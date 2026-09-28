@@ -8,6 +8,7 @@ One set of geometry drives every output:
   res/values/ic_launcher_background.xml          adaptive-icon background colour
   res/mipmap-*/ic_launcher.png                   pre-Android-8 launcher icons
   web/icons/*.png, web/favicon.png               web build icons
+  assets/icon.png                                the icon inside the app (Info screen)
   tools/icon_preview.png                         how launchers show it
 Usage (from C:\\Claude\\KomgaClient): py -3.13 tools\\make_icon.py
 """
@@ -126,6 +127,11 @@ def main():
         written += [web / 'icons' / f'Icon-{size}.png', web / 'icons' / f'Icon-maskable-{size}.png']
     raster(32, 0.84, corner_frac=0.18).save(web / 'favicon.png')
     written.append(web / 'favicon.png')
+
+    # in-app copy (Info screen)
+    (APP / 'assets').mkdir(exist_ok=True)
+    raster(256, 0.78, corner_frac=0.2).save(APP / 'assets' / 'icon.png')
+    written.append(APP / 'assets' / 'icon.png')
 
     svg = ROOT / 'tools' / 'icon.svg'
     write_svg(svg)

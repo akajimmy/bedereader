@@ -21,3 +21,5 @@ flutter:
   uses-material-design: true
   shaders:
     - shaders/page.frag
+  assets:
+    - assets/icon.png

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 /// The remote's "you are here" look, used on every button in the app (the Home pills, app-bar buttons, the reader's
 /// controls, dialogs): a thick accent outline and a strong accent fill with white text/icon. It only ever shows for
-/// keyboard/remote focus - touch doesn't focus buttons.
+/// keyboard/remote focus: a button that merely starts with focus (autofocus - Retry, Read, a dialog's Cancel) stays
+/// plain until an arrow key has been pressed (Flutter's "traditional" highlight mode), like the poster tiles.
 ButtonStyle strongFocusStyle(Color accent) {
+  bool remote() => FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
   WidgetStateProperty<T?> onFocus<T>(T v) =>
-      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) ? v : null);
+      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) && remote() ? v : null);
   return ButtonStyle(
     backgroundColor: onFocus(accent.withValues(alpha: 0.45)),
     foregroundColor: onFocus(Colors.white),

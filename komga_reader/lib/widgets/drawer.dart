@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../screens/info.dart';
 import '../screens/library.dart';
 import 'display_panel.dart';
 
@@ -54,9 +55,17 @@ class _AppDrawerState extends State<AppDrawer> {
       backgroundColor: const Color(0xFF111113),
       child: SafeArea(
         child: ListView(children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Text('Komga Reader', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 20, 12),
+            child: Row(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset('assets/icon.png', width: 36, height: 36,
+                    errorBuilder: (_, __, ___) => const SizedBox(width: 36, height: 36)),
+              ),
+              const SizedBox(width: 12),
+              const Text('Komga Reader', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+            ]),
           ),
           ListTile(autofocus: true, leading: const Icon(Icons.home_outlined), title: const Text('Home'),
               onTap: () => _go(null, home: true)),
@@ -69,6 +78,11 @@ class _AppDrawerState extends State<AppDrawer> {
           const Divider(height: 1),
           ListTile(leading: const Icon(Icons.tune), title: const Text('Reader settings (brightness, night mode)'),
               onTap: () { Navigator.of(context).pop(); showReaderPanel(context); }),
+          ListTile(leading: const Icon(Icons.info_outline), title: const Text('Info'),
+              onTap: () {
+                Scaffold.maybeOf(context)?.closeDrawer();
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => InfoScreen(api: widget.api)));
+              }),
           ListTile(leading: const Icon(Icons.logout), title: const Text('Sign out'),
               onTap: () { Navigator.of(context).popUntil((r) => r.isFirst); widget.onSignOut(); }),
         ]),

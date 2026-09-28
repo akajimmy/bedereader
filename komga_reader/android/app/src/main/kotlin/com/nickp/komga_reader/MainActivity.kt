@@ -1,5 +1,7 @@
 package com.nickp.komga_reader
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -74,6 +76,21 @@ class MainActivity : FlutterActivity() {
                     } else {
                         val sys = Settings.System.getInt(contentResolver, Settings.System.SCREEN_BRIGHTNESS, 128)
                         result.success((sys / 255.0).coerceIn(0.0, 1.0))
+                    }
+                }
+                // Installed version for the Info screen (versionName + build number from pubspec's version).
+                "appVersion" -> {
+                    val info = packageManager.getPackageInfo(packageName, 0)
+                    val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+                    result.success(mapOf("name" to info.versionName, "code" to code))
+                }
+                // Open a web link (Info screen credits) in the tablet's browser.
+                "openUrl" -> {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.arguments as String)))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
                     }
                 }
                 else -> result.notImplemented()
