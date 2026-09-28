@@ -1,22 +1,30 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import 'book_details.dart';
+import 'series.dart';
 
-/// Book actions sheet (long-press a book): mark as read, mark as unread (both always offered; a book already in that
-/// state is left alone), select multiple (where the screen supports it), delete.
+/// Book actions sheet (long-press a book): details, view series (not when already in that series), mark as read,
+/// mark as unread (both always offered; a book already in that state is left alone), select multiple (where the
+/// screen supports it), delete.
 /// Every entry is a focusable list tile, so the remote can drive it.
 /// Returns what was done: 'read', 'unread', 'deleted', or null (cancelled / nothing to do / failed).
 Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
-    {required VoidCallback onChanged, VoidCallback? onSelectMultiple}) async {
+    {required VoidCallback onChanged, VoidCallback? onSelectMultiple, String? readListId, bool showViewSeries = true}) async {
   final title = '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}';
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
     builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text(title), subtitle: Text(b['metadata']?['title'] ?? '')),
         const Divider(height: 1),
-        ListTile(autofocus: true, leading: const Icon(Icons.check_circle_outline), title: const Text('Mark as read'),
+        ListTile(autofocus: true, leading: const Icon(Icons.info_outline), title: const Text('Details'),
+            onTap: () => Navigator.pop(ctx, 'details')),
+        if (showViewSeries)
+          ListTile(leading: const Icon(Icons.collections_bookmark_outlined), title: const Text('View series'),
+              onTap: () => Navigator.pop(ctx, 'series')),
+        ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
@@ -26,12 +34,28 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
             title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
             onTap: () => Navigator.pop(ctx, 'delete')),
-      ]),
+      ])),
     ),
   );
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'details' || choice == 'series') {
+    try {
+      final nav = Navigator.of(context);
+      if (choice == 'details') {
+        await nav.push(MaterialPageRoute(builder: (_) =>
+            BookDetailsScreen(api: api, book: b, readListId: readListId, showViewSeries: showViewSeries)));
+      } else {
+        final s = await api.oneSeries(b['seriesId'] as String);
+        if (s != null) await nav.push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api, series: s)));
+      }
+      onChanged(); // read state may have changed there
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
     return null;
   }
   try {
@@ -109,7 +133,7 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
     context: context,
     backgroundColor: const Color(0xFF141416),
     builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text(title), subtitle: Text('${s['booksCount'] ?? 0} books')),
         const Divider(height: 1),
         ListTile(autofocus: true, leading: const Icon(Icons.check_circle_outline), title: const Text('Mark series as read'),
@@ -119,7 +143,7 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
             title: const Text('Delete series…', style: TextStyle(color: Color(0xFFFF8A80))),
             onTap: () => Navigator.pop(ctx, 'delete')),
-      ]),
+      ])),
     ),
   );
   if (choice == null || !context.mounted) return;
@@ -159,14 +183,14 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
     context: context,
     backgroundColor: const Color(0xFF141416),
     builder: (ctx) => SafeArea(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text(name), subtitle: Text('$total books')),
         const Divider(height: 1),
         ListTile(autofocus: true, leading: const Icon(Icons.check_circle_outline), title: const Text('Mark all as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
-      ]),
+      ])),
     ),
   );
   if (choice == null || !context.mounted) return;

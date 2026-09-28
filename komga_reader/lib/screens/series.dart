@@ -70,7 +70,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
       body: PagedPosterGrid(
         paged: _paged,
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
-            selection: _sel, onOpen: () async {
+            selection: _sel, showViewSeries: false, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: widget.api, book: b)));
           _paged.refresh();
         }),

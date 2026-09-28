@@ -257,7 +257,7 @@ Widget seriesTile(BuildContext context, Komga api, dynamic s,
 /// multiple", and while selecting a tap toggles the book instead of opening it.
 Widget bookTile(BuildContext context, Komga api, dynamic b,
     {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false, String? readListId,
-    Selection? selection}) {
+    Selection? selection, bool showViewSeries = true}) {
   final selecting = selection != null && selection.active;
   final rp = b['readProgress'];
   final pagesCount = (b['media']?['pagesCount'] ?? 0) as int;
@@ -274,7 +274,7 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
     onOpen: selecting ? () => selection.toggle(b) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(b)
-        : () => showBookActions(context, api, b, onChanged: onChanged ?? () {},
-            onSelectMultiple: selection == null ? null : () => selection.start(b)),
+        : () => showBookActions(context, api, b, onChanged: onChanged ?? () {}, readListId: readListId,
+            showViewSeries: showViewSeries, onSelectMultiple: selection == null ? null : () => selection.start(b)),
   );
 }

@@ -9,9 +9,8 @@ import 'reader.dart';
 import 'readlist.dart';
 import 'series.dart';
 
-/// Start screen: Continue reading, On deck (can be hidden from the ⋮ menu), Pinned views (long-press to rename or
-/// unpin) and a button per library.
-/// The side menu (☰) has the same library links.
+/// Start screen: Continue reading, On deck, Pinned views (long-press to rename or unpin) and a button per library;
+/// each section can be shown or hidden from the ⋮ menu. The side menu (☰) has the same library links.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.api, required this.onSignOut});
   final Komga api;
@@ -26,7 +25,12 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _libraries = [];
   List<dynamic> _inProgress = [];
   List<dynamic> _onDeck = [];
-  bool _showOnDeck = true;
+  /// Home sections that can be shown or hidden from the ⋮ menu (saved on the device).
+  final Map<String, bool> _show = {'continue': true, 'ondeck': true, 'pinned': true, 'libraries': true};
+  static const _sectionNames = {
+    'continue': 'Continue reading', 'ondeck': 'On deck', 'pinned': 'Pinned', 'libraries': 'Libraries',
+  };
+  bool get _showOnDeck => _show['ondeck']!;
   bool _loading = true;
   String? _error;
 
@@ -36,7 +40,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     SharedPreferences.getInstance().then((p) {
-      _showOnDeck = p.getBool('showOnDeck') ?? true;
+      for (final k in _show.keys) {
+        // 'showOnDeck' was the only toggle up to build 15
+        _show[k] = p.getBool('home.show.$k') ?? (k == 'ondeck' ? p.getBool('showOnDeck') : null) ?? true;
+      }
       _load();
     });
   }
@@ -58,10 +65,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _toggleOnDeck() async {
-    _showOnDeck = !_showOnDeck;
-    (await SharedPreferences.getInstance()).setBool('showOnDeck', _showOnDeck);
-    _load();
+  Future<void> _toggleSection(String k) async {
+    setState(() => _show[k] = !_show[k]!);
+    (await SharedPreferences.getInstance()).setBool('home.show.$k', _show[k]!);
+    if (k == 'ondeck' && _show[k]!) _load(); // On deck is only fetched while shown
   }
 
   /// Open a pinned view. Series and read lists are fetched fresh (their tiles need the full object).
@@ -112,9 +119,11 @@ class _HomeScreenState extends State<HomeScreen> {
         actions: [
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _load),
           PopupMenuButton<String>(
-            onSelected: (v) { if (v == 'ondeck') _toggleOnDeck(); },
+            tooltip: 'Show or hide sections',
+            onSelected: _toggleSection,
             itemBuilder: (_) => [
-              CheckedPopupMenuItem(value: 'ondeck', checked: _showOnDeck, child: const Text('Show On deck')),
+              for (final e in _sectionNames.entries)
+                CheckedPopupMenuItem(value: e.key, checked: _show[e.key]!, child: Text(e.value)),
             ],
           ),
         ],
@@ -127,11 +136,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
                       child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
-                _Section('Continue reading'),
-                _inProgress.isEmpty
-                    ? const _Empty('Nothing in progress')
-                    : _BookRow(books: _inProgress, api: api, autofocusFirst: true, onChanged: _load,
-                        onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
+                if (!_show.values.any((v) => v))
+                  const _Empty('Every section is hidden - use ⋮ at the top right to show them again.'),
+                if (_show['continue']!) ...[
+                  _Section('Continue reading'),
+                  _inProgress.isEmpty
+                      ? const _Empty('Nothing in progress')
+                      : _BookRow(books: _inProgress, api: api, autofocusFirst: true, onChanged: _load,
+                          onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
+                ],
                 if (_showOnDeck) ...[
                   _Section('On deck'),
                   _onDeck.isEmpty
@@ -143,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   listenable: Pins.instance,
                   builder: (context, _) {
                     final pins = Pins.instance.items;
-                    if (pins.isEmpty) return const SizedBox.shrink();
+                    if (pins.isEmpty || !_show['pinned']!) return const SizedBox.shrink();
                     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       _Section('Pinned'),
                       Padding(
@@ -158,17 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ]);
                   },
                 ),
+                if (_show['libraries']!) ...[
                 _Section('Libraries'),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Wrap(spacing: 10, runSpacing: 10, children: [
                     for (final l in _libraries)
-                      _LibraryButton(label: l['name'] as String, autofocus: _inProgress.isEmpty && l == _libraries.first,
+                      _LibraryButton(label: l['name'] as String, autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
                           onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: l['id'] as String))),
                     _LibraryButton(label: 'All libraries', icon: Icons.collections_bookmark_outlined,
                         onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut))),
                   ]),
                 ),
+                ],
               ]),
             )),
     );
