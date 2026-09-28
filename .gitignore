@@ -1,0 +1,16 @@
+# Secrets - never commit
+apikey.txt
+*.keystore
+*.jks
+key.properties
+
+# Build outputs (komga_reader/.gitignore covers the Flutter build folders)
+*.apk
+*.aab
+
+# Local safety copies made before overwriting files (e.g. the original Flutter icons)
+backups/
+
+# Tooling scratch
+__pycache__/
+*.pyc

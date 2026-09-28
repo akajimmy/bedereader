@@ -1,0 +1,89 @@
+import 'package:flutter/material.dart';
+
+import '../api.dart';
+import '../screens/actions.dart';
+
+/// Multi-select state for a book grid. While [active], tapping (or OK on) a book toggles it instead of opening it.
+class Selection extends ChangeNotifier {
+  bool active = false;
+  final Map<String, dynamic> _books = {}; // id -> book, in the order picked
+
+  int get count => _books.length;
+  List<dynamic> get books => _books.values.toList();
+  bool isSelected(dynamic b) => _books.containsKey(b['id']);
+
+  void start([dynamic first]) {
+    active = true;
+    if (first != null) _books[first['id'] as String] = first;
+    notifyListeners();
+  }
+
+  void toggle(dynamic b) {
+    final id = b['id'] as String;
+    _books.containsKey(id) ? _books.remove(id) : _books[id] = b;
+    notifyListeners();
+  }
+
+  void selectAll(Iterable<dynamic> all) {
+    for (final b in all) {
+      _books[b['id'] as String] = b;
+    }
+    notifyListeners();
+  }
+
+  void end() {
+    active = false;
+    _books.clear();
+    notifyListeners();
+  }
+}
+
+/// Top bar while selecting: close, "N selected", select all (everything loaded), mark read, mark unread, delete.
+/// [all] gives the books currently loaded in the grid; [onChanged] refreshes the grid after an action.
+PreferredSizeWidget selectionAppBar(BuildContext context, Komga api, Selection sel,
+    {required List<dynamic> Function() all, required VoidCallback onChanged}) {
+  final none = sel.count == 0;
+  Future<void> run(Future<void> Function() action) async {
+    await action();
+    sel.end();
+    onChanged();
+  }
+
+  return AppBar(
+    leading: IconButton(tooltip: 'Stop selecting', icon: const Icon(Icons.close), onPressed: sel.end),
+    title: Text(none ? 'Select books' : '${sel.count} selected'),
+    actions: [
+      IconButton(tooltip: 'Select all', icon: const Icon(Icons.select_all), onPressed: () => sel.selectAll(all())),
+      IconButton(tooltip: 'Mark as read', icon: const Icon(Icons.check_circle_outline),
+          onPressed: none ? null : () => run(() => bulkMark(context, api, sel.books, read: true))),
+      IconButton(tooltip: 'Mark as unread', icon: const Icon(Icons.radio_button_unchecked),
+          onPressed: none ? null : () => run(() => bulkMark(context, api, sel.books, read: false))),
+      IconButton(tooltip: 'Delete…', icon: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
+          onPressed: none ? null : () async {
+            if (await bulkDelete(context, api, sel.books)) {
+              sel.end();
+              onChanged();
+            }
+          }),
+    ],
+  );
+}
+
+/// Top-bar button that enters multi-select.
+class SelectButton extends StatelessWidget {
+  const SelectButton({super.key, required this.selection});
+  final Selection selection;
+  @override
+  Widget build(BuildContext context) =>
+      IconButton(tooltip: 'Select multiple', icon: const Icon(Icons.checklist), onPressed: () => selection.start());
+}
+
+/// Rebuilds a screen as the selection changes; Back while selecting ends the selection instead of leaving.
+Widget selectionScope(Selection sel, WidgetBuilder builder) => ListenableBuilder(
+      listenable: sel,
+      builder: (context, _) => PopScope(
+        canPop: !sel.active,
+        onPopInvokedWithResult: (didPop, _) { if (!didPop) sel.end(); },
+        child: builder(context),
+      ),
+    );

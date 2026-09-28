@@ -1,0 +1,216 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'api.dart';
+import 'screen.dart';
+
+enum FitMode { screen, width, height }
+
+extension FitModeLabel on FitMode {
+  String get label => switch (this) { FitMode.screen => 'Screen', FitMode.width => 'Width', FitMode.height => 'Height' };
+}
+
+/// How pages are shown. Saved per series (a new series starts from the global default) and synced through Komga.
+@immutable
+class ReaderPrefs {
+  const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
+      this.autoLevels = false});
+
+  final FitMode fit;
+  final double brightness; // -0.5 .. 0.5, added to every channel
+  final double contrast; // -0.5 .. 0.5, stretch around mid-grey
+  final bool sharpen; // light, fixed-strength sharpening (lib/page_image.dart sharpenAmount)
+  final bool autoLevels; // stretch each page to full black..white (fixes yellow paper, grey blacks)
+
+  bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels;
+
+  ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels}) =>
+      ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
+          sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels);
+
+  /// Same fit, image settings back to neutral.
+  ReaderPrefs imageReset() => ReaderPrefs(fit: fit);
+
+  Map<String, dynamic> toJson() =>
+      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels};
+
+  factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
+        fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
+        brightness: (j['b'] as num?)?.toDouble() ?? 0,
+        contrast: (j['c'] as num?)?.toDouble() ?? 0,
+        sharpen: j['s'] == true || (j['s'] is num && (j['s'] as num) > 0), // was a 0..1 slider in build 4
+        autoLevels: j['l'] == true,
+      );
+
+  @override
+  bool operator ==(Object other) => other is ReaderPrefs && jsonEncode(other.toJson()) == jsonEncode(toJson());
+  @override
+  int get hashCode => jsonEncode(toJson()).hashCode;
+}
+
+/// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
+@immutable
+class DisplayPrefs {
+  const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness});
+  final bool night;
+  final double warmth; // 0..1, how amber night mode is
+  final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
+
+  static const dimZone = 0.2;
+
+  /// Screen backlight for this app's window: -1 = system setting, else 0.01..1.
+  double get backlight {
+    final b = brightness;
+    if (b == null) return -1;
+    if (b <= dimZone) return 0.01;
+    return 0.01 + (b - dimZone) / (1 - dimZone) * 0.99;
+  }
+
+  /// Slider position that gives this backlight level (the inverse of [backlight]).
+  static double sliderFor(double backlight) =>
+      dimZone + ((backlight - 0.01) / 0.99).clamp(0.0, 1.0) * (1 - dimZone);
+
+  /// Black overlay opacity for "darker than the minimum".
+  double get dimOverlay {
+    final b = brightness;
+    if (b == null || b >= dimZone) return 0;
+    return (dimZone - b) / dimZone * 0.75;
+  }
+
+  DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness}) => DisplayPrefs(
+      night: night ?? this.night, warmth: warmth ?? this.warmth,
+      brightness: brightness != null ? brightness() : this.brightness);
+
+  Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness};
+  factory DisplayPrefs.fromJson(Map<String, dynamic> j) => DisplayPrefs(
+      night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
+      brightness: (j['brightness'] as num?)?.toDouble());
+}
+
+/// Holds reader prefs (global default + per series, synced to the user's Komga client settings) and display prefs
+/// (this device). Changes apply immediately; the Komga copy is written a moment later, merged with whatever is on
+/// the server so two devices don't wipe each other's series.
+class AppSettings extends ChangeNotifier {
+  AppSettings._();
+  static final AppSettings instance = AppSettings._();
+
+  static const komgaKey = 'komgareader.readerprefs';
+  static const _localReader = 'readerPrefs';
+  static const _localDisplay = 'displayPrefs';
+
+  Komga? _api;
+  ReaderPrefs defaults = const ReaderPrefs();
+  final Map<String, ReaderPrefs> series = {};
+  DisplayPrefs display = const DisplayPrefs();
+  String? syncError; // last Komga sync problem, shown in the Display panel
+
+  final Set<String> _dirtySeries = {};
+  bool _dirtyDefault = false;
+  Timer? _syncTimer;
+
+  ReaderPrefs prefsFor(String? seriesId) => (seriesId != null ? series[seriesId] : null) ?? defaults;
+
+  /// Local copy first (instant), then the Komga copy replaces it if the server has one.
+  Future<void> load(Komga api) async {
+    _api = api;
+    final p = await SharedPreferences.getInstance();
+    final d = p.getString(_localDisplay);
+    if (d != null) display = DisplayPrefs.fromJson(jsonDecode(d) as Map<String, dynamic>);
+    final r = p.getString(_localReader);
+    if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>);
+    applyBacklight();
+    notifyListeners();
+    try {
+      final remote = await _fetchRemote();
+      if (remote != null) {
+        _applyBlob(remote);
+        await p.setString(_localReader, jsonEncode(_blob()));
+        notifyListeners();
+      }
+      syncError = null;
+    } catch (e) {
+      syncError = 'Could not read settings from Komga: $e';
+    }
+  }
+
+  void setSeries(String seriesId, ReaderPrefs prefs) {
+    series[seriesId] = prefs;
+    _dirtySeries.add(seriesId);
+    _changedReader();
+  }
+
+  void setDefault(ReaderPrefs prefs) {
+    defaults = prefs;
+    _dirtyDefault = true;
+    _changedReader();
+  }
+
+  void setDisplay(DisplayPrefs d) {
+    final backlightChanged = d.backlight != display.backlight;
+    display = d;
+    if (backlightChanged) applyBacklight();
+    notifyListeners();
+    SharedPreferences.getInstance().then((p) => p.setString(_localDisplay, jsonEncode(d.toJson())));
+  }
+
+  void applyBacklight() => setScreenBrightness(display.backlight);
+
+  void _changedReader() {
+    notifyListeners();
+    SharedPreferences.getInstance().then((p) => p.setString(_localReader, jsonEncode(_blob())));
+    _syncTimer?.cancel();
+    _syncTimer = Timer(const Duration(seconds: 2), _sync);
+  }
+
+  Future<void> _sync() async {
+    final api = _api;
+    if (api == null || (_dirtySeries.isEmpty && !_dirtyDefault)) return;
+    final sending = Set<String>.of(_dirtySeries);
+    final sendDefault = _dirtyDefault;
+    try {
+      final merged = await _fetchRemote() ?? <String, dynamic>{};
+      final remoteSeries = Map<String, dynamic>.from((merged['series'] as Map?) ?? {});
+      for (final id in sending) {
+        final p = series[id];
+        if (p == null) { remoteSeries.remove(id); } else { remoteSeries[id] = p.toJson(); }
+      }
+      merged['v'] = 1;
+      merged['series'] = remoteSeries;
+      if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
+      await api.putClientSetting(komgaKey, jsonEncode(merged));
+      _dirtySeries.removeAll(sending);
+      if (sendDefault) _dirtyDefault = false;
+      syncError = null;
+    } catch (e) {
+      syncError = 'Settings not saved to Komga yet (kept on this device): $e';
+      _syncTimer = Timer(const Duration(minutes: 1), _sync);
+    }
+    notifyListeners();
+  }
+
+  Future<Map<String, dynamic>?> _fetchRemote() async {
+    final raw = (await _api!.clientSettings())[komgaKey]?['value'];
+    return raw is String ? jsonDecode(raw) as Map<String, dynamic> : null;
+  }
+
+  Map<String, dynamic> _blob() => {
+        'v': 1,
+        'default': defaults.toJson(),
+        'series': {for (final e in series.entries) e.key: e.value.toJson()},
+      };
+
+  void _applyBlob(Map<String, dynamic> b) {
+    final d = b['default'];
+    if (d is Map<String, dynamic> && !_dirtyDefault) defaults = ReaderPrefs.fromJson(d);
+    final s = b['series'];
+    if (s is Map) {
+      for (final e in s.entries) {
+        if (_dirtySeries.contains(e.key)) continue; // a local change still waiting to be sent wins
+        series[e.key as String] = ReaderPrefs.fromJson(Map<String, dynamic>.from(e.value as Map));
+      }
+    }
+  }
+}

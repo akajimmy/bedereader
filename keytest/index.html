@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote key tester</title>
+<style>
+  html, body { margin: 0; background: #000; color: #eee; font-family: system-ui, sans-serif; }
+  main { padding: 24px; }
+  h1 { font-size: 22px; font-weight: 500; margin: 0 0 8px; }
+  p { color: #999; margin: 0 0 20px; }
+  #last { font-size: 48px; font-weight: 600; min-height: 60px; color: #fff; }
+  #detail { font-family: ui-monospace, monospace; color: #8fd; margin: 8px 0 24px; min-height: 22px; }
+  table { border-collapse: collapse; width: 100%; font-family: ui-monospace, monospace; font-size: 15px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #222; }
+  th { color: #777; font-weight: 400; }
+  button { background: #222; color: #eee; border: 1px solid #444; border-radius: 6px; padding: 8px 14px; font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Remote key tester</h1>
+  <p>Press each button on the remote, one at a time. If a button shows nothing at all, it is probably sending a volume or
+     system key that a browser can't see.</p>
+  <div id="last">waiting…</div>
+  <div id="detail"></div>
+  <button id="clear">Clear</button>
+  <table>
+    <thead><tr><th>time</th><th>event</th><th>key</th><th>code</th><th>keyCode</th></tr></thead>
+    <tbody id="log"></tbody>
+  </table>
+</main>
+<script>
+  const log = document.getElementById('log'), last = document.getElementById('last'), detail = document.getElementById('detail');
+  function add(kind, e) {
+    const tr = document.createElement('tr');
+    const t = new Date().toLocaleTimeString();
+    tr.innerHTML = `<td>${t}</td><td>${kind}</td><td>${e.key ?? ''}</td><td>${e.code ?? ''}</td><td>${e.keyCode ?? ''}</td>`;
+    log.prepend(tr);
+    if (kind === 'keydown') {
+      last.textContent = e.key === ' ' ? 'Space' : (e.key || e.code || '(no key name)');
+      detail.textContent = `code=${e.code}  keyCode=${e.keyCode}`;
+    }
+  }
+  // capture everything and stop the browser acting on it (scrolling, back navigation, etc.)
+  for (const k of ['keydown', 'keyup']) {
+    window.addEventListener(k, e => { add(k, e); if (k === 'keydown') e.preventDefault(); }, { capture: true });
+  }
+  // media-session buttons (play/pause/next/previous on headset-style remotes)
+  if ('mediaSession' in navigator) {
+    for (const a of ['play', 'pause', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward']) {
+      try { navigator.mediaSession.setActionHandler(a, () => add('media:' + a, { key: a, code: '', keyCode: '' })); } catch {}
+    }
+  }
+  document.getElementById('clear').onclick = () => { log.innerHTML = ''; last.textContent = 'waiting…'; detail.textContent = ''; };
+</script>
+</body>
+</html>
