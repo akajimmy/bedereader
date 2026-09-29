@@ -148,7 +148,7 @@ options > Wireless debugging > Pair device with pairing code. Wireless debugging
 switches it off whenever the tablet leaves the Wi-Fi); if the tablet can't be reached the build still succeeds and
 says so - install later with `tools\install-android.ps1`.
 
-**Release signing (Android):** the APK is signed with the key named in `komga_readerndroid\key.properties`
+**Release signing (Android):** the APK is signed with the key named in `komga_reader\android\key.properties`
 (copy `key.properties.example`; never committed), whose keystore lives outside the repository. Without that file the
 build falls back to the debug key and says so. Android only updates an app signed with the same key, so the release
 key must never change: keep a backup of the keystore and its password.
