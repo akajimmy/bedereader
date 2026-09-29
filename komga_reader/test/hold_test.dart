@@ -51,6 +51,31 @@ void main() {
     });
   });
 
+  testWidgets('Crop edges: 5% off every side, and the cropped page is what gets drawn', (tester) async {
+    late ui.Image img;
+    await tester.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec)
+        ..drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFFFFFFF)) // margin
+        ..drawRect(const Rect.fromLTWH(10, 15, 180, 270), Paint()..color = const Color(0xFF204060)); // the art
+      img = await rec.endRecording().toImage(200, 300);
+      final cut = await cropEdges(img, 0.05);
+      expect((cut.width, cut.height), (180, 270));
+      final d = (await cut.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+      expect(d.getUint8(0), 0x20); // the top-left corner is now art, not margin
+    });
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
+      data: PageData(img, Uint8List(0)),
+      prefs: const ReaderPrefs(crop: 0.05),
+      scroll: ScrollController(),
+    ))));
+    expect(find.byType(RawImage), findsNothing); // waits for the crop, never shows the margin
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
+    final shown = tester.widget<RawImage>(find.byType(RawImage)).image!;
+    expect((shown.width, shown.height), (180, 270));
+  });
+
   testWidgets('Enhance colours on: the page waits for its colours instead of showing uncorrected', (tester) async {
     late ui.Image img;
     await tester.runAsync(() async {

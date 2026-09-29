@@ -4,6 +4,10 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Image settings: **Crop edges** - 0 to 10% (1% steps) cut off every side of the page, per series (default in App
+  settings > Reading); the remaining art fills more of the screen. Enhance colours and Enhance work on the cropped page.
+- Reader settings: "Page turn" is now "Page turn animation": Wipe / Instant flip (only the look of a page change;
+  tapping, swiping and the arrows turn pages the same in both - now covered by tests).
 - Opening a book with Enhance colours (or Enhance) no longer flashes the uncorrected page: the page waits (spinner)
   until it's processed. The book's colour measurement fetches its five pages at once and is remembered on the device,
   so reopening a book has nothing to wait for. If the GPU processing can't run on a device, the page shows plain.

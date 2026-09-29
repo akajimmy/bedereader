@@ -371,7 +371,7 @@ void main() {
     DisplayPrefs.backlightControl = true;
   });
 
-  testWidgets('page turn: Straight flip cuts to the next page with no slide', (tester) async {
+  testWidgets('page turn animation: Instant flip cuts to the next page with no slide', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
     addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
     await openReader(tester);

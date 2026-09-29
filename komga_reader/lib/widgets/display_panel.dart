@@ -120,7 +120,7 @@ class _ReaderPanel extends StatelessWidget {
             ),
           ),
         ],
-        const _Heading('Page turn · this device'),
+        const _Heading('Page turn animation · this device'),
         const PageTurnControl(),
         const _Heading('Screen · whole app, this device'),
         const ScreenBrightnessControls(),
@@ -154,7 +154,8 @@ class _ImagePanel extends StatelessWidget {
           OutlinedButton(
             onPressed: () {
               s.setDefault(s.defaults.copyWith(
-                  brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen, autoLevels: p.autoLevels));
+                  brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen, autoLevels: p.autoLevels,
+                  crop: p.crop));
               _toast(context, "Series you haven't adjusted will use these image settings");
             },
             child: const Text('Make these the default'),
@@ -183,8 +184,11 @@ class _Heading extends StatelessWidget {
       );
 }
 
-/// Page brightness, contrast, enhance, auto-levels for [p] (a series' settings, or the defaults).
+/// Crop edges, page brightness, contrast, enhance, enhance colours for [p] (a series' settings, or the defaults).
 List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
+      _SliderRow(label: 'Crop edges', value: p.crop, min: 0, max: ReaderPrefs.maxCrop,
+          divisions: 10, // 1% steps
+          valueText: p.crop == 0 ? 'Off' : '${(p.crop * 100).round()}%', onChanged: (v) => setP(p.copyWith(crop: v))),
       _SliderRow(label: 'Page brightness', value: p.brightness, min: -0.3, max: 0.3,
           valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
       _SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
@@ -355,9 +359,10 @@ class NightModeControls extends StatelessWidget {
 
 class _SliderRow extends StatelessWidget {
   const _SliderRow({required this.label, required this.value, required this.onChanged, required this.valueText,
-      this.min = 0, this.max = 1, this.enabled = true});
+      this.min = 0, this.max = 1, this.enabled = true, this.divisions});
   final String label;
   final double value, min, max;
+  final int? divisions; // steps, or smooth
   final String valueText;
   final bool enabled;
   final ValueChanged<double> onChanged;
@@ -367,7 +372,8 @@ class _SliderRow extends StatelessWidget {
     return Row(children: [
       SizedBox(width: 120, child: Text(label, style: TextStyle(color: enabled ? null : const Color(0xFF6A6A6A)))),
       Expanded(
-        child: Slider(value: value.clamp(min, max), min: min, max: max, onChanged: enabled ? onChanged : null),
+        child: Slider(value: value.clamp(min, max), min: min, max: max, divisions: divisions,
+            onChanged: enabled ? onChanged : null),
       ),
       SizedBox(width: 64, child: Text(valueText, textAlign: TextAlign.right,
           style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12))),
