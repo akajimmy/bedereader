@@ -47,7 +47,7 @@ class PosterTile extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: Stack(fit: StackFit.expand, children: [
-                  image ?? Image.network(imageUrl, headers: api.imageHeaders, fit: BoxFit.cover, cacheWidth: 400,
+                  image ?? Image(image: ResizeImage(api.thumbImage(imageUrl), width: 400), fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F))),
                   if (read) Container(color: Colors.black.withValues(alpha: 0.45)),
                   if (read) const Positioned(right: 6, top: 6, child: _ReadBadge()),

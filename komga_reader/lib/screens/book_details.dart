@@ -80,7 +80,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       borderRadius: BorderRadius.circular(6),
       child: AspectRatio(
         aspectRatio: 0.66,
-        child: Image.network(api.bookThumb(_book['id'] as String), headers: api.imageHeaders, fit: BoxFit.cover,
+        child: Image(image: api.thumbImage(api.bookThumb(_book['id'] as String)), fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1C1C1F))),
       ),
     );

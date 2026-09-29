@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
@@ -119,6 +120,10 @@ class Komga {
   String bookThumb(String id) => '$baseUrl/api/v1/books/$id/thumbnail';
   String readListThumb(String id) => '$baseUrl/api/v1/readlists/$id/thumbnail';
   String collectionThumb(String id) => '$baseUrl/api/v1/collections/$id/thumbnail';
+
+  /// The image for a thumbnail reference from the methods above. Screens go through this rather than building
+  /// network images themselves, so the offline source can hand back images from disk (lib/offline/).
+  ImageProvider thumbImage(String ref) => NetworkImage(ref, headers: imageHeaders);
 
   // ---- reading state (always straight to the server)
   Future<void> setProgress(String bookId, int page, {bool completed = false}) =>

@@ -84,8 +84,8 @@ class _Mosaic extends StatelessWidget {
   final List<dynamic> books;
 
   Widget _cover(int i) => i < books.length
-      ? Image.network(api.bookThumb(books[i]['id'] as String), headers: api.imageHeaders, fit: BoxFit.cover,
-          cacheWidth: 220, errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1C1C1F)))
+      ? Image(image: ResizeImage(api.thumbImage(api.bookThumb(books[i]['id'] as String)), width: 220), fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1C1C1F)))
       : const ColoredBox(color: Color(0xFF1C1C1F));
 
   @override
