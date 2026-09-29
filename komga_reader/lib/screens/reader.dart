@@ -54,6 +54,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   DateTime _lastWheelTurn = DateTime(0);
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
   Timer? _saveTimer;
+  Timer? _flashTimer;
+  bool _flash = false; // the page number shows for a moment after a turn (setting: Show the page number after a turn)
   final Map<int, ScrollController> _scrolls = {};
   final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
@@ -93,6 +95,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _flashTimer?.cancel();
     Connection.instance.readerClosed();
     _saveNow();
     _settings.removeListener(_onSettings);
@@ -163,6 +166,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
     if (i <= _last) _loader?.around(i);
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
+    if (i <= _last && _settings.display.pageNumber) {
+      _flashTimer?.cancel();
+      setState(() => _flash = true);
+      _flashTimer = Timer(const Duration(milliseconds: 1200), () { if (mounted) setState(() => _flash = false); });
+    }
   }
 
   /// Opening a book and closing it without turning a page leaves no trace. Turning pages in a finished book starts
@@ -501,6 +509,24 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       ),
                     ));
                   }),
+                  // "12 / 36" for a moment after a turn - not over the controls (they have the count) or the end card
+                  Positioned(
+                    right: 14,
+                    bottom: 14,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: _flash && !_menu && _index <= _last ? 1 : 0,
+                        duration: const Duration(milliseconds: 250),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Text('${_index + 1} / ${_pages.length}',
+                              style: const TextStyle(color: Colors.white, fontSize: 13)),
+                        ),
+                      ),
+                    ),
+                  ),
                   if (_menu) ..._controls(),
                 ]),
         ),
