@@ -5,6 +5,11 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Fixed**
+- Sign-in: an address typed without `http://`, or with a space after the colon (the tablet keyboard adds one), no
+  longer fails with a "FormatException" - it's tidied up and the field shows the address used. The keyboard's
+  word suggestions are off in that field.
+
 ## 0.1.1 - offline reading and better pages
 
 Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.

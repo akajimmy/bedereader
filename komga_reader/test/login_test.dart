@@ -24,4 +24,27 @@ void main() {
     expect(field(tester, 'Server').controller!.text, 'http://nas.local:25600');
     expect(field(tester, 'API key').controller!.text, isEmpty); // never kept
   });
+
+  test('the server address is tidied up: spaces out, http:// added, trailing slashes off', () {
+    String? s(String typed) => serverAddress(typed);
+    expect(s('10.0.0.23: 25600'), 'http://10.0.0.23:25600'); // as typed on the tablet (user's screenshot)
+    expect(s(' http://nas.local:25600/ '), 'http://nas.local:25600');
+    expect(s('https://komga.example.org'), 'https://komga.example.org');
+    expect(s('HTTP://10.0.0.23:25600'), 'HTTP://10.0.0.23:25600');
+    expect(s(''), isNull);
+    expect(s('ftp://10.0.0.23'), isNull);
+    expect(s('http://'), isNull);
+  });
+
+  testWidgets('an address typed without http:// connects, and the field shows what was used', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
+    await tester.pump();
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
+        '10.0.0.23: 25600');
+    await tester.tap(find.text('Connect'));
+    await tester.pump();
+    expect(field(tester, 'Server').controller!.text, 'http://10.0.0.23:25600');
+    expect(find.textContaining('FormatException'), findsNothing);
+  });
 }
