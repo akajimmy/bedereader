@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Pinned views on Home are posters: a 2x2 of the first four items of the pinned view (its filter and sort), the
+  pin's name and the view's count; long-press / right-click to rename or unpin. Read-list posters share the code.
+
 - Side menu can be docked: the pin in its header keeps it open beside the page (the page shifts right) on screens at
   least 720 wide; the pin again lets it slide away. Remote: Left from the leftmost tile moves into it, Right back.
   Remembered on the device; on narrow screens it always slides out.

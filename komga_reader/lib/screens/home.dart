@@ -6,6 +6,7 @@ import '../offline/connection.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
 import '../widgets/home_sections_editor.dart';
+import '../widgets/pin_tile.dart';
 import 'library.dart';
 import 'reader.dart';
 import 'readlist.dart';
@@ -62,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _optional = ['ondeck', 'recentlyRead', 'recentBooks', 'recentSeries', 'releases'];
 
   Future<void> _load() async {
+    PinTile.invalidate(); // pin posters show the current first items
     _checkOfflinePins();
     setState(() { _loading = _inProgress.isEmpty && _libraries.isEmpty; _error = null; });
     try {
@@ -146,18 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final keep = <Pin>{};
     for (final p in Pins.instance.items) {
       try {
-        final status = p.readFilter.api;
-        final Map<String, dynamic> r = switch (p.kind) {
-          'series' => await api.seriesBooks(p.id!, readStatus: status, size: 1),
-          'readlist' => await api.readListBooks(p.id!, readStatus: status, size: 1),
-          'collection' => await api.series(collectionId: p.id, readStatus: status, size: 1),
-          _ => switch (p.mode) {
-              'books' => await api.books(libraryId: p.id, readStatus: status, size: 1),
-              'collections' => await api.collections(libraryId: p.id, size: 1),
-              'readLists' => await api.readLists(libraryId: p.id, size: 1),
-              _ => await api.series(libraryId: p.id, readStatus: status, size: 1),
-            },
-        };
+          final r = await pinView(api, p, size: 1);
         if (((r['totalElements'] as num?) ?? 0) > 0) keep.add(p);
       } catch (_) {
         // can't tell: leave it out rather than show an empty pin
@@ -203,16 +194,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
                         : Pins.instance.items;
                     if (pins.isEmpty) return const SizedBox.shrink();
+                    // a row of posters: each a 2x2 of its view's first items (lib/widgets/pin_tile.dart)
                     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       _Section('Pinned'),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Wrap(spacing: 10, runSpacing: 10, children: [
-                          for (final p in pins)
-                            _LibraryButton(label: p.name, icon: Icons.push_pin_outlined,
-                                onTap: () => _openPin(p),
-                                onLongPress: () => showPinDialog(context, p, pinned: true)),
-                        ]),
+                      SizedBox(
+                        height: 290,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: pins.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 8),
+                          itemBuilder: (context, i) => SizedBox(
+                            width: 150,
+                            child: PinTile(api: api, pin: pins[i], onOpen: () => _openPin(pins[i])),
+                          ),
+                        ),
                       ),
                     ]);
                   },
@@ -359,24 +355,16 @@ class _SeriesRow extends StatelessWidget {
 }
 
 class _LibraryButton extends StatelessWidget {
-  const _LibraryButton({required this.label, required this.onTap, this.icon = Icons.folder_outlined, this.autofocus = false,
-      this.onLongPress});
+  const _LibraryButton({required this.label, required this.onTap, this.icon = Icons.folder_outlined, this.autofocus = false});
   final String label;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
   final IconData icon;
   final bool autofocus;
   @override
-  Widget build(BuildContext context) => GestureDetector(
-        onSecondaryTap: onLongPress, // right-click on desktop
-        child: _button(),
-      );
-
-  Widget _button() => FilledButton.tonalIcon(
+  Widget build(BuildContext context) => FilledButton.tonalIcon(
         autofocus: autofocus,
         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
         onPressed: onTap,
-        onLongPress: onLongPress,
         icon: Icon(icon),
         label: Text(label),
       );

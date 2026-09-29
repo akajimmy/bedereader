@@ -65,7 +65,9 @@ class _ReadListTileState extends State<ReadListTile> {
           api: widget.api,
           autofocus: widget.autofocus,
           imageUrl: widget.api.readListThumb(_id),
-          image: books.isEmpty ? null : _Mosaic(api: widget.api, books: books),
+          image: books.isEmpty
+              ? null
+              : PosterMosaic(api: widget.api, refs: [for (final b in books) widget.api.bookThumb(b['id'] as String)]),
           title: widget.readList['name'] as String,
           subtitle: unread == null ? '$total books' : done ? '$total books · read' : '$unread of $total unread',
           read: done && total > 0,
@@ -77,22 +79,24 @@ class _ReadListTileState extends State<ReadListTile> {
   }
 }
 
-/// 1 book = its cover; 2 = side by side; 3-4 = a 2x2 grid (an empty dark cell for 3).
-class _Mosaic extends StatelessWidget {
-  const _Mosaic({required this.api, required this.books});
+/// A poster made of up to four other posters: 1 = that poster; 2 = side by side; 3-4 = a 2x2 grid (an empty dark
+/// cell for 3). [refs] are thumbnail references from the api (bookThumb / seriesThumb / ...). Used by read lists
+/// (first unread books) and pins (first items of the pinned view).
+class PosterMosaic extends StatelessWidget {
+  const PosterMosaic({super.key, required this.api, required this.refs});
   final Komga api;
-  final List<dynamic> books;
+  final List<String> refs;
 
-  Widget _cover(int i) => i < books.length
-      ? Image(image: ResizeImage(api.thumbImage(api.bookThumb(books[i]['id'] as String)), width: 220), fit: BoxFit.cover,
+  Widget _cover(int i) => i < refs.length
+      ? Image(image: ResizeImage(api.thumbImage(refs[i]), width: 220), fit: BoxFit.cover,
           errorBuilder: (_, __, ___) => const ColoredBox(color: Color(0xFF1C1C1F)))
       : const ColoredBox(color: Color(0xFF1C1C1F));
 
   @override
   Widget build(BuildContext context) {
     const gap = SizedBox(width: 2, height: 2);
-    if (books.length == 1) return _cover(0);
-    if (books.length == 2) {
+    if (refs.length == 1) return _cover(0);
+    if (refs.length == 2) {
       return Row(crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [Expanded(child: _cover(0)), gap, Expanded(child: _cover(1))]);
     }
