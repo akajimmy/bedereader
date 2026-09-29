@@ -40,12 +40,20 @@ class OfflineStore {
   }
 
   /// Written to a temporary file first, then moved over the index, so a crash mid-write can't leave half an index.
-  Future<void> save() async {
-    await root.create(recursive: true);
-    final tmp = File('${_index.path}.tmp');
-    await tmp.writeAsString(jsonEncode({'v': 1, 'books': books, 'progress': progress}));
-    await tmp.rename(_index.path);
+  /// Saves run one after another (overlapping ones would fight over the temporary file).
+  /// A failed save is reported to its caller but doesn't block the saves after it.
+  Future<void> save() {
+    final write = _writes.then((_) async {
+      await root.create(recursive: true);
+      final tmp = File('${_index.path}.tmp');
+      await tmp.writeAsString(jsonEncode({'v': 1, 'books': books, 'progress': progress}));
+      await tmp.rename(_index.path);
+    });
+    _writes = write.catchError((Object _) {});
+    return write;
   }
+
+  Future<void> _writes = Future.value();
 
   /// Adds or replaces a book entry (the download engine calls this; tests build stores with it).
   Future<void> put(String bookId, Map<String, dynamic> entry) async {

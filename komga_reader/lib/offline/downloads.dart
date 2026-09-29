@@ -48,10 +48,23 @@ class Downloads extends ChangeNotifier {
   final List<DownloadJob> queue = [];
   final List<String> recentlyDone = []; // this session, newest first (titles)
   bool paused = false;
+
+  /// Offline mode: nothing downloads (and the server isn't contacted) until it's released.
+  bool get hold => _hold;
+  set hold(bool v) {
+    _hold = v;
+    if (!v) _pump();
+  }
+
+  bool _hold = false;
   int? capBytes = defaultCap; // null = no limit
   bool _running = false;
+  int _session = 0; // bumped by attach(); a worker from an older session stops instead of blocking the new one
 
   bool get ready => store != null;
+
+  /// The worker is running (including its final saves after a book finishes or pauses).
+  bool get busy => _running;
   int get usedBytes => store?.books.values.fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0)) ?? 0;
   bool isDownloaded(String bookId) => store?.books[bookId]?['state'] == 'done';
   DownloadJob? jobFor(String bookId) {
@@ -66,6 +79,9 @@ class Downloads extends ChangeNotifier {
   /// Starts (or restarts) the manager for this server. [root] overrides the storage folder (tests).
   Future<void> attach(Komga api, {Directory? root}) async {
     _api = api;
+    _session++;
+    _running = false; // any older worker notices the new session and stops
+    _queueWrites = Future.value(); // a fresh start: nothing to wait behind
     final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
     store = OfflineStore(base);
     await store!.load();
@@ -100,10 +116,16 @@ class Downloads extends ChangeNotifier {
     _pump();
   }
 
-  Future<void> _saveQueue() async {
-    await store!.root.create(recursive: true);
-    await _queueFile.writeAsString(jsonEncode([for (final j in queue) j.toJson()]));
-  }
+  /// Written to a temporary file and then moved over queue.json, so a crash (or a reader) never sees half a file.
+  /// Saves run one after another (overlapping ones would fight over the temporary file).
+  Future<void> _saveQueue() => _queueWrites = _queueWrites.then((_) async {
+        await store!.root.create(recursive: true);
+        final tmp = File('${_queueFile.path}.tmp');
+        await tmp.writeAsString(jsonEncode([for (final j in queue) j.toJson()]));
+        await tmp.rename(_queueFile.path);
+      }).catchError((Object _) {});
+
+  Future<void> _queueWrites = Future.value();
 
   // ---- adding -----------------------------------------------------------------------------------------------------
   /// Queues books that aren't downloaded or queued yet. Returns how many were added.
@@ -196,10 +218,11 @@ class Downloads extends ChangeNotifier {
 
   // ---- the worker ---------------------------------------------------------------------------------------------------
   Future<void> _pump() async {
-    if (_running || paused || _api == null || store == null) return;
+    if (_running || paused || _hold || _api == null || store == null) return;
     _running = true;
+    final session = _session;
     try {
-      while (!paused) {
+      while (!paused && !_hold && session == _session) {
         DownloadJob? next;
         for (final j in queue) {
           if (j.state == JobState.queued) {
@@ -211,7 +234,7 @@ class Downloads extends ChangeNotifier {
         await _run(next);
       }
     } finally {
-      _running = false;
+      if (session == _session) _running = false;
     }
   }
 
@@ -300,7 +323,7 @@ class Downloads extends ChangeNotifier {
       // pages - those already on disk (an interrupted earlier try) are skipped
       var bytes = 0;
       for (final p in plan) {
-        if (job._cancel || paused) break;
+        if (job._cancel || paused || _hold) break;
         final f = s.file('${job.bookId}/${p['file']}');
         if (await f.exists() && await f.length() > 0) {
           bytes += await f.length();
@@ -319,8 +342,8 @@ class Downloads extends ChangeNotifier {
       if (job._cancel) {
         queue.remove(job);
         await _deleteFiles(job.bookId);
-      } else if (paused) {
-        job.state = JobState.paused;
+      } else if (paused || _hold) {
+        job.state = _hold ? JobState.queued : JobState.paused; // held: carries on when back online
         entry['bytes'] = bytes;
         await s.put(job.bookId, entry);
       } else {

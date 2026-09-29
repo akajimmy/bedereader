@@ -80,8 +80,11 @@ $dirty = Git 'status --porcelain'
 if ($dirty -and -not $AllowDirty) {
     throw "Uncommitted changes - commit them first (or pass -AllowDirty for a throwaway build):`n$($dirty -join "`n")"
 }
-if ($Platforms -contains 'windows' -and (Get-Process KomgaReader -ErrorAction SilentlyContinue)) {
-    throw 'Komga Reader is running on this PC - close it first (the Windows build replaces its files).'
+# only a copy running from the build folder is in the way (a portable copy elsewhere is fine)
+$buildDir = Join-Path $app 'build\windows'
+$blocking = Get-Process KomgaReader -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
+if ($Platforms -contains 'windows' -and $blocking) {
+    throw "Komga Reader is running from the build folder ($($blocking[0].Path)) - close it first (the Windows build replaces its files)."
 }
 Run 'flutter pub get' 'flutter pub get'
 Run 'flutter analyze' 'flutter analyze --no-fatal-infos'

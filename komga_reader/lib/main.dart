@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
+import 'offline/connection.dart';
 import 'offline/downloads.dart';
 import 'pins.dart';
 import 'settings.dart';
@@ -38,13 +39,25 @@ class KomgaReaderApp extends StatefulWidget {
 }
 
 class _KomgaReaderAppState extends State<KomgaReaderApp> {
-  Komga? _api;
+  Komga? _api; // the server (online) connection
   bool _loaded = false;
+  final _nav = GlobalKey<NavigatorState>();
+  bool _wasOffline = false;
 
   @override
   void initState() {
     super.initState();
+    Connection.instance.addListener(_onConnection);
     _restore();
+  }
+
+  /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one).
+  void _onConnection() {
+    final now = Connection.instance.offline;
+    if (now == _wasOffline) return;
+    _wasOffline = now;
+    _nav.currentState?.popUntil((r) => r.isFirst);
+    setState(() {});
   }
 
   Future<void> _restore() async {
@@ -67,9 +80,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     _startDownloads(api);
   }
 
-  /// Downloads (1.1): not on web, which has no storage for them.
-  void _startDownloads(Komga api) {
-    if (!kIsWeb) Downloads.instance.attach(api);
+  /// Downloads (1.1): not on web, which has no storage for them. Offline mode needs them, so it loads after.
+  Future<void> _startDownloads(Komga api) async {
+    if (!kIsWeb) await Downloads.instance.attach(api);
+    await Connection.instance.load(api);
   }
 
   Future<void> _signOut() async {
@@ -83,13 +97,18 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     return MaterialApp(
       title: 'Komga Reader',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _nav,
       theme: buildTheme(),
       builder: (context, child) => NightOverlay(child: child!),
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
           : _api == null
               ? LoginScreen(onSignedIn: _signIn)
-              : HomeScreen(api: _api!, onSignOut: _signOut),
+              : HomeScreen(
+                  key: ValueKey(Connection.instance.offline), // a fresh Home when switching online/offline
+                  api: Connection.instance.online == null ? _api! : Connection.instance.api,
+                  onSignOut: _signOut,
+                ),
     );
   }
 }

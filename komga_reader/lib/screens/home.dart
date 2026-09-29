@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../home_sections.dart';
+import '../offline/connection.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
 import 'library.dart';
@@ -140,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.only(bottom: 24), children: [
+                if (Connection.instance.offline) const _OfflineBanner(),
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
                       child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
@@ -269,3 +271,25 @@ class _LibraryButton extends StatelessWidget {
         label: Text(label),
       );
 }
+
+/// Shown on Home while offline: what you're looking at, and the way back.
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2410),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFF6B5A1E)),
+        ),
+        child: Row(children: [
+          const Icon(Icons.cloud_off, color: Color(0xFFFACC15)),
+          const SizedBox(width: 10),
+          const Expanded(child: Text('Offline mode - showing downloaded books')),
+          TextButton(onPressed: () => Connection.instance.setForcedOffline(false), child: const Text('Go online')),
+        ]),
+      );
+}
+

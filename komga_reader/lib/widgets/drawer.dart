@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../screens/app_settings.dart';
 import '../screens/downloads_screen.dart';
@@ -78,6 +79,17 @@ class _AppDrawerState extends State<AppDrawer> {
           for (final l in _libraries)
             ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
+          if (Connection.instance.available)
+            ListenableBuilder(
+            listenable: Connection.instance,
+            builder: (context, _) => SwitchListTile(
+              secondary: Icon(Connection.instance.offline ? Icons.cloud_off : Icons.cloud_outlined),
+              title: const Text('Offline mode'),
+              subtitle: Text(Connection.instance.offline ? 'Showing downloaded books only' : 'Connected to Komga'),
+              value: Connection.instance.offline,
+              onChanged: (v) => Connection.instance.setForcedOffline(v),
+            ),
+          ),
           if (Downloads.instance.ready)
             ListenableBuilder(
               listenable: Downloads.instance,

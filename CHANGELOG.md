@@ -4,6 +4,11 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Offline mode switch (side menu and App settings): the whole app shows only the downloaded books, with a banner on
+  Home and Go online; downloads hold and nothing contacts the server; remembered across restarts.
+- Downloads: saves are written safely one after another (a crash can't leave a half-written queue or index), and
+  signing out and back in mid-download can't stall the queue.
+
 - Downloads (1.1, part 1 of offline mode): Download / Remove download on a book; Download unread / Download all
   on a series or read list. Books download page by page into app storage with their place in the library (series,
   read lists, collections) and posters; the queue survives restarts and resumes where it stopped.

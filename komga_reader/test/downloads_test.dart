@@ -12,6 +12,7 @@ class FakeKomga extends Komga {
   FakeKomga() : super('http://test', 'k');
   int pageRequests = 0;
   bool slow = false;
+  void Function(int number)? onPage; // called after serving a page (tests use it to pause at an exact point)
 
   Map<String, dynamic> _book(String id, int n) => {
         'id': id, 'seriesId': 'S1', 'seriesTitle': 'Silver Surfer', 'libraryId': 'L1', 'name': id,
@@ -28,6 +29,7 @@ class FakeKomga extends Komga {
   Future<Uint8List> pageBytes(String bookId, int number) async {
     pageRequests++;
     if (slow) await Future<void>.delayed(const Duration(milliseconds: 20));
+    onPage?.call(number);
     return Uint8List(100);
   }
 
@@ -61,8 +63,11 @@ void main() {
     dir = await Directory.systemTemp.createTemp('komga_downloads_test');
   });
   tearDown(() async {
+    // stop the worker before deleting its folder (it may still be writing a page)
     d.pauseAll();
-    await Future<void>.delayed(const Duration(milliseconds: 50));
+    for (var i = 0; i < 300 && d.busy; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     d.paused = false;
     await dir.delete(recursive: true);
   });
@@ -129,14 +134,15 @@ void main() {
   });
 
   test('the queue survives a restart, and pages already on disk are not fetched again', () async {
-    final api = FakeKomga()..slow = true;
+    // pause exactly after page 1 (deterministic, whatever the machine's speed)
+    final api = FakeKomga()..onPage = (n) { if (n == 1) d.pauseAll(); };
     await d.attach(api, root: dir);
     await d.add([book('B1', 1)]);
-    await Future<void>.delayed(const Duration(milliseconds: 30)); // part-way through
-    d.pauseAll();
-    await Future<void>.delayed(const Duration(milliseconds: 60));
+    for (var i = 0; i < 300 && (d.jobFor('B1')?.state != JobState.paused || d.busy); i++) { // paused and saved
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     final fetchedBefore = api.pageRequests;
-    expect(fetchedBefore, inInclusiveRange(1, 2));
+    expect(fetchedBefore, 1);
 
     d.paused = false;
     final again = FakeKomga();

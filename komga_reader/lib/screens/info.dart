@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../offline/offline_komga.dart';
 import '../screen.dart';
 
 /// Placeholders until the project's details are settled (the user plans to open-source it; licence TBD).
@@ -34,6 +35,10 @@ class _InfoScreenState extends State<InfoScreen> {
   /// Green: answered and the API key is accepted. Amber: answered, but refused the key or took over 3 s.
   /// Red: no answer.
   Future<void> _check() async {
+    if (widget.api is OfflineKomga) {
+      setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing downloaded books'; });
+      return;
+    }
     setState(() { _state = ServerState.checking; _detail = 'Checking…'; });
     final watch = Stopwatch()..start();
     ServerState state;

@@ -22,6 +22,14 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  /// Pause and wait (on a real clock) until the worker has finished its last save, so the folder can go.
+  Future<void> quiet(WidgetTester tester) => tester.runAsync(() async {
+        d.pauseAll();
+        for (var i = 0; i < 300 && d.busy; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+      });
+
   testWidgets('book menu: Download queues the book; the Downloads screen shows it, then Remove download frees it',
       (tester) async {
     final api = FakeKomga();
@@ -58,6 +66,7 @@ void main() {
     });
     await tester.pump();
     expect(find.text('Downloaded · 0'), findsOneWidget);
+    await quiet(tester);
   });
 
   testWidgets('a failed download says why and offers Retry', (tester) async {
@@ -73,6 +82,7 @@ void main() {
     expect(find.textContaining('Failed: not enough room'), findsOneWidget);
     expect(find.byTooltip('Retry'), findsOneWidget);
     expect(find.text('Retry 1'), findsOneWidget); // retry-all in the top bar
-    await tester.runAsync(() => d.setCap(null));
+    // (no need to lift the limit: each test starts from fresh settings)
+    await quiet(tester);
   });
 }

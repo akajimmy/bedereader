@@ -1,0 +1,80 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/offline/connection.dart';
+import 'package:komga_reader/offline/downloads.dart';
+import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/screens/home.dart';
+import 'package:komga_reader/widgets/drawer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'downloads_test.dart' show FakeKomga;
+
+void main() {
+  late Directory dir;
+  final conn = Connection.instance;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    dir = await Directory.systemTemp.createTemp('komga_toggle_test');
+  });
+  tearDown(() async {
+    await conn.setForcedOffline(false);
+    await dir.delete(recursive: true);
+  });
+
+  test('offline mode switches every screen to the downloaded books, holds downloads, and is remembered', () async {
+    final online = FakeKomga();
+    await Downloads.instance.attach(online, root: dir);
+    await conn.load(online);
+    expect(conn.api, same(online));
+
+    await conn.setForcedOffline(true);
+    expect(conn.api, isA<OfflineKomga>());
+    expect(Downloads.instance.hold, isTrue); // nothing talks to the server
+    expect((await SharedPreferences.getInstance()).getBool('offline.forced'), isTrue);
+
+    await conn.load(online); // "restart": still offline
+    expect(conn.offline, isTrue);
+
+    await conn.setForcedOffline(false);
+    expect(conn.api, same(online));
+    expect(Downloads.instance.hold, isFalse);
+  });
+
+  testWidgets('Home offline shows the banner; Go online switches back', (tester) async {
+    final online = FakeKomga();
+    await tester.runAsync(() async {
+      await Downloads.instance.attach(online, root: dir);
+      await conn.load(online);
+      await conn.setForcedOffline(true);
+    });
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: conn.api, onSignOut: () {})));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+    expect(find.text('Offline mode - showing downloaded books'), findsOneWidget);
+    await tester.tap(find.text('Go online'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    expect(conn.offline, isFalse);
+  });
+
+  testWidgets('side menu has the Offline mode switch', (tester) async {
+    final online = FakeKomga();
+    await tester.runAsync(() async {
+      await Downloads.instance.attach(online, root: dir);
+      await conn.load(online);
+    });
+    final scaffold = GlobalKey<ScaffoldState>();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
+        drawer: AppDrawer(api: online, onSignOut: () {}), body: const SizedBox())));
+    scaffold.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    expect(find.text('Connected to Komga'), findsOneWidget);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Offline mode'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect(conn.offline, isTrue);
+    expect(find.text('Showing downloaded books only'), findsOneWidget);
+  });
+}

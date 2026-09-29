@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../home_sections.dart';
+import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import 'downloads_screen.dart';
 
@@ -28,6 +29,16 @@ class AppSettingsScreen extends StatelessWidget {
                   const SizedBox(width: 90, child: Text('Address', style: TextStyle(color: Color(0xFF9A9A9A)))),
                   Expanded(child: SelectableText(api.baseUrl)),
                 ]),
+                if (Connection.instance.available) ListenableBuilder(
+                  listenable: Connection.instance,
+                  builder: (context, _) => SwitchListTile(
+                    secondary: Icon(Connection.instance.offline ? Icons.cloud_off : Icons.cloud_outlined),
+                    title: const Text('Offline mode'),
+                    subtitle: Text(Connection.instance.offline ? 'Showing downloaded books only' : 'Connected to Komga'),
+                    value: Connection.instance.offline,
+                    onChanged: (v) => Connection.instance.setForcedOffline(v),
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Align(
                   alignment: Alignment.centerLeft,

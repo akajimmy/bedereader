@@ -139,6 +139,15 @@ class AppSettings extends ChangeNotifier {
   bool _dirtyDefault = false;
   Timer? _syncTimer;
 
+  /// Switch connection (online / offline) without reloading; a failed sync retries on its own.
+  void useApi(Komga api) {
+    _api = api;
+    if (_dirtySeries.isNotEmpty || _dirtyDefault) {
+      _syncTimer?.cancel();
+      _syncTimer = Timer(const Duration(seconds: 2), _sync);
+    }
+  }
+
   ReaderPrefs prefsFor(String? seriesId) => (seriesId != null ? series[seriesId] : null) ?? defaults;
 
   /// Local copy first (instant), then the Komga copy replaces it if the server has one.

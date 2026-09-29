@@ -73,6 +73,9 @@ class Pins extends ChangeNotifier {
     }
   }
 
+  /// Switch connection (online / offline) without reloading.
+  void useApi(Komga api) => _api = api;
+
   Pin? find(Pin view) {
     for (final p in items) {
       if (p.sameView(view)) return p;
