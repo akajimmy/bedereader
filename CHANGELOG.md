@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Reader: after a page turn the page number ("12 / 36") shows in the bottom-right corner for a moment, then fades.
+  Setting "Show the page number after a turn" (on by default, this device) next to Page turn, in the reader's
+  Reader settings and App settings > Reading.
 - Settings reorganised: App settings is the one place for everything, in sections that each say where they're kept
   (this device / synced through Komga): Server & connection (with the server status from Info), Reading (defaults
   for new series - fit, direction, image - editable here, plus "N series have their own settings" with Reset all;

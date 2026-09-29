@@ -214,19 +214,29 @@ class _Live extends StatelessWidget {
       ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
 }
 
-/// Page-turn style (this device). In the reader's Reader settings and App settings > Reading.
+/// Page-turn style and the page number flash (this device). In the reader's Reader settings and App settings >
+/// Reading.
 class PageTurnControl extends StatelessWidget {
   const PageTurnControl({super.key});
   @override
-  Widget build(BuildContext context) => _Live((s) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: SegmentedButton<PageTurn>(
-          segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
-          selected: {s.display.pageTurn},
-          showSelectedIcon: false,
-          onSelectionChanged: (v) => s.setDisplay(s.display.copyWith(pageTurn: v.first)),
+  Widget build(BuildContext context) => _Live((s) => Column(mainAxisSize: MainAxisSize.min, children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SegmentedButton<PageTurn>(
+            segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
+            selected: {s.display.pageTurn},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) => s.setDisplay(s.display.copyWith(pageTurn: v.first)),
+          ),
         ),
-      ));
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Show the page number after a turn'),
+          subtitle: const Text('"12 / 36" in the corner for a moment'),
+          value: s.display.pageNumber,
+          onChanged: (v) => s.setDisplay(s.display.copyWith(pageNumber: v)),
+        ),
+      ]));
 }
 
 /// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on desktop.

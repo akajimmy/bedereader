@@ -237,6 +237,30 @@ void main() {
     expect(api.finished, [3]); // page 3 of 3, read
   });
 
+  double flashOpacity(WidgetTester tester, String text) => tester
+      .widget<AnimatedOpacity>(find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)).first)
+      .opacity;
+
+  testWidgets('page number: "2 / 3" shows for a moment after a turn, then fades', (tester) async {
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(flashOpacity(tester, '2 / 3'), 1.0);
+    await tester.pump(const Duration(seconds: 2));
+    expect(flashOpacity(tester, '2 / 3'), 0.0);
+  });
+
+  testWidgets('page number: switched off, it stays hidden', (tester) async {
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.copyWith(pageNumber: false));
+    addTearDown(() => s.setDisplay(s.display.copyWith(pageNumber: true)));
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(flashOpacity(tester, '2 / 3'), 0.0);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('end card: the last book says so', (tester) async {
     await openReader(tester);
     await toEndCard(tester);
