@@ -8,7 +8,7 @@ import '../widgets/fullscreen_exit.dart';
 import 'document.dart';
 
 const appName = 'Komga Reader';
-const appAuthor = 'Nick';
+const appAuthor = 'Nick Perusse 🍁';
 const appLicense = 'MIT licence - free to use, change and share, keeping the copyright notice'; // LICENSE
 
 /// App name, version, author, licence; the Komga server's address and a traffic-light status with Retry;
