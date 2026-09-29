@@ -4,6 +4,10 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Hide from On deck (book and series menus): a series never shows in On deck; a book is skipped (its series comes
+  back once that book is read). "Show in On deck again" in the same menu; App settings > Home counts what's hidden,
+  with Show all again. Synced through Komga like pins; a change made offline is sent at the next start.
+- Side menu: the Offline mode switch has no description line; "Reader settings" without the parenthesis.
 ## Build 29 - 2026-09-29
 
 - Fix: closing a book from the end card now marks it read. Before, turning past the last page within 1.5 s and

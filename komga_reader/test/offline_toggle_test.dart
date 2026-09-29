@@ -70,11 +70,13 @@ void main() {
         drawer: AppDrawer(api: online, onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
-    expect(find.text('Connected to Komga'), findsOneWidget);
+    final sw = find.widgetWithText(SwitchListTile, 'Offline mode');
+    expect(tester.widget<SwitchListTile>(sw).value, isFalse);
+    expect(find.text('Connected to Komga'), findsNothing); // the label says it all (user)
     await tester.tap(find.widgetWithText(SwitchListTile, 'Offline mode'));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump();
     expect(conn.offline, isTrue);
-    expect(find.text('Showing downloaded books only'), findsOneWidget);
+    expect(tester.widget<SwitchListTile>(sw).value, isTrue);
   });
 }

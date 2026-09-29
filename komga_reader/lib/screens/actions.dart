@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
 import 'book_details.dart';
 import 'series.dart';
@@ -39,6 +40,12 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
+        OnDeckHidden.instance.bookHidden(b['id'] as String?)
+            ? ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('Show in On deck again'),
+                onTap: () => Navigator.pop(ctx, 'ondeck-show'))
+            : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
+                subtitle: const Text('Skips this book; its series comes back once it is read'),
+                onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
@@ -51,6 +58,10 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'ondeck-hide' || choice == 'ondeck-show') {
+    OnDeckHidden.instance.setBook(b['id'] as String, choice == 'ondeck-hide');
     return null;
   }
   if (choice == 'download' || choice == 'undownload') {
@@ -165,6 +176,12 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark series as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
         ...downloadTiles(ctx),
+        OnDeckHidden.instance.seriesHidden(s['id'] as String?)
+            ? ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('Show in On deck again'),
+                onTap: () => Navigator.pop(ctx, 'ondeck-show'))
+            : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
+                subtitle: const Text('This series never shows in On deck'),
+                onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
             title: const Text('Delete series…', style: TextStyle(color: Color(0xFFFF8A80))),
             onTap: () => Navigator.pop(ctx, 'delete')),
@@ -172,6 +189,10 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'ondeck-hide' || choice == 'ondeck-show') {
+    OnDeckHidden.instance.setSeries(s['id'] as String, choice == 'ondeck-hide');
+    return;
+  }
   if (choice == 'dl-all' || choice == 'dl-unread') {
     return queueDownloads(context, title, (status) => api.seriesBooks(s['id'] as String, readStatus: status, size: 2000),
         unreadOnly: choice == 'dl-unread');

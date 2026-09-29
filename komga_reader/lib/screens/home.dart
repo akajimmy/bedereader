@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../home_sections.dart';
 import '../offline/connection.dart';
+import '../ondeck_hidden.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
 import '../widgets/home_sections_editor.dart';
@@ -45,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _sections.addListener(_onSections);
     Pins.instance.addListener(_checkOfflinePins);
+    OnDeckHidden.instance.addListener(_onHiddenChanged);
     _sections.load().then((_) => _load());
   }
 
@@ -52,7 +54,15 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _sections.removeListener(_onSections);
     Pins.instance.removeListener(_checkOfflinePins);
+    OnDeckHidden.instance.removeListener(_onHiddenChanged);
     super.dispose();
+  }
+
+  /// Hidden from On deck (here or on another screen): filter again now; fetch again if showing it back needs more.
+  void _onHiddenChanged() {
+    if (!mounted) return;
+    setState(() {});
+    if (_sections['ondeck']) _load();
   }
 
   /// A section switched on or off, or moved (here or in App settings). Rows fetched only while shown load now.
@@ -74,7 +84,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final results = await Future.wait([
         api.libraries(),
         api.inProgress(),
-        if (want.contains('ondeck')) api.onDeck() else Future.value({}),
+        // extra, to still fill the row after the hidden ones are left out
+        if (want.contains('ondeck')) api.onDeck(size: 30 + OnDeckHidden.instance.count) else Future.value({}),
         if (want.contains('recentlyRead'))
           api.books(readStatus: const ['READ'], sort: 'readProgress.readDate,desc', size: 30)
         else
@@ -178,7 +189,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case 'continue':
         return books('Continue reading', _inProgress, 'Nothing in progress', 'Nothing downloaded in progress', autofocus: true);
       case 'ondeck':
-        return books('On deck', _onDeck, 'Nothing on deck', 'Nothing downloaded on deck');
+        final hidden = OnDeckHidden.instance;
+        return books('On deck', [for (final b in _onDeck) if (!hidden.hides(b)) b].take(30).toList(), 'Nothing on deck',
+            'Nothing downloaded on deck');
       case 'recentlyRead':
         return books('Recently read', _recentlyRead, 'Nothing read yet', 'No downloaded books read yet');
       case 'recentBooks':

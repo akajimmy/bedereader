@@ -80,6 +80,8 @@ void main() {
     await open(tester);
     await tester.longPress(find.text('S #C'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Select multiple')); // the menu scrolls on a short window
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Select multiple'));
     await tester.pumpAndSettle();
     expect(find.text('1 selected'), findsOneWidget);
