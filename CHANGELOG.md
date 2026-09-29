@@ -5,14 +5,16 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1-rc.1 - offline reading and better pages
+
+Release candidate 1 is build 35, tagged `v0.1.1-rc.1`. Builds 21-26 still showed version 0.1.0.
+
+### Build 35 - 2026-09-29
+
 **Fixed**
 - Licences: the Android version now carries the Apache 2.0 terms for the AndroidX and Kotlin libraries it includes
   (Info > licences page), and the third-party list covers each platform's extra parts. The Windows program's
   copyright line and the web version's title and description no longer show template text.
-
-## 0.1.1-rc.1 - offline reading and better pages
-
-Release candidate 1 is build 35, tagged `v0.1.1-rc.1`. Builds 21-26 still showed version 0.1.0.
 
 ### Build 33 - 2026-09-29
 
