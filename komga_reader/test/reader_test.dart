@@ -31,7 +31,14 @@ class FakeKomga extends Komga {
   @override
   Future<void> markRead(String bookId) async => marked.add(bookId);
   @override
-  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async { nextCalls++; return null; }
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
+    nextCalls++;
+    askedReadList = readListId;
+    return next;
+  }
+
+  Map<String, dynamic>? next; // the book after this one (null = last one)
+  String? askedReadList = 'not asked';
   @override
   Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async => null;
   @override
@@ -45,11 +52,11 @@ void main() {
 
   late FakeKomga api;
 
-  Future<void> openReader(WidgetTester tester) async {
-    api = FakeKomga();
+  Future<void> openReader(WidgetTester tester, {String? readListId, Map<String, dynamic>? next}) async {
+    api = FakeKomga()..next = next;
     await tester.pumpWidget(MaterialApp(
       home: Builder(builder: (context) => TextButton(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook))),
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook, readListId: readListId))),
         child: const Text('open'),
       )),
     ));
@@ -183,6 +190,43 @@ void main() {
     await tester.pump(const Duration(seconds: 1)); // route exit animation
     expect(find.byType(ReaderScreen), findsNothing);
     await tester.pump(const Duration(seconds: 5)); // snackbar timer
+  });
+
+  Future<void> toEndCard(WidgetTester tester) async {
+    for (var i = 0; i < 3; i++) { // 3 pages, then the end card
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    await tester.pump();
+  }
+
+  final second = {'id': 'B2', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'The Second One'}};
+
+  testWidgets('end card: shows the next book in the series - title and poster', (tester) async {
+    await openReader(tester, next: second);
+    await toEndCard(tester);
+    expect(find.text('Up next in the series'), findsOneWidget);
+    expect(find.text('Test #2'), findsOneWidget);
+    expect(find.text('The Second One'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget); // its poster
+    expect(api.askedReadList, isNull); // opened outside a read list: the series
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('end card: opened from a read list, the next book comes from the read list', (tester) async {
+    await openReader(tester, readListId: 'RL1', next: second);
+    await toEndCard(tester);
+    expect(find.text('Up next in this read list'), findsOneWidget);
+    expect(api.askedReadList, 'RL1');
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('end card: the last book says so', (tester) async {
+    await openReader(tester);
+    await toEndCard(tester);
+    expect(find.text('End of the series'), findsOneWidget);
+    expect(find.text('→ : close the book'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
   });
 
   test('series status text counts unread and in-progress books separately', () {

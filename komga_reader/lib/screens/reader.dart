@@ -160,6 +160,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
     if (i <= _last) _loader?.around(i);
+    if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
   }
 
   /// Opening a book and closing it without turning a page leaves no trace. Turning pages in a finished book starts
@@ -536,14 +537,86 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  /// The book after this one (in the read list it was opened from, else the series) - looked up once per book, when
+  /// the last page is near, for the end card.
+  Future<Map<String, dynamic>?> _upNext() {
+    final id = _book['id'] as String;
+    if (_upNextFor != id || _upNextFuture == null) {
+      _upNextFor = id;
+      _upNextFuture = api.nextBook(id, readListId: widget.readListId);
+    }
+    return _upNextFuture!;
+  }
+
+  String? _upNextFor;
+  Future<Map<String, dynamic>?>? _upNextFuture;
+
+  /// After the last page: what's next - its poster and title - or that this was the last one.
   Widget _endCard() {
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('End of book', style: TextStyle(color: Colors.white70, fontSize: 18)),
-        const SizedBox(height: 16),
-        Text('${_rtl ? '←' : '→'} : next book in ${widget.readListId != null ? 'this read list' : 'the series'}',
-            style: const TextStyle(color: Colors.white38)),
-      ]),
+    final where = widget.readListId != null ? 'this read list' : 'the series';
+    final arrow = _rtl ? '←' : '→';
+    const dim = TextStyle(color: Colors.white38);
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _upNext(),
+      builder: (context, snap) {
+        final next = snap.data;
+        final List<Widget> body;
+        if (snap.connectionState != ConnectionState.done) {
+          body = [const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))];
+        } else if (snap.hasError) {
+          body = [Text('$arrow : next book in $where', style: dim)]; // couldn't look it up: the turn still tries
+        } else if (next == null) {
+          body = [
+            Text(widget.readListId != null ? 'End of the read list' : 'End of the series',
+                style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            const SizedBox(height: 12),
+            Text('$arrow : close the book', style: dim),
+          ];
+        } else {
+          final number = next['metadata']?['number'] ?? next['number'];
+          final title = (next['metadata']?['title'] ?? next['name']) as String?;
+          final heading = '${next['seriesTitle'] ?? ''} #$number'.trim();
+          body = [
+            Text('Up next in $where', style: dim),
+            const SizedBox(height: 12),
+            LayoutBuilder(builder: (context, c) {
+              final h = (MediaQuery.sizeOf(context).height * 0.42).clamp(160.0, 520.0);
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: h,
+                  width: h * 0.66,
+                  child: Image(
+                    image: ResizeImage(api.thumbImage(api.bookThumb(next['id'] as String)), height: 800),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F)),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 14),
+            Text(heading, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
+            if (title != null && title != heading && !title.endsWith('#$number'))
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70)),
+              ),
+            const SizedBox(height: 14),
+            Text('$arrow : open it', style: dim),
+          ];
+        }
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text('End of book', style: TextStyle(color: Colors.white70, fontSize: 18)),
+              const SizedBox(height: 16),
+              ...body,
+            ]),
+          ),
+        );
+      },
     );
   }
 
