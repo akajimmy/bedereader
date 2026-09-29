@@ -8,7 +8,7 @@ import '../paged.dart';
 class PosterTile extends StatelessWidget {
   const PosterTile({super.key, required this.api, required this.imageUrl, required this.title,
       this.subtitle, this.read = false, this.progress, required this.onOpen, this.onMenu, this.autofocus = false,
-      this.image, this.selected});
+      this.image, this.selected, this.badge});
 
   final Komga api;
   final String imageUrl;
@@ -21,6 +21,7 @@ class PosterTile extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback? onMenu;
   final bool autofocus;
+  final Widget? badge; // bottom-right corner (what of it is downloaded)
 
   /// Two title lines (13 px, line height 1.2) + one subtitle line (11 px, 1.3), following the tablet's text size.
   static double textBlockHeight(BuildContext context) {
@@ -64,6 +65,7 @@ class PosterTile extends StatelessWidget {
                       shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
                     )),
                   ],
+                  if (badge != null) Positioned(right: 6, bottom: 9, child: badge!), // clear of the progress bar
                   if (progress != null && !read)
                     Positioned(left: 0, right: 0, bottom: 0,
                         child: LinearProgressIndicator(value: progress, minHeight: 3, color: accent, backgroundColor: Colors.black54)),

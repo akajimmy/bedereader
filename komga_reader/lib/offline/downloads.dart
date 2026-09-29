@@ -67,6 +67,31 @@ class Downloads extends ChangeNotifier {
   bool get busy => _running;
   int get usedBytes => store?.books.values.fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0)) ?? 0;
   bool isDownloaded(String bookId) => store?.books[bookId]?['state'] == 'done';
+
+  /// Downloaded books per series / read list (for the tile badges) - worked out once per change, not per tile.
+  int downloadedInSeries(String seriesId) => _counts().$1[seriesId] ?? 0;
+  int downloadedInReadList(String readListId) => _counts().$2[readListId] ?? 0;
+  (Map<String, int>, Map<String, int>)? _countCache;
+  (Map<String, int>, Map<String, int>) _counts() => _countCache ??= () {
+        final series = <String, int>{}, lists = <String, int>{};
+        for (final e in store?.books.values ?? const <Map<String, dynamic>>[]) {
+          if (e['state'] != 'done') continue;
+          final s = (e['book'] as Map?)?['seriesId'] as String?;
+          if (s != null) series[s] = (series[s] ?? 0) + 1;
+          for (final rl in (e['readLists'] as List?) ?? const []) {
+            final id = (rl as Map)['id'] as String;
+            lists[id] = (lists[id] ?? 0) + 1;
+          }
+        }
+        return (series, lists);
+      }();
+
+  @override
+  void notifyListeners() {
+    _countCache = null; // every change to the store is followed by a notify
+    super.notifyListeners();
+  }
+
   DownloadJob? jobFor(String bookId) {
     for (final j in queue) {
       if (j.bookId == bookId) return j;
