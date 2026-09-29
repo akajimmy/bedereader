@@ -14,3 +14,6 @@ backups/
 # Tooling scratch
 __pycache__/
 *.pyc
+
+# Build pipeline output (tools/build.ps1)
+dist/
