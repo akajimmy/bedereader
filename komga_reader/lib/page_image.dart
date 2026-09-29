@@ -165,7 +165,7 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe});
+      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -191,6 +191,10 @@ class PageCanvas extends StatefulWidget {
 
   /// Dragging on past the edge of such a page: turn the page (true = forward, in reading direction).
   final ValueChanged<bool>? onEdgeSwipe;
+
+  /// Where the page's image sits in this widget (unzoomed), as laid out - not the bars around it. The page curl
+  /// bends only this part.
+  final ValueChanged<Rect>? onPageRect;
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -421,6 +425,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       switch (widget.prefs.fit) {
         case FitMode.screen:
           final s = aspect > w / h ? Size(w, w / aspect) : Size(h * aspect, h);
+          widget.onPageRect?.call(Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height));
           _viewport = Size(w, h);
           _picture = Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height);
           // scaleFactor infinity: the viewer's own wheel zoom off (it zooms on every notch, whoever claims the wheel -
@@ -429,6 +434,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
               child: _wheel(Center(child: picture(s)), ctrlZooms: true));
         case FitMode.width:
           final s = Size(w, w / aspect);
+          // taller than the screen: it fills it (scrolling); else centred with bars above and below
+          widget.onPageRect?.call(s.height > h ? Rect.fromLTWH(0, 0, w, h) : Rect.fromLTWH(0, (h - s.height) / 2, w, s.height));
           _placeScroll(s.height > h);
           _setPan(false);
           return s.height <= h
@@ -437,6 +444,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
         case FitMode.height:
           final s = Size(h * aspect, h);
           final wide = s.width > w;
+          widget.onPageRect?.call(wide ? Rect.fromLTWH(0, 0, w, h) : Rect.fromLTWH((w - s.width) / 2, 0, s.width, h));
           _placeScroll(wide);
           _setPan(wide);
           return !wide

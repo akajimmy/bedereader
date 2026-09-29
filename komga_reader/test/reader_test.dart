@@ -469,6 +469,23 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('a slow drag started mid-screen turns the page (grab anywhere)', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height * 0.4;
+      final g = await tester.startGesture(Offset(size.width * 0.5, y)); // the middle, not the edge
+      for (var i = 1; i <= 16; i++) {
+        await g.moveTo(Offset(size.width * 0.5 - i * size.width * 0.025, y)); // to 10% from the left edge
+        await tester.pump(const Duration(milliseconds: 60));
+      }
+      await g.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('back: the previous page uncurls over this one', (tester) async {
       await openCurling(tester);
       await key(tester, LogicalKeyboardKey.arrowRight);

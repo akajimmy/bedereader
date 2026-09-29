@@ -234,9 +234,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final target = next ? _index + 1 : _index - 1;
     if (target < 0 || target > _pages.length) return;
     if (_curlMode) {
-      final grab = Offset(_area.width, _area.height * 0.72);
-      final start = next ? grab : Offset(PageCurl.gone(_area.width), grab.dy);
-      if (_startCurl(next: next, grab: grab, finger: start)) {
+      final page = _pageRect(next ? _index : target);
+      final grab = Offset(page.width, page.height * 0.72);
+      final start = next ? grab : Offset(PageCurl.gone(page.width), grab.dy);
+      if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
         _animateCurl(complete: true);
         return;
       }
@@ -258,6 +259,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   _Curl? _curl;
   Size _area = Size.zero;
   Offset? _dragStart;
+  final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
+
+  /// The page's image on screen - only it curls, not the bars around it. Unknown (the end card, still loading):
+  /// the whole area.
+  Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
 
   bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
 
@@ -266,6 +272,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// Positions in reading-direction space (x from the right edge in a right-to-left book).
   Offset _reading(Offset p) => _rtl ? Offset(_area.width - p.dx, p.dy) : p;
+
+  /// A screen position in [page]'s own coordinates, in reading direction (origin top-left; top-right for a
+  /// right-to-left book) - how the curl's geometry is worked out.
+  Offset _pagePoint(Offset screen, Rect page) =>
+      Offset(_rtl ? page.right - screen.dx : screen.dx - page.left, screen.dy - page.top);
 
   ui.Image? _snapshot() {
     final b = _pagesKey.currentContext?.findRenderObject();
@@ -277,14 +288,14 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     }
   }
 
-  bool _startCurl({required bool next, required Offset grab, required Offset finger}) {
+  bool _startCurl({required bool next, required Rect page, required Offset grab, required Offset finger}) {
     final target = next ? _index + 1 : _index - 1;
     if (target < 0 || target > _pages.length || _pc == null || _area.isEmpty) return false;
     _finishCurlNow();
     final now = _snapshot();
     if (now == null) return false;
-    final c = _Curl(sheet: now, forward: next, grab: grab, finger: finger, from: _index, under: next ? null : now,
-        pending: !next);
+    final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _index,
+        under: next ? null : now, pending: !next);
     _curl = c;
     _pc!.jumpToPage(target);
     setState(() {});
@@ -303,12 +314,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void _animateCurl({required bool complete}) {
     final c = _curl;
     if (c == null) return;
-    final w = _area.width;
+    final w = c.page.width;
     c
       ..completing = complete
       ..animFrom = c.finger
       ..animTo = c.forward == complete
-          ? Offset(PageCurl.gone(w), c.grab.dy - _area.height * 0.08) // turned away, corner lifted a little
+          ? Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _curlAnim.forward(from: 0);
   }
@@ -336,29 +347,42 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _endCurl();
   }
 
-  void _curlDragStart(DragStartDetails d) => _dragStart = _reading(d.localPosition);
+  Offset? _dragStartScreen;
 
+  void _curlDragStart(DragStartDetails d) {
+    _dragStart = _reading(d.localPosition);
+    _dragStartScreen = d.localPosition;
+  }
+
+  /// A drag can start anywhere on the screen: the distance from where it starts to the edge it moves towards is
+  /// the whole turn (so from the middle, half the screen turns the page fully) - the page doesn't have to be taken
+  /// by its edge.
   void _curlDragUpdate(DragUpdateDetails d) {
-    final s = _dragStart;
-    if (s == null) return;
-    final p = _reading(d.localPosition), w = _area.width;
+    final s = _dragStart, s0 = _dragStartScreen;
+    if (s == null || s0 == null) return;
+    final p = _reading(d.localPosition);
     if (_curl == null) {
       final dx = p.dx - s.dx;
       if (dx.abs() < 4) return;
       final next = dx < 0;
-      final grab = Offset(w, s.dy);
-      if (!_startCurl(next: next, grab: grab, finger: next ? grab : Offset(PageCurl.gone(w), s.dy))) {
+      final page = _pageRect(next ? _index : _index - 1);
+      final at = _pagePoint(s0, page);
+      final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
+      if (!_startCurl(next: next, page: page, grab: grab,
+          finger: next ? grab : Offset(PageCurl.gone(page.width), grab.dy))) {
         _dragStart = null;
         return;
       }
     }
     final c = _curl!;
     if (_curlAnim.isAnimating) return;
-    final gone = PageCurl.gone(w);
+    final w = c.page.width, gone = PageCurl.gone(w);
+    final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
+    final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
+    final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
+    final y = _pagePoint(d.localPosition, c.page).dy;
     setState(() {
-      c.finger = c.forward
-          ? Offset(math.min(w, w + (p.dx - s.dx)), p.dy) // the page's edge follows the finger
-          : Offset(gone + (w - gone) * ((p.dx - s.dx) / w * 1.2).clamp(0.0, 1.0), p.dy);
+      c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     });
   }
 
@@ -366,12 +390,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final c = _curl;
     _dragStart = null;
     if (c == null || _curlAnim.isAnimating) return;
-    final w = _area.width, gone = PageCurl.gone(w);
+    final w = c.page.width, gone = PageCurl.gone(w);
     var vx = d.velocity.pixelsPerSecond.dx;
     if (_rtl) vx = -vx;
     final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
     final complete = c.forward
-        ? vx < -400 || (vx < 400 && turned > 0.3)
+        ? vx < -400 || (vx < 400 && turned > 0.35)
         : vx > 400 || (vx > -400 && turned < 0.65);
     _animateCurl(complete: complete);
   }
@@ -671,7 +695,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                           if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
                           if (!_curl!.pending)
                             CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: _curl!.sheet,
-                                grab: _curl!.grab, finger: _curl!.finger, mirror: _rtl)),
+                                page: _curl!.page, grab: _curl!.grab, finger: _curl!.finger, mirror: _rtl)),
                         ]),
                       ),
                     ),
@@ -719,6 +743,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           onWheel: _onWheel,
           onPanChanged: (pans) => setState(() => pans ? _sideways.add(i) : _sideways.remove(i)),
           onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
+          onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,
@@ -1003,12 +1028,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
 /// A page turn in progress (3D page curl).
 class _Curl {
-  _Curl({required this.sheet, required this.forward, required this.grab, required this.finger, required this.from,
-      this.under, this.pending = false});
+  _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
+      required this.from, this.under, this.pending = false});
   ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
   final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
   final bool forward;
-  final Offset grab; // where the page was taken hold of (right edge, reading space)
+  final Rect page; // the curling page's image on screen - only it curls, not the bars around it
+  final Offset grab; // where the page was taken hold of (its right edge, page coordinates in reading direction)
   Offset finger; // where that point is now
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
