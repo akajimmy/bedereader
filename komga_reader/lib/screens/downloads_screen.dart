@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../offline/sync.dart';
 
 /// The download queue and everything downloaded (side menu > Downloads). The queue shows each book's state and,
 /// for the one downloading, pages done / total with a progress bar; failed books say why and can be retried.
@@ -67,6 +69,7 @@ class DownloadsScreen extends StatelessWidget {
           body: !d.ready
               ? const Center(child: Text('Downloads aren\'t available on this device', style: TextStyle(color: Color(0xFF9A9A9A))))
               : ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+                  const _PendingProgress(),
                   // storage
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -160,4 +163,34 @@ class _Heading extends StatelessWidget {
         padding: const EdgeInsets.only(top: 18, bottom: 6),
         child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
       );
+}
+
+/// Reading progress made offline that hasn't reached Komga yet, with Send now (online only).
+class _PendingProgress extends StatelessWidget {
+  const _PendingProgress();
+  @override
+  Widget build(BuildContext context) {
+    final sync = ProgressSync.instance;
+    return ListenableBuilder(
+      listenable: Listenable.merge([sync, Connection.instance, Downloads.instance]),
+      builder: (context, _) {
+        final n = sync.pending;
+        if (n == 0) return const SizedBox.shrink();
+        final offline = Connection.instance.offline;
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: const Icon(Icons.sync),
+            title: Text('Reading progress for $n ${n == 1 ? 'book' : 'books'} waiting for Komga'),
+            subtitle: Text(offline ? 'Sent when back online' : 'Sent automatically; or send it now'),
+            trailing: offline
+                ? null
+                : sync.running
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : TextButton(onPressed: sync.run, child: const Text('Send now')),
+          ),
+        );
+      },
+    );
+  }
 }

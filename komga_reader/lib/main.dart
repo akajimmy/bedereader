@@ -7,10 +7,12 @@ import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
 import 'offline/downloads.dart';
+import 'offline/sync.dart';
 import 'pins.dart';
 import 'settings.dart';
 import 'side_menu.dart';
 import 'widgets/connection_prompt.dart';
+import 'widgets/sync_alert.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 
@@ -51,6 +53,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.initState();
     SideMenu.instance.load();
     Connection.instance.addListener(_onConnection);
+    ProgressSync.instance.addListener(_onSync);
     _restore();
   }
 
@@ -82,6 +85,19 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   bool get _readerOpen => Connection.instance.readersOpen > 0;
   final _messenger = GlobalKey<ScaffoldMessengerState>();
 
+  /// Offline progress reached Komga: an alert if Komga had changed too (further wins), else a short message.
+  void _onSync() {
+    final r = ProgressSync.instance.last;
+    final ctx = _nav.currentContext;
+    if (r == null || ctx == null) return;
+    ProgressSync.instance.takeResult();
+    if (r.conflicts.isNotEmpty) {
+      showSyncConflicts(ctx, r);
+    } else {
+      _say(syncSummary(r));
+    }
+  }
+
   void _say(String text, {SnackBarAction? action}) => _messenger.currentState
     ?..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(text), action: action,
@@ -111,6 +127,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _startDownloads(Komga api) async {
     if (!kIsWeb) await Downloads.instance.attach(api);
     await Connection.instance.load(api);
+    if (!kIsWeb) ProgressSync.instance.start(); // offline reading -> Komga
   }
 
   Future<void> _signOut() async {

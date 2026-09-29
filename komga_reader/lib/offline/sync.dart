@@ -1,0 +1,214 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+
+import '../api.dart';
+import 'connection.dart';
+import 'downloads.dart';
+import 'store.dart';
+
+/// A book whose progress had changed both here (offline) and on Komga: what each side had, and which was kept.
+class ProgressConflict {
+  const ProgressConflict({required this.title, required this.here, required this.komga, required this.keptHere});
+  final String title, here, komga;
+  final bool keptHere;
+}
+
+class SyncResult {
+  const SyncResult({this.sent = 0, this.conflicts = const [], this.gone = 0});
+  final int sent; // offline progress sent to Komga without a clash
+  final List<ProgressConflict> conflicts;
+  final int gone; // books no longer on the server (their queued progress is dropped)
+  bool get isEmpty => sent == 0 && conflicts.isEmpty && gone == 0;
+}
+
+/// Offline phase 5: reading progress made offline goes to Komga once it's reachable (user's rules, 2026-09-28):
+/// - only this device changed it -> sent as it is (including "mark as unread");
+/// - Komga changed too (another device / the web) -> **further wins**: never back a page, never un-finish - and the
+///   books are listed in an alert with what each side had and what was kept.
+/// Runs when the app goes back online, at start-up, and on returning to the app. It also refreshes the downloaded
+/// copies from Komga (reading done elsewhere), and keeps them current while reading online ([Komga.onProgressWritten]).
+class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
+  ProgressSync._();
+  static final ProgressSync instance = ProgressSync._();
+
+  static const refreshGap = Duration(minutes: 2); // resume checks: not more often than this
+
+  bool running = false;
+  SyncResult? last; // shown once by the app, then cleared ([takeResult])
+  DateTime? _lastRun;
+  bool _wasOffline = false, _started = false;
+
+  OfflineStore? get _store => Downloads.instance.store;
+  Connection get _conn => Connection.instance;
+
+  /// Wired up once the connection is loaded.
+  void start() {
+    Komga.onProgressWritten = _mirror;
+    if (!_started) {
+      _started = true;
+      _conn.addListener(_onConnection);
+      WidgetsBinding.instance.addObserver(this);
+    }
+    _wasOffline = _conn.offline;
+    unawaited(run());
+  }
+
+  void _onConnection() {
+    final now = _conn.offline;
+    if (_wasOffline && !now) unawaited(run()); // back online
+    _wasOffline = now;
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    final l = _lastRun;
+    if (l == null || DateTime.now().difference(l) > refreshGap || (_store?.unsynced.isNotEmpty ?? false)) unawaited(run());
+  }
+
+  SyncResult? takeResult() {
+    final r = last;
+    last = null;
+    return r;
+  }
+
+  int get pending => _store?.unsynced.length ?? 0;
+
+  /// Sends what's queued, then refreshes the downloaded copies. Quietly stops if Komga stops answering.
+  Future<void> run() async {
+    final store = _store, api = _conn.online;
+    if (running || store == null || api == null || _conn.offline) return;
+    running = true;
+    _lastRun = DateTime.now();
+    notifyListeners();
+    var sent = 0, gone = 0;
+    final conflicts = <ProgressConflict>[];
+    try {
+      for (final id in store.unsynced) {
+        final local = store.progress[id]!;
+        final book = await api.book(id);
+        if (book == null) {
+          store.progress.remove(id);
+          gone++;
+          continue;
+        }
+        final server = OfflineStore.norm(book['readProgress'] as Map?);
+        final here = _norm(local);
+        final base = local['base'] as Map?;
+        final komgaChanged = base != null && !_same(server, base) && !_same(server, here);
+        if (!komgaChanged) {
+          if (!_same(server, here)) await _send(api, id, here, book);
+          sent++;
+          store.setServerProgress(id, _asReadProgress(here, book));
+        } else {
+          final keepHere = _rank(here) >= _rank(server);
+          if (keepHere) await _send(api, id, here, book);
+          store.setServerProgress(id, keepHere ? _asReadProgress(here, book) : book['readProgress'] as Map?);
+          conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
+              keptHere: keepHere));
+        }
+        await store.save();
+      }
+      await _refresh(api, store);
+    } on KomgaUnreachable {
+      // back offline mid-way: the rest stays queued for next time
+    } catch (_) {
+      // anything else: try again on the next run
+    } finally {
+      running = false;
+      final r = SyncResult(sent: sent, conflicts: conflicts, gone: gone);
+      if (!r.isEmpty) last = r;
+      notifyListeners();
+    }
+  }
+
+  /// Downloaded copies take Komga's current progress (one request per series), except books with unsent changes.
+  Future<void> _refresh(Komga api, OfflineStore store) async {
+    final bySeries = <String, List<String>>{};
+    store.books.forEach((id, e) {
+      final s = (e['book'] as Map?)?['seriesId'] as String?;
+      if (s != null) bySeries.putIfAbsent(s, () => []).add(id);
+    });
+    var changed = false;
+    for (final entry in bySeries.entries) {
+      final r = await api.seriesBooks(entry.key);
+      for (final b in (r['content'] as List?) ?? const []) {
+        final id = (b as Map)['id'] as String;
+        if (!entry.value.contains(id) || store.progress[id]?['synced'] == false) continue;
+        final rp = b['readProgress'] as Map?;
+        final cur = store.progress[id];
+        if (cur != null && _same(_norm(cur), OfflineStore.norm(rp))) continue;
+        store.setServerProgress(id, rp);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await store.save();
+      Downloads.instance.notifyListeners(); // tiles showing downloaded books
+    }
+  }
+
+  /// Written to Komga while online: the downloaded copy follows, and it's the new baseline.
+  void _mirror(Komga api, ProgressWrite w) {
+    final store = _store;
+    if (store == null || !identical(api, _conn.online)) return;
+    final ids = w.bookId != null
+        ? [w.bookId!]
+        : [for (final e in store.books.entries) if ((e.value['book'] as Map?)?['seriesId'] == w.seriesId) e.key];
+    var changed = false;
+    for (final id in ids) {
+      if (!store.books.containsKey(id)) continue;
+      final pages = (store.books[id]?['pages'] as List?)?.length ?? 0;
+      store.setServerProgress(id, w.unread ? null : {'page': w.page ?? pages, 'completed': w.completed});
+      changed = true;
+    }
+    if (changed) unawaited(store.save().catchError((Object _) {}));
+  }
+
+  static Future<void> _send(Komga api, String id, Map<String, dynamic> p, Map book) async {
+    if (p['none'] == true) {
+      await api.markUnread(id);
+    } else if (p['completed'] == true) {
+      await api.markRead(id);
+    } else {
+      await api.setProgress(id, (p['page'] as int).clamp(1, 1 << 20));
+    }
+  }
+
+  static Map<String, dynamic>? _asReadProgress(Map<String, dynamic> p, Map book) {
+    if (p['none'] == true) return null;
+    final pages = (book['media'] as Map?)?['pagesCount'] as int? ?? p['page'] as int;
+    return {'page': p['completed'] == true ? pages : p['page'], 'completed': p['completed'] == true};
+  }
+
+  static Map<String, dynamic> _norm(Map p) =>
+      {'page': p['page'] ?? 0, 'completed': p['completed'] == true, 'none': p['none'] == true};
+
+  static bool _same(Map a, Map b) {
+    if ((a['none'] == true) != (b['none'] == true)) return false;
+    if (a['none'] == true) return true;
+    if ((a['completed'] == true) != (b['completed'] == true)) return false;
+    return a['completed'] == true || a['page'] == b['page']; // read is read, whatever page it was left on
+  }
+
+  /// How far along: unread < page 1 < page 2 ... < read.
+  static int _rank(Map p) => p['none'] == true ? -1 : p['completed'] == true ? 1 << 30 : (p['page'] as int? ?? 0);
+
+  static String _describe(Map p) =>
+      p['none'] == true ? 'unread' : p['completed'] == true ? 'read' : 'page ${p['page']}';
+
+  static String _title(Map book) {
+    final number = (book['metadata'] as Map?)?['number'] ?? book['number'];
+    return '${book['seriesTitle'] ?? ''} #$number'.trim();
+  }
+
+  /// Tests: back to a clean state.
+  @visibleForTesting
+  void reset() {
+    running = false;
+    last = null;
+    _lastRun = null;
+    Komga.onProgressWritten = null;
+  }
+}

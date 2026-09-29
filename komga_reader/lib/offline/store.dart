@@ -58,28 +58,42 @@ class OfflineStore {
   /// Adds or replaces a book entry (the download engine calls this; tests build stores with it).
   Future<void> put(String bookId, Map<String, dynamic> entry) async {
     books[bookId] = entry;
-    final rp = (entry['book'] as Map?)?['readProgress'];
-    progress.putIfAbsent(bookId, () => {
-          'page': rp?['page'] ?? 0,
-          'completed': rp?['completed'] == true,
-          'at': DateTime.now().toIso8601String(),
-          'synced': true, // this is the server's own progress
-          if (rp == null) 'none': true,
-        });
+    final rp = (entry['book'] as Map?)?['readProgress'] as Map?;
+    if (!progress.containsKey(bookId)) setServerProgress(bookId, rp); // this is the server's own progress
     await save();
   }
 
-  /// Reading progress made offline (queued for Komga).
-  Future<void> setProgress(String bookId, {int? page, required bool completed, bool clear = false}) async {
+  /// Komga's progress, as {page, completed, none} ([rp] = Komga's readProgress, null = unread).
+  static Map<String, dynamic> norm(Map? rp) =>
+      {'page': rp?['page'] ?? 0, 'completed': rp?['completed'] == true, 'none': rp == null};
+
+  /// Progress that is now the same on Komga and here (downloaded, synced, read online): also the new baseline for
+  /// spotting later changes on Komga. Not saved - callers save once after a batch.
+  void setServerProgress(String bookId, Map? rp) {
+    final n = norm(rp);
     progress[bookId] = {
-      'page': clear ? 0 : (page ?? progress[bookId]?['page'] ?? 0),
+      'page': n['page'], 'completed': n['completed'], 'at': DateTime.now().toIso8601String(), 'synced': true,
+      if (rp == null) 'none': true,
+      'base': n,
+    };
+  }
+
+  /// Reading progress made offline (queued for Komga). Keeps the baseline: what Komga had when the two last agreed.
+  Future<void> setProgress(String bookId, {int? page, required bool completed, bool clear = false}) async {
+    final prev = progress[bookId];
+    progress[bookId] = {
+      'page': clear ? 0 : (page ?? prev?['page'] ?? 0),
       'completed': completed,
       'at': DateTime.now().toIso8601String(),
       'synced': false,
       if (clear) 'none': true,
+      if (prev?['base'] != null) 'base': prev!['base'],
     };
     await save();
   }
+
+  /// Books whose progress made offline hasn't reached Komga yet.
+  List<String> get unsynced => [for (final e in progress.entries) if (e.value['synced'] == false) e.key];
 
   /// The book's readProgress as Komga would give it (null = never opened / marked unread).
   Map<String, dynamic>? readProgressOf(String bookId) {
