@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
+import 'offline/downloads.dart';
 import 'pins.dart';
 import 'settings.dart';
 import 'widgets/focus_style.dart';
@@ -50,7 +52,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     final url = p.getString('server'), key = p.getString('apiKey');
     setState(() {
       if (url != null && key != null) _api = Komga(url, key);
-      if (_api != null) { AppSettings.instance.load(_api!); Pins.instance.load(_api!); }
+      if (_api != null) { AppSettings.instance.load(_api!); Pins.instance.load(_api!); _startDownloads(_api!); }
       _loaded = true;
     });
   }
@@ -62,6 +64,12 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     setState(() => _api = api);
     AppSettings.instance.load(api);
     Pins.instance.load(api);
+    _startDownloads(api);
+  }
+
+  /// Downloads (1.1): not on web, which has no storage for them.
+  void _startDownloads(Komga api) {
+    if (!kIsWeb) Downloads.instance.attach(api);
   }
 
   Future<void> _signOut() async {

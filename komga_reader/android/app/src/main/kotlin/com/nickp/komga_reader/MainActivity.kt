@@ -93,6 +93,8 @@ class MainActivity : FlutterActivity() {
                         result.success(false)
                     }
                 }
+                // App-private storage for downloaded books (removed with the app; no permissions needed).
+                "storageDir" -> result.success(filesDir.absolutePath)
                 else -> result.notImplemented()
             }
         }

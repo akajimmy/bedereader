@@ -4,6 +4,14 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Downloads (1.1, part 1 of offline mode): Download / Remove download on a book; Download unread / Download all
+  on a series or read list. Books download page by page into app storage with their place in the library (series,
+  read lists, collections) and posters; the queue survives restarts and resumes where it stopped.
+- Downloads screen (side menu, with a count while books are queued): the queue with live progress (page n of m,
+  size), pause / resume, cancel, failed books with the reason and Retry; everything downloaded with sizes and Remove.
+- App settings > Downloads: space used and a storage limit (2-100 GB or no limit, default 10 GB). A book that
+  would go over the limit stops with a note and carries on when the limit is raised.
+
 - App settings (side menu, above Reader settings): server address with Sign out / change server (asks first),
   and the Home section switches - the same setting as Home's ⋮ menu.
 

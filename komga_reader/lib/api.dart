@@ -161,6 +161,20 @@ class Komga {
         return r.bodyBytes;
       }, limit: pageTimeout);
 
+  // ---- what a book belongs to (the download engine snapshots this for offline browsing)
+  Future<List<dynamic>> bookReadLists(String bookId) async =>
+      (await _get('/api/v1/books/$bookId/readlists') as List<dynamic>?) ?? [];
+  Future<List<dynamic>> seriesCollections(String seriesId) async =>
+      (await _get('/api/v1/series/$seriesId/collections') as List<dynamic>?) ?? [];
+
+  /// A poster's image bytes (null if it has none).
+  Future<Uint8List?> thumbBytes(String url) => _net(() async {
+        final r = await _http.get(Uri.parse(url), headers: imageHeaders);
+        if (r.statusCode == 404) return null;
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'thumbnail');
+        return r.bodyBytes;
+      });
+
   // ---- delete (removes the files on the server - callers must confirm first)
   Future<void> deleteBookFile(String bookId) => _send('DELETE', '/api/v1/books/$bookId/file');
   Future<void> deleteSeriesFiles(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/file');

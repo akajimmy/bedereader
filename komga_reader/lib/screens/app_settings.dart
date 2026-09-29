@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../home_sections.dart';
+import '../offline/downloads.dart';
+import 'downloads_screen.dart';
 
 /// App-wide settings (side menu > App settings; not reachable from the reader, as reader/image settings are the
 /// reader's). Starts with the server and the Home sections; offline/download settings will join it (1.1).
@@ -53,6 +55,33 @@ class AppSettingsScreen extends StatelessWidget {
                   ),
                 ),
               ]),
+              if (Downloads.instance.ready)
+                ListenableBuilder(
+                  listenable: Downloads.instance,
+                  builder: (context, _) {
+                    final d = Downloads.instance;
+                    const choices = <int?>[2, 5, 10, 20, 50, 100, null]; // GB; null = no limit
+                    final current = d.capBytes == null ? null : (d.capBytes! / Downloads.gb).round();
+                    return _Card(title: 'Downloads', icon: Icons.download_outlined, children: [
+                      Text('${DownloadsScreen.size(d.usedBytes)} used on this device',
+                          style: const TextStyle(color: Color(0xFF9A9A9A))),
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        const Expanded(child: Text('Storage limit')),
+                        DropdownButton<int?>(
+                          value: choices.contains(current) ? current : 10,
+                          items: [
+                            for (final c in choices)
+                              DropdownMenuItem(value: c, child: Text(c == null ? 'No limit' : '$c GB')),
+                          ],
+                          onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
+                        ),
+                      ]),
+                      const Text('A book that would go over the limit stops in the queue with a note, and carries on by itself when the limit is raised.',
+                          style: TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
+                    ]);
+                  },
+                ),
               _Card(title: 'Home', icon: Icons.home_outlined, children: [
                 const Text('Sections shown on Home', style: TextStyle(color: Color(0xFF9A9A9A))),
                 for (final e in HomeSections.names.entries)

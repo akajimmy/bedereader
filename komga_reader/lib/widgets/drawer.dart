@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../offline/downloads.dart';
 import '../screens/app_settings.dart';
+import '../screens/downloads_screen.dart';
 import '../screens/info.dart';
 import '../screens/library.dart';
 import 'display_panel.dart';
@@ -76,6 +78,22 @@ class _AppDrawerState extends State<AppDrawer> {
           for (final l in _libraries)
             ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
+          if (Downloads.instance.ready)
+            ListenableBuilder(
+              listenable: Downloads.instance,
+              builder: (context, _) {
+                final q = Downloads.instance.queue.length;
+                return ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('Downloads'),
+                  trailing: q == 0 ? null : Badge(label: Text('$q')), // books waiting or downloading
+                  onTap: () {
+                    Scaffold.maybeOf(context)?.closeDrawer();
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DownloadsScreen()));
+                  },
+                );
+              },
+            ),
           const Divider(height: 1),
           ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('App settings'),
               onTap: () {

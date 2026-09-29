@@ -60,6 +60,16 @@ Future<bool> openUrl(String url) async {
   }
 }
 
+/// The app's private folder for downloads (Android app storage; Windows %LOCALAPPDATA%\KomgaReader). Null where
+/// there is none (web).
+Future<String?> appStorageDir() async {
+  try {
+    return await _channel.invokeMethod<String>('storageDir');
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Backlight for this app's window only (the rest of the tablet keeps its setting): -1 = follow the system,
 /// else 0.01..1. Android; a no-op elsewhere.
 Future<void> setScreenBrightness(double value) async {

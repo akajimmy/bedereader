@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../offline/downloads.dart';
 import 'book_details.dart';
 import 'series.dart';
 
@@ -12,6 +13,7 @@ import 'series.dart';
 Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     {required VoidCallback onChanged, VoidCallback? onSelectMultiple, String? readListId, bool showViewSeries = true}) async {
   final title = '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}';
+  final dl = Downloads.instance;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -24,6 +26,15 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
         if (showViewSeries)
           ListTile(leading: const Icon(Icons.collections_bookmark_outlined), title: const Text('View series'),
               onTap: () => Navigator.pop(ctx, 'series')),
+        if (dl.ready)
+          dl.isDownloaded(b['id'] as String)
+              ? ListTile(leading: const Icon(Icons.download_done), title: const Text('Remove download'),
+                  subtitle: const Text('Frees the space on this device; the book stays on the server'),
+                  onTap: () => Navigator.pop(ctx, 'undownload'))
+              : dl.jobFor(b['id'] as String) != null
+                  ? const ListTile(enabled: false, leading: Icon(Icons.downloading), title: Text('In the download queue'))
+                  : ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download'),
+                      onTap: () => Navigator.pop(ctx, 'download')),
         ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark as unread'),
@@ -40,6 +51,19 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'download' || choice == 'undownload') {
+    if (choice == 'download') {
+      await dl.add([b]);
+    } else {
+      await dl.remove(b['id'] as String);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(choice == 'download' ? 'Queued "$title" for download' : 'Removed the download of "$title"')));
+    }
+    onChanged();
     return null;
   }
   if (choice == 'details' || choice == 'series') {
@@ -140,6 +164,7 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark series as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
+        ...downloadTiles(ctx),
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
             title: const Text('Delete series…', style: TextStyle(color: Color(0xFFFF8A80))),
             onTap: () => Navigator.pop(ctx, 'delete')),
@@ -147,6 +172,10 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'dl-all' || choice == 'dl-unread') {
+    return queueDownloads(context, title, (status) => api.seriesBooks(s['id'] as String, readStatus: status, size: 2000),
+        unreadOnly: choice == 'dl-unread');
+  }
   final n = s['booksCount'] ?? 0;
   if (choice == 'read' &&
       !await confirmBulk(context, 'Mark all $n books of "$title" read?', 'Books in progress are marked finished.', 'Mark read')) {
@@ -190,10 +219,15 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
+        ...downloadTiles(ctx),
       ])),
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'dl-all' || choice == 'dl-unread') {
+    return queueDownloads(context, name, (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
+        unreadOnly: choice == 'dl-unread');
+  }
   final read = choice == 'read';
   if (!await confirmBulk(context, read ? 'Mark all $total books of "$name" read?' : 'Mark all $total books of "$name" unread?',
       read ? 'Books in progress are marked finished.' : 'This also clears the saved page of books in progress.',
@@ -264,4 +298,32 @@ Future<bool> confirmDelete(BuildContext context, String title, String body) asyn
     ),
   );
   return r == true;
+}
+
+/// "Download all" / "Download unread" entries for series and read-list menus (when downloads are available).
+List<Widget> downloadTiles(BuildContext ctx) => !Downloads.instance.ready
+    ? const []
+    : [
+        ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download unread'),
+            subtitle: const Text('Unread and in-progress books'), onTap: () => Navigator.pop(ctx, 'dl-unread')),
+        ListTile(leading: const Icon(Icons.download_for_offline_outlined), title: const Text('Download all'),
+            onTap: () => Navigator.pop(ctx, 'dl-all')),
+      ];
+
+/// Queues the books of a series or read list (in their order) and says how many were added.
+Future<void> queueDownloads(BuildContext context, String name,
+    Future<Map<String, dynamic>> Function(List<String>? readStatus) fetch, {required bool unreadOnly}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final r = await fetch(unreadOnly ? const ['UNREAD', 'IN_PROGRESS'] : null);
+    final books = (r['content'] as List<dynamic>?) ?? [];
+    final added = await Downloads.instance.add(books);
+    final skipped = books.length - added;
+    messenger.showSnackBar(SnackBar(content: Text(added == 0
+        ? 'Nothing new to download from "$name"'
+        : 'Queued $added book${added == 1 ? '' : 's'} from "$name"'
+            '${skipped > 0 ? ' ($skipped already downloaded or queued)' : ''}')));
+  } catch (e) {
+    messenger.showSnackBar(SnackBar(content: Text('$e')));
+  }
 }

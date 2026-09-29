@@ -9,17 +9,30 @@
 
 namespace {
 
-// %LOCALAPPDATA%\KomgaReader\window.txt
-std::wstring WindowFile() {
+// %LOCALAPPDATA%\KomgaReader (created if missing): window memory and downloaded books
+std::wstring AppDir() {
   PWSTR base = nullptr;
   std::wstring path;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base))) {
     path = std::wstring(base) + L"\\KomgaReader";
     CreateDirectoryW(path.c_str(), nullptr);
-    path += L"\\window.txt";
   }
   CoTaskMemFree(base);
   return path;
+}
+
+// %LOCALAPPDATA%\KomgaReader\window.txt
+std::wstring WindowFile() {
+  std::wstring dir = AppDir();
+  return dir.empty() ? dir : dir + L"\\window.txt";
+}
+
+std::string Narrow(const std::wstring& w) {
+  if (w.empty()) return std::string();
+  int n = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
+  std::string s(n, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w.c_str(), static_cast<int>(w.size()), s.data(), n, nullptr, nullptr);
+  return s;
 }
 
 std::wstring Widen(const std::string& s) {
@@ -65,6 +78,13 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
     } else if (m == "fullscreen") {
       if (args && std::holds_alternative<bool>(*args)) SetFullscreen(std::get<bool>(*args));
       result->Success(flutter::EncodableValue(fullscreen_));
+    } else if (m == "storageDir") {
+      std::wstring dir = AppDir();
+      if (dir.empty()) {
+        result->Success();
+      } else {
+        result->Success(flutter::EncodableValue(Narrow(dir)));
+      }
     } else if (m == "isFullscreen") {
       result->Success(flutter::EncodableValue(fullscreen_));
     } else {
