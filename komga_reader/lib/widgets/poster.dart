@@ -39,6 +39,7 @@ class PosterTile extends StatelessWidget {
           autofocus: autofocus,
           onTap: onOpen,
           onLongPress: onMenu,
+          onSecondaryTap: onMenu, // right-click on desktop
           borderRadius: BorderRadius.circular(6),
           focusColor: Colors.transparent,
           child: _FocusFrame(accent: accent, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

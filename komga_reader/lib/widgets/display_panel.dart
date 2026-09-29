@@ -97,6 +97,15 @@ class _ReaderPanel extends StatelessWidget {
           ),
         ],
         const _Heading('Screen · whole app, this device'),
+        if (!DisplayPrefs.backlightControl)
+          // desktop: a monitor's backlight can't be set, so the slider only dims (right = no dimming)
+          _SliderRow(
+            label: 'Screen brightness',
+            value: d.brightness ?? 1,
+            valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
+            onChanged: (v) => s.setDisplay(d.copyWith(brightness: () => v >= 0.995 ? null : v)),
+          ),
+        if (DisplayPrefs.backlightControl) ...[
         _SliderRow(
           label: 'Screen brightness',
           value: d.brightness ?? 0.6,
@@ -117,6 +126,7 @@ class _ReaderPanel extends StatelessWidget {
             s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
           },
         ),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Night mode (warm colours)'),

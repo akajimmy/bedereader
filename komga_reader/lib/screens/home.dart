@@ -248,7 +248,12 @@ class _LibraryButton extends StatelessWidget {
   final IconData icon;
   final bool autofocus;
   @override
-  Widget build(BuildContext context) => FilledButton.tonalIcon(
+  Widget build(BuildContext context) => GestureDetector(
+        onSecondaryTap: onLongPress, // right-click on desktop
+        child: _button(),
+      );
+
+  Widget _button() => FilledButton.tonalIcon(
         autofocus: autofocus,
         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
         onPressed: onTap,

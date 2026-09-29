@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
@@ -34,5 +35,15 @@ void main() {
     await tester.tap(find.text('Book 1'));
     await tester.pump(const Duration(milliseconds: 200));
     expect(outlined(tester), isFalse);
+  });
+
+  testWidgets('right-click on a tile opens its menu, like a long-press', (tester) async {
+    var menus = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 150, height: 290,
+        child: PosterTile(api: Komga('http://test', 'k'), imageUrl: 'http://test/x', title: 'T', onOpen: () {},
+            onMenu: () => menus++)))));
+    await tester.tap(find.text('T'), buttons: kSecondaryButton);
+    await tester.pump();
+    expect(menus, 1);
   });
 }

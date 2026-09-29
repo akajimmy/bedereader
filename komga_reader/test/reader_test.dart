@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -223,5 +225,50 @@ void main() {
     expect(find.text('This is the first book of the series'), findsOneWidget);
     expect(find.byType(ReaderScreen), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('desktop: one mouse-wheel notch turns one page', (tester) async {
+    await openReader(tester);
+    final centre = tester.getCenter(find.byType(ReaderScreen));
+    final mouse = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(mouse.hover(centre));
+    await tester.sendEventToBinding(mouse.scroll(const Offset(0, 100)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400)); // page animation
+    expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 1.0);
+    await tester.pump(const Duration(seconds: 2)); // progress save after the page settles
+    expect(api.saves, [2]);
+  });
+
+  testWidgets('desktop: F11 toggles full screen, and the top bar gets a full-screen button', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final calls = <bool>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
+      if (call.method == 'fullscreen') {
+        calls.add(call.arguments as bool);
+        return call.arguments;
+      }
+      return null;
+    });
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.f11);
+    await tester.pump();
+    expect(calls, [true]);
+    await key(tester, LogicalKeyboardKey.enter); // controls
+    expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.escape); // hides the controls first
+    await key(tester, LogicalKeyboardKey.escape); // then leaves full screen
+    await tester.pump();
+    expect(calls, [true, false]);
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  test('desktop brightness: the slider only dims (no backlight)', () {
+    DisplayPrefs.backlightControl = false;
+    expect(const DisplayPrefs(brightness: 1).dimOverlay, 0);
+    expect(const DisplayPrefs(brightness: 0.5).dimOverlay, closeTo(0.375, 1e-9));
+    expect(const DisplayPrefs(brightness: 0.5).backlight, -1); // never touches the backlight
+    DisplayPrefs.backlightControl = true;
   });
 }

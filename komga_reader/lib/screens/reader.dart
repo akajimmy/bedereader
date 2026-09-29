@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -29,7 +30,7 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-enum _Ctl { close, fit, night, read, delete, prevBook, slider, image, reader, nextBook }
+enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, image, reader, nextBook }
 
 class _ReaderScreenState extends State<ReaderScreen> {
   late dynamic _book = widget.book;
@@ -45,6 +46,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _turned = false; // progress is only saved once a page has been turned in this visit
   int _openedAt = 0;
   bool _zoomed = false; // pinch-zoomed in: page swiping is paused so a drag pans the page
+  bool _fullscreen = false; // desktop: F11 / the full-screen button
+  double _wheelAcc = 0; // mouse wheel travel towards the next page turn
+  DateTime _lastWheelTurn = DateTime(0);
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
   Timer? _saveTimer;
   final Map<int, ScrollController> _scrolls = {};
@@ -76,6 +80,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _settings.removeListener(_onSettings);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     keepScreenOn(false);
+    if (_fullscreen) setFullscreen(false); // leaving the reader leaves full screen
     _pc?.dispose();
     _disposeScrolls();
     _keys.dispose();
@@ -270,7 +275,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   /// The two bars, left to right, as the remote walks them.
-  List<_Ctl> get _topBar => const [_Ctl.close, _Ctl.fit, _Ctl.night, _Ctl.read, _Ctl.delete];
+  List<_Ctl> get _topBar => [_Ctl.close, _Ctl.fit, _Ctl.night, if (isDesktop) _Ctl.fullscreen, _Ctl.read, _Ctl.delete];
   List<_Ctl> get _bottomBar => [
         _Ctl.prevBook,
         if (_pages.length > 1) _Ctl.slider,
@@ -310,13 +315,50 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _isBack(LogicalKeyboardKey k) =>
       k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
 
+  Future<void> _toggleFullscreen() async {
+    final now = await setFullscreen(!_fullscreen);
+    if (mounted) setState(() => _fullscreen = now);
+  }
+
+  /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
+  /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
+  void _onWheel(double dy) {
+    if (_menu || _pc == null) return;
+    final c = _scrolls[_index];
+    if (_prefs.fit != FitMode.screen && c != null && c.hasClients) {
+      final p = c.position;
+      final target = (p.pixels + dy).clamp(0.0, p.maxScrollExtent);
+      if ((target - p.pixels).abs() > 0.5) {
+        c.jumpTo(target);
+        _wheelAcc = 0;
+        return;
+      }
+    }
+    _wheelAcc += dy;
+    if (_wheelAcc.abs() < 40) return;
+    final forward = _wheelAcc > 0;
+    _wheelAcc = 0;
+    final now = DateTime.now();
+    if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
+    _lastWheelTurn = now;
+    forward ? _forward() : _back();
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    if (isDesktop && k == LogicalKeyboardKey.f11 && e is KeyDownEvent) {
+      _toggleFullscreen();
+      return KeyEventResult.handled;
+    }
     if (!_menu) {
-      if (_isFwd(k)) { _forward(); return KeyEventResult.handled; }
-      if (_isBack(k)) { _back(); return KeyEventResult.handled; }
+      if (_isFwd(k) || (k == LogicalKeyboardKey.space && !HardwareKeyboard.instance.isShiftPressed)) {
+        _forward();
+        return KeyEventResult.handled;
+      }
+      if (_isBack(k) || k == LogicalKeyboardKey.space) { _back(); return KeyEventResult.handled; }
       if (_isOk(k) && e is KeyDownEvent) { _showControls(); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.escape && _fullscreen) { _toggleFullscreen(); return KeyEventResult.handled; }
       return KeyEventResult.ignored;
     }
     if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) { _hideControls(); return KeyEventResult.handled; }
@@ -383,11 +425,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
               : Stack(children: [
                   LayoutBuilder(builder: (context, box) {
                     return Listener(
+                      // wheel over the end card or a loading page (over a page, the page itself takes it)
+                      onPointerSignal: (e) {
+                        if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+                          GestureBinding.instance.pointerSignalResolver
+                              .register(e, (ev) => _onWheel((ev as PointerScrollEvent).scrollDelta.dy));
+                        }
+                      },
                       onPointerDown: (_) => _setFingers(_fingers + 1),
                       onPointerUp: (_) => _setFingers(_fingers - 1),
                       onPointerCancel: (_) => _setFingers(_fingers - 1),
                       child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
+                      onSecondaryTap: () => _menu ? _hideControls() : _showControls(), // right-click
                       onTapUp: (d) {
                         final x = d.localPosition.dx / box.maxWidth;
                         if (x < 0.33) { _back(); }
@@ -426,6 +476,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           startAtEnd: _startAtEnd == i,
           levels: _loader!.bookLevels,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
+          onWheel: _onWheel,
           onStartedAtEnd: () => _startAtEnd = null,
         );
       },
@@ -503,6 +554,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       color: night ? const Color(0xFFFFB74D) : null),
                   onPressed: () => _settings.setDisplay(_settings.display.copyWith(night: !night)),
                 ),
+                if (isDesktop)
+                  _iconCtl(
+                    node: _ctl[_Ctl.fullscreen]!,
+                    icon: _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                    label: _fullscreen ? 'Leave full screen (F11)' : 'Full screen (F11)',
+                    onPressed: _toggleFullscreen,
+                  ),
                 _iconCtl(
                   node: _ctl[_Ctl.read]!,
                   icon: completed ? Icons.check_circle : Icons.check_circle_outline,

@@ -25,10 +25,15 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  desktop_ = std::make_unique<DesktopChannel>(flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (start_maximized_) {
+      ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
+    } else {
+      this->Show();
+    }
   });
 
   // Flutter can complete the first frame before the "show window" callback is
@@ -40,6 +45,7 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  desktop_ = nullptr;
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -64,6 +70,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_CLOSE:
+      if (desktop_) desktop_->SaveWindow();  // remember size/position for next time
       break;
   }
 

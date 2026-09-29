@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'api.dart';
 import 'settings.dart';
@@ -152,7 +153,7 @@ Future<ui.FragmentProgram?> _sharpenProgram() => _program ??= ui.FragmentProgram
 /// same controller to scroll with the remote before turning the page).
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
-      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged});
+      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -160,6 +161,7 @@ class PageCanvas extends StatefulWidget {
   final VoidCallback? onStartedAtEnd;
   final Future<Levels> Function()? levels; // the book's auto-levels (used when auto-levels is on)
   final ValueChanged<bool>? onZoomChanged; // pinch-zoomed in or back to fit
+  final ValueChanged<double>? onWheel; // mouse wheel over the page (desktop); Ctrl+wheel still zooms
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -227,21 +229,39 @@ class _PageCanvasState extends State<PageCanvas> {
       switch (widget.prefs.fit) {
         case FitMode.screen:
           final s = aspect > w / h ? Size(w, w / aspect) : Size(h * aspect, h);
-          return InteractiveViewer(transformationController: _zoom, maxScale: 4, child: Center(child: picture(s)));
+          return InteractiveViewer(transformationController: _zoom, maxScale: 4, child: _wheel(Center(child: picture(s))));
         case FitMode.width:
           final s = Size(w, w / aspect);
           _jumpToEndIfNeeded();
           return s.height <= h
-              ? Center(child: picture(s))
-              : SingleChildScrollView(controller: widget.scroll, child: picture(s));
+              ? _wheel(Center(child: picture(s)))
+              : SingleChildScrollView(controller: widget.scroll, child: _wheel(picture(s)));
         case FitMode.height:
           final s = Size(h * aspect, h);
           _jumpToEndIfNeeded();
           return s.width <= w
-              ? Center(child: picture(s))
-              : SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal, child: picture(s));
+              ? _wheel(Center(child: picture(s)))
+              : SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal, child: _wheel(picture(s)));
       }
     });
+  }
+
+  /// Claims mouse-wheel events over the page before the zoom viewer or scroll view can (they would zoom / scroll
+  /// on their own); the reader decides whether a notch scrolls the page or turns it. Ctrl+wheel is left alone so
+  /// it still zooms.
+  Widget _wheel(Widget child) {
+    final onWheel = widget.onWheel;
+    if (onWheel == null) return child;
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerSignal: (e) {
+        if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+          GestureBinding.instance.pointerSignalResolver
+              .register(e, (ev) => onWheel((ev as PointerScrollEvent).scrollDelta.dy));
+        }
+      },
+      child: child,
+    );
   }
 
   void _jumpToEndIfNeeded() {

@@ -62,9 +62,12 @@ class DisplayPrefs {
   static const dimZone = 0.2;
 
   /// Screen backlight for this app's window: -1 = system setting, else 0.01..1.
+  /// Android can set the backlight; on desktop the whole slider is a dimming layer (0 = darkest, 1 = none).
+  static bool backlightControl = hasBacklightControl;
+
   double get backlight {
     final b = brightness;
-    if (b == null) return -1;
+    if (b == null || !backlightControl) return -1;
     if (b <= dimZone) return 0.01;
     return 0.01 + (b - dimZone) / (1 - dimZone) * 0.99;
   }
@@ -76,7 +79,9 @@ class DisplayPrefs {
   /// Black overlay opacity for "darker than the minimum".
   double get dimOverlay {
     final b = brightness;
-    if (b == null || b >= dimZone) return 0;
+    if (b == null) return 0;
+    if (!backlightControl) return (1 - b) * 0.75;
+    if (b >= dimZone) return 0;
     return (dimZone - b) / dimZone * 0.75;
   }
 

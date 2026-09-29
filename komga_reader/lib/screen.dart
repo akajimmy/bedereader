@@ -1,6 +1,26 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 const _channel = MethodChannel('komga_reader/screen');
+
+/// Windows / macOS / Linux app (mouse, keyboard, resizable window) rather than a phone or tablet.
+bool get isDesktop =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux);
+
+/// Only Android lets the app set the screen's backlight; elsewhere the brightness slider just dims.
+bool get hasBacklightControl => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+/// Desktop: borderless full screen on/off (F11 in the reader). Returns whether it is now full screen.
+Future<bool> setFullscreen(bool on) async {
+  try {
+    return await _channel.invokeMethod<bool>('fullscreen', on) ?? false;
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Stops the tablet from dimming and sleeping while a book is open (Android; a no-op on web/Windows).
 Future<void> keepScreenOn(bool on) async {

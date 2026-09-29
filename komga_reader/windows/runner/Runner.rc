@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.nickp" "\0"
-            VALUE "FileDescription", "komga_reader" "\0"
+            VALUE "FileDescription", "Komga Reader" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "komga_reader" "\0"
+            VALUE "InternalName", "KomgaReader" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.nickp. All rights reserved." "\0"
-            VALUE "OriginalFilename", "komga_reader.exe" "\0"
-            VALUE "ProductName", "komga_reader" "\0"
+            VALUE "OriginalFilename", "KomgaReader.exe" "\0"
+            VALUE "ProductName", "Komga Reader" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
