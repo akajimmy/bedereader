@@ -4,6 +4,11 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Reading progress made offline reaches Komga once it's reachable again (on going back online, at start-up, and on
+  returning to the app). If only this device changed a book it's sent as it is; if Komga changed too, the further
+  one wins (never back a page, never un-finish) and an alert lists those books with what each side had and what was
+  kept. Downloaded copies follow Komga (reading on the web, or online on this device). Downloads screen shows
+  progress still waiting, with Send now.
 - Offline mode switches when Komga can't be reached: at start-up, on returning to the app, or when anything fails
   to load, the app asks "Can't reach Komga" - Use downloaded books / Retry / Stay online (with nothing downloaded it
   just says so). Offline that way it checks every 30 s and on returning to the app, and offers "Komga is reachable

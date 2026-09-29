@@ -144,12 +144,33 @@ class Komga {
   ImageProvider thumbImage(String ref) => NetworkImage(ref, headers: imageHeaders);
 
   // ---- reading state (always straight to the server)
-  Future<void> setProgress(String bookId, int page, {bool completed = false}) =>
-      _send('PATCH', '/api/v1/books/$bookId/read-progress', {'page': page, 'completed': completed});
-  Future<void> markRead(String bookId) => _send('PATCH', '/api/v1/books/$bookId/read-progress', {'completed': true});
-  Future<void> markUnread(String bookId) => _send('DELETE', '/api/v1/books/$bookId/read-progress');
-  Future<void> markSeriesRead(String seriesId) => _send('POST', '/api/v1/series/$seriesId/read-progress');
-  Future<void> markSeriesUnread(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/read-progress');
+  // After each write [onProgressWritten] is told, so a downloaded copy of the book follows (lib/offline/sync.dart).
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    await _send('PATCH', '/api/v1/books/$bookId/read-progress', {'page': page, 'completed': completed});
+    onProgressWritten?.call(this, ProgressWrite(bookId: bookId, page: page, completed: completed));
+  }
+
+  Future<void> markRead(String bookId) async {
+    await _send('PATCH', '/api/v1/books/$bookId/read-progress', {'completed': true});
+    onProgressWritten?.call(this, ProgressWrite(bookId: bookId, completed: true));
+  }
+
+  Future<void> markUnread(String bookId) async {
+    await _send('DELETE', '/api/v1/books/$bookId/read-progress');
+    onProgressWritten?.call(this, ProgressWrite(bookId: bookId, unread: true));
+  }
+
+  Future<void> markSeriesRead(String seriesId) async {
+    await _send('POST', '/api/v1/series/$seriesId/read-progress');
+    onProgressWritten?.call(this, ProgressWrite(seriesId: seriesId, completed: true));
+  }
+
+  Future<void> markSeriesUnread(String seriesId) async {
+    await _send('DELETE', '/api/v1/series/$seriesId/read-progress');
+    onProgressWritten?.call(this, ProgressWrite(seriesId: seriesId, unread: true));
+  }
+
+  static void Function(Komga api, ProgressWrite write)? onProgressWritten;
 
   // ---- next book: within the read list it was opened from, else within its series
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
@@ -209,6 +230,14 @@ class KomgaError implements Exception {
 }
 
 /// No answer from the server (away from home, Komga or the PC off, wrong address).
+/// A reading-progress change just written to Komga: one book, or every book of a series.
+class ProgressWrite {
+  const ProgressWrite({this.bookId, this.seriesId, this.page, this.completed = false, this.unread = false});
+  final String? bookId, seriesId;
+  final int? page; // null with completed: the last page
+  final bool completed, unread;
+}
+
 class KomgaUnreachable implements Exception {
   KomgaUnreachable(this.baseUrl);
   final String baseUrl;
