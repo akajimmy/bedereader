@@ -165,7 +165,7 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect});
+      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -195,6 +195,11 @@ class PageCanvas extends StatefulWidget {
   /// Where the page's image sits in this widget (unzoomed), as laid out - not the bars around it. The page curl
   /// bends only this part.
   final ValueChanged<Rect>? onPageRect;
+
+  /// For a page off screen (the reader's neighbours): completes once no page turn is playing. Enhance colours and
+  /// Enhance wait for it, so their GPU work doesn't land on a turn's frames - a curl or wipe hitched while the page
+  /// after next was processed during it (user, 2026-09-29). Null: process at once (the page on screen).
+  final Future<void> Function()? idle;
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -333,6 +338,10 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Future<void> _prepare() async {
     final p = widget.prefs;
     final run = ++_colourRun;
+    if (p.crop > 0 || p.autoLevels) {
+      await widget.idle?.call(); // off screen: the crop and colour passes wait until no page turn is playing
+      if (!mounted || run != _colourRun) return;
+    }
     var img = widget.data.image;
     if (p.crop > 0) {
       if (_cropped == null || _croppedBy != p.crop) {
@@ -374,6 +383,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     _enhancedFor = physical; // requested: don't ask again for this size
     final run = ++_enhanceRun;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (run != _enhanceRun || !mounted) return;
+      await widget.idle?.call(); // off screen: not during a page turn
       if (run != _enhanceRun || !mounted) return;
       final out = await Enhancer.run(img, physical.width.round(), physical.height.round());
       if (out == null) {

@@ -557,6 +557,18 @@ void main() {
     });
   });
 
+  testWidgets('every page turn mode keeps the neighbouring pages built (processed before they are turned to)',
+      (tester) async {
+    for (final turn in PageTurn.values) {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
+      await openReader(tester);
+      expect(tester.widget<PageView>(find.byType(PageView)).allowImplicitScrolling, isTrue, reason: turn.name);
+      await tester.pumpWidget(const SizedBox());
+    }
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe));
+    await tester.pump(const Duration(seconds: 3));
+  });
+
   testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.arrowRight);
