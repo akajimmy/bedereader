@@ -112,6 +112,23 @@ void main() {
     expect((await api.previousBook('B2', readListId: 'RL1'))!['id'], 'B3');
   });
 
+  test("next book offline: never skips ahead - a next book that isn't downloaded says so", () async {
+    Future<void> set(String id, Map<String, dynamic> changes) => store.put(id, {...store.books[id]!, ...changes});
+    // series, recorded at download time: B1 -> B2 (downloaded), B5 -> B9 (not), B2 last
+    await set('B1', {'nextId': 'B2'});
+    await set('B5', {'nextId': 'B9'});
+    await set('B2', {'nextId': null});
+    expect((await api.nextBook('B1'))!['id'], 'B2');
+    expect(() => api.nextBook('B5'), throwsA(isA<NotAvailableOffline>()));
+    expect(await api.nextBook('B2'), isNull); // end of the series
+    // read list RL1: B3 at 2, B2 at 5 - positions 3 and 4 aren't downloaded
+    expect(() => api.nextBook('B3', readListId: 'RL1'), throwsA(isA<NotAvailableOffline>())); // not B2
+    await set('B2', {'readLists': [{'id': 'RL1', 'name': 'Event', 'index': 5, 'count': 6}]});
+    expect(await api.nextBook('B2', readListId: 'RL1'), isNull); // the list's last book
+    await set('B2', {'readLists': [{'id': 'RL1', 'name': 'Event', 'index': 5, 'count': 9}]});
+    expect(() => api.nextBook('B2', readListId: 'RL1'), throwsA(isA<NotAvailableOffline>()));
+  });
+
   test('server-only actions refuse clearly; settings sync waits for the connection', () async {
     expect(() => api.deleteBookFile('B1'), throwsA(isA<NotAvailableOffline>()));
     expect(() => api.clientSettings(), throwsA(isA<KomgaUnreachable>()));

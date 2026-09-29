@@ -43,6 +43,9 @@ class FakeKomga extends Komga {
   Future<List<dynamic>> seriesCollections(String seriesId) async => [{'id': 'C1', 'name': 'Marvel cosmic'}];
   @override
   Future<Uint8List?> thumbBytes(String url) async => Uint8List(10);
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async =>
+      bookId == 'B1' ? _book('B2', 2) : null; // B2 is the series' last
 
   /// Reachability check: answers while [up], else "can't reach" - reported like every real server call.
   bool up = true;
@@ -102,6 +105,10 @@ void main() {
     expect(((await offline.collections())['content'] as List).single['name'], 'Marvel cosmic');
     expect(offline.store.readProgressOf('B1')!['page'], 2); // the server's progress came along
     expect(d.recentlyDone.first, 'Silver Surfer #1');
+    // what comes next is recorded, so offline can say "the next book isn't downloaded" instead of skipping ahead
+    expect(d.store!.books['B1']!['nextId'], 'B2');
+    expect(((d.store!.books['B1']!['readLists'] as List).single as Map)['count'], 2);
+    expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
   test('queuing the same book twice, or one already downloaded, does nothing', () async {
