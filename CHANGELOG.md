@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 19 - 2026-09-28
+
 - Library sort menu: pick a field (Title, Date added, Date updated, Release date), then the direction
   (A → Z / Z → A, Newest / Oldest first). Remembered per library, kept in pins, reset by Clear filters.
 - Series: order toggle in the top bar - oldest first / newest first by issue number. Remembered per series,
