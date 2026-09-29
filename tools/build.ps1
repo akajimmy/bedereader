@@ -165,12 +165,41 @@ Say "building $name+$build for: $($Platforms -join ', ') -> $out"
 $artifacts = @()
 try {
 if ($Platforms -contains 'android') {
+    # Release signing: android\key.properties names the keystore; its password is kept encrypted with this Windows
+    # account (DPAPI) in %USERPROFILE%\.keystores\android-release.pass and handed to Gradle through
+    # KOMGA_SIGNING_PASSWORD for this one build - never written out, logged or shown.
     $keyProps = Join-Path $app 'android\key.properties'
-    $signing = if (Test-Path $keyProps) { 'release key (android\key.properties)' } else { 'DEBUG key - no android\key.properties' }
+    $passFile = Join-Path $env:USERPROFILE '.keystores\android-release.pass'
     if (-not (Test-Path $keyProps)) {
-        Say 'WARNING: no android\key.properties - the APK is signed with the debug key (fine for testing, not for release)'
+        Say 'WARNING: no android\key.properties - the APK will be signed with the debug key (fine for testing only)'
+    } elseif (Test-Path $passFile) {
+        try {
+            $secure = Get-Content $passFile -ErrorAction Stop | ConvertTo-SecureString -ErrorAction Stop
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try { $env:KOMGA_SIGNING_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+            finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+        } catch {
+            Say "WARNING: couldn't decrypt $passFile (another Windows account or PC?) - the APK will be signed with the debug key"
+        }
+    } else {
+        Say "WARNING: no $passFile - unless key.properties holds the password, the APK will be signed with the debug key"
     }
-    Run 'Android APK' 'flutter build apk --release'
+    try {
+        Run 'Android APK' 'flutter build apk --release'
+    } finally {
+        Remove-Item Env:KOMGA_SIGNING_PASSWORD -ErrorAction SilentlyContinue
+    }
+    # which key actually signed it (Android's own signature check - no password needed)
+    $apksigner = Get-ChildItem 'C:\Dev\android-sdk\build-tools' -Filter apksigner.bat -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object FullName -Descending | Select-Object -First 1
+    $signer = if ($apksigner) {
+        (cmd /c "`"$($apksigner.FullName)`" verify --print-certs `"$(Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk')`" 2>&1" |
+            Select-String 'Signer #1 certificate DN: (.*)' | Select-Object -First 1).Matches.Groups[1].Value
+    }
+    $signing = if (-not $signer) { 'unknown (apksigner not found)' }
+               elseif ($signer -match 'CN=Android Debug') { "the DEBUG key ($signer)" }
+               else { "the release key ($signer)" }
+    Say "APK signed with $signing"
     $apk = Join-Path $out "$product-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
     $artifacts += $apk
@@ -202,7 +231,7 @@ $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].V
     "commit:   $commit$(if ($Bump) { ' (+ this version bump)' })$(if ($dirty) { ' - WORKING TREE HAD UNCOMMITTED CHANGES' })",
     "flutter:  $fv",
     "tests:    $(if ($SkipTests) { 'skipped' } else { 'passed' })",
-    "android:  $(if ($Platforms -contains 'android') { "signed with the $signing" } else { 'not built' })",
+    "android:  $(if ($Platforms -contains 'android') { "signed with $signing" } else { 'not built' })",
     '',
     'files:'
 ) + ($artifacts | ForEach-Object { '  {0}  ({1:N1} MB)' -f (Split-Path $_ -Leaf), ((Get-Item $_).Length / 1MB) }) |

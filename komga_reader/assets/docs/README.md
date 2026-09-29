@@ -148,10 +148,14 @@ options > Wireless debugging > Pair device with pairing code. Wireless debugging
 switches it off whenever the tablet leaves the Wi-Fi); if the tablet can't be reached the build still succeeds and
 says so - install later with `tools\install-android.ps1`.
 
-**Release signing (Android):** the APK is signed with the key named in `komga_reader\android\key.properties`
-(copy `key.properties.example`; never committed), whose keystore lives outside the repository. Without that file the
-build falls back to the debug key and says so. Android only updates an app signed with the same key, so the release
-key must never change: keep a backup of the keystore and its password.
+**Release signing (Android):** `komga_reader\android\key.properties` (copy `key.properties.example`; never
+committed) names the keystore, which lives outside the repository. Its password is kept encrypted with your Windows
+account in `%USERPROFILE%\.keystores\android-release.pass` - make it once with
+`Read-Host 'Keystore password' -AsSecureString | ConvertFrom-SecureString | Set-Content "$env:USERPROFILE\.keystores\android-release.pass"`.
+The build decrypts it for the Android build only, then checks which key actually signed the APK (in the log and
+BUILD-INFO.txt). Without the keystore or password it falls back to the debug key and says so. Android only updates an
+app signed with the same key, so the release key must never change: back up the keystore and keep its password in a
+password manager (the encrypted copy only works for this Windows account on this PC).
 
 Outputs in `dist\<version>\`:
 - `KomgaReader-<ver>-android.apk` - install on the tablet (sideload)

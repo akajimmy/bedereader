@@ -1,7 +1,11 @@
-# Release signing for the Android app. Copy this file to key.properties (in this folder) and fill it in.
-# key.properties is never committed (.gitignore); the keystore itself lives outside the repository - keep a backup
-# of both it and its password somewhere safe: without the same key, a new version can't be installed over the old one.
+# Release signing for the Android app. Copy this file to key.properties (in this folder) and fill in the path.
+# key.properties is never committed (.gitignore); the keystore lives outside the repository.
+#
+# The password isn't written here: it's kept encrypted with your Windows account - make that once in PowerShell with
+#   Read-Host 'Keystore password' -AsSecureString | ConvertFrom-SecureString | Set-Content "$env:USERPROFILE\.keystores\android-release.pass"
+# and tools\build.ps1 decrypts it for the Android build only. (A storePassword= line here would also work, in plain text.)
+#
+# Back up the keystore and keep its password in a password manager: without the same key, a new version can't be
+# installed over the old one.
 storeFile=C:/Users/<you>/.keystores/android-release.jks
-storePassword=<the keystore password>
 keyAlias=release
-keyPassword=<the key password - the same as the keystore password for a PKCS12 keystore>
