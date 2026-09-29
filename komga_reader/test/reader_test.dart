@@ -379,6 +379,31 @@ void main() {
     expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 1.0); // already there, same frame
   });
 
+  for (final turn in PageTurn.values) {
+    testWidgets('page turn ${turn.name}: only the look differs - tap, swipe and arrows all turn', (tester) async {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
+      addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+      await openReader(tester);
+      double page() => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+      final size = tester.getSize(find.byType(PageView));
+      Future<void> settle() async { for (var i = 0; i < 40; i++) { await tester.pump(const Duration(milliseconds: 50)); } }
+
+      await tester.tapAt(Offset(size.width * 0.9, size.height / 2)); // right side: forward
+      await settle();
+      expect(page(), 1.0, reason: 'tap');
+      await tester.fling(find.byType(PageView), Offset(-size.width * 0.6, 0), 1500); // swipe: forward
+      await settle();
+      expect(page(), 2.0, reason: 'swipe after a tap');
+      await key(tester, LogicalKeyboardKey.arrowLeft); // back
+      await settle();
+      expect(page(), 1.0, reason: 'arrow');
+      await tester.fling(find.byType(PageView), Offset(size.width * 0.6, 0), 1500); // swipe: back
+      await settle();
+      expect(page(), 0.0, reason: 'swipe after an arrow');
+      await tester.pump(const Duration(seconds: 2));
+    });
+  }
+
   testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.arrowRight);
