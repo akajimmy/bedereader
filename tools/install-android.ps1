@@ -32,7 +32,13 @@ if (-not $Apk) {
 }
 
 # 1. a connected device, or connect to one advertised on the Wi-Fi
-function Devices { @(Adb 'devices' | Where-Object { $_ -match '\sdevice$' } | ForEach-Object { ($_ -split '\s+')[0] }) }
+# Connected devices as transport ids, newest connection first. (Names can contain spaces - after Wireless debugging
+# is switched off and on the tablet reappears as "adb-... (2)" next to the stale old entry - so go by transport id.)
+function Devices {
+    @(Adb 'devices -l' | ForEach-Object {
+            if ($_ -match '\sdevice\s.*transport_id:(\d+)') { [int]$Matches[1] }
+        } | Sort-Object -Descending)
+}
 $devices = @(Devices)  # @() keeps a single device a list (else [0] is its first letter)
 if ($devices.Count -eq 0) {
     Say 'no tablet connected - looking for it on the Wi-Fi ...'
@@ -50,10 +56,10 @@ if ($devices.Count -eq 0) {
 $device = $devices[0]
 
 # 2. install as an update and check the version that is now there
-$before = (Adb "-s $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
-Say "installing $(Split-Path $Apk -Leaf) on $device ..."
-$result = Adb "-s $device install -r `"$Apk`""
+$before = (Adb "-t $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
+Say "installing $(Split-Path $Apk -Leaf) on the tablet (connection $device) ..."
+$result = Adb "-t $device install -r `"$Apk`""
 if (-not ($result -match '^Success')) { throw "install failed: $($result -join ' ')" }
-$after = (Adb "-s $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
+$after = (Adb "-t $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
 $b = if ($before) { $before.Matches[0].Groups[1].Value } else { 'none' }
 Say "installed: build $b -> build $($after.Matches[0].Groups[1].Value)"

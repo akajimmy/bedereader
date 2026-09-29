@@ -154,7 +154,7 @@ Future<ui.FragmentProgram?> _sharpenProgram() => _program ??= ui.FragmentProgram
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom, this.rtl = false});
+      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -173,6 +173,13 @@ class PageCanvas extends StatefulWidget {
 
   /// Right-to-left book: the zoomed path runs right to left, and fit height starts at the right edge.
   final bool rtl;
+
+  /// Fit height with a page wider than the screen: true while the page can be dragged sideways (the reader stops
+  /// page swipes then, so a drag moves the page instead).
+  final ValueChanged<bool>? onPanChanged;
+
+  /// Dragging on past the edge of such a page: turn the page (true = forward, in reading direction).
+  final ValueChanged<bool>? onEdgeSwipe;
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -205,6 +212,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    if (_panning == true) widget.onPanChanged?.call(false);
     widget.onStepper?.call(null);
     _anim.dispose();
     if (widget.zoom == null) _zoom.dispose();
@@ -274,6 +282,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
         old.data != widget.data) {
       _prepare();
     }
+    // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
+    if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd)) _placed = false;
   }
 
   Future<void> _prepare() async {
@@ -309,17 +319,20 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
           return InteractiveViewer(transformationController: _zoom, maxScale: 4, child: _wheel(Center(child: picture(s))));
         case FitMode.width:
           final s = Size(w, w / aspect);
-          _jumpToEndIfNeeded();
+          _placeScroll(s.height > h);
+          _setPan(false);
           return s.height <= h
               ? _wheel(Center(child: picture(s)))
               : SingleChildScrollView(controller: widget.scroll, child: _wheel(picture(s)));
         case FitMode.height:
           final s = Size(h * aspect, h);
-          _jumpToEndIfNeeded();
-          return s.width <= w
+          final wide = s.width > w;
+          _placeScroll(wide);
+          _setPan(wide);
+          return !wide
               ? _wheel(Center(child: picture(s)))
-              : SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal, reverse: widget.rtl,
-                  child: _wheel(picture(s)));
+              : _edgeSwipe(SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal,
+                  reverse: widget.rtl, child: _wheel(picture(s))));
       }
     });
   }
@@ -342,14 +355,49 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     );
   }
 
-  void _jumpToEndIfNeeded() {
-    if (!widget.startAtEnd) return;
+  bool _placed = false; // the scroll position has been set for this page
+  bool? _panning;
+  double _overscroll = 0;
+
+  /// Where a page that overflows in fit width/height opens: centred (user's call) - or at its end when coming back
+  /// from the next page. Done once per page.
+  void _placeScroll(bool overflows) {
+    if (_placed || !overflows) return;
+    _placed = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final c = widget.scroll;
-      if (c.hasClients) c.jumpTo(c.position.maxScrollExtent);
-      widget.onStartedAtEnd?.call();
+      if (!c.hasClients) return;
+      if (widget.startAtEnd) {
+        c.jumpTo(c.position.maxScrollExtent);
+        widget.onStartedAtEnd?.call();
+      } else {
+        c.jumpTo(c.position.maxScrollExtent / 2);
+      }
     });
   }
+
+  void _setPan(bool pans) {
+    if (_panning == pans) return;
+    _panning = pans;
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) widget.onPanChanged?.call(pans); });
+  }
+
+  /// Dragging on past either edge of a sideways page turns the page (about 80 px of pull).
+  Widget _edgeSwipe(Widget child) => NotificationListener<ScrollNotification>(
+        onNotification: (n) {
+          if (n is ScrollStartNotification) _overscroll = 0;
+          if (n is OverscrollNotification && n.dragDetails != null) {
+            _overscroll += n.overscroll;
+            if (_overscroll.abs() > 80) {
+              final forward = _overscroll > 0; // past the far end = on in reading direction (reverse for right to left)
+              _overscroll = 0;
+              widget.onEdgeSwipe?.call(forward);
+            }
+          }
+          return false;
+        },
+        child: child,
+      );
 }
 
 /// Levels/contrast/brightness plus an unsharp mask, on the GPU (shaders/page.frag).
