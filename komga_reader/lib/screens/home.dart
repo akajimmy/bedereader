@@ -5,6 +5,7 @@ import '../home_sections.dart';
 import '../offline/connection.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
+import '../widgets/home_sections_editor.dart';
 import 'library.dart';
 import 'reader.dart';
 import 'readlist.dart';
@@ -26,11 +27,11 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _libraries = [];
   List<dynamic> _inProgress = [];
   List<dynamic> _onDeck = [];
+  List<dynamic> _recentlyRead = [], _recentBooks = [], _recentSeries = [], _releases = [];
   /// Home sections shown or hidden from the ⋮ menu or App settings (lib/home_sections.dart).
   HomeSections get _sections => HomeSections.instance;
   Map<String, bool> get _show => _sections.show;
-  bool get _showOnDeck => _sections['ondeck'];
-  bool _onDeckWasShown = true;
+  Set<String> _fetched = {}; // sections loaded with the last _load (optional rows are only fetched while shown)
   bool _loading = true;
   String? _error;
 
@@ -41,10 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _sections.addListener(_onSections);
     Pins.instance.addListener(_checkOfflinePins);
-    _sections.load().then((_) {
-      _onDeckWasShown = _showOnDeck;
-      _load();
-    });
+    _sections.load().then((_) => _load());
   }
 
   @override
@@ -54,26 +52,41 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  /// A section switched on or off (here or in App settings). On deck is only fetched while shown.
+  /// A section switched on or off, or moved (here or in App settings). Rows fetched only while shown load now.
   void _onSections() {
     if (!mounted) return;
     setState(() {});
-    if (_showOnDeck && !_onDeckWasShown) _load();
-    _onDeckWasShown = _showOnDeck;
+    if (_optional.any((k) => _sections[k] && !_fetched.contains(k))) _load();
   }
+
+  static const _optional = ['ondeck', 'recentlyRead', 'recentBooks', 'recentSeries', 'releases'];
 
   Future<void> _load() async {
     _checkOfflinePins();
     setState(() { _loading = _inProgress.isEmpty && _libraries.isEmpty; _error = null; });
     try {
+      final want = {for (final k in _optional) if (_sections[k]) k};
+      List<dynamic> content(Object r) => ((r as Map)['content'] as List<dynamic>?) ?? [];
       final results = await Future.wait([
         api.libraries(),
         api.inProgress(),
-        if (_showOnDeck) api.onDeck(),
+        if (want.contains('ondeck')) api.onDeck() else Future.value({}),
+        if (want.contains('recentlyRead'))
+          api.books(readStatus: const ['READ'], sort: 'readProgress.readDate,desc', size: 30)
+        else
+          Future.value({}),
+        if (want.contains('recentBooks')) api.books(sort: 'createdDate,desc', size: 30) else Future.value({}),
+        if (want.contains('recentSeries')) api.series(sort: 'createdDate,desc', size: 30) else Future.value({}),
+        if (want.contains('releases')) api.books(sort: 'metadata.releaseDate,desc', size: 30) else Future.value({}),
       ]);
       _libraries = results[0] as List<dynamic>;
-      _inProgress = ((results[1] as Map)['content'] as List<dynamic>?) ?? [];
-      _onDeck = _showOnDeck ? (((results[2] as Map)['content'] as List<dynamic>?) ?? []) : [];
+      _inProgress = content(results[1]);
+      _onDeck = content(results[2]);
+      _recentlyRead = content(results[3]);
+      _recentBooks = content(results[4]);
+      _recentSeries = content(results[5]);
+      _releases = content(results[6]);
+      _fetched = want;
     } catch (e) {
       _error = '$e';
     }
@@ -153,6 +166,76 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _offlinePins = keep);
   }
 
+  /// The widgets for one Home section (drawn in the order chosen in the ⋮ menu / App settings).
+  List<Widget> _sectionWidgets(String key) {
+    final offline = Connection.instance.offline;
+    // each empty row says what's missing, online or offline
+    Widget books(List<dynamic> list, String empty, String emptyOffline, {bool autofocus = false}) => list.isEmpty
+        ? _Empty(offline ? emptyOffline : empty)
+        : _BookRow(books: list, api: api, autofocusFirst: autofocus, onChanged: _load,
+            onOpen: (b) => _push(ReaderScreen(api: api, book: b)));
+    switch (key) {
+      case 'continue':
+        return [_Section('Continue reading'), books(_inProgress, 'Nothing in progress', 'Nothing downloaded in progress', autofocus: true)];
+      case 'ondeck':
+        return [_Section('On deck'), books(_onDeck, 'Nothing on deck', 'Nothing downloaded on deck')];
+      case 'recentlyRead':
+        return [_Section('Recently read'), books(_recentlyRead, 'Nothing read yet', 'No downloaded books read yet')];
+      case 'recentBooks':
+        return [_Section('Recently added books'), books(_recentBooks, 'Nothing added yet', 'No downloaded books')];
+      case 'recentSeries':
+        return [
+          _Section('Recently added series'),
+          _recentSeries.isEmpty
+              ? _Empty(offline ? 'No downloaded series' : 'Nothing added yet')
+              : _SeriesRow(series: _recentSeries, api: api, onChanged: _load,
+                  onOpen: (s) => _push(SeriesScreen(api: api, series: s))),
+        ];
+      case 'releases':
+        return [_Section('Recent releases'), books(_releases, 'No releases yet', 'No downloaded books')];
+      case 'pinned':
+        return [
+          ListenableBuilder(
+                  listenable: Pins.instance,
+                  builder: (context, _) {
+                    final offlineKeep = _offlinePins;
+                    final pins = Connection.instance.offline
+                        ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
+                        : Pins.instance.items;
+                    if (pins.isEmpty) return const SizedBox.shrink();
+                    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                      _Section('Pinned'),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Wrap(spacing: 10, runSpacing: 10, children: [
+                          for (final p in pins)
+                            _LibraryButton(label: p.name, icon: Icons.push_pin_outlined,
+                                onTap: () => _openPin(p),
+                                onLongPress: () => showPinDialog(context, p, pinned: true)),
+                        ]),
+                      ),
+                    ]);
+                  },
+                ),
+        ];
+      case 'libraries':
+        return [
+          _Section('Libraries'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Wrap(spacing: 10, runSpacing: 10, children: [
+                    for (final l in _libraries)
+                      _LibraryButton(label: l['name'] as String, autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
+                          onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: l['id'] as String))),
+                    _LibraryButton(label: 'All libraries', icon: Icons.collections_bookmark_outlined,
+                        onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut))),
+                  ]),
+                ),
+        ];
+    }
+    return const [];
+  }
+
   Future<void> _push(Widget w) async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
     _load(); // read state may have changed while away
@@ -170,10 +253,13 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _load),
           PopupMenuButton<String>(
             tooltip: 'Show or hide sections',
-            onSelected: _toggleSection,
+            onSelected: (k) => k == '_arrange' ? showHomeSectionsEditor(context) : _toggleSection(k),
             itemBuilder: (_) => [
-              for (final e in HomeSections.names.entries)
-                CheckedPopupMenuItem(value: e.key, checked: _show[e.key]!, child: Text(e.value)),
+              for (final k in _sections.order)
+                CheckedPopupMenuItem(value: k, checked: _sections[k], child: Text(HomeSections.names[k]!)),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: '_arrange', child: ListTile(
+                  contentPadding: EdgeInsets.zero, leading: Icon(Icons.reorder), title: Text('Arrange sections…'))),
             ],
           ),
         ],
@@ -189,55 +275,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
                 if (!_show.values.any((v) => v))
                   const _Empty('Every section is hidden - use ⋮ at the top right to show them again.'),
-                if (_show['continue']!) ...[
-                  _Section('Continue reading'),
-                  _inProgress.isEmpty
-                      ? _Empty(Connection.instance.offline ? 'Nothing downloaded in progress' : 'Nothing in progress')
-                      : _BookRow(books: _inProgress, api: api, autofocusFirst: true, onChanged: _load,
-                          onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
-                ],
-                if (_showOnDeck) ...[
-                  _Section('On deck'),
-                  _onDeck.isEmpty
-                      ? _Empty(Connection.instance.offline ? 'Nothing downloaded on deck' : 'Nothing on deck')
-                      : _BookRow(books: _onDeck, api: api, onChanged: _load,
-                          onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
-                ],
-                ListenableBuilder(
-                  listenable: Pins.instance,
-                  builder: (context, _) {
-                    final offlineKeep = _offlinePins;
-                    final pins = Connection.instance.offline
-                        ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
-                        : Pins.instance.items;
-                    if (pins.isEmpty || !_show['pinned']!) return const SizedBox.shrink();
-                    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                      _Section('Pinned'),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Wrap(spacing: 10, runSpacing: 10, children: [
-                          for (final p in pins)
-                            _LibraryButton(label: p.name, icon: Icons.push_pin_outlined,
-                                onTap: () => _openPin(p),
-                                onLongPress: () => showPinDialog(context, p, pinned: true)),
-                        ]),
-                      ),
-                    ]);
-                  },
-                ),
-                if (_show['libraries']!) ...[
-                _Section('Libraries'),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Wrap(spacing: 10, runSpacing: 10, children: [
-                    for (final l in _libraries)
-                      _LibraryButton(label: l['name'] as String, autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
-                          onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: l['id'] as String))),
-                    _LibraryButton(label: 'All libraries', icon: Icons.collections_bookmark_outlined,
-                        onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut))),
-                  ]),
-                ),
-                ],
+                for (final k in _sections.order)
+                  if (_sections[k]) ..._sectionWidgets(k),
               ]),
             )),
     );
@@ -287,6 +326,32 @@ class _BookRow extends StatelessWidget {
           width: 150,
           child: bookTile(context, api, books[i], autofocus: autofocusFirst && i == 0,
               onChanged: onChanged, onOpen: () => onOpen(books[i])),
+        ),
+      ),
+    );
+  }
+}
+
+/// A horizontal strip of series posters.
+class _SeriesRow extends StatelessWidget {
+  const _SeriesRow({required this.series, required this.api, required this.onOpen, required this.onChanged});
+  final List<dynamic> series;
+  final Komga api;
+  final void Function(dynamic series) onOpen;
+  final VoidCallback onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 290,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: series.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) => SizedBox(
+          width: 150,
+          child: seriesTile(context, api, series[i], onChanged: onChanged, onOpen: () => onOpen(series[i])),
         ),
       ),
     );

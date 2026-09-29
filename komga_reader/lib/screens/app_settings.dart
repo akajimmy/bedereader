@@ -4,6 +4,7 @@ import '../api.dart';
 import '../home_sections.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../widgets/home_sections_editor.dart';
 import 'downloads_screen.dart';
 
 /// App-wide settings (side menu > App settings; not reachable from the reader, as reader/image settings are the
@@ -94,14 +95,9 @@ class AppSettingsScreen extends StatelessWidget {
                   },
                 ),
               _Card(title: 'Home', icon: Icons.home_outlined, children: [
-                const Text('Sections shown on Home', style: TextStyle(color: Color(0xFF9A9A9A))),
-                for (final e in HomeSections.names.entries)
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(e.value),
-                    value: sections[e.key],
-                    onChanged: (v) => sections.set(e.key, v),
-                  ),
+                const Text('Sections on Home: switch on or off, and move with ▲▼ or the handle',
+                    style: TextStyle(color: Color(0xFF9A9A9A))),
+                const HomeSectionsEditor(),
               ]),
             ]),
           ),

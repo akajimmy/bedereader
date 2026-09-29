@@ -35,13 +35,15 @@ void main() {
 
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.tap(find.widgetWithText(SwitchListTile, 'On deck'));
+    Finder onDeckSwitch() => find.descendant(
+        of: find.ancestor(of: find.text('On deck'), matching: find.byType(Row)).first, matching: find.byType(Switch));
+    await tester.tap(onDeckSwitch());
     await tester.pump();
     expect(HomeSections.instance['ondeck'], isFalse);
     expect((await SharedPreferences.getInstance()).getBool('home.show.ondeck'), isFalse);
     await HomeSections.instance.set('ondeck', true); // e.g. from the Home menu
     await tester.pump();
-    expect(tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'On deck')).value, isTrue);
+    expect(tester.widget<Switch>(onDeckSwitch()).value, isTrue);
   });
 
   testWidgets('sign out asks first; Cancel keeps you signed in', (tester) async {
