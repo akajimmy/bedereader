@@ -77,6 +77,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
           : AppBar(
         title: Text((s['metadata']?['title'] ?? s['name']) as String),
         actions: [
+          Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
           // issue order toggle: oldest first <-> newest first
           IconButton(
@@ -152,6 +153,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title),
           actions: [
+            Center(child: CountBadge(paged: _paged)),
             HideReadButton(value: _filter, onChanged: _setFilter),
             PinButton(current: Pin(
               name: [widget.title, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
@@ -193,26 +195,16 @@ class HideReadButton extends StatelessWidget {
   final ValueChanged<ReadFilter> onChanged;
   @override
   Widget build(BuildContext context) {
+    // icon only (user's call): crossed-out eye + accent tint while read items are hidden; the name is the tooltip
     final hiding = value == ReadFilter.hideRead;
     final accent = Theme.of(context).colorScheme.primary;
-    if (MediaQuery.sizeOf(context).width < 600) {
-      // narrow screens: icon only, highlighted while read books are hidden
-      return IconButton(
-        tooltip: hiding ? 'Show read' : 'Hide read',
-        isSelected: hiding,
-        color: hiding ? accent : null,
-        icon: Icon(hiding ? Icons.visibility_off : Icons.visibility),
-        onPressed: () => onChanged(hiding ? ReadFilter.all : ReadFilter.hideRead),
-      );
-    }
-    return TextButton.icon(
-      onPressed: () => onChanged(hiding ? ReadFilter.all : ReadFilter.hideRead),
-      style: TextButton.styleFrom(
-        foregroundColor: hiding ? accent : const Color(0xFFBDBDBD),
-        backgroundColor: hiding ? accent.withValues(alpha: 0.14) : null,
-      ),
+    return IconButton(
+      tooltip: hiding ? 'Read hidden (show read)' : 'Hide read',
+      isSelected: hiding,
+      color: hiding ? accent : null,
+      style: hiding ? IconButton.styleFrom(backgroundColor: accent.withValues(alpha: 0.16)) : null,
       icon: Icon(hiding ? Icons.visibility_off : Icons.visibility),
-      label: Text(hiding ? 'Read hidden' : 'Hide read'),
+      onPressed: () => onChanged(hiding ? ReadFilter.all : ReadFilter.hideRead),
     );
   }
 }

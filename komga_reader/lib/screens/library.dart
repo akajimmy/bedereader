@@ -167,6 +167,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ]),
         ),
         actions: [
+          Center(child: CountBadge(paged: _paged)),
           if (filterable)
             HideReadButton(value: _filter, onChanged: (f) { _filter = f; _load(); }),
           if (filterable)

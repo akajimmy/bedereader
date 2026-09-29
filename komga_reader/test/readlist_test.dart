@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/actions.dart';
+import 'package:komga_reader/screens/readlist.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:komga_reader/widgets/readlist_tile.dart';
 
 /// A 5-book read list: 2 unread, 1 in progress, 2 read.
@@ -13,7 +15,13 @@ class FakeKomga extends Komga {
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async {
     final ids = status.entries.where((e) => readStatus == null || readStatus.contains(e.value)).map((e) => e.key).toList();
-    return {'content': [for (final id in ids.take(size)) {'id': id}], 'totalElements': ids.length, 'last': true};
+    return {
+      'content': [
+        for (final id in ids.take(size)) {'id': id, 'name': id, 'seriesTitle': 'S', 'metadata': {'number': id, 'title': 'T'}},
+      ],
+      'totalElements': ids.length,
+      'last': true,
+    };
   }
 
   @override
@@ -64,4 +72,19 @@ void main() {
     await tester.pump();
     expect(find.text('2 of 5 unread'), findsOneWidget);
   });
+
+  testWidgets('header count shows the total for the current filter, in a box left of Hide read',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: FakeKomga(), readList: rl)));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('5'), findsOneWidget); // all 5 books
+    await tester.tap(find.byTooltip('Hide read'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('3'), findsOneWidget); // 2 unread + 1 in progress
+    expect(tester.getTopLeft(find.text('3')).dx < tester.getTopLeft(find.byTooltip('Read hidden (show read)')).dx, isTrue);
+  });
 }
+

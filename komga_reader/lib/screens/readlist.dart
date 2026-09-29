@@ -58,6 +58,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
           : AppBar(
         title: Text(widget.readList['name'] as String),
         actions: [
+          Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
           PinButton(current: Pin(
             name: [widget.readList['name'] as String, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),

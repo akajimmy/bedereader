@@ -213,3 +213,32 @@ class _ReadBadge extends StatelessWidget {
         child: const Icon(Icons.check_circle, size: 40, color: Color(0xFF16C75F)),
       );
 }
+
+/// The number of items in the current view (the server's total for the active filter), in a small box - shown in
+/// the header next to the Hide read button. "…" until the first page arrives.
+class CountBadge extends StatelessWidget {
+  const CountBadge({super.key, required this.paged});
+  final Paged paged;
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: paged,
+        builder: (context, _) {
+          final n = paged.total ?? (paged.firstLoad ? null : paged.items.length);
+          return Semantics(
+            label: n == null ? 'counting' : '$n items',
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF4A4D55)),
+                color: const Color(0xFF17181C),
+              ),
+              child: Text(n == null ? '…' : '$n',
+                  style: const TextStyle(fontSize: 13, fontFeatures: [FontFeature.tabularFigures()])),
+            ),
+          );
+        },
+      );
+}
+

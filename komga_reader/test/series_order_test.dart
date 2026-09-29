@@ -49,7 +49,7 @@ void main() {
     SharedPreferences.setMockInitialValues({'view.series.S1': jsonEncode({'filter': 'hideRead'})});
     final api = await open(tester);
     expect(api.sorts.last, 'metadata.numberSort,asc');
-    expect(find.text('Read hidden'), findsOneWidget);
+    expect(find.byTooltip('Read hidden (show read)'), findsOneWidget);
   });
 
   testWidgets('pins: "number:desc" opens newest first; older series pins (no sort) open oldest first', (tester) async {
