@@ -40,6 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _sections.addListener(_onSections);
+    Pins.instance.addListener(_checkOfflinePins);
     _sections.load().then((_) {
       _onDeckWasShown = _showOnDeck;
       _load();
@@ -49,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _sections.removeListener(_onSections);
+    Pins.instance.removeListener(_checkOfflinePins);
     super.dispose();
   }
 
@@ -61,6 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _load() async {
+    _checkOfflinePins();
     setState(() { _loading = _inProgress.isEmpty && _libraries.isEmpty; _error = null; });
     try {
       final results = await Future.wait([
@@ -105,10 +108,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _gone(Pin p) {
     if (!mounted) return;
+    if (Connection.instance.offline) {
+      // offline this only means nothing from it is downloaded - not that it's gone
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nothing from "${p.title}" is downloaded')));
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('"${p.title}" no longer exists on the server'),
+      showCloseIcon: true, // always dismissable, whatever you decide about the pin
       action: SnackBarAction(label: 'Unpin', onPressed: () => Pins.instance.remove(p)),
     ));
+  }
+
+  /// Offline: the pins whose view has something downloaded (null = not worked out yet, or online: show all).
+  Set<Pin>? _offlinePins;
+
+  /// Offline, a pin leading to an empty view is hidden (user's call). Each pin's own view is asked - the same query
+  /// its screen would run, filter included - against the downloaded books.
+  Future<void> _checkOfflinePins() async {
+    if (!Connection.instance.offline) {
+      if (_offlinePins != null && mounted) setState(() => _offlinePins = null);
+      return;
+    }
+    final keep = <Pin>{};
+    for (final p in Pins.instance.items) {
+      try {
+        final status = p.readFilter.api;
+        final Map<String, dynamic> r = switch (p.kind) {
+          'series' => await api.seriesBooks(p.id!, readStatus: status, size: 1),
+          'readlist' => await api.readListBooks(p.id!, readStatus: status, size: 1),
+          'collection' => await api.series(collectionId: p.id, readStatus: status, size: 1),
+          _ => switch (p.mode) {
+              'books' => await api.books(libraryId: p.id, readStatus: status, size: 1),
+              'collections' => await api.collections(libraryId: p.id, size: 1),
+              'readLists' => await api.readLists(libraryId: p.id, size: 1),
+              _ => await api.series(libraryId: p.id, readStatus: status, size: 1),
+            },
+        };
+        if (((r['totalElements'] as num?) ?? 0) > 0) keep.add(p);
+      } catch (_) {
+        // can't tell: leave it out rather than show an empty pin
+      }
+    }
+    if (mounted) setState(() => _offlinePins = keep);
   }
 
   Future<void> _push(Widget w) async {
@@ -164,7 +206,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 ListenableBuilder(
                   listenable: Pins.instance,
                   builder: (context, _) {
-                    final pins = Pins.instance.items;
+                    final offlineKeep = _offlinePins;
+                    final pins = Connection.instance.offline
+                        ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
+                        : Pins.instance.items;
                     if (pins.isEmpty || !_show['pinned']!) return const SizedBox.shrink();
                     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                       _Section('Pinned'),

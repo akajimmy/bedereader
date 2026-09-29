@@ -6,6 +6,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 - Downloads screen: Cancel all (asks first) - empties the queue, stops the book downloading; finished downloads stay.
 - Multi-select: Download button queues the ticked books in the order picked.
+- Offline: pins whose view has nothing downloaded (with the pin's filter) are hidden on Home; reaching one says
+  "Nothing from … is downloaded" instead of "no longer exists on the server". Online, that message now has a close
+  button besides Unpin.
 
 ## Build 21 - 2026-09-28
 
