@@ -46,7 +46,7 @@ licence); both covered by Flutter's notices.
 | kotlinx.coroutines (core, android) | 1.7.3 | Apache-2.0 |
 
 Flutter gathers the full licence texts of the framework, engine and Dart packages into every build; they're shown
-in the app under Info > *Licences of included open-source software*, together with the app's own licence, AMD's
+in the app under About > *Licences of included open-source software*, together with the app's own licence, AMD's
 notice, the Material Icons attribution and (on Android) the Apache 2.0 terms for the libraries above.
 
 ## Used to build and develop it (not shipped)

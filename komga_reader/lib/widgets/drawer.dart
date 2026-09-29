@@ -6,7 +6,7 @@ import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../screens/app_settings.dart';
 import '../screens/downloads_screen.dart';
-import '../screens/info.dart';
+import '../screens/about.dart';
 import '../screens/library.dart';
 import '../side_menu.dart';
 
@@ -127,16 +127,16 @@ class _AppDrawerState extends State<AppDrawer> {
                 );
               },
             ),
-          ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('App settings'),
+          ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('Settings'),
               onTap: () {
                 _close();
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => AppSettingsScreen(api: widget.api, onSignOut: widget.onSignOut)));
               }),
-          ListTile(leading: const Icon(Icons.info_outline), title: const Text('Info'),
+          ListTile(leading: const Icon(Icons.info_outline), title: const Text('About'),
               onTap: () {
                 _close();
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => InfoScreen(api: widget.api)));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutScreen(api: widget.api)));
               }),
         ]),
       ),

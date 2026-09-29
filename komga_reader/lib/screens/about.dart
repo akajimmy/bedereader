@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../licences.dart';
-import '../offline/offline_komga.dart';
 import '../screen.dart';
 import '../widgets/fullscreen_exit.dart';
 import 'document.dart';
@@ -11,18 +10,17 @@ const appName = 'Komga Reader';
 const appAuthor = 'Nick Perusse 🍁';
 const appLicense = 'MIT licence - free to use, change and share, keeping the copyright notice'; // LICENSE
 
-/// App name, version, author, licence; the Komga server's address and a traffic-light status with Retry;
-/// credits and links for Komga.
-class InfoScreen extends StatefulWidget {
-  const InfoScreen({super.key, required this.api});
+/// About (side menu, Settings > About): the app's name, version, author, licence, What's new / Read me /
+/// Third-party software, the AI usage disclosure, and credits and links for Komga. The server's status is in
+/// Settings > Server & connection.
+class AboutScreen extends StatefulWidget {
+  const AboutScreen({super.key, required this.api});
   final Komga api;
   @override
-  State<InfoScreen> createState() => _InfoScreenState();
+  State<AboutScreen> createState() => _AboutScreenState();
 }
 
-enum ServerState { checking, ok, warning, down }
-
-class _InfoScreenState extends State<InfoScreen> {
+class _AboutScreenState extends State<AboutScreen> {
   String? _version;
 
   @override
@@ -35,7 +33,7 @@ class _InfoScreenState extends State<InfoScreen> {
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
     return Scaffold(
-      appBar: AppBar(title: const Text('Info'), actions: const [FullscreenExit()]),
+      appBar: AppBar(title: const Text('About'), actions: const [FullscreenExit()]),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
@@ -70,7 +68,7 @@ class _InfoScreenState extends State<InfoScreen> {
               ),
             ),
             const SizedBox(height: 28),
-            _Card(title: 'About', icon: Icons.person_outline, children: [
+            _Card(title: 'This app', icon: Icons.person_outline, children: [
               _row('Author', appAuthor),
               _row('Licence', appLicense),
               Align(
@@ -106,11 +104,6 @@ class _InfoScreenState extends State<InfoScreen> {
                 const SizedBox(width: 8),
                 const Expanded(child: Text(aiDisclosure, style: TextStyle(color: Color(0xFFBDBDBD), height: 1.4))),
               ]),
-            ]),
-            _Card(title: 'Server', icon: Icons.dns_outlined, children: [
-              _row('Address', widget.api.baseUrl),
-              const SizedBox(height: 6),
-              ServerStatus(api: widget.api, autofocus: true),
             ]),
             _Card(title: 'Komga', icon: Icons.favorite_outline, children: [
               const Text('This app reads your library from a Komga server. Komga is a free and open-source media '
@@ -175,90 +168,4 @@ class _Card extends StatelessWidget {
           ...children,
         ]),
       );
-}
-
-/// The server's traffic light with Retry (Info, App settings > Server & connection). Green: answered and the API key
-/// is accepted. Amber: answered but refused the key, took over 3 s, or offline mode. Red: no answer.
-class ServerStatus extends StatefulWidget {
-  const ServerStatus({super.key, required this.api, this.autofocus = false});
-  final Komga api;
-  final bool autofocus;
-  @override
-  State<ServerStatus> createState() => _ServerStatusState();
-}
-
-class _ServerStatusState extends State<ServerStatus> {
-  ServerState _state = ServerState.checking;
-  String _detail = 'Checking…';
-
-  @override
-  void initState() {
-    super.initState();
-    _check();
-  }
-
-  Future<void> _check() async {
-    if (widget.api is OfflineKomga) {
-      setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing downloaded books'; });
-      return;
-    }
-    setState(() { _state = ServerState.checking; _detail = 'Checking…'; });
-    final watch = Stopwatch()..start();
-    ServerState state;
-    String detail;
-    try {
-      final me = await widget.api.me();
-      final secs = watch.elapsedMilliseconds / 1000;
-      final who = me?['email'] as String?;
-      if (secs > 3) {
-        state = ServerState.warning;
-        detail = 'Connected, but slow (${secs.toStringAsFixed(1)} s)';
-      } else {
-        state = ServerState.ok;
-        detail = who == null ? 'Connected' : 'Connected as $who';
-      }
-    } on KomgaError catch (e) {
-      state = e.status == 401 || e.status == 403 ? ServerState.warning : ServerState.down;
-      detail = e.status == 401 || e.status == 403 ? 'Reachable, but the API key was refused' : '$e';
-    } catch (e) {
-      state = ServerState.down;
-      detail = '$e';
-    }
-    if (mounted) setState(() { _state = state; _detail = detail; });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colour = switch (_state) {
-      ServerState.ok => const Color(0xFF22C55E),
-      ServerState.warning => const Color(0xFFFACC15),
-      ServerState.down => const Color(0xFFEF4444),
-      ServerState.checking => const Color(0xFF6B7280),
-    };
-    return Row(children: [
-      Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(
-            color: colour.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: colour.withValues(alpha: 0.5)),
-          ),
-          child: Row(children: [
-            Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, color: colour,
-                boxShadow: [BoxShadow(color: colour.withValues(alpha: 0.6), blurRadius: 8)])),
-            const SizedBox(width: 10),
-            Expanded(child: Text(_detail)),
-          ]),
-        ),
-      ),
-      const SizedBox(width: 10),
-      FilledButton.tonalIcon(
-        autofocus: widget.autofocus,
-        onPressed: _state == ServerState.checking ? null : _check,
-        icon: const Icon(Icons.refresh),
-        label: const Text('Retry'),
-      ),
-    ]);
-  }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Home's sections: which are shown and in what order (this device). Shared by Home's ⋮ menu and App settings, so
+/// Home's sections: which are shown and in what order (this device). Shared by Home's ⋮ menu and Settings, so
 /// both always agree.
 class HomeSections extends ChangeNotifier {
   HomeSections._();

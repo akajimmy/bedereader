@@ -309,7 +309,7 @@ class Downloads extends ChangeNotifier {
       final cap = capBytes;
       if (cap != null && usedBytes - alreadyHere + estimate > cap) {
         throw Exception('not enough room: the download limit is ${_gb(cap)} and ${_gb(usedBytes)} is used '
-            '(raise it in App settings)');
+            '(raise it in Settings)');
       }
 
       // what it belongs to, for browsing offline

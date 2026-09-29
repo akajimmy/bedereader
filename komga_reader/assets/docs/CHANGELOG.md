@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Changed**
+- Side menu: **App settings** is now **Settings**, and **Info** is now **About**. The server's address, status and
+  Retry are in Settings > Server & connection only (About no longer repeats them).
+- 3D page curl: only the comic page curls, not the black bars around it.
+- 3D page curl: a drag can start anywhere on the screen - the distance to the edge you drag towards is the whole
+  turn, so a slow drag from the middle finishes the page too.
+
 ## 0.1.1-rc.1 - offline reading and better pages
 
 Release candidate 1 is build 35, tagged `v0.1.1-rc.1`. Builds 21-26 still showed version 0.1.0.

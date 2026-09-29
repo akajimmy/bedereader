@@ -29,15 +29,15 @@ void main() {
     await HomeSections.instance.load();
   });
 
-  testWidgets('side menu: App settings after the libraries, and opens the screen', (tester) async {
+  testWidgets('side menu: Settings after the libraries, and opens the screen', (tester) async {
     final scaffold = GlobalKey<ScaffoldState>();
     await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
         drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
     double y(String t) => tester.getTopLeft(find.textContaining(t)).dy;
-    expect(y('All libraries') < y('App settings'), isTrue); // Home, line, libraries, line, app items
-    await tester.tap(find.text('App settings'));
+    expect(y('All libraries') < y('Settings'), isTrue); // Home, line, libraries, line, app items
+    await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
     expect(find.text('http://10.0.0.23:25600'), findsOneWidget);

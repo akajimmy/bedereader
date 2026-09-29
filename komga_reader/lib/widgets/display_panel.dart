@@ -218,7 +218,7 @@ class _Live extends StatelessWidget {
       ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
 }
 
-/// Page-turn style and the page number flash (this device). In the reader's Reader settings and App settings >
+/// Page-turn style and the page number flash (this device). In the reader's Reader settings and Settings >
 /// Reading.
 class PageTurnControl extends StatelessWidget {
   const PageTurnControl({super.key});
@@ -244,7 +244,7 @@ class PageTurnControl extends StatelessWidget {
 }
 
 /// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on desktop.
-/// In the reader's Reader settings and App settings > Display.
+/// In the reader's Reader settings and Settings > Display.
 class ScreenBrightnessControls extends StatelessWidget {
   const ScreenBrightnessControls({super.key});
   @override
@@ -285,7 +285,7 @@ class ScreenBrightnessControls extends StatelessWidget {
 }
 
 /// The defaults every series you haven't adjusted follows (synced through Komga): fit, reading direction and the
-/// image adjustments - App settings > Reading. The reader's "Make ... the default" buttons set the same thing.
+/// image adjustments - Settings > Reading. The reader's "Make ... the default" buttons set the same thing.
 class ReadingDefaults extends StatelessWidget {
   const ReadingDefaults({super.key});
   @override
@@ -326,7 +326,7 @@ class ReadingDefaults extends StatelessWidget {
       });
 }
 
-/// Night mode switch + warmth. It tints the whole app (library views too), so it lives in App settings as well as in
+/// Night mode switch + warmth. It tints the whole app (library views too), so it lives in Settings as well as in
 /// the reader's Reader settings - one setting, shown in both places.
 class NightModeControls extends StatelessWidget {
   const NightModeControls({super.key});

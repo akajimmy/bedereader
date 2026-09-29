@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// The app's own licence, and third-party notices Flutter doesn't collect by itself - added to the licences page
-/// (Info > Licences of included open-source software) alongside the ones it gathers from Flutter and the Dart
+/// (About > Licences of included open-source software) alongside the ones it gathers from Flutter and the Dart
 /// packages. Same texts as LICENSE and THIRD_PARTY_NOTICES.md in the repository.
 const appCopyright = 'Copyright (c) 2026 Nick Perusse';
 const appLicenceName = 'MIT licence';
@@ -25,7 +25,7 @@ const materialIconsNotice = 'Material Icons by Google, licensed under the Creati
     'International licence (https://creativecommons.org/licenses/by/4.0/). Used unmodified, as the font supplied '
     'with Flutter.';
 
-/// The AI usage disclosure (Info screen, README, THIRD_PARTY_NOTICES.md).
+/// The AI usage disclosure (About screen, README, THIRD_PARTY_NOTICES.md).
 const aiDisclosure = 'This application was developed with the aid of AI coding tools (Claude, by Anthropic, through '
     'Claude Code), and reviewed and tested by a human.';
 
