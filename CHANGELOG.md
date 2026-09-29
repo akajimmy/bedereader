@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
+Builds 21-26 still showed version 0.1.0.
+
+### Build 38 - 2026-09-29
+
 **Fixed**
 - With Enhance colours (or Enhance, or Crop edges) on, page turns hitched - most visibly the 3D page curl. The
   pages around the one you're reading are now processed between turns instead of during them, and in every page turn
@@ -12,11 +19,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 - Sign-in: an address typed without `http://`, or with a space after the colon (the tablet keyboard adds one), no
   longer fails with a "FormatException" - it's tidied up and the field shows the address used. The keyboard's
   word suggestions are off in that field.
-
-## 0.1.1 - offline reading and better pages
-
-Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
-Builds 21-26 still showed version 0.1.0.
 
 ### Build 37 - 2026-09-29
 
