@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _inProgress = [];
   List<dynamic> _onDeck = [];
   List<dynamic> _recentlyRead = [], _recentBooks = [], _recentSeries = [], _releases = [];
-  /// Home sections shown or hidden from the ⋮ menu or App settings (lib/home_sections.dart).
+  /// Home sections shown or hidden from the ⋮ menu or Settings (lib/home_sections.dart).
   HomeSections get _sections => HomeSections.instance;
   Map<String, bool> get _show => _sections.show;
   Set<String> _fetched = {}; // sections loaded with the last _load (optional rows are only fetched while shown)
@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_sections['ondeck']) _load();
   }
 
-  /// A section switched on or off, or moved (here or in App settings). Rows fetched only while shown load now.
+  /// A section switched on or off, or moved (here or in Settings). Rows fetched only while shown load now.
   void _onSections() {
     if (!mounted) return;
     setState(() {});
@@ -171,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _offlinePins = keep);
   }
 
-  /// The widgets for one Home section (drawn in the order chosen in the ⋮ menu / App settings).
+  /// The widgets for one Home section (drawn in the order chosen in the ⋮ menu / Settings).
   List<Widget> _sectionWidgets(String key) {
     final offline = Connection.instance.offline;
     // a row of book posters, or - when empty - its title and what's missing (online / offline wording)

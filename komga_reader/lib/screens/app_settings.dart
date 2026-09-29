@@ -8,11 +8,12 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
+import '../widgets/server_status.dart';
+import 'about.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
-import 'info.dart';
 
-/// Every setting in one place (side menu > App settings), grouped, each group saying where it's kept: synced through
+/// Every setting in one place (side menu > Settings), grouped, each group saying where it's kept: synced through
 /// Komga (every device) or this device only. The reader's own panels stay for quick changes while reading.
 /// Sections: Server & connection, Reading, Display, Library & Home, Downloads, About.
 class AppSettingsScreen extends StatelessWidget {
@@ -26,7 +27,7 @@ class AppSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('App settings'), actions: const [FullscreenExit()]),
+      appBar: AppBar(title: const Text('Settings'), actions: const [FullscreenExit()]),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
@@ -172,10 +173,10 @@ class AppSettingsScreen extends StatelessWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.info_outline),
-                title: const Text('Info'),
-                subtitle: const Text('Version, licences, Komga credits'),
+                title: const Text('About Komga Reader'),
+                subtitle: const Text('Version, author, licence, credits'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InfoScreen(api: api))),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutScreen(api: api))),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -243,7 +244,7 @@ class AppSettingsScreen extends StatelessWidget {
   }
 }
 
-/// Rounded section card with an icon + title header (same look as the Info screen).
+/// Rounded section card with an icon + title header (same look as the About screen).
 class _Card extends StatelessWidget {
   const _Card({required this.title, required this.icon, required this.children, this.scope});
   final String title;

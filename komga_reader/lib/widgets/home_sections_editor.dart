@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../home_sections.dart';
 
 /// Show/hide and order Home's sections: a switch per section, ▲▼ buttons (remote-friendly) and a drag handle
-/// (touch). Used in App settings and in the sheet from Home's ⋮ menu (Arrange sections…).
+/// (touch). Used in Settings and in the sheet from Home's ⋮ menu (Arrange sections…).
 class HomeSectionsEditor extends StatelessWidget {
   const HomeSectionsEditor({super.key});
 

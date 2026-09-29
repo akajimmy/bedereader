@@ -192,7 +192,7 @@ class AppSettings extends ChangeNotifier {
     _changedReader();
   }
 
-  /// Every series back to following the defaults (App settings > Reading). Synced: other devices lose them too.
+  /// Every series back to following the defaults (Settings > Reading). Synced: other devices lose them too.
   void resetAllSeries() {
     _dirtySeries.addAll(series.keys); // sync removes each from Komga's copy
     series.clear();

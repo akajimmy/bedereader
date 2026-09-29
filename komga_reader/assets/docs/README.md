@@ -58,7 +58,7 @@ This app shows them and keeps everything in sync.
 - **On this device**: the server address and API key, screen brightness and night mode, page turn animation, Home's
   layout, remembered filters and sort orders, downloads and the offline mode switch.
 
-App settings (side menu) has everything in one place, each section labelled with where it's kept.
+Settings (side menu) has everything in one place, each section labelled with where it's kept.
 
 ## Remote page-turners
 
@@ -75,8 +75,8 @@ copyright notice.
 It's an independent app, not part of the Komga project. [Komga](https://komga.org) is free, open-source software
 (MIT) by Gauthier Roebroeck (gotson) and contributors. The app is built with [Flutter](https://flutter.dev), and its
 page enhancement adapts AMD FidelityFX Super Resolution 1 (MIT). Everything the project relies on - libraries, fonts,
-build tools - is listed, with the notices they require, in `THIRD_PARTY_NOTICES.md` (in the app: App settings >
-About > Third-party software). What's new in each build is in `CHANGELOG.md` (App settings > About > What's new).
+build tools - is listed, with the notices they require, in `THIRD_PARTY_NOTICES.md` (in the app: About >
+Third-party software). What's new in each build is in `CHANGELOG.md` (About > What's new).
 
 **AI usage:** this application was developed with the aid of AI coding tools (Claude, by Anthropic, through Claude
 Code), and reviewed and tested by a human.

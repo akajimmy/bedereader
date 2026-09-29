@@ -14,7 +14,7 @@ import 'offline_komga.dart';
 /// talks to the server: downloads hold, settings and pins wait to sync.
 ///
 /// Two ways in (user's decisions, 2026-09-28):
-/// - **by hand** (side menu / App settings, remembered across restarts). Manual wins: no checks, no prompts, until
+/// - **by hand** (side menu / Settings, remembered across restarts). Manual wins: no checks, no prompts, until
 ///   switched off.
 /// - **when Komga can't be reached**: by default the app *asks* first ([autoSwitch] makes it switch both ways by
 ///   itself) ([askPending] -> "Use downloaded books" / Retry / Stay
