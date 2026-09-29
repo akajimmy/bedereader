@@ -46,6 +46,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _turned = false; // progress is only saved once a page has been turned in this visit
   int _openedAt = 0;
   bool _zoomed = false; // pinch-zoomed in: page swiping is paused so a drag pans the page
+  final Set<int> _sideways = {}; // pages (fit height, wider than the screen) that a drag moves sideways
   bool _fullscreen = false; // desktop: F11 / the full-screen button
   double _wheelAcc = 0; // mouse wheel travel towards the next page turn
   DateTime _lastWheelTurn = DateTime(0);
@@ -488,7 +489,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       child: PageView.builder(
                         controller: _pc,
                         reverse: _rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
-                        physics: _zoomed || _fingers > 1 ? const NeverScrollableScrollPhysics() : null,
+                        // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
+                        physics: _zoomed || _fingers > 1 || _sideways.contains(_index)
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
                         itemCount: _pages.length + 1,
                         onPageChanged: _onPage,
                         itemBuilder: (context, i) => i == _pages.length ? _endCard() : _page(i),
@@ -519,6 +523,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
           levels: _loader!.bookLevels,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
+          onPanChanged: (pans) => setState(() => pans ? _sideways.add(i) : _sideways.remove(i)),
+          onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,

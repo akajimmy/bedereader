@@ -4,6 +4,12 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Reader, fit width / fit height: a page that overflows the screen opens centred in the other direction (coming
+  back from the next page still opens at its end). In fit height a page wider than the screen can be dragged left
+  and right to see the cut-off parts; dragging on past its edge turns the page.
+- Tools: tablet install finds the tablet after Wireless debugging is toggled; a skipped install no longer makes the
+  build report failure.
+
 ## Build 26 - 2026-09-28
 
 - Search (button on Home and library screens): Komga's search across series, books, read lists and collections,
