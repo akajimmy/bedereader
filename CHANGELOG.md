@@ -5,9 +5,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
-## 0.1.1-rc.1 - offline reading and better pages
+## 0.1.1 - offline reading and better pages
 
-Release candidate 1 is build 35, tagged `v0.1.1-rc.1`. Builds 21-26 still showed version 0.1.0.
+Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
+Builds 21-26 still showed version 0.1.0.
 
 ### Build 37 - 2026-09-29
 
