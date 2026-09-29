@@ -186,6 +186,21 @@ class Downloads extends ChangeNotifier {
     _pump();
   }
 
+  /// Empties the queue: everything waiting, paused or failed goes (with any partly downloaded files); the book
+  /// downloading stops after its current page and is cleaned up. Finished downloads are untouched.
+  Future<void> cancelAll() async {
+    for (final j in List<DownloadJob>.of(queue)) {
+      if (j.state == JobState.downloading) {
+        j._cancel = true; // the worker removes it
+      } else {
+        queue.remove(j);
+        await _deleteFiles(j.bookId);
+      }
+    }
+    await _saveQueue();
+    notifyListeners();
+  }
+
   /// Removes a book from the queue; a partly downloaded book's files go too.
   Future<void> cancel(String bookId) async {
     final j = jobFor(bookId);

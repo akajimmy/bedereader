@@ -153,4 +153,26 @@ void main() {
     expect(d.isDownloaded('B1'), isTrue);
     expect(again.pageRequests, 3 - fetchedBefore); // only the missing pages
   });
+
+  test('cancel all empties the queue (the downloading book stops and is cleaned up); finished downloads stay', () async {
+    final api = FakeKomga();
+    await d.attach(api, root: dir);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+
+    api.onPage = (n) {}; // B2 downloading while we cancel
+    api.slow = true;
+    await d.add([book('B2', 2), book('B3', 3)]);
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    await d.cancelAll();
+    for (var i = 0; i < 300 && (d.busy || d.queue.isNotEmpty); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(d.queue, isEmpty);
+    expect(d.isDownloaded('B1'), isTrue); // finished download untouched
+    expect(d.store!.books.containsKey('B2'), isFalse); // partial download cleaned up
+    expect(await Directory(d.store!.file('B2').path).exists(), isFalse);
+  });
 }
+

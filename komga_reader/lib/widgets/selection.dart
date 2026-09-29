@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../offline/downloads.dart';
 import '../screens/actions.dart';
 
 /// Multi-select state for a book grid. While [active], tapping (or OK on) a book toggles it instead of opening it.
@@ -54,6 +55,25 @@ PreferredSizeWidget selectionAppBar(BuildContext context, Komga api, Selection s
     title: Text(none ? 'Select books' : '${sel.count} selected'),
     actions: [
       IconButton(tooltip: 'Select all', icon: const Icon(Icons.select_all), onPressed: () => sel.selectAll(all())),
+      if (Downloads.instance.ready)
+        IconButton(
+          tooltip: 'Download',
+          icon: const Icon(Icons.download_outlined),
+          onPressed: none
+              ? null
+              : () async {
+                  final books = sel.books; // in the order they were picked
+                  final added = await Downloads.instance.add(books);
+                  final skipped = books.length - added;
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(added == 0
+                        ? 'All already downloaded or queued'
+                        : 'Queued $added book${added == 1 ? '' : 's'} for download'
+                            '${skipped > 0 ? ' ($skipped already downloaded or queued)' : ''}')));
+                  }
+                  sel.end();
+                },
+        ),
       IconButton(tooltip: 'Mark as read', icon: const Icon(Icons.check_circle_outline),
           onPressed: none ? null : () => run(() => bulkMark(context, api, sel.books, read: true))),
       IconButton(tooltip: 'Mark as unread', icon: const Icon(Icons.radio_button_unchecked),

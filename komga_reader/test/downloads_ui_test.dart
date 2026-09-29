@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/screens/actions.dart';
 import 'package:komga_reader/screens/downloads_screen.dart';
+import 'package:komga_reader/widgets/selection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'downloads_test.dart' show FakeKomga;
@@ -85,4 +86,23 @@ void main() {
     // (no need to lift the limit: each test starts from fresh settings)
     await quiet(tester);
   });
+
+  testWidgets('multi-select: Download queues the ticked books in the order picked', (tester) async {
+    final api = FakeKomga();
+    await tester.runAsync(() => d.attach(api, root: dir));
+    d.pauseAll(); // keep them in the queue to check the order
+    final sel = Selection()..start();
+    final b1 = {'id': 'B1', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '1'}};
+    final b2 = {'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}};
+    sel
+      ..toggle(b2)
+      ..toggle(b1);
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(
+        appBar: selectionAppBar(context, api, sel, all: () => [b1, b2], onChanged: () {}), body: const SizedBox()))));
+    await tester.tap(find.byTooltip('Download'));
+    // the queue is updated before the save starts, so this is deterministic (the save itself is covered in
+    // downloads_test; waiting on it here would need the real clock and the test clock to hand over repeatedly)
+    expect(d.queue.map((j) => j.bookId), ['B2', 'B1']);
+  });
 }
+

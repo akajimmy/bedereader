@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Downloads screen: Cancel all (asks first) - empties the queue, stops the book downloading; finished downloads stay.
+- Multi-select: Download button queues the ticked books in the order picked.
+
 ## Build 21 - 2026-09-28
 
 - Offline mode switch (side menu and App settings): the whole app shows only the downloaded books, with a banner on

@@ -42,6 +42,26 @@ class DownloadsScreen extends StatelessWidget {
                     : TextButton.icon(onPressed: d.pauseAll, icon: const Icon(Icons.pause), label: const Text('Pause')),
               if (failed > 0)
                 TextButton.icon(onPressed: d.retryAll, icon: const Icon(Icons.refresh), label: Text('Retry $failed')),
+              if (queue.isNotEmpty)
+                TextButton.icon(
+                  onPressed: () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: Text('Cancel all ${queue.length} in the queue?'),
+                        content: const Text('Books waiting, paused or failed are removed from the queue, and the one '
+                            'downloading stops. Finished downloads stay.'),
+                        actions: [
+                          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
+                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Cancel all')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) await d.cancelAll();
+                  },
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Cancel all'),
+                ),
             ],
           ),
           body: !d.ready
