@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Image settings: Auto-levels becomes **Enhance colours** - auto-levels, then yellowed paper whitened and faded ink
+  deepened (low-colour areas only; strong colours kept), in one small GPU pass per page (shaders/colours.frag). Chosen
+  by the user in the image lab. Series with Auto-levels on get Enhance colours. Works with or without Enhance.
 ## Build 30 - 2026-09-29
 
 - Image settings: Sharpen is replaced by **Enhance** - the page is cleaned up (edge-preserving denoise), scaled with

@@ -24,8 +24,9 @@ class Enhancer {
             ui.FragmentProgram.fromAsset('shaders/denoise.frag'),
             ui.FragmentProgram.fromAsset('shaders/lanczos.frag'),
             ui.FragmentProgram.fromAsset('shaders/rcas.frag'),
+            ui.FragmentProgram.fromAsset('shaders/colours.frag'),
           ]);
-          return _Programs(r[0], r[1], r[2]);
+          return _Programs(r[0], r[1], r[2], r[3]);
         } catch (e) {
           debugPrint('enhance: shaders unavailable ($e) - pages are drawn plain');
           return null;
@@ -60,6 +61,27 @@ class Enhancer {
     return out;
   }
 
+  /// "Enhance colours": [src] with auto-levels ([lo]/[hi] per channel, 0..1), then Whiten paper and Deepen ink at
+  /// full strength (the user's pick in tools/image-lab), at the page's own size. Null if the shaders can't run here.
+  static const whiten = 1.0, ink = 1.0;
+  static Future<ui.Image?> colours(ui.Image src, List<double> lo, List<double> hi) async {
+    final p = await _load();
+    if (p == null) return null;
+    final w = src.width, h = src.height;
+    return _pass(p.colours, src, w, h, (s) {
+      var i = 0;
+      s
+        ..setFloat(i++, w.toDouble())
+        ..setFloat(i++, h.toDouble());
+      for (final v in [...lo, ...hi]) {
+        s.setFloat(i++, v);
+      }
+      s
+        ..setFloat(i++, whiten)
+        ..setFloat(i++, ink);
+    });
+  }
+
   static void _lanczos(ui.FragmentShader s, int outW, int outH, int inW, int inH, int axis, double scale) {
     s
       ..setFloat(0, outW.toDouble())
@@ -87,6 +109,6 @@ class Enhancer {
 }
 
 class _Programs {
-  _Programs(this.denoise, this.lanczos, this.rcas);
-  final ui.FragmentProgram denoise, lanczos, rcas;
+  _Programs(this.denoise, this.lanczos, this.rcas, this.colours);
+  final ui.FragmentProgram denoise, lanczos, rcas, colours;
 }

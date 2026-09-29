@@ -8,7 +8,7 @@ import '../settings.dart';
 ///
 /// * Reader settings: fit mode (this series) + screen brightness and night mode (whole app, this device). Also opened
 ///   from the side menu, without the fit part.
-/// * Image settings: page brightness / contrast / enhance / auto-levels (this series).
+/// * Image settings: page brightness / contrast / enhance / enhance colours (this series).
 ///
 /// A series you have never adjusted follows the defaults; the first change you make in a series gives it its own
 /// settings (starting from the defaults), which the defaults no longer affect.
@@ -198,8 +198,8 @@ List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
       ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Auto-levels'),
-        subtitle: const Text('Whitens yellowed paper, deepens grey blacks'),
+        title: const Text('Enhance colours'),
+        subtitle: const Text('Whitens yellowed paper and deepens faded ink'),
         value: p.autoLevels,
         onChanged: (v) => setP(p.copyWith(autoLevels: v)),
       ),
