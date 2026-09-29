@@ -9,6 +9,7 @@ import 'offline/connection.dart';
 import 'offline/downloads.dart';
 import 'pins.dart';
 import 'settings.dart';
+import 'side_menu.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 
@@ -47,6 +48,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   @override
   void initState() {
     super.initState();
+    SideMenu.instance.load();
     Connection.instance.addListener(_onConnection);
     _restore();
   }

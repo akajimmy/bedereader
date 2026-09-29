@@ -243,10 +243,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return SideMenuFrame(api: api, onSignOut: widget.onSignOut, page: (context, docked) => Scaffold(
       key: _scaffold,
       onDrawerChanged: (open) { if (!open) _edge.currentState?.restore(); },
-      drawer: AppDrawer(api: api, onSignOut: widget.onSignOut),
+      drawer: docked ? null : AppDrawer(api: api, onSignOut: widget.onSignOut), // docked: beside the page instead
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
@@ -279,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (_sections[k]) ..._sectionWidgets(k),
               ]),
             )),
-    );
+    ));
   }
 }
 

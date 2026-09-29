@@ -148,10 +148,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final filterable = _mode == BrowseMode.series || _mode == BrowseMode.books;
-    return selectionScope(_sel, (context) => Scaffold(
+    return SideMenuFrame(api: api, onSignOut: widget.onSignOut, page: (context, docked) =>
+        selectionScope(_sel, (context) => Scaffold(
       key: _scaffold,
       onDrawerChanged: (open) { if (!open) _edge.currentState?.restore(); },
-      drawer: AppDrawer(api: api, onSignOut: widget.onSignOut),
+      drawer: docked ? null : AppDrawer(api: api, onSignOut: widget.onSignOut), // docked: beside the page instead
       appBar: _sel.active
           ? selectionAppBar(context, api, _sel, all: () => _paged.items, onChanged: _refresh)
           : AppBar(
@@ -228,7 +229,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       ),
       body: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _body()),
-    ));
+    )));
   }
 
   Widget _body() => PagedPosterGrid(

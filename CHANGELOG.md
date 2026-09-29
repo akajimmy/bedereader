@@ -4,6 +4,10 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Side menu can be docked: the pin in its header keeps it open beside the page (the page shifts right) on screens at
+  least 720 wide; the pin again lets it slide away. Remote: Left from the leftmost tile moves into it, Right back.
+  Remembered on the device; on narrow screens it always slides out.
+
 ## Build 24 - 2026-09-28
 
 - Home: four optional rows - Recently read, Recently added books, Recently added series, Recent releases (off by
