@@ -110,7 +110,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Details')),
-      body: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
+      // pull down to refresh (re-reads the book and series from Komga)
+      body: RefreshIndicator(onRefresh: _load, child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
               child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
@@ -130,7 +132,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
           Text(summary, style: const TextStyle(fontSize: 15, height: 1.45)),
         ],
         ..._credits(m['authors'] as List?),
-      ]),
+      ])),
     );
   }
 

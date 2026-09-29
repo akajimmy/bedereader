@@ -59,4 +59,16 @@ void main() {
     api = await open(tester, pin: const Pin(name: 'x', kind: 'series', id: 'S1', title: 'Silver Surfer'));
     expect(api.sorts.last, 'metadata.numberSort,asc');
   });
+
+  testWidgets('pull down to refresh reloads the series from Komga (even when it is empty)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = await open(tester);
+    final before = api.sorts.length;
+    await tester.fling(find.byType(Scrollable).first, const Offset(0, 400), 1500);
+    await tester.pump(); // start the refresh
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(api.sorts.length, greaterThan(before));
+  });
 }
+

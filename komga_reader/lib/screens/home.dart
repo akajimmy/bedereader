@@ -132,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
-              child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+              child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.only(bottom: 24), children: [
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
                       child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),

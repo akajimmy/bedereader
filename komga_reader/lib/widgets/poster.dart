@@ -154,10 +154,14 @@ class PosterGrid extends StatelessWidget {
 /// A [PosterGrid] over a [Paged] listing: asks for the next page when the grid gets within ~2 screens of the end
 /// (scrolling by touch, or by moving focus down with the remote), with a spinner row while it loads.
 class PagedPosterGrid extends StatelessWidget {
-  const PagedPosterGrid({super.key, required this.paged, required this.itemBuilder, this.empty = 'Nothing here'});
+  const PagedPosterGrid({super.key, required this.paged, required this.itemBuilder, this.empty = 'Nothing here',
+      this.onRefresh});
   final Paged paged;
   final Widget Function(BuildContext context, dynamic item, int index) itemBuilder;
   final String empty;
+
+  /// Pull down to refresh (every grid has it). Default: re-fetch what's loaded, keeping the scroll position.
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -165,11 +169,26 @@ class PagedPosterGrid extends StatelessWidget {
       listenable: paged,
       builder: (context, _) {
         if (paged.firstLoad) return const Center(child: CircularProgressIndicator());
+        final refresh = onRefresh ?? paged.refresh;
         if (paged.items.isEmpty) {
-          return Center(child: Text(paged.error != null ? '${paged.error}' : empty,
-              style: TextStyle(color: paged.error != null ? const Color(0xFFFF8A80) : const Color(0xFF9A9A9A))));
+          // still pullable, so an empty list or an error can be retried by pulling down
+          return RefreshIndicator(
+            onRefresh: refresh,
+            child: LayoutBuilder(builder: (context, box) => ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(
+                      height: box.maxHeight,
+                      child: Center(child: Text(paged.error != null ? '${paged.error}' : empty,
+                          style: TextStyle(color: paged.error != null ? const Color(0xFFFF8A80) : const Color(0xFF9A9A9A)))),
+                    ),
+                  ],
+                )),
+          );
         }
-        return CustomScrollView(slivers: [
+        return RefreshIndicator(
+          onRefresh: refresh,
+          child: CustomScrollView(physics: const AlwaysScrollableScrollPhysics(), slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             sliver: SliverGrid.builder(
@@ -194,7 +213,8 @@ class PagedPosterGrid extends StatelessWidget {
                   : Center(child: Text('${paged.items.length} shown', style: const TextStyle(color: Color(0xFF6A6A6A), fontSize: 12))),
             ),
           ),
-        ]);
+        ]),
+        );
       },
     );
   }

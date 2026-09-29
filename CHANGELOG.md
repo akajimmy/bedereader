@@ -11,6 +11,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
   settings (Auto / Left to right / Right to left). In right-to-left books Left goes forward, the tap zones and
   swipes flip, the page slider runs right to left, the zoomed path starts top-right, fit height starts at the
   right edge. Vertical/webtoon series still read as pages.
+- Pull down to refresh everywhere: library, series, collection and read-list grids (also when empty or showing an
+  error), book Details, and Home even when its content is short.
 
 ## Build 19 - 2026-09-28
 

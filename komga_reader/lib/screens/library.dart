@@ -231,7 +231,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ));
   }
 
-  Widget _body() => PagedPosterGrid(paged: _paged, itemBuilder: (context, it, i) => _tile(it, i == 0));
+  Widget _body() => PagedPosterGrid(
+        paged: _paged,
+        itemBuilder: (context, it, i) => _tile(it, i == 0),
+        onRefresh: () {
+          ReadListTile.invalidate(); // read-list posters show the first unread books
+          return _paged.refresh();
+        },
+      );
 
   Widget _tile(dynamic it, bool first) {
     switch (_mode) {
