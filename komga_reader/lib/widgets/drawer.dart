@@ -78,7 +78,7 @@ class _AppDrawerState extends State<AppDrawer> {
                     errorBuilder: (_, __, ___) => const SizedBox(width: 36, height: 36)),
               ),
               const SizedBox(width: 12),
-              const Expanded(child: Text('Komga Reader', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500))),
+              const Expanded(child: Text(appName, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500))),
               // keep the menu open beside the page (wide screens only)
               if (SideMenu.roomFor(context))
                 IconButton(

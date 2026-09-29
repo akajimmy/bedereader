@@ -173,7 +173,7 @@ class AppSettingsScreen extends StatelessWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.info_outline),
-                title: const Text('About Komga Reader'),
+                title: const Text('About $appName'),
                 subtitle: const Text('Version, author, licence, credits'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutScreen(api: api))),

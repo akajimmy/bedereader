@@ -26,7 +26,7 @@ function Say([string]$text) { Write-Host ('[{0}] {1}' -f (Get-Date -Format 'HH:m
 function Adb([string]$arguments) { cmd /c "`"$adb`" $arguments 2>&1" }
 
 if (-not $Apk) {
-    $Apk = Get-ChildItem (Join-Path $root 'dist') -Recurse -Filter 'KomgaReader-*-android.apk' -ErrorAction SilentlyContinue |
+    $Apk = Get-ChildItem (Join-Path $root 'dist') -Recurse -Filter '*-android.apk' -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
     if (-not $Apk) { throw 'No APK found in dist\ - run tools\build.ps1 first.' }
 }

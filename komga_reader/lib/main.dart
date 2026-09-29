@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'app_identity.dart';
 import 'licences.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -163,7 +164,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Komga Reader',
+      title: appName,
       debugShowCheckedModeBanner: false,
       navigatorKey: _nav,
       scaffoldMessengerKey: _messenger,
