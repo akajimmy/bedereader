@@ -319,8 +319,21 @@ class Downloads extends ChangeNotifier {
       final library = libraries.firstWhere((l) => l['id'] == book['libraryId'], orElse: () => {'id': book['libraryId'], 'name': 'Library'});
       final readLists = [
         for (final rl in await api.bookReadLists(job.bookId))
-          {'id': rl['id'], 'name': rl['name'], 'index': ((rl['bookIds'] as List?) ?? []).indexOf(job.bookId)},
+          {
+            'id': rl['id'], 'name': rl['name'], 'index': ((rl['bookIds'] as List?) ?? []).indexOf(job.bookId),
+            'count': ((rl['bookIds'] as List?) ?? []).length, // offline: the list's last book vs one not downloaded
+          },
       ];
+      // the book after this one in its series (null: the last), so offline reading can tell "the next book isn't
+      // downloaded" from "end of the series" instead of skipping ahead to the next one that is (user, 2026-09-29)
+      String? nextId;
+      var nextKnown = false;
+      try {
+        nextId = (await api.nextBook(job.bookId))?['id'] as String?;
+        nextKnown = true;
+      } catch (_) {
+        // not worth failing the download for: offline falls back to the next downloaded book
+      }
       final collections = [for (final c in await api.seriesCollections(seriesId)) {'id': c['id'], 'name': c['name']}];
 
       final plan = [
@@ -334,6 +347,7 @@ class Downloads extends ChangeNotifier {
       final entry = <String, dynamic>{
         'book': book, 'series': series, 'library': {'id': library['id'], 'name': library['name']},
         'readLists': readLists, 'collections': collections, 'pages': plan, 'bytes': 0, 'state': 'partial',
+        if (nextKnown) 'nextId': nextId,
       };
       await s.put(job.bookId, entry);
 

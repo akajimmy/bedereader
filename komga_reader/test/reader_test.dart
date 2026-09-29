@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/offline/offline_komga.dart' show NotAvailableOffline;
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screens/library.dart';
@@ -66,6 +67,13 @@ class CoverKomga extends FakeKomga {
     coverAsked.add(bookId);
     return Future.value(cover);
   }
+}
+
+/// [FakeKomga] offline, with the next book not downloaded.
+class NotDownloadedKomga extends FakeKomga {
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async =>
+      throw NotAvailableOffline('The next book');
 }
 
 void main() {
@@ -252,6 +260,27 @@ void main() {
     expect(images.last.image, isA<ResizeImage>()); // decoded at about the size shown
     expect((images.last.image as ResizeImage).imageProvider, isA<MemoryImage>());
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets("end card offline: the next book isn't downloaded - it says so, no poster, and → closes the book",
+      (tester) async {
+    api = NotDownloadedKomga();
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook))),
+      child: const Text('open'),
+    ))));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await toEndCard(tester);
+    expect(find.text("The next book in the series isn't downloaded"), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(ReaderScreen), findsNothing); // closed
+    expect(api.marked, ['B1']); // and this one is read
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('end card: shows the next book in the series - title and poster', (tester) async {

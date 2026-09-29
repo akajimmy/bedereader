@@ -6,6 +6,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 ## Unreleased
 
 **Fixed**
+- Offline, the end of a book no longer skips ahead: if the book that comes next in the series or read list isn't
+  downloaded, the end card says so and the arrow closes the book (it used to offer the next book that *was*
+  downloaded, jumping over the missing ones). Books downloaded before this build still skip ahead in a series until
+  they're downloaded again.
 - End of book: the next book's poster was blurry (Komga's thumbnails are small). The book's cover page itself now
   replaces it, sharp, fetched ahead as you reach the last pages.
 

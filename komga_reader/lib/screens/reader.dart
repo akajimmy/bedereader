@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../offline/connection.dart';
+import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
 import '../page_image.dart';
 import '../screen.dart';
@@ -465,6 +466,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       } else {
         _open(next);
       }
+    } on NotAvailableOffline {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("The next book isn't downloaded")));
+      Navigator.of(context).pop();
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
@@ -830,6 +835,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         final List<Widget> body;
         if (snap.connectionState != ConnectionState.done) {
           body = [const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))];
+        } else if (snap.error is NotAvailableOffline) {
+          body = [ // offline, and the book that comes next isn't downloaded: no jumping ahead to one that is
+            Text("The next book in $where isn't downloaded", textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 16)),
+            const SizedBox(height: 12),
+            Text('$arrow : close the book', style: dim),
+          ];
         } else if (snap.hasError) {
           body = [Text('$arrow : next book in $where', style: dim)]; // couldn't look it up: the turn still tries
         } else if (next == null) {

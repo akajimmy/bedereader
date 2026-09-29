@@ -295,8 +295,31 @@ class OfflineKomga extends Komga {
     return _booksOfSeries(sid)..sort((a, b) => _numberSort(store.books[a]!['book'] as Map).compareTo(_numberSort(store.books[b]!['book'] as Map)));
   }
 
+  /// The next book only if it's downloaded: when the one that comes next isn't, this says so
+  /// ([NotAvailableOffline]) rather than skipping ahead to the next one that is (user, 2026-09-29). Books downloaded
+  /// before the next one was recorded fall back to the next downloaded book.
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
+    final entry = store.books[bookId];
+    if (readListId != null) {
+      Map? place(Map<String, dynamic>? e) =>
+          ((e?['readLists'] as List?) ?? []).cast<Map>().where((r) => r['id'] == readListId).firstOrNull;
+      final index = (place(entry)?['index'] as num?)?.toInt();
+      if (index == null || index < 0) return null;
+      String? at(int i) => _done.where((e) => (place(e.value)?['index'] as num?)?.toInt() == i).firstOrNull?.key;
+      final next = at(index + 1);
+      if (next != null) return _book(next);
+      final count = (place(entry)?['count'] as num?)?.toInt();
+      final later = _done.any((e) => ((place(e.value)?['index'] as num?)?.toInt() ?? -1) > index + 1);
+      if (count != null ? index + 1 >= count : !later) return null; // the list's last book (or can't tell)
+      throw NotAvailableOffline('The next book');
+    }
+    if (entry != null && entry.containsKey('nextId')) {
+      final next = entry['nextId'] as String?;
+      if (next == null) return null; // the series' last book
+      if (store.books[next]?['state'] == 'done') return _book(next);
+      throw NotAvailableOffline('The next book');
+    }
     final order = _order(bookId, readListId);
     final i = order.indexOf(bookId);
     return i >= 0 && i + 1 < order.length ? _book(order[i + 1]) : null;
