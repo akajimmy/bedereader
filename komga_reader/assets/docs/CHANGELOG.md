@@ -10,9 +10,9 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
   (Info > licences page), and the third-party list covers each platform's extra parts. The Windows program's
   copyright line and the web version's title and description no longer show template text.
 
-## 0.1.1 - offline reading and better pages
+## 0.1.1-rc.1 - offline reading and better pages
 
-From build 21, on the way to the next release. Builds 21-26 still showed version 0.1.0.
+Release candidate 1 is build 35, tagged `v0.1.1-rc.1`. Builds 21-26 still showed version 0.1.0.
 
 ### Build 33 - 2026-09-29
 
