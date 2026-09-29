@@ -59,6 +59,14 @@ $device = $devices[0]
 $before = (Adb "-t $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
 Say "installing $(Split-Path $Apk -Leaf) on the tablet (connection $device) ..."
 $result = Adb "-t $device install -r `"$Apk`""
+if ($result -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE') {
+    # the tablet's copy is signed with another key (the debug key, before release signing): Android won't update it.
+    # Uninstalling deletes the app's data on the tablet, so that's left to the user.
+    Say 'the tablet has a copy signed with a different key, so Android refuses to update it. Uninstall Komga Reader on'
+    Say 'the tablet (this removes its settings and downloads there; what is synced through Komga comes back), then run'
+    Say 'tools\install-android.ps1 again. This happens once, when moving to the release key.'
+    exit 3
+}
 if (-not ($result -match '^Success')) { throw "install failed: $($result -join ' ')" }
 $after = (Adb "-t $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
 $b = if ($before) { $before.Matches[0].Groups[1].Value } else { 'none' }

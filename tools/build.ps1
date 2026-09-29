@@ -164,6 +164,11 @@ Say "building $name+$build for: $($Platforms -join ', ') -> $out"
 $artifacts = @()
 try {
 if ($Platforms -contains 'android') {
+    $keyProps = Join-Path $app 'android\key.properties'
+    $signing = if (Test-Path $keyProps) { 'release key (android\key.properties)' } else { 'DEBUG key - no android\key.properties' }
+    if (-not (Test-Path $keyProps)) {
+        Say 'WARNING: no android\key.properties - the APK is signed with the debug key (fine for testing, not for release)'
+    }
     Run 'Android APK' 'flutter build apk --release'
     $apk = Join-Path $out "KomgaReader-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
@@ -196,6 +201,7 @@ $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].V
     "commit:   $commit$(if ($Bump) { ' (+ this version bump)' })$(if ($dirty) { ' - WORKING TREE HAD UNCOMMITTED CHANGES' })",
     "flutter:  $fv",
     "tests:    $(if ($SkipTests) { 'skipped' } else { 'passed' })",
+    "android:  $(if ($Platforms -contains 'android') { "signed with the $signing" } else { 'not built' })",
     '',
     'files:'
 ) + ($artifacts | ForEach-Object { '  {0}  ({1:N1} MB)' -f (Split-Path $_ -Leaf), ((Get-Item $_).Length / 1MB) }) |
@@ -224,6 +230,7 @@ if ($Platforms -contains 'android' -and -not $NoInstall) {
     $apk = $artifacts | Where-Object { $_ -like '*-android.apk' } | Select-Object -First 1
     & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
     if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1' }
+    if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)' }
 }
 
 Say ('all done in {0:N0} s' -f ((Get-Date) - $started).TotalSeconds)
