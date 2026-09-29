@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/poster_row.dart';
 import '../widgets/readlist_tile.dart';
@@ -97,6 +98,7 @@ class _SearchScreenState extends State<SearchScreen> {
         actions: [
           if (_text.text.isNotEmpty)
             IconButton(tooltip: 'Clear', icon: const Icon(Icons.close), onPressed: () { _text.clear(); _search(''); }),
+          const FullscreenExit(),
         ],
         bottom: widget.libraryId == null
             ? null

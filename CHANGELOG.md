@@ -4,6 +4,15 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Settings reorganised: App settings is the one place for everything, in sections that each say where they're kept
+  (this device / synced through Komga): Server & connection (with the server status from Info), Reading (defaults
+  for new series - fit, direction, image - editable here, plus "N series have their own settings" with Reset all;
+  page turn), Display (screen brightness, night mode), Library & Home (sections, hidden from On deck), Downloads
+  (limit, Open Downloads), About (Info). Side menu: Reader settings and Sign out removed (both in App settings).
+  The reader's panels are unchanged.
+- Desktop full screen: an X at the right of every screen's top bar leaves it (the borderless window has no title bar).
+- Series menu: Details - poster, publisher, status, first release, books read, language, age rating, genres and
+  tags, summary, credits of all its books by role; Open series (not when already in it).
 - Hide from On deck (book and series menus): a series never shows in On deck; a book is skipped (its series comes
   back once that book is read). "Show in On deck again" in the same menu; App settings > Home counts what's hidden,
   with Show all again. Synced through Komga like pins; a change made offline is sent at the next start.

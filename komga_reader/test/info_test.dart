@@ -48,15 +48,17 @@ void main() {
     expect(api.calls, 3);
   });
 
-  testWidgets('side menu: Info sits between Reader settings and Sign out', (tester) async {
+  testWidgets('side menu: Info comes last, after App settings (Reader settings and Sign out moved to App settings)',
+      (tester) async {
     final scaffold = GlobalKey<ScaffoldState>();
     await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
         drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
     double y(String t) => tester.getTopLeft(find.textContaining(t)).dy;
-    expect(y('Reader settings') < y('Info'), isTrue);
-    expect(y('Info') < y('Sign out'), isTrue);
+    expect(y('App settings') < y('Info'), isTrue);
+    expect(find.text('Reader settings'), findsNothing);
+    expect(find.text('Sign out'), findsNothing);
     await tester.tap(find.text('Info'));
     await tester.pumpAndSettle();
     expect(find.byType(InfoScreen), findsOneWidget);

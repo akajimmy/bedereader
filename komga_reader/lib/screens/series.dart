@@ -4,6 +4,7 @@ import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
+import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
@@ -97,7 +98,8 @@ class _SeriesScreenState extends State<SeriesScreen> {
           )),
           SelectButton(selection: _sel),
           IconButton(tooltip: 'Series actions', icon: const Icon(Icons.more_vert),
-              onPressed: () => showSeriesActions(context, widget.api, s, onChanged: _paged.refresh)),
+              onPressed: () => showSeriesActions(context, widget.api, s, onChanged: _paged.refresh, inSeries: true)),
+          const FullscreenExit(),
         ],
       ),
       body: PagedPosterGrid(
@@ -159,6 +161,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
               name: [widget.title, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
               kind: 'collection', id: widget.collectionId, title: widget.title, filter: _filter.name,
             )),
+            const FullscreenExit(),
           ]),
       body: PagedPosterGrid(
         paged: _paged,

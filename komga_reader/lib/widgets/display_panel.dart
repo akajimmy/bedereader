@@ -75,7 +75,6 @@ class _ReaderPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(title: 'Reader settings', rows: (s) {
-      final d = s.display;
       final id = seriesId;
       final p = s.prefsFor(id);
       final fitName = p.fit.label.toLowerCase();
@@ -122,46 +121,9 @@ class _ReaderPanel extends StatelessWidget {
           ),
         ],
         const _Heading('Page turn · this device'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: SegmentedButton<PageTurn>(
-            segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
-            selected: {d.pageTurn},
-            showSelectedIcon: false,
-            onSelectionChanged: (v) => s.setDisplay(d.copyWith(pageTurn: v.first)),
-          ),
-        ),
+        const PageTurnControl(),
         const _Heading('Screen · whole app, this device'),
-        if (!DisplayPrefs.backlightControl)
-          // desktop: a monitor's backlight can't be set, so the slider only dims (right = no dimming)
-          _SliderRow(
-            label: 'Screen brightness',
-            value: d.brightness ?? 1,
-            valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
-            onChanged: (v) => s.setDisplay(d.copyWith(brightness: () => v >= 0.995 ? null : v)),
-          ),
-        if (DisplayPrefs.backlightControl) ...[
-        _SliderRow(
-          label: 'Screen brightness',
-          value: d.brightness ?? 0.6,
-          enabled: d.brightness != null,
-          valueText: d.brightness == null
-              ? 'Auto'
-              : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
-          onChanged: (v) => s.setDisplay(d.copyWith(brightness: () => v)),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Automatic brightness (tablet setting)'),
-          value: d.brightness == null,
-          onChanged: (auto) async {
-            if (auto) return s.setDisplay(d.copyWith(brightness: () => null));
-            // start from the current screen level, so nothing jumps until the slider moves
-            final now = await getScreenBrightness();
-            s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
-          },
-        ),
-        ],
+        const ScreenBrightnessControls(),
         const NightModeControls(),
       ];
     });
@@ -180,24 +142,7 @@ class _ImagePanel extends StatelessWidget {
       void setP(ReaderPrefs n) => s.setSeries(seriesId, n);
       return [
         _Heading('Pages · ${seriesTitle ?? 'this series'}'),
-        _SliderRow(label: 'Page brightness', value: p.brightness, min: -0.3, max: 0.3,
-            valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
-        _SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
-            valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Sharpen'),
-          subtitle: const Text('Light, for soft or low-resolution scans'),
-          value: p.sharpen,
-          onChanged: (v) => setP(p.copyWith(sharpen: v)),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Auto-levels'),
-          subtitle: const Text('Whitens yellowed paper, deepens grey blacks'),
-          value: p.autoLevels,
-          onChanged: (v) => setP(p.copyWith(autoLevels: v)),
-        ),
+        ..._imageRows(p, setP),
         const SizedBox(height: 4),
         Wrap(spacing: 8, runSpacing: 8, children: [
           // back to the untouched scan for this series (fit is left alone)
@@ -236,6 +181,135 @@ class _Heading extends StatelessWidget {
         padding: const EdgeInsets.only(top: 14, bottom: 2),
         child: Text(text, style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
       );
+}
+
+/// Page brightness, contrast, sharpen, auto-levels for [p] (a series' settings, or the defaults).
+List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
+      _SliderRow(label: 'Page brightness', value: p.brightness, min: -0.3, max: 0.3,
+          valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
+      _SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
+          valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Sharpen'),
+        subtitle: const Text('Light, for soft or low-resolution scans'),
+        value: p.sharpen,
+        onChanged: (v) => setP(p.copyWith(sharpen: v)),
+      ),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Auto-levels'),
+        subtitle: const Text('Whitens yellowed paper, deepens grey blacks'),
+        value: p.autoLevels,
+        onChanged: (v) => setP(p.copyWith(autoLevels: v)),
+      ),
+    ];
+
+/// Rebuilds [build] whenever the settings change (the shared controls below are used outside the panels too).
+class _Live extends StatelessWidget {
+  const _Live(this.build_);
+  final Widget Function(AppSettings s) build_;
+  @override
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
+}
+
+/// Page-turn style (this device). In the reader's Reader settings and App settings > Reading.
+class PageTurnControl extends StatelessWidget {
+  const PageTurnControl({super.key});
+  @override
+  Widget build(BuildContext context) => _Live((s) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: SegmentedButton<PageTurn>(
+          segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
+          selected: {s.display.pageTurn},
+          showSelectedIcon: false,
+          onSelectionChanged: (v) => s.setDisplay(s.display.copyWith(pageTurn: v.first)),
+        ),
+      ));
+}
+
+/// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on desktop.
+/// In the reader's Reader settings and App settings > Display.
+class ScreenBrightnessControls extends StatelessWidget {
+  const ScreenBrightnessControls({super.key});
+  @override
+  Widget build(BuildContext context) => _Live((s) {
+        final d = s.display;
+        if (!DisplayPrefs.backlightControl) {
+          // desktop: a monitor's backlight can't be set, so the slider only dims (right = no dimming)
+          return _SliderRow(
+            label: 'Screen brightness',
+            value: d.brightness ?? 1,
+            valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
+            onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
+          );
+        }
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          _SliderRow(
+            label: 'Screen brightness',
+            value: d.brightness ?? 0.6,
+            enabled: d.brightness != null,
+            valueText: d.brightness == null
+                ? 'Auto'
+                : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
+            onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Automatic brightness (tablet setting)'),
+            value: d.brightness == null,
+            onChanged: (auto) async {
+              if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
+              // start from the current screen level, so nothing jumps until the slider moves
+              final now = await getScreenBrightness();
+              s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
+            },
+          ),
+        ]);
+      });
+}
+
+/// The defaults every series you haven't adjusted follows (synced through Komga): fit, reading direction and the
+/// image adjustments - App settings > Reading. The reader's "Make ... the default" buttons set the same thing.
+class ReadingDefaults extends StatelessWidget {
+  const ReadingDefaults({super.key});
+  @override
+  Widget build(BuildContext context) => _Live((s) {
+        final p = s.defaults;
+        void setP(ReaderPrefs n) => s.setDefault(n);
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          const _Heading('Fit'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: SegmentedButton<FitMode>(
+              segments: [for (final f in FitMode.values) ButtonSegment(value: f, label: Text('Fit ${f.label.toLowerCase()}'))],
+              selected: {p.fit},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => setP(p.copyWith(fit: v.first)),
+            ),
+          ),
+          const _Heading('Reading direction'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: SegmentedButton<ReadingDirection>(
+              segments: [
+                for (final r in ReadingDirection.values)
+                  ButtonSegment(value: r, label: Text(r == ReadingDirection.auto ? 'Auto (from Komga)' : r.label)),
+              ],
+              selected: {p.direction},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => setP(p.copyWith(direction: v.first)),
+            ),
+          ),
+          const _Heading('Pages'),
+          ..._imageRows(p, setP),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(onPressed: () => setP(p.imageReset()), child: const Text('Image back to original')),
+          ),
+        ]);
+      });
 }
 
 /// Night mode switch + warmth. It tints the whole app (library views too), so it lives in App settings as well as in

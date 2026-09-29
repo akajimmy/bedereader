@@ -9,7 +9,6 @@ import '../screens/downloads_screen.dart';
 import '../screens/info.dart';
 import '../screens/library.dart';
 import '../side_menu.dart';
-import 'display_panel.dart';
 
 /// Side navigation: Home, each library, sign out. Home is always the root route, so every entry first pops back to it.
 class AppDrawer extends StatefulWidget {
@@ -134,15 +133,11 @@ class _AppDrawerState extends State<AppDrawer> {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => AppSettingsScreen(api: widget.api, onSignOut: widget.onSignOut)));
               }),
-          ListTile(leading: const Icon(Icons.tune), title: const Text('Reader settings'),
-              onTap: () { _close(); showReaderPanel(context); }),
           ListTile(leading: const Icon(Icons.info_outline), title: const Text('Info'),
               onTap: () {
                 _close();
                 Navigator.of(context).push(MaterialPageRoute(builder: (_) => InfoScreen(api: widget.api)));
               }),
-          ListTile(leading: const Icon(Icons.logout), title: const Text('Sign out'),
-              onTap: () { Navigator.of(context).popUntil((r) => r.isFirst); widget.onSignOut(); }),
         ]),
       ),
     );

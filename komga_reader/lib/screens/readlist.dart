@@ -4,6 +4,7 @@ import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
+import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
@@ -67,6 +68,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
           SelectButton(selection: _sel),
           IconButton(tooltip: 'Read list actions', icon: const Icon(Icons.more_vert),
               onPressed: () => showReadListActions(context, widget.api, widget.readList, onChanged: _paged.refresh)),
+          const FullscreenExit(),
         ],
       ),
       body: PagedPosterGrid(

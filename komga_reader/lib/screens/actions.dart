@@ -5,6 +5,7 @@ import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
 import 'book_details.dart';
 import 'series.dart';
+import 'series_details.dart';
 
 /// Book actions sheet (long-press a book): details, view series (not when already in that series), mark as read,
 /// mark as unread (both always offered; a book already in that state is left alone), select multiple (where the
@@ -162,7 +163,8 @@ Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) as
 }
 
 /// Series actions: mark whole series read/unread, delete series.
-Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {required VoidCallback onChanged}) async {
+Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
+    {required VoidCallback onChanged, bool inSeries = false}) async {
   final title = (s['metadata']?['title'] ?? s['name']) as String;
   final choice = await showModalBottomSheet<String>(
     context: context,
@@ -171,7 +173,9 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
       child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text(title), subtitle: Text('${s['booksCount'] ?? 0} books')),
         const Divider(height: 1),
-        ListTile(autofocus: true, leading: const Icon(Icons.check_circle_outline), title: const Text('Mark series as read'),
+        ListTile(autofocus: true, leading: const Icon(Icons.info_outline), title: const Text('Details'),
+            onTap: () => Navigator.pop(ctx, 'details')),
+        ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark series as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark series as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
@@ -189,6 +193,12 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s, {requ
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'details') {
+    await Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => SeriesDetailsScreen(api: api, series: s, showOpen: !inSeries)));
+    onChanged(); // read state may have changed there
+    return;
+  }
   if (choice == 'ondeck-hide' || choice == 'ondeck-show') {
     OnDeckHidden.instance.setSeries(s['id'] as String, choice == 'ondeck-hide');
     return;
