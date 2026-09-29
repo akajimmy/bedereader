@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Downloaded badge on tiles (bottom right): books show a blue tick when downloaded, a filling ring while in the
+  queue, a pause sign or a red mark if paused or failed; series and read lists show how many of their books are
+  downloaded (the tick alone when all are). Hidden in offline mode, where everything shown is downloaded.
 - Reader, fit width / fit height: a page that overflows the screen opens centred in the other direction (coming
   back from the next page still opens at its end). In fit height a page wider than the screen can be dragged left
   and right to see the cut-off parts; dragging on past its edge turns the page.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import 'download_badge.dart';
 import 'poster.dart';
 
 /// Read-list tile whose poster is built from the first four UNREAD books of the list (Komga's own read-list
@@ -71,6 +72,7 @@ class _ReadListTileState extends State<ReadListTile> {
           title: widget.readList['name'] as String,
           subtitle: unread == null ? '$total books' : done ? '$total books · read' : '$unread of $total unread',
           read: done && total > 0,
+          badge: DownloadBadge.readList(_id, total: total),
           onOpen: widget.onOpen,
           onMenu: widget.onMenu,
         );
