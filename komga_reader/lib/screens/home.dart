@@ -192,14 +192,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (_show['continue']!) ...[
                   _Section('Continue reading'),
                   _inProgress.isEmpty
-                      ? const _Empty('Nothing in progress')
+                      ? _Empty(Connection.instance.offline ? 'Nothing downloaded in progress' : 'Nothing in progress')
                       : _BookRow(books: _inProgress, api: api, autofocusFirst: true, onChanged: _load,
                           onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
                 ],
                 if (_showOnDeck) ...[
                   _Section('On deck'),
                   _onDeck.isEmpty
-                      ? const _Empty('Nothing on deck')
+                      ? _Empty(Connection.instance.offline ? 'Nothing downloaded on deck' : 'Nothing on deck')
                       : _BookRow(books: _onDeck, api: api, onChanged: _load,
                           onOpen: (b) => _push(ReaderScreen(api: api, book: b))),
                 ],

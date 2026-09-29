@@ -38,6 +38,7 @@ void main() {
     expect(find.text('Surfer'), findsOneWidget);
     expect(find.text('Surfer unread'), findsOneWidget);
     expect(find.text('Hulk'), findsNothing);
+    expect(find.text('Nothing downloaded on deck'), findsOneWidget); // S1 has a book in progress, so nothing on deck
 
     Connection.instance.forcedOffline = false;
     Pins.instance.items = [];
