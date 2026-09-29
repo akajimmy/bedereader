@@ -48,6 +48,12 @@ Runs analyze + tests (stops on any failure), raises the build number, builds And
 `-Platforms android` (or `windows`, `web`) builds a subset; `-SkipTests` skips the tests; progress is in
 `dist\build.log`. Close Komga Reader on this PC before a Windows build.
 
+After an Android build the pipeline installs the APK on the paired tablet over wireless ADB
+(`tools\install-android.ps1`; skip with `-NoInstall`). One-time pairing, done by hand on the PC:
+`& 'C:\Dev\android-sdk\platform-tools\adb.exe' pair <IP>:<port>` with the code from the tablet's
+Settings > Developer options > Wireless debugging > Pair device with pairing code. Wireless debugging must be on
+for installs; if the tablet isn't reachable the build still succeeds and says so.
+
 Outputs:
 - `KomgaReader-<ver>-android.apk` - install on the tablet (sideload)
 - `KomgaReader-<ver>-windows.zip` - portable: unzip anywhere, run `KomgaReader.exe`

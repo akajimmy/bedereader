@@ -11,6 +11,8 @@
          web      -> KomgaReader-<ver>-web.zip
     4. Writes SHA256SUMS.txt and BUILD-INFO.txt next to them.
     5. With -Bump, commits the version change and tags it build-<n>.
+    6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
+       if the tablet isn't reachable the build still counts and it says so.
 
     Each step prints a timestamped line; the tools' full output goes to dist\build.log
     (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
@@ -25,7 +27,8 @@ param(
     [ValidateSet('android', 'windows', 'web')]
     [string[]]$Platforms = @('android', 'windows', 'web'),
     [switch]$SkipTests,
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+    [switch]$NoInstall      # don't install the APK on the paired tablet afterwards
 )
 
 $ErrorActionPreference = 'Stop'
@@ -171,6 +174,13 @@ if ($Bump) {
     Git "commit -q -m `"Build $build`"" | Out-Null
     Git "tag build-$build" | Out-Null
     Say "committed and tagged build-$build"
+}
+
+# ---- 6. put it on the tablet ---------------------------------------------------------------------------------------
+if ($Platforms -contains 'android' -and -not $NoInstall) {
+    $apk = $artifacts | Where-Object { $_ -like '*-android.apk' } | Select-Object -First 1
+    & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
+    if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1' }
 }
 
 Say ('all done in {0:N0} s' -f ((Get-Date) - $started).TotalSeconds)
