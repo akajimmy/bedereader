@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 20 - 2026-09-28
+
 - Header count: the number of items in the current view (with the active filter) in a small box, left of Hide read,
   on library, series, collection and read-list screens.
 - Hide read is an icon-only button (crossed-out eye, tinted while read items are hidden).
