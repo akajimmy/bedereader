@@ -43,6 +43,15 @@ void main() {
     });
   });
 
+  testWidgets('shrinking (Lanczos path, not EASU): the asked size, a flat colour stays flat', (tester) async {
+    await tester.runAsync(() async {
+      final src = await fromPixels(80, 120, (x, y) => 90);
+      final out = (await Enhancer.run(src, 61, 92))!;
+      expect((out.width, out.height), (61, 92));
+      expect((await greys(out)).every((v) => (v - 90).abs() <= 1), isTrue);
+    });
+  });
+
   testWidgets('light speckle (JPEG-like) is smoothed away', (tester) async {
     await tester.runAsync(() async {
       final rnd = math.Random(7);

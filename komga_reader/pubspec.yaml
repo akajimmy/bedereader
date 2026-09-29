@@ -24,5 +24,6 @@ flutter:
     - shaders/lanczos.frag
     - shaders/rcas.frag
     - shaders/colours.frag
+    - shaders/easu.frag
   assets:
     - assets/icon.png
