@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Opening a book with Enhance colours (or Enhance) no longer flashes the uncorrected page: the page waits (spinner)
+  until it's processed. The book's colour measurement fetches its five pages at once and is remembered on the device,
+  so reopening a book has nothing to wait for. If the GPU processing can't run on a device, the page shows plain.
 ## Build 31 - 2026-09-29
 
 - Enhance: enlarged pages are now scaled with FSR 1 EASU (edge-directed: diagonal lines and lettering stay smooth),
