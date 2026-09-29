@@ -5,10 +5,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
-**New**
-- **What's new** and **Read me** in App settings > About and on the Info screen: this changelog, and what the
-  app does, how to get started and where your settings live.
-
 ## 0.1.1 - offline reading and better pages
 
 Builds 21-32, on the way to the next release. Builds 21-26 still showed version 0.1.0.

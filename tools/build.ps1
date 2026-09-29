@@ -104,6 +104,57 @@ if ($Bump) {
     [IO.File]::WriteAllText($pubspec, $text, (New-Object Text.UTF8Encoding($false)))  # no BOM
     Say "version bumped to $name+$build"
 }
+# ---- 2b. changelog, and the documents bundled into the app (About > What's new / Read me) ---------------------------
+# Done before building so the app's copy of the changelog already lists this build. Put back if the build fails.
+$changelog = Join-Path $root 'CHANGELOG.md'
+$docsDir = Join-Path $app 'assets\docs'
+$utf8 = New-Object Text.UTF8Encoding($false)
+$originalChangelog = if (Test-Path $changelog) { [IO.File]::ReadAllText($changelog) } else { $null }
+$originalDocs = @{}
+foreach ($f in 'README.md', 'CHANGELOG.md') {
+    $p = Join-Path $docsDir $f
+    $originalDocs[$f] = if (Test-Path $p) { [IO.File]::ReadAllText($p) } else { $null }
+}
+$filed = $false
+if ($Bump -and $originalChangelog) {
+    # the "Unreleased" entries become "### Build <n> - <date>", first in this version's "## <version>" section
+    # (a new section is started above the others for a new version)
+    $cl = $originalChangelog
+    $u = [regex]::Match($cl, '(?ms)^## Unreleased[^\n]*\n(.*?)(?=^## |\z)')
+    if ($u.Success -and $u.Groups[1].Value.Trim()) {
+        $entries = $u.Groups[1].Value.Trim()
+        $cl = $cl.Substring(0, $u.Index) + "## Unreleased`n`n" + $cl.Substring($u.Index + $u.Length)
+        $heading = "### Build $build - $(Get-Date -Format 'yyyy-MM-dd')`n`n$entries`n`n"
+        $v = [regex]::Match($cl, "(?m)^## $([regex]::Escape($name))\b[^\n]*\n")
+        if ($v.Success) {
+            $firstBuild = [regex]::Match($cl.Substring($v.Index), '(?m)^### ')
+            $at = if ($firstBuild.Success) { $v.Index + $firstBuild.Index } else { $v.Index + $v.Length }
+            $cl = $cl.Substring(0, $at) + $heading + $cl.Substring($at)
+        } else {
+            $top = [regex]::Match($cl, '(?m)^## Unreleased[^\n]*\n\s*')
+            $at = $top.Index + $top.Length
+            $cl = $cl.Substring(0, $at) + "## $name`n`n" + $heading + $cl.Substring($at)
+        }
+        [IO.File]::WriteAllText($changelog, $cl, $utf8)
+        $filed = $true
+        Say "CHANGELOG: Unreleased entries filed under Build $build ($name)"
+    }
+}
+New-Item -ItemType Directory -Force $docsDir | Out-Null
+foreach ($f in 'README.md', 'CHANGELOG.md') {
+    $src = Join-Path $root $f
+    if (Test-Path $src) { Copy-Item $src (Join-Path $docsDir $f) -Force }
+}
+
+function Restore-Documents {
+    if ($filed) { [IO.File]::WriteAllText($changelog, $originalChangelog, $utf8) }
+    foreach ($f in 'README.md', 'CHANGELOG.md') {
+        $p = Join-Path $docsDir $f
+        if ($null -eq $originalDocs[$f]) { if (Test-Path $p) { Remove-Item $p } }
+        else { [IO.File]::WriteAllText($p, $originalDocs[$f], $utf8) }
+    }
+}
+
 $version = "$name-b$build"
 $out = Join-Path $dist "$name+$build"
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -150,30 +201,19 @@ $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].V
 ) + ($artifacts | ForEach-Object { '  {0}  ({1:N1} MB)' -f (Split-Path $_ -Leaf), ((Get-Item $_).Length / 1MB) }) |
     Out-File (Join-Path $out 'BUILD-INFO.txt') -Encoding utf8
 } catch {
+    # a failed build must not leave a half-done version bump, changelog or document copy behind
+    Restore-Documents
     if ($Bump) {
-        # a failed build must not leave a half-done version bump behind (it would block the next run)
         [IO.File]::WriteAllText($pubspec, $originalPubspec, (New-Object Text.UTF8Encoding($false)))
-        Say "build failed - version put back to $name+$($build - 1)"
+        Say "build failed - version put back to $name+$($build - 1); changelog and bundled documents put back"
     }
     throw
 }
 
 # ---- 5. commit + tag the bump ----------------------------------------------------------------------------------------
 if ($Bump) {
-    # CHANGELOG.md: the "Unreleased" entries become this build's section
-    $changelog = Join-Path $root 'CHANGELOG.md'
-    if (Test-Path $changelog) {
-        $cl = [IO.File]::ReadAllText($changelog)
-        $u = [regex]::Match($cl, '(?ms)^## Unreleased\s*\r?\n(.*?)(?=^## |\z)')
-        if ($u.Success -and $u.Groups[1].Value.Trim()) {
-            $section = "## Unreleased`r`n`r`n## Build $build - $(Get-Date -Format 'yyyy-MM-dd')`r`n`r`n" + $u.Groups[1].Value.Trim() + "`r`n`r`n"
-            $cl = $cl.Substring(0, $u.Index) + $section + $cl.Substring($u.Index + $u.Length)
-            [IO.File]::WriteAllText($changelog, $cl, (New-Object Text.UTF8Encoding($false)))
-            Git "add CHANGELOG.md" | Out-Null
-            Say "CHANGELOG: Unreleased entries filed under Build $build"
-        }
-    }
-    Git "add komga_reader/pubspec.yaml" | Out-Null
+    # the changelog was filed and the documents bundled before building (step 2b)
+    Git "add CHANGELOG.md komga_reader/assets/docs komga_reader/pubspec.yaml" | Out-Null
     Git "commit -q -m `"Build $build`"" | Out-Null
     Git "tag build-$build" | Out-Null
     Say "committed and tagged build-$build"
