@@ -4,6 +4,12 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Offline mode switches when Komga can't be reached: at start-up, on returning to the app, or when anything fails
+  to load, the app asks "Can't reach Komga" - Use downloaded books / Retry / Stay online (with nothing downloaded it
+  just says so). Offline that way it checks every 30 s and on returning to the app, and offers "Komga is reachable
+  again - Go online" (message and Home banner). App settings > Server > "If Komga can't be reached": Ask first
+  (default) or Automatic - switches both ways by itself, going back online only once the open book is closed.
+  Offline mode switched on by hand still wins: no checks, no prompts.
 - Downloaded badge on tiles (bottom right): books show a blue tick when downloaded, a filling ring while in the
   queue, a pause sign or a red mark if paused or failed; series and read lists show how many of their books are
   downloaded (the tick alone when all are). Hidden in offline mode, where everything shown is downloaded.

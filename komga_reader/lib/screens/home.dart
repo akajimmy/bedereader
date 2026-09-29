@@ -318,24 +318,38 @@ class _LibraryButton extends StatelessWidget {
       );
 }
 
-/// Shown on Home while offline: what you're looking at, and the way back.
+/// Shown on Home while offline: what you're looking at, and the way back - offline by hand ("Go online"), because
+/// Komga couldn't be reached ("Retry"), or Komga answers again ("Go online", in green).
 class _OfflineBanner extends StatelessWidget {
   const _OfflineBanner();
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-        padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2A2410),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF6B5A1E)),
-        ),
-        child: Row(children: [
-          const Icon(Icons.cloud_off, color: Color(0xFFFACC15)),
-          const SizedBox(width: 10),
-          const Expanded(child: Text('Offline mode - showing downloaded books')),
-          TextButton(onPressed: () => Connection.instance.setForcedOffline(false), child: const Text('Go online')),
-        ]),
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: Connection.instance,
+        builder: (context, _) {
+          final c = Connection.instance;
+          final back = c.reachableAgain && !c.forcedOffline;
+          final (text, button, action) = c.forcedOffline
+              ? ('Offline mode - showing downloaded books', 'Go online', c.goOnline)
+              : back
+                  ? ('Komga is reachable again', 'Go online', c.goOnline)
+                  : ("Can't reach Komga - showing downloaded books", 'Retry', () { c.check(); });
+          final color = back ? const Color(0xFF4ADE80) : const Color(0xFFFACC15);
+          return Container(
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: back ? const Color(0xFF10261A) : const Color(0xFF2A2410),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: back ? const Color(0xFF1E6B3E) : const Color(0xFF6B5A1E)),
+            ),
+            child: Row(children: [
+              Icon(back ? Icons.cloud_done : Icons.cloud_off, color: color),
+              const SizedBox(width: 10),
+              Expanded(child: Text(text)),
+              TextButton(onPressed: action, child: Text(button)),
+            ]),
+          );
+        },
       );
 }
 

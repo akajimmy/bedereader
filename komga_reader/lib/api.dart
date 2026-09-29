@@ -36,15 +36,23 @@ class Komga {
   /// Runs a request with a time limit, turning "no answer" into one clear error instead of a spinner forever.
   Future<T> _net<T>(Future<T> Function() request, {Duration limit = timeout}) async {
     try {
-      return await request().timeout(limit);
+      final r = await request().timeout(limit);
+      onReachability?.call(this, true);
+      return r;
     } on KomgaError {
+      onReachability?.call(this, true); // it answered, with an error
       rethrow;
     } on TimeoutException {
+      onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl);
     } on http.ClientException {
+      onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl); // package:http wraps socket errors (refused, no route) in this
     }
   }
+
+  /// Told after every server call whether Komga answered (the connection uses it to offer offline mode).
+  static void Function(Komga api, bool reachable)? onReachability;
 
   Future<dynamic> _get(String path, [Map<String, Object?>? query]) => _net(() async {
         final r = await _http.get(_u(path, query), headers: headers);

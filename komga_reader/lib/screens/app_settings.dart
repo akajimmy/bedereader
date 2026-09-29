@@ -40,6 +40,28 @@ class AppSettingsScreen extends StatelessWidget {
                     onChanged: (v) => Connection.instance.setForcedOffline(v),
                   ),
                 ),
+                if (Connection.instance.available) ListenableBuilder(
+                  listenable: Connection.instance,
+                  builder: (context, _) => ListTile(
+                    leading: const Icon(Icons.swap_horiz),
+                    title: const Text("If Komga can't be reached"),
+                    subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(Connection.instance.autoSwitch
+                          ? 'Switches to the downloaded books and back by itself (back online once the book is closed)'
+                          : 'Asks before switching to the downloaded books, and offers to go back online'),
+                      const SizedBox(height: 8),
+                      SegmentedButton<bool>(
+                        showSelectedIcon: false,
+                        segments: const [
+                          ButtonSegment(value: false, label: Text('Ask first')),
+                          ButtonSegment(value: true, label: Text('Automatic')),
+                        ],
+                        selected: {Connection.instance.autoSwitch},
+                        onSelectionChanged: (s) => Connection.instance.setAutoSwitch(s.first),
+                      ),
+                    ]),
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Align(
                   alignment: Alignment.centerLeft,
