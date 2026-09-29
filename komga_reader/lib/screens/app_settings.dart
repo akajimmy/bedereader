@@ -1,0 +1,105 @@
+import 'package:flutter/material.dart';
+
+import '../api.dart';
+import '../home_sections.dart';
+
+/// App-wide settings (side menu > App settings; not reachable from the reader, as reader/image settings are the
+/// reader's). Starts with the server and the Home sections; offline/download settings will join it (1.1).
+class AppSettingsScreen extends StatelessWidget {
+  const AppSettingsScreen({super.key, required this.api, required this.onSignOut});
+  final Komga api;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = HomeSections.instance;
+    return Scaffold(
+      appBar: AppBar(title: const Text('App settings')),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620),
+          child: ListenableBuilder(
+            listenable: sections,
+            builder: (context, _) => ListView(padding: const EdgeInsets.fromLTRB(20, 12, 20, 40), children: [
+              _Card(title: 'Server', icon: Icons.dns_outlined, children: [
+                Row(children: [
+                  const SizedBox(width: 90, child: Text('Address', style: TextStyle(color: Color(0xFF9A9A9A)))),
+                  Expanded(child: SelectableText(api.baseUrl)),
+                ]),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    autofocus: true,
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Sign out?'),
+                          content: const Text('The API key is removed from this device; you can sign in again or '
+                              'connect to a different server. Downloads and settings stay.'),
+                          actions: [
+                            TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+                          ],
+                        ),
+                      );
+                      if (ok != true || !context.mounted) return;
+                      Navigator.of(context).popUntil((r) => r.isFirst);
+                      onSignOut();
+                    },
+                    icon: const Icon(Icons.logout),
+                    label: const Text('Sign out / change server'),
+                  ),
+                ),
+              ]),
+              _Card(title: 'Home', icon: Icons.home_outlined, children: [
+                const Text('Sections shown on Home', style: TextStyle(color: Color(0xFF9A9A9A))),
+                for (final e in HomeSections.names.entries)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(e.value),
+                    value: sections[e.key],
+                    onChanged: (v) => sections.set(e.key, v),
+                  ),
+              ]),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rounded section card with an icon + title header (same look as the Info screen).
+class _Card extends StatelessWidget {
+  const _Card({required this.title, required this.icon, required this.children});
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+  @override
+  // A Material (not a coloured box) so the switch rows' ripple and remote focus highlight show on the card.
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Material(
+          color: const Color(0xFF15161A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFF26282E)),
+          ),
+          child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Icon(icon, size: 18, color: const Color(0xFF9A9A9A)),
+            const SizedBox(width: 8),
+            Text(title.toUpperCase(),
+                style: const TextStyle(fontSize: 12, letterSpacing: 1.2, color: Color(0xFF9A9A9A), fontWeight: FontWeight.w600)),
+          ]),
+          const SizedBox(height: 12),
+          ...children,
+        ]),
+          ),
+        ),
+      );
+}

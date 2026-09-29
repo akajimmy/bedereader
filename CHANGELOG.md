@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- App settings (side menu, above Reader settings): server address with Sign out / change server (asks first),
+  and the Home section switches - the same setting as Home's ⋮ menu.
+
 ## Build 20 - 2026-09-28
 
 - Header count: the number of items in the current view (with the active filter) in a small box, left of Hide read,

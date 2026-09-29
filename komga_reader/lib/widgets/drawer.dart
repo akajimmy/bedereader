@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../screens/app_settings.dart';
 import '../screens/info.dart';
 import '../screens/library.dart';
 import 'display_panel.dart';
@@ -76,6 +77,12 @@ class _AppDrawerState extends State<AppDrawer> {
             ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
           const Divider(height: 1),
+          ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('App settings'),
+              onTap: () {
+                Scaffold.maybeOf(context)?.closeDrawer();
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => AppSettingsScreen(api: widget.api, onSignOut: widget.onSignOut)));
+              }),
           ListTile(leading: const Icon(Icons.tune), title: const Text('Reader settings (brightness, night mode)'),
               onTap: () { Navigator.of(context).pop(); showReaderPanel(context); }),
           ListTile(leading: const Icon(Icons.info_outline), title: const Text('Info'),

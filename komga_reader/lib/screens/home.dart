@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../home_sections.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
 import 'library.dart';
@@ -25,12 +25,11 @@ class _HomeScreenState extends State<HomeScreen> {
   List<dynamic> _libraries = [];
   List<dynamic> _inProgress = [];
   List<dynamic> _onDeck = [];
-  /// Home sections that can be shown or hidden from the ⋮ menu (saved on the device).
-  final Map<String, bool> _show = {'continue': true, 'ondeck': true, 'pinned': true, 'libraries': true};
-  static const _sectionNames = {
-    'continue': 'Continue reading', 'ondeck': 'On deck', 'pinned': 'Pinned', 'libraries': 'Libraries',
-  };
-  bool get _showOnDeck => _show['ondeck']!;
+  /// Home sections shown or hidden from the ⋮ menu or App settings (lib/home_sections.dart).
+  HomeSections get _sections => HomeSections.instance;
+  Map<String, bool> get _show => _sections.show;
+  bool get _showOnDeck => _sections['ondeck'];
+  bool _onDeckWasShown = true;
   bool _loading = true;
   String? _error;
 
@@ -39,13 +38,25 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    SharedPreferences.getInstance().then((p) {
-      for (final k in _show.keys) {
-        // 'showOnDeck' was the only toggle up to build 15
-        _show[k] = p.getBool('home.show.$k') ?? (k == 'ondeck' ? p.getBool('showOnDeck') : null) ?? true;
-      }
+    _sections.addListener(_onSections);
+    _sections.load().then((_) {
+      _onDeckWasShown = _showOnDeck;
       _load();
     });
+  }
+
+  @override
+  void dispose() {
+    _sections.removeListener(_onSections);
+    super.dispose();
+  }
+
+  /// A section switched on or off (here or in App settings). On deck is only fetched while shown.
+  void _onSections() {
+    if (!mounted) return;
+    setState(() {});
+    if (_showOnDeck && !_onDeckWasShown) _load();
+    _onDeckWasShown = _showOnDeck;
   }
 
   Future<void> _load() async {
@@ -65,11 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _toggleSection(String k) async {
-    setState(() => _show[k] = !_show[k]!);
-    (await SharedPreferences.getInstance()).setBool('home.show.$k', _show[k]!);
-    if (k == 'ondeck' && _show[k]!) _load(); // On deck is only fetched while shown
-  }
+  Future<void> _toggleSection(String k) => _sections.toggle(k);
 
   /// Open a pinned view. Series and read lists are fetched fresh (their tiles need the full object).
   Future<void> _openPin(Pin p) async {
@@ -122,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'Show or hide sections',
             onSelected: _toggleSection,
             itemBuilder: (_) => [
-              for (final e in _sectionNames.entries)
+              for (final e in HomeSections.names.entries)
                 CheckedPopupMenuItem(value: e.key, checked: _show[e.key]!, child: Text(e.value)),
             ],
           ),
