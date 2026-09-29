@@ -91,4 +91,23 @@ flutter test
     expect(textOf('AMD FidelityFX Super Resolution 1 (FSR 1)').single, contains('Advanced Micro Devices'));
     expect(textOf('Material Icons').single, contains('Creative Commons Attribution 4.0'));
   });
+
+  testWidgets('Android: the AndroidX / Kotlin libraries with the Apache 2.0 terms; not on other platforms', (tester) async {
+    registerLicences();
+    Future<List<LicenseEntry>> entries() async =>
+        (await tester.runAsync(() => LicenseRegistry.licenses.toList()))!;
+    bool hasAndroid(List<LicenseEntry> all) => all.any((e) => e.packages.contains('kotlinx.coroutines'));
+    try {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      expect(hasAndroid(await entries()), isFalse);
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final all = await entries();
+      expect(hasAndroid(all), isTrue);
+      final text = all.firstWhere((e) => e.packages.contains('kotlinx.coroutines')).paragraphs.map((p) => p.text).join(' ');
+      expect(text, contains('Apache License'));
+      expect(text, contains('END OF TERMS AND CONDITIONS'));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
 }

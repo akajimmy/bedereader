@@ -5,6 +5,11 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Fixed**
+- Licences: the Android version now carries the Apache 2.0 terms for the AndroidX and Kotlin libraries it includes
+  (Info > licences page), and the third-party list covers each platform's extra parts. The Windows program's
+  copyright line and the web version's title and description no longer show template text.
+
 ## 0.1.1 - offline reading and better pages
 
 From build 21, on the way to the next release. Builds 21-26 still showed version 0.1.0.

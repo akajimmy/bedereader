@@ -14,7 +14,7 @@ reviewed and tested by a human.
 | What | Licence | Role |
 |---|---|---|
 | [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app. Komga Reader is not affiliated with the Komga project. |
-| CanvasKit and the Roboto font (web version only) | BSD-3-Clause; Google Fonts licence (Apache-2.0 / OFL-1.1) | Loaded from Google's servers by the web version when it starts. |
+| Roboto font (web version only) | Google Fonts licence (Apache-2.0 / OFL-1.1) | Loaded from Google's font servers by the web version for its text. |
 
 ## Inside the app
 
@@ -30,9 +30,24 @@ reviewed and tested by a human.
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
 | `async`, `characters`, `collection`, `ffi`, `file`, `http_parser`, `meta`, `path`, `platform`, `plugin_platform_interface`, `source_span`, `string_scanner`, `term_glyph`, `typed_data`, `vector_math`, `web` | various | BSD-3-Clause | Supporting libraries used by the above |
 
-Flutter gathers the full licence texts of the framework and these packages into every build; they're shown in the
-app under Info > *Licences of included open-source software*, together with the app's own licence, AMD's notice and
-the Material Icons attribution.
+**Windows version** - also `flutter_windows.dll` (the Flutter engine) and ICU Unicode data (`icudtl.dat`, Unicode
+licence); both covered by Flutter's notices.
+
+**Web version** - also CanvasKit / Skwasm (the Skia graphics engine compiled for the browser; BSD-3-Clause), in the
+`canvaskit` folder.
+
+**Android version** - also these native libraries, brought in by Flutter's Android layer and the settings package
+(Apache-2.0; the licence terms are on the app's licences page on Android):
+
+| What | Version | Licence |
+|---|---|---|
+| AndroidX: activity, annotation, appcompat, arch.core, asynclayoutinflater, coordinatorlayout, core, cursoradapter, customview, datastore, documentfile, drawerlayout, exifinterface, fragment, interpolator, legacy, lifecycle, loader, localbroadcastmanager, preference, print, profileinstaller, recyclerview, savedstate, slidingpanelayout, startup, swiperefreshlayout, tracing, transition, vectordrawable, versionedparcelable, viewpager, window | 1.0.0 - 2.7.0 (per library) | Apache-2.0 |
+| Kotlin standard library | with Kotlin 2.4 | Apache-2.0 |
+| kotlinx.coroutines (core, android) | 1.7.3 | Apache-2.0 |
+
+Flutter gathers the full licence texts of the framework, engine and Dart packages into every build; they're shown
+in the app under Info > *Licences of included open-source software*, together with the app's own licence, AMD's
+notice, the Material Icons attribution and (on Android) the Apache 2.0 terms for the libraries above.
 
 ## Used to build and develop it (not shipped)
 
