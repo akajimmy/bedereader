@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 30 - 2026-09-29
+
 - Image settings: Sharpen is replaced by **Enhance** - the page is cleaned up (edge-preserving denoise), scaled with
   Lanczos 3 (anti-aliased when shrinking) and sharpened with RCAS (AMD FSR 1), on the GPU, once per page at the exact
   size it's shown at. Values tuned by the user in the image lab on two test pages; against plain scaling it gives
@@ -27,6 +29,7 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
   back once that book is read). "Show in On deck again" in the same menu; App settings > Home counts what's hidden,
   with Show all again. Synced through Komga like pins; a change made offline is sent at the next start.
 - Side menu: the Offline mode switch has no description line; "Reader settings" without the parenthesis.
+
 ## Build 29 - 2026-09-29
 
 - Fix: closing a book from the end card now marks it read. Before, turning past the last page within 1.5 s and
