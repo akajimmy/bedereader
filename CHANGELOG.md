@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Home rows have ‹ › buttons at the right of their title (like Plex): each scrolls about a screen's width, greyed at
+  the ends; on every device, and reachable with the remote.
+
 - Pinned views on Home are posters: a 2x2 of the first four items of the pinned view (its filter and sort), the
   pin's name and the view's count; long-press / right-click to rename or unpin. Read-list posters share the code.
 
