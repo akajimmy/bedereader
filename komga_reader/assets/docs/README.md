@@ -1,5 +1,8 @@
 # Komga Reader
 
+[![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
+
 A comic reader for your own [Komga](https://komga.org) server - for an Android tablet or phone, a Windows PC, or a
 web browser. Browse your libraries with proper posters, read with touch, keyboard, mouse or a remote page-turner,
 take books with you offline, and make old scans look their best.

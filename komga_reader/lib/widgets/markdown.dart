@@ -52,6 +52,12 @@ class MarkdownView extends StatelessWidget {
         i++;
         continue;
       }
+      // badge lines ([![label](image)](link) / ![label](image)) are for GitHub; images aren't shown here
+      if (RegExp(r'^\[?!\[[^\]]*\]\([^)]*\)(\]\([^)]*\))?$').hasMatch(t)) {
+        flush();
+        i++;
+        continue;
+      }
       final h = RegExp(r'^(#{1,3})\s+(.*)$').firstMatch(t);
       if (h != null) {
         flush();
