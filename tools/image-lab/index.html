@@ -158,8 +158,11 @@ void main() {
   ivec2 q = ivec2(gl_FragCoord.xy);
   vec3 c = px(src, q);
   if (blur > 0.0 || denoise > 0.0) {
-    float sr = max(blur, 0.8);             // spatial spread (px)
-    float rr = mix(1.0, 0.06, denoise);    // range spread: small = only smooth similar colours (edges kept)
+    float sr = max(blur, 1.0);             // spatial spread (px)
+    // range spread: how different two colours may be and still be smoothed together. Grows with the slider, so
+    // 0 = nothing, ~0.3 = JPEG speckle (small colour wobbles), 1 = starts smoothing faint detail. Ink lines are far
+    // bigger jumps than that, so they stay sharp throughout.
+    float rr = 0.2 * denoise;
     vec3 acc = vec3(0.0); float wsum = 0.0;
     for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
       vec3 s = px(src, q + ivec2(x, y));
