@@ -9,6 +9,7 @@ One set of geometry drives every output:
   res/mipmap-*/ic_launcher.png                   pre-Android-8 launcher icons
   web/icons/*.png, web/favicon.png               web build icons
   assets/icon.png                                the icon inside the app (Info screen)
+  windows/runner/resources/app_icon.ico          Windows app icon
   tools/icon_preview.png                         how launchers show it
 Usage (from C:\\Claude\\KomgaClient): py -3.13 tools\\make_icon.py
 """
@@ -127,6 +128,12 @@ def main():
         written += [web / 'icons' / f'Icon-{size}.png', web / 'icons' / f'Icon-maskable-{size}.png']
     raster(32, 0.84, corner_frac=0.18).save(web / 'favicon.png')
     written.append(web / 'favicon.png')
+
+    # Windows app icon (taskbar, title bar, Explorer): one .ico holding the sizes Windows asks for
+    ico = APP / 'windows' / 'runner' / 'resources' / 'app_icon.ico'
+    big = raster(256, 0.78, corner_frac=0.2)
+    big.save(ico, format='ICO', sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+    written.append(ico)
 
     # in-app copy (Info screen)
     (APP / 'assets').mkdir(exist_ok=True)
