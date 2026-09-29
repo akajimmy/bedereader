@@ -12,6 +12,13 @@ val keyProperties = Properties().apply {
     if (f.exists()) FileInputStream(f).use { load(it) }
 }
 
+// The keystore password: from KOMGA_SIGNING_PASSWORD, which tools/build.ps1 sets for one build from the copy encrypted
+// with the Windows account (%USERPROFILE%\.keystores\android-release.pass) - or, failing that, from key.properties.
+// No password: release builds use the debug key.
+val signingPassword: String? = System.getenv("KOMGA_SIGNING_PASSWORD")?.takeIf { it.isNotEmpty() }
+    ?: keyProperties.getProperty("storePassword")?.takeIf { it.isNotEmpty() && !it.startsWith("<") }
+val releaseSigning = keyProperties.getProperty("storeFile") != null && signingPassword != null
+
 android {
     namespace = "com.nickp.komga_reader"
     compileSdk = flutter.compileSdkVersion
@@ -41,19 +48,19 @@ android {
     // which lives outside the repository. Without it, release builds fall back to the debug key (tools/build.ps1
     // warns). Android only updates an app signed with the same key, so this key must never change once released.
     signingConfigs {
-        if (keyProperties.isNotEmpty()) {
+        if (releaseSigning) {
             create("release") {
                 storeFile = file(keyProperties.getProperty("storeFile"))
-                storePassword = keyProperties.getProperty("storePassword")
-                keyAlias = keyProperties.getProperty("keyAlias")
-                keyPassword = keyProperties.getProperty("keyPassword")
+                storePassword = signingPassword
+                keyAlias = keyProperties.getProperty("keyAlias") ?: "release"
+                keyPassword = signingPassword // a PKCS12 keystore: one password for the store and the key
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = if (keyProperties.isNotEmpty()) signingConfigs.getByName("release")
+            signingConfig = if (releaseSigning) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")
         }
     }
