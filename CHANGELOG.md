@@ -4,6 +4,12 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Page turn animation: **3D page curl**. A slow drag takes the page's corner with your finger (curling from a corner
+  or straight across, by where you hold it); let go past halfway, or flick, and it turns, else it springs back. Taps,
+  arrows, the remote and the mouse wheel play the whole curl; going back uncurls the previous page over this one. The
+  back of the page shows the print faintly, with shading and a shadow on the next page. Right-to-left books curl the
+  other way. Zoomed in, or on a wide page in fit height, a drag still moves the page. A GPU shader (shaders/curl.frag);
+  where it can't run, pages turn instantly.
 - Image settings: **Crop edges** - 0 to 10% (1% steps) cut off every side of the page, per series (default in App
   settings > Reading); the remaining art fills more of the screen. Enhance colours and Enhance work on the cropped page.
 - Reader settings: "Page turn" is now "Page turn animation": Wipe / Instant flip (only the look of a page change;

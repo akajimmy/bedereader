@@ -67,11 +67,15 @@ class ReaderPrefs {
   int get hashCode => jsonEncode(toJson()).hashCode;
 }
 
-/// How the reader moves between pages. Room for a 3D page curl later.
-enum PageTurn { swipe, flip }
+/// How a page change looks - not how it's triggered: tap, swipe and the arrows turn pages in all of them.
+enum PageTurn { swipe, flip, curl }
 
 extension PageTurnLabel on PageTurn {
-  String get label => switch (this) { PageTurn.swipe => 'Wipe', PageTurn.flip => 'Instant flip' };
+  String get label => switch (this) {
+        PageTurn.swipe => 'Wipe',
+        PageTurn.flip => 'Instant flip',
+        PageTurn.curl => '3D page curl',
+      };
 }
 
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).

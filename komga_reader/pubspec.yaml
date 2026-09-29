@@ -25,5 +25,6 @@ flutter:
     - shaders/rcas.frag
     - shaders/colours.frag
     - shaders/easu.frag
+    - shaders/curl.frag
   assets:
     - assets/icon.png
