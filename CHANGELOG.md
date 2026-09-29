@@ -4,12 +4,15 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 28 - 2026-09-29
+
 - Reader end card shows what's next: "Up next in the series" (or "in this read list") with the next book's poster,
   series and number, and its title; the last book says "End of the series" / "End of the read list". Looked up
   just before the last page so it's ready. (Next book already follows the read list when a book is opened from
   one, and the series from anywhere else.)
 - Night mode (and its warmth) is also in App settings, in a new Display card - it tints the library views too. Same
   setting as in the reader's Reader settings, which keeps it.
+
 ## Build 27 - 2026-09-29
 
 - Reading progress made offline reaches Komga once it's reachable again (on going back online, at start-up, and on
