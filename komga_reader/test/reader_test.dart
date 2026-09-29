@@ -14,8 +14,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 class FakeKomga extends Komga {
   FakeKomga() : super('http://test', 'k');
   final theBook = {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '1', 'title': 'T'}};
+  static String direction = 'LEFT_TO_RIGHT'; // the series' reading direction in Komga
   @override
   Future<Map<String, dynamic>?> book(String id) async => theBook;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) async => {'id': id, 'metadata': {'readingDirection': direction}};
   @override
   Future<List<dynamic>> pages(String bookId) async => [{'number': 1}, {'number': 2}, {'number': 3}];
   @override
@@ -293,4 +296,63 @@ void main() {
     expect(DisplayPrefs.fromJson(const DisplayPrefs(pageTurn: PageTurn.flip).toJson()).pageTurn, PageTurn.flip);
     expect(DisplayPrefs.fromJson({'night': true}).pageTurn, PageTurn.swipe);
   });
+
+  group('right to left', () {
+    setUp(() => FakeKomga.direction = 'RIGHT_TO_LEFT');
+    tearDown(() {
+      FakeKomga.direction = 'LEFT_TO_RIGHT';
+      AppSettings.instance.series.remove('S1');
+    });
+
+    double page(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+
+    testWidgets('Komga says right to left: pages run backwards, Left goes forward, Right goes back', (tester) async {
+      await openReader(tester);
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+      await key(tester, LogicalKeyboardKey.arrowLeft);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 1.0);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 0.0);
+      await key(tester, LogicalKeyboardKey.arrowDown); // Down has no direction: still forward
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('tap zones flip: the left third goes forward', (tester) async {
+      await openReader(tester);
+      final box = tester.getRect(find.byType(PageView));
+      await tester.tapAt(Offset(box.left + box.width * 0.1, box.center.dy));
+      await tester.pump(); // the page animation starts on the next frame
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a per-series "Left to right" overrides Komga', (tester) async {
+      AppSettings.instance.series['S1'] = const ReaderPrefs(direction: ReadingDirection.ltr);
+      await openReader(tester);
+      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+  });
+
+  testWidgets('a per-series "Right to left" works even when Komga says left to right', (tester) async {
+    AppSettings.instance.series['S1'] = const ReaderPrefs(direction: ReadingDirection.rtl);
+    addTearDown(() => AppSettings.instance.series.remove('S1'));
+    await openReader(tester);
+    expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+  });
+
+  test('reading direction survives the settings round trip; older settings are Auto', () {
+    expect(ReaderPrefs.fromJson(const ReaderPrefs(direction: ReadingDirection.rtl).toJson()).direction, ReadingDirection.rtl);
+    expect(ReaderPrefs.fromJson({'fit': 'width'}).direction, ReadingDirection.auto);
+    expect(const ReaderPrefs(direction: ReadingDirection.rtl, contrast: 0.2).imageReset().direction, ReadingDirection.rtl);
+  });
 }
+

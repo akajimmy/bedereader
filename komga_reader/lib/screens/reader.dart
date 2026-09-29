@@ -63,6 +63,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
   String? get _seriesId => _book['seriesId'] as String?;
   ReaderPrefs get _prefs => _settings.prefsFor(_seriesId);
 
+  /// The series' reading direction in Komga (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON), fetched on open.
+  String? _komgaDirection;
+  String? _directionSeries; // which series _komgaDirection belongs to
+
+  /// Right to left: forced per series, or (on Auto) because Komga says so. Vertical/webtoon read as left to right.
+  bool get _rtl => switch (_prefs.direction) {
+        ReadingDirection.rtl => true,
+        ReadingDirection.ltr => false,
+        ReadingDirection.auto => _komgaDirection == 'RIGHT_TO_LEFT',
+      };
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +119,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
     try {
       final fresh = await api.book(book['id']) ?? book; // current progress from the server
       final pages = await api.pages(book['id']);
+      final seriesId = fresh['seriesId'] as String?;
+      if (seriesId != null && seriesId != _directionSeries) {
+        try {
+          _komgaDirection = (await api.oneSeries(seriesId))?['metadata']?['readingDirection'] as String?;
+        } catch (_) {
+          _komgaDirection = null; // unknown: left to right
+        }
+        _directionSeries = seriesId;
+      }
       final rp = fresh['readProgress'];
       final start = rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pages.length - 1);
       _pc?.dispose();
@@ -324,10 +344,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   bool _isOk(LogicalKeyboardKey k) =>
       k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter;
+  // Left/Right follow the reading direction (right to left: Left goes forward); Up/Down and Page Up/Down don't.
   bool _isFwd(LogicalKeyboardKey k) =>
-      k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.arrowDown || k == LogicalKeyboardKey.pageDown;
+      k == (_rtl ? LogicalKeyboardKey.arrowLeft : LogicalKeyboardKey.arrowRight) ||
+      k == LogicalKeyboardKey.arrowDown || k == LogicalKeyboardKey.pageDown;
   bool _isBack(LogicalKeyboardKey k) =>
-      k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
+      k == (_rtl ? LogicalKeyboardKey.arrowRight : LogicalKeyboardKey.arrowLeft) ||
+      k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
 
   Future<void> _toggleFullscreen() async {
     final now = await setFullscreen(!_fullscreen);
@@ -454,12 +477,14 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       onSecondaryTap: () => _menu ? _hideControls() : _showControls(), // right-click
                       onTapUp: (d) {
                         final x = d.localPosition.dx / box.maxWidth;
-                        if (x < 0.33) { _back(); }
-                        else if (x > 0.67) { _forward(); }
+                        // tap zones follow the reading direction: the side you read towards goes forward
+                        if (x < 0.33) { _rtl ? _forward() : _back(); }
+                        else if (x > 0.67) { _rtl ? _back() : _forward(); }
                         else { _showControls(); }
                       },
                       child: PageView.builder(
                         controller: _pc,
+                        reverse: _rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
                         physics: _zoomed || _fingers > 1 ? const NeverScrollableScrollPhysics() : null,
                         itemCount: _pages.length + 1,
                         onPageChanged: _onPage,
@@ -492,6 +517,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
+          rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,
         );
       },
@@ -503,7 +529,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Text('End of book', style: TextStyle(color: Colors.white70, fontSize: 18)),
         const SizedBox(height: 16),
-        Text(widget.readListId != null ? '→ : next book in this read list' : '→ : next book in the series',
+        Text('${_rtl ? '←' : '→'} : next book in ${widget.readListId != null ? 'this read list' : 'the series'}',
             style: const TextStyle(color: Colors.white38)),
       ]),
     );
@@ -621,7 +647,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       style: TextStyle(color: _scrubbing ? Theme.of(context).colorScheme.primary : Colors.white,
                           fontSize: 15, fontFeatures: const [FontFeature.tabularFigures()])),
                 ),
-                Expanded(child: _pages.length < 2 ? const SizedBox.shrink() : _slider(shown)),
+                Expanded(
+                  child: _pages.length < 2
+                      ? const SizedBox.shrink()
+                      // right to left: page 1 at the right end of the slider
+                      : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
+                ),
                 if (_seriesId != null)
                   _iconCtl(node: _ctl[_Ctl.image]!, icon: Icons.settings_brightness, label: 'Image settings',
                       onPressed: () => showImagePanel(context,
@@ -629,7 +660,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
                 _iconCtl(node: _ctl[_Ctl.reader]!, icon: Icons.tune,
                     label: 'Reader settings',
                     onPressed: () => showReaderPanel(context,
-                        seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?)),
+                        seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
+                        komgaDirection: _komgaDirection)),
                 IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
                     icon: const Icon(Icons.skip_next, size: 28)),
               ]),

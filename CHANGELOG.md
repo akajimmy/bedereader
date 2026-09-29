@@ -7,6 +7,10 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 - Header count: the number of items in the current view (with the active filter) in a small box, left of Hide read,
   on library, series, collection and read-list screens.
 - Hide read is an icon-only button (crossed-out eye, tinted while read items are hidden).
+- Right-to-left reading: follows each series' reading direction in Komga, or a per-series override in Reader
+  settings (Auto / Left to right / Right to left). In right-to-left books Left goes forward, the tap zones and
+  swipes flip, the page slider runs right to left, the zoomed path starts top-right, fit height starts at the
+  right edge. Vertical/webtoon series still read as pages.
 
 ## Build 19 - 2026-09-28
 

@@ -12,8 +12,8 @@ import '../settings.dart';
 ///
 /// A series you have never adjusted follows the defaults; the first change you make in a series gives it its own
 /// settings (starting from the defaults), which the defaults no longer affect.
-Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle}) =>
-    _show(context, _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle));
+Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection}) =>
+    _show(context, _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection));
 
 Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
     _show(context, _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle));
@@ -60,9 +60,17 @@ class _Panel extends StatelessWidget {
 }
 
 class _ReaderPanel extends StatelessWidget {
-  const _ReaderPanel({this.seriesId, this.seriesTitle});
+  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection});
   final String? seriesId;
   final String? seriesTitle;
+  final String? komgaDirection; // the series' reading direction in Komga, for the Auto label
+
+  static String _komgaLabel(String? d) => switch (d) {
+        'RIGHT_TO_LEFT' => 'right to left',
+        'VERTICAL' => 'vertical (read left to right)',
+        'WEBTOON' => 'webtoon (read left to right)',
+        _ => 'left to right',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +101,23 @@ class _ReaderPanel extends StatelessWidget {
                 _toast(context, "Series you haven't adjusted will open in fit $fitName");
               },
               child: Text('Make fit $fitName the default'),
+            ),
+          ),
+          _Heading('Reading direction · ${seriesTitle ?? 'this series'}'),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: SegmentedButton<ReadingDirection>(
+              segments: [
+                for (final r in ReadingDirection.values)
+                  ButtonSegment(
+                    value: r,
+                    // Auto shows what it resolves to, from the series' reading direction in Komga
+                    label: Text(r == ReadingDirection.auto ? 'Auto · ${_komgaLabel(komgaDirection)}' : r.label),
+                  ),
+              ],
+              selected: {p.direction},
+              showSelectedIcon: false,
+              onSelectionChanged: (v) => s.setSeries(id, p.copyWith(direction: v.first)),
             ),
           ),
         ],

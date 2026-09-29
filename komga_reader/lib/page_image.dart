@@ -154,7 +154,7 @@ Future<ui.FragmentProgram?> _sharpenProgram() => _program ??= ui.FragmentProgram
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom});
+      this.zoom, this.rtl = false});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -170,6 +170,9 @@ class PageCanvas extends StatefulWidget {
 
   /// Optional outside controller for the zoom (tests); the page makes its own otherwise.
   final TransformationController? zoom;
+
+  /// Right-to-left book: the zoomed path runs right to left, and fit height starts at the right edge.
+  final bool rtl;
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -212,6 +215,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   /// from the right edge = back to the left edge and one screen-height down, clamped to the bottom; from the
   /// bottom-right corner = false (turn the page). Backward mirrors it (left; then right edge one screen up; top-left
   /// corner = false). A zoomed page narrower (or shorter) than the screen stays centred on that axis.
+  /// Right-to-left books mirror the rows: start top-right, step leftwards, then the right edge one screen down.
   bool _step(bool forward) {
     final vp = _viewport, pic = _picture;
     if (vp == null || pic == null) return false;
@@ -228,20 +232,26 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     const eps = 0.5;
     final atRight = fitsX || tx <= minTx + eps, atLeft = fitsX || tx >= maxTx - eps;
     final atBottom = fitsY || ty <= minTy + eps, atTop = fitsY || ty >= maxTy - eps;
+    // a row starts at the left edge (left to right) or the right edge (right to left)
+    final rtl = widget.rtl;
+    final atRowEnd = rtl ? atLeft : atRight, atRowStart = rtl ? atRight : atLeft;
+    final rowStartTx = rtl ? minTx : maxTx, rowEndTx = rtl ? maxTx : minTx;
+    double along(double by) => rtl ? math.min(tx + by, maxTx) : math.max(tx - by, minTx); // + = reading direction
+    double backAlong(double by) => rtl ? math.max(tx - by, minTx) : math.min(tx + by, maxTx);
     if (forward) {
-      if (!atRight) {
-        tx = math.max(tx - vp.width, minTx);
+      if (!atRowEnd) {
+        tx = along(vp.width);
       } else if (!atBottom) {
-        tx = fitsX ? centreX : maxTx;
+        tx = fitsX ? centreX : rowStartTx;
         ty = math.max(ty - vp.height, minTy);
       } else {
         return false;
       }
     } else {
-      if (!atLeft) {
-        tx = math.min(tx + vp.width, maxTx);
+      if (!atRowStart) {
+        tx = backAlong(vp.width);
       } else if (!atTop) {
-        tx = fitsX ? centreX : minTx;
+        tx = fitsX ? centreX : rowEndTx;
         ty = math.min(ty + vp.height, maxTy);
       } else {
         return false;
@@ -308,7 +318,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
           _jumpToEndIfNeeded();
           return s.width <= w
               ? _wheel(Center(child: picture(s)))
-              : SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal, child: _wheel(picture(s)));
+              : SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal, reverse: widget.rtl,
+                  child: _wheel(picture(s)));
       }
     });
   }

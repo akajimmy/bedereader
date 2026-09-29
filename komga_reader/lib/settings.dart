@@ -13,13 +13,22 @@ extension FitModeLabel on FitMode {
   String get label => switch (this) { FitMode.screen => 'Screen', FitMode.width => 'Width', FitMode.height => 'Height' };
 }
 
+/// Page order for a series: follow Komga's reading direction for it (auto), or force one.
+enum ReadingDirection { auto, ltr, rtl }
+
+extension ReadingDirectionLabel on ReadingDirection {
+  String get label =>
+      switch (this) { ReadingDirection.auto => 'Auto', ReadingDirection.ltr => 'Left to right', ReadingDirection.rtl => 'Right to left' };
+}
+
 /// How pages are shown. Saved per series (a new series starts from the global default) and synced through Komga.
 @immutable
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
-      this.autoLevels = false});
+      this.autoLevels = false, this.direction = ReadingDirection.auto});
 
   final FitMode fit;
+  final ReadingDirection direction; // auto = the series' reading direction in Komga
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // light, fixed-strength sharpening (lib/page_image.dart sharpenAmount)
@@ -27,15 +36,17 @@ class ReaderPrefs {
 
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels;
 
-  ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels}) =>
+  ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
+          ReadingDirection? direction}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
-          sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels);
+          sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
+          direction: direction ?? this.direction);
 
-  /// Same fit, image settings back to neutral.
-  ReaderPrefs imageReset() => ReaderPrefs(fit: fit);
+  /// Same fit and direction, image settings back to neutral.
+  ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction);
 
   Map<String, dynamic> toJson() =>
-      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels};
+      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name};
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
         fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
@@ -43,6 +54,7 @@ class ReaderPrefs {
         contrast: (j['c'] as num?)?.toDouble() ?? 0,
         sharpen: j['s'] == true || (j['s'] is num && (j['s'] as num) > 0), // was a 0..1 slider in build 4
         autoLevels: j['l'] == true,
+        direction: ReadingDirection.values.firstWhere((d) => d.name == j['d'], orElse: () => ReadingDirection.auto),
       );
 
   @override

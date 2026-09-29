@@ -18,7 +18,8 @@ void main() {
     return img;
   }
 
-  Future<(TransformationController, bool Function(bool))> setUpPage(WidgetTester tester, Size screen, int w, int h) async {
+  Future<(TransformationController, bool Function(bool))> setUpPage(WidgetTester tester, Size screen, int w, int h,
+      {bool rtl = false}) async {
     tester.view.physicalSize = screen;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -31,6 +32,7 @@ void main() {
       scroll: ScrollController(),
       zoom: zoom,
       onStepper: (s) => step = s,
+      rtl: rtl,
     ))));
     await tester.pump();
     return (zoom, step!);
@@ -99,4 +101,25 @@ void main() {
     expect(at(zoom), const Offset(-300, -300)); // down to the bottom (900 tall, 600 screen)
     expect(step(true), isFalse);
   });
+
+  testWidgets('right to left: starts top-right, steps left, then the right edge one screen down', (tester) async {
+    final (zoom, step) = await setUpPage(tester, const Size(400, 600), 800, 1200, rtl: true);
+    zoom.value = Matrix4.identity()
+      ..translateByDouble(-400, 0, 0, 1) // top-right quarter showing
+      ..scaleByDouble(2, 2, 1, 1);
+    step(true);
+    await tester.pumpAndSettle();
+    expect(at(zoom), const Offset(0, 0)); // one screen left = the left edge
+    step(true);
+    await tester.pumpAndSettle();
+    expect(at(zoom), const Offset(-400, -600)); // right edge, one screen down
+    step(true);
+    await tester.pumpAndSettle();
+    expect(at(zoom), const Offset(0, -600)); // bottom-left: the end of a right-to-left page
+    expect(step(true), isFalse);
+    step(false);
+    await tester.pumpAndSettle();
+    expect(at(zoom), const Offset(-400, -600)); // back: rightwards
+  });
 }
+
