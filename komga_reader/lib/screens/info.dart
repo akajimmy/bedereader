@@ -4,6 +4,7 @@ import '../api.dart';
 import '../offline/offline_komga.dart';
 import '../screen.dart';
 import '../widgets/fullscreen_exit.dart';
+import 'document.dart';
 
 /// Placeholders until the project's details are settled (the user plans to open-source it; licence TBD).
 const appName = 'Komga Reader';
@@ -81,6 +82,18 @@ class _InfoScreenState extends State<InfoScreen> {
                   label: const Text('Licences of included open-source software'),
                 ),
               ),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.whatsNew())),
+                  icon: const Icon(Icons.new_releases_outlined, size: 18),
+                  label: const Text("What's new"),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.readMe())),
+                  icon: const Icon(Icons.menu_book_outlined, size: 18),
+                  label: const Text('Read me'),
+                ),
+              ]),
             ]),
             _Card(title: 'Server', icon: Icons.dns_outlined, children: [
               _row('Address', widget.api.baseUrl),

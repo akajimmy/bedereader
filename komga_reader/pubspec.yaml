@@ -28,3 +28,5 @@ flutter:
     - shaders/curl.frag
   assets:
     - assets/icon.png
+    - assets/docs/README.md
+    - assets/docs/CHANGELOG.md

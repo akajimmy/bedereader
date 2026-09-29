@@ -8,6 +8,7 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
+import 'document.dart';
 import 'downloads_screen.dart';
 import 'info.dart';
 
@@ -175,6 +176,22 @@ class AppSettingsScreen extends StatelessWidget {
                 subtitle: const Text('Version, licences, Komga credits'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => InfoScreen(api: api))),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.new_releases_outlined),
+                title: const Text("What's new"),
+                subtitle: const Text('What changed in each build'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.whatsNew())),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.menu_book_outlined),
+                title: const Text('Read me'),
+                subtitle: const Text('What the app does, getting started, where settings live'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.readMe())),
               ),
             ]),
           ]),
