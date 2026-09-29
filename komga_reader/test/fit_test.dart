@@ -73,6 +73,15 @@ void main() {
     expect(scroll.offset, scroll.position.maxScrollExtent);
   });
 
+  testWidgets('fit height on a wide page, then fit screen: page swipes are given back', (tester) async {
+    // user's repro: cycling screen -> width -> height -> screen left swiping dead
+    final pans = <bool>[];
+    await page(tester, FitMode.height, 1600, 1200, onPan: pans.add);
+    expect(pans, [true]);
+    await page(tester, FitMode.screen, 1600, 1200, onPan: pans.add); // same page, fit changed
+    expect(pans, [true, false]);
+  });
+
   testWidgets('a page that fits is simply centred, nothing to drag', (tester) async {
     bool? pans;
     await page(tester, FitMode.height, 600, 1200, onPan: (p) => pans = p); // 600 wide fits in 800
