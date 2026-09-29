@@ -10,7 +10,7 @@ import 'widgets/drawer.dart';
 void main() => runApp(MaterialApp(debugShowCheckedModeBanner: false, theme: buildTheme(), home: const _Preview()));
 
 class _FakeKomga extends Komga {
-  _FakeKomga() : super('http://10.0.0.23:25600', 'k');
+  _FakeKomga() : super('http://192.168.1.10:25600', 'k');
   @override
   Future<Map<String, dynamic>?> me() async => {'email': 'reader@example.com'};
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
 
@@ -11,10 +12,20 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _server = TextEditingController(text: 'http://10.0.0.23:25600');
+  final _server = TextEditingController();
   final _key = TextEditingController();
   String? _error;
   bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // signing in again (after Sign out): the last server address is still saved on the device
+    SharedPreferences.getInstance().then((p) {
+      final last = p.getString('server');
+      if (last != null && mounted && _server.text.isEmpty) _server.text = last;
+    });
+  }
 
   Future<void> _connect() async {
     setState(() { _busy = true; _error = null; });
@@ -41,7 +52,8 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text('Komga', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 24),
-              TextField(controller: _server, decoration: const InputDecoration(labelText: 'Server')),
+              TextField(controller: _server, keyboardType: TextInputType.url,
+                  decoration: const InputDecoration(labelText: 'Server', hintText: 'http://192.168.1.10:25600')),
               const SizedBox(height: 12),
               TextField(controller: _key, obscureText: true, decoration: const InputDecoration(labelText: 'API key'),
                   onSubmitted: (_) => _connect()),

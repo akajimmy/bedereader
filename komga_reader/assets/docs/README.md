@@ -60,6 +60,16 @@ This app shows them and keeps everything in sync.
 
 Settings (side menu) has everything in one place, each section labelled with where it's kept.
 
+## Privacy
+
+- The app talks only to **your own Komga server**. No analytics, no tracking, no accounts, no ads.
+- The one exception is the **web version**, which loads a font from Google's servers when it starts.
+- Your server address and API key are stored **on the device, unencrypted** (the app's private storage on Android;
+  your Windows profile on a PC). Encrypted storage is planned. Anyone with that API key can use your Komga account:
+  you can revoke it any time in Komga (your account > API keys).
+- On Android the app allows plain `http://` connections, so it can reach a Komga server on your home network that
+  has no HTTPS. On a network you don't trust, use HTTPS.
+
 ## Remote page-turners
 
 Bluetooth remotes that send arrow keys and Enter work throughout the app: arrows move between items, OK opens. In
@@ -182,6 +192,7 @@ updates, because the internal identifiers never change:
 - Development happens on a version branch (now `1.1`); releases are tagged (`v0.1.0-rc.1`).
 - One branch per change, off the version branch: `git switch -c feature/two-page-mode 1.1`, commit there, keep
   `flutter analyze` and `flutter test` green, then merge back into `1.1`.
+- GitHub runs `flutter analyze` and the tests on every push and pull request (`.github\workflows\checks.yml`).
 - New behaviour gets a test in `test\`. Screens that talk to Komga are tested against a fake `Komga` subclass (see
   `test\reader_test.dart`); shaders are run for real in tests (`test\enhance_test.dart`).
 - Add a line to `CHANGELOG.md` under *Unreleased*; the build moves it under the new build number.
