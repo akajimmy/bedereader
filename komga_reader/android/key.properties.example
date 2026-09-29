@@ -1,0 +1,7 @@
+# Release signing for the Android app. Copy this file to key.properties (in this folder) and fill it in.
+# key.properties is never committed (.gitignore); the keystore itself lives outside the repository - keep a backup
+# of both it and its password somewhere safe: without the same key, a new version can't be installed over the old one.
+storeFile=C:/Users/<you>/.keystores/android-release.jks
+storePassword=<the keystore password>
+keyAlias=release
+keyPassword=<the key password - the same as the keystore password for a PKCS12 keystore>

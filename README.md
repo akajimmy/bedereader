@@ -92,7 +92,6 @@ The rest of this file is about building the app.
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
-- `NOTES.md` - requirements, design decisions and the backlog of ideas.
 - `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
 - `tools\image-lab\` - a browser tool for tuning the page processing (serve the repository folder with
@@ -149,6 +148,11 @@ options > Wireless debugging > Pair device with pairing code. Wireless debugging
 switches it off whenever the tablet leaves the Wi-Fi); if the tablet can't be reached the build still succeeds and
 says so - install later with `tools\install-android.ps1`.
 
+**Release signing (Android):** the APK is signed with the key named in `komga_readerndroid\key.properties`
+(copy `key.properties.example`; never committed), whose keystore lives outside the repository. Without that file the
+build falls back to the debug key and says so. Android only updates an app signed with the same key, so the release
+key must never change: keep a backup of the keystore and its password.
+
 Outputs in `dist\<version>\`:
 - `KomgaReader-<ver>-android.apk` - install on the tablet (sideload)
 - `KomgaReader-<ver>-windows.zip` - portable: unzip anywhere, run `KomgaReader.exe`
@@ -162,4 +166,3 @@ Outputs in `dist\<version>\`:
 - New behaviour gets a test in `test\`. Screens that talk to Komga are tested against a fake `Komga` subclass (see
   `test\reader_test.dart`); shaders are run for real in tests (`test\enhance_test.dart`).
 - Add a line to `CHANGELOG.md` under *Unreleased*; the build moves it under the new build number.
-- Ideas that aren't being built yet go in `NOTES.md` under Backlog.
