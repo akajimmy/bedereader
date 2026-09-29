@@ -8,6 +8,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 **New**
 - **What's new** and **Read me** in App settings > About and on the Info screen: this changelog, and what the
   app does, how to get started and where your settings live.
+- **Third-party software** (App settings > About, and Info): everything the app relies on - libraries, fonts,
+  services and build tools - with their licences.
+- Komga Reader is now open source under the **MIT licence**. The licences page (Info) also carries AMD's notice for
+  the page enhancement and the Material Icons attribution; the Info screen has an AI usage disclosure.
 
 ## 0.1.1 - offline reading and better pages
 

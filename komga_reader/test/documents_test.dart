@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/licences.dart';
 import 'package:komga_reader/screens/document.dart';
 import 'package:komga_reader/widgets/markdown.dart';
 
@@ -64,5 +66,29 @@ flutter test
     expect(find.textContaining('Getting started', findRichText: true), findsOneWidget);
     expect(find.textContaining('For developers', findRichText: true), findsNothing);
     expect(find.textContaining('Toolchain', findRichText: true), findsNothing);
+  });
+
+  testWidgets('Third-party software lists what the app relies on, with the AI disclosure', (tester) async {
+    tester.view.physicalSize = const Size(900, 30000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: DocumentScreen.thirdParty()));
+    await tester.pumpAndSettle();
+    for (final t in ['AI assistance', 'Komga', 'Flutter', 'shared_preferences', 'AMD FidelityFX Super Resolution 1',
+        'Material Icons', 'Eclipse Temurin JDK']) {
+      expect(find.textContaining(t, findRichText: true), findsWidgets, reason: t);
+    }
+  });
+
+  test("licences page: the app's MIT licence, AMD's FSR notice and the Material Icons attribution", () async {
+    registerLicences();
+    final entries = await LicenseRegistry.licenses.toList();
+    List<String> textOf(String package) => [
+          for (final e in entries)
+            if (e.packages.contains(package)) e.paragraphs.map((p) => p.text).join(' ')
+        ];
+    expect(textOf('Komga Reader').single, contains('Permission is hereby granted'));
+    expect(textOf('AMD FidelityFX Super Resolution 1 (FSR 1)').single, contains('Advanced Micro Devices'));
+    expect(textOf('Material Icons').single, contains('Creative Commons Attribution 4.0'));
   });
 }

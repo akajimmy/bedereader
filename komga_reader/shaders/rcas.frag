@@ -2,6 +2,9 @@
 
 #include <flutter/runtime_effect.glsl>
 
+// Adapted from AMD FidelityFX Super Resolution 1 - Copyright (c) 2021 Advanced Micro Devices, Inc. MIT licence;
+// the full notice is in THIRD_PARTY_NOTICES.md (and on the app's licences page).
+
 // Enhance, step 3 of 3 (lib/enhance.dart), at screen resolution: RCAS, the sharpener of AMD FidelityFX FSR 1.
 // The sharpening lobe is limited so no pixel is pushed past what its neighbours allow: crisper lines with little
 // ringing, and flat areas left mostly alone. Tuned by the user in tools/image-lab: amount 0.6.

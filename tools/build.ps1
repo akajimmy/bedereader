@@ -111,7 +111,7 @@ $docsDir = Join-Path $app 'assets\docs'
 $utf8 = New-Object Text.UTF8Encoding($false)
 $originalChangelog = if (Test-Path $changelog) { [IO.File]::ReadAllText($changelog) } else { $null }
 $originalDocs = @{}
-foreach ($f in 'README.md', 'CHANGELOG.md') {
+foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
     $p = Join-Path $docsDir $f
     $originalDocs[$f] = if (Test-Path $p) { [IO.File]::ReadAllText($p) } else { $null }
 }
@@ -141,14 +141,14 @@ if ($Bump -and $originalChangelog) {
     }
 }
 New-Item -ItemType Directory -Force $docsDir | Out-Null
-foreach ($f in 'README.md', 'CHANGELOG.md') {
+foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
     $src = Join-Path $root $f
     if (Test-Path $src) { Copy-Item $src (Join-Path $docsDir $f) -Force }
 }
 
 function Restore-Documents {
     if ($filed) { [IO.File]::WriteAllText($changelog, $originalChangelog, $utf8) }
-    foreach ($f in 'README.md', 'CHANGELOG.md') {
+    foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
         $p = Join-Path $docsDir $f
         if ($null -eq $originalDocs[$f]) { if (Test-Path $p) { Remove-Item $p } }
         else { [IO.File]::WriteAllText($p, $originalDocs[$f], $utf8) }
