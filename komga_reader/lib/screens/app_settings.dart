@@ -4,6 +4,7 @@ import '../api.dart';
 import '../home_sections.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../widgets/display_panel.dart';
 import '../widgets/home_sections_editor.dart';
 import 'downloads_screen.dart';
 
@@ -116,6 +117,11 @@ class AppSettingsScreen extends StatelessWidget {
                     ]);
                   },
                 ),
+              const _Card(title: 'Display', icon: Icons.nightlight_outlined, children: [
+                Text('Whole app, this device (also in the reader\'s Reader settings)',
+                    style: TextStyle(color: Color(0xFF9A9A9A))),
+                NightModeControls(),
+              ]),
               _Card(title: 'Home', icon: Icons.home_outlined, children: [
                 const Text('Sections on Home: switch on or off, and move with ▲▼ or the handle',
                     style: TextStyle(color: Color(0xFF9A9A9A))),

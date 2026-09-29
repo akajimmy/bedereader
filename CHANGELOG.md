@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Night mode (and its warmth) is also in App settings, in a new Display card - it tints the library views too. Same
+  setting as in the reader's Reader settings, which keeps it.
 ## Build 27 - 2026-09-29
 
 - Reading progress made offline reaches Komga once it's reachable again (on going back online, at start-up, and on
