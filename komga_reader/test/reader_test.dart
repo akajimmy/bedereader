@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screen.dart';
@@ -54,6 +55,12 @@ class FakeKomga extends Komga {
 }
 
 void main() {
+  // the reader starts loading the curl shader when it opens; load it once for real first, or that load starts inside
+  // a test's fake clock, never finishes, and the curl tests wait on it forever
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await PageCurl.program();
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   late FakeKomga api;
@@ -403,6 +410,83 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
   }
+
+  group('3D page curl', () {
+    setUp(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl)));
+    tearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+
+    Future<void> openCurling(WidgetTester tester) async {
+      expect(PageCurl.loaded, isNotNull); // loaded for real in setUpAll
+      await openReader(tester);
+      await tester.pump();
+    }
+
+    double page(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+    Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter);
+
+    testWidgets('a tap plays the curl and lands on the next page', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      await tester.tapAt(Offset(size.width * 0.9, size.height / 2));
+      await tester.pump();
+      expect(curling(), findsOneWidget); // this page curling away over the next
+      expect(page(tester), 1.0); // the next page is already underneath
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(curling(), findsNothing);
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a slow drag past halfway turns the page; a short one springs back', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height / 2;
+      // short and slow: back where it was
+      var g = await tester.startGesture(Offset(size.width * 0.8, y));
+      for (var i = 1; i <= 10; i++) {
+        await g.moveTo(Offset(size.width * 0.8 - i * 8.0, y));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(curling(), findsOneWidget); // the page follows the finger
+      await g.up();
+      await tester.pump(); // the spring-back / finishing animation starts counting from this frame
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(curling(), findsNothing);
+      expect(page(tester), 0.0);
+      // long and slow: turned
+      g = await tester.startGesture(Offset(size.width * 0.9, y));
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(Offset(size.width * 0.9 - i * size.width * 0.04, y));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pump(); // the spring-back / finishing animation starts counting from this frame
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('back: the previous page uncurls over this one', (tester) async {
+      await openCurling(tester);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await key(tester, LogicalKeyboardKey.arrowLeft);
+      await tester.pump(); // the previous page's snapshot is taken after this frame
+      await tester.pump();
+      expect(curling(), findsOneWidget);
+      expect(page(tester), 0.0);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(curling(), findsNothing);
+      expect(page(tester), 0.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+  });
 
   testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
     await openReader(tester);

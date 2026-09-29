@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../offline/connection.dart';
+import '../page_curl.dart';
 import '../page_image.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -34,7 +37,7 @@ class ReaderScreen extends StatefulWidget {
 
 enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, image, reader, nextBook }
 
-class _ReaderScreenState extends State<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderStateMixin {
   late dynamic _book = widget.book;
   List<dynamic> _pages = [];
   PageLoader? _loader;
@@ -89,6 +92,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
     keepScreenOn(true);
     _settings.addListener(_onSettings);
     fullscreen.addListener(_onFullscreen); // F11 is app-wide (main.dart): the button follows
+    PageCurl.program().ignore(); // load the curl shader ahead of the first turn
+    _curlAnim
+      ..addListener(_onCurlTick)
+      ..addStatusListener((s) { if (s == AnimationStatus.completed) _endCurl(); });
     _open(_book);
   }
 
@@ -96,6 +103,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void dispose() {
     _saveTimer?.cancel();
     _flashTimer?.cancel();
+    _curlAnim.dispose();
+    _curl?.dispose();
     Connection.instance.readerClosed();
     _saveNow();
     _settings.removeListener(_onSettings);
@@ -220,15 +229,151 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _turnPage(next: false);
   }
 
-  /// One page on or back, in the chosen style: slide (Swipe) or cut straight to it (Straight flip).
+  /// One page on or back, in the chosen animation: Wipe (slide), Instant flip, or 3D page curl.
   void _turnPage({required bool next}) {
     final target = next ? _index + 1 : _index - 1;
     if (target < 0 || target > _pages.length) return;
-    if (_settings.display.pageTurn == PageTurn.flip) {
+    if (_curlMode) {
+      final grab = Offset(_area.width, _area.height * 0.72);
+      final start = next ? grab : Offset(PageCurl.gone(_area.width), grab.dy);
+      if (_startCurl(next: next, grab: grab, finger: start)) {
+        _animateCurl(complete: true);
+        return;
+      }
+      _pc!.jumpToPage(target); // couldn't snapshot the page: turn instantly
+    } else if (_settings.display.pageTurn == PageTurn.flip) {
       _pc!.jumpToPage(target);
     } else {
       _pc!.animateToPage(target, duration: _turn, curve: Curves.easeOut);
     }
+  }
+
+  // ---- 3D page curl (Page turn animation; lib/page_curl.dart) ----------------------------------------------------
+  // A turn jumps the page view to the target page at once and draws the turning page over it from a snapshot:
+  // forward, this page curls away over the next; back, the previous page uncurls over this one (a snapshot of this
+  // page covers the view until then). Letting go before halfway springs back and jumps back.
+  final _pagesKey = GlobalKey(); // repaint boundary around the page view: the snapshots
+  late final AnimationController _curlAnim =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+  _Curl? _curl;
+  Size _area = Size.zero;
+  Offset? _dragStart;
+
+  bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
+
+  /// A horizontal drag curls the page - unless it's moving the page itself (zoomed, pinching, a sideways page).
+  bool get _curlDrag => _curlMode && !_zoomed && _fingers <= 1 && !_sideways.contains(_index) && _pc != null && !_menu;
+
+  /// Positions in reading-direction space (x from the right edge in a right-to-left book).
+  Offset _reading(Offset p) => _rtl ? Offset(_area.width - p.dx, p.dy) : p;
+
+  ui.Image? _snapshot() {
+    final b = _pagesKey.currentContext?.findRenderObject();
+    if (b is! RenderRepaintBoundary || !b.hasSize) return null;
+    try {
+      return b.toImageSync(pixelRatio: MediaQuery.devicePixelRatioOf(context));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _startCurl({required bool next, required Offset grab, required Offset finger}) {
+    final target = next ? _index + 1 : _index - 1;
+    if (target < 0 || target > _pages.length || _pc == null || _area.isEmpty) return false;
+    _finishCurlNow();
+    final now = _snapshot();
+    if (now == null) return false;
+    final c = _Curl(sheet: now, forward: next, grab: grab, finger: finger, from: _index, under: next ? null : now,
+        pending: !next);
+    _curl = c;
+    _pc!.jumpToPage(target);
+    setState(() {});
+    if (!next) {
+      // the previous page is now in the view (under the cover): snapshot it to uncurl
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_curl != c || !c.pending) return;
+        final prev = _snapshot();
+        if (prev == null) { _endCurl(cancel: true); return; }
+        setState(() { c.sheet = prev; c.pending = false; });
+      });
+    }
+    return true;
+  }
+
+  void _animateCurl({required bool complete}) {
+    final c = _curl;
+    if (c == null) return;
+    final w = _area.width;
+    c
+      ..completing = complete
+      ..animFrom = c.finger
+      ..animTo = c.forward == complete
+          ? Offset(PageCurl.gone(w), c.grab.dy - _area.height * 0.08) // turned away, corner lifted a little
+          : c.grab; // flat on the page
+    _curlAnim.forward(from: 0);
+  }
+
+  void _onCurlTick() {
+    final c = _curl;
+    if (c == null) return;
+    setState(() => c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!);
+  }
+
+  /// The turn is over: let go before halfway -> back to where it started.
+  void _endCurl({bool cancel = false}) {
+    final c = _curl;
+    if (c == null) return;
+    _curl = null;
+    if (cancel || !c.completing) _pc?.jumpToPage(c.from);
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
+  }
+
+  /// Another turn while one is playing: finish that one at once.
+  void _finishCurlNow() {
+    if (_curl == null) return;
+    _curlAnim.stop();
+    _endCurl();
+  }
+
+  void _curlDragStart(DragStartDetails d) => _dragStart = _reading(d.localPosition);
+
+  void _curlDragUpdate(DragUpdateDetails d) {
+    final s = _dragStart;
+    if (s == null) return;
+    final p = _reading(d.localPosition), w = _area.width;
+    if (_curl == null) {
+      final dx = p.dx - s.dx;
+      if (dx.abs() < 4) return;
+      final next = dx < 0;
+      final grab = Offset(w, s.dy);
+      if (!_startCurl(next: next, grab: grab, finger: next ? grab : Offset(PageCurl.gone(w), s.dy))) {
+        _dragStart = null;
+        return;
+      }
+    }
+    final c = _curl!;
+    if (_curlAnim.isAnimating) return;
+    final gone = PageCurl.gone(w);
+    setState(() {
+      c.finger = c.forward
+          ? Offset(math.min(w, w + (p.dx - s.dx)), p.dy) // the page's edge follows the finger
+          : Offset(gone + (w - gone) * ((p.dx - s.dx) / w * 1.2).clamp(0.0, 1.0), p.dy);
+    });
+  }
+
+  void _curlDragEnd(DragEndDetails d) {
+    final c = _curl;
+    _dragStart = null;
+    if (c == null || _curlAnim.isAnimating) return;
+    final w = _area.width, gone = PageCurl.gone(w);
+    var vx = d.velocity.pixelsPerSecond.dx;
+    if (_rtl) vx = -vx;
+    final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
+    final complete = c.forward
+        ? vx < -400 || (vx < 400 && turned > 0.3)
+        : vx > 400 || (vx > -400 && turned < 0.65);
+    _animateCurl(complete: complete);
   }
 
   /// Next book. On the last page or the end card the current book is marked read; before that, ask.
@@ -475,6 +620,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Stack(children: [
                   LayoutBuilder(builder: (context, box) {
+                    _area = Size(box.maxWidth, box.maxHeight);
                     return Listener(
                       // wheel over the end card or a loading page (over a page, the page itself takes it)
                       onPointerSignal: (e) {
@@ -489,6 +635,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onSecondaryTap: () => _menu ? _hideControls() : _showControls(), // right-click
+                      // 3D page curl: a horizontal drag curls the page (the page view doesn't scroll in that mode)
+                      onHorizontalDragStart: _curlDrag ? _curlDragStart : null,
+                      onHorizontalDragUpdate: _curlDrag ? _curlDragUpdate : null,
+                      onHorizontalDragEnd: _curlDrag ? _curlDragEnd : null,
                       onTapUp: (d) {
                         final x = d.localPosition.dx / box.maxWidth;
                         // tap zones follow the reading direction: the side you read towards goes forward
@@ -496,19 +646,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         else if (x > 0.67) { _rtl ? _back() : _forward(); }
                         else { _showControls(); }
                       },
-                      child: PageView.builder(
+                      child: RepaintBoundary(
+                        key: _pagesKey,
+                        child: PageView.builder(
                         controller: _pc,
+                        // instant flip and the curl jump between pages: keep the neighbours built (and processed)
+                        allowImplicitScrolling: _settings.display.pageTurn != PageTurn.swipe,
                         reverse: _rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
                         // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
-                        physics: _zoomed || _fingers > 1 || _sideways.contains(_index)
+                        physics: _zoomed || _fingers > 1 || _sideways.contains(_index) || _curlMode
                             ? const NeverScrollableScrollPhysics()
                             : null,
                         itemCount: _pages.length + 1,
                         onPageChanged: _onPage,
                         itemBuilder: (context, i) => i == _pages.length ? _endCard() : _page(i),
                       ),
+                      ),
                     ));
                   }),
+                  if (_curl != null)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Stack(fit: StackFit.expand, children: [
+                          if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
+                          if (!_curl!.pending)
+                            CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: _curl!.sheet,
+                                grab: _curl!.grab, finger: _curl!.finger, mirror: _rtl)),
+                        ]),
+                      ),
+                    ),
                   // "12 / 36" for a moment after a turn - not over the controls (they have the count) or the end card
                   Positioned(
                     right: 14,
@@ -824,6 +990,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
             label: 'Page ${shown + 1}',
             onChanged: (v) => setState(() => _scrub = v.round()),
             onChangeEnd: (v) {
+              _finishCurlNow();
               _pc?.jumpToPage(v.round());
               setState(() => _scrub = null);
             },
@@ -831,5 +998,25 @@ class _ReaderScreenState extends State<ReaderScreen> {
         ),
       ),
     );
+  }
+}
+
+/// A page turn in progress (3D page curl).
+class _Curl {
+  _Curl({required this.sheet, required this.forward, required this.grab, required this.finger, required this.from,
+      this.under, this.pending = false});
+  ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
+  final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
+  final bool forward;
+  final Offset grab; // where the page was taken hold of (right edge, reading space)
+  Offset finger; // where that point is now
+  final int from; // the page before the turn, to go back to if it's let go
+  bool pending; // going back: the previous page's snapshot isn't taken yet
+  bool completing = true;
+  Offset animFrom = Offset.zero, animTo = Offset.zero;
+
+  void dispose() {
+    sheet.dispose();
+    if (under != null && !identical(under, sheet)) under!.dispose();
   }
 }
