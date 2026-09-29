@@ -6,6 +6,7 @@ import '../pins.dart';
 import '../view_prefs.dart';
 import '../widgets/download_badge.dart';
 import '../widgets/drawer.dart';
+import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/selection.dart';
@@ -211,6 +212,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               onPressed: () => _push(SearchScreen(api: api, libraryId: _libraryId,
                   libraryName: _libraryId == null ? null : _libraryName))),
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _refresh),
+          const FullscreenExit(),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(44),

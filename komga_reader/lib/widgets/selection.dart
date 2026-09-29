@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../offline/downloads.dart';
 import '../screens/actions.dart';
+import 'fullscreen_exit.dart';
 
 /// Multi-select state for a book grid. While [active], tapping (or OK on) a book toggles it instead of opening it.
 class Selection extends ChangeNotifier {
@@ -85,6 +86,7 @@ PreferredSizeWidget selectionAppBar(BuildContext context, Komga api, Selection s
               onChanged();
             }
           }),
+      const FullscreenExit(),
     ],
   );
 }

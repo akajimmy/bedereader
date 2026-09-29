@@ -4,6 +4,8 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/book_details.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
+import 'package:komga_reader/screens/series_details.dart';
+import 'package:komga_reader/screens/actions.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final theBook = {
@@ -98,4 +100,51 @@ void main() {
         scrollable: find.descendant(of: find.byType(BottomSheet), matching: find.byType(Scrollable)));
     expect(find.text('Delete book…').hitTestable(), findsOneWidget);
   });
+
+  testWidgets('series details: from the series menu - facts, genres and tags, summary, credits once each', (tester) async {
+    tester.view.physicalSize = const Size(1280, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final series = {
+      'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 18, 'booksReadCount': 3, 'booksUnreadCount': 15,
+      'booksInProgressCount': 0,
+      'metadata': {'title': 'Silver Surfer', 'publisher': 'Marvel', 'status': 'ENDED', 'genres': ['Superhero'],
+          'tags': ['cosmic'], 'summary': 'The Sentinel of the Spaceways.', 'language': 'en', 'ageRating': 12},
+      'booksMetadata': {'releaseDate': '1968-08-01', 'authors': [
+        {'name': 'Stan Lee', 'role': 'writer'}, {'name': 'Stan Lee', 'role': 'writer'}, // two books, same writer
+        {'name': 'John Buscema', 'role': 'penciller'},
+      ]},
+    };
+    final api = _SeriesKomga(series);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
+        onPressed: () => showSeriesActions(context, api, series, onChanged: () {}), child: const Text('menu'))))));
+    await tester.tap(find.text('menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SeriesDetailsScreen), findsOneWidget);
+    expect(find.text('Marvel'), findsOneWidget);
+    expect(find.text('Ended'), findsOneWidget);
+    expect(find.text('1 August 1968'), findsOneWidget);
+    expect(find.text('Superhero'), findsOneWidget);
+    expect(find.text('cosmic'), findsOneWidget);
+    expect(find.text('The Sentinel of the Spaceways.'), findsOneWidget);
+    expect(find.text('Stan Lee'), findsOneWidget); // once, not per book
+    expect(find.text('Open series'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('series details from inside that series: no Open series', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: SeriesDetailsScreen(api: FakeKomga(),
+        series: const {'id': 'S1', 'name': 'Silver Surfer', 'metadata': {}}, showOpen: false)));
+    await tester.pump();
+    expect(find.text('Open series'), findsNothing);
+  });
+}
+
+class _SeriesKomga extends FakeKomga {
+  _SeriesKomga(this.s);
+  final Map<String, dynamic> s;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) async => s;
 }

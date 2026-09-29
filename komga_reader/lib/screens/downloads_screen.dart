@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../offline/sync.dart';
+import '../widgets/fullscreen_exit.dart';
 
 /// The download queue and everything downloaded (side menu > Downloads). The queue shows each book's state and,
 /// for the one downloading, pages done / total with a progress bar; failed books say why and can be retried.
@@ -64,6 +65,7 @@ class DownloadsScreen extends StatelessWidget {
                   icon: const Icon(Icons.clear_all),
                   label: const Text('Cancel all'),
                 ),
+              const FullscreenExit(),
             ],
           ),
           body: !d.ready

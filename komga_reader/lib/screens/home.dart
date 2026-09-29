@@ -6,6 +6,7 @@ import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
 import '../widgets/drawer.dart';
+import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
 import '../widgets/pin_tile.dart';
 import '../widgets/poster_row.dart';
@@ -274,6 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   contentPadding: EdgeInsets.zero, leading: Icon(Icons.reorder), title: Text('Arrange sections…'))),
             ],
           ),
+          const FullscreenExit(),
         ],
       ),
       body: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _loading

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../widgets/fullscreen_exit.dart';
 import 'reader.dart';
 import 'series.dart';
 
@@ -91,10 +92,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       const SizedBox(height: 4),
       Text((m['title'] ?? _book['name'] ?? '') as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
       const SizedBox(height: 12),
-      _fact('Publisher', _series?['metadata']?['publisher'] as String?),
-      _fact('Released', _date(m['releaseDate'] as String?)),
-      _fact('Pages', pages == 0 ? null : '$pages'),
-      _fact('Status', status),
+      detailsFact('Publisher', _series?['metadata']?['publisher'] as String?),
+      detailsFact('Released', detailsDate(m['releaseDate'] as String?)),
+      detailsFact('Pages', pages == 0 ? null : '$pages'),
+      detailsFact('Status', status),
       const SizedBox(height: 16),
       Wrap(spacing: 10, runSpacing: 10, children: [
         FilledButton.icon(autofocus: true, onPressed: _read, icon: const Icon(Icons.menu_book),
@@ -109,7 +110,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     ]);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Details')),
+      appBar: AppBar(title: const Text('Details'), actions: const [FullscreenExit()]),
       // pull down to refresh (re-reads the book and series from Komga)
       body: RefreshIndicator(onRefresh: _load, child: ListView(
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
@@ -128,67 +129,18 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                 facts,
               ]),
         if (summary.isNotEmpty) ...[
-          const _Heading('Summary'),
+          const DetailsHeading('Summary'),
           Text(summary, style: const TextStyle(fontSize: 15, height: 1.45)),
         ],
-        ..._credits(m['authors'] as List?),
+        ...creditsSection(m['authors'] as List?),
       ])),
     );
   }
 
-  List<Widget> _credits(List? authors) {
-    if (authors == null || authors.isEmpty) return const [];
-    final byRole = <String, List<String>>{};
-    for (final a in authors) {
-      final role = ((a['role'] as String?) ?? 'other').toLowerCase();
-      byRole.putIfAbsent(role, () => []).add(a['name'] as String? ?? '');
-    }
-    final roles = byRole.keys.toList()
-      ..sort((a, b) {
-        final ia = _roleOrder.indexOf(a), ib = _roleOrder.indexOf(b);
-        return (ia < 0 ? 99 : ia).compareTo(ib < 0 ? 99 : ib);
-      });
-    return [
-      const _Heading('Credits'),
-      for (final r in roles)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 6),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 110, child: Text(_roleLabel(r, byRole[r]!.length),
-                style: const TextStyle(color: Color(0xFF9A9A9A)))),
-            Expanded(child: Text(byRole[r]!.join(', '))),
-          ]),
-        ),
-    ];
-  }
-
-  static String _roleLabel(String role, int n) {
-    final base = role.isEmpty ? 'Other' : role[0].toUpperCase() + role.substring(1);
-    return n > 1 && !base.endsWith('s') ? '${base}s' : base;
-  }
-
-  static String? _date(String? iso) {
-    if (iso == null || iso.isEmpty) return null;
-    final d = DateTime.tryParse(iso);
-    if (d == null) return iso;
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
-        'November', 'December'];
-    return '${d.day} ${months[d.month - 1]} ${d.year}';
-  }
-
-  Widget _fact(String label, String? value) => value == null || value.isEmpty
-      ? const SizedBox.shrink()
-      : Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: Row(children: [
-            SizedBox(width: 90, child: Text(label, style: const TextStyle(color: Color(0xFF9A9A9A)))),
-            Expanded(child: Text(value)),
-          ]),
-        );
 }
 
-class _Heading extends StatelessWidget {
-  const _Heading(this.text);
+class DetailsHeading extends StatelessWidget {
+  const DetailsHeading(this.text, {super.key});
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
@@ -196,3 +148,55 @@ class _Heading extends StatelessWidget {
         child: Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500)),
       );
 }
+
+/// Shared with the series Details screen.
+List<Widget> creditsSection(List? authors) {
+  if (authors == null || authors.isEmpty) return const [];
+  final byRole = <String, List<String>>{};
+  for (final a in authors) {
+    final role = ((a['role'] as String?) ?? 'other').toLowerCase();
+    final names = byRole.putIfAbsent(role, () => []), name = a['name'] as String? ?? '';
+    if (!names.contains(name)) names.add(name); // a series lists every book's credits: once each
+  }
+  final roles = byRole.keys.toList()
+    ..sort((a, b) {
+      final ia = _roleOrder.indexOf(a), ib = _roleOrder.indexOf(b);
+      return (ia < 0 ? 99 : ia).compareTo(ib < 0 ? 99 : ib);
+    });
+  return [
+    const DetailsHeading('Credits'),
+    for (final r in roles)
+      Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(width: 110, child: Text(_roleLabel(r, byRole[r]!.length),
+              style: const TextStyle(color: Color(0xFF9A9A9A)))),
+          Expanded(child: Text(byRole[r]!.join(', '))),
+        ]),
+      ),
+  ];
+}
+
+String _roleLabel(String role, int n) {
+  final base = role.isEmpty ? 'Other' : role[0].toUpperCase() + role.substring(1);
+  return n > 1 && !base.endsWith('s') ? '${base}s' : base;
+}
+
+String? detailsDate(String? iso) {
+  if (iso == null || iso.isEmpty) return null;
+  final d = DateTime.tryParse(iso);
+  if (d == null) return iso;
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
+      'November', 'December'];
+  return '${d.day} ${months[d.month - 1]} ${d.year}';
+}
+
+Widget detailsFact(String label, String? value) => value == null || value.isEmpty
+    ? const SizedBox.shrink()
+    : Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          SizedBox(width: 90, child: Text(label, style: const TextStyle(color: Color(0xFF9A9A9A)))),
+          Expanded(child: Text(value)),
+        ]),
+      );
