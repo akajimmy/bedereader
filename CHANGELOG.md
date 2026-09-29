@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 25 - 2026-09-28
+
 - Home rows have ‹ › buttons at the right of their title (like Plex): each scrolls about a screen's width, greyed at
   the ends; on every device, and reachable with the remote.
 
