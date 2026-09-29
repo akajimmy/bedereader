@@ -486,6 +486,58 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    test('the spine stays down: a steep diagonal is held so neither spine corner lifts', () {
+      const w = 600.0, h = 900.0;
+      final r = PageCurl.radius(w);
+      const grab = Offset(w, h * 0.5);
+      double lift(Offset finger, Offset corner) {
+        final (p, n) = PageCurl.fold(grab, finger, r)!;
+        return (corner - p).dx * n.dx + (corner - p).dy * n.dy;
+      }
+
+      const steep = Offset(w * 0.3, h * 1.4); // halfway across, pulled far down
+      expect(lift(steep, Offset.zero), greaterThan(0)); // unheld, the top of the spine peels up
+      final held = PageCurl.pinned(grab, steep, r, h);
+      expect(held.dx, steep.dx); // the turn's progress is untouched
+      expect(held.dy, inInclusiveRange(grab.dy, steep.dy)); // only the tilt is reduced
+      for (final corner in [Offset.zero, const Offset(0, h)]) {
+        expect(lift(held, corner), lessThanOrEqualTo(0.5));
+      }
+      const gentle = Offset(w * 0.6, h * 0.55);
+      expect(PageCurl.pinned(grab, gentle, r, h), gentle); // a slight tilt is left alone
+    });
+
+    testWidgets('a diagonal drag turns the page', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final start = Offset(size.width * 0.85, size.height * 0.7);
+      final g = await tester.startGesture(start);
+      for (var i = 1; i <= 12; i++) {
+        await g.moveTo(start + Offset(-i * size.width * 0.04, -i * size.height * 0.035)); // up and to the left
+        await tester.pump(const Duration(milliseconds: 40));
+      }
+      await g.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('two quick swipes turn two pages (the second is not lost to the first one still playing)',
+        (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      await tester.flingFrom(Offset(size.width * 0.8, size.height / 2), Offset(-size.width * 0.5, 0), 1500);
+      await tester.pump(const Duration(milliseconds: 100)); // first turn mid-way
+      await tester.flingFrom(Offset(size.width * 0.8, size.height / 2), Offset(-size.width * 0.5, 0), 1500);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 2.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('back: the previous page uncurls over this one', (tester) async {
       await openCurling(tester);
       await key(tester, LogicalKeyboardKey.arrowRight);

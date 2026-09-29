@@ -38,6 +38,29 @@ class PageCurl {
     final n = v / len;
     return (finger + n * ((len - math.pi * r) / 2), n);
   }
+
+  /// [finger], held so the page stays attached along its spine (the left edge, x = 0, of a page [height] tall): a
+  /// diagonal drag tilts the fold, but no more than keeps both spine corners flat - past that the page would peel
+  /// away from the spine, up or down, like a tear (user, 2026-09-29). The finger's height is brought back towards
+  /// the grab's until the corners lie flat, or no lower than they would with a straight (vertical) fold, which only
+  /// lifts them at the very end of the turn.
+  static Offset pinned(Offset grab, Offset finger, double r, double height) {
+    final spine = [Offset.zero, Offset(0, height)];
+    double lift(Offset f, Offset c) {
+      final fl = fold(grab, f, r);
+      return fl == null ? -1 : (c - fl.$1).dx * fl.$2.dx + (c - fl.$1).dy * fl.$2.dy;
+    }
+
+    final straight = Offset(finger.dx, grab.dy);
+    bool ok(Offset f) => spine.every((c) => lift(f, c) <= math.max(0.0, lift(straight, c)) + 0.5);
+    if (ok(finger)) return finger;
+    var lo = 0.0, hi = 1.0; // share of the finger's height change kept
+    for (var i = 0; i < 14; i++) {
+      final mid = (lo + hi) / 2;
+      ok(Offset(finger.dx, grab.dy + (finger.dy - grab.dy) * mid)) ? lo = mid : hi = mid;
+    }
+    return Offset(finger.dx, grab.dy + (finger.dy - grab.dy) * lo);
+  }
 }
 
 /// Paints the curling page (see [PageCurl]): only the page's image ([page], its rectangle on screen - not the black
@@ -55,7 +78,7 @@ class PageCurlPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final r = PageCurl.radius(page.width);
-    final f = PageCurl.fold(grab, finger, r);
+    final f = PageCurl.fold(grab, PageCurl.pinned(grab, finger, r, page.height), r);
     if (f == null) {
       // flat: just the page
       final scale = sheet.width / size.width;

@@ -350,6 +350,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   Offset? _dragStartScreen;
 
   void _curlDragStart(DragStartDetails d) {
+    _finishCurlNow(); // a quick second swipe: the turn still playing ends at once instead of eating this one
     _dragStart = _reading(d.localPosition);
     _dragStartScreen = d.localPosition;
   }
@@ -380,7 +381,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
     final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
-    final y = _pagePoint(d.localPosition, c.page).dy;
+    // a diagonal drag tilts the page by half its height change (PageCurl.pinned keeps the spine down)
+    final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy) * 0.5;
     setState(() {
       c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     });
@@ -394,9 +396,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     var vx = d.velocity.pixelsPerSecond.dx;
     if (_rtl) vx = -vx;
     final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
+    // a flick (diagonal ones carry less sideways speed) or a slow drag about a third of the way
     final complete = c.forward
-        ? vx < -400 || (vx < 400 && turned > 0.35)
-        : vx > 400 || (vx > -400 && turned < 0.65);
+        ? vx < -250 || (vx < 250 && turned > 0.3)
+        : vx > 250 || (vx > -250 && turned < 0.7);
     _animateCurl(complete: complete);
   }
 

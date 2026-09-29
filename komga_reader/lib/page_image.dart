@@ -428,6 +428,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
           widget.onPageRect?.call(Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height));
           _viewport = Size(w, h);
           _picture = Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height);
+          _setPan(false); // was a wide page in fit height: page swipes back on (else they stay off)
           // scaleFactor infinity: the viewer's own wheel zoom off (it zooms on every notch, whoever claims the wheel -
           // wheel up zoomed while turning back). Pinch is unaffected; Ctrl+wheel zooms through _wheel instead.
           return InteractiveViewer(transformationController: _zoom, maxScale: 4, scaleFactor: double.infinity,

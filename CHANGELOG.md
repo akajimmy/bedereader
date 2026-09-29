@@ -9,6 +9,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 - Sign-in: the server field starts empty (with an example); signing in again fills in the last address.
 - Android builds are now signed with the project's own release key. Installing one over an earlier test build needs
   that build uninstalled first, once.
+- 3D page curl: the page stays attached along its spine - a diagonal drag tilts the curl but no longer peels the
+  page up or down from the inside edge.
+- 3D page curl: diagonal drags and flicks turn the page more readily, and a quick second swipe while a page is still
+  turning turns the next one instead of being ignored.
+
+**Fixed**
+- After switching the fit mode through Fit height and back to Fit screen, swiping no longer turned pages.
 
 ## 0.1.1-rc.1 - offline reading and better pages
 
