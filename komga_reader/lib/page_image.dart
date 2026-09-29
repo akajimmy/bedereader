@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'enhance.dart';
@@ -48,19 +49,26 @@ class PageLoader {
   Future<Levels>? _bookLevels;
 
   /// Auto-levels for the whole book (user's choice: one consistent correction rather than per page), measured once
-  /// from five pages spread through the book, skipping the cover.
+  /// from five pages spread through the book, skipping the cover - all five at once - and remembered on the device,
+  /// so opening the book again has nothing to wait for.
   Future<Levels> bookLevels() => _bookLevels ??= () async {
+        final key = 'levels.$bookId';
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString(key);
+        if (saved != null) {
+          final v = saved.split(',').map(double.tryParse).toList();
+          if (v.length == 6 && v.every((x) => x != null)) return Levels(v.sublist(0, 3).cast(), v.sublist(3).cast());
+        }
         final n = pageNumbers.length;
         final picks = <int>{for (final f in [0.2, 0.35, 0.5, 0.65, 0.8]) (n * f).floor().clamp(n > 2 ? 1 : 0, n - 1)};
-        final measured = <Levels>[];
-        for (final i in picks) {
-          try {
-            measured.add(await Levels.measure(await api.pageBytes(bookId, pageNumbers[i])));
-          } catch (_) {
-            // a page that won't load just doesn't vote
-          }
-        }
-        return Levels.combine(measured);
+        final measured = await Future.wait([
+          for (final i in picks)
+            api.pageBytes(bookId, pageNumbers[i]).then<Levels?>(Levels.measure).catchError((Object _) => null),
+        ]); // a page that won't load just doesn't vote
+        final got = measured.whereType<Levels>().toList();
+        final levels = Levels.combine(got);
+        if (got.length == picks.length) await prefs.setString(key, [...levels.lo, ...levels.hi].join(','));
+        return levels;
       }();
 }
 
@@ -181,10 +189,12 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Levels _levels = Levels.identity;
   // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
   ui.Image? _coloured;
+  bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
   int _colourRun = 0;
   // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
   ui.Image? _enhanced;
   Size? _enhancedFor;
+  bool _enhanceFailed = false;
   int _enhanceRun = 0; // a newer request (page / size / switch changed) makes older results stale
   late final TransformationController _zoom = widget.zoom ?? TransformationController();
   bool _zoomedIn = false;
@@ -280,7 +290,14 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   @override
   void didUpdateWidget(PageCanvas old) {
     super.didUpdateWidget(old);
-    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data) _prepare();
+    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data) {
+      if (old.data != widget.data || !widget.prefs.autoLevels) {
+        _coloured?.dispose();
+        _coloured = null;
+      }
+      _colourFailed = false;
+      _prepare();
+    }
     if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
     // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd)) _placed = false;
@@ -301,11 +318,13 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     setState(() {
       _coloured?.dispose();
       _coloured = coloured;
+      _colourFailed = p.autoLevels && coloured == null;
       _dropEnhanced(); // Enhance starts again from the new colours
     });
   }
 
   void _dropEnhanced() {
+    _enhanceFailed = false;
     _enhanceRun++;
     _enhanced?.dispose();
     _enhanced = null;
@@ -320,7 +339,10 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (run != _enhanceRun || !mounted) return;
       final out = await Enhancer.run(img, physical.width.round(), physical.height.round());
-      if (out == null) return;
+      if (out == null) {
+        if (run == _enhanceRun && mounted) setState(() => _enhanceFailed = true); // can't run here: plain
+        return;
+      }
       if (run != _enhanceRun || !mounted) { out.dispose(); return; }
       setState(() {
         _enhanced?.dispose();
@@ -339,12 +361,18 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     final dpr = MediaQuery.devicePixelRatioOf(context);
 
     Widget picture(Size size) {
+      // hold the page until its processing is ready, rather than flash the unprocessed page (user, 2026-09-29)
+      Widget waiting() => SizedBox(width: size.width, height: size.height,
+          child: const Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))));
+      if (widget.prefs.autoLevels && _coloured == null && !_colourFailed) return waiting();
       var source = base;
-      if (enhance) {
+      if (enhance && !_enhanceFailed) {
         final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());
         if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
           _enhance(physical, base);
-          if (_enhanced != null && _enhancedFor == physical) source = _enhanced!;
+          // until the first picture is ready: wait; after a resize (rotation): the old one, stretched, meanwhile
+          if (_enhanced == null) return waiting();
+          source = _enhanced!;
         }
       }
       // medium: at rest the enhanced picture is drawn 1:1 (so unchanged); pinch-zoomed it's smoothly magnified
