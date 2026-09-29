@@ -53,6 +53,30 @@ void main() {
     });
   });
 
+  testWidgets('Enhance colours: yellowed paper to white, brown-black ink to black, a strong colour kept', (tester) async {
+    await tester.runAsync(() async {
+      // three bands: cream paper (244,226,206), faded ink (43,37,24), and a saturated red (200,40,40) - the
+      // Secret Wars page's measured paper and ink; levels as the app measured them there
+      final bytes = Uint8List(30 * 3 * 4);
+      const colours = [[244, 226, 206], [43, 37, 24], [200, 40, 40]];
+      for (var i = 0; i < 90; i++) {
+        final c = colours[i ~/ 30];
+        bytes..[i * 4] = c[0]..[i * 4 + 1] = c[1]..[i * 4 + 2] = c[2]..[i * 4 + 3] = 255;
+      }
+      final buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      final desc = ui.ImageDescriptor.raw(buffer, width: 30, height: 3, pixelFormat: ui.PixelFormat.rgba8888);
+      final src = (await (await desc.instantiateCodec()).getNextFrame()).image;
+      final out = (await Enhancer.colours(src, [45 / 255, 41 / 255, 28 / 255], [247 / 255, 229 / 255, 209 / 255]))!;
+      final d = (await out.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+      List<int> at(int x, int y) => [for (var c = 0; c < 3; c++) d.getUint8((y * 30 + x) * 4 + c)];
+      expect(at(15, 0).every((v) => v >= 250), isTrue, reason: 'paper ${at(15, 0)}');
+      expect(at(15, 1).every((v) => v <= 5), isTrue, reason: 'ink ${at(15, 1)}');
+      final red = at(15, 2);
+      expect(red[0], greaterThan(190), reason: 'red $red');
+      expect(red[1], lessThan(40), reason: 'red $red');
+    });
+  });
+
   testWidgets('a hard black/white edge stays hard (ink lines are not blurred)', (tester) async {
     await tester.runAsync(() async {
       final src = await fromPixels(40, 40, (x, y) => x < 20 ? 20 : 235);

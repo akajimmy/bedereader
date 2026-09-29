@@ -23,5 +23,6 @@ flutter:
     - shaders/denoise.frag
     - shaders/lanczos.frag
     - shaders/rcas.frag
+    - shaders/colours.frag
   assets:
     - assets/icon.png

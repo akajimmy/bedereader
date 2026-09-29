@@ -32,7 +32,7 @@ class ReaderPrefs {
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
-  final bool autoLevels; // stretch each page to full black..white (fixes yellow paper, grey blacks)
+  final bool autoLevels; // shown as "Enhance colours": auto-levels + whiten paper + deepen ink (lib/enhance.dart)
 
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels;
 

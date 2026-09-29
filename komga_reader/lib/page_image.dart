@@ -179,6 +179,9 @@ class PageCanvas extends StatefulWidget {
 
 class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateMixin {
   Levels _levels = Levels.identity;
+  // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
+  ui.Image? _coloured;
+  int _colourRun = 0;
   // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
   ui.Image? _enhanced;
   Size? _enhancedFor;
@@ -211,6 +214,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     widget.onStepper?.call(null);
     _enhanceRun++;
     _enhanced?.dispose();
+    _colourRun++;
+    _coloured?.dispose();
     _anim.dispose();
     if (widget.zoom == null) _zoom.dispose();
     super.dispose();
@@ -281,10 +286,23 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd)) _placed = false;
   }
 
+  /// Enhance colours: the book's levels, then the colour-corrected page (the page shows with plain auto-levels
+  /// until it's ready; without the shaders that's what stays).
   Future<void> _prepare() async {
     final p = widget.prefs;
+    final run = ++_colourRun;
+    final img = widget.data.image;
     final levels = p.autoLevels && widget.levels != null ? await widget.levels!() : Levels.identity;
-    if (mounted) setState(() => _levels = levels);
+    if (!mounted || run != _colourRun) return;
+    setState(() => _levels = levels);
+    ui.Image? coloured;
+    if (p.autoLevels) coloured = await Enhancer.colours(img, levels.lo, levels.hi);
+    if (!mounted || run != _colourRun) { coloured?.dispose(); return; }
+    setState(() {
+      _coloured?.dispose();
+      _coloured = coloured;
+      _dropEnhanced(); // Enhance starts again from the new colours
+    });
   }
 
   void _dropEnhanced() {
@@ -295,11 +313,10 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   }
 
   /// Makes the enhanced picture for [physical] (after this frame; the page shows plain until it's ready).
-  void _enhance(Size physical) {
+  void _enhance(Size physical, ui.Image img) {
     if (_enhancedFor == physical) return;
     _enhancedFor = physical; // requested: don't ask again for this size
     final run = ++_enhanceRun;
-    final img = widget.data.image;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (run != _enhanceRun || !mounted) return;
       final out = await Enhancer.run(img, physical.width.round(), physical.height.round());
@@ -316,16 +333,17 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final img = widget.data.image;
     final aspect = img.width / img.height;
-    final tone = Tone.of(widget.prefs, _levels);
+    final base = _coloured ?? img; // Enhance colours already applied the levels
+    final tone = Tone.of(widget.prefs, _coloured != null ? Levels.identity : _levels);
     final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings
     final dpr = MediaQuery.devicePixelRatioOf(context);
 
     Widget picture(Size size) {
-      var source = img;
+      var source = base;
       if (enhance) {
         final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());
         if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
-          _enhance(physical);
+          _enhance(physical, base);
           if (_enhanced != null && _enhancedFor == physical) source = _enhanced!;
         }
       }
