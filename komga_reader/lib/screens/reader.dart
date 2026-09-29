@@ -395,7 +395,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
       if (_isBack(k) || k == LogicalKeyboardKey.space) { _back(); return KeyEventResult.handled; }
       if (_isOk(k) && e is KeyDownEvent) { _showControls(); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.escape && _fullscreen) { _toggleFullscreen(); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.escape && e is KeyDownEvent) { // nothing showing: Esc closes the book (and full screen)
+        Navigator.of(context).maybePop();
+        return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
     }
     if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) { _hideControls(); return KeyEventResult.handled; }

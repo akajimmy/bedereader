@@ -260,8 +260,9 @@ void main() {
     await key(tester, LogicalKeyboardKey.enter); // controls
     expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
     await key(tester, LogicalKeyboardKey.escape); // hides the controls first
-    await key(tester, LogicalKeyboardKey.escape); // then leaves full screen
-    await tester.pump();
+    await key(tester, LogicalKeyboardKey.escape); // then closes the book, which also leaves full screen
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing);
     expect(calls, [true, false]);
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     debugDefaultTargetPlatformOverride = null;
