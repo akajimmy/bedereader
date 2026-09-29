@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Image lab - Komga Reader</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; font: 13px/1.35 system-ui, sans-serif; background: #0b0b0c; color: #e6e6e6; display: flex; height: 100vh; }
+  #panel { width: 330px; flex: none; overflow-y: auto; padding: 12px 14px 40px; background: #141416; border-right: 1px solid #26282e; box-sizing: border-box; }
+  #view { flex: 1; overflow: auto; position: relative; background: #000; }
+  #canvas { display: block; image-rendering: pixelated; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  h2 { font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #9a9a9a; margin: 16px 0 6px; border-top: 1px solid #26282e; padding-top: 10px; }
+  label { display: block; margin: 6px 0 2px; color: #cfcfcf; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row input[type=range] { flex: 1; }
+  .val { width: 44px; text-align: right; color: #8ab4f8; font-variant-numeric: tabular-nums; }
+  select, button, input[type=number] { background: #1c1d22; color: #e6e6e6; border: 1px solid #33363e; border-radius: 6px; padding: 4px 6px; font: inherit; }
+  select { width: 100%; }
+  button { cursor: pointer; }
+  button:hover { border-color: #8ab4f8; }
+  .hint { color: #8a8d96; font-size: 12px; }
+  #stats { color: #9a9a9a; font-size: 12px; margin-top: 4px; }
+  #params { width: 100%; height: 110px; background: #0f1013; color: #cfcfcf; border: 1px solid #33363e; border-radius: 6px; font: 11px/1.3 ui-monospace, monospace; box-sizing: border-box; }
+  .chk { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+  #splitline { position: absolute; top: 0; width: 2px; background: #8ab4f8; pointer-events: none; opacity: .8; }
+  #tagA, #tagB { position: absolute; top: 8px; padding: 2px 8px; background: rgba(0,0,0,.7); border-radius: 10px; font-size: 12px; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h1>Image lab</h1>
+  <div class="hint">Temporary tool for tuning the reader's page sharpening / scaling. The page is rendered as the
+    chosen screen would show it (fit screen), one canvas pixel = one screen pixel. Left of the line: the baseline;
+    right: your settings. Hold <b>Space</b> to see the baseline full width. Drag the line, or use the Split slider.</div>
+
+  <h2>Page</h2>
+  <select id="page"></select>
+  <div class="row" style="margin-top:6px"><input type="file" id="file" accept="image/*"></div>
+  <div id="stats"></div>
+
+  <h2>Screen</h2>
+  <select id="screen">
+    <option value="1200x1920" selected>Tablet portrait (Tab A8, 1200 x 1920)</option>
+    <option value="1920x1200">Tablet landscape (1920 x 1200)</option>
+    <option value="1920x1080">PC full screen (1920 x 1080)</option>
+    <option value="2560x1440">PC 1440p (2560 x 1440)</option>
+    <option value="1080x2400">Phone portrait (1080 x 2400)</option>
+    <option value="native">Page's own size (no scaling)</option>
+  </select>
+  <label>Fit</label>
+  <select id="fit">
+    <option value="screen" selected>Fit screen</option>
+    <option value="width">Fit width</option>
+    <option value="height">Fit height</option>
+  </select>
+  <label>Magnify (to see pixels)</label>
+  <div class="row"><input type="range" id="zoom" min="1" max="4" step="1" value="1"><span class="val" id="zoomV"></span></div>
+
+  <h2>Baseline (left)</h2>
+  <select id="baseline">
+    <option value="off" selected>App now: Sharpen off</option>
+    <option value="now">App now: Sharpen on (nearest + unsharp 0.36)</option>
+    <option value="same">Same as right (no split)</option>
+  </select>
+  <label>Split</label>
+  <div class="row"><input type="range" id="split" min="0" max="1" step="0.01" value="0.5"><span class="val" id="splitV"></span></div>
+
+  <h2>1 · Clean up (page pixels, before scaling)</h2>
+  <label>Soften (Gaussian, px) - tames halftone dots / grain</label>
+  <div class="row"><input type="range" id="blur" min="0" max="1.5" step="0.05" value="0"><span class="val" id="blurV"></span></div>
+  <label>Denoise (edge-preserving) - JPEG speckle</label>
+  <div class="row"><input type="range" id="denoise" min="0" max="1" step="0.05" value="0"><span class="val" id="denoiseV"></span></div>
+
+  <h2>2 · Sharpen</h2>
+  <label>Method</label>
+  <select id="method">
+    <option value="none">None</option>
+    <option value="unsharp">Unsharp (the app's current filter)</option>
+    <option value="cas" selected>CAS - contrast adaptive (AMD)</option>
+    <option value="rcas">RCAS - robust CAS (AMD FSR 1)</option>
+  </select>
+  <label>Amount</label>
+  <div class="row"><input type="range" id="amount" min="0" max="1" step="0.02" value="0.5"><span class="val" id="amountV"></span></div>
+  <label>When</label>
+  <select id="stage">
+    <option value="before">Before scaling (page pixels)</option>
+    <option value="after" selected>After scaling (screen pixels)</option>
+  </select>
+
+  <h2>3 · Scaling filter</h2>
+  <select id="filter">
+    <option value="nearest">Nearest (what Sharpen on uses now)</option>
+    <option value="linear">Bilinear</option>
+    <option value="cubic">Bicubic (Catmull-Rom)</option>
+    <option value="lanczos2">Lanczos 2</option>
+    <option value="lanczos3" selected>Lanczos 3</option>
+  </select>
+  <div class="chk"><input type="checkbox" id="aa" checked><label for="aa" style="margin:0">Anti-alias when shrinking (wider filter)</label></div>
+
+  <h2>Settings to send back</h2>
+  <textarea id="params" readonly></textarea>
+  <div class="row"><button id="copy">Copy</button><button id="reset">Reset</button><span class="hint" id="copied"></span></div>
+</div>
+<div id="view">
+  <canvas id="canvas"></canvas>
+  <div id="splitline"></div>
+  <div id="tagA">baseline</div><div id="tagB">yours</div>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const canvas = $('canvas');
+const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true, antialias: false });
+if (!gl) document.body.innerHTML = '<p style="padding:20px">WebGL 2 is not available in this browser.</p>';
+
+// ---- shaders -----------------------------------------------------------------------------------------------------
+const VS = `#version 300 es
+in vec2 p; out vec2 uv;
+void main() { uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }`;
+
+// shared sharpeners: sampling the 3x3 around integer pixel coordinate q of texture t
+const SHARPEN = `
+vec3 px(sampler2D t, ivec2 q) { ivec2 s = textureSize(t, 0); return texelFetch(t, clamp(q, ivec2(0), s - 1), 0).rgb; }
+vec3 sharpen(sampler2D t, ivec2 q, int method, float amount) {
+  vec3 e = px(t, q);
+  if (method == 0 || amount <= 0.0) return e;
+  vec3 b = px(t, q + ivec2(0, -1)), d = px(t, q + ivec2(-1, 0)), f = px(t, q + ivec2(1, 0)), h = px(t, q + ivec2(0, 1));
+  if (method == 1) { // unsharp, as in shaders/page.frag (the app uses 0.36; the slider goes to 0.72)
+    return e + amount * 0.72 * (4.0 * e - b - d - f - h);
+  }
+  if (method == 2) { // AMD FidelityFX CAS, non-scaling path
+    vec3 a = px(t, q + ivec2(-1, -1)), c = px(t, q + ivec2(1, -1)), g = px(t, q + ivec2(-1, 1)), i = px(t, q + ivec2(1, 1));
+    vec3 mn = min(min(min(d, e), min(f, b)), h);
+    mn += min(mn, min(min(a, c), min(g, i)));
+    vec3 mx = max(max(max(d, e), max(f, b)), h);
+    mx += max(mx, max(max(a, c), max(g, i)));
+    vec3 amp = sqrt(clamp(min(mn, 2.0 - mx) / max(mx, vec3(1e-5)), 0.0, 1.0));
+    vec3 w = amp * (-1.0 / mix(8.0, 5.0, amount));
+    return (w * (b + d + f + h) + e) / (1.0 + 4.0 * w);
+  }
+  // RCAS (AMD FSR 1): limits the lobe so it can't push past the neighbourhood min/max
+  vec3 mn4 = min(min(b, d), min(f, h)), mx4 = max(max(b, d), max(f, h));
+  vec3 hitMin = mn4 / (4.0 * max(mx4, vec3(1e-5)));
+  vec3 hitMax = (1.0 - mx4) / min(4.0 * mn4 - 4.0, vec3(-1e-5));
+  vec3 lobeRGB = max(-hitMin, hitMax);
+  float lobe = max(-0.1875, min(max(lobeRGB.r, max(lobeRGB.g, lobeRGB.b)), 0.0)) * exp2(-(1.0 - amount) * 2.0);
+  return (lobe * (b + d + f + h) + e) / (4.0 * lobe + 1.0);
+}`;
+
+// pass 1 - page pixels: soften, denoise, optionally sharpen
+const FS_PRE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D src; uniform float blur, denoise; uniform int method; uniform float amount;
+${SHARPEN}
+void main() {
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  vec3 c = px(src, q);
+  if (blur > 0.0 || denoise > 0.0) {
+    float sr = max(blur, 0.8);             // spatial spread (px)
+    float rr = mix(1.0, 0.06, denoise);    // range spread: small = only smooth similar colours (edges kept)
+    vec3 acc = vec3(0.0); float wsum = 0.0;
+    for (int y = -3; y <= 3; y++) for (int x = -3; x <= 3; x++) {
+      vec3 s = px(src, q + ivec2(x, y));
+      float ws = exp(-float(x * x + y * y) / (2.0 * sr * sr));
+      vec3 dc = s - c;
+      float wr = denoise > 0.0 ? exp(-dot(dc, dc) / (2.0 * rr * rr)) : 1.0;
+      float w = blur > 0.0 || denoise > 0.0 ? ws * wr : 0.0;
+      acc += s * w; wsum += w;
+    }
+    c = acc / wsum;
+  }
+  o = vec4(c, 1.0);
+}`;
+
+// pass 1b - sharpen at page resolution (separate pass so it sees the cleaned-up pixels)
+const FS_SHARP = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D src; uniform int method; uniform float amount;
+${SHARPEN}
+void main() { o = vec4(clamp(sharpen(src, ivec2(gl_FragCoord.xy), method, amount), 0.0, 1.0), 1.0); }`;
+
+// pass 2 - scale to the screen
+const FS_SCALE = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D src; uniform vec2 outSize; uniform int filt; uniform bool aa;
+const float PI = 3.14159265;
+float sinc(float x) { return abs(x) < 1e-5 ? 1.0 : sin(PI * x) / (PI * x); }
+float cubicW(float x) { // Catmull-Rom
+  x = abs(x);
+  if (x < 1.0) return 1.5 * x * x * x - 2.5 * x * x + 1.0;
+  if (x < 2.0) return -0.5 * x * x * x + 2.5 * x * x - 4.0 * x + 2.0;
+  return 0.0;
+}
+vec3 px(ivec2 q) { ivec2 s = textureSize(src, 0); return texelFetch(src, clamp(q, ivec2(0), s - 1), 0).rgb; }
+void main() {
+  vec2 ts = vec2(textureSize(src, 0));
+  vec2 pos = (vec2(gl_FragCoord.x, outSize.y - gl_FragCoord.y) ) / outSize * ts - 0.5; // source pixel coords
+  pos.y = ts.y - 1.0 - pos.y; // textures are stored bottom-up here
+  if (filt == 0) { o = vec4(px(ivec2(floor(pos + 0.5))), 1.0); return; }
+  float scale = min(outSize.x / ts.x, 1.0);
+  float stretch = (aa && scale < 1.0) ? 1.0 / scale : 1.0;  // widen the filter when shrinking
+  float radius = filt == 1 ? 1.0 : filt == 2 ? 2.0 : filt == 3 ? 2.0 : 3.0;
+  float r = radius * stretch;
+  vec2 base = floor(pos);
+  vec3 acc = vec3(0.0); float wsum = 0.0;
+  int n = int(ceil(r));
+  for (int y = -n + 1; y <= n; y++) for (int x = -n + 1; x <= n; x++) {
+    vec2 s = base + vec2(float(x), float(y));
+    vec2 dd = (s - pos) / stretch;
+    float wx, wy;
+    if (filt == 1) { wx = max(0.0, 1.0 - abs(dd.x)); wy = max(0.0, 1.0 - abs(dd.y)); }
+    else if (filt == 2) { wx = cubicW(dd.x); wy = cubicW(dd.y); }
+    else { wx = abs(dd.x) < radius ? sinc(dd.x) * sinc(dd.x / radius) : 0.0; wy = abs(dd.y) < radius ? sinc(dd.y) * sinc(dd.y / radius) : 0.0; }
+    float w = wx * wy;
+    acc += px(ivec2(s)) * w; wsum += w;
+  }
+  o = vec4(clamp(acc / wsum, 0.0, 1.0), 1.0);
+}`;
+
+// pass 3 - screen pixels: optionally sharpen, and put baseline | yours side by side at the split
+const FS_FINAL = `#version 300 es
+precision highp float; in vec2 uv; out vec4 o;
+uniform sampler2D mine, base; uniform int method; uniform float amount; uniform float split; uniform bool showBase;
+${SHARPEN}
+void main() {
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  bool left = showBase || gl_FragCoord.x < split * float(textureSize(mine, 0).x);
+  vec3 c = left ? px(base, q) : sharpen(mine, q, method, amount);
+  o = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+
+function compile(fs) {
+  const prog = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, VS], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    gl.attachShader(prog, s);
+  }
+  gl.bindAttribLocation(prog, 0, 'p');
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  return prog;
+}
+const P = { pre: compile(FS_PRE), sharp: compile(FS_SHARP), scale: compile(FS_SCALE), final: compile(FS_FINAL) };
+
+const quad = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+function texture(w, h, data) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  if (data) { gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, data); }
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const k of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, k, gl.NEAREST);
+  for (const k of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE);
+  return t;
+}
+function target(w, h) { const t = texture(w, h); const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return { t, f, w, h }; }
+
+function run(prog, dst, inputs, uniforms) {
+  gl.useProgram(prog);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.f : null);
+  gl.viewport(0, 0, dst ? dst.w : canvas.width, dst ? dst.h : canvas.height);
+  Object.entries(inputs).forEach(([name, tex], i) => {
+    gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.uniform1i(gl.getUniformLocation(prog, name), i);
+  });
+  for (const [name, v] of Object.entries(uniforms)) {
+    const loc = gl.getUniformLocation(prog, name);
+    if (loc == null) continue;
+    if (Array.isArray(v)) gl.uniform2f(loc, v[0], v[1]);
+    else if (typeof v === 'boolean') gl.uniform1i(loc, v ? 1 : 0);
+    else if (Number.isInteger(v) && name !== 'amount' && name !== 'blur' && name !== 'denoise' && name !== 'split') gl.uniform1i(loc, v);
+    else gl.uniform1f(loc, v);
+  }
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ---- state -------------------------------------------------------------------------------------------------------
+const METHODS = { none: 0, unsharp: 1, cas: 2, rcas: 3 };
+const FILTERS = { nearest: 0, linear: 1, cubic: 2, lanczos2: 3, lanczos3: 4 };
+const DEFAULTS = { blur: 0, denoise: 0, method: 'cas', amount: 0.5, stage: 'after', filter: 'lanczos3', aa: true };
+let img = null, srcTex = null, srcW = 0, srcH = 0, targets = null, showBase = false;
+
+function outSize() {
+  if ($('screen').value === 'native') return [srcW, srcH];
+  const [sw, sh] = $('screen').value.split('x').map(Number);
+  const fit = $('fit').value;
+  const s = fit === 'width' ? sw / srcW : fit === 'height' ? sh / srcH : Math.min(sw / srcW, sh / srcH);
+  return [Math.round(srcW * s), Math.round(srcH * s)];
+}
+
+function settings() {
+  return { blur: +$('blur').value, denoise: +$('denoise').value, method: $('method').value, amount: +$('amount').value,
+           stage: $('stage').value, filter: $('filter').value, aa: $('aa').checked };
+}
+
+// one pipeline: page -> [clean up] -> [sharpen before] -> scale -> (final pass sharpens after)
+function pipeline(s, pre, mid, scaled) {
+  run(P.pre, pre, { src: srcTex }, { blur: s.blur, denoise: s.denoise });
+  let page = pre;
+  if (s.stage === 'before' && s.method !== 'none') {
+    run(P.sharp, mid, { src: pre.t }, { method: METHODS[s.method], amount: s.amount }); page = mid;
+  }
+  const [w, h] = outSize();
+  run(P.scale, scaled, { src: page.t }, { outSize: [w, h], filt: FILTERS[s.filter], aa: s.aa });
+}
+
+function render() {
+  if (!srcTex) return;
+  const [w, h] = outSize();
+  if (!targets || targets.w !== w || targets.h !== h || targets.sw !== srcW || targets.sh !== srcH) {
+    targets = { w, h, sw: srcW, sh: srcH,
+      preA: target(srcW, srcH), midA: target(srcW, srcH), outA: target(w, h),
+      preB: target(srcW, srcH), midB: target(srcW, srcH), outB: target(w, h) };
+  }
+  canvas.width = w; canvas.height = h;
+  const zoom = +$('zoom').value, dpr = window.devicePixelRatio || 1;
+  canvas.style.width = (w / dpr * zoom) + 'px'; canvas.style.height = (h / dpr * zoom) + 'px';
+
+  const mine = settings();
+  pipeline(mine, targets.preA, targets.midA, targets.outA);
+  const b = $('baseline').value;
+  const base = b === 'off' ? { blur: 0, denoise: 0, method: 'none', amount: 0, stage: 'before', filter: 'linear', aa: true }
+             : b === 'now' ? { blur: 0, denoise: 0, method: 'unsharp', amount: 0.5, stage: 'before', filter: 'nearest', aa: false }
+             : mine;
+  pipeline(base, targets.preB, targets.midB, targets.outB);
+  // the baseline's after-scaling sharpen never applies (baselines sharpen before); yours may
+  const after = mine.stage === 'after' ? METHODS[mine.method] : 0;
+  const split = b === 'same' ? 0 : +$('split').value;
+  run(P.final, null, { mine: targets.outA.t, base: targets.outB.t }, { method: after, amount: mine.amount, split, showBase });
+
+  // overlay: split line and tags
+  const cssW = w / dpr * zoom, cssH = h / dpr * zoom;
+  const x = showBase ? cssW : split * cssW;
+  Object.assign($('splitline').style, { left: x + 'px', height: cssH + 'px', display: b === 'same' || showBase ? 'none' : 'block' });
+  $('tagA').style.left = '8px'; $('tagA').textContent = showBase ? 'baseline (Space held)' : 'baseline: ' + $('baseline').selectedOptions[0].text;
+  $('tagA').style.display = b === 'same' ? 'none' : 'block';
+  $('tagB').style.left = (Math.max(x, 0) + 8) + 'px'; $('tagB').style.display = showBase ? 'none' : 'block';
+
+  $('stats').textContent = `${srcW} x ${srcH} page -> ${w} x ${h} on screen (x${(w / srcW).toFixed(2)})`;
+  const labels = { blur: 'soften', denoise: 'denoise', method: 'sharpen', amount: 'amount', stage: 'when', filter: 'scaling', aa: 'antialias' };
+  $('params').value = JSON.stringify({ page: $('page').value.split('/').pop(), screen: $('screen').value, fit: $('fit').value,
+    ...Object.fromEntries(Object.entries(mine).map(([k, v]) => [labels[k] || k, v])) }, null, 1);
+  for (const id of ['blur', 'denoise', 'amount', 'split']) $(id + 'V').textContent = (+$(id).value).toFixed(2);
+  $('zoomV').textContent = zoom + 'x';
+}
+
+function load(src) {
+  const im = new Image();
+  im.onload = () => { img = im; srcW = im.naturalWidth; srcH = im.naturalHeight; srcTex = texture(0, 0, im); targets = null; render(); };
+  im.onerror = () => { $('stats').textContent = 'Could not load ' + src; };
+  im.src = src;
+}
+
+// pages: every image in testpages/ (the server's folder listing), or a file you pick
+fetch('/testpages/').then((r) => r.text()).then((html) => {
+  const pages = [...html.matchAll(/href="([^"]+\.(?:jpe?g|png|webp))"/gi)].map((m) => decodeURIComponent(m[1]));
+  for (const p of pages) { const o = document.createElement('option'); o.value = '/testpages/' + p; o.textContent = p; $('page').append(o); }
+  if (pages.length) load('/testpages/' + encodeURIComponent(pages[0]));
+  else $('stats').textContent = 'No images in testpages/ - pick a file above.';
+});
+$('page').onchange = () => load($('page').value.split('/').map((s, i) => i < 2 ? s : encodeURIComponent(s)).join('/'));
+$('file').onchange = (e) => { const f = e.target.files[0]; if (f) load(URL.createObjectURL(f)); };
+
+for (const el of document.querySelectorAll('#panel input, #panel select')) {
+  if (el.id !== 'file' && el.id !== 'page') el.addEventListener('input', render);
+}
+$('copy').onclick = () => { navigator.clipboard.writeText($('params').value); $('copied').textContent = 'copied'; setTimeout(() => $('copied').textContent = '', 1500); };
+$('reset').onclick = () => {
+  for (const [k, v] of Object.entries(DEFAULTS)) { if (typeof v === 'boolean') $(k).checked = v; else $(k).value = v; }
+  render();
+};
+document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !showBase) { showBase = true; render(); e.preventDefault(); } });
+document.addEventListener('keyup', (e) => { if (e.code === 'Space') { showBase = false; render(); } });
+// drag the split line
+let dragging = false;
+$('view').addEventListener('mousedown', (e) => { dragging = true; setSplit(e); });
+window.addEventListener('mouseup', () => { dragging = false; });
+window.addEventListener('mousemove', (e) => { if (dragging) setSplit(e); });
+function setSplit(e) {
+  const r = canvas.getBoundingClientRect();
+  $('split').value = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)).toFixed(2); render();
+}
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
