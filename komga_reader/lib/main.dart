@@ -9,6 +9,7 @@ import 'screens/login.dart';
 import 'offline/connection.dart';
 import 'offline/downloads.dart';
 import 'offline/sync.dart';
+import 'ondeck_hidden.dart';
 import 'pins.dart';
 import 'settings.dart';
 import 'screen.dart';
@@ -126,7 +127,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     final url = p.getString('server'), key = p.getString('apiKey');
     setState(() {
       if (url != null && key != null) _api = Komga(url, key);
-      if (_api != null) { AppSettings.instance.load(_api!); Pins.instance.load(_api!); _startDownloads(_api!); }
+      if (_api != null) { AppSettings.instance.load(_api!); Pins.instance.load(_api!); OnDeckHidden.instance.load(_api!); _startDownloads(_api!); }
       _loaded = true;
     });
   }
@@ -138,6 +139,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     setState(() => _api = api);
     AppSettings.instance.load(api);
     Pins.instance.load(api);
+    OnDeckHidden.instance.load(api);
     _startDownloads(api);
   }
 

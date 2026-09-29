@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../home_sections.dart';
+import '../ondeck_hidden.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../widgets/display_panel.dart';
@@ -126,6 +127,21 @@ class AppSettingsScreen extends StatelessWidget {
                 const Text('Sections on Home: switch on or off, and move with ▲▼ or the handle',
                     style: TextStyle(color: Color(0xFF9A9A9A))),
                 const HomeSectionsEditor(),
+                ListenableBuilder(
+                  listenable: OnDeckHidden.instance,
+                  builder: (context, _) {
+                    final h = OnDeckHidden.instance;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.visibility_off_outlined),
+                      title: const Text('Hidden from On deck'),
+                      subtitle: Text(h.isEmpty
+                          ? 'Nothing (hide a series or book from its menu)'
+                          : '${h.series.length} series · ${h.books.length} book${h.books.length == 1 ? '' : 's'}'),
+                      trailing: h.isEmpty ? null : TextButton(onPressed: h.clear, child: const Text('Show all again')),
+                    );
+                  },
+                ),
               ]),
             ]),
           ),

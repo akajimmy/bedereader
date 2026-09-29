@@ -108,7 +108,6 @@ class _AppDrawerState extends State<AppDrawer> {
             builder: (context, _) => SwitchListTile(
               secondary: Icon(Connection.instance.offline ? Icons.cloud_off : Icons.cloud_outlined),
               title: const Text('Offline mode'),
-              subtitle: Text(Connection.instance.offline ? 'Showing downloaded books only' : 'Connected to Komga'),
               value: Connection.instance.offline,
               onChanged: (v) => Connection.instance.setForcedOffline(v),
             ),
@@ -135,7 +134,7 @@ class _AppDrawerState extends State<AppDrawer> {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => AppSettingsScreen(api: widget.api, onSignOut: widget.onSignOut)));
               }),
-          ListTile(leading: const Icon(Icons.tune), title: const Text('Reader settings (brightness, night mode)'),
+          ListTile(leading: const Icon(Icons.tune), title: const Text('Reader settings'),
               onTap: () { _close(); showReaderPanel(context); }),
           ListTile(leading: const Icon(Icons.info_outline), title: const Text('Info'),
               onTap: () {
