@@ -188,3 +188,6 @@ if ($Platforms -contains 'android' -and -not $NoInstall) {
 
 Say ('all done in {0:N0} s' -f ((Get-Date) - $started).TotalSeconds)
 $artifacts | ForEach-Object { Write-Host ('  {0}  ({1:N1} MB)' -f $_, ((Get-Item $_).Length / 1MB)) }
+
+# the build itself succeeded (a skipped tablet install is reported above, not a failure)
+exit 0
