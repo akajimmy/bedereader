@@ -162,19 +162,7 @@ class _ReaderPanel extends StatelessWidget {
           },
         ),
         ],
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Night mode (warm colours)'),
-          value: d.night,
-          onChanged: (v) => s.setDisplay(d.copyWith(night: v)),
-        ),
-        _SliderRow(
-          label: 'Warmth',
-          value: d.warmth,
-          enabled: d.night,
-          valueText: '${(d.warmth * 100).round()}%',
-          onChanged: (v) => s.setDisplay(d.copyWith(warmth: v)),
-        ),
+        const NightModeControls(),
       ];
     });
   }
@@ -248,6 +236,37 @@ class _Heading extends StatelessWidget {
         padding: const EdgeInsets.only(top: 14, bottom: 2),
         child: Text(text, style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
       );
+}
+
+/// Night mode switch + warmth. It tints the whole app (library views too), so it lives in App settings as well as in
+/// the reader's Reader settings - one setting, shown in both places.
+class NightModeControls extends StatelessWidget {
+  const NightModeControls({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSettings.instance;
+    return ListenableBuilder(
+      listenable: s,
+      builder: (context, _) {
+        final d = s.display;
+        return Column(mainAxisSize: MainAxisSize.min, children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Night mode (warm colours)'),
+            value: d.night,
+            onChanged: (v) => s.setDisplay(s.display.copyWith(night: v)),
+          ),
+          _SliderRow(
+            label: 'Warmth',
+            value: d.warmth,
+            enabled: d.night,
+            valueText: '${(d.warmth * 100).round()}%',
+            onChanged: (v) => s.setDisplay(s.display.copyWith(warmth: v)),
+          ),
+        ]);
+      },
+    );
+  }
 }
 
 class _SliderRow extends StatelessWidget {
