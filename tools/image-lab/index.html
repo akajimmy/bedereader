@@ -81,6 +81,8 @@
   <div class="row"><input type="range" id="whiten" min="0" max="1" step="0.05" value="0"><span class="val" id="whitenV"></span></div>
   <label>Deepen ink - faded blacks</label>
   <div class="row"><input type="range" id="ink" min="0" max="1" step="0.05" value="0"><span class="val" id="inkV"></span></div>
+  <label>Thin ink - ink spread: reopens letters run together (up to ~1 px per side)</label>
+  <div class="row"><input type="range" id="thin" min="0" max="1" step="0.05" value="0"><span class="val" id="thinV"></span></div>
 
   <h2>1 · Clean up (page pixels)</h2>
   <label>Soften (Gaussian, px)</label>
@@ -267,6 +269,24 @@ void main() {
   o = vec4(clamp(c, 0.0, 1.0), 1.0);
 }`;
 
+// 0e. thin ink (ink spread / dot gain): each dark pixel moves towards the lightest of its 3x3 neighbours - a
+// grey-level erosion of the ink, by up to one pixel per side at 1.0. Only dark pixels next to lighter ones change,
+// so half-filled gaps inside and between letters reopen; solid areas stay solid.
+const FS_THIN = COMMON + `
+uniform sampler2D src; uniform float amount;
+void main() {
+  ivec2 q = ivec2(gl_FragCoord.xy);
+  vec3 c = px(src, q);
+  vec3 best = c; float bestL = luma(c);
+  for (int dy = -1; dy <= 1; dy++) for (int dx = -1; dx <= 1; dx++) {
+    vec3 s = px(src, q + ivec2(dx, dy));
+    float l = luma(s) * ((dx != 0 && dy != 0) ? 0.85 : 1.0);  // diagonals count a little less: rounder result
+    if (l > bestL) { bestL = l; best = s; }
+  }
+  float dark = 1.0 - smoothstep(0.30, 0.65, luma(c));
+  o = vec4(mix(c, best, amount * dark), 1.0);
+}`;
+
 // 1. soften / edge-preserving denoise
 const FS_PRE = COMMON + `
 uniform sampler2D src; uniform float blur, denoise;
@@ -414,7 +434,7 @@ function compile(fs) {
   return prog;
 }
 const P = { deblock: compile(FS_DEBLOCK), chroma: compile(FS_CHROMA), gauss: compile(FS_GAUSS), descreen: compile(FS_DESCREEN),
-            paper: compile(FS_PAPER), pre: compile(FS_PRE), sharp: compile(FS_SHARP), scale: compile(FS_SCALE), final: compile(FS_FINAL) };
+            paper: compile(FS_PAPER), thin: compile(FS_THIN), pre: compile(FS_PRE), sharp: compile(FS_SHARP), scale: compile(FS_SCALE), final: compile(FS_FINAL) };
 
 const quad = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -459,9 +479,9 @@ function run(prog, dst, inputs, uniforms) {
 const METHODS = { none: 0, unsharp: 1, cas: 2, rcas: 3 };
 const FILTERS = { nearest: 0, linear: 1, cubic: 2, lanczos2: 3, lanczos3: 4, easu: 5 };
 // "Reset to Enhance": the app's Enhance (build 30), with the old-print fixes off
-const ENHANCE = { levels: false, deblock: 0, chroma: 0, descreen: 0, whiten: 0, ink: 0, blur: 0, denoise: 0.75, method: 'rcas',
+const ENHANCE = { levels: false, thin: 0, deblock: 0, chroma: 0, descreen: 0, whiten: 0, ink: 0, blur: 0, denoise: 0.75, method: 'rcas',
                   amount: 0.6, stage: 'after', filter: 'lanczos3', aa: true };
-const SLIDERS = ['deblock', 'chroma', 'descreen', 'whiten', 'ink', 'blur', 'denoise', 'amount', 'split'];
+const SLIDERS = ['deblock', 'chroma', 'descreen', 'whiten', 'ink', 'thin', 'blur', 'denoise', 'amount', 'split'];
 let srcTex = null, srcW = 0, srcH = 0, T = null, showBase = false;
 let pageLevels = { lo: [0, 0, 0], hi: [1, 1, 1] };
 
@@ -512,6 +532,7 @@ function pipeline(s, pp, tmp, out) {
   if (s.whiten > 0 || s.ink > 0 || s.levels) {
     step(P.paper, { whiten: s.whiten, ink: s.ink, levels: s.levels, lo: pageLevels.lo, hi: pageLevels.hi });
   }
+  if (s.thin > 0) step(P.thin, { amount: s.thin });
   if (s.blur > 0 || s.denoise > 0) step(P.pre, { blur: s.blur, denoise: s.denoise });
   if (s.stage === 'before' && s.method !== 'none') step(P.sharp, { method: METHODS[s.method], amount: s.amount });
   const [w, h] = outSize();
