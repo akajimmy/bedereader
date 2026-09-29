@@ -59,6 +59,7 @@ notice, the Material Icons attribution and (on Android) the Apache 2.0 terms for
 | Eclipse Temurin JDK | 17.0.20.1 | GPL-2.0 with Classpath Exception | Running the Android build tools |
 | Visual Studio Build Tools 2022 (MSVC, CMake) | 2022 | Microsoft licence | Windows builds |
 | Git, Git for Windows | 2.55 | GPL-2.0 | Version control |
+| GitHub, GitHub Actions (`actions/checkout`, `subosito/flutter-action`); GitHub CLI | -; v7, v2; 2.101 | GitHub terms; MIT | Hosting, the automatic checks on every push, publishing |
 | Windows PowerShell | 5.1 | Microsoft | The build and install scripts |
 | Python, with Pillow and NumPy | 3.13, 12.3, 2.5 | PSF; MIT-CMU; BSD-3-Clause | Icon generation, image comparisons, extracting test pages |
 | AMD FidelityFX CAS | 1.0 | MIT | Compared in the image-lab tool (notice below) |

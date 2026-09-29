@@ -1,0 +1,19 @@
+# Text files are stored with LF line endings in the repository (each checkout converts as its platform prefers);
+# the files below are binary and never converted.
+* text=auto
+
+# Windows command scripts need CRLF even when checked out elsewhere
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# shell scripts need LF
+*.sh text eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.otf binary
+*.ttf binary
+*.jks binary
+*.keystore binary
+*.zip binary
+*.apk binary
