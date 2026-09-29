@@ -5,6 +5,12 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+Builds 21-32, on the way to the next release. Builds 21-26 still showed version 0.1.0.
+
+### Build 33 - 2026-09-29
+
 **New**
 - **What's new** and **Read me** in App settings > About and on the Info screen: this changelog, and what the
   app does, how to get started and where your settings live.
@@ -12,10 +18,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
   services and build tools - with their licences.
 - Komga Reader is now open source under the **MIT licence**. The licences page (Info) also carries AMD's notice for
   the page enhancement and the Material Icons attribution; the Info screen has an AI usage disclosure.
-
-## 0.1.1 - offline reading and better pages
-
-Builds 21-32, on the way to the next release. Builds 21-26 still showed version 0.1.0.
 
 ### Build 32 - 2026-09-29
 
