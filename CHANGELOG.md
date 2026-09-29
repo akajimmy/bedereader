@@ -7,7 +7,7 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## 0.1.1 - offline reading and better pages
 
-Builds 21-32, on the way to the next release. Builds 21-26 still showed version 0.1.0.
+From build 21, on the way to the next release. Builds 21-26 still showed version 0.1.0.
 
 ### Build 33 - 2026-09-29
 
