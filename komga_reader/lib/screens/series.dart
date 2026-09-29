@@ -22,21 +22,42 @@ class SeriesScreen extends StatefulWidget {
 
 class _SeriesScreenState extends State<SeriesScreen> {
   ReadFilter _filter = ReadFilter.all;
-  late final Paged _paged = Paged((page, size) =>
-      widget.api.seriesBooks(widget.series['id'], readStatus: _filter.api, page: page, size: size));
+  bool _newestFirst = false; // issue order: oldest first (number ascending) unless flipped
+  late final Paged _paged = Paged((page, size) => widget.api.seriesBooks(widget.series['id'],
+      readStatus: _filter.api, sort: 'metadata.numberSort,${_newestFirst ? 'desc' : 'asc'}', page: page, size: size));
   String get _viewKey => 'view.series.${widget.series['id']}';
   final _sel = Selection();
 
   @override
   void initState() {
     super.initState();
-    (widget.pin != null ? Future.value(widget.pin!.readFilter) : restoreFilter(_viewKey))
-        .then((f) { if (mounted) { setState(() => _filter = f); _paged.more(); } });
+    _restore().then((_) { if (mounted) { setState(() {}); _paged.more(); } });
   }
+
+  /// From the pin it was opened from, else this series' remembered view.
+  Future<void> _restore() async {
+    final pin = widget.pin;
+    if (pin != null) {
+      _filter = pin.readFilter;
+      _newestFirst = pin.sort == 'number:desc';
+    } else {
+      final v = await ViewPrefs.load(_viewKey);
+      _filter = ReadFilterApi.fromName(v['filter']);
+      _newestFirst = v['newestFirst'] == true;
+    }
+  }
+
+  void _save() => ViewPrefs.save(_viewKey, {'filter': _filter.name, 'newestFirst': _newestFirst});
 
   void _setFilter(ReadFilter f) {
     setState(() => _filter = f);
-    ViewPrefs.save(_viewKey, {'filter': f.name});
+    _save();
+    _paged.reset();
+  }
+
+  void _toggleOrder() {
+    setState(() => _newestFirst = !_newestFirst);
+    _save();
     _paged.reset();
   }
 
@@ -57,10 +78,21 @@ class _SeriesScreenState extends State<SeriesScreen> {
         title: Text((s['metadata']?['title'] ?? s['name']) as String),
         actions: [
           HideReadButton(value: _filter, onChanged: _setFilter),
+          // issue order toggle: oldest first <-> newest first
+          IconButton(
+            tooltip: _newestFirst ? 'Newest first (switch to oldest first)' : 'Oldest first (switch to newest first)',
+            onPressed: _toggleOrder,
+            icon: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.sort),
+              Icon(_newestFirst ? Icons.arrow_downward : Icons.arrow_upward, size: 14),
+            ]),
+          ),
           PinButton(current: Pin(
-            name: [(s['metadata']?['title'] ?? s['name']) as String, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
+            name: [(s['metadata']?['title'] ?? s['name']) as String, if (_filter == ReadFilter.hideRead) 'unread',
+                if (_newestFirst) 'newest first'].join(' · '),
             kind: 'series', id: s['id'] as String, title: (s['metadata']?['title'] ?? s['name']) as String,
             filter: _filter.name,
+            sort: _newestFirst ? 'number:desc' : null, // null = oldest first, as pins made before this have
           )),
           SelectButton(selection: _sel),
           IconButton(tooltip: 'Series actions', icon: const Icon(Icons.more_vert),
