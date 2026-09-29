@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 21 - 2026-09-28
+
 - Offline mode switch (side menu and App settings): the whole app shows only the downloaded books, with a banner on
   Home and Go online; downloads hold and nothing contacts the server; remembered across restarts.
 - Downloads: saves are written safely one after another (a crash can't leave a half-written queue or index), and
