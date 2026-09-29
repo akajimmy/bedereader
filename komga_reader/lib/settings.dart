@@ -51,11 +51,19 @@ class ReaderPrefs {
   int get hashCode => jsonEncode(toJson()).hashCode;
 }
 
+/// How the reader moves between pages. Room for a 3D page curl later.
+enum PageTurn { swipe, flip }
+
+extension PageTurnLabel on PageTurn {
+  String get label => switch (this) { PageTurn.swipe => 'Swipe', PageTurn.flip => 'Straight flip' };
+}
+
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
 @immutable
 class DisplayPrefs {
-  const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness});
+  const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe});
   final bool night;
+  final PageTurn pageTurn; // reader page-turn animation (this device)
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
 
@@ -85,14 +93,17 @@ class DisplayPrefs {
     return (dimZone - b) / dimZone * 0.75;
   }
 
-  DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness}) => DisplayPrefs(
-      night: night ?? this.night, warmth: warmth ?? this.warmth,
-      brightness: brightness != null ? brightness() : this.brightness);
+  DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn}) =>
+      DisplayPrefs(
+          night: night ?? this.night, warmth: warmth ?? this.warmth,
+          brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn);
 
-  Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness};
+  Map<String, dynamic> toJson() =>
+      {'night': night, 'warmth': warmth, 'brightness': brightness, 'pageTurn': pageTurn.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) => DisplayPrefs(
       night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
-      brightness: (j['brightness'] as num?)?.toDouble());
+      brightness: (j['brightness'] as num?)?.toDouble(),
+      pageTurn: PageTurn.values.firstWhere((t) => t.name == j['pageTurn'], orElse: () => PageTurn.swipe));
 }
 
 /// Holds reader prefs (global default + per series, synced to the user's Komga client settings) and display prefs

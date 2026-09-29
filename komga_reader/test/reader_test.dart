@@ -271,4 +271,26 @@ void main() {
     expect(const DisplayPrefs(brightness: 0.5).backlight, -1); // never touches the backlight
     DisplayPrefs.backlightControl = true;
   });
+
+  testWidgets('page turn: Straight flip cuts to the next page with no slide', (tester) async {
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+    addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 1.0); // already there, same frame
+  });
+
+  testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 60));
+    final page = tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+    expect(page > 0 && page < 1, isTrue);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  test('page-turn choice survives the device settings round trip; older settings default to Swipe', () {
+    expect(DisplayPrefs.fromJson(const DisplayPrefs(pageTurn: PageTurn.flip).toJson()).pageTurn, PageTurn.flip);
+    expect(DisplayPrefs.fromJson({'night': true}).pageTurn, PageTurn.swipe);
+  });
 }

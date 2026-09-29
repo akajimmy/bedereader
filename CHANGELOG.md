@@ -11,6 +11,7 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 - Reader, zoomed in: next steps through the page - one screen right, then back to the left edge one screen down
   (clamped at the edges); at the bottom-right corner it turns the page (unzoomed). Back mirrors it. Works for
   arrows, the remote, tap zones, Space and the mouse wheel.
+- Reader settings: Page turn - Swipe (slide) or Straight flip (instant). Per device.
 
 ## Build 18 - 2026-09-28
 

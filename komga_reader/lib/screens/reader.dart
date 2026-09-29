@@ -162,7 +162,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
         return;
       }
     }
-    _pc!.nextPage(duration: _turn, curve: Curves.easeOut);
+    _turnPage(next: true);
   }
 
   /// Back: scroll back through the page first; the previous page then opens at its end.
@@ -180,7 +180,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _scrolls.remove(_index - 1)?.dispose(); // fresh controller so the page lays out again from its end
       _startAtEnd = _index - 1;
     }
-    _pc!.previousPage(duration: _turn, curve: Curves.easeOut);
+    _turnPage(next: false);
+  }
+
+  /// One page on or back, in the chosen style: slide (Swipe) or cut straight to it (Straight flip).
+  void _turnPage({required bool next}) {
+    final target = next ? _index + 1 : _index - 1;
+    if (target < 0 || target > _pages.length) return;
+    if (_settings.display.pageTurn == PageTurn.flip) {
+      _pc!.jumpToPage(target);
+    } else {
+      _pc!.animateToPage(target, duration: _turn, curve: Curves.easeOut);
+    }
   }
 
   /// Next book. On the last page or the end card the current book is marked read; before that, ask.

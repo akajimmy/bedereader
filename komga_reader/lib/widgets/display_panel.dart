@@ -96,6 +96,16 @@ class _ReaderPanel extends StatelessWidget {
             ),
           ),
         ],
+        const _Heading('Page turn · this device'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SegmentedButton<PageTurn>(
+            segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
+            selected: {d.pageTurn},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) => s.setDisplay(d.copyWith(pageTurn: v.first)),
+          ),
+        ),
         const _Heading('Screen · whole app, this device'),
         if (!DisplayPrefs.backlightControl)
           // desktop: a monitor's backlight can't be set, so the slider only dims (right = no dimming)
