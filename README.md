@@ -67,6 +67,8 @@ the reader, OK shows the controls, Left/Right turn pages, and Back closes the co
 
 ## Credits and licence
 
+Made by **Nick Perusse** 🍁.
+
 Komga Reader is free software under the **MIT licence** (see `LICENSE`): use it, change it and share it, keeping the
 copyright notice.
 
