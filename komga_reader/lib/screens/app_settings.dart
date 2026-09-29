@@ -105,7 +105,7 @@ class AppSettingsScreen extends StatelessWidget {
               ),
               const Padding(
                 padding: EdgeInsets.only(top: 8),
-                child: Text('PAGE TURN · THIS DEVICE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Color(0xFF9A9A9A))),
+                child: Text('PAGE TURN ANIMATION · THIS DEVICE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Color(0xFF9A9A9A))),
               ),
               const PageTurnControl(),
             ]),

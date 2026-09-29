@@ -148,6 +148,17 @@ class Tone {
       ];
 }
 
+/// Crop edges: [img] with [share] of its width and height cut off every side (a quick GPU copy, once per page).
+Future<ui.Image> cropEdges(ui.Image img, double share) {
+  final dx = (img.width * share).round(), dy = (img.height * share).round();
+  final w = img.width - 2 * dx, h = img.height - 2 * dy;
+  final rec = ui.PictureRecorder();
+  Canvas(rec).drawImageRect(img, Rect.fromLTWH(dx.toDouble(), dy.toDouble(), w.toDouble(), h.toDouble()),
+      Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..filterQuality = FilterQuality.none);
+  final picture = rec.endRecording();
+  return picture.toImage(w, h).whenComplete(picture.dispose);
+}
+
 /// One page, laid out by the fit mode and drawn with the series' image adjustments.
 /// Fit width scrolls vertically inside the page and fit height horizontally, through [scroll] (the reader uses the
 /// same controller to scroll with the remote before turning the page).
@@ -188,6 +199,9 @@ class PageCanvas extends StatefulWidget {
 class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateMixin {
   Levels _levels = Levels.identity;
   // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
+  // Crop edges: the page with the chosen share cut off every side (null = not cropped)
+  ui.Image? _cropped;
+  double _croppedBy = 0;
   ui.Image? _coloured;
   bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
   int _colourRun = 0;
@@ -226,6 +240,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     _enhanced?.dispose();
     _colourRun++;
     _coloured?.dispose();
+    _cropped?.dispose();
     _anim.dispose();
     if (widget.zoom == null) _zoom.dispose();
     super.dispose();
@@ -290,12 +305,18 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   @override
   void didUpdateWidget(PageCanvas old) {
     super.didUpdateWidget(old);
-    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data) {
-      if (old.data != widget.data || !widget.prefs.autoLevels) {
+    final cropChanged = old.prefs.crop != widget.prefs.crop;
+    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data || cropChanged) {
+      if (old.data != widget.data || !widget.prefs.autoLevels || cropChanged) {
         _coloured?.dispose();
         _coloured = null;
       }
+      if (old.data != widget.data || cropChanged) {
+        _cropped?.dispose();
+        _cropped = null;
+      }
       _colourFailed = false;
+      _dropEnhanced();
       _prepare();
     }
     if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
@@ -308,7 +329,19 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Future<void> _prepare() async {
     final p = widget.prefs;
     final run = ++_colourRun;
-    final img = widget.data.image;
+    var img = widget.data.image;
+    if (p.crop > 0) {
+      if (_cropped == null || _croppedBy != p.crop) {
+        final cut = await cropEdges(img, p.crop);
+        if (!mounted || run != _colourRun) { cut.dispose(); return; }
+        setState(() {
+          _cropped?.dispose();
+          _cropped = cut;
+          _croppedBy = p.crop;
+        });
+      }
+      img = _cropped!;
+    }
     final levels = p.autoLevels && widget.levels != null ? await widget.levels!() : Levels.identity;
     if (!mounted || run != _colourRun) return;
     setState(() => _levels = levels);
@@ -354,8 +387,9 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     final img = widget.data.image;
-    final aspect = img.width / img.height;
-    final base = _coloured ?? img; // Enhance colours already applied the levels
+    final cropping = widget.prefs.crop > 0;
+    final base = _coloured ?? (cropping ? _cropped : null) ?? img; // Enhance colours already applied levels and crop
+    final aspect = base.width / base.height;
     final tone = Tone.of(widget.prefs, _coloured != null ? Levels.identity : _levels);
     final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings
     final dpr = MediaQuery.devicePixelRatioOf(context);
@@ -365,6 +399,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       Widget waiting() => SizedBox(width: size.width, height: size.height,
           child: const Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))));
       if (widget.prefs.autoLevels && _coloured == null && !_colourFailed) return waiting();
+      if (cropping && _cropped == null) return waiting();
       var source = base;
       if (enhance && !_enhanceFailed) {
         final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());

@@ -25,7 +25,7 @@ extension ReadingDirectionLabel on ReadingDirection {
 @immutable
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
-      this.autoLevels = false, this.direction = ReadingDirection.auto});
+      this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0});
 
   final FitMode fit;
   final ReadingDirection direction; // auto = the series' reading direction in Komga
@@ -33,20 +33,23 @@ class ReaderPrefs {
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
   final bool autoLevels; // shown as "Enhance colours": auto-levels + whiten paper + deepen ink (lib/enhance.dart)
+  final double crop; // "Crop edges": this fraction of the page cut off every side (0 .. 0.1)
 
-  bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels;
+  static const maxCrop = 0.10;
+
+  bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels && crop == 0;
 
   ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
-          ReadingDirection? direction}) =>
+          ReadingDirection? direction, double? crop}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
-          direction: direction ?? this.direction);
+          direction: direction ?? this.direction, crop: crop ?? this.crop);
 
   /// Same fit and direction, image settings back to neutral.
   ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction);
 
   Map<String, dynamic> toJson() =>
-      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name};
+      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name, 'x': crop};
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
         fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
@@ -55,6 +58,7 @@ class ReaderPrefs {
         sharpen: j['s'] == true || (j['s'] is num && (j['s'] as num) > 0), // was a 0..1 slider in build 4
         autoLevels: j['l'] == true,
         direction: ReadingDirection.values.firstWhere((d) => d.name == j['d'], orElse: () => ReadingDirection.auto),
+        crop: ((j['x'] as num?)?.toDouble() ?? 0).clamp(0.0, maxCrop),
       );
 
   @override
@@ -67,7 +71,7 @@ class ReaderPrefs {
 enum PageTurn { swipe, flip }
 
 extension PageTurnLabel on PageTurn {
-  String get label => switch (this) { PageTurn.swipe => 'Swipe', PageTurn.flip => 'Straight flip' };
+  String get label => switch (this) { PageTurn.swipe => 'Wipe', PageTurn.flip => 'Instant flip' };
 }
 
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
