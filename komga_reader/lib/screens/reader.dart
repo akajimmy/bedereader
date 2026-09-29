@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +49,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   int _openedAt = 0;
   bool _zoomed = false; // pinch-zoomed in: page swiping is paused so a drag pans the page
   final Set<int> _sideways = {}; // pages (fit height, wider than the screen) that a drag moves sideways
-  bool _fullscreen = false; // desktop: F11 / the full-screen button
+  bool get _fullscreen => fullscreen.value; // desktop, whole app: F11 / the full-screen button (lib/screen.dart)
   double _wheelAcc = 0; // mouse wheel travel towards the next page turn
   DateTime _lastWheelTurn = DateTime(0);
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
@@ -85,6 +86,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     keepScreenOn(true);
     _settings.addListener(_onSettings);
+    fullscreen.addListener(_onFullscreen); // F11 is app-wide (main.dart): the button follows
     _open(_book);
   }
 
@@ -94,9 +96,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     Connection.instance.readerClosed();
     _saveNow();
     _settings.removeListener(_onSettings);
+    fullscreen.removeListener(_onFullscreen);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     keepScreenOn(false);
-    if (_fullscreen) setFullscreen(false); // leaving the reader leaves full screen
     _pc?.dispose();
     _disposeScrolls();
     _keys.dispose();
@@ -166,9 +168,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
   /// Opening a book and closing it without turning a page leaves no trace. Turning pages in a finished book starts
   /// it over (Komga's own behaviour).
   void _saveNow() {
-    if (!_turned || _pages.isEmpty || _index > _last) return;
-    final done = _index >= _last;
-    api.setProgress(_book['id'], _index + 1, completed: done).catchError((_) {});
+    if (!_turned || _pages.isEmpty) return;
+    // the end card counts as the last page: finished (closing from it used to save nothing if the last page's
+    // save hadn't happened yet - the 1.5 s settle timer is cancelled by the turn onto the card)
+    final page = math.min(_index, _last);
+    api.setProgress(_book['id'], page + 1, completed: page >= _last).catchError((_) {});
   }
 
   // ---- navigation (the page after the last is the "end of book" card)
@@ -357,10 +361,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       k == (_rtl ? LogicalKeyboardKey.arrowRight : LogicalKeyboardKey.arrowLeft) ||
       k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
 
-  Future<void> _toggleFullscreen() async {
-    final now = await setFullscreen(!_fullscreen);
-    if (mounted) setState(() => _fullscreen = now);
-  }
+  Future<void> _toggleFullscreen() => toggleFullscreen(); // stays on after the book closes (user)
+  void _onFullscreen() { if (mounted) setState(() {}); }
 
   /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
   /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
@@ -389,10 +391,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (isDesktop && k == LogicalKeyboardKey.f11 && e is KeyDownEvent) {
-      _toggleFullscreen();
-      return KeyEventResult.handled;
-    }
     if (!_menu) {
       if (_isFwd(k) || (k == LogicalKeyboardKey.space && !HardwareKeyboard.instance.isShiftPressed)) {
         _forward();
@@ -400,7 +398,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       }
       if (_isBack(k) || k == LogicalKeyboardKey.space) { _back(); return KeyEventResult.handled; }
       if (_isOk(k) && e is KeyDownEvent) { _showControls(); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.escape && e is KeyDownEvent) { // nothing showing: Esc closes the book (and full screen)
+      if (k == LogicalKeyboardKey.escape && e is KeyDownEvent) { // nothing showing: Esc closes the book (full screen stays)
         Navigator.of(context).maybePop();
         return KeyEventResult.handled;
       }

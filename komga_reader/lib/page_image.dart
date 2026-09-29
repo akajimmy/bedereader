@@ -316,7 +316,10 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
           final s = aspect > w / h ? Size(w, w / aspect) : Size(h * aspect, h);
           _viewport = Size(w, h);
           _picture = Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height);
-          return InteractiveViewer(transformationController: _zoom, maxScale: 4, child: _wheel(Center(child: picture(s))));
+          // scaleFactor infinity: the viewer's own wheel zoom off (it zooms on every notch, whoever claims the wheel -
+          // wheel up zoomed while turning back). Pinch is unaffected; Ctrl+wheel zooms through _wheel instead.
+          return InteractiveViewer(transformationController: _zoom, maxScale: 4, scaleFactor: double.infinity,
+              child: _wheel(Center(child: picture(s)), ctrlZooms: true));
         case FitMode.width:
           final s = Size(w, w / aspect);
           _placeScroll(s.height > h);
@@ -337,22 +340,44 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     });
   }
 
-  /// Claims mouse-wheel events over the page before the zoom viewer or scroll view can (they would zoom / scroll
-  /// on their own); the reader decides whether a notch scrolls the page or turns it. Ctrl+wheel is left alone so
-  /// it still zooms.
-  Widget _wheel(Widget child) {
+  /// Claims mouse-wheel events over the page before a scroll view can (it would scroll on its own); the reader
+  /// decides whether a notch scrolls the page or turns it. Ctrl+wheel: zooms in fit screen ([ctrlZooms]), else is
+  /// left to the scroll view.
+  Widget _wheel(Widget child, {bool ctrlZooms = false}) {
     final onWheel = widget.onWheel;
     if (onWheel == null) return child;
     return Listener(
       behavior: HitTestBehavior.opaque,
       onPointerSignal: (e) {
-        if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+        if (e is! PointerScrollEvent) return;
+        if (!HardwareKeyboard.instance.isControlPressed) {
           GestureBinding.instance.pointerSignalResolver
               .register(e, (ev) => onWheel((ev as PointerScrollEvent).scrollDelta.dy));
+        } else if (ctrlZooms && e.scrollDelta.dy != 0) {
+          GestureBinding.instance.pointerSignalResolver
+              .register(e, (ev) => _wheelZoom(ev.localPosition, (ev as PointerScrollEvent).scrollDelta.dy));
         }
       },
       child: child,
     );
+  }
+
+  /// Ctrl+wheel zoom (fit screen), about the pointer, between fit (1x) and 4x - the zoom viewer's own rate.
+  void _wheelZoom(Offset scenePoint, double dy) {
+    final m = _zoom.value;
+    final k = m.getMaxScaleOnAxis();
+    final target = (k * math.exp(-dy / 200)).clamp(1.0, 4.0);
+    if ((target - k).abs() < 1e-6) return;
+    if (target <= 1.0 + 1e-6) {
+      _zoom.value = Matrix4.identity(); // back to fit
+      return;
+    }
+    final f = target / k;
+    final p = MatrixUtils.transformPoint(m, scenePoint); // the pointer on screen stays over the same spot
+    _zoom.value = Matrix4.translationValues(p.dx, p.dy, 0)
+        .multiplied(Matrix4.diagonal3Values(f, f, 1))
+        .multiplied(Matrix4.translationValues(-p.dx, -p.dy, 0))
+        .multiplied(m);
   }
 
   bool _placed = false; // the scroll position has been set for this page

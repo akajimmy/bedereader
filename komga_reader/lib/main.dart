@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
@@ -10,6 +11,7 @@ import 'offline/downloads.dart';
 import 'offline/sync.dart';
 import 'pins.dart';
 import 'settings.dart';
+import 'screen.dart';
 import 'side_menu.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/sync_alert.dart';
@@ -52,6 +54,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    restoreFullscreen(); // desktop: left in full screen last time
+    if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
     Connection.instance.addListener(_onConnection);
     ProgressSync.instance.addListener(_onSync);
     _restore();
@@ -59,6 +63,20 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one). Also shows
   /// the "can't reach Komga" prompt and the messages about switching.
+  /// F11 anywhere (desktop): full screen is app-wide (lib/screen.dart). A keyboard-level handler, so it works on
+  /// any screen whether or not something has focus.
+  bool _onF11(KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.f11) return false;
+    toggleFullscreen();
+    return true;
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onF11);
+    super.dispose();
+  }
+
   void _onConnection() {
     final c = Connection.instance;
     if (c.askPending && !_prompting) {

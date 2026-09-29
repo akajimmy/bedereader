@@ -4,6 +4,12 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Fix: closing a book from the end card now marks it read. Before, turning past the last page within 1.5 s and
+  closing saved nothing.
+- Fix (desktop): mouse wheel up in fit screen zoomed the page as well as turning back - the zoom viewer applied its
+  own wheel zoom regardless. Plain wheel now only turns/scrolls; Ctrl+wheel zooms (about the pointer, 1x-4x).
+- Desktop full screen is app-wide and remembered: Esc closes the book and stays full screen, the next book opens in
+  it, and it's restored at start-up. F11 works on every screen.
 ## Build 28 - 2026-09-29
 
 - Reader end card shows what's next: "Up next in the series" (or "in this read list") with the next book's poster,
