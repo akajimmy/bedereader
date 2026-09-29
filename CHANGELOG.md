@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 24 - 2026-09-28
+
 - Home: four optional rows - Recently read, Recently added books, Recently added series, Recent releases (off by
   default; each fetched only while shown; offline they show the downloaded books).
 - Home sections can be rearranged: App settings > Home and Home's ⋮ > Arrange sections… list every section with its
