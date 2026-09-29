@@ -41,6 +41,19 @@ flutter test
     expect((blocks[8] as MdTable).rows, [['What', 'Where'], ['Flutter', r'`C:\Dev\flutter`']]);
   });
 
+  test('badge lines (images, for GitHub) are left out; the text around them stays', () {
+    final blocks = MarkdownView.parseBlocks('''
+# Title
+
+[![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits)
+![plain image](https://example.org/x.png)
+
+Text after.
+''');
+    expect(blocks.map((b) => b.runtimeType.toString()).toList(), ['MdHeading', 'MdParagraph']);
+    expect((blocks[1] as MdParagraph).text, 'Text after.');
+  });
+
   test('inline: bold, italic, code and links become styled spans', () {
     final spans = inlineSpans('a **b** *c* `d` [e](https://komga.org)', const TextStyle());
     final texts = [for (final s in spans) (s as TextSpan).text];
