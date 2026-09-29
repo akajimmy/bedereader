@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../licences.dart';
 import '../offline/offline_komga.dart';
 import '../screen.dart';
 import '../widgets/fullscreen_exit.dart';
 import 'document.dart';
 
-/// Placeholders until the project's details are settled (the user plans to open-source it; licence TBD).
 const appName = 'Komga Reader';
 const appAuthor = 'Nick';
-const appLicense = 'Open source - licence to be decided.';
+const appLicense = 'MIT licence - free to use, change and share, keeping the copyright notice'; // LICENSE
 
 /// App name, version, author, licence; the Komga server's address and a traffic-light status with Retry;
 /// credits and links for Komga.
@@ -77,7 +77,7 @@ class _InfoScreenState extends State<InfoScreen> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   onPressed: () => showLicensePage(context: context, applicationName: appName,
-                      applicationVersion: _version),
+                      applicationVersion: _version, applicationLegalese: '$appCopyright. $appLicenceName.'),
                   icon: const Icon(Icons.description_outlined, size: 18),
                   label: const Text('Licences of included open-source software'),
                 ),
@@ -93,6 +93,18 @@ class _InfoScreenState extends State<InfoScreen> {
                   icon: const Icon(Icons.menu_book_outlined, size: 18),
                   label: const Text('Read me'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.thirdParty())),
+                  icon: const Icon(Icons.extension_outlined, size: 18),
+                  label: const Text('Third-party software'),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.smart_toy_outlined, size: 18, color: Color(0xFF9A9A9A)),
+                const SizedBox(width: 8),
+                const Expanded(child: Text(aiDisclosure, style: TextStyle(color: Color(0xFFBDBDBD), height: 1.4))),
               ]),
             ]),
             _Card(title: 'Server', icon: Icons.dns_outlined, children: [

@@ -5,7 +5,8 @@ import '../widgets/fullscreen_exit.dart';
 import '../widgets/markdown.dart';
 
 /// One of the app's own documents, bundled by the build (tools/build.ps1 copies them into assets/docs):
-/// What's new (CHANGELOG.md) and Read me (README.md - the part before "For developers").
+/// What's new (CHANGELOG.md), Read me (README.md - the part before "For developers") and Third-party software
+/// (THIRD_PARTY_NOTICES.md).
 class DocumentScreen extends StatelessWidget {
   const DocumentScreen({super.key, required this.title, required this.asset, this.stopAt});
   final String title;
@@ -14,6 +15,8 @@ class DocumentScreen extends StatelessWidget {
 
   static DocumentScreen whatsNew() =>
       const DocumentScreen(title: "What's new", asset: 'assets/docs/CHANGELOG.md');
+  static DocumentScreen thirdParty() =>
+      const DocumentScreen(title: 'Third-party software', asset: 'assets/docs/THIRD_PARTY_NOTICES.md');
   static DocumentScreen readMe() =>
       const DocumentScreen(title: 'Read me', asset: 'assets/docs/README.md', stopAt: '## For developers');
 

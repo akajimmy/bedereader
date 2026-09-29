@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/licences.dart';
 import 'package:komga_reader/screens/info.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 
@@ -32,6 +33,8 @@ void main() {
     expect(find.text(appName), findsOneWidget);
     expect(find.text(appAuthor), findsOneWidget);
     expect(find.text(appLicense), findsOneWidget);
+    expect(find.text(aiDisclosure), findsOneWidget); // AI usage disclosure
+    expect(find.text('Third-party software'), findsOneWidget);
     expect(find.text('http://10.0.0.23:25600'), findsOneWidget);
     expect(find.text('Connected as reader@example.com'), findsOneWidget);
     expect(find.text('komga.org'), findsOneWidget);

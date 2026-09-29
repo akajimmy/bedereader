@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'licences.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
@@ -19,7 +20,10 @@ import 'widgets/sync_alert.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 
-void main() => runApp(const KomgaReaderApp());
+void main() {
+  registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
+  runApp(const KomgaReaderApp());
+}
 
 /// Minimal dark theme. Focus is made clearly visible because the app is driven by a D-pad remote as well as touch.
 ThemeData buildTheme() {

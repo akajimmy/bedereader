@@ -67,10 +67,17 @@ the reader, OK shows the controls, Left/Right turn pages, and Back closes the co
 
 ## Credits and licence
 
-Komga Reader is an independent app, not part of the Komga project. [Komga](https://komga.org) is free, open-source
-software by Gauthier Roebroeck (gotson) and contributors. The page enhancement uses techniques from AMD FidelityFX
-FSR 1 (MIT licence). Licence for this app: to be decided. What's new in each build is in `CHANGELOG.md` (and in the
-app under App settings > About > What's new).
+Komga Reader is free software under the **MIT licence** (see `LICENSE`): use it, change it and share it, keeping the
+copyright notice.
+
+It's an independent app, not part of the Komga project. [Komga](https://komga.org) is free, open-source software
+(MIT) by Gauthier Roebroeck (gotson) and contributors. The app is built with [Flutter](https://flutter.dev), and its
+page enhancement adapts AMD FidelityFX Super Resolution 1 (MIT). Everything the project relies on - libraries, fonts,
+build tools - is listed, with the notices they require, in `THIRD_PARTY_NOTICES.md` (in the app: App settings >
+About > Third-party software). What's new in each build is in `CHANGELOG.md` (App settings > About > What's new).
+
+**AI usage:** this application was developed with the aid of AI coding tools (Claude, by Anthropic, through Claude
+Code), and reviewed and tested by a human.
 
 ## For developers
 
@@ -80,7 +87,9 @@ The rest of this file is about building the app.
 
 - `komga_reader\` - the Flutter app: Dart in `lib\`, shaders in `shaders\`, tests in `test\`, native code in
   `android\` and `windows\`.
-- `CHANGELOG.md` - what each build contains. `README.md` - this file. Both are bundled into the app by the build.
+- `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
+  project relies on, and the notices it must carry. All three are bundled into the app by the build.
+- `LICENSE` - MIT.
 - `NOTES.md` - requirements, design decisions and the backlog of ideas.
 - `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
@@ -123,7 +132,8 @@ C:\Claude\KomgaClient\tools\build.ps1 -Bump
 ```
 
 Checks the working tree is committed, runs analyze and the tests (stopping on any failure), raises the build number,
-files the changelog's *Unreleased* entries under the new build, bundles `README.md` and `CHANGELOG.md` into the app,
+files the changelog's *Unreleased* entries under the new build, bundles the README, changelog and third-party notices
+into the app,
 builds Android, Windows and web into `dist\<version>\` with checksums and a BUILD-INFO.txt, then commits and tags
 `build-<n>`. If a build fails, the version, changelog and bundled documents are put back.
 

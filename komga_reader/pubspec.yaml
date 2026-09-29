@@ -30,3 +30,4 @@ flutter:
     - assets/icon.png
     - assets/docs/README.md
     - assets/docs/CHANGELOG.md
+    - assets/docs/THIRD_PARTY_NOTICES.md

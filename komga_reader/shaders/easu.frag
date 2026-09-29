@@ -2,6 +2,9 @@
 
 #include <flutter/runtime_effect.glsl>
 
+// Adapted from AMD FidelityFX Super Resolution 1 - Copyright (c) 2021 Advanced Micro Devices, Inc. MIT licence;
+// the full notice is in THIRD_PARTY_NOTICES.md (and on the app's licences page).
+
 // Enhance, step 2 when the page is enlarged (lib/enhance.dart): EASU, the edge-adaptive upscaler of AMD FidelityFX
 // FSR 1 (MIT). From 12 page pixels around each screen pixel it finds the local edge direction and stretches its
 // filter along it, so enlarged diagonal lines and lettering stay smooth instead of stair-stepped or blurred. One
