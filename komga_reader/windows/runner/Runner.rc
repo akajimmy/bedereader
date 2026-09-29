@@ -93,7 +93,7 @@ BEGIN
             VALUE "FileDescription", "Komga Reader" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "KomgaReader" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.nickp. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Nick. MIT licence." "\0"
             VALUE "OriginalFilename", "KomgaReader.exe" "\0"
             VALUE "ProductName", "Komga Reader" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

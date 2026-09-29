@@ -31,3 +31,4 @@ flutter:
     - assets/docs/README.md
     - assets/docs/CHANGELOG.md
     - assets/docs/THIRD_PARTY_NOTICES.md
+    - assets/licences/apache-2.0.txt

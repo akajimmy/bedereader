@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /// The app's own licence, and third-party notices Flutter doesn't collect by itself - added to the licences page
 /// (Info > Licences of included open-source software) alongside the ones it gathers from Flutter and the Dart
@@ -28,14 +29,25 @@ const materialIconsNotice = 'Material Icons by Google, licensed under the Creati
 const aiDisclosure = 'This application was developed with the aid of AI coding tools (Claude, by Anthropic, through '
     'Claude Code), and reviewed and tested by a human.';
 
+/// The Android version also carries AndroidX, Kotlin and kotlinx.coroutines (through Flutter's Android layer and the
+/// settings package) - Apache 2.0, whose terms have to go with the app. Flutter's own notices don't cover them.
+const androidLibraries = ['AndroidX libraries (activity, annotation, appcompat, core, datastore, fragment, lifecycle, '
+    'preference, window and others)', 'Kotlin standard library', 'kotlinx.coroutines'];
+const androidLibrariesNotice = 'Included in the Android version. Copyright The Android Open Source Project; '
+    'JetBrains s.r.o. and Kotlin Programming Language contributors. Licensed under the Apache License, Version 2.0:';
+
 var _registered = false;
 
 void registerLicences() {
   if (_registered) return;
   _registered = true;
-  LicenseRegistry.addLicense(() => Stream.fromIterable([
-        const LicenseEntryWithLineBreaks(['Komga Reader'], appLicence),
-        const LicenseEntryWithLineBreaks(['AMD FidelityFX Super Resolution 1 (FSR 1)'], amdFsrNotice),
-        const LicenseEntryWithLineBreaks(['Material Icons'], materialIconsNotice),
-      ]));
+  LicenseRegistry.addLicense(() async* {
+    yield const LicenseEntryWithLineBreaks(['Komga Reader'], appLicence);
+    yield const LicenseEntryWithLineBreaks(['AMD FidelityFX Super Resolution 1 (FSR 1)'], amdFsrNotice);
+    yield const LicenseEntryWithLineBreaks(['Material Icons'], materialIconsNotice);
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final apache = await rootBundle.loadString('assets/licences/apache-2.0.txt');
+      yield LicenseEntryWithLineBreaks(androidLibraries, '$androidLibrariesNotice\n\n$apache');
+    }
+  });
 }

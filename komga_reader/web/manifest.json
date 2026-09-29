@@ -1,11 +1,11 @@
 {
-    "name": "komga_reader",
-    "short_name": "komga_reader",
+    "name": "Komga Reader",
+    "short_name": "Komga Reader",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A comic reader for your Komga server.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
