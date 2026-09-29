@@ -4,6 +4,13 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Image settings: Sharpen is replaced by **Enhance** - the page is cleaned up (edge-preserving denoise), scaled with
+  Lanczos 3 (anti-aliased when shrinking) and sharpened with RCAS (AMD FSR 1), on the GPU, once per page at the exact
+  size it's shown at. Values tuned by the user in the image lab on two test pages; against plain scaling it gives
+  lines ~1.2x crisper with grain 0.6x (soft enlarged scan) / 1.0x (paper scan shrunk). Off by default, per series,
+  as Sharpen was (existing Sharpen settings carry over as Enhance).
+- Fix: with Sharpen on, pages were sampled unfiltered (nearest pixel): enlarged pages went blocky and shrunk pages
+  shimmered, and most of the old Sharpen's extra grain came from that. Gone with the old shader.
 - Reader: after a page turn the page number ("12 / 36") shows in the bottom-right corner for a moment, then fades.
   Setting "Show the page number after a turn" (on by default, this device) next to Page turn, in the reader's
   Reader settings and App settings > Reading.

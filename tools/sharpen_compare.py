@@ -17,6 +17,7 @@ Methods (all numpy, mirroring what a GPU shader would do - no ML):
   on-linear   - the same unsharp, but sampled with linear filtering (the one-line fix)
   cas         - AMD FidelityFX CAS (contrast-adaptive sharpening) at source resolution, then smooth scaling
   lanczos+cas - Lanczos-3 scaling to the screen, then CAS at screen resolution (FSR-1-like: upscale, then RCAS)
+  tuned       - the user's image-lab pick: Denoise 0.75, Lanczos 3 (anti-aliased), then RCAS 0.6 on screen pixels
 """
 import argparse
 import pathlib
@@ -84,6 +85,38 @@ def cas(src, sharpness):
     return (w * (b + d + f + h) + e) / (1 + 4 * w)
 
 
+def bilateral(src, denoise, spread=1.0, radius=3):
+    """The image lab's Denoise: edge-preserving smoothing over a 7x7 window; colours closer than ~0.2*denoise are
+    averaged together, bigger jumps (ink lines) are left alone."""
+    rr = 0.2 * denoise
+    acc = np.zeros_like(src)
+    wsum = np.zeros(src.shape[:2] + (1,), dtype=src.dtype)
+    p = np.pad(src, ((radius, radius), (radius, radius), (0, 0)), mode='edge')
+    h, w = src.shape[:2]
+    for dy in range(-radius, radius + 1):
+        for dx in range(-radius, radius + 1):
+            s = p[radius + dy:radius + dy + h, radius + dx:radius + dx + w]
+            ws = np.exp(-(dx * dx + dy * dy) / (2 * spread * spread))
+            dc = s - src
+            wr = np.exp(-np.sum(dc * dc, axis=2, keepdims=True) / (2 * rr * rr))
+            acc += s * ws * wr
+            wsum += ws * wr
+    return acc / wsum
+
+
+def rcas(src, amount):
+    """The image lab's RCAS (AMD FSR 1): the sharpening lobe is limited so it can't push a pixel past what its
+    neighbours allow - little ringing, and flat areas are left mostly alone. amount 0..1 (1 = strongest)."""
+    b, d, e, f, h = (shifted(src, 0, -1), shifted(src, -1, 0), src, shifted(src, 1, 0), shifted(src, 0, 1))
+    mn4 = np.minimum.reduce([b, d, f, h])
+    mx4 = np.maximum.reduce([b, d, f, h])
+    hit_min = mn4 / (4 * np.maximum(mx4, 1e-5))
+    hit_max = (1 - mx4) / np.minimum(4 * mn4 - 4, -1e-5)
+    lobe = np.maximum(-hit_min, hit_max).max(axis=2, keepdims=True)
+    lobe = np.maximum(-0.1875, np.minimum(lobe, 0)) * 2 ** (-(1 - amount) * 2)
+    return (lobe * (b + d + f + h) + e) / (4 * lobe + 1)
+
+
 # ---- methods ---------------------------------------------------------------------------------------------------------
 def render(src, method, out_w, out_h):
     if method == 'off':
@@ -96,10 +129,12 @@ def render(src, method, out_w, out_h):
         return np.clip(pil_resize(cas(src, 0.6), out_w, out_h, Image.BILINEAR), 0, 1)
     if method == 'lanczos+cas':
         return np.clip(cas(pil_resize(src, out_w, out_h, Image.LANCZOS), 0.5), 0, 1)
+    if method == 'tuned':  # the user's pick in the image lab, 2026-09-29: denoise 0.75, Lanczos 3, RCAS 0.6 after
+        return np.clip(rcas(pil_resize(bilateral(src, 0.75), out_w, out_h, Image.LANCZOS), 0.6), 0, 1)
     raise ValueError(method)
 
 
-METHODS = ['off', 'on-now', 'on-linear', 'cas', 'lanczos+cas']
+METHODS = ['off', 'on-now', 'cas', 'tuned']
 
 
 # ---- measures --------------------------------------------------------------------------------------------------------

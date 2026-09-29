@@ -8,7 +8,7 @@ import '../settings.dart';
 ///
 /// * Reader settings: fit mode (this series) + screen brightness and night mode (whole app, this device). Also opened
 ///   from the side menu, without the fit part.
-/// * Image settings: page brightness / contrast / sharpen / auto-levels (this series).
+/// * Image settings: page brightness / contrast / enhance / auto-levels (this series).
 ///
 /// A series you have never adjusted follows the defaults; the first change you make in a series gives it its own
 /// settings (starting from the defaults), which the defaults no longer affect.
@@ -183,7 +183,7 @@ class _Heading extends StatelessWidget {
       );
 }
 
-/// Page brightness, contrast, sharpen, auto-levels for [p] (a series' settings, or the defaults).
+/// Page brightness, contrast, enhance, auto-levels for [p] (a series' settings, or the defaults).
 List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
       _SliderRow(label: 'Page brightness', value: p.brightness, min: -0.3, max: 0.3,
           valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
@@ -191,8 +191,8 @@ List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
           valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Sharpen'),
-        subtitle: const Text('Light, for soft or low-resolution scans'),
+        title: const Text('Enhance'),
+        subtitle: const Text('Cleans up speckle and grain, then sharpens - for older or low-resolution scans'),
         value: p.sharpen,
         onChanged: (v) => setP(p.copyWith(sharpen: v)),
       ),

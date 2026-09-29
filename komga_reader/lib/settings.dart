@@ -31,7 +31,7 @@ class ReaderPrefs {
   final ReadingDirection direction; // auto = the series' reading direction in Komga
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
-  final bool sharpen; // light, fixed-strength sharpening (lib/page_image.dart sharpenAmount)
+  final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
   final bool autoLevels; // stretch each page to full black..white (fixes yellow paper, grey blacks)
 
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels;

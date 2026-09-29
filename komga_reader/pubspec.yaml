@@ -20,6 +20,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   shaders:
-    - shaders/page.frag
+    - shaders/denoise.frag
+    - shaders/lanczos.frag
+    - shaders/rcas.frag
   assets:
     - assets/icon.png

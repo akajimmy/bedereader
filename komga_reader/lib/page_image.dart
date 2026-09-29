@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'api.dart';
+import 'enhance.dart';
 import 'settings.dart';
 
 /// A decoded page and the file it came from.
@@ -139,15 +140,6 @@ class Tone {
       ];
 }
 
-/// Sharpen is a plain on/off at a fixed, light strength (user's call after comparing on a 1968 scan: 30% of the
-/// original scale looked best and stronger brought up JPEG speckle).
-const sharpenAmount = 1.2 * 0.3;
-
-Future<ui.FragmentProgram?>? _program;
-Future<ui.FragmentProgram?> _sharpenProgram() => _program ??= ui.FragmentProgram.fromAsset('shaders/page.frag')
-    .then<ui.FragmentProgram?>((p) => p)
-    .catchError((Object _) => null);
-
 /// One page, laid out by the fit mode and drawn with the series' image adjustments.
 /// Fit width scrolls vertically inside the page and fit height horizontally, through [scroll] (the reader uses the
 /// same controller to scroll with the remote before turning the page).
@@ -187,7 +179,10 @@ class PageCanvas extends StatefulWidget {
 
 class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateMixin {
   Levels _levels = Levels.identity;
-  ui.FragmentProgram? _shader;
+  // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
+  ui.Image? _enhanced;
+  Size? _enhancedFor;
+  int _enhanceRun = 0; // a newer request (page / size / switch changed) makes older results stale
   late final TransformationController _zoom = widget.zoom ?? TransformationController();
   bool _zoomedIn = false;
   Size? _viewport; // fit-screen layout, for stepping: the viewer's size...
@@ -214,6 +209,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   void dispose() {
     if (_panning == true) widget.onPanChanged?.call(false);
     widget.onStepper?.call(null);
+    _enhanceRun++;
+    _enhanced?.dispose();
     _anim.dispose();
     if (widget.zoom == null) _zoom.dispose();
     super.dispose();
@@ -278,10 +275,8 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   @override
   void didUpdateWidget(PageCanvas old) {
     super.didUpdateWidget(old);
-    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.prefs.sharpen != widget.prefs.sharpen ||
-        old.data != widget.data) {
-      _prepare();
-    }
+    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data) _prepare();
+    if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
     // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd)) _placed = false;
   }
@@ -289,8 +284,32 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Future<void> _prepare() async {
     final p = widget.prefs;
     final levels = p.autoLevels && widget.levels != null ? await widget.levels!() : Levels.identity;
-    final shader = p.sharpen ? await _sharpenProgram() : null;
-    if (mounted) setState(() { _levels = levels; _shader = shader; });
+    if (mounted) setState(() => _levels = levels);
+  }
+
+  void _dropEnhanced() {
+    _enhanceRun++;
+    _enhanced?.dispose();
+    _enhanced = null;
+    _enhancedFor = null;
+  }
+
+  /// Makes the enhanced picture for [physical] (after this frame; the page shows plain until it's ready).
+  void _enhance(Size physical) {
+    if (_enhancedFor == physical) return;
+    _enhancedFor = physical; // requested: don't ask again for this size
+    final run = ++_enhanceRun;
+    final img = widget.data.image;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (run != _enhanceRun || !mounted) return;
+      final out = await Enhancer.run(img, physical.width.round(), physical.height.round());
+      if (out == null) return;
+      if (run != _enhanceRun || !mounted) { out.dispose(); return; }
+      setState(() {
+        _enhanced?.dispose();
+        _enhanced = out;
+      });
+    });
   }
 
   @override
@@ -298,13 +317,20 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     final img = widget.data.image;
     final aspect = img.width / img.height;
     final tone = Tone.of(widget.prefs, _levels);
-    final sharpen = widget.prefs.sharpen;
+    final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings
+    final dpr = MediaQuery.devicePixelRatioOf(context);
 
     Widget picture(Size size) {
-      if (sharpen && _shader != null) {
-        return CustomPaint(size: size, painter: _ShaderPainter(img, _shader!.fragmentShader(), tone, sharpenAmount));
+      var source = img;
+      if (enhance) {
+        final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());
+        if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
+          _enhance(physical);
+          if (_enhanced != null && _enhancedFor == physical) source = _enhanced!;
+        }
       }
-      final raw = RawImage(image: img, width: size.width, height: size.height, fit: BoxFit.fill,
+      // medium: at rest the enhanced picture is drawn 1:1 (so unchanged); pinch-zoomed it's smoothly magnified
+      final raw = RawImage(image: source, width: size.width, height: size.height, fit: BoxFit.fill,
           filterQuality: FilterQuality.medium);
       return tone.isIdentity ? raw : ColorFiltered(colorFilter: ColorFilter.matrix(tone.matrix), child: raw);
     }
@@ -425,32 +451,3 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       );
 }
 
-/// Levels/contrast/brightness plus an unsharp mask, on the GPU (shaders/page.frag).
-class _ShaderPainter extends CustomPainter {
-  _ShaderPainter(this.image, this.shader, this.tone, this.sharpen);
-  final ui.Image image;
-  final ui.FragmentShader shader;
-  final Tone tone;
-  final double sharpen;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    var i = 0;
-    shader
-      ..setFloat(i++, size.width)
-      ..setFloat(i++, size.height)
-      ..setFloat(i++, 1 / image.width)
-      ..setFloat(i++, 1 / image.height);
-    for (final v in [...tone.scale, ...tone.offset]) {
-      shader.setFloat(i++, v);
-    }
-    shader
-      ..setFloat(i++, sharpen)
-      ..setImageSampler(0, image);
-    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
-  }
-
-  @override
-  bool shouldRepaint(_ShaderPainter o) =>
-      o.image != image || o.sharpen != sharpen || o.tone.matrix.toString() != tone.matrix.toString();
-}
