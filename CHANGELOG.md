@@ -8,6 +8,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
   (A → Z / Z → A, Newest / Oldest first). Remembered per library, kept in pins, reset by Clear filters.
 - Series: order toggle in the top bar - oldest first / newest first by issue number. Remembered per series,
   kept in pins.
+- Reader, zoomed in: next steps through the page - one screen right, then back to the left edge one screen down
+  (clamped at the edges); at the bottom-right corner it turns the page (unzoomed). Back mirrors it. Works for
+  arrows, the remote, tap zones, Space and the mouse wheel.
 
 ## Build 18 - 2026-09-28
 

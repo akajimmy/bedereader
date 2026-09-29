@@ -153,7 +153,8 @@ Future<ui.FragmentProgram?> _sharpenProgram() => _program ??= ui.FragmentProgram
 /// same controller to scroll with the remote before turning the page).
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
-      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel});
+      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
+      this.zoom});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -163,15 +164,26 @@ class PageCanvas extends StatefulWidget {
   final ValueChanged<bool>? onZoomChanged; // pinch-zoomed in or back to fit
   final ValueChanged<double>? onWheel; // mouse wheel over the page (desktop); Ctrl+wheel still zooms
 
+  /// Hands the reader this page's zoomed-in stepper (null when the page goes away): step(forward) moves the zoomed
+  /// view one screen along the reading path and returns false when it is already at the end (the page should turn).
+  final ValueChanged<bool Function(bool forward)?>? onStepper;
+
+  /// Optional outside controller for the zoom (tests); the page makes its own otherwise.
+  final TransformationController? zoom;
+
   @override
   State<PageCanvas> createState() => _PageCanvasState();
 }
 
-class _PageCanvasState extends State<PageCanvas> {
+class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateMixin {
   Levels _levels = Levels.identity;
   ui.FragmentProgram? _shader;
-  final _zoom = TransformationController();
+  late final TransformationController _zoom = widget.zoom ?? TransformationController();
   bool _zoomedIn = false;
+  Size? _viewport; // fit-screen layout, for stepping: the viewer's size...
+  Rect? _picture; // ...and where the page sits inside it (unzoomed)
+  late final AnimationController _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+  Animation<Matrix4>? _move;
 
   @override
   void initState() {
@@ -183,13 +195,66 @@ class _PageCanvasState extends State<PageCanvas> {
         widget.onZoomChanged?.call(z);
       }
     });
+    _anim.addListener(() { final m = _move; if (m != null) _zoom.value = m.value; });
+    widget.onStepper?.call(_step);
     _prepare();
   }
 
   @override
   void dispose() {
-    _zoom.dispose();
+    widget.onStepper?.call(null);
+    _anim.dispose();
+    if (widget.zoom == null) _zoom.dispose();
     super.dispose();
+  }
+
+  /// Zoomed-in reading path (user's design): forward = one screen-width right, clamped to the page's right edge;
+  /// from the right edge = back to the left edge and one screen-height down, clamped to the bottom; from the
+  /// bottom-right corner = false (turn the page). Backward mirrors it (left; then right edge one screen up; top-left
+  /// corner = false). A zoomed page narrower (or shorter) than the screen stays centred on that axis.
+  bool _step(bool forward) {
+    final vp = _viewport, pic = _picture;
+    if (vp == null || pic == null) return false;
+    final m = _zoom.value;
+    final k = m.getMaxScaleOnAxis();
+    if (k <= 1.01) return false;
+    final t = m.getTranslation();
+    var tx = t.x, ty = t.y;
+    // translations that keep the screen inside the page
+    final minTx = vp.width - k * pic.right, maxTx = -k * pic.left;
+    final minTy = vp.height - k * pic.bottom, maxTy = -k * pic.top;
+    final fitsX = minTx >= maxTx, fitsY = minTy >= maxTy;
+    final centreX = (minTx + maxTx) / 2, centreY = (minTy + maxTy) / 2;
+    const eps = 0.5;
+    final atRight = fitsX || tx <= minTx + eps, atLeft = fitsX || tx >= maxTx - eps;
+    final atBottom = fitsY || ty <= minTy + eps, atTop = fitsY || ty >= maxTy - eps;
+    if (forward) {
+      if (!atRight) {
+        tx = math.max(tx - vp.width, minTx);
+      } else if (!atBottom) {
+        tx = fitsX ? centreX : maxTx;
+        ty = math.max(ty - vp.height, minTy);
+      } else {
+        return false;
+      }
+    } else {
+      if (!atLeft) {
+        tx = math.min(tx + vp.width, maxTx);
+      } else if (!atTop) {
+        tx = fitsX ? centreX : minTx;
+        ty = math.min(ty + vp.height, maxTy);
+      } else {
+        return false;
+      }
+    }
+    if (fitsX) tx = centreX;
+    if (fitsY) ty = centreY;
+    final target = Matrix4.identity()
+      ..translateByDouble(tx, ty, 0, 1)
+      ..scaleByDouble(k, k, 1, 1);
+    _move = Matrix4Tween(begin: m.clone(), end: target).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
+    _anim.forward(from: 0);
+    return true;
   }
 
   @override
@@ -229,6 +294,8 @@ class _PageCanvasState extends State<PageCanvas> {
       switch (widget.prefs.fit) {
         case FitMode.screen:
           final s = aspect > w / h ? Size(w, w / aspect) : Size(h * aspect, h);
+          _viewport = Size(w, h);
+          _picture = Rect.fromLTWH((w - s.width) / 2, (h - s.height) / 2, s.width, s.height);
           return InteractiveViewer(transformationController: _zoom, maxScale: 4, child: _wheel(Center(child: picture(s))));
         case FitMode.width:
           final s = Size(w, w / aspect);

@@ -52,6 +52,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
   Timer? _saveTimer;
   final Map<int, ScrollController> _scrolls = {};
+  final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
   final FocusNode _sliderInner = FocusNode(canRequestFocus: false, skipTraversal: true); // the wrapper takes focus
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
@@ -152,6 +153,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   void _forward() {
     if (_pc == null) return;
     if (_index >= _pages.length) { _nextBook(); return; }
+    if (_zoomed && (_steppers[_index]?.call(true) ?? false)) return; // zoomed in: pan along the page first
     final c = _scrolls[_index];
     if (_prefs.fit != FitMode.screen && c != null && c.hasClients) {
       final p = c.position;
@@ -166,6 +168,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   /// Back: scroll back through the page first; the previous page then opens at its end.
   void _back() {
     if (_pc == null) return;
+    if (_zoomed && (_steppers[_index]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
     final c = _scrolls[_index];
     if (_prefs.fit != FitMode.screen && c != null && c.hasClients && c.position.pixels > 1) {
       final p = c.position;
@@ -477,6 +480,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           levels: _loader!.bookLevels,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
+          onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           onStartedAtEnd: () => _startAtEnd = null,
         );
       },
