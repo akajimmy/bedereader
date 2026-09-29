@@ -17,3 +17,5 @@ __pycache__/
 
 # Build pipeline output (tools/build.ps1)
 dist/
+# copies of library pages/books for image tests (not ours to publish)
+testpages/
