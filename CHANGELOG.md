@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 27 - 2026-09-29
+
 - Reading progress made offline reaches Komga once it's reachable again (on going back online, at start-up, and on
   returning to the app). If only this device changed a book it's sent as it is; if Komga changed too, the further
   one wins (never back a page, never un-finish) and an alert lists those books with what each side had and what was
