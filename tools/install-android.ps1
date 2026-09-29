@@ -25,6 +25,15 @@ $package = 'com.nickp.komga_reader'
 function Say([string]$text) { Write-Host ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $text) }
 function Adb([string]$arguments) { cmd /c "`"$adb`" $arguments 2>&1" }
 
+# adb's background server is started on its own first, in a hidden window. Started by the first captured call below
+# instead, it inherits that call's output pipe and holds it open for as long as it runs - the call never returns, and
+# the install hung after build 37 until stopped by hand.
+$server = Start-Process $adb -ArgumentList 'start-server' -WindowStyle Hidden -PassThru
+if (-not $server.WaitForExit(20000)) {
+    Say 'adb did not start within 20 s - install later with tools\install-android.ps1'
+    exit 2
+}
+
 if (-not $Apk) {
     $Apk = Get-ChildItem (Join-Path $root 'dist') -Recurse -Filter '*-android.apk' -ErrorAction SilentlyContinue |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
