@@ -4,6 +4,8 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 18 - 2026-09-28
+
 - Windows desktop: right-click menus, mouse-wheel page turns (Ctrl+wheel zooms), F11 full-screen reader,
   Space / Shift+Space, remembered window size and position, keep-awake, version and links on the Info screen,
   dimming-only brightness slider, named "Komga Reader" (`KomgaReader.exe`) with the app icon.
