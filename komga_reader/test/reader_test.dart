@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screens/library.dart';
+import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,7 +25,12 @@ class FakeKomga extends Komga {
   @override
   Future<Uint8List> pageBytes(String bookId, int number) => Future.any([]); // never completes
   @override
-  Future<void> setProgress(String bookId, int page, {bool completed = false}) async => saves.add(page);
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    saves.add(page);
+    if (completed) finished.add(page);
+  }
+
+  final finished = <int>[]; // saves that marked the book read
   final saves = <int>[];
   final marked = <String>[];
   int nextCalls = 0;
@@ -221,6 +227,16 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  testWidgets('closing from the end card marks the book read, even straight after the last page', (tester) async {
+    await openReader(tester);
+    await toEndCard(tester); // 400 ms per turn: the last page's 1.5 s save never ran
+    expect(api.finished, isEmpty);
+    await key(tester, LogicalKeyboardKey.escape); // close
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing);
+    expect(api.finished, [3]); // page 3 of 3, read
+  });
+
   testWidgets('end card: the last book says so', (tester) async {
     await openReader(tester);
     await toEndCard(tester);
@@ -287,7 +303,8 @@ void main() {
     expect(api.saves, [2]);
   });
 
-  testWidgets('desktop: F11 toggles full screen, and the top bar gets a full-screen button', (tester) async {
+  testWidgets('desktop: full screen is app-wide - the button toggles it, Esc closes the book and it stays on',
+      (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     final calls = <bool>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
@@ -298,16 +315,26 @@ void main() {
       return null;
     });
     await openReader(tester);
-    await key(tester, LogicalKeyboardKey.f11);
+    await key(tester, LogicalKeyboardKey.enter); // controls
+    await tester.tap(find.byTooltip('Full screen (F11)'));
+    await tester.pump();
     await tester.pump();
     expect(calls, [true]);
-    await key(tester, LogicalKeyboardKey.enter); // controls
+    expect(fullscreen.value, isTrue);
+    expect((await SharedPreferences.getInstance()).getBool('desktop.fullscreen'), isTrue); // remembered
     expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
     await key(tester, LogicalKeyboardKey.escape); // hides the controls first
-    await key(tester, LogicalKeyboardKey.escape); // then closes the book, which also leaves full screen
+    await key(tester, LogicalKeyboardKey.escape); // then closes the book - full screen stays (user)
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(ReaderScreen), findsNothing);
-    expect(calls, [true, false]);
+    expect(calls, [true]);
+    expect(fullscreen.value, isTrue);
+    await tester.tap(find.text('open')); // the next book opens in full screen
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await key(tester, LogicalKeyboardKey.enter);
+    expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
+    fullscreen.value = false;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     debugDefaultTargetPlatformOverride = null;
   });

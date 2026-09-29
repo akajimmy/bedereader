@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _channel = MethodChannel('komga_reader/screen');
 
@@ -13,7 +14,26 @@ bool get isDesktop =>
 /// Only Android lets the app set the screen's backlight; elsewhere the brightness slider just dims.
 bool get hasBacklightControl => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-/// Desktop: borderless full screen on/off (F11 in the reader). Returns whether it is now full screen.
+/// Desktop full screen: one state for the whole app, not just the open book - closing a book (Esc included) stays
+/// full screen, the next book opens in it, and it's remembered across restarts (user, 2026-09-29). F11 anywhere,
+/// or the reader's button.
+final ValueNotifier<bool> fullscreen = ValueNotifier(false);
+const _fullscreenKey = 'desktop.fullscreen';
+
+Future<void> toggleFullscreen() async {
+  final now = await setFullscreen(!fullscreen.value);
+  fullscreen.value = now;
+  await (await SharedPreferences.getInstance()).setBool(_fullscreenKey, now);
+}
+
+/// At start-up: back into full screen if the app was left in it.
+Future<void> restoreFullscreen() async {
+  if (!isDesktop) return;
+  if ((await SharedPreferences.getInstance()).getBool(_fullscreenKey) ?? false) fullscreen.value = await setFullscreen(true);
+}
+
+/// Desktop: borderless full screen on/off - use [toggleFullscreen], which keeps [fullscreen] and the setting.
+/// Returns whether it is now full screen.
 Future<bool> setFullscreen(bool on) async {
   try {
     return await _channel.invokeMethod<bool>('fullscreen', on) ?? false;
