@@ -69,6 +69,8 @@
   <div class="row"><input type="range" id="split" min="0" max="1" step="0.01" value="0.5"><span class="val" id="splitV"></span></div>
 
   <h2>0 · Old print fixes (page pixels)</h2>
+  <div class="chk"><input type="checkbox" id="levels"><label for="levels" style="margin:0">Auto-levels (the app's, measured on this page)</label></div>
+  <div class="hint" id="levelsInfo"></div>
   <label>Deblock - JPEG 8x8 block edges in flat areas</label>
   <div class="row"><input type="range" id="deblock" min="0" max="1" step="0.05" value="0"><span class="val" id="deblockV"></span></div>
   <label>Colour denoise - colour blotches around lines</label>
@@ -249,11 +251,13 @@ void main() {
   o = vec4(mix(px(blur, q), px(orig, q), keep), 1.0);
 }`;
 
-// 0d. paper and ink: pale low-colour areas towards white; dark low-colour areas towards black
+// 0d. paper and ink: pale low-colour areas towards white; dark low-colour areas towards black. First, optionally,
+// the app's Auto-levels: each channel stretched between its black and white point (lib/page_image.dart Levels)
 const FS_PAPER = COMMON + `
-uniform sampler2D src; uniform float whiten, ink;
+uniform sampler2D src; uniform float whiten, ink; uniform vec3 lo, hi; uniform bool levels;
 void main() {
   vec3 c = px(src, ivec2(gl_FragCoord.xy));
+  if (levels) c = clamp((c - lo) / (hi - lo), 0.0, 1.0);
   float l = luma(c);
   float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
   float paper = smoothstep(0.55, 0.92, l) * (1.0 - smoothstep(0.10, 0.30, sat));
@@ -442,7 +446,8 @@ function run(prog, dst, inputs, uniforms) {
   for (const [name, v] of Object.entries(uniforms)) {
     const loc = gl.getUniformLocation(prog, name);
     if (loc == null) continue;
-    if (Array.isArray(v)) gl.uniform2f(loc, v[0], v[1]);
+    if (Array.isArray(v) && v.length === 3) gl.uniform3f(loc, v[0], v[1], v[2]);
+    else if (Array.isArray(v)) gl.uniform2f(loc, v[0], v[1]);
     else if (typeof v === 'boolean') gl.uniform1i(loc, v ? 1 : 0);
     else if (INTS.has(name)) gl.uniform1i(loc, v);
     else gl.uniform1f(loc, v);
@@ -454,10 +459,29 @@ function run(prog, dst, inputs, uniforms) {
 const METHODS = { none: 0, unsharp: 1, cas: 2, rcas: 3 };
 const FILTERS = { nearest: 0, linear: 1, cubic: 2, lanczos2: 3, lanczos3: 4, easu: 5 };
 // "Reset to Enhance": the app's Enhance (build 30), with the old-print fixes off
-const ENHANCE = { deblock: 0, chroma: 0, descreen: 0, whiten: 0, ink: 0, blur: 0, denoise: 0.75, method: 'rcas',
+const ENHANCE = { levels: false, deblock: 0, chroma: 0, descreen: 0, whiten: 0, ink: 0, blur: 0, denoise: 0.75, method: 'rcas',
                   amount: 0.6, stage: 'after', filter: 'lanczos3', aa: true };
 const SLIDERS = ['deblock', 'chroma', 'descreen', 'whiten', 'ink', 'blur', 'denoise', 'amount', 'split'];
 let srcTex = null, srcW = 0, srcH = 0, T = null, showBase = false;
+let pageLevels = { lo: [0, 0, 0], hi: [1, 1, 1] };
+
+// the app's Auto-levels measurement: a 96 px wide copy, per channel the darkest and brightest 0.5% cut off,
+// black point at most 90/255 and white point at least 165/255 (the app takes the median over 5 pages of the book)
+function measureLevels(im) {
+  const w = 96, h = Math.round(96 * im.naturalHeight / im.naturalWidth);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); x.imageSmoothingQuality = 'medium'; x.drawImage(im, 0, 0, w, h);
+  const d = x.getImageData(0, 0, w, h).data, n = w * h, cut = Math.round(n * 0.005);
+  const lo = [], hi = [];
+  for (let ch = 0; ch < 3; ch++) {
+    const hist = new Array(256).fill(0);
+    for (let i = ch; i < d.length; i += 4) hist[d[i]]++;
+    let a = 0, acc = 0; while (a < 255 && (acc += hist[a]) <= cut) a++;
+    let b = 255; acc = 0; while (b > 0 && (acc += hist[b]) <= cut) b--;
+    lo.push(Math.min(a, 90) / 255); hi.push(Math.max(b, 165) / 255);
+  }
+  return { lo, hi };
+}
 
 function outSize() {
   if ($('screen').value === 'native') return [srcW, srcH];
@@ -485,7 +509,9 @@ function pipeline(s, pp, tmp, out) {
     run(P.gauss, tmp, { src: cur }, { sigma: 0.6 + 1.4 * s.descreen });
     into(P.descreen, { orig: cur, blur: tmp.t }, { strength: s.descreen });
   }
-  if (s.whiten > 0 || s.ink > 0) step(P.paper, { whiten: s.whiten, ink: s.ink });
+  if (s.whiten > 0 || s.ink > 0 || s.levels) {
+    step(P.paper, { whiten: s.whiten, ink: s.ink, levels: s.levels, lo: pageLevels.lo, hi: pageLevels.hi });
+  }
   if (s.blur > 0 || s.denoise > 0) step(P.pre, { blur: s.blur, denoise: s.denoise });
   if (s.stage === 'before' && s.method !== 'none') step(P.sharp, { method: METHODS[s.method], amount: s.amount });
   const [w, h] = outSize();
@@ -531,7 +557,13 @@ function render() {
 
 function load(src) {
   const im = new Image();
-  im.onload = () => { srcW = im.naturalWidth; srcH = im.naturalHeight; srcTex = texture(0, 0, im); T = null; render(); };
+  im.onload = () => {
+    srcW = im.naturalWidth; srcH = im.naturalHeight; srcTex = texture(0, 0, im); T = null;
+    pageLevels = measureLevels(im);
+    const f = (v) => v.map((x) => Math.round(x * 255)).join(', ');
+    $('levelsInfo').textContent = `this page: black point ${f(pageLevels.lo)} · white point ${f(pageLevels.hi)}`;
+    render();
+  };
   im.onerror = () => { $('stats').textContent = 'Could not load ' + src; };
   im.src = src;
 }
