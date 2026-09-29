@@ -14,6 +14,7 @@ std::wstring AppDir() {
   PWSTR base = nullptr;
   std::wstring path;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base))) {
+    // internal and fixed, whatever the app is called: renaming it would strand people's downloads
     path = std::wstring(base) + L"\\KomgaReader";
     CreateDirectoryW(path.c_str(), nullptr);
   }

@@ -158,6 +158,21 @@ Outputs in `dist\<version>\`:
 - `KomgaReader-<ver>-windows.zip` - portable: unzip anywhere, run `KomgaReader.exe`
 - `KomgaReader-<ver>-web.zip` - static site; needs Komga to allow cross-origin requests (CORS) from where it's served
 
+### Renaming the app
+
+"Komga Reader" is a placeholder. A rename is a display-only change; everyone keeps their settings, downloads and
+updates, because the internal identifiers never change:
+
+- **Change** (the name people see): `komga_reader\lib\app_identity.dart` (`appName` - every screen);
+  `android\app\src\main\AndroidManifest.xml` (`android:label`); `windows\runner\main.cpp` (window title);
+  `windows\runner\Runner.rc` (`FileDescription`, `InternalName`, `OriginalFilename`); `windows\CMakeLists.txt`
+  (`BINARY_NAME`, the .exe); `web\index.html` and `web\manifest.json`; `tools\build.ps1` (`$product`, the file names
+  in `dist\`); this README, the changelog's intro, `THIRD_PARTY_NOTICES.md`, `lib\licences.dart` (the AI disclosure).
+- **Never change** (internal): the Android application ID and Kotlin package `com.nickp.komga_reader`; the Dart
+  package `komga_reader`; `Runner.rc`'s `CompanyName` and `ProductName` (they name the Windows settings folder
+  `%APPDATA%\com.nickp\Komga Reader`); the Windows data folder `%LOCALAPPDATA%\KomgaReader`
+  (`desktop_channel.cpp`); the Komga client-setting keys `komgareader.*`.
+
 ### Working on changes
 
 - Development happens on a version branch (now `1.1`); releases are tagged (`v0.1.0-rc.1`).

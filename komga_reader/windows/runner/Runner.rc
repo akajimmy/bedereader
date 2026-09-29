@@ -89,6 +89,9 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
+            // CompanyName + ProductName name the settings folder (%APPDATA%\com.nickp\Komga Reader):
+            // internal and fixed - never change them, or the settings are left behind. The display name is
+            // FileDescription (Task Manager) and the window title (main.cpp).
             VALUE "CompanyName", "com.nickp" "\0"
             VALUE "FileDescription", "Komga Reader" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"

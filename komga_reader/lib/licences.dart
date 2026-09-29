@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'app_identity.dart';
+
 /// The app's own licence, and third-party notices Flutter doesn't collect by itself - added to the licences page
 /// (About > Licences of included open-source software) alongside the ones it gathers from Flutter and the Dart
 /// packages. Same texts as LICENSE and THIRD_PARTY_NOTICES.md in the repository.
@@ -42,7 +44,7 @@ void registerLicences() {
   if (_registered) return;
   _registered = true;
   LicenseRegistry.addLicense(() async* {
-    yield const LicenseEntryWithLineBreaks(['Komga Reader'], appLicence);
+    yield const LicenseEntryWithLineBreaks([appName], appLicence);
     yield const LicenseEntryWithLineBreaks(['AMD FidelityFX Super Resolution 1 (FSR 1)'], amdFsrNotice);
     yield const LicenseEntryWithLineBreaks(['Material Icons'], materialIconsNotice);
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {

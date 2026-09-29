@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../app_identity.dart';
 import '../licences.dart';
 import '../screen.dart';
 import '../widgets/fullscreen_exit.dart';
 import 'document.dart';
 
-const appName = 'Komga Reader';
+export '../app_identity.dart' show appName; // the display name (lib/app_identity.dart)
 const appAuthor = 'Nick Perusse 🍁';
 const appLicense = 'MIT licence - free to use, change and share, keeping the copyright notice'; // LICENSE
 

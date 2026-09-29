@@ -82,7 +82,8 @@ if ($dirty -and -not $AllowDirty) {
 }
 # only a copy running from the build folder is in the way (a portable copy elsewhere is fine)
 $buildDir = Join-Path $app 'build\windows'
-$blocking = Get-Process KomgaReader -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
+$product = 'KomgaReader'  # file-name form of the display name (the .exe, the dist\ files)
+$blocking = Get-Process $product -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
 if ($Platforms -contains 'windows' -and $blocking) {
     throw "Komga Reader is running from the build folder ($($blocking[0].Path)) - close it first (the Windows build replaces its files)."
 }
@@ -170,20 +171,20 @@ if ($Platforms -contains 'android') {
         Say 'WARNING: no android\key.properties - the APK is signed with the debug key (fine for testing, not for release)'
     }
     Run 'Android APK' 'flutter build apk --release'
-    $apk = Join-Path $out "KomgaReader-$version-android.apk"
+    $apk = Join-Path $out "$product-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
     $artifacts += $apk
 }
 if ($Platforms -contains 'windows') {
     Run 'Windows app' 'flutter build windows --release'
-    $zip = Join-Path $out "KomgaReader-$version-windows.zip"
+    $zip = Join-Path $out "$product-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $app 'build\windows\x64\runner\Release\*') -DestinationPath $zip
     $artifacts += $zip
 }
 if ($Platforms -contains 'web') {
     Run 'Web app' 'flutter build web --release'
-    $zip = Join-Path $out "KomgaReader-$version-web.zip"
+    $zip = Join-Path $out "$product-$version-web.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $app 'build\web\*') -DestinationPath $zip
     $artifacts += $zip
