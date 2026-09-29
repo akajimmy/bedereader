@@ -4,11 +4,14 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+## Build 31 - 2026-09-29
+
 - Enhance: enlarged pages are now scaled with FSR 1 EASU (edge-directed: diagonal lines and lettering stay smooth),
   one pass instead of Lanczos's two; shrunk pages keep Lanczos 3. Chosen by the user in the image lab.
 - Image settings: Auto-levels becomes **Enhance colours** - auto-levels, then yellowed paper whitened and faded ink
   deepened (low-colour areas only; strong colours kept), in one small GPU pass per page (shaders/colours.frag). Chosen
   by the user in the image lab. Series with Auto-levels on get Enhance colours. Works with or without Enhance.
+
 ## Build 30 - 2026-09-29
 
 - Image settings: Sharpen is replaced by **Enhance** - the page is cleaned up (edge-preserving denoise), scaled with
