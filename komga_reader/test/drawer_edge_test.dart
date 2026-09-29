@@ -44,4 +44,32 @@ void main() {
     expect(scaffold.currentState!.isDrawerOpen, isFalse);
     expect(a.hasPrimaryFocus, isTrue); // back where it was
   });
+
+  testWidgets('a left-to-right swipe anywhere opens the side menu; a sideways row still scrolls', (tester) async {
+    final scaffold = GlobalKey<ScaffoldState>();
+    final row = ScrollController();
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        key: scaffold,
+        drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}),
+        body: DrawerEdge(scaffoldKey: scaffold, child: Column(children: [
+          SizedBox(height: 100, child: ListView(controller: row, scrollDirection: Axis.horizontal, children: [
+            for (var i = 0; i < 20; i++) SizedBox(width: 100, child: Text('tile $i')),
+          ])),
+          const Expanded(child: Center(child: Text('page'))),
+        ])),
+      ),
+    ));
+    row.jumpTo(300);
+    await tester.pump();
+    await tester.fling(find.text('tile 4'), const Offset(250, 0), 1500); // on the row: scrolls it back
+    await tester.pumpAndSettle();
+    expect(scaffold.currentState!.isDrawerOpen, isFalse);
+    expect(row.offset, lessThan(300));
+
+    await tester.fling(find.text('page'), const Offset(250, 0), 1500); // in the middle of the page
+    await tester.pumpAndSettle();
+    expect(scaffold.currentState!.isDrawerOpen, isTrue);
+  });
 }
+

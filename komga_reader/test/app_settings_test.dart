@@ -26,6 +26,7 @@ void main() {
     await tester.pumpAndSettle();
     double y(String t) => tester.getTopLeft(find.textContaining(t)).dy;
     expect(y('App settings') < y('Reader settings'), isTrue);
+    expect(y('All libraries') < y('App settings'), isTrue); // Home, line, libraries, line, app items
     await tester.tap(find.text('App settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);

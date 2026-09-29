@@ -79,6 +79,7 @@ class _AppDrawerState extends State<AppDrawer> {
           for (final l in _libraries)
             ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
+          const Divider(height: 1),
           if (Connection.instance.available)
             ListenableBuilder(
             listenable: Connection.instance,
@@ -106,7 +107,6 @@ class _AppDrawerState extends State<AppDrawer> {
                 );
               },
             ),
-          const Divider(height: 1),
           ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('App settings'),
               onTap: () {
                 Scaffold.maybeOf(context)?.closeDrawer();
@@ -160,6 +160,18 @@ class DrawerEdgeState extends State<DrawerEdge> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: widget.child);
+  Widget build(BuildContext context) => Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _onKey,
+        // a left-to-right swipe anywhere opens the side menu (not just from the edge); a swipe that starts on a
+        // sideways-scrolling row (Continue reading, On deck) still scrolls the row, which wins the gesture
+        child: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: (d) {
+            if ((d.primaryVelocity ?? 0) > 300) widget.scaffoldKey.currentState?.openDrawer();
+          },
+          child: widget.child,
+        ),
+      );
 }

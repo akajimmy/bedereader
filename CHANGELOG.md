@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Side menu order: Home | libraries | Offline mode, Downloads, App settings, Reader settings, Info, Sign out.
+- A left-to-right swipe anywhere on Home and library screens opens the side menu (sideways rows still scroll).
+
 - Offline, empty Home rows read "Nothing downloaded in progress" / "Nothing downloaded on deck".
 
 ## Build 22 - 2026-09-28
