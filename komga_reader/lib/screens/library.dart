@@ -34,11 +34,23 @@ class _LibraryScreenState extends State<LibraryScreen> {
   BrowseMode _mode = BrowseMode.series;
   ReadFilter _filter = ReadFilter.all;
   String _sortKey = 'title';
+  bool _desc = false; // sort direction
   late final Paged _paged = Paged(_fetch);
   final _sel = Selection(); // multi-select, in Books mode
 
-  static const _seriesSorts = {'title': 'metadata.titleSort,asc', 'added': 'createdDate,desc', 'updated': 'lastModifiedDate,desc'};
-  static const _bookSorts = {'title': 'metadata.title,asc', 'added': 'createdDate,desc', 'release': 'metadata.releaseDate,desc'};
+  // sort key -> Komga field; the direction is separate (_desc)
+  static const _seriesSorts = {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'};
+  static const _bookSorts = {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'};
+
+  /// The natural direction when a field is picked: titles A -> Z, dates newest first.
+  static bool _defaultDesc(String key) => key != 'title';
+
+  Map<String, String> get _sorts => _mode == BrowseMode.series ? _seriesSorts : _bookSorts;
+  String get _sortParam => '${_sorts[_sortKey] ?? _sorts.values.first},${_desc ? 'desc' : 'asc'}';
+
+  /// Direction wording that suits the field.
+  static String _dirLabel(String key, bool desc) =>
+      key == 'title' ? (desc ? 'Z → A' : 'A → Z') : (desc ? 'Newest first' : 'Oldest first');
 
   Komga get api => widget.api;
 
@@ -57,15 +69,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   static String _defaultSort(BrowseMode m) => m == BrowseMode.books ? 'added' : 'title';
   String get _viewKey => 'view.library.${_libraryId ?? 'all'}';
-  bool get _filtered => _filter != ReadFilter.all || _sortKey != _defaultSort(_mode);
+  bool get _filtered =>
+      _filter != ReadFilter.all || _sortKey != _defaultSort(_mode) || _desc != _defaultDesc(_defaultSort(_mode));
 
   /// This library's remembered mode / filter / sort.
   Future<void> _restoreView() async {
     final v = await ViewPrefs.load(_viewKey);
     _mode = BrowseMode.values.firstWhere((m) => m.name == v['mode'], orElse: () => BrowseMode.series);
     _filter = ReadFilterApi.fromName(v['filter']);
-    final sorts = _mode == BrowseMode.series ? _seriesSorts : _bookSorts;
-    _sortKey = sorts.containsKey(v['sort']) ? v['sort'] as String : _defaultSort(_mode);
+    _sortKey = _sorts.containsKey(v['sort']) ? v['sort'] as String : _defaultSort(_mode);
+    _desc = v['desc'] is bool ? v['desc'] as bool : _defaultDesc(_sortKey); // saved before directions existed: natural one
   }
 
   Future<void> _init() async {
@@ -73,7 +86,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (pin != null) {
       _mode = BrowseMode.values.firstWhere((m) => m.name == pin.mode, orElse: () => BrowseMode.series);
       _filter = pin.readFilter;
-      _sortKey = pin.sort ?? _defaultSort(_mode);
+      // pin.sort is "key:asc" / "key:desc" (pins made before directions existed have just "key")
+      final parts = (pin.sort ?? '').split(':');
+      _sortKey = _sorts.containsKey(parts.first) ? parts.first : _defaultSort(_mode);
+      _desc = parts.length > 1 ? parts[1] == 'desc' : _defaultDesc(_sortKey);
     } else {
       await _restoreView();
     }
@@ -90,9 +106,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Future<Map<String, dynamic>> _fetch(int page, int size) => switch (_mode) {
         BrowseMode.series => api.series(libraryId: _libraryId, readStatus: _filter.api,
-            sort: _seriesSorts[_sortKey] ?? _seriesSorts['title']!, page: page, size: size),
+            sort: _sortParam, page: page, size: size),
         BrowseMode.books => api.books(libraryId: _libraryId, readStatus: _filter.api,
-            sort: _bookSorts[_sortKey] ?? _bookSorts['added']!, page: page, size: size),
+            sort: _sortParam, page: page, size: size),
         BrowseMode.collections => api.collections(libraryId: _libraryId, page: page, size: size),
         BrowseMode.readLists => api.readLists(libraryId: _libraryId, page: page, size: size),
       };
@@ -101,7 +117,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _load() {
     setState(() {});
     _paged.reset();
-    ViewPrefs.save(_viewKey, {'mode': _mode.name, 'filter': _filter.name, 'sort': _sortKey});
+    ViewPrefs.save(_viewKey, {'mode': _mode.name, 'filter': _filter.name, 'sort': _sortKey, 'desc': _desc});
   }
 
   Future<void> _switchLibrary(String? id) async {
@@ -115,6 +131,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   void _clearFilters() {
     _filter = ReadFilter.all;
     _sortKey = _defaultSort(_mode);
+    _desc = _defaultDesc(_sortKey);
     _load();
   }
 
@@ -153,13 +170,30 @@ class _LibraryScreenState extends State<LibraryScreen> {
           if (filterable)
             HideReadButton(value: _filter, onChanged: (f) { _filter = f; _load(); }),
           if (filterable)
+            // Sort: pick a field (it starts in its natural direction), then flip the direction below the divider.
             PopupMenuButton<String>(
-              tooltip: 'Sort',
-              icon: const Icon(Icons.sort),
-              onSelected: (s) { _sortKey = s; _load(); },
+              tooltip: 'Sort: ${_sortLabel(_sortKey)}, ${_dirLabel(_sortKey, _desc)}',
+              icon: Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.sort),
+                Icon(_desc ? Icons.arrow_downward : Icons.arrow_upward, size: 14),
+              ]),
+              onSelected: (s) {
+                final value = s.substring(2);
+                if (s.startsWith('f:') && value != _sortKey) {
+                  _sortKey = value;
+                  _desc = _defaultDesc(value);
+                } else if (s.startsWith('d:')) {
+                  _desc = value == 'desc';
+                }
+                _load();
+              },
               itemBuilder: (_) => [
-                for (final e in (_mode == BrowseMode.series ? _seriesSorts : _bookSorts).keys)
-                  CheckedPopupMenuItem(value: e, checked: e == _sortKey, child: Text(_sortLabel(e))),
+                for (final e in _sorts.keys)
+                  CheckedPopupMenuItem(value: 'f:$e', checked: e == _sortKey, child: Text(_sortLabel(e))),
+                const PopupMenuDivider(),
+                for (final d in const [false, true])
+                  CheckedPopupMenuItem(value: d ? 'd:desc' : 'd:asc', checked: _desc == d,
+                      child: Text(_dirLabel(_sortKey, d))),
               ],
             ),
           if (filterable && _filtered) ClearFiltersButton(onPressed: _clearFilters),
@@ -167,7 +201,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           PinButton(current: Pin(
             name: [_libraryName, _modeLabel(_mode), if (filterable && _filter == ReadFilter.hideRead) 'unread'].join(' · '),
             kind: 'library', id: _libraryId, title: _libraryName,
-            filter: filterable ? _filter.name : 'all', mode: _mode.name, sort: filterable ? _sortKey : null,
+            filter: filterable ? _filter.name : 'all', mode: _mode.name, sort: filterable ? '$_sortKey:${_desc ? 'desc' : 'asc'}' : null,
           )),
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
@@ -183,7 +217,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   child: ChoiceChip(
                     label: Text(_modeLabel(m)),
                     selected: _mode == m,
-                    onSelected: (_) { _sel.end(); _mode = m; _sortKey = _defaultSort(m); _load(); },
+                    onSelected: (_) {
+                      _sel.end(); _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); _load();
+                    },
                   ),
                 ),
             ]),
@@ -227,7 +263,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         BrowseMode.collections => 'Collections', BrowseMode.readLists => 'Read lists',
       };
   static String _sortLabel(String k) =>
-      {'title': 'Title', 'added': 'Recently added', 'updated': 'Recently updated', 'release': 'Release date'}[k] ?? k;
+      {'title': 'Title', 'added': 'Date added', 'updated': 'Date updated', 'release': 'Release date'}[k] ?? k;
 }
 
 /// "12 books · 3 unread · 1 in progress", or "12 books · read" once every book is finished.

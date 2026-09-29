@@ -4,6 +4,9 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Library sort menu: pick a field (Title, Date added, Date updated, Release date), then the direction
+  (A → Z / Z → A, Newest / Oldest first). Remembered per library, kept in pins, reset by Clear filters.
+
 ## Build 18 - 2026-09-28
 
 - Windows desktop: right-click menus, mouse-wheel page turns (Ctrl+wheel zooms), F11 full-screen reader,
