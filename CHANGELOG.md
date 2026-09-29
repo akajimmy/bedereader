@@ -6,6 +6,9 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 ## Unreleased
 
 **Fixed**
+- With Enhance colours (or Enhance, or Crop edges) on, page turns hitched - most visibly the 3D page curl. The
+  pages around the one you're reading are now processed between turns instead of during them, and in every page turn
+  animation the next page is ready before you turn to it.
 - Sign-in: an address typed without `http://`, or with a space after the colon (the tablet keyboard adds one), no
   longer fails with a "FormatException" - it's tidied up and the field shows the address used. The keyboard's
   word suggestions are off in that field.

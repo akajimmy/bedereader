@@ -94,4 +94,31 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byType(RawImage), findsNothing); // not the uncorrected page
   });
+
+  testWidgets('a page off screen waits for the page turn to finish before its colours are made', (tester) async {
+    // the hitch: the page after next was processed on the GPU during the curl / wipe (user, 2026-09-29)
+    late ui.Image img;
+    await tester.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 40, 60), Paint()..color = const Color(0xFFD8C8A8));
+      img = await rec.endRecording().toImage(40, 60);
+    });
+    final turn = Completer<void>(); // a page turn playing
+    var asked = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
+      data: PageData(img, Uint8List(0)),
+      prefs: const ReaderPrefs(autoLevels: true),
+      scroll: ScrollController(),
+      levels: () async => Levels.identity,
+      idle: () { asked++; return turn.future; },
+    ))));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pump();
+    expect(asked, 1);
+    expect(find.byType(RawImage), findsNothing); // still waiting: nothing processed mid-turn
+    turn.complete(); // the turn is over
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+    await tester.pump();
+    expect(find.byType(RawImage), findsOneWidget); // processed now
+  });
 }

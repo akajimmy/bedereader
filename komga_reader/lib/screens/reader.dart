@@ -105,6 +105,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _flashTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
+    _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
     _saveNow();
     _settings.removeListener(_onSettings);
@@ -261,6 +262,31 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   Offset? _dragStart;
   final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
 
+  // ---- page processing waits out page turns (PageCanvas.idle) ----------------------------------------------------
+  bool _swiping = false; // the page view is sliding (a wipe, or a drag in Swipe mode)
+  Completer<void>? _idle;
+  bool get _turning => _swiping || _curl != null;
+
+  /// Completes once no turn is playing - when pages off screen may do their GPU processing.
+  Future<void> _whenIdle() => _turning ? (_idle ??= Completer<void>()).future : Future<void>.value();
+
+  void _maybeIdle() {
+    if (_turning) return;
+    final c = _idle;
+    _idle = null;
+    c?.complete();
+  }
+
+  bool _onPagesScroll(ScrollNotification n) {
+    if (n.depth != 0) return false; // a page's own scrolling (fit width/height), not the page view
+    if (n is ScrollStartNotification) _swiping = true;
+    if (n is ScrollEndNotification) {
+      _swiping = false;
+      _maybeIdle();
+    }
+    return false;
+  }
+
   /// The page's image on screen - only it curls, not the bars around it. Unknown (the end card, still loading):
   /// the whole area.
   Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
@@ -336,6 +362,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (c == null) return;
     _curl = null;
     if (cancel || !c.completing) _pc?.jumpToPage(c.from);
+    _maybeIdle();
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
   }
@@ -675,10 +702,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                       },
                       child: RepaintBoundary(
                         key: _pagesKey,
+                        child: NotificationListener<ScrollNotification>(
+                        onNotification: _onPagesScroll,
                         child: PageView.builder(
                         controller: _pc,
-                        // instant flip and the curl jump between pages: keep the neighbours built (and processed)
-                        allowImplicitScrolling: _settings.display.pageTurn != PageTurn.swipe,
+                        // keep the neighbours built, so they're processed before they're turned to (in every mode:
+                        // a wipe used to build - and process - the next page while it slid in)
+                        allowImplicitScrolling: true,
                         reverse: _rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
                         // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
                         physics: _zoomed || _fingers > 1 || _sideways.contains(_index) || _curlMode
@@ -687,6 +717,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         itemCount: _pages.length + 1,
                         onPageChanged: _onPage,
                         itemBuilder: (context, i) => i == _pages.length ? _endCard() : _page(i),
+                      ),
                       ),
                       ),
                     ));
@@ -747,6 +778,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           onPanChanged: (pans) => setState(() => pans ? _sideways.add(i) : _sideways.remove(i)),
           onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
           onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
+          idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,
