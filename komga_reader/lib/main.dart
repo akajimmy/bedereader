@@ -10,6 +10,7 @@ import 'offline/downloads.dart';
 import 'pins.dart';
 import 'settings.dart';
 import 'side_menu.dart';
+import 'widgets/connection_prompt.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 
@@ -53,14 +54,38 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     _restore();
   }
 
-  /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one).
+  /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one). Also shows
+  /// the "can't reach Komga" prompt and the messages about switching.
   void _onConnection() {
-    final now = Connection.instance.offline;
+    final c = Connection.instance;
+    if (c.askPending && !_prompting) {
+      final ctx = _nav.currentContext;
+      if (ctx != null) {
+        _prompting = true;
+        showUnreachablePrompt(ctx).whenComplete(() => _prompting = false);
+      }
+    }
+    if (c.reachableAgain && !_wasReachable && !(c.autoSwitch && !_readerOpen)) {
+      _say('Komga is reachable again', action: SnackBarAction(label: 'Go online', onPressed: c.goOnline));
+    }
+    _wasReachable = c.reachableAgain;
+
+    final now = c.offline;
     if (now == _wasOffline) return;
     _wasOffline = now;
+    if (c.autoSwitch && !c.forcedOffline) _say(now ? "Can't reach Komga - showing downloaded books" : 'Back online');
     _nav.currentState?.popUntil((r) => r.isFirst);
     setState(() {});
   }
+
+  bool _prompting = false, _wasReachable = false;
+  bool get _readerOpen => Connection.instance.readersOpen > 0;
+  final _messenger = GlobalKey<ScaffoldMessengerState>();
+
+  void _say(String text, {SnackBarAction? action}) => _messenger.currentState
+    ?..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(text), action: action,
+        duration: Duration(seconds: action == null ? 4 : 12), behavior: SnackBarBehavior.floating));
 
   Future<void> _restore() async {
     final p = await SharedPreferences.getInstance();
@@ -100,6 +125,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       title: 'Komga Reader',
       debugShowCheckedModeBanner: false,
       navigatorKey: _nav,
+      scaffoldMessengerKey: _messenger,
       theme: buildTheme(),
       builder: (context, child) => NightOverlay(child: child!),
       home: !_loaded

@@ -43,6 +43,15 @@ class FakeKomga extends Komga {
   Future<List<dynamic>> seriesCollections(String seriesId) async => [{'id': 'C1', 'name': 'Marvel cosmic'}];
   @override
   Future<Uint8List?> thumbBytes(String url) async => Uint8List(10);
+
+  /// Reachability check: answers while [up], else "can't reach" - reported like every real server call.
+  bool up = true;
+  @override
+  Future<Map<String, dynamic>?> me() async {
+    Komga.onReachability?.call(this, up);
+    if (!up) throw KomgaUnreachable(baseUrl);
+    return {'id': 'U1'};
+  }
 }
 
 Map<String, dynamic> book(String id, int n) =>

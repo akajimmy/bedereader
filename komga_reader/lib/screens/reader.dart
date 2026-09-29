@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../offline/connection.dart';
 import '../page_image.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -78,6 +79,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void initState() {
     super.initState();
+    Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
     // Follow the sensor (the whole app does, via the manifest), hide the system bars, keep the screen on.
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -89,6 +91,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    Connection.instance.readerClosed();
     _saveNow();
     _settings.removeListener(_onSettings);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
