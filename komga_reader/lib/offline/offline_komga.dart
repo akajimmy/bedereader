@@ -309,6 +309,39 @@ class OfflineKomga extends Komga {
     return i > 0 ? _book(order[i - 1]) : null;
   }
 
+  // ---- search: titles of the downloaded books, series, lists and collections -----------------------------------------------
+  static bool _matches(String query, Iterable<Object?> fields) {
+    final q = query.toLowerCase().trim();
+    return q.isNotEmpty && fields.any((f) => f != null && '$f'.toLowerCase().contains(q));
+  }
+
+  @override
+  Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async {
+    final all = (await series(libraryId: libraryId, size: 100000))['content'] as List;
+    return _page([for (final s in all) if (_matches(query, [s['name'], (s['metadata'] as Map?)?['title']])) s], 0, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async {
+    final all = (await books(libraryId: libraryId, sort: 'metadata.title,asc', size: 100000))['content'] as List;
+    return _page([
+      for (final b in all)
+        if (_matches(query, [b['name'], b['seriesTitle'], (b['metadata'] as Map?)?['title']])) b,
+    ], 0, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async {
+    final all = (await readLists(libraryId: libraryId, size: 100000))['content'] as List;
+    return _page([for (final r in all) if (_matches(query, [r['name']])) r], 0, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async {
+    final all = (await collections(libraryId: libraryId, size: 100000))['content'] as List;
+    return _page([for (final c in all) if (_matches(query, [c['name']])) c], 0, size);
+  }
+
   // ---- needs the server --------------------------------------------------------------------------------------------------
   @override
   Future<Map<String, dynamic>> clientSettings() async => throw KomgaUnreachable(baseUrl);

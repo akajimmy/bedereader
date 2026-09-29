@@ -103,6 +103,16 @@ class Komga {
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async =>
       await _get('/api/v1/readlists', {'library_id': libraryId, 'page': page, 'size': size}) as Map<String, dynamic>;
 
+  // ---- search (Komga's own search, by title and more; optionally within one library)
+  Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async =>
+      await _get('/api/v1/series', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async =>
+      await _get('/api/v1/books', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async =>
+      await _get('/api/v1/readlists', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+  Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async =>
+      await _get('/api/v1/collections', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+
   /// Books of a read list in the list's own order, optionally only unread / in progress / read.
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       await _get('/api/v1/readlists/$readListId/books',

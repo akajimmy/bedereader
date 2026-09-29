@@ -7,8 +7,10 @@ import '../pins.dart';
 import '../widgets/drawer.dart';
 import '../widgets/home_sections_editor.dart';
 import '../widgets/pin_tile.dart';
+import '../widgets/poster_row.dart';
 import 'library.dart';
 import 'reader.dart';
+import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
 
@@ -165,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
         list.isEmpty
             ? [_Section(title), _Empty(offline ? emptyOffline : empty)]
             : [
-                _PosterRow(
+                PosterRow(
                   title: title,
                   itemCount: list.length,
                   itemBuilder: (context, i) => bookTile(context, api, list[i], autofocus: autofocus && i == 0,
@@ -185,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return _recentSeries.isEmpty
             ? [_Section('Recently added series'), _Empty(offline ? 'No downloaded series' : 'Nothing added yet')]
             : [
-                _PosterRow(
+                PosterRow(
                   title: 'Recently added series',
                   itemCount: _recentSeries.length,
                   itemBuilder: (context, i) => seriesTile(context, api, _recentSeries[i], onChanged: _load,
@@ -205,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   : Pins.instance.items;
               if (pins.isEmpty) return const SizedBox.shrink();
               // posters: each a 2x2 of its view's first items (lib/widgets/pin_tile.dart)
-              return _PosterRow(
+              return PosterRow(
                 title: 'Pinned',
                 itemCount: pins.length,
                 itemBuilder: (context, i) => PinTile(api: api, pin: pins[i], onOpen: () => _openPin(pins[i])),
@@ -245,6 +247,8 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
+          IconButton(tooltip: 'Search', icon: const Icon(Icons.search),
+              onPressed: () => _push(SearchScreen(api: api))),
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _load),
           PopupMenuButton<String>(
             tooltip: 'Show or hide sections',
@@ -296,82 +300,6 @@ class _Empty extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Text(text, style: const TextStyle(color: Color(0xFF9A9A9A))),
       );
-}
-
-/// A Home row: its title with ‹ › buttons on the right (each scrolls about a screen's width; greyed at the ends),
-/// then a horizontal strip of posters. Touch can swipe the strip, the remote's Left/Right move along it too.
-class _PosterRow extends StatefulWidget {
-  const _PosterRow({required this.title, required this.itemCount, required this.itemBuilder});
-  final String title;
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
-  @override
-  State<_PosterRow> createState() => _PosterRowState();
-}
-
-class _PosterRowState extends State<_PosterRow> {
-  final _scroll = ScrollController();
-  bool _canBack = false, _canForward = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _scroll.addListener(_update);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
-  }
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _update() {
-    if (!mounted || !_scroll.hasClients) return;
-    final p = _scroll.position;
-    final back = p.pixels > 1, forward = p.pixels < p.maxScrollExtent - 1;
-    if (back != _canBack || forward != _canForward) setState(() { _canBack = back; _canForward = forward; });
-  }
-
-  void _page(int direction) {
-    final p = _scroll.position;
-    _scroll.animateTo((p.pixels + direction * p.viewportDimension * 0.9).clamp(0.0, p.maxScrollExtent),
-        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-        child: Row(children: [
-          Expanded(child: Text(widget.title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500))),
-          IconButton(tooltip: '${widget.title}: back', icon: const Icon(Icons.chevron_left),
-              onPressed: _canBack ? () => _page(-1) : null),
-          IconButton(tooltip: '${widget.title}: more', icon: const Icon(Icons.chevron_right),
-              onPressed: _canForward ? () => _page(1) : null),
-        ]),
-      ),
-      SizedBox(
-        height: 290,
-        // the strip's size changes (window resized, posters loading) also update the buttons
-        child: NotificationListener<ScrollMetricsNotification>(
-          onNotification: (_) {
-            _update();
-            return false;
-          },
-          child: ListView.separated(
-            controller: _scroll,
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: widget.itemCount,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) => SizedBox(width: 150, child: widget.itemBuilder(context, i)),
-          ),
-        ),
-      ),
-    ]);
-  }
 }
 
 class _LibraryButton extends StatelessWidget {

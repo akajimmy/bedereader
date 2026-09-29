@@ -10,6 +10,7 @@ import '../widgets/readlist_tile.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'reader.dart';
+import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
 
@@ -205,6 +206,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
             kind: 'library', id: _libraryId, title: _libraryName,
             filter: filterable ? _filter.name : 'all', mode: _mode.name, sort: filterable ? '$_sortKey:${_desc ? 'desc' : 'asc'}' : null,
           )),
+          IconButton(tooltip: 'Search', icon: const Icon(Icons.search),
+              onPressed: () => _push(SearchScreen(api: api, libraryId: _libraryId,
+                  libraryName: _libraryId == null ? null : _libraryName))),
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _refresh),
         ],
         bottom: PreferredSize(

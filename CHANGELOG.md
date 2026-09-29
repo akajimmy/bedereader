@@ -4,6 +4,10 @@ Newest first. Build numbers are the `+n` in `komga_reader\pubspec.yaml` and the 
 
 ## Unreleased
 
+- Search (button on Home and library screens): Komga's search across series, books, read lists and collections,
+  results as you type in poster rows with counts. From a library it searches that library, with a chip for all
+  libraries. Offline it searches the downloaded titles.
+
 - Reader: Esc hides the controls if they're showing, otherwise closes the book (leaving full screen with it).
 
 ## Build 25 - 2026-09-28
