@@ -5,6 +5,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Fixed**
+- End of book: the next book's poster was blurry (Komga's thumbnails are small). The book's cover page itself now
+  replaces it, sharp, fetched ahead as you reach the last pages.
+
 ## 0.1.1 - offline reading and better pages
 
 Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.

@@ -793,9 +793,26 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final id = _book['id'] as String;
     if (_upNextFor != id || _upNextFuture == null) {
       _upNextFor = id;
-      _upNextFuture = api.nextBook(id, readListId: widget.readListId);
+      _upNextFuture = api.nextBook(id, readListId: widget.readListId).then((next) {
+        if (next != null) _cover(next['id'] as String).ignore(); // fetched ahead, like the lookup itself
+        return next;
+      });
     }
     return _upNextFuture!;
+  }
+
+  String? _coverFor;
+  Future<Uint8List?>? _coverFuture;
+
+  /// The next book's first page - its cover at full resolution. Komga's thumbnails are small (300 px wide by
+  /// default), and blurry at the end card's poster size (user, 2026-09-29). Null if it can't be had (offline and not
+  /// downloaded, say): the thumbnail stays.
+  Future<Uint8List?> _cover(String bookId) {
+    if (_coverFor != bookId || _coverFuture == null) {
+      _coverFor = bookId;
+      _coverFuture = api.pageBytes(bookId, 1).then<Uint8List?>((b) => b).catchError((Object _) => null);
+    }
+    return _coverFuture!;
   }
 
   String? _upNextFor;
@@ -831,16 +848,32 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
             const SizedBox(height: 12),
             LayoutBuilder(builder: (context, c) {
               final h = (MediaQuery.sizeOf(context).height * 0.42).clamp(160.0, 520.0);
+              final dpr = MediaQuery.devicePixelRatioOf(context);
+              final id = next['id'] as String;
+              // the thumbnail at once, then the cover page itself (sharp) over it when it's in
               return ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: SizedBox(
                   height: h,
                   width: h * 0.66,
-                  child: Image(
-                    image: ResizeImage(api.thumbImage(api.bookThumb(next['id'] as String)), height: 800),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F)),
-                  ),
+                  child: Stack(fit: StackFit.expand, children: [
+                    Image(
+                      image: api.thumbImage(api.bookThumb(id)),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F)),
+                    ),
+                    FutureBuilder<Uint8List?>(
+                      future: _cover(id),
+                      builder: (context, cover) => cover.data == null
+                          ? const SizedBox.shrink()
+                          : Image.memory(cover.data!,
+                              fit: BoxFit.cover,
+                              // decoded at about the size shown (a little over, for covers narrower than the frame)
+                              cacheHeight: (h * dpr * 1.25).round(),
+                              filterQuality: FilterQuality.medium,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                    ),
+                  ]),
                 ),
               );
             }),

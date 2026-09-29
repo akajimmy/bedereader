@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +54,18 @@ class FakeKomga extends Komga {
   Future<Map<String, dynamic>> clientSettings() async => {};
   @override
   Future<void> putClientSetting(String key, String value) async {}
+}
+
+/// [FakeKomga] whose next book (B2) has a cover page to fetch.
+class CoverKomga extends FakeKomga {
+  static late Uint8List cover;
+  final coverAsked = <String>[];
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) {
+    if (bookId != 'B2' || number != 1) return super.pageBytes(bookId, number);
+    coverAsked.add(bookId);
+    return Future.value(cover);
+  }
 }
 
 void main() {
@@ -214,6 +228,31 @@ void main() {
   }
 
   final second = {'id': 'B2', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'The Second One'}};
+
+  testWidgets("end card: the next book's cover page replaces the (small, blurry) thumbnail once it's in",
+      (tester) async {
+    late Uint8List png;
+    await tester.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 20, 30), Paint()..color = const Color(0xFF3060A0));
+      final img = await rec.endRecording().toImage(20, 30);
+      png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    });
+    CoverKomga.cover = png;
+    api = CoverKomga()..next = second;
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await toEndCard(tester);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+    expect((api as CoverKomga).coverAsked, ['B2']); // page 1 of the next book - once
+    final images = tester.widgetList<Image>(find.byType(Image)).toList();
+    expect(images.length, 2); // the thumbnail underneath, the cover over it
+    expect(images.last.image, isA<ResizeImage>()); // decoded at about the size shown
+    expect((images.last.image as ResizeImage).imageProvider, isA<MemoryImage>());
+    await tester.pump(const Duration(seconds: 2));
+  });
 
   testWidgets('end card: shows the next book in the series - title and poster', (tester) async {
     await openReader(tester, next: second);
