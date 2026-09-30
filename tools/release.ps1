@@ -46,39 +46,57 @@ $tag = if ($Final) { "v$name" } else { "v$name-rc.$Rc" }
 if ((Git "tag -l $tag")) { throw "$tag already exists." }
 
 $date = Get-Date -Format 'yyyy-MM-dd'
-$message = if ($Final) { "$name (build $Build) - release" } else { "$name release candidate $Rc (build $Build)" }
-Git "tag -a $tag $commit -m `"$message`"" | Out-Null
-Write-Host "tagged $tag -> $buildTag ($($commit.Substring(0, 7)))"
 
-# CHANGELOG: the version's section says which builds are candidates / the release
+# Everything is checked and prepared first; the files are written, committed, and only then tagged - so a problem
+# on the way leaves no tag behind (and git puts the files back).
+
+# CHANGELOG: the version's section says which builds are candidates / the release (works with either line ending,
+# and keeps the one the file has)
 $clPath = Join-Path $root 'CHANGELOG.md'
-$cl = [IO.File]::ReadAllText($clPath)
+$raw = [IO.File]::ReadAllText($clPath)
+$nl = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
+$cl = $raw.Replace("`r`n", "`n")
 $sec = [regex]::Match($cl, "(?m)^## $([regex]::Escape($name))\b[^\n]*\n\n([^\n#][^\n]*(\n[^\n#][^\n]*)*)?")
-if (-not $sec.Success) { throw "No '## $name' section in CHANGELOG.md" }
-$candidates = @(Git "tag -l v$name-rc.*" | Sort-Object { [int]($_ -replace '.*-rc\.', '') } |
-    ForEach-Object { "build $([int]((Git "describe --tags --match build-* $_") -replace '^build-(\d+).*', '$1')) (``$_``)" })
-$rcText = if ($candidates.Count) { "Release candidates: $($candidates -join ', ')." } else { 'No release candidates.' }
+if (-not $sec.Success) { throw "No '## $name' section in CHANGELOG.md - nothing changed" }
+$rcs = @(Git "tag -l v$name-rc.*" | Where-Object { $_ })
+$candidates = @($rcs | ForEach-Object { [pscustomobject]@{ n = [int]($_ -replace '.*-rc\.', ''); tag = $_;
+    build = [int]((Git "describe --tags --match build-* $_") -replace '^build-(\d+).*', '$1') } })
+if (-not $Final) { $candidates += [pscustomobject]@{ n = $Rc; tag = $tag; build = $Build } }
+$rcText = if ($candidates.Count) {
+    "Release candidates: $(($candidates | Sort-Object n | ForEach-Object { "build $($_.build) (``$($_.tag)``)" }) -join ', ')."
+} else { 'No release candidates.' }
 $note = if ($Final) {
     "## $name`n`n**Released as build $Build, tagged ``v$name``** ($date). $rcText"
 } else {
     "## $name - in development`n`nNot released yet. $rcText"
 }
 $cl = $cl.Substring(0, $sec.Index) + $note + $cl.Substring($sec.Index + $sec.Length)
-[IO.File]::WriteAllText($clPath, $cl)
-Copy-Item $clPath (Join-Path $root 'komga_reader\assets\docs\CHANGELOG.md') -Force
 
 $files = 'CHANGELOG.md komga_reader/assets/docs/CHANGELOG.md'
+$pub = Join-Path $root 'komga_reader\pubspec.yaml'
 if ($Final) {
     # the next build is the first build of the next version
-    $pub = Join-Path $root 'komga_reader\pubspec.yaml'
-    $text = [IO.File]::ReadAllText($pub)
-    $now = [regex]::Match($text, '(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)')
+    $pubText = [IO.File]::ReadAllText($pub)
+    $now = [regex]::Match($pubText, '(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)')
+    if (-not $now.Success) { throw 'No version line in pubspec.yaml - nothing changed' }
     $next = "$($now.Groups[1].Value).$([int]$now.Groups[2].Value + 1).0"
-    $text = $text.Substring(0, $now.Index) + "version: $next+$($now.Groups[4].Value)" + $text.Substring($now.Index + $now.Length)
-    [IO.File]::WriteAllText($pub, $text)
+    $pubText = $pubText.Substring(0, $now.Index) + "version: $next+$($now.Groups[4].Value)" +
+        $pubText.Substring($now.Index + $now.Length)
     $files += ' komga_reader/pubspec.yaml'
-    Write-Host "pubspec.yaml: the next build is the first $next build"
 }
-Git "add $files" | Out-Null
-Git "commit -q -m `"$(if ($Final) { "Release $name (build $Build)" } else { "Release candidate $Rc of $name (build $Build)" })`"" | Out-Null
-Write-Host "CHANGELOG noted and committed. Not pushed: push main and $tag when you want them on GitHub."
+
+try {
+    [IO.File]::WriteAllText($clPath, $cl.Replace("`n", $nl))
+    Copy-Item $clPath (Join-Path $root 'komga_reader\assets\docs\CHANGELOG.md') -Force
+    if ($Final) { [IO.File]::WriteAllText($pub, $pubText) }
+    Git "add $files" | Out-Null
+    Git "commit -q -m `"$(if ($Final) { "Release $name (build $Build)" } else { "Release candidate $Rc of $name (build $Build)" })`"" | Out-Null
+} catch {
+    Git "checkout -- $files" | Out-Null # back as they were
+    throw
+}
+$message = if ($Final) { "$name (build $Build) - release" } else { "$name release candidate $Rc (build $Build)" }
+Git "tag -a $tag $commit -m `"$message`"" | Out-Null
+Write-Host "tagged $tag -> $buildTag ($($commit.Substring(0, 7))); CHANGELOG noted and committed"
+if ($Final) { Write-Host "pubspec.yaml: the next build is the first $next build" }
+Write-Host "Not pushed: push main and $tag when you want them on GitHub."

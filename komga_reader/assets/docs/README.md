@@ -217,9 +217,13 @@ spelling is displayed, typed, searched and used in file names.
 
 ### Working on changes
 
-- Development happens on a version branch (now `1.1`); releases are tagged (`v0.1.0-rc.1`).
-- One branch per change, off the version branch: `git switch -c feature/two-page-mode 1.1`, commit there, keep
-  `flutter analyze` and `flutter test` green, then merge back into `1.1`.
+- Development happens on a version branch (now `1.2`). One branch per change, off the version branch:
+  `git switch -c feature/two-page-mode 1.2`, commit there, keep `flutter analyze` and `flutter test` green, then merge
+  back into `1.2`.
+- Versions: every build after a release is a build of the next version (after 1.1, builds show 1.2.0). When a build
+  is good enough to be a release candidate, `tools\release.ps1 -Rc 1` tags it `v1.2.0-rc.1`; when one is the
+  release, `tools\release.ps1 -Final` tags it `v1.2.0` and moves the version on to 1.3.0 for the next build. Both
+  note it in the changelog and commit; neither pushes. (The 1.1 release was numbered 0.1.1, tag `v0.1.1`.)
 - GitHub runs `flutter analyze` and the tests on every push and pull request (`.github\workflows\checks.yml`).
 - New behaviour gets a test in `test\`. Screens that talk to Komga are tested against a fake `Komga` subclass (see
   `test\reader_test.dart`); shaders are run for real in tests (`test\enhance_test.dart`).
