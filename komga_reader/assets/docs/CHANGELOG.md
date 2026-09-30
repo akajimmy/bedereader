@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 46 - 2026-09-30
+
 **Changed**
 - The page number after a turn ("12 / 36") now shows in the bottom-left corner instead of the bottom right.
 - The reader's **Reader** panel:
@@ -14,11 +21,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
     in Settings.
 - The **Image** panel's Reset to original, Make default and Use the defaults are buttons under the settings instead of
   a ⋮ menu.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 44 - 2026-09-30
 
