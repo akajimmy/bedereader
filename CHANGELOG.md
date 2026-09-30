@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 47 - 2026-09-30
+
 **New**
 - **Rotation lock** (Android; Settings > Reader, and the reader's Reader panel): in the reader, follow the device, or
   stay in portrait or landscape - for reading lying down.
@@ -17,11 +24,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 - **Next book follows Hide read.** Open a book from a series, read list or library with Hide read on, and the next book
   is the next one you haven't read, skipping books already read ("Next unread in the series" at the end of the
   book). Opened with Hide read off, or from Home or search, the next book is simply the next in order, as before.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 46 - 2026-09-30
 
