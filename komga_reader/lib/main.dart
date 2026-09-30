@@ -24,6 +24,8 @@ import 'widgets/night.dart';
 
 void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
+  WidgetsFlutterBinding.ensureInitialized();
+  focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
   runApp(const KomgaReaderApp());
 }
 

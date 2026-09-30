@@ -5,6 +5,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Fixed**
+- On the PC, the first Continue reading book showed the keyboard/remote highlight as soon as the app opened. The
+  highlight now shows only once an arrow, Tab or Enter key is used, and goes away again with a click or a touch.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
