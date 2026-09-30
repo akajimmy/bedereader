@@ -221,13 +221,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
-          title: 'Next book before the last page',
-          subtitle: switch (d.midBook) {
-            MidBook.ask => 'Asks whether to mark this one read',
-            MidBook.markRead => 'This one is marked read',
-            MidBook.keep => 'This one stays in progress',
-          },
-          choices: [for (final m in MidBook.values) Choice(m, m.label)],
+          title: "'Next book' before the last page", // wording: user, 2026-09-30
+          subtitle: 'What should happen to the current book?',
+          choices: [for (final m in const [MidBook.markRead, MidBook.keep, MidBook.ask]) Choice(m, m.label)],
           value: d.midBook,
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
         ),

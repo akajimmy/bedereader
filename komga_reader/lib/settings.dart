@@ -85,7 +85,7 @@ extension PageTurnLabel on PageTurn {
 enum MidBook { ask, markRead, keep }
 
 extension MidBookLabel on MidBook {
-  String get label => switch (this) { MidBook.ask => 'Ask', MidBook.markRead => 'Mark read', MidBook.keep => 'Keep in progress' };
+  String get label => switch (this) { MidBook.ask => 'Ask', MidBook.markRead => 'Mark read', MidBook.keep => 'No change' };
 }
 
 /// What's around the page in the reader.

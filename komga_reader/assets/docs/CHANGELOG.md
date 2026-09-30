@@ -45,8 +45,8 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 - **Volume keys turn pages** (Android): volume down for the next page, volume up for the previous one. With the
   controls showing they change the volume as usual. On by default; switch it off in Settings > Reader.
 - New settings, all kept on this device:
-  - **Next book before the last page** (Settings > Reader): ask whether to mark the book read (as before), always
-    mark it read, or keep it in progress.
+  - **'Next book' before the last page** (Settings > Reader): what happens to the book you're leaving - mark it
+    read, no change (it stays in progress), or ask (as before).
   - **Background** (Settings > Reader): black, dark grey or white around the page.
   - **Keep the screen on** (Settings > Reader): off, 5, 10, 20 or 30 minutes after the last page turn or touch, or
     always. **Off by default**: until now the screen stayed on for as long as a book was open.
