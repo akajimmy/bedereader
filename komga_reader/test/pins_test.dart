@@ -18,6 +18,22 @@ class FakeKomga extends Komga {
       {'content': [], 'totalElements': 0, 'last': true};
 }
 
+/// [FakeKomga] that can't be reached while [down].
+class DownKomga extends FakeKomga {
+  bool down = false;
+  @override
+  Future<Map<String, dynamic>> clientSettings() async {
+    if (down) throw KomgaUnreachable(baseUrl);
+    return super.clientSettings();
+  }
+
+  @override
+  Future<void> putClientSetting(String key, String value) async {
+    if (down) throw KomgaUnreachable(baseUrl);
+    return super.putClientSetting(key, value);
+  }
+}
+
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
@@ -62,6 +78,22 @@ void main() {
     SharedPreferences.setMockInitialValues({}); // "new device": nothing local
     await Pins.instance.load(api);
     expect(Pins.instance.items.single.id, 'RL1');
+  });
+
+  test("a pin added while Komga was down survives the next start and is sent then - not replaced by Komga's older "
+      'list (code review, 2026-09-30)', () async {
+    final api = DownKomga();
+    await Pins.instance.load(api); // Komga has no pins
+    api.down = true;
+    Pins.instance.add(uu);
+    await pumpEventQueue();
+    expect(api.written[Pins.komgaKey], isNull); // couldn't be sent
+
+    api.down = false;
+    Pins.instance.items = []; // "the next start"
+    await Pins.instance.load(api);
+    expect(Pins.instance.items.single.id, 'RL1', reason: "this device's unsent pin wins");
+    expect(api.written[Pins.komgaKey], contains('RL1'), reason: 'and reaches Komga');
   });
 
   testWidgets('a read list opened from a pin starts with that pin\'s filter, and its pin button shows pinned', (tester) async {

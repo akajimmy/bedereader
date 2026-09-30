@@ -24,6 +24,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   - Reaching the last page marks the book read straight away; after Mark unread there, the tick shows unread.
   - Turning "Override the defaults" on keeps a fit you'd picked for this book from the top bar.
   - A book with no pages crashed the controls. It now says so, with Next book and Close.
+- Settings and pins kept in Komga (from a code review):
+  - A reader-settings or pin change made while Komga couldn't be reached was lost at the next start (Komga's older
+    copy won). It's now kept on the device, sent when Komga answers, and wins until it has been.
+  - Series settings removed on another device (Reset all, Use the defaults) now go on this one too.
+  - A change made while an earlier one was still being sent could be marked sent without reaching Komga.
+  - Signing out now clears the account's pins, reader settings and On deck list from the device, so they can't show
+    under - or be sent to - the next account. They come back from Komga when you sign in again.
 
 **Added**
 - Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book

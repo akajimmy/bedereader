@@ -92,6 +92,18 @@ class OnDeckHidden extends ChangeNotifier {
     }
   }
 
+  /// Signed out: the account's list goes from this device (it comes back from Komga on signing in again) - an unsent
+  /// change here was sent to the next account, over its own list (code review, 2026-09-30).
+  Future<void> clearAccount() async {
+    _api = null;
+    series = {};
+    books = {};
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_local);
+    await p.remove(_dirtyKey);
+  }
+
   @visibleForTesting
   void reset() {
     _api = null;

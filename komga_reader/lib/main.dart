@@ -222,7 +222,13 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _signOut() async {
     final p = await SharedPreferences.getInstance();
     await p.remove('apiKey');
-    setState(() => _api = null);
+    // the account's synced things go from this device - pins, reader settings, On deck hidden, anything unsent -
+    // so they can't show under, or be sent to, the next account (code review, 2026-09-30). They come back from Komga
+    // on signing in again; this device's own settings (display, keys, downloads) stay.
+    await AppSettings.instance.clearAccount();
+    await Pins.instance.clearAccount();
+    await OnDeckHidden.instance.clearAccount();
+    if (mounted) setState(() => _api = null);
   }
 
   // the theme is made again only when the accent colour changes, not on every settings change (a slider drag)
