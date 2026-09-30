@@ -94,6 +94,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
               Icon(_newestFirst ? Icons.arrow_downward : Icons.arrow_upward, size: 14),
             ]),
           ),
+          const PosterSizeButton(),
           PinButton(current: Pin(
             name: [(s['metadata']?['title'] ?? s['name']) as String, if (_filter == ReadFilter.hideRead) 'unread',
                 if (_newestFirst) 'newest first'].join(' · '),
@@ -162,6 +163,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
           actions: [
             Center(child: CountBadge(paged: _paged)),
             HideReadButton(value: _filter, onChanged: _setFilter),
+            const PosterSizeButton(),
             PinButton(current: Pin(
               name: [widget.title, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
               kind: 'collection', id: widget.collectionId, title: widget.title, filter: _filter.name,

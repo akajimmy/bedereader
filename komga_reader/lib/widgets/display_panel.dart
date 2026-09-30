@@ -80,7 +80,8 @@ class _Panel extends StatelessWidget {
             TextButton(autofocus: true, onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
           ]),
           const SizedBox(height: 6),
-          ...groups(s),
+          // the panel's segmented choices share one width
+          SettingsColumn(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: groups(s))),
           if (s.syncError != null)
             Text(s.syncError!, style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 12)),
         ]);

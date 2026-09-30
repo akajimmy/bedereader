@@ -6,6 +6,7 @@ import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/drawer.dart';
+import 'package:komga_reader/widgets/poster.dart' show PosterSizeButton;
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -222,6 +223,37 @@ void main() {
     expect([old.midBook, old.background, old.screenOn, old.posterSize, old.posterTitleOnly, old.pageTurn],
         [MidBook.ask, ReaderBackground.black, 0, PosterSize.medium, false, PageTurn.flip]);
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0); // not a choice: the default
+  });
+
+  testWidgets('segmented choices on a page share one width (the widest), flush right', (tester) async {
+    tall(tester, width: 1200);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SettingsColumn(child: Column(children: [
+      SettingsGroup(children: [
+        SegmentRow<int>(title: 'A', choices: const [Choice(1, 'x'), Choice(2, 'y')], value: 1, onChanged: (_) {}),
+        SegmentRow<String>(title: 'B', value: 'a', onChanged: (_) {},
+            choices: const [Choice('a', 'aaaa'), Choice('b', 'bbbb'), Choice('c', 'cccc')]),
+      ]),
+    ])))));
+    await tester.pump(); // the column widens after the first frame
+    final small = tester.getRect(find.byType(SegmentedButton<int>));
+    final wide = tester.getRect(find.byType(SegmentedButton<String>));
+    expect(small.width, closeTo(wide.width, 0.5));
+    expect(small.right, closeTo(wide.right, 0.5));
+    expect(small.right, greaterThan(1200 - 20)); // flush with the row's right edge (inside its padding)
+  });
+
+  testWidgets('poster size button in a top bar: S / M / L, the same setting as here', (tester) async {
+    final s = AppSettings.instance;
+    s.setDisplay(const DisplayPrefs());
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(appBar: AppBar(actions: const [PosterSizeButton()]))));
+    expect(find.text('M'), findsOneWidget);
+    await tester.tap(find.byTooltip('Poster size: medium'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Large'));
+    await tester.pumpAndSettle();
+    expect(s.display.posterSize, PosterSize.large);
+    expect(find.text('L'), findsOneWidget);
   });
 
   testWidgets('settings groups: rows are separated by hairlines, not spacers', (tester) async {
