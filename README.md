@@ -103,6 +103,11 @@ Third-party software). What's new in each build is in `CHANGELOG.md` (About > Wh
 **AI usage:** this application was developed with the aid of AI coding tools, but was designed, reviewed, and
 tested by a human.
 
+## Feedback
+
+Bug reports and ideas are welcome as [GitHub issues](https://github.com/akajimmy/bedereader/issues). The project
+doesn't take pull requests.
+
 ## For developers
 
 The rest of this file is about building the app.
