@@ -5,6 +5,19 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Changed**
+- **Settings, redesigned** to be easier to take in at a glance:
+  - One page at a time. The pages are listed down the side on a wide screen, or across the top on a phone.
+  - Every setting is one row: its name on the left, its switch or choices on the right, one short line of explanation
+    at most.
+  - Each page says once where its settings are kept.
+- **The reader's Reader and Image panels** use the same rows.
+  - On a wide screen they open from the side, so the page stays in view while you adjust it.
+  - Reader: fit is three icons, and the background is three swatches.
+  - Image: Enhance and Enhance colours come first. Reset to original, Make these the default and a new **Use the
+    defaults**, which drops a series' own settings, are in the ⋮ menu. The panel says whether the series has its own
+    settings or follows the defaults.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
