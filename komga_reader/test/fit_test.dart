@@ -107,6 +107,29 @@ void main() {
     expect(scroll.offset, 400, reason: 'centred again, not left at the edge');
   });
 
+  testWidgets('moving off a zoomed page puts it back to fit (the reader forgets the zoom on a turn)', (tester) async {
+    // code review, 2026-09-30: coming back, the page was still zoomed while the reader thought it wasn't
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final zoom = TransformationController();
+    final data = PageData(await image(tester, 800, 1200), Uint8List(0));
+    final zoomed = <bool>[];
+    Future<void> show({required bool current}) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(data: data, prefs: const ReaderPrefs(),
+          scroll: ScrollController(), zoom: zoom, current: current, onZoomChanged: zoomed.add))));
+      await tester.pump();
+    }
+
+    await show(current: true);
+    zoom.value = Matrix4.diagonal3Values(2, 2, 1); // pinched in
+    expect(zoomed, [true]);
+    await show(current: false); // turned to the next page: this one is a neighbour now
+    await tester.pump();
+    expect(zoom.value.getMaxScaleOnAxis(), closeTo(1, 1e-6), reason: 'back to fit');
+    expect(zoomed, [true, false]);
+  });
+
   testWidgets('a page that fits is simply centred, nothing to drag', (tester) async {
     bool? pans;
     await page(tester, FitMode.height, 600, 1200, onPan: (p) => pans = p); // 600 wide fits in 800

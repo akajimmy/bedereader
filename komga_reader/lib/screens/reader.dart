@@ -209,55 +209,120 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   static String _titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();
 
-  Future<void> _open(dynamic book) async {
-    setState(() { _loading = true; _book = book; _menu = false; _openError = null; _bookFit = null; });
+  int _openRun = 0; // each _open's number: an older one still loading doesn't take over
+
+  /// Opens [book]. The book being read stays the current one - its pages (under the loading cover), where progress is
+  /// saved, the title - until the new one has loaded; a load that fails leaves it exactly as it was (code review,
+  /// 2026-09-30: closing mid-load saved the old book's page to the new one). [onOpened] runs once it has loaded.
+  Future<void> _open(dynamic book, {VoidCallback? onOpened}) async {
+    final run = ++_openRun;
+    setState(() { _loading = true; _menu = false; _openError = null; });
     try {
       final fresh = await api.book(book['id']) ?? book; // current progress from the server
       final pages = await api.pages(book['id']);
+      if (pages.isEmpty) throw _NoPages();
       final seriesId = fresh['seriesId'] as String?;
+      String? direction = _komgaDirection;
       if (seriesId != null && seriesId != _directionSeries) {
         try {
-          _komgaDirection = (await api.oneSeries(seriesId))?['metadata']?['readingDirection'] as String?;
+          direction = (await api.oneSeries(seriesId))?['metadata']?['readingDirection'] as String?;
         } catch (_) {
-          _komgaDirection = null; // unknown: left to right
+          direction = null; // unknown: left to right
         }
-        _directionSeries = seriesId;
       }
+      if (!mounted || run != _openRun) return; // closed, or another book asked for since
+      _komgaDirection = direction;
+      _directionSeries = seriesId;
       final rp = fresh['readProgress'];
       final start = rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pages.length - 1);
-      _pc?.dispose();
-      _disposeScrolls();
+      // the last book's page view is still up (under the cover): its controllers go once the new one has replaced it
+      final oldPc = _pc, oldScrolls = List.of(_scrolls.values);
+      _scrolls.clear();
       _clearThumbs();
       final loader = PageLoader(api, fresh['id'] as String,
           [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
-      if (pages.isNotEmpty) loader.around(start);
+      loader.around(start);
       setState(() {
         _book = fresh; _pages = pages; _index = start; _loader = loader;
-        _openedAt = start; _turned = false; _zoomed = false;
+        _openedAt = start; _turned = false; _zoomed = false; _bookFit = null;
         _pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
         _loading = false;
       });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        oldPc?.dispose();
+        for (final c in oldScrolls) {
+          c.dispose();
+        }
+      });
+      onOpened?.call();
       _keys.requestFocus();
     } catch (e, st) {
-      if (!mounted) return;
-      final message = couldnt('open "${_titleOf(book)}"', e, thing: 'book');
+      if (!mounted || run != _openRun) return;
+      final empty = e is _NoPages;
+      final message = empty
+          ? '"${_titleOf(book)}" has no pages (Komga may need to analyse it again).'
+          : couldnt('open "${_titleOf(book)}"', e, thing: 'book');
       if (_pc == null) {
-        setState(() { _loading = false; _openError = (message, e, st); }); // nothing to show: say so on the screen
+        // nothing to show: say so on the screen (a book with no pages: Close, or on to the next book)
+        setState(() { _loading = false; _openError = (message, e, st); });
       } else {
-        setState(() => _loading = false);
-        showErrorSnack(context, message, e, st); // the book being read stays
+        setState(() => _loading = false); // the book being read stays
+        if (empty) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message),
+              action: SnackBarAction(label: 'Next book', onPressed: () => _skipPast(book))));
+        } else {
+          showErrorSnack(context, message, e, st);
+        }
       }
     }
   }
 
+  /// On past a book that can't be read (no pages): the one after it.
+  Future<void> _skipPast(dynamic book) async {
+    if (_busy) return;
+    _switching = true;
+    try {
+      final next = await _nextFrom(book['id'] as String);
+      if (!mounted) return;
+      if (next == null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_endText)));
+        Navigator.of(context).pop();
+      } else {
+        await _goTo(next, forward: true);
+      }
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('find the next book', e, thing: 'book'), e, st);
+    } finally {
+      _switching = false;
+    }
+  }
+
+  /// Moving to another book (Next / Previous book at work, or it's loading): page turns and book moves wait - a second
+  /// "next" meanwhile opened the book after, marking the one in between read (code review, 2026-09-30).
+  bool _switching = false;
+  bool get _busy => _loading || _switching;
+
   // ---- progress: saved 1.5 s after the page settles, and on leaving
   void _onPage(int i) {
     _awake();
-    setState(() { _index = i; _zoomed = false; if (i != _openedAt) _turned = true; });
-    _saveTimer?.cancel();
-    _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
+    setState(() { _index = i; _zoomed = false; });
     if (i <= _last) _loader?.around(i);
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
+    // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
+    // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
+    if (_curl == null) _pageTurned(i);
+  }
+
+  /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
+  /// counts as read (user, 2026-09-30) - and the page number flashes.
+  void _pageTurned(int i) {
+    if (i != _openedAt) _turned = true;
+    _saveTimer?.cancel();
+    if (_turned && i == _last) {
+      _saveNow();
+    } else {
+      _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
+    }
     if (i <= _last && _settings.display.pageNumber) {
       _flashTimer?.cancel();
       setState(() => _flash = true);
@@ -280,7 +345,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// Forward: in fit width/height scroll on through the page first, then turn.
   void _forward() {
-    if (_pc == null) return;
+    if (_pc == null || _busy || _curlSettling) return;
     if (_index >= _pages.length) { _nextBook(); return; }
     if (_zoomed && (_steppers[_index]?.call(true) ?? false)) return; // zoomed in: pan along the page first
     final c = _scrolls[_index];
@@ -296,7 +361,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// Back: scroll back through the page first; the previous page then opens at its end.
   void _back() {
-    if (_pc == null) return;
+    if (_pc == null || _busy || _curlSettling) return;
     if (_zoomed && (_steppers[_index]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
     final c = _scrolls[_index];
     if (_prefs.fit != FitMode.screen && c != null && c.hasClients && c.position.pixels > 1) {
@@ -314,6 +379,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// One page on or back, in the chosen animation: Wipe (slide), Instant flip, or 3D page curl.
   void _turnPage({required bool next}) {
+    if (_busy || _curlSettling) return;
     final target = next ? _index + 1 : _index - 1;
     if (target < 0 || target > _pages.length) return;
     if (_curlMode) {
@@ -477,12 +543,18 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     setState(() => c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!);
   }
 
-  /// The turn is over: let go before halfway -> back to where it started.
+  /// A curl is playing out after the finger let go (turning, or springing back): taps and keys wait for it (user,
+  /// 2026-09-30) - one during a spring-back skipped a page, from the last page it even opened the next book.
+  bool get _curlSettling => _curl != null && _curlAnim.isAnimating;
+
+  /// The turn is over: let go before halfway -> back to where it started, and nothing counted; else the turn counts.
   void _endCurl({bool cancel = false}) {
     final c = _curl;
     if (c == null) return;
+    final back = cancel || !c.completing;
+    if (back) _pc?.jumpToPage(c.from); // while _curl is still set: not counted as a turn (_onPage)
     _curl = null;
-    if (cancel || !c.completing) _pc?.jumpToPage(c.from);
+    if (!back) _pageTurned(_index);
     _maybeIdle();
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
@@ -554,6 +626,16 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   /// Next book. On the last page or the end card the current book is marked read; before that, it depends on "Next
   /// book before the last page" (Settings > Reader): ask, mark read, or keep it in progress.
   Future<void> _nextBook() async {
+    if (_busy) return; // already on the way to another book
+    _switching = true;
+    try {
+      await _toNextBook();
+    } finally {
+      _switching = false;
+    }
+  }
+
+  Future<void> _toNextBook() async {
     final finished = _index >= _last;
     final midBook = _settings.display.midBook;
     var markRead = finished || midBook == MidBook.markRead;
@@ -579,13 +661,15 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       } else {
         _saveNow();
       }
+      // settled: nothing more to save for this book on leaving - closing used to save the page over "read" (review)
+      _turned = false;
       final next = await _nextFrom(_book['id'] as String);
       if (!mounted) return;
       if (next == null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_endText)));
         Navigator.of(context).pop();
       } else {
-        _goTo(next, forward: true);
+        await _goTo(next, forward: true);
       }
     } on NotAvailableOffline {
       if (!mounted) return;
@@ -601,10 +685,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   /// hidden, the previous one not read yet (user, 2026-09-30). Nothing is marked; this book's place is kept if a
   /// page was turned.
   Future<void> _prevBook() async {
+    if (_busy) return; // already on the way to another book
+    _switching = true;
+    try {
+      await _toPrevBook();
+    } finally {
+      _switching = false;
+    }
+  }
+
+  Future<void> _toPrevBook() async {
     _saveTimer?.cancel();
     _saveNow();
     if (_at > 0) {
-      _goTo(_visited[_at - 1], forward: false);
+      await _goTo(_visited[_at - 1], forward: false);
       return;
     }
     try {
@@ -619,7 +713,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
             ? 'No unread books before this one in the $where'
             : 'This is the first book of the $where')));
       } else {
-        _goTo(prev, forward: false);
+        await _goTo(prev, forward: false);
       }
     } catch (e, st) {
       if (mounted) showErrorSnack(context, couldnt('find the previous book', e, thing: 'book'), e, st);
@@ -651,8 +745,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _saveTimer?.cancel();
     _turned = false;
     _openedAt = _index;
-    final fresh = await api.book(_book['id']).catchError((_) => null);
-    if (mounted && fresh != null) setState(() => _book = fresh);
+    final id = _book['id'];
+    final fresh = await api.book(id).catchError((_) => null);
+    // only if that book is still the one open (a quick Next book meanwhile: the answer is for the book left behind)
+    if (mounted && fresh != null && _book['id'] == id && !_busy) setState(() => _book = fresh);
   }
 
   // ---- controls
@@ -753,7 +849,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
       switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
         case ReaderAction.next:
-          _forward();
+          // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
+          if (e is KeyDownEvent || _index < _pages.length) _forward();
         case ReaderAction.previous:
           _back();
         case ReaderAction.controls:
@@ -842,11 +939,15 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                   child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
                       style: TextStyle(color: _ink(0.7)),
                       action: Row(mainAxisSize: MainAxisSize.min, children: [
-                        TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
+                        // a book with no pages: retrying won't help - on to the next book instead
+                        if (_openError!.$2 is _NoPages)
+                          TextButton(autofocus: true, onPressed: () => _skipPast(_book), child: const Text('Next book'))
+                        else
+                          TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
                         TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
                       ])),
                 ))
-              : _loading || _pc == null
+              : _pc == null
               ? const Center(child: CircularProgressIndicator())
               : Stack(children: [
                   LayoutBuilder(builder: (context, box) {
@@ -963,6 +1064,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                       ),
                     ),
                   if (_menu) ..._controls(),
+                  // another book loading: this one's pages stay underneath (it's still the current book until the new
+                  // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
+                  if (_loading)
+                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: _bg,
+                        child: const Center(child: CircularProgressIndicator())))),
                 ]),
         ),
       ),
@@ -999,6 +1105,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
           onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
           idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
+          current: i == _index, // moved off, a zoomed page goes back to fit
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           onZoomToggle: (zoom) => zoom == null ? _zoomers.remove(i) : _zoomers[i] = zoom,
           onZoomStep: (step) => step == null ? _zoomSteps.remove(i) : _zoomSteps[i] = step,
@@ -1047,24 +1154,26 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// Moves to [book], the next (forward) or previous one: steps along the visited books when that's where it is,
   /// else records it (going forward from the middle, the books after here are left behind).
-  void _goTo(Map<String, dynamic> book, {required bool forward}) {
+  /// (The visit only moves once the book has loaded: one that fails to open leaves it as it was.)
+  Future<void> _goTo(Map<String, dynamic> book, {required bool forward}) {
     final id = book['id'];
-    if (forward) {
-      if (_at + 1 < _visited.length && _visited[_at + 1]['id'] == id) {
-        _at++;
+    return _open(book, onOpened: () {
+      if (forward) {
+        if (_at + 1 < _visited.length && _visited[_at + 1]['id'] == id) {
+          _at++;
+        } else {
+          _visited
+            ..removeRange(_at + 1, _visited.length)
+            ..add(book);
+          _at = _visited.length - 1;
+        }
+      } else if (_at > 0 && _visited[_at - 1]['id'] == id) {
+        _at--;
       } else {
-        _visited
-          ..removeRange(_at + 1, _visited.length)
-          ..add(book);
-        _at = _visited.length - 1;
+        _visited.insert(_at, book); // before where this visit started (or [_at] is 0 anyway)
       }
-    } else if (_at > 0 && _visited[_at - 1]['id'] == id) {
-      _at--;
-    } else {
-      _visited.insert(_at, book); // before where this visit started (or [_at] is 0 anyway)
-    }
-    _upNextFuture = null; // what's next depends on where in the visit this is
-    _open(book);
+      _upNextFuture = null; // what's next depends on where in the visit this is
+    });
   }
 
   /// The book after [id]: the one moved on to before, when this visit went back from it; else the one after it in
@@ -1188,7 +1297,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   /// Top bar (close, title, fit, night, read toggle, more) and bottom bar (page counter, slider, display, next book).
   /// A tap anywhere that isn't a control hides them.
   List<Widget> _controls() {
-    final completed = _book['readProgress']?['completed'] == true || _index >= _last;
+    // read: marked so, or the last page reached in this visit (saved as read at once, _pageTurned). Not merely being
+    // on the last page: after Mark unread there, the tick has to show unread (code review, 2026-09-30)
+    final completed = _book['readProgress']?['completed'] == true || (_turned && _index >= _last);
     final shown = _scrub ?? _index.clamp(0, _last);
     final night = _settings.display.night;
     const bar = Color(0xE6101012);
@@ -1572,6 +1683,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         ),
       );
 }
+
+/// Komga lists the book with no pages (a damaged file, or not analysed yet).
+class _NoPages implements Exception {}
 
 /// A page turn in progress (3D page curl).
 class _Curl {

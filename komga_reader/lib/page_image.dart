@@ -177,7 +177,7 @@ class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
       this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle,
-      this.onZoomStep});
+      this.onZoomStep, this.current = true});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -219,6 +219,10 @@ class PageCanvas extends StatefulWidget {
   /// Enhance wait for it, so their GPU work doesn't land on a turn's frames - a curl or wipe hitched while the page
   /// after next was processed during it (user, 2026-09-29). Null: process at once (the page on screen).
   final Future<void> Function()? idle;
+
+  /// The page showing (not a neighbour kept ready). Moving off it puts it back to fit: coming back, it shows whole,
+  /// and the reader (which forgets the zoom on a turn) agrees with it (code review, 2026-09-30).
+  final bool current;
 
   @override
   State<PageCanvas> createState() => _PageCanvasState();
@@ -389,6 +393,15 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   @override
   void didUpdateWidget(PageCanvas old) {
     super.didUpdateWidget(old);
+    if (old.current && !widget.current) {
+      // moved off this page: back to fit - after the frame, as the reader hears of zoom changes with a setState
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.current) return;
+        _anim.stop();
+        _move = null;
+        if (_zoomedIn) _zoom.value = Matrix4.identity();
+      });
+    }
     final cropChanged = old.prefs.crop != widget.prefs.crop;
     if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data || cropChanged) {
       if (old.data != widget.data || !widget.prefs.autoLevels || cropChanged) {

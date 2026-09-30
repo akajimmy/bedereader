@@ -125,7 +125,12 @@ class _ReaderPanel extends StatelessWidget {
                       ? 'Using the defaults. This book: fit ${bookFit!.label.toLowerCase()}, for now'
                       : 'Using the defaults',
               value: own,
-              onChanged: (v) => s.setOverride(id, layout: v),
+              onChanged: (v) {
+                s.setOverride(id, layout: v);
+                // on: it starts from what's on screen, including a fit picked for this book - nothing moves (review)
+                final f = bookFit;
+                if (v && f != null) s.setSeriesLayout(id, s.prefsFor(id).copyWith(fit: f));
+              },
             ),
             ...fitDirectionRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
                 enabled: own),
