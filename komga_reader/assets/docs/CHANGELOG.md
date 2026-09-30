@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book
+  part way through keeps its pages - and carries on by itself back on Wi-Fi. The Downloads screen says it's waiting.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.

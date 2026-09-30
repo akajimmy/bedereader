@@ -61,6 +61,18 @@ Future<(int, bool)?> batteryState() async {
   }
 }
 
+/// Whether the device is on Wi-Fi (or a cable) rather than mobile data - Downloads' "Wi-Fi only". A PC, the web, or
+/// a check that fails count as Wi-Fi: better a download than a queue stuck for no reason.
+Future<bool> onWifi() async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return true;
+  try {
+    final n = await _channel.invokeMethod<String>('network');
+    return n == null || n == 'wifi';
+  } catch (_) {
+    return true;
+  }
+}
+
 /// Stops the tablet from dimming and sleeping while a book is open (Android; a no-op on web/Windows).
 Future<void> keepScreenOn(bool on) async {
   try {
