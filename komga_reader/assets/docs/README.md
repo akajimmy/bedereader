@@ -110,9 +110,6 @@ The rest of this file is about building the app.
 - `LICENSE` - MIT.
 - `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
-- `tools\image-lab\` - a browser tool for tuning the page processing (serve the repository folder with
-  `python -m http.server 8765` and open `/tools/image-lab/index.html`); `tools\sharpen_compare.py` and
-  `tools\extract_pages.py` go with it. Test pages go in `testpages\`, which isn't committed.
 - `keytest\` - a page for finding out which keys a remote sends.
 - `dev_setup.py` - downloads and verifies the toolchain.
 

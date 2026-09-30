@@ -4,7 +4,7 @@
 
 // Enhance, step 1 of 3 (lib/enhance.dart), at the page's own resolution: edge-preserving smoothing (a bilateral
 // filter over 7x7). Colours closer than about uRange are averaged together - JPEG speckle, paper grain - while bigger
-// jumps such as ink lines are left alone. Tuned by the user in tools/image-lab: Denoise 0.75 -> uRange 0.15.
+// jumps such as ink lines are left alone. Tuned by the user in the image lab (a local tuning page): Denoise 0.75 -> uRange 0.15.
 uniform vec2 uSize;     // page size, px (this pass draws at that size)
 uniform float uRange;
 uniform sampler2D uImage;

@@ -61,8 +61,7 @@ notice, the Material Icons attribution and (on Android) the Apache 2.0 terms for
 | Git, Git for Windows | 2.55 | GPL-2.0 | Version control |
 | GitHub, GitHub Actions (`actions/checkout`, `subosito/flutter-action`); GitHub CLI | -; v7, v2; 2.101 | GitHub terms; MIT | Hosting, the automatic checks on every push, publishing |
 | Windows PowerShell | 5.1 | Microsoft | The build and install scripts |
-| Python, with Pillow and NumPy | 3.13, 12.3, 2.5 | PSF; MIT-CMU; BSD-3-Clause | Icon generation, image comparisons, extracting test pages |
-| AMD FidelityFX CAS | 1.0 | MIT | Compared in the image-lab tool (notice below) |
+| Python, with Pillow | 3.13, 12.3 | PSF; MIT-CMU | Icon generation (`tools\make_icon.py`), toolchain setup (`dev_setup.py`) |
 | Claude Code (Anthropic) | - | Anthropic terms | AI coding assistant (see *AI assistance*) |
 
 Pages from the owner's own comics are used locally to tune the image processing; they're not part of the project.
@@ -72,38 +71,11 @@ Pages from the owner's own comics are used locally to tune the image processing;
 ### AMD FidelityFX Super Resolution 1 (FSR 1)
 
 Enhance adapts FSR 1's EASU upscaler (`komga_reader\shaders\easu.frag`) and RCAS sharpener
-(`komga_reader\shaders\rcas.frag`); the image lab (`tools\image-lab\index.html`) contains versions of both.
+(`komga_reader\shaders\rcas.frag`).
 <https://github.com/GPUOpen-Effects/FidelityFX-FSR>
 
 ```
 Copyright (c) 2021 Advanced Micro Devices, Inc. All rights reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-```
-
-### AMD FidelityFX Contrast Adaptive Sharpening (CAS)
-
-The image lab (`tools\image-lab\index.html`) contains a version of CAS. Not part of the app.
-<https://github.com/GPUOpen-Effects/FidelityFX-CAS>
-
-```
-Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

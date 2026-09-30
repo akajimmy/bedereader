@@ -22,3 +22,13 @@ testpages/
 
 # private working notes and backlog (kept out of the public repository)
 NOTES.md
+
+# local development leftovers - kept on this PC, not published (2026-09-29):
+# the image-tuning page and its helpers (the Enhance work is done), one-off preview entry points,
+# a generated icon preview (tools/make_icon.py recreates it), and editor/assistant tool settings
+tools/image-lab/
+tools/sharpen_compare.py
+tools/extract_pages.py
+tools/icon_preview.png
+komga_reader/lib/dev_*.dart
+.claude/

@@ -9,7 +9,7 @@
 // FSR 1 (MIT). From 12 page pixels around each screen pixel it finds the local edge direction and stretches its
 // filter along it, so enlarged diagonal lines and lettering stay smooth instead of stair-stepped or blurred. One
 // pass (Lanczos 3 needs two). Shrunk pages still use Lanczos (shaders/lanczos.frag). Chosen by the user in
-// tools/image-lab, 2026-09-29.
+// the image lab (a local tuning page), 2026-09-29.
 uniform vec2 uOut;  // output size, px
 uniform vec2 uIn;   // page size, px
 uniform sampler2D uImage;
