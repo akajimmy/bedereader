@@ -35,3 +35,6 @@ komga_reader/lib/dev_*.dart
 
 # raw screenshots for the README (the chosen ones go, sized, into docs/images/)
 screenshots/
+
+# private reports (analysis, research) - kept on this PC
+reports/
