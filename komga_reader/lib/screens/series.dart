@@ -8,6 +8,7 @@ import '../widgets/breadcrumb.dart';
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
+import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'library.dart';
@@ -23,7 +24,10 @@ class SeriesScreen extends StatefulWidget {
   State<SeriesScreen> createState() => _SeriesScreenState();
 }
 
-class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere {
+class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshOnReturn {
+  @override
+  void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
+
   ReadFilter _filter = ReadFilter.all;
   bool _newestFirst = false; // issue order: oldest first (number ascending) unless flipped
   late final Paged _paged = Paged((page, size) => widget.api.seriesBooks(widget.series['id'],
@@ -118,8 +122,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere {
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
             selection: _sel, showViewSeries: false, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: widget.api, book: b,
-              skipRead: _filter == ReadFilter.hideRead)));
-          _paged.refresh();
+              skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),
     ));
@@ -137,7 +140,10 @@ class SeriesListScreen extends StatefulWidget {
   State<SeriesListScreen> createState() => _SeriesListScreenState();
 }
 
-class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere {
+class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, RefreshOnReturn {
+  @override
+  void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
+
   ReadFilter _filter = ReadFilter.all;
   late final Paged _paged = Paged((page, size) =>
       widget.api.series(collectionId: widget.collectionId, readStatus: _filter.api, page: page, size: size));
@@ -183,8 +189,8 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere {
         paged: _paged,
         itemBuilder: (context, it, i) => seriesTile(context, widget.api, it, autofocus: i == 0,
             onChanged: _paged.refresh, onOpen: () async {
+          // coming back loads afresh: refreshView
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: widget.api, series: it)));
-          _paged.refresh();
         }),
       )),
     );

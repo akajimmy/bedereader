@@ -22,6 +22,7 @@ import 'screen.dart';
 import 'side_menu.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/drawer.dart';
+import 'widgets/refresh_on_return.dart';
 import 'widgets/sync_alert.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
@@ -243,6 +244,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       title: appName,
       debugShowCheckedModeBanner: false,
       navigatorKey: _nav,
+      navigatorObservers: [ReturnObserver.instance], // library views refresh when they're back on top
       scaffoldMessengerKey: _messenger,
       theme: _themeOf(display.accent),
       // this app's text size (Settings > Display), on top of the device's own

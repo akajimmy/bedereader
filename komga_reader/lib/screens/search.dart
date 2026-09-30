@@ -8,6 +8,7 @@ import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/poster_row.dart';
 import '../widgets/readlist_tile.dart';
+import '../widgets/refresh_on_return.dart';
 import '../widgets/error_text.dart';
 import 'library.dart';
 import 'reader.dart';
@@ -26,7 +27,7 @@ class SearchScreen extends StatefulWidget {
   State<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
+class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
   final _text = TextEditingController();
   Timer? _debounce;
   late bool _inLibrary = widget.libraryId != null;
@@ -74,8 +75,11 @@ class _SearchScreenState extends State<SearchScreen> {
     }
   }
 
-  Future<void> _push(Widget w) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+  // coming back searches again: refreshView
+  Future<void> _push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
+
+  @override
+  void refreshView() {
     if (_query.isNotEmpty) _search(_query); // read state may have changed
   }
 

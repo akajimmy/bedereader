@@ -13,6 +13,7 @@ import '../widgets/home_sections_editor.dart';
 import '../widgets/pin_tile.dart';
 import '../widgets/poster.dart' show PosterSizeButton;
 import '../widgets/poster_row.dart';
+import '../widgets/refresh_on_return.dart';
 import '../widgets/error_text.dart';
 import 'library.dart';
 import 'reader.dart';
@@ -30,7 +31,10 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
+  @override
+  void refreshView() => _load(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
+
   final _scaffold = GlobalKey<ScaffoldState>();
   final _edge = GlobalKey<DrawerEdgeState>(); // Left past the first item opens the side menu
   List<dynamic> _libraries = [];
@@ -253,10 +257,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return const [];
   }
 
-  Future<void> _push(Widget w) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
-    _load(); // read state may have changed while away
-  }
+  // coming back loads afresh: refreshView
+  Future<void> _push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
 
   @override
   Widget build(BuildContext context) {
