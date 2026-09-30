@@ -6,7 +6,7 @@
 //   1. Auto-levels - each channel stretched between the book's black and white point (lib/page_image.dart Levels)
 //   2. Whiten paper - pale, low-colour areas (yellowed paper) towards white
 //   3. Deepen ink - dark, low-colour areas (faded blacks) towards black
-// The user's pick in tools/image-lab, 2026-09-29: auto-levels + whiten 1.0 + ink 1.0.
+// The user's pick in the image lab (a local tuning page), 2026-09-29: auto-levels + whiten 1.0 + ink 1.0.
 uniform vec2 uSize;
 uniform vec3 uLo;
 uniform vec3 uHi;

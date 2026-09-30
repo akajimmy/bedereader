@@ -7,7 +7,7 @@
 
 // Enhance, step 3 of 3 (lib/enhance.dart), at screen resolution: RCAS, the sharpener of AMD FidelityFX FSR 1.
 // The sharpening lobe is limited so no pixel is pushed past what its neighbours allow: crisper lines with little
-// ringing, and flat areas left mostly alone. Tuned by the user in tools/image-lab: amount 0.6.
+// ringing, and flat areas left mostly alone. Tuned by the user in the image lab (a local tuning page): amount 0.6.
 uniform vec2 uSize;     // size, px
 uniform float uAmount;  // 0..1, 1 = strongest
 uniform sampler2D uImage;

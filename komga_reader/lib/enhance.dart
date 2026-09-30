@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
 /// "Enhance" (Image settings, per series; replaces the old Sharpen): the page is cleaned up, scaled and sharpened on
-/// the GPU once, at the exact size it's shown at, and that picture is drawn 1:1. Tuned by the user in tools/image-lab
+/// the GPU once, at the exact size it's shown at, and that picture is drawn 1:1. Tuned by the user in the image lab (a local tuning page)
 /// on two test pages (a soft 1999 JPEG scan enlarged, a 1984 paper scan shrunk), 2026-09-29:
 ///   1. Denoise 0.75 - edge-preserving smoothing at page resolution (shaders/denoise.frag)
 ///   2. scaling to the screen: enlarging with FSR 1 EASU, edge-directed (shaders/easu.frag, added 2026-09-29 by the
@@ -78,7 +78,7 @@ class Enhancer {
   }
 
   /// "Enhance colours": [src] with auto-levels ([lo]/[hi] per channel, 0..1), then Whiten paper and Deepen ink at
-  /// full strength (the user's pick in tools/image-lab), at the page's own size. Null if the shaders can't run here.
+  /// full strength (the user's pick in the image lab (a local tuning page)), at the page's own size. Null if the shaders can't run here.
   static const whiten = 1.0, ink = 1.0;
   static Future<ui.Image?> colours(ui.Image src, List<double> lo, List<double> hi) async {
     final p = await _load();
