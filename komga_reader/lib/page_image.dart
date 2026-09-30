@@ -399,7 +399,11 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     }
     if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
     // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
-    if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd)) _placed = false;
+    // ... and a change of fit: going round the fits again left a wide page at the left edge (tablet, 2026-09-30)
+    if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd) ||
+        old.prefs.fit != widget.prefs.fit) {
+      _placed = false;
+    }
   }
 
   /// Enhance colours: the book's levels, then the colour-corrected page (the page shows with plain auto-levels

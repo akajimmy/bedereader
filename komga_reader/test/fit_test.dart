@@ -82,6 +82,31 @@ void main() {
     expect(pans, [true, false]);
   });
 
+  testWidgets('going round the fits again: a wide page in fit height is centred every time, not at the left edge',
+      (tester) async {
+    // user's repro (2026-09-30): the top bar's fit button, round twice - same page, same scroll controller
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // the reader keeps one per page; its offset isn't restored when the page's scroll view comes back (in the reader
+    // it wasn't - hence the left edge), so no keepScrollOffset here
+    final scroll = ScrollController(keepScrollOffset: false);
+    final data = PageData(await image(tester, 1600, 1200), Uint8List(0)); // one page: the same data throughout, as in the reader
+    Future<void> show(FitMode fit) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
+          data: data, prefs: ReaderPrefs(fit: fit), scroll: scroll))));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await show(FitMode.height);
+    expect(scroll.offset, 400); // centred
+    await show(FitMode.screen);
+    await show(FitMode.width);
+    await show(FitMode.height); // round again
+    expect(scroll.offset, 400, reason: 'centred again, not left at the edge');
+  });
+
   testWidgets('a page that fits is simply centred, nothing to drag', (tester) async {
     bool? pans;
     await page(tester, FitMode.height, 600, 1200, onPan: (p) => pans = p); // 600 wide fits in 800

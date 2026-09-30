@@ -69,6 +69,8 @@ void main() {
     await tester.pump();
     expect(find.text('Next page'), findsOneWidget);
     expect(find.text('PgDn'), findsOneWidget);
+    final chip = tester.widget<InputChip>(find.ancestor(of: find.text('PgDn'), matching: find.byType(InputChip)));
+    expect(chip.onDeleted, isNull, reason: 'one stop per key for the remote - no separate delete button');
     await tester.tap(find.text('Add').first); // Next page
     await tester.pumpAndSettle();
     expect(find.text('Next page: press a key'), findsOneWidget);

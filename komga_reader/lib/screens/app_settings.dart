@@ -577,11 +577,15 @@ class _KeyRow extends StatelessWidget {
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
           for (final key in k.keys[action]!)
+            // one stop per key for the remote: the ✕ is drawn in the label, not a second (focusable) delete button
+            // (user, 2026-09-30); OK or a tap removes it
             InputChip(
-              label: Text(ReaderKeys.nameOf(key)),
+              label: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text(ReaderKeys.nameOf(key)),
+                if (removable) ...[const SizedBox(width: 6), const Icon(Icons.close, size: 16)],
+              ]),
               visualDensity: VisualDensity.compact,
               tooltip: removable ? 'Remove ${ReaderKeys.nameOf(key)}' : 'Show the controls keeps at least one key',
-              onDeleted: removable ? () => k.remove(action, key) : null,
               onPressed: removable ? () => k.remove(action, key) : null,
             ),
           if (k.keys[action]!.isEmpty) const Text('No key', style: TextStyle(color: hintColour)),

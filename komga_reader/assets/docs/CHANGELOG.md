@@ -9,6 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- Remote in Settings and the reader panels: Up and Down always go to the row above or below, instead of skipping a
+  row when a wide control sat over a short one. Home's sections count as a row each.
+- Remote and keys: each key is one stop for the remote (it was two: the key, then its ✕).
+- Choices beside their labels line up again, one width for the page; choices under their label span the row.
+- With Override the defaults off, the choice in force stays highlighted (dimmed), so you can see the default.
+- Going round the fits from the top bar a second time left a wide page at the left edge; it's centred every time.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.

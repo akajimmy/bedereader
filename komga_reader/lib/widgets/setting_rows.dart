@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The one visual language for settings (Settings screen and the reader's panels; user, 2026-09-30): groups with a
 /// small accent label, rows inside a rounded box separated by hairlines, the label on the left and the control on
@@ -20,6 +21,80 @@ double textWidth(BuildContext context, String text, double fontSize) {
   final w = painter.width;
   painter.dispose();
   return w;
+}
+
+/// One settings row for the remote: Up and Down from anywhere in it go to the first control of the previous / next
+/// row - not to whatever control is nearest straight up or down, which skipped a row when a wide control sat over a
+/// short one (user, 2026-09-30). Left and Right still move within the row. Rows can nest (Home's sections inside
+/// their group): the innermost counts. Where there's no row that way (the page list above the first row, say),
+/// the usual navigation takes over.
+class RowNav extends StatefulWidget {
+  const RowNav({super.key, required this.child});
+  final Widget child;
+
+  static const _label = 'settings-row';
+
+  @override
+  State<RowNav> createState() => _RowNavState();
+}
+
+class _RowNavState extends State<RowNav> {
+  final _node = FocusNode(debugLabel: RowNav._label, canRequestFocus: false, skipTraversal: true);
+
+  static FocusNode? _rowOf(FocusNode n) {
+    for (final a in n.ancestors) {
+      if (a.debugLabel == RowNav._label) return a;
+    }
+    return null;
+  }
+
+  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final down = e.logicalKey == LogicalKeyboardKey.arrowDown;
+    if (!down && e.logicalKey != LogicalKeyboardKey.arrowUp) return KeyEventResult.ignored;
+    final current = FocusManager.instance.primaryFocus;
+    final scope = current?.nearestScope;
+    if (current == null || scope == null) return KeyEventResult.ignored;
+    final mine = _rowOf(current); // the innermost row the focus is in (a nested row handles it first)
+    if (mine != _node) return KeyEventResult.ignored;
+    // every control on the page, in the order they're laid out
+    final all = [for (final n in scope.traversalDescendants) if (n.canRequestFocus && !n.skipTraversal) n];
+    final at = all.indexOf(current);
+    if (at < 0) return KeyEventResult.ignored;
+    FocusNode? target;
+    if (down) {
+      for (var j = at + 1; j < all.length; j++) {
+        if (_rowOf(all[j]) != mine) {
+          target = all[j]; // the first control after this row: the next row's first
+          break;
+        }
+      }
+    } else {
+      for (var j = at - 1; j >= 0; j--) {
+        final row = _rowOf(all[j]);
+        if (row != mine) {
+          var k = j; // the previous row's last control: back to its first
+          while (k > 0 && row != null && _rowOf(all[k - 1]) == row) {
+            k--;
+          }
+          target = all[k];
+          break;
+        }
+      }
+    }
+    if (target == null || _rowOf(target) == null) return KeyEventResult.ignored; // not a row: the usual way
+    target.requestFocus();
+    return KeyEventResult.handled;
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(focusNode: _node, onKeyEvent: _onKey, child: widget.child);
 }
 
 /// A labelled box of rows.
@@ -52,7 +127,7 @@ class SettingsGroup extends StatelessWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             for (var i = 0; i < children.length; i++) ...[
               if (i > 0) const Divider(height: 1, thickness: 1, color: _lineColour),
-              children[i],
+              RowNav(child: children[i]), // Up / Down: row to row
             ],
           ]),
         ),
@@ -209,29 +284,47 @@ class SegmentRow<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final own = _width(context);
     final column = SettingsColumn._of(context);
-    column?.report(own);
-    final shared = column == null || column.width < own ? own : column.width;
     return LayoutBuilder(builder: (context, box) {
-      // the page's shared width if it fits beside the label, else this control's own
-      final room = textWidth(context, title, 14.5).clamp(0.0, SettingRow._labelRoom) + 12 + 28; // + row padding
-      final w = box.maxWidth - shared >= room ? shared : own;
-      return _row(context, w);
+      final inner = box.maxWidth - 28; // inside the row's padding
+      final room = textWidth(context, title, 14.5).clamp(0.0, SettingRow._labelRoom) + 12;
+      if (inner - own >= room) {
+        // beside the label, in the page's shared column: only controls that sit beside their label set its width -
+        // one that has to go under its label counting made the column too wide for anyone (tablet, 2026-09-30)
+        column?.report(own);
+        final shared = column == null || column.width < own ? own : column.width;
+        final w = inner - shared >= room ? shared : own;
+        return SettingRow(title: title, enabled: enabled, subtitle: subtitle, trailingWidth: w,
+            trailing: SizedBox(width: w, child: _buttons(context)));
+      }
+      // under the label: the full width of the row (shrunk to fit if even that's too narrow)
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SettingRow(title: title, enabled: enabled, subtitle: subtitle),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+          child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
+              child: SizedBox(width: own > inner ? own : inner, child: _buttons(context))),
+        ),
+      ]);
     });
   }
 
-  Widget _row(BuildContext context, double w) => SettingRow(
-        title: title,
-        enabled: enabled,
-        subtitle: subtitle,
-        stackWhenNarrow: true,
-        trailingWidth: w,
-        trailing: SizedBox(width: w, child: SegmentedButton<T>(
-          expandedInsets: EdgeInsets.zero, // fills [w]: every segment as wide as the others
-          style: const ButtonStyle(
+  Widget _buttons(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SegmentedButton<T>(
+          expandedInsets: EdgeInsets.zero, // fills its width: every segment as wide as the others
+          style: ButtonStyle(
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 13)),
-            padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10)),
+            textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13)),
+            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10)),
+            // disabled (a series following the defaults), the choice in force stays highlighted - dimmed - so the
+            // value shows; Flutter draws a disabled selection with no highlight at all (user, 2026-09-30)
+            backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
+                ? (s.contains(WidgetState.disabled) ? scheme.primary.withValues(alpha: 0.35) : scheme.primary)
+                : null),
+            foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
+                ? (s.contains(WidgetState.disabled) ? Colors.white70 : scheme.onPrimary)
+                : null),
           ),
           showSelectedIcon: false,
           segments: [
@@ -245,8 +338,8 @@ class SegmentRow<T> extends StatelessWidget {
           ],
           selected: {value},
           onSelectionChanged: enabled ? (v) => onChanged(v.first) : null,
-        )),
-      );
+        );
+  }
 }
 
 /// A slider with its label on the left and its value on the right.
