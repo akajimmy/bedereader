@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -145,11 +146,13 @@ class VisitKomga extends ChainKomga {
 class ImageKomga extends FakeKomga {
   static late Uint8List png;
   final thumbsAsked = <int>[];
+  Completer<void>? thumbsHeld; // set: thumbnails wait for it (a slow server)
   @override
   Future<Uint8List> pageBytes(String bookId, int number) async => png;
   @override
   Future<Uint8List> pageThumbBytes(String bookId, int number) async {
     thumbsAsked.add(number);
+    await thumbsHeld?.future;
     return png;
   }
 }
@@ -988,6 +991,34 @@ void main() {
       await g.up();
       await tester.pump();
       expect(find.byKey(preview), findsNothing);
+      expect(page(tester), 2.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('slider: scrubbing back and forth never turns the page before letting go, and asks only for the '
+        'page the thumb is on (user, 2026-09-30)', (tester) async {
+      await openLoaded(tester);
+      final komga = api as ImageKomga..thumbsHeld = Completer<void>(); // a slow server
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      final r = tester.getRect(find.byType(Slider));
+      Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 2, r.center.dy); // 3 pages
+      final g = await tester.startGesture(at(0));
+      await tester.pump();
+      for (final i in [1, 2, 1, 0, 2, 1, 2]) { // to and fro
+        await g.moveTo(at(i));
+        await tester.pump();
+        expect(page(tester), 0.0, reason: 'the finger is still down');
+      }
+      await tester.pump();
+      expect(komga.thumbsAsked, [1, 2], reason: 'two at a time; the pages passed meanwhile are not queued up');
+      await tester.runAsync(() async => komga.thumbsHeld!.complete());
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      expect(komga.thumbsAsked, [1, 2, 3], reason: 'then the page the thumb is on now');
+      expect(find.text('Page 3'), findsOneWidget);
+      await g.up();
+      await tester.pump();
       expect(page(tester), 2.0);
       await tester.pump(const Duration(seconds: 2));
     });

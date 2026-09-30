@@ -16,6 +16,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Choices beside their labels line up again, one width for the page; choices under their label span the row.
 - With Override the defaults off, the choice in force stays highlighted (dimmed), so you can see the default.
 - Going round the fits from the top bar a second time left a wide page at the left edge; it's centred every time.
+- Page slider: scrubbing back and forth no longer freezes the preview (it asked Komga for every page passed, all at
+  once; now only the page under your finger), and the page changes only when you let go.
 
 ## 1.2.0 - in development
 
