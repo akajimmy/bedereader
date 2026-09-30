@@ -83,9 +83,11 @@ extension PageTurnLabel on PageTurn {
 @immutable
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
-      this.pageNumber = true});
+      this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true});
   final bool night;
   final bool pageNumber; // reader: flash "12 / 36" in the corner for a moment after each page turn (this device)
+  final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
+  final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
   final PageTurn pageTurn; // reader page-turn animation (this device)
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
@@ -117,19 +119,21 @@ class DisplayPrefs {
   }
 
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          bool? pageNumber}) =>
+          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys}) =>
       DisplayPrefs(
           night: night ?? this.night, warmth: warmth ?? this.warmth,
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
-          pageNumber: pageNumber ?? this.pageNumber);
+          pageNumber: pageNumber ?? this.pageNumber, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
+          volumeKeys: volumeKeys ?? this.volumeKeys);
 
-  Map<String, dynamic> toJson() =>
-      {'night': night, 'warmth': warmth, 'brightness': brightness, 'pageTurn': pageTurn.name, 'pageNumber': pageNumber};
+  Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
+      'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) => DisplayPrefs(
       night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
       brightness: (j['brightness'] as num?)?.toDouble(),
       pageTurn: PageTurn.values.firstWhere((t) => t.name == j['pageTurn'], orElse: () => PageTurn.swipe),
-      pageNumber: j['pageNumber'] != false); // on unless switched off
+      // on unless switched off
+      pageNumber: j['pageNumber'] != false, doubleTapZoom: j['doubleTapZoom'] != false, volumeKeys: j['volumeKeys'] != false);
 }
 
 /// Holds reader prefs (global default + per series, synced to the user's Komga client settings) and display prefs

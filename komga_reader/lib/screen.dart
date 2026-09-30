@@ -14,6 +14,10 @@ bool get isDesktop =>
 /// Only Android lets the app set the screen's backlight; elsewhere the brightness slider just dims.
 bool get hasBacklightControl => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
+/// Volume keys can turn pages: on Android the app sees them first, and a key it uses doesn't change the volume. On a
+/// PC the system changes the volume whatever the app does, so they're left alone there.
+bool get hasVolumeKeys => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
 /// Desktop full screen: one state for the whole app, not just the open book - closing a book (Esc included) stays
 /// full screen, the next book opens in it, and it's remembered across restarts (user, 2026-09-29). F11 anywhere,
 /// or the reader's button.

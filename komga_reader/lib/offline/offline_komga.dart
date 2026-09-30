@@ -250,6 +250,10 @@ class OfflineKomga extends Komga {
     return store.file('$bookId/${page['file']}').readAsBytes();
   }
 
+  /// No thumbnails are downloaded: the page itself (the reader decodes it small).
+  @override
+  Future<Uint8List> pageThumbBytes(String bookId, int number) => pageBytes(bookId, number);
+
   @override
   String bookThumb(String id) => store.file('$id/thumb.jpg').path;
   @override

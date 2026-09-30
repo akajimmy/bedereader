@@ -170,7 +170,7 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle});
+      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -183,6 +183,10 @@ class PageCanvas extends StatefulWidget {
   /// Hands the reader this page's zoomed-in stepper (null when the page goes away): step(forward) moves the zoomed
   /// view one screen along the reading path and returns false when it is already at the end (the page should turn).
   final ValueChanged<bool Function(bool forward)?>? onStepper;
+
+  /// Hands the reader this page's double-tap zoom (null when the page goes away): toggle(globalPosition) zooms in on
+  /// that spot, or back out to fit when zoomed in. Fit screen only.
+  final ValueChanged<void Function(Offset global)?>? onZoomToggle;
 
   /// Optional outside controller for the zoom (tests); the page makes its own otherwise.
   final TransformationController? zoom;
@@ -243,6 +247,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     });
     _anim.addListener(() { final m = _move; if (m != null) _zoom.value = m.value; });
     widget.onStepper?.call(_step);
+    widget.onZoomToggle?.call(_toggleZoom);
     _prepare();
   }
 
@@ -250,6 +255,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   void dispose() {
     if (_panning == true) widget.onPanChanged?.call(false);
     widget.onStepper?.call(null);
+    widget.onZoomToggle?.call(null);
     _enhanceRun++;
     _enhanced?.dispose();
     _colourRun++;
@@ -308,12 +314,39 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     }
     if (fitsX) tx = centreX;
     if (fitsY) ty = centreY;
-    final target = Matrix4.identity()
+    _animateTo(Matrix4.identity()
       ..translateByDouble(tx, ty, 0, 1)
-      ..scaleByDouble(k, k, 1, 1);
-    _move = Matrix4Tween(begin: m.clone(), end: target).animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
-    _anim.forward(from: 0);
+      ..scaleByDouble(k, k, 1, 1));
     return true;
+  }
+
+  void _animateTo(Matrix4 target) {
+    _move = Matrix4Tween(begin: _zoom.value.clone(), end: target)
+        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
+    _anim.forward(from: 0);
+  }
+
+  static const doubleTapScale = 2.0;
+
+  /// Double-tap zoom: in to [doubleTapScale] with the tapped spot staying where it is - moved just enough to keep
+  /// the screen inside the page (a tap in the black bars beside a page zooms on its nearest edge) - or, zoomed in
+  /// (by double tap or pinch), back out to fit.
+  void _toggleZoom(Offset global) {
+    final vp = _viewport, pic = _picture, box = context.findRenderObject();
+    if (vp == null || pic == null || box is! RenderBox || !box.attached) return;
+    if (_zoom.value.getMaxScaleOnAxis() > 1.01) {
+      _animateTo(Matrix4.identity());
+      return;
+    }
+    const k = doubleTapScale;
+    final p = box.globalToLocal(global);
+    // same bounds as the stepper's; a page narrower (or shorter) than the screen when zoomed stays centred
+    double keep(double t, double min, double max) => min >= max ? (min + max) / 2 : t.clamp(min, max);
+    final tx = keep(p.dx * (1 - k), vp.width - k * pic.right, -k * pic.left);
+    final ty = keep(p.dy * (1 - k), vp.height - k * pic.bottom, -k * pic.top);
+    _animateTo(Matrix4.identity()
+      ..translateByDouble(tx, ty, 0, 1)
+      ..scaleByDouble(k, k, 1, 1));
   }
 
   @override

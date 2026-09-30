@@ -19,7 +19,7 @@ void main() {
   }
 
   Future<(TransformationController, bool Function(bool))> setUpPage(WidgetTester tester, Size screen, int w, int h,
-      {bool rtl = false}) async {
+      {bool rtl = false, ValueChanged<void Function(Offset)?>? onZoomToggle}) async {
     tester.view.physicalSize = screen;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -32,6 +32,7 @@ void main() {
       scroll: ScrollController(),
       zoom: zoom,
       onStepper: (s) => step = s,
+      onZoomToggle: onZoomToggle,
       rtl: rtl,
     ))));
     await tester.pump();
@@ -120,6 +121,33 @@ void main() {
     step(false);
     await tester.pumpAndSettle();
     expect(at(zoom), const Offset(-400, -600)); // back: rightwards
+  });
+
+  group('double-tap zoom', () {
+    testWidgets('zooms 2x with the tapped spot staying put; again: back to fit', (tester) async {
+      late void Function(Offset) toggle;
+      final (zoom, _) = await setUpPage(tester, const Size(400, 600), 800, 1200,
+          onZoomToggle: (t) { if (t != null) toggle = t; });
+      toggle(const Offset(100, 500));
+      await tester.pumpAndSettle();
+      expect(zoom.value.getMaxScaleOnAxis(), closeTo(2, 1e-6));
+      expect(at(zoom), const Offset(-100, -500)); // (100, 500) * 2 - 100, 500 = still at (100, 500)
+      toggle(const Offset(300, 100)); // zoomed in: anywhere zooms back out
+      await tester.pumpAndSettle();
+      expect(zoom.value.getMaxScaleOnAxis(), closeTo(1, 1e-6));
+      expect(at(zoom), Offset.zero);
+    });
+
+    testWidgets('near an edge the page is kept on screen; a page narrower than the screen stays centred',
+        (tester) async {
+      late void Function(Offset) toggle;
+      // landscape 1200x600, portrait page shown as 400x600 at x 400..800; 2x = 800 wide, still narrower
+      final (zoom, _) = await setUpPage(tester, const Size(1200, 600), 800, 1200,
+          onZoomToggle: (t) { if (t != null) toggle = t; });
+      toggle(const Offset(1150, 20)); // in the black bar, near the top
+      await tester.pumpAndSettle();
+      expect(at(zoom), const Offset(-600, -20)); // centred across (the page at 200..1000), the tapped row stays
+    });
   });
 }
 

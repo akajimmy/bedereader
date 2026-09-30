@@ -218,8 +218,8 @@ class _Live extends StatelessWidget {
       ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
 }
 
-/// Page-turn style and the page number flash (this device). In the reader's Reader settings and Settings >
-/// Reading.
+/// Page-turn style, the page number flash, double-tap zoom and volume keys (this device). In the reader's Reader
+/// settings and Settings > Reading.
 class PageTurnControl extends StatelessWidget {
   const PageTurnControl({super.key});
   @override
@@ -240,6 +240,22 @@ class PageTurnControl extends StatelessWidget {
           value: s.display.pageNumber,
           onChanged: (v) => s.setDisplay(s.display.copyWith(pageNumber: v)),
         ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Double-tap to zoom'),
+          subtitle: const Text('In fit screen. Taps wait a moment for a second one - switch off for instant tap turns'),
+          value: s.display.doubleTapZoom,
+          onChanged: (v) => s.setDisplay(s.display.copyWith(doubleTapZoom: v)),
+        ),
+        if (hasVolumeKeys)
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Volume keys turn pages'),
+            subtitle: const Text('Volume down: next page, volume up: previous. With the controls showing they change '
+                'the volume as usual'),
+            value: s.display.volumeKeys,
+            onChanged: (v) => s.setDisplay(s.display.copyWith(volumeKeys: v)),
+          ),
       ]));
 }
 
