@@ -11,8 +11,6 @@ touch, keyboard, mouse or a remote page-turner, take books with you offline, and
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
 
-*Until September 2026 the app was called Komga Reader.*
-
 ## What it does
 
 **Browsing**
@@ -94,8 +92,8 @@ page enhancement adapts AMD FidelityFX Super Resolution 1 (MIT). Everything the 
 build tools - is listed, with the notices they require, in `THIRD_PARTY_NOTICES.md` (in the app: About >
 Third-party software). What's new in each build is in `CHANGELOG.md` (About > What's new).
 
-**AI usage:** this application was developed with the aid of AI coding tools (Claude, by Anthropic, through Claude
-Code), and reviewed and tested by a human.
+**AI usage:** this application was developed with the aid of AI coding tools, but was designed, reviewed, and
+tested by a human.
 
 ## For developers
 
