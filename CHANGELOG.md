@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 41 - 2026-09-29
+
 **New**
 - Series, read list and collection screens show where they sit in the title bar: **Ongoing › Absolute Flash**,
   **Read lists › Civil War**, **Collections › Cosmic**.
@@ -12,11 +19,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 **Fixed**
 - On the PC, the first Continue reading book showed the keyboard/remote highlight as soon as the app opened. The
   highlight now shows only once an arrow, Tab or Enter key is used, and goes away again with a click or a touch.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 39 - 2026-09-29
 
