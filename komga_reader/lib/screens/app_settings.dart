@@ -218,9 +218,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Turning pages', children: [
         pageTurnRow(s),
         doubleTapRow(s),
-        if (hasVolumeKeys)
-          SwitchRow(title: 'Volume keys turn pages', subtitle: 'Down: next page, up: previous',
-              value: d.volumeKeys, onChanged: (v) => s.setDisplay(d.copyWith(volumeKeys: v))),
       ]),
       // what's drawn over the page (set once, so Settings only - except the page number, also in the Reader panel)
       SettingsGroup(title: 'On the page', children: [
@@ -249,6 +246,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Widget _keys(BuildContext context) {
     final k = ReaderKeys.instance;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // the volume keys live here with the other keys (tablet bug, 2026-09-30), not under Reader
+      if (hasVolumeKeys)
+        _live((s) => SettingsGroup(title: 'Volume keys', children: [
+              SwitchRow(title: 'Volume keys turn pages', subtitle: 'Down: next page, up: previous',
+                  value: s.display.volumeKeys, onChanged: (v) => s.setDisplay(s.display.copyWith(volumeKeys: v))),
+            ])),
       SettingsGroup(title: 'In the reader, with the controls hidden', children: [
         for (final a in ReaderAction.values) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
         const NoteRow('For a book read right to left, Left and Right swap. Shift+Space always goes back. Once the '
@@ -319,12 +322,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             value: s.display.textScale,
             onChanged: (t) => s.setDisplay(s.display.copyWith(textScale: t)),
           ),
-          SettingRow(
-            title: 'Accent colour',
-            trailing: Wrap(spacing: 2, children: [
-              for (final a in Accent.values)
-                ColourSwatch(colour: a.colour, label: a.label, selected: s.display.accent == a,
-                    onTap: () => s.setDisplay(s.display.copyWith(accent: a))),
+          // fourteen swatches: under the label, wrapping, rather than squeezed beside it
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Accent colour', style: TextStyle(fontSize: 14.5)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 2, runSpacing: 2, children: [
+                for (final a in Accent.values)
+                  ColourSwatch(colour: a.colour, label: a.label, selected: s.display.accent == a,
+                      onTap: () => s.setDisplay(s.display.copyWith(accent: a))),
+              ]),
             ]),
           ),
         ]),
@@ -434,12 +442,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
           ),
         ),
-        const NoteRow('A book that would go over the limit waits in the queue, and carries on when the limit is raised.'),
-        SwitchRow(
+        const NoteRow("A book that won't fit stops in the queue, and carries on when space is available."),
+        SegmentRow<DeleteRead>(
           title: "Delete a downloaded book once it's read",
-          subtitle: 'Read here, offline or elsewhere. An open book goes when you close it.',
-          value: d.deleteWhenRead,
-          onChanged: d.setDeleteWhenRead,
+          subtitle: switch (d.deleteRead) {
+            DeleteRead.never => 'Downloads stay until you remove them',
+            DeleteRead.ask => 'Asks, once no book is open (read here, offline or elsewhere)',
+            DeleteRead.always => 'Read here, offline or elsewhere; an open book goes when you close it',
+          },
+          choices: const [Choice(DeleteRead.never, 'Never'), Choice(DeleteRead.ask, 'Ask'), Choice(DeleteRead.always, 'Always')],
+          value: d.deleteRead,
+          onChanged: d.setDeleteRead,
         ),
         ActionRow(
           title: 'Open Downloads',
@@ -523,7 +536,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     if (Connection.instance.available) await Connection.instance.setAutoSwitch(false);
     if (Downloads.instance.ready) {
       await Downloads.instance.setCap(Downloads.defaultCap);
-      await Downloads.instance.setDeleteWhenRead(false);
+      await Downloads.instance.setDeleteRead(DeleteRead.never);
     }
     if (context.mounted) {
       ScaffoldMessenger.maybeOf(context)

@@ -39,7 +39,8 @@ ThemeData buildTheme([Accent choice = Accent.blue]) {
   final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
   return base.copyWith(
     scaffoldBackgroundColor: const Color(0xFF0B0B0C),
-    colorScheme: ColorScheme.dark(primary: accent, secondary: accent, surface: const Color(0xFF141416)),
+    colorScheme: ColorScheme.dark(primary: accent, secondary: accent, onPrimary: choice.onColour,
+        onSecondary: choice.onColour, surface: const Color(0xFF141416)),
     appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF0B0B0C), elevation: 0, centerTitle: false),
     focusColor: accent.withValues(alpha: 0.4), // list rows (side menu, sheets) under the remote
     iconButtonTheme: IconButtonThemeData(style: strongFocusStyle(accent)),
@@ -73,6 +74,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
     Connection.instance.addListener(_onConnection);
     ProgressSync.instance.addListener(_onSync);
+    Downloads.instance.addListener(_onDownloads); // Delete once read, Ask: the question
     _restore();
   }
 
@@ -142,6 +144,40 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     } else {
       _say(syncSummary(r));
     }
+  }
+
+  /// Delete once read = Ask: books finished (here, offline or elsewhere) are gathered; once no book is open, one
+  /// question lists them all. Keep is the default answer (focused - OK on the remote keeps them).
+  bool _asking = false;
+  void _onDownloads() {
+    final d = Downloads.instance;
+    final ctx = _nav.currentContext;
+    if (_asking || d.askPending.isEmpty || !d.noBookOpen || ctx == null) return;
+    final ids = d.takeAskPending();
+    if (ids.isEmpty) return;
+    String title(String id) {
+      final b = (d.store?.books[id]?['book'] as Map?) ?? const {};
+      return '${b['seriesTitle'] ?? ''} #${(b['metadata'] as Map?)?['number'] ?? ''}'.trim();
+    }
+
+    _asking = true;
+    showDialog<bool>(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        title: Text(ids.length == 1 ? 'Delete the download of a book you\'ve read?' : 'Delete the downloads of '
+            '${ids.length} books you\'ve read?'),
+        content: Text([for (final id in ids.take(8)) title(id), if (ids.length > 8) 'and ${ids.length - 8} more']
+            .join('\n')),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(c, false), child: const Text('Keep')),
+          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Delete')),
+        ],
+      ),
+    ).then((delete) async {
+      if (delete == true) await d.removeAll(ids);
+      _asking = false;
+      _onDownloads(); // more may have been finished meanwhile
+    });
   }
 
   void _say(String text, {SnackBarAction? action}) => _messenger.currentState

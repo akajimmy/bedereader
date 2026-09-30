@@ -12,6 +12,9 @@ import 'store.dart';
 
 enum JobState { queued, downloading, paused, failed }
 
+/// Delete a downloaded book once it's read: never, ask (one question for all of them, when no book is open), always.
+enum DeleteRead { never, ask, always }
+
 /// One book in the download queue. Visible on the Downloads screen, page by page (the user asked for a real queue
 /// view with progress - CDisplayEx never had one).
 class DownloadJob {
@@ -115,7 +118,10 @@ class Downloads extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
-    deleteWhenRead = p.getBool(_deleteReadKey) ?? false;
+    final saved = p.getString(_deleteReadKey);
+    deleteRead = saved != null
+        ? DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never)
+        : (p.getBool(_oldDeleteReadKey) ?? false) ? DeleteRead.always : DeleteRead.never; // the old switch: on = Always
     queue.clear();
     if (await _queueFile.exists()) {
       try {
@@ -128,23 +134,33 @@ class Downloads extends ChangeNotifier {
     _pump();
   }
 
-  // ---- Delete once read (Settings > Downloads, this device) ----------------------------------------------------------
-  static const _deleteReadKey = 'downloads.deleteWhenRead';
-  bool deleteWhenRead = false;
-  final Set<String> _finished = {}; // read while open in the reader: deleted once it closes
+  // ---- Delete once read (Settings > Downloads, this device): Never / Ask / Always (tablet bug, 2026-09-30) -----------
+  static const _deleteReadKey = 'downloads.deleteRead';
+  static const _oldDeleteReadKey = 'downloads.deleteWhenRead'; // build 42-51: on/off (on = Always)
+  DeleteRead deleteRead = DeleteRead.never;
+  final Set<String> _finished = {}; // Always: read while a book was open - deleted once the reader closes
+  final Set<String> askPending = {}; // Ask: finished, waiting to be asked about once no book is open
   int _readers = 0;
 
-  Future<void> setDeleteWhenRead(bool on) async {
-    deleteWhenRead = on;
+  /// No book is open: the moment to ask about [askPending] (the app shows the question - main.dart).
+  bool get noBookOpen => _readers == 0;
+
+  Future<void> setDeleteRead(DeleteRead d) async {
+    deleteRead = d;
+    if (d != DeleteRead.ask) askPending.clear();
     notifyListeners();
-    await (await SharedPreferences.getInstance()).setBool(_deleteReadKey, on);
+    await (await SharedPreferences.getInstance()).setString(_deleteReadKey, d.name);
   }
 
-  /// A book was marked read - here, offline, or on another device (seen by the progress sync). With Delete once
-  /// read on, its download goes; a book still open in the reader waits for the reader to close. Books that were
-  /// already read when downloaded aren't touched: this only follows a book becoming read.
+  /// A book was marked read - here, offline, or on another device (seen by the progress sync). Always: its download
+  /// goes (a book still open in the reader, once the reader closes). Ask: it's added to the books to ask about. Books
+  /// that were already read when downloaded aren't touched: this only follows a book becoming read.
   void bookFinished(String bookId) {
-    if (!deleteWhenRead || !isDownloaded(bookId)) return;
+    if (deleteRead == DeleteRead.never || !isDownloaded(bookId)) return;
+    if (deleteRead == DeleteRead.ask) {
+      if (askPending.add(bookId)) notifyListeners();
+      return;
+    }
     _finished.add(bookId);
     if (_readers == 0) unawaited(_deleteFinished());
   }
@@ -153,30 +169,50 @@ class Downloads extends ChangeNotifier {
   void readerClosed() {
     if (_readers > 0) _readers--;
     if (_readers == 0 && _finished.isNotEmpty) unawaited(_deleteFinished());
+    if (_readers == 0 && askPending.isNotEmpty) notifyListeners(); // time to ask
+  }
+
+  /// The books waiting to be asked about, handed over once (the answer is the caller's).
+  List<String> takeAskPending() {
+    final ids = [for (final id in askPending) if (isDownloaded(id)) id];
+    askPending.clear();
+    return ids;
+  }
+
+  /// "Delete" in answer to Ask.
+  Future<void> removeAll(Iterable<String> ids) async {
+    for (final id in ids) {
+      if (isDownloaded(id)) await remove(id);
+    }
   }
 
   Future<void> _deleteFinished() async {
     final ids = List.of(_finished);
     _finished.clear();
-    for (final id in ids) {
-      if (isDownloaded(id)) await remove(id); // progress not yet sent to Komga is kept (see remove)
-    }
+    await removeAll(ids); // progress not yet sent to Komga is kept (see remove)
   }
 
   Future<void> setCap(int? bytes) async {
     capBytes = bytes;
     await (await SharedPreferences.getInstance()).setInt(_capKey, bytes ?? -1);
-    // books that stopped for lack of room get another go under the new limit
+    await _roomAgain();
+  }
+
+  /// There may be room now (the limit went up, or a download was deleted): books that stopped for lack of room go
+  /// back in the queue, and the worker tries them - "carries on when space is available" (user, 2026-09-30).
+  Future<void> _roomAgain() async {
+    var any = false;
     for (final j in queue) {
       if (j.state == JobState.failed && (j.error ?? '').startsWith('not enough room')) {
         j
           ..state = JobState.queued
           ..error = null;
+        any = true;
       }
     }
-    if (ready) await _saveQueue();
+    if (any && ready) await _saveQueue();
     notifyListeners();
-    _pump();
+    if (any) _pump();
   }
 
   /// Written to a temporary file and then moved over queue.json, so a crash (or a reader) never sees half a file.
@@ -282,7 +318,7 @@ class Downloads extends ChangeNotifier {
   /// reached Komga yet is kept, so it can still be sent.
   Future<void> remove(String bookId) async {
     await _deleteFiles(bookId);
-    notifyListeners();
+    await _roomAgain(); // room freed: books that stopped for lack of it carry on (and the listeners hear of it)
   }
 
   Future<void> _deleteFiles(String bookId) async {

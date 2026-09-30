@@ -46,18 +46,38 @@ void main() {
     expect(tester.takeException(), isNull); // nothing overflows at phone width
   });
 
-  testWidgets('a change gives the series its own settings; ⋮ Use the defaults goes back to them', (tester) async {
+  testWidgets('a change gives the series its own settings; Use the defaults goes back to them', (tester) async {
     await openPanel(tester, const Size(1280, 800), image: true);
-    expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Use the defaults')).onPressed, isNull,
-        reason: 'already follows them');
+    expect(find.text('Settings for Series: Planet Comics'), findsOneWidget); // the heading (user, 2026-09-30)
+    OutlinedButton useDefaults() => tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Use the defaults'));
+    expect(useDefaults().onPressed, isNull, reason: 'already follows them');
     await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance'));
     await tester.pumpAndSettle();
     expect(AppSettings.instance.prefsFor('S1').sharpen, isTrue);
-    expect(find.text('Own settings'), findsOneWidget);
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Use the defaults')); // a button, not in a menu
+    expect(useDefaults().onPressed, isNotNull, reason: 'own settings now'); // a button, not in a menu
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use the defaults'));
     await tester.pumpAndSettle();
     expect(AppSettings.instance.hasOwn('S1'), isFalse);
-    expect(find.text('Follows the defaults'), findsOneWidget);
+    expect(useDefaults().onPressed, isNull);
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
+  });
+
+  testWidgets('narrow sheet: sliders go full width under their label and value; the remote can move off them',
+      (tester) async {
+    await openPanel(tester, const Size(1280, 800), image: true); // side sheet, 380 wide
+    final slider = tester.getRect(find.byType(Slider).at(1)); // Brightness
+    expect(slider.width, greaterThan(300)); // not squeezed beside the label any more
+    final mq = tester.widget<MediaQuery>(find.ancestor(of: find.byType(Slider).at(1), matching: find.byType(MediaQuery)).first);
+    expect(mq.data.navigationMode, NavigationMode.directional); // Up/Down leave the slider
+  });
+
+  testWidgets('narrow sheet: Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
+    await openPanel(tester, const Size(1280, 800)); // Reader panel, side sheet
+    await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
+    final sheet = tester.getRect(find.byType(ListView).last);
+    final choices = tester.getRect(find.byType(SegmentedButton<int>));
+    expect(choices.right, lessThanOrEqualTo(sheet.right + 0.5)); // not cut off at the right edge
+    expect(find.text('Always'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

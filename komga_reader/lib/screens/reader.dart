@@ -75,6 +75,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   final Map<int, ScrollController> _scrolls = {};
   final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
   final Map<int, void Function(Offset global)> _zoomers = {}; // double-tap zoom, per page (page_image.dart)
+  final Map<int, void Function(bool zoomIn)> _zoomSteps = {}; // zoom keys, per page (page_image.dart)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
   final FocusNode _sliderInner = FocusNode(canRequestFocus: false, skipTraversal: true); // the wrapper takes focus
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
@@ -751,6 +752,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
           if (e is KeyDownEvent) Navigator.of(context).maybePop();
+        case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
+          if (_prefs.fit == FitMode.screen) _zoomSteps[_index]?.call(true);
+        case ReaderAction.zoomOut:
+          if (_prefs.fit == FitMode.screen) _zoomSteps[_index]?.call(false);
         case null:
           return KeyEventResult.ignored;
       }
@@ -977,6 +982,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           onZoomToggle: (zoom) => zoom == null ? _zoomers.remove(i) : _zoomers[i] = zoom,
+          onZoomStep: (step) => step == null ? _zoomSteps.remove(i) : _zoomSteps[i] = step,
           rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,
         );
@@ -1159,7 +1165,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       double size = 26}) =>
       IconButton(focusNode: node, tooltip: label, icon: Icon(icon, color: Colors.white, size: size), onPressed: onPressed);
 
-  static const _fitIcons = {FitMode.screen: Icons.fit_screen, FitMode.width: Icons.swap_horiz, FitMode.height: Icons.swap_vert};
 
   /// Top bar (close, title, fit, night, read toggle, more) and bottom bar (page counter, slider, display, next book).
   /// A tap anywhere that isn't a control hides them.
@@ -1207,11 +1212,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                 if (showClock && clockInBar)
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
                 // one press = next fit mode (screen -> width -> height), label shows which
-                _iconCtl(
-                  node: _ctl[_Ctl.fit]!,
+                IconButton(
+                  focusNode: _ctl[_Ctl.fit],
+                  tooltip: 'Fit ${_prefs.fit.label.toLowerCase()}',
                   onPressed: () => _setFit(FitMode.values[(_prefs.fit.index + 1) % FitMode.values.length]),
-                  icon: _fitIcons[_prefs.fit]!,
-                  label: 'Fit ${_prefs.fit.label.toLowerCase()}',
+                  icon: fitIcon(_prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
                 ),
                 IconButton(
                   focusNode: _ctl[_Ctl.night],

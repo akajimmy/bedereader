@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// What a key does in the reader, with the controls hidden (Settings > Remote and keys; user, 2026-09-30).
-enum ReaderAction { next, previous, controls, close }
+enum ReaderAction { next, previous, controls, close, zoomIn, zoomOut }
 
 extension ReaderActionLabel on ReaderAction {
   String get label => switch (this) {
@@ -13,6 +13,8 @@ extension ReaderActionLabel on ReaderAction {
         ReaderAction.previous => 'Previous page',
         ReaderAction.controls => 'Show the controls',
         ReaderAction.close => 'Close the book',
+        ReaderAction.zoomIn => 'Zoom in',
+        ReaderAction.zoomOut => 'Zoom out',
       };
 }
 
@@ -32,6 +34,9 @@ class ReaderKeys extends ChangeNotifier {
     ReaderAction.previous: [LogicalKeyboardKey.arrowLeft, LogicalKeyboardKey.arrowUp, LogicalKeyboardKey.pageUp],
     ReaderAction.controls: [LogicalKeyboardKey.enter, LogicalKeyboardKey.select, LogicalKeyboardKey.numpadEnter],
     ReaderAction.close: [LogicalKeyboardKey.escape],
+    // in fit screen: a step in or out (x1.5), like pinching
+    ReaderAction.zoomIn: [LogicalKeyboardKey.equal, LogicalKeyboardKey.add, LogicalKeyboardKey.numpadAdd],
+    ReaderAction.zoomOut: [LogicalKeyboardKey.minus, LogicalKeyboardKey.numpadSubtract],
   };
 
   Map<ReaderAction, List<LogicalKeyboardKey>> keys = {for (final e in defaults.entries) e.key: List.of(e.value)};
@@ -110,7 +115,8 @@ class ReaderKeys extends ChangeNotifier {
     LogicalKeyboardKey.space: 'Space', LogicalKeyboardKey.enter: 'Enter', LogicalKeyboardKey.escape: 'Esc',
     LogicalKeyboardKey.select: 'Select', LogicalKeyboardKey.numpadEnter: 'Num Enter',
     LogicalKeyboardKey.mediaTrackNext: 'Next track', LogicalKeyboardKey.mediaTrackPrevious: 'Previous track',
-    LogicalKeyboardKey.mediaPlayPause: 'Play/Pause',
+    LogicalKeyboardKey.mediaPlayPause: 'Play/Pause', LogicalKeyboardKey.numpadAdd: 'Num +',
+    LogicalKeyboardKey.numpadSubtract: 'Num -',
   };
 
   static String nameOf(LogicalKeyboardKey k) {

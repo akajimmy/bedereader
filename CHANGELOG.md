@@ -9,6 +9,27 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **Zoom in and zoom out keys** (Remote and keys): + (or =) and - by default, a step each press, in fit screen.
+- **Delete a downloaded book once it's read** is now **Never / Ask / Always**. Ask gathers the books you finish
+  (here, offline or elsewhere) and asks once, with no book open. Anyone who had it on has Always.
+
+**Changed**
+- Accent colours: fourteen stronger colours instead of seven pale ones (your choice carries over, in its stronger
+  version).
+- **Volume keys turn pages** moved to the Remote and keys page.
+- The Image panel's heading reads "Settings for Series: *name*".
+- Fit width and fit height use double-headed arrows (↔ ↕).
+- Brightness and contrast move in steps of 5, screen brightness and warmth in steps of 5 %.
+- Night mode has no line of explanation under it any more.
+
+**Fixed**
+- With a remote, you can move off a slider in Settings and the reader's panels (Up and Down go to the next row;
+  Left and Right adjust).
+- In the reader's side sheets, sliders use the full width, and Keep the screen on no longer runs off the edge.
+- A book that stopped for lack of room carries on when space is available - also when you delete a download, not
+  only when the limit is raised (the note under the limit said otherwise).
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
