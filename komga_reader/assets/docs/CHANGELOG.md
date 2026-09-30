@@ -9,13 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-**Fixed**
-- Moving on from the end card opened the next book on its own end card (so the card showed the book after that),
-  instead of at its first page: the page view kept the last book's place. Each book now gets its own.
-
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 57 - 2026-09-30
+
+**Fixed**
+- Moving on from the end card opened the next book on its own end card (so the card showed the book after that),
+  instead of at its first page: the page view kept the last book's place. Each book now gets its own.
 
 ### Build 56 - 2026-09-30
 
