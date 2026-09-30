@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 52 - 2026-09-30
+
 **New**
 - **Zoom in and zoom out keys** (Remote and keys): + (or =) and - by default, a step each press, in fit screen.
 - **Delete a downloaded book once it's read** is now **Never / Ask / Always**. Ask gathers the books you finish
@@ -29,10 +35,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - In the reader's side sheets, sliders use the full width, and Keep the screen on no longer runs off the edge.
 - A book that stopped for lack of room carries on when space is available - also when you delete a download, not
   only when the limit is raised (the note under the limit said otherwise).
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 51 - 2026-09-30
 
