@@ -13,9 +13,14 @@ import '../side_menu.dart';
 
 /// Side navigation: Home, each library, sign out. Home is always the root route, so every entry first pops back to it.
 class AppDrawer extends StatefulWidget {
-  const AppDrawer({super.key, required this.api, required this.onSignOut, this.docked = false});
+  const AppDrawer({super.key, required this.api, VoidCallback? onSignOut, this.docked = false})
+      : _onSignOut = onSignOut;
   final Komga api;
-  final VoidCallback onSignOut;
+  final VoidCallback? _onSignOut;
+  VoidCallback get onSignOut => _onSignOut ?? appSignOut;
+
+  /// Signing out, for menus on screens that aren't handed it (a series, a read list...); main.dart sets it.
+  static VoidCallback appSignOut = () {};
   final bool docked; // shown as a panel beside the page instead of sliding out
   @override
   State<AppDrawer> createState() => _AppDrawerState();
@@ -201,6 +206,18 @@ class DrawerEdgeState extends State<DrawerEdge> {
           child: widget.child,
         ),
       );
+}
+
+/// A library view opened from another - a series, a collection, a read list: the side menu slides out here too (Left
+/// past the leftmost item, or a swipe), as on Home and the libraries (user, 2026-09-30); the app bar keeps its back
+/// arrow. Give the Scaffold [menuScaffold], [menuDrawer], [onMenuChanged], wrap its body in [menuEdge], and give the
+/// AppBar `leading: const BackButton()`.
+mixin SideMenuHere<T extends StatefulWidget> on State<T> {
+  final menuScaffold = GlobalKey<ScaffoldState>();
+  final _menuEdge = GlobalKey<DrawerEdgeState>();
+  Widget menuDrawer(Komga api) => AppDrawer(api: api);
+  void onMenuChanged(bool open) { if (!open) _menuEdge.currentState?.restore(); }
+  Widget menuEdge(Widget body) => DrawerEdge(key: _menuEdge, scaffoldKey: menuScaffold, child: body);
 }
 
 /// Wraps a screen that has the side menu: slide-out menu normally; docked beside the page (with the page shifted

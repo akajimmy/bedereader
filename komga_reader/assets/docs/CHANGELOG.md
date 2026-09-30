@@ -18,6 +18,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Going round the fits from the top bar a second time left a wide page at the left edge; it's centred every time.
 - Page slider: scrubbing back and forth no longer freezes the preview (it asked Komga for every page passed, all at
   once; now only the page under your finger), and the page changes only when you let go.
+- A series, a collection or a read list: Left from the leftmost book opens the side menu, as on Home and the libraries
+  (a swipe does too). The back arrow stays.
 
 ## 1.2.0 - in development
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/book_details.dart';
@@ -25,6 +26,8 @@ final theBook = {
 
 class FakeKomga extends Komga {
   FakeKomga() : super('http://test', 'k');
+  @override
+  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}]; // the side menu's
   @override
   Future<Map<String, dynamic>?> book(String id) async => theBook;
   @override
@@ -72,6 +75,28 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.byType(SeriesScreen), findsOneWidget);
+  });
+
+  testWidgets('a series, a read list: Left from the leftmost book opens the side menu; the back arrow stays '
+      '(user, 2026-09-30)', (tester) async {
+    for (final screen in <Widget>[
+      SeriesScreen(api: FakeKomga(),
+          series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}),
+      ReadListScreen(api: FakeKomga(), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
+    ]) {
+      await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
+          child: const Text('open')))));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BackButton), findsOneWidget, reason: '${screen.runtimeType}: back, not the menu button');
+      final scaffold = tester.state<ScaffoldState>(find.byType(Scaffold).last);
+      expect(scaffold.isDrawerOpen, isFalse);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft); // the first book has focus; nothing left of it
+      await tester.pumpAndSettle();
+      expect(scaffold.isDrawerOpen, isTrue, reason: '${screen.runtimeType}');
+      await tester.pumpWidget(const SizedBox()); // next screen afresh
+    }
   });
 
   testWidgets('inside the series itself, the book menu has no View series', (tester) async {
