@@ -8,11 +8,28 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 **New**
 - **Double-tap to zoom** (fit screen): double-tap a spot to zoom in on it, double-tap again to zoom back out. To tell
   a double tap from a single one, taps wait a quarter of a second before turning the page or showing the controls;
-  switch it off in Reader settings (or Settings > Reading) for instant taps.
+  switch it off in Settings > Reader for instant taps.
 - **Page previews on the slider**: while you pick a page on the slider (by touch, mouse or remote), a small picture of
   it shows over the thumb, with its page number.
 - **Volume keys turn pages** (Android): volume down for the next page, volume up for the previous one. With the
-  controls showing they change the volume as usual. On by default; switch it off in Reader settings.
+  controls showing they change the volume as usual. On by default; switch it off in Settings > Reader.
+- New settings, all kept on this device:
+  - **Next book before the last page** (Settings > Reader): ask whether to mark the book read (as before), always
+    mark it read, or keep it in progress.
+  - **Background** (Settings > Reader): black, dark grey or white around the page.
+  - **Keep the screen on** (Settings > Reader): off, 5, 10, 20 or 30 minutes after the last page turn or touch, or
+    always. **Off by default**: until now the screen stayed on for as long as a book was open.
+  - **Poster size** (Settings > Library & Home): small, medium or large posters in grids and on Home.
+  - **Book posters show** (Settings > Library & Home): "Series #N" and the title, or the title only.
+  - **Delete a downloaded book once it's read** (Settings > Downloads): when a book becomes read, here, offline or on
+    another device, its download goes. A book open in the reader goes when it's closed.
+  - **Reset this device's settings** (Settings > About): everything kept on this device back to the defaults. Synced
+    settings, your sign-in and your downloads stay.
+
+**Changed**
+- Settings: the Reading card is now two cards. **Reading defaults** holds the defaults synced through Komga; **Reader**
+  holds how the reader behaves on this device.
+- Page turn animation is now **None / Wipe / Curl** (None was "Instant flip"). Your choice carries over.
 
 ## 0.1.1 - offline reading and better pages
 

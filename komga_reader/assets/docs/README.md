@@ -36,17 +36,18 @@ This app shows them and keeps everything in sync.
 - Fit to screen, width or height; pinch, double-tap or Ctrl+wheel to zoom; a zoomed-in page is read across and down
   before turning.
 - Tap the sides, swipe, use the arrow keys, the mouse wheel, a remote or (on Android) the volume keys. Page turn
-  animation: Wipe, Instant flip or a 3D page curl that follows your finger.
+  animation: none, a wipe, or a 3D page curl that follows your finger.
 - A page slider with a preview of the page you're picking.
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
 - **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
   sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).
-- Night mode (warm tint), a brightness slider that can go darker than the screen's minimum, and the screen kept on
-  while reading.
+- Night mode (warm tint), a brightness slider that can go darker than the screen's minimum, a black, grey or white
+  background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
 - At the end of a book: the next one in the series or read list, with its poster.
 
 **Offline**
-- Download single books, or a series or read list's unread (or all) books, with a storage limit.
+- Download single books, or a series or read list's unread (or all) books, with a storage limit; optionally deleted
+  once read.
 - Offline mode shows just your downloaded books - by hand, or offered automatically when Komga can't be reached.
 - Reading done offline is sent to Komga when it's back; if you also read elsewhere, the further position wins.
 
@@ -68,8 +69,9 @@ This app shows them and keeps everything in sync.
 
 - **On Komga, for every device**: reading progress, per-series reader and image settings and their defaults, pins,
   and what's hidden from On deck.
-- **On this device**: the server address and API key, screen brightness and night mode, page turn animation, Home's
-  layout, remembered filters and sort orders, downloads and the offline mode switch.
+- **On this device**: the server address and API key, screen brightness and night mode, how the reader behaves (page
+  turn animation, taps, volume keys, background, keeping the screen on), poster size, Home's layout, remembered
+  filters and sort orders, downloads and the offline mode switch. Settings > About can reset all of these at once.
 
 Settings (side menu) has everything in one place, each section labelled with where it's kept.
 

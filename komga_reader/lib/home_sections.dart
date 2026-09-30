@@ -41,6 +41,15 @@ class HomeSections extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Back to the default sections and order (Settings > Reset this device's settings).
+  Future<void> reset() async {
+    final p = await SharedPreferences.getInstance();
+    for (final k in p.getKeys().where((k) => k.startsWith('home.show.') || k == 'home.order' || k == 'showOnDeck')) {
+      await p.remove(k);
+    }
+    await load();
+  }
+
   Future<void> toggle(String key) => set(key, !this[key]);
 
   Future<void> set(String key, bool value) async {

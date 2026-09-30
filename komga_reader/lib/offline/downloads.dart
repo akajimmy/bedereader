@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -114,6 +115,7 @@ class Downloads extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
+    deleteWhenRead = p.getBool(_deleteReadKey) ?? false;
     queue.clear();
     if (await _queueFile.exists()) {
       try {
@@ -124,6 +126,41 @@ class Downloads extends ChangeNotifier {
     }
     notifyListeners();
     _pump();
+  }
+
+  // ---- Delete once read (Settings > Downloads, this device) ----------------------------------------------------------
+  static const _deleteReadKey = 'downloads.deleteWhenRead';
+  bool deleteWhenRead = false;
+  final Set<String> _finished = {}; // read while open in the reader: deleted once it closes
+  int _readers = 0;
+
+  Future<void> setDeleteWhenRead(bool on) async {
+    deleteWhenRead = on;
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setBool(_deleteReadKey, on);
+  }
+
+  /// A book was marked read - here, offline, or on another device (seen by the progress sync). With Delete once
+  /// read on, its download goes; a book still open in the reader waits for the reader to close. Books that were
+  /// already read when downloaded aren't touched: this only follows a book becoming read.
+  void bookFinished(String bookId) {
+    if (!deleteWhenRead || !isDownloaded(bookId)) return;
+    _finished.add(bookId);
+    if (_readers == 0) unawaited(_deleteFinished());
+  }
+
+  void readerOpened() => _readers++;
+  void readerClosed() {
+    if (_readers > 0) _readers--;
+    if (_readers == 0 && _finished.isNotEmpty) unawaited(_deleteFinished());
+  }
+
+  Future<void> _deleteFinished() async {
+    final ids = List.of(_finished);
+    _finished.clear();
+    for (final id in ids) {
+      if (isDownloaded(id)) await remove(id); // progress not yet sent to Komga is kept (see remove)
+    }
   }
 
   Future<void> setCap(int? bytes) async {

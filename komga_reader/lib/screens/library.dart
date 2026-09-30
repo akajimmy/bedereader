@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
+import '../settings.dart';
 import '../view_prefs.dart';
 import '../widgets/download_badge.dart';
 import '../widgets/drawer.dart';
@@ -317,10 +318,11 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final completed = rp != null && rp['completed'] == true;
   final number = b['metadata']?['number'] ?? b['number'];
   final title = (b['metadata']?['title'] ?? b['name']) as String;
+  final titleOnly = AppSettings.instance.display.posterTitleOnly; // Settings > Library & Home > Poster text
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.bookThumb(b['id']),
-    title: '${b['seriesTitle'] ?? ''} #$number',
-    subtitle: title,
+    title: titleOnly ? title : '${b['seriesTitle'] ?? ''} #$number',
+    subtitle: titleOnly ? null : title,
     read: completed,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,

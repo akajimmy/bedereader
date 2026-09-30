@@ -218,8 +218,8 @@ class _Live extends StatelessWidget {
       ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
 }
 
-/// Page-turn style, the page number flash, double-tap zoom and volume keys (this device). In the reader's Reader
-/// settings and Settings > Reading.
+/// Page turn animation and the page number flash (this device). In the reader's Reader settings and Settings >
+/// Reader.
 class PageTurnControl extends StatelessWidget {
   const PageTurnControl({super.key});
   @override
@@ -240,6 +240,24 @@ class PageTurnControl extends StatelessWidget {
           value: s.display.pageNumber,
           onChanged: (v) => s.setDisplay(s.display.copyWith(pageNumber: v)),
         ),
+      ]));
+}
+
+/// How the reader behaves on this device - Settings > Reader, under the page turn: double-tap zoom, volume keys,
+/// next book before the last page, the background, and how long the screen stays on.
+class ReaderBehaviourControls extends StatelessWidget {
+  const ReaderBehaviourControls({super.key});
+
+  static String screenOnLabel(int minutes) => switch (minutes) {
+        DisplayPrefs.alwaysOn => 'Always',
+        0 => "Off (the device's own timeout)",
+        _ => '$minutes minutes',
+      };
+
+  @override
+  Widget build(BuildContext context) => _Live((s) {
+        final d = s.display;
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Double-tap to zoom'),
@@ -256,7 +274,46 @@ class PageTurnControl extends StatelessWidget {
             value: s.display.volumeKeys,
             onChanged: (v) => s.setDisplay(s.display.copyWith(volumeKeys: v)),
           ),
-      ]));
+        const _Heading('Next book before the last page'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SegmentedButton<MidBook>(
+            segments: [for (final m in MidBook.values) ButtonSegment(value: m, label: Text(m.label))],
+            selected: {d.midBook},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) => s.setDisplay(d.copyWith(midBook: v.first)),
+          ),
+        ),
+        Text(switch (d.midBook) {
+          MidBook.ask => 'Asks whether to mark the book you leave as read',
+          MidBook.markRead => 'The book you leave is marked read',
+          MidBook.keep => 'The book you leave stays in progress, at the page you were on',
+        }, style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
+        const _Heading('Background'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SegmentedButton<ReaderBackground>(
+            segments: [for (final b in ReaderBackground.values) ButtonSegment(value: b, label: Text(b.label))],
+            selected: {d.background},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) => s.setDisplay(d.copyWith(background: v.first)),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(children: [
+          const Expanded(child: Text('Keep the screen on')),
+          DropdownButton<int>(
+            value: d.screenOn,
+            items: [
+              for (final m in DisplayPrefs.screenOnChoices) DropdownMenuItem(value: m, child: Text(screenOnLabel(m))),
+            ],
+            onChanged: (m) => s.setDisplay(d.copyWith(screenOn: m)),
+          ),
+        ]),
+        const Text('While a book is open. The minutes count from the last page turn or touch.',
+            style: TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
+      ]);
+      });
 }
 
 /// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on desktop.
@@ -336,7 +393,7 @@ class ReadingDefaults extends StatelessWidget {
           ..._imageRows(p, setP),
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton(onPressed: () => setP(p.imageReset()), child: const Text('Image back to original')),
+            child: TextButton(onPressed: () => setP(p.imageReset()), child: const Text('Reset to original')),
           ),
         ]);
       });
