@@ -845,9 +845,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         ]),
                       ),
                     ),
-                  // "12 / 36" for a moment after a turn - not over the controls (they have the count) or the end card
+                  // "12 / 36" for a moment after a turn, bottom left (user, 2026-09-30) - not over the controls (they
+                  // have the count) or the end card
                   Positioned(
-                    right: 14,
+                    left: 14,
                     bottom: 14,
                     child: IgnorePointer(
                       child: AnimatedOpacity(

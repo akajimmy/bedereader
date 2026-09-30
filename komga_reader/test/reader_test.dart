@@ -367,6 +367,9 @@ void main() {
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 300));
     expect(flashOpacity(tester, '2 / 3'), 1.0);
+    final at = tester.getRect(find.text('2 / 3')), screen = tester.getRect(find.byType(ReaderScreen));
+    expect(at.left - screen.left, lessThan(60)); // bottom left (user, 2026-09-30)
+    expect(screen.bottom - at.bottom, lessThan(60));
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 0.0);
   });
