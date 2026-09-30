@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 54 - 2026-09-30
+
 **Fixed**
 - Remote in Settings and the reader panels: Up and Down always go to the row above or below, instead of skipping a
   row when a wide control sat over a short one. Home's sections count as a row each.
@@ -23,10 +29,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Home (Continue reading and the rest) could be out of date: it only reloaded when a screen it opened itself closed.
   Now Home, the libraries, series, collections, read lists and search results load afresh whenever they're back on
   top, however you got there (the side menu's Home, say), and when the app comes back into view.
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 53 - 2026-09-30
 
