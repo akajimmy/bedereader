@@ -234,7 +234,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       setState(() {
         _book = fresh; _pages = pages; _index = start; _loader = loader;
         _openedAt = start; _turned = false; _zoomed = false;
-        _pc = PageController(initialPage: start);
+        _pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
         _loading = false;
       });
       _keys.requestFocus();
@@ -878,6 +878,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         child: NotificationListener<ScrollNotification>(
                         onNotification: _onPagesScroll,
                         child: PageView.builder(
+                        // a fresh page view for each book: kept, it hands the new controller the last book's place
+                        // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
+                        key: ValueKey(_book['id']),
                         controller: _pc,
                         // keep the neighbours built, so they're processed before they're turned to (in every mode:
                         // a wipe used to build - and process - the next page while it slid in)
