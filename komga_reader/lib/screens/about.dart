@@ -57,9 +57,6 @@ class _AboutScreenState extends State<AboutScreen> {
             const SizedBox(height: 20),
             const Center(child: Text(appName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600))),
             const Center(child: Text(appTagline, style: TextStyle(color: Colors.white60))),
-            const SizedBox(height: 2),
-            const Center(child: Text('BéDé is Québec French for comics.',
-                style: TextStyle(color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic))),
             const SizedBox(height: 10),
             Center(
               child: Container(
