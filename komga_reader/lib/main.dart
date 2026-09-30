@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'app_identity.dart';
 import 'errors.dart';
+import 'hidden_libraries.dart';
 import 'licences.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
@@ -148,6 +149,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         duration: Duration(seconds: action == null ? 4 : 12), behavior: SnackBarBehavior.floating));
 
   Future<void> _restore() async {
+    await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = p.getString('apiKey');
     setState(() {

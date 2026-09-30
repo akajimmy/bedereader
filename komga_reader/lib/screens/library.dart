@@ -101,7 +101,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() {});
     _paged.more();
     try {
-      final libs = await api.libraries();
+      final libs = await api.visibleLibraries(); // the picker: those hidden on this device left out
       if (mounted) setState(() => _libraries = libs);
     } catch (_) {
       // the grid shows the error if the server is unreachable

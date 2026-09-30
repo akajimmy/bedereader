@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
+import 'hidden_libraries.dart';
+
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
 /// override changes made in the web client.
@@ -112,11 +114,29 @@ class Komga {
     }
   }
 
+  /// The libraries this device shows (Settings > Library & Home): side menu, Home, the library picker.
+  Future<List<dynamic>> visibleLibraries() async =>
+      [for (final l in await libraries()) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
+
+  /// What to ask Komga for: one library, or - across libraries, with some hidden on this device - the shown ones
+  /// (Komga takes a list), so every list leaves the hidden ones out. Null: no filter at all.
+  Future<Object?> _scope(String? libraryId) async {
+    if (libraryId != null || HiddenLibraries.instance.ids.isEmpty) return libraryId;
+    try {
+      final all = await (_librariesOnce ??= libraries());
+      final shown = [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l['id'] as String];
+      return shown.isEmpty ? null : shown; // (Settings keeps at least one shown)
+    } catch (_) {
+      _librariesOnce = null;
+      return null; // can't tell which: the request itself will say what's wrong
+    }
+  }
+
   // ---- browsing (Komga pages: {content, totalElements, last})
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
     return await _get('/api/v1/series', {
-      'library_id': libraryId, 'collection_id': collectionId, 'read_status': readStatus,
+      'library_id': await _scope(libraryId), 'collection_id': collectionId, 'read_status': readStatus,
       'sort': sort, 'page': page, 'size': size,
     }) as Map<String, dynamic>;
   }
@@ -124,7 +144,7 @@ class Komga {
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
     return await _get('/api/v1/books', {
-      'library_id': libraryId, 'read_status': readStatus, 'sort': sort, 'page': page, 'size': size,
+      'library_id': await _scope(libraryId), 'read_status': readStatus, 'sort': sort, 'page': page, 'size': size,
     }) as Map<String, dynamic>;
   }
 
@@ -134,7 +154,7 @@ class Komga {
 
   /// Komga's "On deck": the next unread book of series you have been reading.
   Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async =>
-      await _get('/api/v1/books/ondeck', {'library_id': libraryId, 'page': 0, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/books/ondeck', {'library_id': await _scope(libraryId), 'page': 0, 'size': size}) as Map<String, dynamic>;
 
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
       String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
@@ -143,20 +163,20 @@ class Komga {
   }
 
   Future<Map<String, dynamic>> collections({String? libraryId, int page = 0, int size = 200}) async =>
-      await _get('/api/v1/collections', {'library_id': libraryId, 'page': page, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/collections', {'library_id': await _scope(libraryId), 'page': page, 'size': size}) as Map<String, dynamic>;
 
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async =>
-      await _get('/api/v1/readlists', {'library_id': libraryId, 'page': page, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/readlists', {'library_id': await _scope(libraryId), 'page': page, 'size': size}) as Map<String, dynamic>;
 
   // ---- search (Komga's own search, by title and more; optionally within one library)
   Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async =>
-      await _get('/api/v1/series', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/series', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async =>
-      await _get('/api/v1/books', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/books', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async =>
-      await _get('/api/v1/readlists', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/readlists', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async =>
-      await _get('/api/v1/collections', {'search': query, 'library_id': libraryId, 'size': size}) as Map<String, dynamic>;
+      await _get('/api/v1/collections', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
 
   /// Books of a read list in the list's own order, optionally only unread / in progress / read.
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>

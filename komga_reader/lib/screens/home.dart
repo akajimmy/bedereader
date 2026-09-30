@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../hidden_libraries.dart';
 import '../errors.dart';
 import '../home_sections.dart';
 import '../offline/connection.dart';
@@ -51,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _sections.addListener(_onSections);
     Pins.instance.addListener(_checkOfflinePins);
     OnDeckHidden.instance.addListener(_onHiddenChanged);
+    HiddenLibraries.instance.addListener(_load); // a library shown or hidden on this device: every row changes
     _sections.load().then((_) => _load());
   }
 
@@ -59,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _sections.removeListener(_onSections);
     Pins.instance.removeListener(_checkOfflinePins);
     OnDeckHidden.instance.removeListener(_onHiddenChanged);
+    HiddenLibraries.instance.removeListener(_load);
     super.dispose();
   }
 
@@ -86,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final want = {for (final k in _optional) if (_sections[k]) k};
       List<dynamic> content(Object r) => ((r as Map)['content'] as List<dynamic>?) ?? [];
       final results = await Future.wait([
-        api.libraries(),
+        api.visibleLibraries(), // those hidden on this device left out
         api.inProgress(),
         // extra, to still fill the row after the hidden ones are left out
         if (want.contains('ondeck')) api.onDeck(size: 30 + OnDeckHidden.instance.count) else Future.value({}),

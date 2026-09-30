@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/painting.dart' show FileImage, ImageProvider;
 
 import '../api.dart';
+import '../hidden_libraries.dart';
 import 'downloads.dart';
 import 'store.dart';
 
@@ -24,7 +25,9 @@ class OfflineKomga extends Komga {
   final OfflineStore store;
 
   // ---- helpers ------------------------------------------------------------------------------------------------------
-  Iterable<MapEntry<String, Map<String, dynamic>>> get _done => store.books.entries.where((e) => e.value['state'] == 'done');
+  // downloaded books - those in a library hidden on this device left out, as online
+  Iterable<MapEntry<String, Map<String, dynamic>>> get _done => store.books.entries.where((e) =>
+      e.value['state'] == 'done' && !HiddenLibraries.instance.isHidden((e.value['library'] as Map?)?['id'] as String?));
 
   /// The book as Komga would return it, with the progress made on this device.
   Map<String, dynamic> _book(String id) {
