@@ -315,17 +315,53 @@ class AppSettings extends ChangeNotifier {
     syncError = note;
   }
 
+  // Changes not on Komga yet. Kept on the device too ([_unsentKey]): lost with the app closing (or offline), Komga's
+  // older copy used to win at the next start and the change was gone (code review, 2026-09-30).
+  static const _unsentKey = 'readerPrefs.unsent';
   final Set<String> _dirtySeries = {};
   bool _dirtyDefault = false;
+  // how many times each entry has changed: a send only clears the entries that didn't change again while it was on
+  // its way (a change made mid-send used to be marked sent without being sent)
+  final Map<String, int> _versions = {};
+  int _defaultVersion = 0;
+  bool _syncing = false, _syncAgain = false; // one sync at a time; one asked for meanwhile runs after it
   Timer? _syncTimer;
 
   /// Switch connection (online / offline) without reloading; a failed sync retries on its own.
   void useApi(Komga api) {
     _api = api;
-    if (_dirtySeries.isNotEmpty || _dirtyDefault) {
-      _syncTimer?.cancel();
-      _syncTimer = Timer(const Duration(seconds: 2), _sync);
+    if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncSoon();
+  }
+
+  void _syncSoon([Duration after = const Duration(seconds: 2)]) {
+    _syncTimer?.cancel();
+    _syncTimer = Timer(after, _sync);
+  }
+
+  Future<void> _saveUnsent() async {
+    final p = await SharedPreferences.getInstance();
+    if (_dirtySeries.isEmpty && !_dirtyDefault) {
+      await p.remove(_unsentKey);
+    } else {
+      await p.setString(_unsentKey, jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault}));
     }
+  }
+
+  /// Signed out: the account's synced settings go from this device (they come back from Komga on signing in again);
+  /// this device's own display settings stay (code review, 2026-09-30: they carried over to the next account).
+  Future<void> clearAccount() async {
+    _syncTimer?.cancel();
+    _api = null;
+    defaults = const ReaderPrefs();
+    series.clear();
+    _dirtySeries.clear();
+    _dirtyDefault = false;
+    _versions.clear();
+    syncError = null;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_localReader);
+    await p.remove(_unsentKey);
   }
 
   /// A series' settings as they apply: each part (page layout, image) its own when overridden, else the defaults'.
@@ -365,20 +401,30 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  /// Local copy first (instant), then the Komga copy replaces it if the server has one.
+  /// Local copy first (instant), then Komga's copy: it's the truth for everything except this device's changes that
+  /// haven't reached it yet - those stay, and are sent.
   Future<void> load(Komga api) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final d = p.getString(_localDisplay);
     if (d != null) display = DisplayPrefs.fromJson(jsonDecode(d) as Map<String, dynamic>);
+    try {
+      final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
+      _dirtySeries
+        ..clear()
+        ..addAll([for (final id in (u['series'] as List? ?? const [])) id as String]);
+      _dirtyDefault = u['default'] == true;
+    } catch (_) {
+      // damaged: nothing counts as unsent
+    }
     final r = p.getString(_localReader);
-    if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>);
+    if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>, remote: false);
     applyBacklight();
     notifyListeners();
     try {
       final remote = await _fetchRemote();
       if (remote != null) {
-        _applyBlob(remote);
+        _applyBlob(remote, remote: true);
         await p.setString(_localReader, jsonEncode(_blob()));
         notifyListeners();
       }
@@ -386,12 +432,18 @@ class AppSettings extends ChangeNotifier {
     } catch (e) {
       _syncNote('Using the settings saved on this device: ${explain(e).reason}.', e);
     }
+    if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncSoon(); // what didn't reach Komga last time goes now
   }
 
   void setSeries(String seriesId, ReaderPrefs prefs) {
     series[seriesId] = prefs;
-    _dirtySeries.add(seriesId);
+    _dirty(seriesId);
     _changedReader();
+  }
+
+  void _dirty(String seriesId) {
+    _dirtySeries.add(seriesId);
+    _versions[seriesId] = (_versions[seriesId] ?? 0) + 1;
   }
 
   /// Whether a series has its own settings (else it follows the defaults).
@@ -400,13 +452,13 @@ class AppSettings extends ChangeNotifier {
   /// One series back to following the defaults (Image settings ⋮ > Use the defaults). Synced.
   void useDefaults(String seriesId) {
     if (series.remove(seriesId) == null) return;
-    _dirtySeries.add(seriesId); // sync removes it from Komga's copy
+    _dirty(seriesId); // sync removes it from Komga's copy
     _changedReader();
   }
 
   /// Every series back to following the defaults (Settings > Reading). Synced: other devices lose them too.
   void resetAllSeries() {
-    _dirtySeries.addAll(series.keys); // sync removes each from Komga's copy
+    series.keys.forEach(_dirty); // sync removes each from Komga's copy
     series.clear();
     _changedReader();
   }
@@ -414,6 +466,7 @@ class AppSettings extends ChangeNotifier {
   void setDefault(ReaderPrefs prefs) {
     defaults = prefs;
     _dirtyDefault = true;
+    _defaultVersion++;
     _changedReader();
   }
 
@@ -430,19 +483,25 @@ class AppSettings extends ChangeNotifier {
   void _changedReader() {
     notifyListeners();
     SharedPreferences.getInstance().then((p) => p.setString(_localReader, jsonEncode(_blob())));
-    _syncTimer?.cancel();
-    _syncTimer = Timer(const Duration(seconds: 2), _sync);
+    _saveUnsent();
+    _syncSoon();
   }
 
   Future<void> _sync() async {
+    if (_syncing) { // one at a time: this one's turn comes after
+      _syncAgain = true;
+      return;
+    }
     final api = _api;
     if (api == null || (_dirtySeries.isEmpty && !_dirtyDefault)) return;
-    final sending = Set<String>.of(_dirtySeries);
+    _syncing = true;
+    final sending = {for (final id in _dirtySeries) id: _versions[id] ?? 0};
     final sendDefault = _dirtyDefault;
+    final defaultVersion = _defaultVersion;
     try {
       final merged = await _fetchRemote() ?? <String, dynamic>{};
       final remoteSeries = Map<String, dynamic>.from((merged['series'] as Map?) ?? {});
-      for (final id in sending) {
+      for (final id in sending.keys) {
         final p = series[id];
         if (p == null) { remoteSeries.remove(id); } else { remoteSeries[id] = p.toJson(); }
       }
@@ -450,14 +509,25 @@ class AppSettings extends ChangeNotifier {
       merged['series'] = remoteSeries;
       if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
       await api.putClientSetting(komgaKey, jsonEncode(merged));
-      _dirtySeries.removeAll(sending);
-      if (sendDefault) _dirtyDefault = false;
+      // sent - unless it changed again meanwhile: then it's still to send
+      for (final e in sending.entries) {
+        if ((_versions[e.key] ?? 0) == e.value) _dirtySeries.remove(e.key);
+      }
+      if (sendDefault && _defaultVersion == defaultVersion) _dirtyDefault = false;
+      await _saveUnsent();
       syncError = null;
+      if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncAgain = true;
     } catch (e) {
       _syncNote('Settings saved on this device, not on Komga yet: ${explain(e).reason}.', e);
-      _syncTimer = Timer(const Duration(minutes: 1), _sync);
+      _syncSoon(const Duration(minutes: 1));
+    } finally {
+      _syncing = false;
     }
     notifyListeners();
+    if (_syncAgain) {
+      _syncAgain = false;
+      _syncSoon();
+    }
   }
 
   Future<Map<String, dynamic>?> _fetchRemote() async {
@@ -471,15 +541,27 @@ class AppSettings extends ChangeNotifier {
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
       };
 
-  void _applyBlob(Map<String, dynamic> b) {
+  /// A saved copy - this device's ([remote] false) or Komga's - replaces what's here, except this device's changes
+  /// that haven't reached Komga yet: those stay as they are (changed, or removed). So a series whose own settings were
+  /// removed on another device goes here too (code review, 2026-09-30: it used to stay for good).
+  void _applyBlob(Map<String, dynamic> b, {required bool remote}) {
     final d = b['default'];
-    if (d is Map<String, dynamic> && !_dirtyDefault) defaults = ReaderPrefs.fromJson(d);
+    if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
     final s = b['series'];
-    if (s is Map) {
-      for (final e in s.entries) {
-        if (_dirtySeries.contains(e.key)) continue; // a local change still waiting to be sent wins
-        series[e.key as String] = ReaderPrefs.fromJson(Map<String, dynamic>.from(e.value as Map));
+    if (s is! Map) return;
+    final next = <String, ReaderPrefs>{
+      for (final e in s.entries)
+        if (!(remote && _dirtySeries.contains(e.key)))
+          e.key as String: ReaderPrefs.fromJson(Map<String, dynamic>.from(e.value as Map)),
+    };
+    if (remote) {
+      for (final id in _dirtySeries) {
+        final mine = series[id];
+        if (mine != null) next[id] = mine; // unsent here: this device's version (absent = removed here)
       }
     }
+    series
+      ..clear()
+      ..addAll(next);
   }
 }

@@ -50,10 +50,15 @@ class Pins extends ChangeNotifier {
 
   static const komgaKey = 'komgareader.pins';
   static const _local = 'pins';
+  // changed while Komga couldn't be reached: kept on the device, sent when it can be, and it wins at start-up (code
+  // review, 2026-09-30: Komga's older list used to replace it at the next start) - as On deck hidden does
+  static const _dirtyKey = 'pins.unsent';
 
   Komga? _api;
   List<Pin> items = [];
   String? syncError;
+  Timer? _retry;
+  bool _sending = false, _sendAgain = false; // one send at a time: the list as it is when it's this one's turn
 
   /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
   void _syncNote(String note, Object error) {
@@ -67,6 +72,10 @@ class Pins extends ChangeNotifier {
     final raw = p.getString(_local);
     if (raw != null) items = _decode(raw);
     notifyListeners();
+    if (p.getBool(_dirtyKey) ?? false) {
+      await _send(); // this device's changes haven't reached Komga: they win
+      return;
+    }
     try {
       final remote = (await api.clientSettings())[komgaKey]?['value'];
       if (remote is String) {
@@ -80,8 +89,23 @@ class Pins extends ChangeNotifier {
     }
   }
 
-  /// Switch connection (online / offline) without reloading.
-  void useApi(Komga api) => _api = api;
+  /// Switch connection (online / offline) without reloading; changes waiting to be sent go now.
+  void useApi(Komga api) {
+    _api = api;
+    SharedPreferences.getInstance().then((p) { if (p.getBool(_dirtyKey) ?? false) _send(); });
+  }
+
+  /// Signed out: the account's pins go from this device (they come back from Komga on signing in again).
+  Future<void> clearAccount() async {
+    _retry?.cancel();
+    _api = null;
+    items = [];
+    syncError = null;
+    notifyListeners();
+    final p = await SharedPreferences.getInstance();
+    await p.remove(_local);
+    await p.remove(_dirtyKey);
+  }
 
   Pin? find(Pin view) {
     for (final p in items) {
@@ -94,18 +118,44 @@ class Pins extends ChangeNotifier {
   void remove(Pin pin) => _save(items.where((p) => !p.sameView(pin)).toList());
   void rename(Pin pin, String name) => _save([for (final p in items) p.sameView(pin) ? p.renamed(name) : p]);
 
+  String get _raw => jsonEncode([for (final p in items) p.toJson()]);
+
   void _save(List<Pin> next) {
     items = next;
     notifyListeners();
-    final raw = jsonEncode([for (final p in items) p.toJson()]);
-    SharedPreferences.getInstance().then((p) => p.setString(_local, raw));
-    final api = _api;
-    if (api == null) return;
-    api.putClientSetting(komgaKey, raw).then((_) {
+    SharedPreferences.getInstance().then((p) async {
+      await p.setString(_local, _raw);
+      await p.setBool(_dirtyKey, true); // until Komga has it
+      await _send();
+    });
+  }
+
+  /// The list to Komga. Not reachable: flagged (kept for the next start) and tried again in a minute.
+  Future<void> _send() async {
+    if (_sending) {
+      _sendAgain = true;
+      return;
+    }
+    _sending = true;
+    _retry?.cancel();
+    final p = await SharedPreferences.getInstance();
+    try {
+      final api = _api;
+      if (api == null) throw StateError('no server');
+      await api.putClientSetting(komgaKey, _raw);
+      if (!_sendAgain) await p.setBool(_dirtyKey, false); // changed meanwhile: still to send
       syncError = null;
-    }).catchError((Object e) {
+    } catch (e) {
       _syncNote('Pins saved on this device, not on Komga yet: ${explain(e).reason}.', e);
-    }).whenComplete(notifyListeners);
+      _retry = Timer(const Duration(minutes: 1), _send);
+    } finally {
+      _sending = false;
+    }
+    notifyListeners();
+    if (_sendAgain) {
+      _sendAgain = false;
+      await _send();
+    }
   }
 
   static List<Pin> _decode(String raw) {
