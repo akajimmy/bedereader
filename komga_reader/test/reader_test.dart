@@ -100,6 +100,22 @@ class ChainKomga extends FakeKomga {
   }
 }
 
+/// [FakeKomga] with B0 (not read) and BR (read) before B1: previous of B1 is BR, previous of BR is B0.
+class BackChainKomga extends FakeKomga {
+  final opened = <String>[];
+  @override
+  Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async => switch (bookId) {
+        'B1' => ChainKomga.b('BR', '0.5', read: true),
+        'BR' => ChainKomga.b('B0', '0'),
+        _ => null,
+      };
+  @override
+  Future<Map<String, dynamic>?> book(String id) async {
+    opened.add(id);
+    return id == 'B1' ? theBook : ChainKomga.b(id, id);
+  }
+}
+
 /// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
 class ImageKomga extends FakeKomga {
   static late Uint8List png;
@@ -415,6 +431,22 @@ void main() {
         expect(find.text('Up next in the series'), findsOneWidget);
         expect(find.text('Test #2'), findsOneWidget); // read or not, the next in order
       }
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('previous book: with read books hidden it skips read ones too; otherwise the one before', (tester) async {
+    for (final skip in [true, false]) {
+      final api = BackChainKomga();
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: skip)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await key(tester, LogicalKeyboardKey.enter);
+      await tester.tap(find.byTooltip('Previous book'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(api.opened.last, skip ? 'B0' : 'BR', reason: 'skipRead: $skip');
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpWidget(const SizedBox());
     }

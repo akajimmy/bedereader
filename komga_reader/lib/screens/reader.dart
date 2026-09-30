@@ -586,17 +586,23 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     }
   }
 
-  /// Previous book (in the read list it was opened from, else the series). Nothing is marked; this book's place is
-  /// kept if a page was turned.
+  /// Previous book (in the read list it was opened from, else the series) - opened from a view with read books
+  /// hidden, the previous one not read yet (user, 2026-09-30). Nothing is marked; this book's place is kept if a
+  /// page was turned.
   Future<void> _prevBook() async {
     _saveTimer?.cancel();
     _saveNow();
     try {
-      final prev = await api.previousBook(_book['id'], readListId: widget.readListId);
+      var prev = await api.previousBook(_book['id'], readListId: widget.readListId);
+      for (var hops = 0; widget.skipRead && prev != null && _isRead(prev) && hops < 500; hops++) {
+        prev = await api.previousBook(prev['id'] as String, readListId: widget.readListId);
+      }
       if (!mounted) return;
       if (prev == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(widget.readListId != null ? 'This is the first book of the read list' : 'This is the first book of the series')));
+        final where = widget.readListId != null ? 'read list' : 'series';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.skipRead
+            ? 'No unread books before this one in the $where'
+            : 'This is the first book of the $where')));
       } else {
         _open(prev);
       }
