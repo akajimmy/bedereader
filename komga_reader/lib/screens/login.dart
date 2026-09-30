@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../app_identity.dart';
 import '../errors.dart';
 import '../widgets/error_text.dart';
 
@@ -70,7 +71,9 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text('Komga', style: Theme.of(context).textTheme.headlineMedium),
+              Text(appName, style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: 4),
+              const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
               const SizedBox(height: 24),
               TextField(controller: _server, keyboardType: TextInputType.url, autocorrect: false,
                   enableSuggestions: false, // no predictive text: it adds spaces after "10.0.0.23:"

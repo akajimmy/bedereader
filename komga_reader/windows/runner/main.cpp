@@ -36,7 +36,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     window.SetStartMaximized(saved.maximized);
   }
   // the window title: the display name (a rename changes it; see README > For developers > Renaming the app)
-  if (!window.Create(L"Komga Reader", origin, size)) {
+  if (!window.Create(L"BeDeReader", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

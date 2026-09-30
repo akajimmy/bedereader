@@ -1,11 +1,11 @@
 {
-    "name": "Komga Reader",
-    "short_name": "Komga Reader",
+    "name": "BeDeReader",
+    "short_name": "BeDeReader",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A comic reader for your Komga server.",
+    "description": "A library and reader for Komga.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -5,7 +5,7 @@ project(komga_reader LANGUAGES CXX)
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 # The .exe name - display only (a rename may change it). The data folders don't depend on it.
-set(BINARY_NAME "KomgaReader")
+set(BINARY_NAME "BeDeReader")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
