@@ -227,7 +227,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       final start = rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pages.length - 1);
       _pc?.dispose();
       _disposeScrolls();
-      _thumbs.clear();
+      _clearThumbs();
       final loader = PageLoader(api, fresh['id'] as String,
           [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
       if (pages.isNotEmpty) loader.around(start);
@@ -792,6 +792,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         setState(() { _scrubbing = false; _scrub = null; });
         if (target != _index) _pc?.jumpToPage(target);
       } else {
+        _thumbShown = null; // not the last scrub's page
         setState(() { _scrubbing = true; _scrub = _index.clamp(0, _last); });
       }
       return KeyEventResult.handled;
@@ -1371,7 +1372,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
             padding: const EdgeInsets.symmetric(horizontal: _sliderInset, vertical: 12),
           ),
           child: LayoutBuilder(builder: (context, box) => Stack(clipBehavior: Clip.none, children: [
-            _sliderItself(shown),
+            _sliderItself(shown, box.maxWidth),
             if (_scrub != null) _preview(shown, box.maxWidth),
           ])),
         ),
@@ -1401,16 +1402,15 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               border: Border.all(color: Colors.white24)),
           child: Column(children: [
             Expanded(
-              child: FutureBuilder<Uint8List?>(
-                future: _thumb(shown),
-                // the previous picture stays until the next one is in (no blinking while dragging)
-                builder: (context, snap) => snap.data == null
-                    ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                    : Image.memory(snap.data!, fit: BoxFit.contain, gaplessPlayback: true,
-                        // offline it's the whole page: decoded small
-                        cacheWidth: (_previewSize.width * dpr).round(),
-                        errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
-              ),
+              // the last picture that came in stays until this page's does (no blinking, no waiting on a spinner)
+              child: switch (_thumbFor(shown) ?? _thumbShown) {
+                null => const Center(
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                final bytes => Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
+                    // offline it's the whole page: decoded small
+                    cacheWidth: (_previewSize.width * dpr).round(),
+                    errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
+              },
             ),
             const SizedBox(height: 4),
             Text('Page ${shown + 1}', style: const TextStyle(color: Colors.white, fontSize: 13)),
@@ -1420,34 +1420,104 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     );
   }
 
-  final Map<int, Future<Uint8List?>> _thumbs = {}; // page index -> its preview picture (null: none to be had)
+  // Page previews: Komga's small picture of a page (offline: the page itself). Scrubbing back and forth used to ask
+  // for every page passed, all at once, so the one wanted waited behind dozens and the preview seemed to freeze
+  // (user, 2026-09-30): now at most two at a time, and only ever the page the thumb is on now.
+  final Map<int, Uint8List?> _thumbs = {}; // page index -> its picture (null: none to be had); most recent last
+  final Set<int> _thumbsLoading = {};
+  int? _thumbWanted; // the page to fetch next, when a slot is free
+  Uint8List? _thumbShown; // the last picture shown, kept up while the next comes in
+  static const _thumbsAtOnce = 2, _thumbsKept = 48;
 
-  /// Komga's small picture of a page (offline: the page itself), fetched once; the last few dozen are kept.
-  Future<Uint8List?> _thumb(int i) {
-    final f = _thumbs.remove(i) ??
-        api.pageThumbBytes(_book['id'] as String, _loader!.pageNumbers[i])
-            .then<Uint8List?>((b) => b)
-            .catchError((Object _) => null);
-    _thumbs[i] = f; // most recently used last
-    while (_thumbs.length > 24) {
-      _thumbs.remove(_thumbs.keys.first);
+  /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
+  Uint8List? _thumbFor(int i) {
+    if (_thumbs.containsKey(i)) {
+      final b = _thumbs.remove(i);
+      _thumbs[i] = b; // most recently used last
+      if (b != null) _thumbShown = b;
+      return b;
     }
-    return f;
+    if (!_thumbsLoading.contains(i)) {
+      _thumbWanted = i;
+      Future.microtask(_nextThumb); // not during the build
+    }
+    return null;
   }
 
-  Widget _sliderItself(int shown) => Slider(
-        focusNode: _sliderInner,
-        min: 0,
-        max: _last.toDouble(),
-        divisions: _last,
-        value: shown.toDouble(),
-        label: 'Page ${shown + 1}',
-        onChanged: (v) => setState(() => _scrub = v.round()),
-        onChangeEnd: (v) {
+  void _nextThumb() {
+    final i = _thumbWanted;
+    if (!mounted || i == null || _thumbsLoading.length >= _thumbsAtOnce) return;
+    _thumbWanted = null;
+    if (_thumbs.containsKey(i) || _thumbsLoading.contains(i) || i > _last) return;
+    final bookId = _book['id'] as String;
+    _thumbsLoading.add(i);
+    api.pageThumbBytes(bookId, _loader!.pageNumbers[i]).then<Uint8List?>((b) => b, onError: (Object _) => null)
+        .then((b) {
+      if (!mounted || _book['id'] != bookId) return; // another book since
+      _thumbsLoading.remove(i);
+      _thumbs[i] = b;
+      while (_thumbs.length > _thumbsKept) {
+        _thumbs.remove(_thumbs.keys.first);
+      }
+      if (_scrub != null) setState(() {});
+      _nextThumb();
+    });
+  }
+
+  void _clearThumbs() {
+    _thumbs.clear();
+    _thumbsLoading.clear();
+    _thumbWanted = null;
+    _thumbShown = null;
+  }
+
+  // Touch on the slider is followed here, not by the Slider's own drag: that could be cancelled mid-drag, which
+  // jumped to the page with the finger still down and left the preview stuck (user, 2026-09-30). Now the page
+  // changes only when the finger lifts.
+  int? _sliderPointer;
+
+  int _pageAt(double x, double width) {
+    final along = ((x - _sliderInset) / (width - 2 * _sliderInset)).clamp(0.0, 1.0);
+    return ((_rtl ? 1 - along : along) * _last).round();
+  }
+
+  Widget _sliderItself(int shown, double width) => Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: (e) {
+          if (_sliderPointer != null) return; // one finger scrubs
+          _sliderPointer = e.pointer;
+          _thumbShown = null; // not the last scrub's page
+          setState(() => _scrub = _pageAt(e.localPosition.dx, width));
+        },
+        onPointerMove: (e) {
+          if (e.pointer != _sliderPointer) return;
+          final p = _pageAt(e.localPosition.dx, width);
+          if (p != _scrub) setState(() => _scrub = p);
+        },
+        onPointerUp: (e) {
+          if (e.pointer != _sliderPointer) return;
+          _sliderPointer = null;
+          final target = _pageAt(e.localPosition.dx, width);
           _finishCurlNow();
-          _pc?.jumpToPage(v.round());
+          if (target != _index) _pc?.jumpToPage(target);
           setState(() => _scrub = null);
         },
+        onPointerCancel: (e) {
+          if (e.pointer != _sliderPointer) return;
+          _sliderPointer = null;
+          setState(() => _scrub = null); // the system took the touch: stay where we were
+        },
+        child: IgnorePointer(
+          child: Slider(
+            focusNode: _sliderInner,
+            min: 0,
+            max: _last.toDouble(),
+            divisions: _last,
+            value: shown.toDouble(),
+            label: 'Page ${shown + 1}',
+            onChanged: (_) {}, // enabled look; touch and keys are handled above
+          ),
+        ),
       );
 }
 
