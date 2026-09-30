@@ -5,16 +5,18 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 51 - 2026-09-30
+
 **Changed**
 - **Previous book goes back through what you've read**: it returns to the book you read before this one since
   opening the reader (even though it's read now), and after going back, Next retraces forward again - like a
   browser's back and forward. Before the first book of the visit it goes to the previous book - with Hide read on,
   the previous one you haven't read.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 50 - 2026-09-30
 
