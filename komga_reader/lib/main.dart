@@ -21,6 +21,7 @@ import 'settings.dart';
 import 'screen.dart';
 import 'side_menu.dart';
 import 'widgets/connection_prompt.dart';
+import 'widgets/drawer.dart';
 import 'widgets/sync_alert.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
@@ -68,6 +69,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time

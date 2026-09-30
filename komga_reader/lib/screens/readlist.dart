@@ -5,6 +5,7 @@ import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
 import '../widgets/breadcrumb.dart';
+import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
@@ -24,7 +25,7 @@ class ReadListScreen extends StatefulWidget {
   State<ReadListScreen> createState() => _ReadListScreenState();
 }
 
-class _ReadListScreenState extends State<ReadListScreen> {
+class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere {
   ReadFilter _filter = ReadFilter.all;
   late final Paged _paged = Paged((page, size) =>
       widget.api.readListBooks(widget.readList['id'], readStatus: _filter.api, page: page, size: size));
@@ -55,9 +56,13 @@ class _ReadListScreenState extends State<ReadListScreen> {
   Widget build(BuildContext context) {
     final rlId = widget.readList['id'] as String;
     return selectionScope(_sel, (context) => Scaffold(
+      key: menuScaffold,
+      drawer: menuDrawer(widget.api),
+      onDrawerChanged: onMenuChanged,
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
+        leading: const BackButton(),
         title: Breadcrumb(parent: 'Read lists', title: widget.readList['name'] as String),
         actions: [
           Center(child: CountBadge(paged: _paged)),
@@ -73,7 +78,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
           const FullscreenExit(),
         ],
       ),
-      body: PagedPosterGrid(
+      body: menuEdge(PagedPosterGrid(
         paged: _paged,
         empty: _filter == ReadFilter.hideRead ? 'Nothing unread in this list' : 'Nothing here',
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0,
@@ -83,7 +88,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
                   skipRead: _filter == ReadFilter.hideRead)));
           _paged.refresh();
         }),
-      ),
+      )),
     ));
   }
 }

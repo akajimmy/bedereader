@@ -5,6 +5,7 @@ import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
 import '../widgets/breadcrumb.dart';
+import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
@@ -22,7 +23,7 @@ class SeriesScreen extends StatefulWidget {
   State<SeriesScreen> createState() => _SeriesScreenState();
 }
 
-class _SeriesScreenState extends State<SeriesScreen> {
+class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere {
   ReadFilter _filter = ReadFilter.all;
   bool _newestFirst = false; // issue order: oldest first (number ascending) unless flipped
   late final Paged _paged = Paged((page, size) => widget.api.seriesBooks(widget.series['id'],
@@ -75,9 +76,13 @@ class _SeriesScreenState extends State<SeriesScreen> {
   Widget build(BuildContext context) {
     final s = widget.series;
     return selectionScope(_sel, (context) => Scaffold(
+      key: menuScaffold,
+      drawer: menuDrawer(widget.api),
+      onDrawerChanged: onMenuChanged,
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
+        leading: const BackButton(),
         title: FutureBuilder<String?>(
           future: _library,
           builder: (context, lib) => Breadcrumb(parent: lib.data, title: (s['metadata']?['title'] ?? s['name']) as String),
@@ -108,7 +113,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
           const FullscreenExit(),
         ],
       ),
-      body: PagedPosterGrid(
+      body: menuEdge(PagedPosterGrid(
         paged: _paged,
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
             selection: _sel, showViewSeries: false, onOpen: () async {
@@ -116,7 +121,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
               skipRead: _filter == ReadFilter.hideRead)));
           _paged.refresh();
         }),
-      ),
+      )),
     ));
   }
 }
@@ -132,7 +137,7 @@ class SeriesListScreen extends StatefulWidget {
   State<SeriesListScreen> createState() => _SeriesListScreenState();
 }
 
-class _SeriesListScreenState extends State<SeriesListScreen> {
+class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere {
   ReadFilter _filter = ReadFilter.all;
   late final Paged _paged = Paged((page, size) =>
       widget.api.series(collectionId: widget.collectionId, readStatus: _filter.api, page: page, size: size));
@@ -160,7 +165,10 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Breadcrumb(parent: 'Collections', title: widget.title),
+      key: menuScaffold,
+      drawer: menuDrawer(widget.api),
+      onDrawerChanged: onMenuChanged,
+      appBar: AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title),
           actions: [
             Center(child: CountBadge(paged: _paged)),
             HideReadButton(value: _filter, onChanged: _setFilter),
@@ -171,14 +179,14 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
             )),
             const FullscreenExit(),
           ]),
-      body: PagedPosterGrid(
+      body: menuEdge(PagedPosterGrid(
         paged: _paged,
         itemBuilder: (context, it, i) => seriesTile(context, widget.api, it, autofocus: i == 0,
             onChanged: _paged.refresh, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: widget.api, series: it)));
           _paged.refresh();
         }),
-      ),
+      )),
     );
   }
 }
