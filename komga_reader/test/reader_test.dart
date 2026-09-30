@@ -161,6 +161,34 @@ class ImageKomga extends FakeKomga {
   }
 }
 
+/// [VisitKomga] (B1 -> B2 -> B3) whose books after B1 load only once [hold] completes (or fail, [failNext]), and
+/// that records which book each progress save went to.
+class SlowKomga extends VisitKomga {
+  Completer<void>? hold;
+  bool failNext = false;
+  final savedTo = <String>[];
+  @override
+  Future<List<dynamic>> pages(String bookId) async {
+    if (bookId != 'B1') {
+      await hold?.future;
+      if (failNext) throw KomgaUnreachable('http://test');
+    }
+    return super.pages(bookId);
+  }
+
+  @override
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) {
+    savedTo.add(bookId);
+    return super.setProgress(bookId, page, completed: completed);
+  }
+}
+
+/// A book Komga lists with no pages (a damaged file, or not analysed yet).
+class EmptyKomga extends FakeKomga {
+  @override
+  Future<List<dynamic>> pages(String bookId) async => [];
+}
+
 void main() {
   // the reader starts loading the curl shader when it opens; load it once for real first, or that load starts inside
   // a test's fake clock, never finishes, and the curl tests wait on it forever
@@ -440,14 +468,17 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('closing from the end card marks the book read, even straight after the last page', (tester) async {
+  testWidgets('reaching the last page marks the book read at once; closing from the end card keeps it read',
+      (tester) async {
+    // user, 2026-09-30: the last page = read (it used to wait for the 1.5 s save, or the close)
     await openReader(tester);
-    await toEndCard(tester); // 400 ms per turn: the last page's 1.5 s save never ran
-    expect(api.finished, isEmpty);
+    await toEndCard(tester); // 400 ms per turn: no 1.5 s save ran
+    expect(api.finished, [3], reason: 'page 3 of 3, saved as read on reaching it');
     await key(tester, LogicalKeyboardKey.escape); // close
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(ReaderScreen), findsNothing);
-    expect(api.finished, [3]); // page 3 of 3, read
+    expect(api.saves.last, 3);
+    expect(api.finished.last, 3); // still read
   });
 
   double flashOpacity(WidgetTester tester, String text) => tester
@@ -758,6 +789,29 @@ void main() {
       await tester.pump();
       expect(page(tester), 1.0);
       await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a curl let go before halfway leaves no trace; a tap while it springs back does nothing',
+        (tester) async {
+      // code review, 2026-09-30: the cancelled curl saved progress (un-reading a finished book); a tap during the
+      // spring-back skipped a page
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height / 2;
+      final g = await tester.startGesture(Offset(size.width * 0.8, y));
+      for (var i = 1; i <= 10; i++) {
+        await g.moveTo(Offset(size.width * 0.8 - i * 8.0, y));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pump(); // the spring-back starts
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tapAt(Offset(size.width * 0.9, y)); // forward, mid spring-back
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 0.0, reason: 'the tap waited for the spring-back: nothing turned');
+      await tester.pump(const Duration(seconds: 2)); // past the save delay
+      expect(api.saves, isEmpty, reason: 'nothing was turned, nothing saved');
     });
 
     testWidgets('a slow drag started mid-screen turns the page (grab anywhere)', (tester) async {
@@ -1143,6 +1197,86 @@ void main() {
       await tester.pump(const Duration(seconds: 5)); // the "End of the series" snackbar
       await tester.pumpWidget(const SizedBox());
     }
+  });
+
+  group('moving between books (code review, 2026-09-30)', () {
+    Future<SlowKomga> openSlow(WidgetTester tester) async {
+      final slow = SlowKomga();
+      api = slow;
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: slow, book: slow.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      return slow;
+    }
+
+    testWidgets('a second forward while the next book loads does nothing (it opened the book after, marking the one '
+        'in between read)', (tester) async {
+      final slow = await openSlow(tester);
+      slow.hold = Completer<void>();
+      await toEndCard(tester);
+      await key(tester, LogicalKeyboardKey.arrowRight); // on past the end card: B2 starts loading
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight); // again while it loads, and held
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      slow.hold!.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(slow.opened, ['B1', 'B2'], reason: 'B3 not opened');
+      expect(slow.marked, ['B1'], reason: 'B2 not marked read');
+      expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 0.0); // B2's first page
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets("the next book failing to open leaves the book being read as it was - its progress isn't saved to "
+        'the other one', (tester) async {
+      final slow = await openSlow(tester)..failNext = true;
+      await toEndCard(tester);
+      await key(tester, LogicalKeyboardKey.arrowRight); // on: B2 fails to open
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Test #2'), findsOneWidget, reason: "still B1's end card");
+      await key(tester, LogicalKeyboardKey.arrowLeft); // back to B1's last page
+      await tester.pump(const Duration(milliseconds: 400));
+      await key(tester, LogicalKeyboardKey.escape); // close
+      await tester.pump(const Duration(seconds: 1));
+      expect(slow.savedTo, isNotEmpty);
+      expect(slow.savedTo, everyElement('B1'));
+      await tester.pump(const Duration(seconds: 5)); // the snackbar
+    });
+
+    testWidgets('Next book mid-book with no book after it: marked read, and closing no longer un-reads it',
+        (tester) async {
+      final s = AppSettings.instance;
+      s.setDisplay(s.display.copyWith(midBook: MidBook.markRead));
+      addTearDown(() => s.setDisplay(s.display.copyWith(midBook: MidBook.ask)));
+      await openReader(tester); // the series' last book
+      await key(tester, LogicalKeyboardKey.arrowRight); // page 2 of 3
+      await tester.pump(const Duration(milliseconds: 400));
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      await tester.tap(find.byTooltip('Next book'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(ReaderScreen), findsNothing); // "End of the series", closed
+      expect(api.marked, ['B1']);
+      expect(api.saves, isEmpty, reason: 'no "in progress at page 2" saved over read on closing');
+      await tester.pump(const Duration(seconds: 5)); // the snackbar
+    });
+
+    testWidgets('a book with no pages says so, offering Next book and Close - no crash', (tester) async {
+      final empty = EmptyKomga();
+      api = empty;
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: empty, book: empty.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('has no pages'), findsOneWidget);
+      expect(find.text('Next book'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+      expect(find.text('Retry'), findsNothing); // retrying won't help
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('background: White makes the reader white, with dark text on the end card', (tester) async {

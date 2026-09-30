@@ -11,6 +11,19 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 - A pinned side menu stays open beside a series, a collection and a read list too (it went away on those).
+- Reader (from a code review):
+  - A second "forward" while the next book was loading (a held key, a double press) opened the book after it and
+    marked the one in between read. Page turns and book moves now wait while a book loads.
+  - Next book part-way through a series' last book marked it read, then closing saved it back to "in progress".
+  - Closing the reader while the next book loaded, or that book failing to open, saved your page to the wrong book.
+    The book you're reading now stays current until the next one has loaded.
+  - A page curl let go before halfway counted as a page turn (and could un-read a finished book); a tap while it
+    sprang back could skip a page. Only finished curls count now, and taps wait for the curl to settle.
+  - Going back to a page you'd zoomed into left it zoomed while the reader thought it wasn't (keys and swipes
+    misbehaved). A page goes back to fit when you move off it.
+  - Reaching the last page marks the book read straight away; after Mark unread there, the tick shows unread.
+  - Turning "Override the defaults" on keeps a fit you'd picked for this book from the top bar.
+  - A book with no pages crashed the controls. It now says so, with Next book and Close.
 
 **Added**
 - Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book

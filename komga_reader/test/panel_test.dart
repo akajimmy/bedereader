@@ -9,7 +9,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => AppSettings.instance.series.clear());
 
-  Future<void> openPanel(WidgetTester tester, Size size, {bool image = false}) async {
+  Future<void> openPanel(WidgetTester tester, Size size, {bool image = false, FitMode? bookFit}) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -17,7 +17,8 @@ void main() {
       child: TextButton(
         onPressed: () => image
             ? showImagePanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics')
-            : showReaderPanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics', komgaDirection: 'RIGHT_TO_LEFT'),
+            : showReaderPanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics', komgaDirection: 'RIGHT_TO_LEFT',
+                bookFit: bookFit),
         child: const Text('open'),
       ),
     )))));
@@ -73,6 +74,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.hasOwn('S1'), isFalse, reason: 'neither part overridden: the series follows the defaults entirely');
     expect(s.prefsFor('S1').sharpen, isTrue);
+    await tester.pump(const Duration(seconds: 5)); // the settings sync timer
+  });
+
+  testWidgets('Reader: turning Override on with a fit picked for this book keeps that fit (nothing jumps)',
+      (tester) async {
+    final s = AppSettings.instance;
+    await openPanel(tester, const Size(1280, 800), bookFit: FitMode.width); // the top bar: fit width, this book only
+    expect(find.text('Using the defaults. This book: fit width, for now'), findsOneWidget);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
+    await tester.pumpAndSettle();
+    expect(s.ownsLayout('S1'), isTrue);
+    expect(s.prefsFor('S1').fit, FitMode.width, reason: 'the series starts from what was on screen');
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
