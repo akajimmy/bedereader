@@ -26,6 +26,10 @@ class PageLoader {
   final String bookId;
   final List<int> pageNumbers; // index -> Komga page number (1-based)
   final Map<int, Future<PageData>> _cache = {};
+  final Map<int, Uint8List> _loaded = {}; // the pages in [_cache] that have arrived
+
+  /// A page already here (the one showing, its neighbours): the slider's preview uses it rather than asking Komga.
+  Uint8List? loadedBytes(int i) => _loaded[i];
 
   Future<PageData> get(int i) => _cache.putIfAbsent(i, () async {
         try {
@@ -36,6 +40,7 @@ class PageLoader {
           } catch (e) {
             throw PageUnreadable(e); // arrived, but can't be decoded: damaged, or a format this device can't read
           }
+          if (_cache.containsKey(i)) _loaded[i] = bytes; // not if it was forgotten meanwhile
           return PageData(frame.image, bytes);
         } catch (_) {
           _cache.remove(i); // let a later visit retry
@@ -49,6 +54,7 @@ class PageLoader {
       if (j < pageNumbers.length) get(j).ignore();
     }
     _cache.removeWhere((k, _) => k < i - 2 || k > i + 3);
+    _loaded.removeWhere((k, _) => !_cache.containsKey(k));
   }
 
   Future<Levels>? _bookLevels;

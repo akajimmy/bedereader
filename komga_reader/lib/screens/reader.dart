@@ -1402,15 +1402,28 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               border: Border.all(color: Colors.white24)),
           child: Column(children: [
             Expanded(
-              // the last picture that came in stays until this page's does (no blinking, no waiting on a spinner)
-              child: switch (_thumbFor(shown) ?? _thumbShown) {
-                null => const Center(
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-                final bytes => Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
-                    // offline it's the whole page: decoded small
-                    cacheWidth: (_previewSize.width * dpr).round(),
-                    errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
-              },
+              // while this page's picture comes in, the last one stays - faded, under a spinner, so it isn't taken for
+              // this page (it read as the wrong page, 2026-09-30); nothing yet: just the spinner
+              child: Builder(builder: (context) {
+                final own = _thumbFor(shown);
+                if (own == null && _thumbs.containsKey(shown)) { // Komga has no picture of this page
+                  return const Icon(Icons.image_not_supported, color: Colors.white24);
+                }
+                final bytes = own ?? _thumbShown;
+                const spinner = Center(
+                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+                return Stack(fit: StackFit.expand, children: [
+                  if (bytes != null)
+                    Opacity(
+                      opacity: own == null ? 0.25 : 1,
+                      child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
+                          // offline, or a page already loaded, it's the whole page: decoded small
+                          cacheWidth: (_previewSize.width * dpr).round(),
+                          errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
+                    ),
+                  if (own == null) const KeyedSubtree(key: ValueKey('preview-loading'), child: spinner),
+                ]);
+              }),
             ),
             const SizedBox(height: 4),
             Text('Page ${shown + 1}', style: const TextStyle(color: Colors.white, fontSize: 13)),
@@ -1431,12 +1444,16 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
   Uint8List? _thumbFor(int i) {
+    final page = _loader?.loadedBytes(i); // the page itself is already here (this one, its neighbours)
+    if (page != null) return _thumbShown = page;
     if (_thumbs.containsKey(i)) {
       final b = _thumbs.remove(i);
       _thumbs[i] = b; // most recently used last
       if (b != null) _thumbShown = b;
       return b;
     }
+    final failed = _thumbsFailed[i];
+    if (failed != null && DateTime.now().difference(failed) < _thumbRetry) return null;
     if (!_thumbsLoading.contains(i)) {
       _thumbWanted = i;
       Future.microtask(_nextThumb); // not during the build
@@ -1451,21 +1468,34 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (_thumbs.containsKey(i) || _thumbsLoading.contains(i) || i > _last) return;
     final bookId = _book['id'] as String;
     _thumbsLoading.add(i);
-    api.pageThumbBytes(bookId, _loader!.pageNumbers[i]).then<Uint8List?>((b) => b, onError: (Object _) => null)
-        .then((b) {
+    void done(void Function() record) {
       if (!mounted || _book['id'] != bookId) return; // another book since
       _thumbsLoading.remove(i);
-      _thumbs[i] = b;
+      record();
       while (_thumbs.length > _thumbsKept) {
         _thumbs.remove(_thumbs.keys.first);
       }
       if (_scrub != null) setState(() {});
       _nextThumb();
-    });
+    }
+    api.pageThumbBytes(bookId, _loader!.pageNumbers[i]).then(
+      (b) => done(() => _thumbs[i] = b),
+      onError: (Object e) => done(() {
+        if (e is KomgaUnreachable) {
+          _thumbsFailed[i] = DateTime.now(); // too slow, or no answer: try again a little later, not never
+        } else {
+          _thumbs[i] = null; // Komga answered: there's no picture to be had
+        }
+      }),
+    );
   }
+
+  final Map<int, DateTime> _thumbsFailed = {}; // page index -> when its picture last didn't come in time
+  static const _thumbRetry = Duration(seconds: 10);
 
   void _clearThumbs() {
     _thumbs.clear();
+    _thumbsFailed.clear();
     _thumbsLoading.clear();
     _thumbWanted = null;
     _thumbShown = null;

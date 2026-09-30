@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- Page slider previews on a slow server: pages the reader already has (the one showing, its neighbours) preview
+  at once, without asking Komga; while a page's picture is on its way the last one is shown faded under a spinner,
+  so it isn't taken for this page; and a preview that takes too long no longer tells the app Komga is unreachable.
+  (Komga makes each preview from the book file as it's asked: seconds each when the NAS is slow.)
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
