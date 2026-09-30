@@ -3,7 +3,13 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../paged.dart';
+import '../settings.dart';
 import 'error_text.dart';
+
+/// Grid columns for the chosen poster size (Settings > Library & Home): about 170 px wide at Medium.
+SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExtent(
+    maxCrossAxisExtent: 170 * AppSettings.instance.display.posterSize.scale,
+    childAspectRatio: 0.52, mainAxisSpacing: 10, crossAxisSpacing: 8);
 
 /// One focusable grid item: poster (Komga thumbnail, incl. custom cover crops) + title + small status line.
 /// Works with touch and with the remote: D-pad moves focus between tiles, OK activates.
@@ -143,16 +149,16 @@ class PosterGrid extends StatelessWidget {
   final ScrollController? controller;
 
   @override
-  Widget build(BuildContext context) {
-    return GridView.builder(
-      controller: controller,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 170, childAspectRatio: 0.52, mainAxisSpacing: 10, crossAxisSpacing: 8),
-      itemCount: itemCount,
-      itemBuilder: itemBuilder,
-    );
-  }
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: AppSettings.instance, // poster size
+        builder: (context, _) => GridView.builder(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          gridDelegate: posterGridDelegate(),
+          itemCount: itemCount,
+          itemBuilder: itemBuilder,
+        ),
+      );
 }
 
 /// A [PosterGrid] over a [Paged] listing: asks for the next page when the grid gets within ~2 screens of the end
@@ -170,7 +176,7 @@ class PagedPosterGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: paged,
+      listenable: Listenable.merge([paged, AppSettings.instance]), // AppSettings: poster size
       builder: (context, _) {
         if (paged.firstLoad) return const Center(child: CircularProgressIndicator());
         final refresh = onRefresh ?? paged.refresh;
@@ -198,8 +204,7 @@ class PagedPosterGrid extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             sliver: SliverGrid.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 170, childAspectRatio: 0.52, mainAxisSpacing: 10, crossAxisSpacing: 8),
+              gridDelegate: posterGridDelegate(),
               itemCount: paged.items.length,
               itemBuilder: (context, i) {
                 if (i >= paged.items.length - 30 && paged.hasMore && !paged.loading && paged.error == null) {

@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
+import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
 import '../page_image.dart';
@@ -20,7 +21,8 @@ import '../widgets/error_text.dart';
 import '../widgets/focus_style.dart';
 import 'actions.dart';
 
-/// Page reader: black background, full screen, follows the tablet's rotation (tilt for spreads).
+/// Page reader: full screen on the chosen background (black, dark grey or white), follows the tablet's rotation
+/// (tilt for spreads).
 ///
 /// Remote: Right/Down = forward, Left/Up = back (in fit width/height that first scrolls through the page).
 /// OK = show/hide the controls, like a tap in the middle. With the controls up, the arrows step through them one at a
@@ -76,6 +78,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   AppSettings get _settings => AppSettings.instance;
   String? get _seriesId => _book['seriesId'] as String?;
   ReaderPrefs get _prefs => _settings.prefsFor(_seriesId);
+  Color get _bg => _settings.display.background.colour; // Settings > Reader > Background
+  Color _ink(double alpha) => _settings.display.background.ink.withValues(alpha: alpha); // text on it
 
   /// The series' reading direction in Komga (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON), fetched on open.
   String? _komgaDirection;
@@ -92,10 +96,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
+    Downloads.instance.readerOpened(); // Delete once read waits for it too
     // Follow the sensor (the whole app does, via the manifest), hide the system bars, keep the screen on.
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    keepScreenOn(true);
+    _awake();
     _settings.addListener(_onSettings);
     fullscreen.addListener(_onFullscreen); // F11 is app-wide (main.dart): the button follows
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
@@ -110,15 +115,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     _tapTimer?.cancel();
+    _awakeTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
     _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
-    _saveNow();
+    _saveNow(); // before Downloads hears the book closed: a book finished here is marked read first
+    Downloads.instance.readerClosed();
     _settings.removeListener(_onSettings);
     fullscreen.removeListener(_onFullscreen);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    keepScreenOn(false);
+    if (_screenHeld) keepScreenOn(false);
     _pc?.dispose();
     _disposeScrolls();
     _keys.dispose();
@@ -129,7 +136,33 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  void _onSettings() { if (mounted) setState(() {}); }
+  void _onSettings() {
+    if (!mounted) return;
+    if (_settings.display.screenOn != _screenOnFor) _awake(); // Keep the screen on changed
+    setState(() {});
+  }
+
+  // ---- Keep the screen on (Settings > Reader): always while a book is open, for N minutes after the last page turn
+  // or touch, or never (the system's own timeout)
+  Timer? _awakeTimer;
+  bool _screenHeld = false;
+  int? _screenOnFor;
+
+  void _awake() {
+    final minutes = _screenOnFor = _settings.display.screenOn;
+    _awakeTimer?.cancel();
+    final hold = minutes != 0;
+    if (hold != _screenHeld) {
+      _screenHeld = hold;
+      keepScreenOn(hold);
+    }
+    if (minutes > 0) {
+      _awakeTimer = Timer(Duration(minutes: minutes), () {
+        _screenHeld = false;
+        keepScreenOn(false); // the system's timeout takes over; the next turn or touch holds it again
+      });
+    }
+  }
 
   void _disposeScrolls() {
     for (final c in _scrolls.values) {
@@ -187,6 +220,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   // ---- progress: saved 1.5 s after the page settles, and on leaving
   void _onPage(int i) {
+    _awake();
     setState(() { _index = i; _zoomed = false; if (i != _openedAt) _turned = true; });
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
@@ -485,11 +519,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _animateCurl(complete: complete);
   }
 
-  /// Next book. On the last page or the end card the current book is marked read; before that, ask.
+  /// Next book. On the last page or the end card the current book is marked read; before that, it depends on "Next
+  /// book before the last page" (Settings > Reader): ask, mark read, or keep it in progress.
   Future<void> _nextBook() async {
     final finished = _index >= _last;
-    var markRead = finished;
-    if (!finished) {
+    final midBook = _settings.display.midBook;
+    var markRead = finished || midBook == MidBook.markRead;
+    if (!finished && midBook == MidBook.ask) {
       final answer = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -658,6 +694,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    _awake();
     final k = e.logicalKey;
     if (!_menu) {
       // Volume keys (Android, a setting): down = forward, up = back, in any reading direction. Handled keys don't
@@ -733,7 +770,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       canPop: !_menu,
       onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: _bg,
         body: Focus(
           focusNode: _keys,
           autofocus: true,
@@ -742,7 +779,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               ? Center(child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
-                      style: const TextStyle(color: Colors.white70),
+                      style: TextStyle(color: _ink(0.7)),
                       action: Row(mainAxisSize: MainAxisSize.min, children: [
                         TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
                         TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
@@ -761,7 +798,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                               .register(e, (ev) => _onWheel((ev as PointerScrollEvent).scrollDelta.dy));
                         }
                       },
-                      onPointerDown: (_) => _setFingers(_fingers + 1),
+                      onPointerDown: (_) {
+                        _awake();
+                        _setFingers(_fingers + 1);
+                      },
                       onPointerUp: (_) => _setFingers(_fingers - 1),
                       onPointerCancel: (_) => _setFingers(_fingers - 1),
                       child: GestureDetector(
@@ -842,9 +882,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           return Center(child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.broken_image, color: Colors.white24, size: 48),
+              Icon(Icons.broken_image, color: _ink(0.24), size: 48),
               const SizedBox(height: 10),
-              ErrorText(message, e, stack: snap.stackTrace, centre: true, style: const TextStyle(color: Colors.white70),
+              ErrorText(message, e, stack: snap.stackTrace, centre: true, style: TextStyle(color: _ink(0.7)),
                   action: TextButton(onPressed: () => setState(() {}), child: const Text('Retry'))),
             ]),
           ));
@@ -904,7 +944,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   Widget _endCard() {
     final where = widget.readListId != null ? 'this read list' : 'the series';
     final arrow = _rtl ? '←' : '→';
-    const dim = TextStyle(color: Colors.white38);
+    final dim = TextStyle(color: _ink(0.38));
     return FutureBuilder<Map<String, dynamic>?>(
       future: _upNext(),
       builder: (context, snap) {
@@ -915,7 +955,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         } else if (snap.error is NotAvailableOffline) {
           body = [ // offline, and the book that comes next isn't downloaded: no jumping ahead to one that is
             Text("The next book in $where isn't downloaded", textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                style: TextStyle(color: _ink(0.7), fontSize: 16)),
             const SizedBox(height: 12),
             Text('$arrow : close the book', style: dim),
           ];
@@ -924,7 +964,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         } else if (next == null) {
           body = [
             Text(widget.readListId != null ? 'End of the read list' : 'End of the series',
-                style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                style: TextStyle(color: _ink(0.7), fontSize: 16)),
             const SizedBox(height: 12),
             Text('$arrow : close the book', style: dim),
           ];
@@ -967,12 +1007,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               );
             }),
             const SizedBox(height: 14),
-            Text(heading, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 18)),
+            Text(heading, textAlign: TextAlign.center, style: TextStyle(color: _ink(1), fontSize: 18)),
             if (title != null && title != heading && !title.endsWith('#$number'))
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70)),
+                    style: TextStyle(color: _ink(0.7))),
               ),
             const SizedBox(height: 14),
             Text('$arrow : open it', style: dim),
@@ -982,7 +1022,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const Text('End of book', style: TextStyle(color: Colors.white70, fontSize: 18)),
+              Text('End of book', style: TextStyle(color: _ink(0.7), fontSize: 18)),
               const SizedBox(height: 16),
               ...body,
             ]),

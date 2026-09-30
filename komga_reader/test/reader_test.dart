@@ -872,6 +872,71 @@ void main() {
     }
   });
 
+  testWidgets('Next book before the last page, set to Mark read or Keep in progress: no question asked',
+      (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(midBook: MidBook.ask)));
+    for (final m in [MidBook.markRead, MidBook.keep]) {
+      s.setDisplay(s.display.copyWith(midBook: m));
+      await openReader(tester);
+      await key(tester, LogicalKeyboardKey.enter);
+      await tester.tap(find.byTooltip('Next book'));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Mark #1 as read?'), findsNothing, reason: m.name);
+      expect(api.marked, m == MidBook.markRead ? ['B1'] : isEmpty, reason: m.name);
+      expect(api.nextCalls, 1, reason: m.name);
+      await tester.pump(const Duration(seconds: 5)); // the "End of the series" snackbar
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('background: White makes the reader white, with dark text on the end card', (tester) async {
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.copyWith(background: ReaderBackground.white));
+    addTearDown(() => s.setDisplay(s.display.copyWith(background: ReaderBackground.black)));
+    await openReader(tester);
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor, const Color(0xFFFFFFFF));
+    await toEndCard(tester);
+    expect(tester.widget<Text>(find.text('End of book')).style!.color!.computeLuminance(), lessThan(0.2));
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('keep the screen on: for the chosen minutes after the last turn; Off never holds it', (tester) async {
+    final calls = <bool>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
+      if (call.method == 'keepOn') calls.add(call.arguments as bool);
+      return null;
+    });
+    final s = AppSettings.instance;
+    addTearDown(() {
+      s.setDisplay(s.display.copyWith(screenOn: 0));
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+    });
+    s.setDisplay(s.display.copyWith(screenOn: 5));
+    await openReader(tester);
+    expect(calls, [true]);
+    await tester.pump(const Duration(minutes: 4));
+    await key(tester, LogicalKeyboardKey.arrowRight); // a turn: five more minutes
+    await tester.pump(const Duration(milliseconds: 400)); // the turn finishes now, not in the next 4-minute frame
+    await tester.pump(const Duration(minutes: 4));
+    expect(calls, [true]);
+    await tester.pump(const Duration(minutes: 2));
+    await tester.pump();
+    expect(calls, [true, false]); // the device's own timeout takes over
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    expect(calls, [true, false, true]); // held again
+    await tester.pumpWidget(const SizedBox());
+    expect(calls.last, isFalse); // closing lets go
+
+    calls.clear();
+    s.setDisplay(s.display.copyWith(screenOn: 0));
+    await openReader(tester);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpWidget(const SizedBox());
+    expect(calls, isEmpty); // Off: never held
+  });
+
   test('double-tap zoom and volume keys: on unless switched off, and kept on the device', () {
     expect(DisplayPrefs.fromJson({'night': true}).doubleTapZoom, isTrue);
     expect(DisplayPrefs.fromJson({'night': true}).volumeKeys, isTrue);

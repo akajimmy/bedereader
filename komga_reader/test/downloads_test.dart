@@ -111,6 +111,28 @@ void main() {
     expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
+  test('Delete once read: off, nothing goes; on, a book read goes - after the reader closes if it was open', () async {
+    await d.attach(FakeKomga(), root: dir);
+    await d.add([book('B1', 1), book('B2', 2)]);
+    await settle(d);
+    final offline = OfflineKomga(d.store!);
+    await offline.markRead('B1');
+    expect(d.isDownloaded('B1'), isTrue); // off (the default): stays
+    await d.setDeleteWhenRead(true);
+    d.readerOpened();
+    await offline.setProgress('B2', 3, completed: true); // finished in the reader
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    expect(d.isDownloaded('B2'), isTrue); // still open: waits
+    d.readerClosed();
+    for (var i = 0; i < 100 && d.isDownloaded('B2'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(d.isDownloaded('B2'), isFalse);
+    expect(d.store!.unsynced, contains('B2')); // the read mark is still on its way to Komga
+    expect(d.isDownloaded('B1'), isTrue); // read before it was switched on: not touched
+    await d.setDeleteWhenRead(false);
+  });
+
   test('queuing the same book twice, or one already downloaded, does nothing', () async {
     await d.attach(FakeKomga(), root: dir);
     await d.add([book('B1', 1)]);

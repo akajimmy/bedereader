@@ -17,4 +17,12 @@ class ViewPrefs {
 
   static Future<void> save(String key, Map<String, dynamic> value) async =>
       (await SharedPreferences.getInstance()).setString(key, jsonEncode(value));
+
+  /// Every screen back to its default mode, filter and sort (Settings > Reset this device's settings).
+  static Future<void> clearAll() async {
+    final p = await SharedPreferences.getInstance();
+    for (final k in p.getKeys().where((k) => k.startsWith('view.'))) {
+      await p.remove(k);
+    }
+  }
 }

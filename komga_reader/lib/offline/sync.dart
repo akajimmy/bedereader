@@ -131,6 +131,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       if (s != null) bySeries.putIfAbsent(s, () => []).add(id);
     });
     var changed = false;
+    final finishedElsewhere = <String>[];
     for (final entry in bySeries.entries) {
       final r = await api.seriesBooks(entry.key);
       for (final b in (r['content'] as List?) ?? const []) {
@@ -141,12 +142,15 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         if (cur != null && _same(_norm(cur), OfflineStore.norm(rp))) continue;
         store.setServerProgress(id, rp);
         changed = true;
+        // read on another device (it wasn't read here before): Delete once read
+        if (cur != null && rp?['completed'] == true) finishedElsewhere.add(id);
       }
     }
     if (changed) {
       await store.save();
       Downloads.instance.notifyListeners(); // tiles showing downloaded books
     }
+    finishedElsewhere.forEach(Downloads.instance.bookFinished);
   }
 
   /// Written to Komga while online: the downloaded copy follows, and it's the new baseline.
@@ -164,6 +168,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       changed = true;
     }
     if (changed) unawaited(store.save().catchError((Object _) {}));
+    if (w.completed && !w.unread) ids.forEach(Downloads.instance.bookFinished); // Delete once read
   }
 
   static Future<void> _send(Komga api, String id, Map<String, dynamic> p, Map book) async {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' show Color;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -68,26 +69,71 @@ class ReaderPrefs {
   int get hashCode => jsonEncode(toJson()).hashCode;
 }
 
-/// How a page change looks - not how it's triggered: tap, swipe and the arrows turn pages in all of them.
-enum PageTurn { swipe, flip, curl }
+/// How a page change looks - not how it's triggered: tap, swipe and the arrows turn pages in all of them. Listed in
+/// the order shown (None, Wipe, Curl); the names are what's saved, so they stay as they were.
+enum PageTurn { flip, swipe, curl }
 
 extension PageTurnLabel on PageTurn {
   String get label => switch (this) {
+        PageTurn.flip => 'None',
         PageTurn.swipe => 'Wipe',
-        PageTurn.flip => 'Instant flip',
-        PageTurn.curl => '3D page curl',
+        PageTurn.curl => 'Curl',
       };
+}
+
+/// Next book before the last page: ask whether to mark this one read (the original behaviour), or don't ask.
+enum MidBook { ask, markRead, keep }
+
+extension MidBookLabel on MidBook {
+  String get label => switch (this) { MidBook.ask => 'Ask', MidBook.markRead => 'Mark read', MidBook.keep => 'Keep in progress' };
+}
+
+/// What's around the page in the reader.
+enum ReaderBackground { black, grey, white }
+
+extension ReaderBackgroundLabel on ReaderBackground {
+  String get label => switch (this) {
+        ReaderBackground.black => 'Black',
+        ReaderBackground.grey => 'Dark grey',
+        ReaderBackground.white => 'White',
+      };
+  Color get colour => switch (this) {
+        ReaderBackground.black => const Color(0xFF000000),
+        ReaderBackground.grey => const Color(0xFF2B2C30),
+        ReaderBackground.white => const Color(0xFFFFFFFF),
+      };
+
+  /// Text and icons drawn straight on the background (the end card, a page that didn't load).
+  Color get ink => this == ReaderBackground.white ? const Color(0xFF1A1A1A) : const Color(0xFFFFFFFF);
+}
+
+/// Library grids and Home's rows: how big the posters are.
+enum PosterSize { small, medium, large }
+
+extension PosterSizeLabel on PosterSize {
+  String get label => switch (this) { PosterSize.small => 'Small', PosterSize.medium => 'Medium', PosterSize.large => 'Large' };
+  double get scale => switch (this) { PosterSize.small => 0.8, PosterSize.medium => 1.0, PosterSize.large => 1.3 };
 }
 
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
 @immutable
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
-      this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true});
+      this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
+      this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
+      this.posterTitleOnly = false});
   final bool night;
   final bool pageNumber; // reader: flash "12 / 36" in the corner for a moment after each page turn (this device)
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
   final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
+  final MidBook midBook; // reader: Next book before the last page
+  final ReaderBackground background; // reader: around the page
+  final int screenOn; // reader: minutes the screen stays on after the last page turn; 0 = the system's timeout
+  final PosterSize posterSize; // library grids and Home's rows
+  final bool posterTitleOnly; // book posters: just the title, not "Series #N" over it
+
+  static const alwaysOn = -1; // [screenOn]: as long as a book is open
+  static const screenOnChoices = [0, 5, 10, 20, 30, alwaysOn];
   final PageTurn pageTurn; // reader page-turn animation (this device)
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
@@ -119,21 +165,37 @@ class DisplayPrefs {
   }
 
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys}) =>
+          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
+          int? screenOn, PosterSize? posterSize, bool? posterTitleOnly}) =>
       DisplayPrefs(
           night: night ?? this.night, warmth: warmth ?? this.warmth,
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
           pageNumber: pageNumber ?? this.pageNumber, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
-          volumeKeys: volumeKeys ?? this.volumeKeys);
+          volumeKeys: volumeKeys ?? this.volumeKeys, midBook: midBook ?? this.midBook,
+          background: background ?? this.background, screenOn: screenOn ?? this.screenOn,
+          posterSize: posterSize ?? this.posterSize, posterTitleOnly: posterTitleOnly ?? this.posterTitleOnly);
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
-      'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys};
-  factory DisplayPrefs.fromJson(Map<String, dynamic> j) => DisplayPrefs(
-      night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
-      brightness: (j['brightness'] as num?)?.toDouble(),
-      pageTurn: PageTurn.values.firstWhere((t) => t.name == j['pageTurn'], orElse: () => PageTurn.swipe),
-      // on unless switched off
-      pageNumber: j['pageNumber'] != false, doubleTapZoom: j['doubleTapZoom'] != false, volumeKeys: j['volumeKeys'] != false);
+      'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
+      'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
+      'posterTitleOnly': posterTitleOnly};
+  factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
+    T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
+        values.firstWhere((v) => v.name == name, orElse: () => fallback);
+    final on = j['screenOn'];
+    return DisplayPrefs(
+        night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
+        brightness: (j['brightness'] as num?)?.toDouble(),
+        pageTurn: pick(PageTurn.values, j['pageTurn'], PageTurn.swipe),
+        // on unless switched off
+        pageNumber: j['pageNumber'] != false, doubleTapZoom: j['doubleTapZoom'] != false,
+        volumeKeys: j['volumeKeys'] != false,
+        midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
+        background: pick(ReaderBackground.values, j['background'], ReaderBackground.black),
+        screenOn: on is int && screenOnChoices.contains(on) ? on : 0, // default Off (user, 2026-09-30)
+        posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
+        posterTitleOnly: j['posterTitleOnly'] == true);
+  }
 }
 
 /// Holds reader prefs (global default + per series, synced to the user's Komga client settings) and display prefs

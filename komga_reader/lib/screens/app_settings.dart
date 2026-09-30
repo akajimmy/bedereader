@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../home_sections.dart';
 import '../ondeck_hidden.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../settings.dart';
+import '../view_prefs.dart';
 import '../widgets/error_text.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -16,7 +18,7 @@ import 'downloads_screen.dart';
 
 /// Every setting in one place (side menu > Settings), grouped, each group saying where it's kept: synced through
 /// Komga (every device) or this device only. The reader's own panels stay for quick changes while reading.
-/// Sections: Server & connection, Reading, Display, Library & Home, Downloads, About.
+/// Sections: Server & connection, Reading defaults, Reader, Display, Library & Home, Downloads, About.
 class AppSettingsScreen extends StatelessWidget {
   const AppSettingsScreen({super.key, required this.api, required this.onSignOut});
   final Komga api;
@@ -87,9 +89,9 @@ class AppSettingsScreen extends StatelessWidget {
                 ),
               ),
             ]),
-            _Card(title: 'Reading', icon: Icons.menu_book_outlined, scope: 'Defaults synced through Komga', children: [
-              const Text("Defaults for every series you haven't adjusted. A series' own settings are changed in the "
-                  "reader (Reader and Image settings).", style: _hint),
+            _Card(title: 'Reading defaults', icon: Icons.menu_book_outlined, scope: 'Synced through Komga', children: [
+              const Text("For every series you haven't adjusted. A series' own settings are changed in the reader "
+                  '(Reader and Image settings).', style: _hint),
               const ReadingDefaults(),
               const SizedBox(height: 6),
               ListenableBuilder(
@@ -106,11 +108,11 @@ class AppSettingsScreen extends StatelessWidget {
                   );
                 },
               ),
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text('PAGE TURN ANIMATION · THIS DEVICE', style: TextStyle(fontSize: 11, letterSpacing: 1.1, color: Color(0xFF9A9A9A))),
-              ),
-              const PageTurnControl(),
+            ]),
+            const _Card(title: 'Reader', icon: Icons.chrome_reader_mode_outlined, scope: 'This device', children: [
+              Text('Page turn animation', style: _hint),
+              PageTurnControl(),
+              ReaderBehaviourControls(),
             ]),
             const _Card(title: 'Display', icon: Icons.brightness_6_outlined, scope: 'This device', children: [
               Text('Whole app, not just the reader (also in the reader\'s Reader settings)', style: _hint),
@@ -119,6 +121,8 @@ class AppSettingsScreen extends StatelessWidget {
             ]),
             _Card(title: 'Library & Home', icon: Icons.home_outlined, scope: 'Sections: this device · On deck: synced',
                 children: [
+              ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => _posterRows()),
+              const SizedBox(height: 10),
               const Text('Sections on Home: switch on or off, and move with ▲▼ or the handle', style: _hint),
               const HomeSectionsEditor(),
               ListenableBuilder(
@@ -159,6 +163,14 @@ class AppSettingsScreen extends StatelessWidget {
                     ]),
                     const Text('A book that would go over the limit stops in the queue with a note, and carries on by '
                         'itself when the limit is raised.', style: _small),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text("Delete a downloaded book once it's read"),
+                      subtitle: const Text('When it becomes read - here, offline, or on another device. A book open '
+                          "in the reader goes when it's closed. Books already read when downloaded stay."),
+                      value: d.deleteWhenRead,
+                      onChanged: d.setDeleteWhenRead,
+                    ),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: TextButton.icon(
@@ -211,6 +223,13 @@ class AppSettingsScreen extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ErrorLogScreen())),
               ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.restart_alt),
+                title: const Text("Reset this device's settings"),
+                subtitle: const Text('Reader, display, Home and library layout back to the defaults'),
+                trailing: TextButton(onPressed: () => _resetDevice(context), child: const Text('Reset')),
+              ),
             ]),
           ]),
         ),
@@ -234,6 +253,68 @@ class AppSettingsScreen extends StatelessWidget {
     if (ok != true || !context.mounted) return;
     Navigator.of(context).popUntil((r) => r.isFirst);
     onSignOut();
+  }
+
+  /// Poster size and poster text (Library & Home, this device).
+  Widget _posterRows() {
+    final s = AppSettings.instance, d = s.display;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Text('Poster size', style: _hint),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: SegmentedButton<PosterSize>(
+          segments: [for (final p in PosterSize.values) ButtonSegment(value: p, label: Text(p.label))],
+          selected: {d.posterSize},
+          showSelectedIcon: false,
+          onSelectionChanged: (v) => s.setDisplay(d.copyWith(posterSize: v.first)),
+        ),
+      ),
+      const SizedBox(height: 4),
+      const Text('Book posters show', style: _hint),
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: SegmentedButton<bool>(
+          segments: const [
+            ButtonSegment(value: false, label: Text('Series #, then title')),
+            ButtonSegment(value: true, label: Text('Title only')),
+          ],
+          selected: {d.posterTitleOnly},
+          showSelectedIcon: false,
+          onSelectionChanged: (v) => s.setDisplay(d.copyWith(posterTitleOnly: v.first)),
+        ),
+      ),
+    ]);
+  }
+
+  /// Everything kept on this device only, back to the defaults - after asking. Synced settings (reading defaults,
+  /// series settings, pins, On deck), the sign-in, the offline mode switch and the downloaded books stay.
+  Future<void> _resetDevice(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Reset this device's settings?"),
+        content: const Text('Back to the defaults: page turn and the other Reader settings, screen brightness and '
+            "night mode, poster size, Home's sections, every screen's remembered filter and sort, \"If Komga can't be "
+            "reached\", and the download limit and Delete once read.\n\nNot touched: settings synced through Komga "
+            '(reading defaults, series settings, pins, On deck), your sign-in and your downloaded books.'),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    AppSettings.instance.setDisplay(const DisplayPrefs());
+    await HomeSections.instance.reset();
+    await ViewPrefs.clearAll();
+    if (Connection.instance.available) await Connection.instance.setAutoSwitch(false);
+    if (Downloads.instance.ready) {
+      await Downloads.instance.setCap(Downloads.defaultCap);
+      await Downloads.instance.setDeleteWhenRead(false);
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(content: Text("This device's settings are back to the defaults")));
+    }
   }
 
   Future<void> _resetSeries(BuildContext context, int n) async {

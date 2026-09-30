@@ -18,7 +18,7 @@ class FakeKomga extends Komga {
 
 /// A portrait-tablet-sized test window: the whole settings screen fits, nothing to scroll to.
 void tall(WidgetTester tester) {
-  tester.view.physicalSize = const Size(800, 3200);
+  tester.view.physicalSize = const Size(800, 5200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 }
@@ -92,11 +92,11 @@ void main() {
     tall(tester);
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
     await tester.pumpAndSettle();
-    final titles = ['SERVER & CONNECTION', 'READING', 'DISPLAY', 'LIBRARY & HOME', 'ABOUT'];
+    final titles = ['SERVER & CONNECTION', 'READING DEFAULTS', 'READER', 'DISPLAY', 'LIBRARY & HOME', 'ABOUT'];
     final ys = [for (final t in titles) tester.getTopLeft(find.text(t)).dy];
     expect(ys, [...ys]..sort()); // in that order
     expect(find.text('This device'), findsWidgets);
-    expect(find.text('Defaults synced through Komga'), findsOneWidget);
+    expect(find.text('Synced through Komga'), findsOneWidget);
     expect(find.text('Connected as nick@test'), findsOneWidget); // status, from Info
     expect(find.text('Screen brightness'), findsOneWidget); // brightness moved here from the side-menu panel
     expect(find.text('Night mode (warm colours)'), findsOneWidget);
@@ -122,6 +122,75 @@ void main() {
     expect(s.prefsFor('S1').fit, FitMode.height); // follows the defaults now
     expect(find.text('Every series follows the defaults'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
+  });
+
+  testWidgets('Reader and Library & Home: the new device settings are set here', (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    s.setDisplay(const DisplayPrefs());
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
+    await tester.pump();
+    Future<void> tap(String text) async {
+      await tester.tap(find.text(text).last);
+      await tester.pumpAndSettle();
+    }
+
+    await tap('None');
+    expect(s.display.pageTurn, PageTurn.flip); // "None" is the old Instant flip: saved choices carry over
+    await tap('Mark read');
+    expect(s.display.midBook, MidBook.markRead);
+    await tap('White');
+    expect(s.display.background, ReaderBackground.white);
+    await tap("Off (the device's own timeout)"); // the dropdown, on its default
+    await tap('10 minutes');
+    expect(s.display.screenOn, 10);
+    await tap('Large');
+    expect(s.display.posterSize, PosterSize.large);
+    await tap('Title only');
+    expect(s.display.posterTitleOnly, isTrue);
+  });
+
+  testWidgets("Reset this device's settings: asks first; this device's settings go back, synced ones stay",
+      (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 5));
+    s.setSeries('S9', const ReaderPrefs(fit: FitMode.width)); // synced: untouched
+    await HomeSections.instance.set('ondeck', false);
+    final p = await SharedPreferences.getInstance();
+    await p.setString('view.library.all', '{"hideRead":true}');
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, 'Reset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(s.display.night, isTrue); // cancelled: nothing changed
+    await tester.tap(find.widgetWithText(TextButton, 'Reset'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, 'Reset').last); // confirm
+    await tester.pumpAndSettle();
+    expect(s.display.night, isFalse);
+    expect(s.display.posterSize, PosterSize.medium);
+    expect(s.display.screenOn, 0); // Off by default
+    expect(HomeSections.instance['ondeck'], isTrue);
+    expect(p.getString('view.library.all'), isNull);
+    expect(s.series['S9']?.fit, FitMode.width);
+    s.series.remove('S9');
+    await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
+  });
+
+  test('new device settings survive the saved form; older saves get the defaults', () {
+    const d = DisplayPrefs(midBook: MidBook.keep, background: ReaderBackground.grey, screenOn: 20,
+        posterSize: PosterSize.small, posterTitleOnly: true, pageTurn: PageTurn.curl);
+    final back = DisplayPrefs.fromJson(d.toJson());
+    expect([back.midBook, back.background, back.screenOn, back.posterSize, back.posterTitleOnly, back.pageTurn],
+        [MidBook.keep, ReaderBackground.grey, 20, PosterSize.small, true, PageTurn.curl]);
+    final old = DisplayPrefs.fromJson({'night': true, 'pageTurn': 'flip'});
+    expect([old.midBook, old.background, old.screenOn, old.posterSize, old.posterTitleOnly, old.pageTurn],
+        [MidBook.ask, ReaderBackground.black, 0, PosterSize.medium, false, PageTurn.flip]);
+    expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0); // not a choice: the default
   });
 
   testWidgets('full screen: an X at the right of the top bar leaves it; none otherwise', (tester) async {

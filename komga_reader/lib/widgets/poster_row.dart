@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../settings.dart';
+
 /// A row of posters (Home, Search): its title with ‹ › buttons on the right (each scrolls about a screen's width; greyed at the ends),
 /// then a horizontal strip of posters. Touch can swipe the strip, the remote's Left/Right move along it too.
 class PosterRow extends StatefulWidget {
@@ -41,8 +43,12 @@ class _PosterRowState extends State<PosterRow> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
 
+  double get _scale => AppSettings.instance.display.posterSize.scale; // Settings > Library & Home
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => _row());
+
+  Widget _row() {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
@@ -55,7 +61,8 @@ class _PosterRowState extends State<PosterRow> {
         ]),
       ),
       SizedBox(
-        height: 290,
+        // Medium: 150 wide, 290 tall; the cover scales with the poster size, the text under it doesn't
+        height: 229 * _scale + 61,
         // the strip's size changes (window resized, posters loading) also update the buttons
         child: NotificationListener<ScrollMetricsNotification>(
           onNotification: (_) {
@@ -68,7 +75,7 @@ class _PosterRowState extends State<PosterRow> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: widget.itemCount,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, i) => SizedBox(width: 150, child: widget.itemBuilder(context, i)),
+            itemBuilder: (context, i) => SizedBox(width: 150 * _scale, child: widget.itemBuilder(context, i)),
           ),
         ),
       ),

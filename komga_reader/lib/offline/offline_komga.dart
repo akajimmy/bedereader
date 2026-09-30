@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/painting.dart' show FileImage, ImageProvider;
 
 import '../api.dart';
+import 'downloads.dart';
 import 'store.dart';
 
 /// Thrown for things that need the server (deleting files, ...) while offline.
@@ -267,12 +268,16 @@ class OfflineKomga extends Komga {
 
   // ---- reading progress: kept on the device, sent to Komga later ------------------------------------------------------
   @override
-  Future<void> setProgress(String bookId, int page, {bool completed = false}) =>
-      store.setProgress(bookId, page: page, completed: completed);
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    await store.setProgress(bookId, page: page, completed: completed);
+    if (completed) Downloads.instance.bookFinished(bookId); // Delete once read (the progress stays queued for Komga)
+  }
+
   @override
   Future<void> markRead(String bookId) async {
     final pages = (store.books[bookId]?['pages'] as List?)?.length;
     await store.setProgress(bookId, page: pages, completed: true);
+    Downloads.instance.bookFinished(bookId);
   }
 
   @override
