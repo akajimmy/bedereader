@@ -106,7 +106,8 @@ The rest of this file is about building the app.
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
-- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB.
+- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB;
+  `tools\update-desktop.cmd` - puts the newest Windows build in `Desktop\BeDeReader`.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
 - `keytest\` - a page for finding out which keys a remote sends.
 - `dev_setup.py` - downloads and verifies the toolchain.
@@ -140,8 +141,11 @@ flutter run -d windows     # run on this PC with hot reload
 ### Building
 
 ```powershell
-C:\Claude\KomgaClient\tools\build.ps1 -Bump
+powershell -ExecutionPolicy Bypass -File C:\Claude\KomgaClient\tools\build.ps1 -Bump
 ```
+
+(Windows blocks `.ps1` scripts by default; `-ExecutionPolicy Bypass` lifts that for this one run without changing any
+setting. The same goes for the other scripts in `tools\`.)
 
 Checks the working tree is committed, runs analyze and the tests (stopping on any failure), raises the build number,
 files the changelog's *Unreleased* entries under the new build, bundles the README, changelog and third-party notices
@@ -150,8 +154,12 @@ builds Android, Windows and web into `dist\<version>\` with checksums and a BUIL
 `build-<n>`. If a build fails, the version, changelog and bundled documents are put back.
 
 Options: `-Platforms android` (or `windows`, `web`) builds a subset; `-SkipTests` skips the tests; `-NoInstall`
-skips the tablet; `-AllowDirty` allows uncommitted changes (for a throwaway build). Progress is in `dist\build.log`.
-Close BeDeReader on this PC before a Windows build.
+skips the tablet and the Desktop copy; `-AllowDirty` allows uncommitted changes (for a throwaway build). Progress is in
+`dist\build.log`.
+
+After a Windows build the app is unzipped over `Desktop\BeDeReader`, the copy used on this PC (your settings and
+downloads aren't in that folder, so nothing is lost). If the app is open from there, that step is skipped and says
+so: close it and run `tools\update-desktop.cmd` (or double-click it).
 
 After an Android build the APK is installed on the paired tablet over wireless ADB. Pairing is a one-time step:
 `& 'C:\Dev\android-sdk\platform-tools\adb.exe' pair <IP>:<port>` with the code from the tablet's Settings > Developer
