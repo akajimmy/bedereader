@@ -107,6 +107,21 @@ extension ReaderBackgroundLabel on ReaderBackground {
   Color get ink => this == ReaderBackground.white ? const Color(0xFF1A1A1A) : const Color(0xFFFFFFFF);
 }
 
+/// The reader's rotation: follow the device (as the rest of the app does), or hold portrait or landscape.
+enum Rotation { auto, portrait, landscape }
+
+extension RotationLabel on Rotation {
+  String get label => switch (this) { Rotation.auto => 'Auto', Rotation.portrait => 'Portrait', Rotation.landscape => 'Landscape' };
+}
+
+/// When the reader shows something extra (the clock and battery): never, only with the controls up, or always.
+enum ShowWhen { off, withControls, always }
+
+extension ShowWhenLabel on ShowWhen {
+  String get label =>
+      switch (this) { ShowWhen.off => 'Off', ShowWhen.withControls => 'With the controls', ShowWhen.always => 'Always' };
+}
+
 /// Library grids and Home's rows: how big the posters are.
 enum PosterSize { small, medium, large }
 
@@ -121,8 +136,12 @@ class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
       this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
       this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
-      this.posterTitleOnly = false});
+      this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
+      this.progressBar = false});
   final bool night;
+  final Rotation rotation; // reader: follow the device, or hold portrait / landscape (Android)
+  final ShowWhen clock; // reader: the time and battery - top right, or on the top bar with the controls up
+  final bool progressBar; // reader: a thin line along the bottom while the controls are hidden (their slider shows it)
   final bool pageNumber; // reader: flash "12 / 36" in the corner for a moment after each page turn (this device)
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
   final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
@@ -166,8 +185,10 @@ class DisplayPrefs {
 
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
           bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
-          int? screenOn, PosterSize? posterSize, bool? posterTitleOnly}) =>
+          int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
+          bool? progressBar}) =>
       DisplayPrefs(
+          rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
           night: night ?? this.night, warmth: warmth ?? this.warmth,
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
           pageNumber: pageNumber ?? this.pageNumber, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
@@ -178,7 +199,7 @@ class DisplayPrefs {
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
       'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
-      'posterTitleOnly': posterTitleOnly};
+      'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -195,7 +216,10 @@ class DisplayPrefs {
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
-        posterTitleOnly: j['posterTitleOnly'] == true);
+        posterTitleOnly: j['posterTitleOnly'] == true,
+        rotation: pick(Rotation.values, j['rotation'], Rotation.auto),
+        clock: pick(ShowWhen.values, j['clock'], ShowWhen.withControls),
+        progressBar: j['progressBar'] == true);
   }
 }
 

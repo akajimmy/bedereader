@@ -211,11 +211,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'Turning pages', children: [
         pageTurnRow(s),
-        pageNumberRow(s),
         doubleTapRow(s),
         if (hasVolumeKeys)
           SwitchRow(title: 'Volume keys turn pages', subtitle: 'Down: next page, up: previous',
               value: d.volumeKeys, onChanged: (v) => s.setDisplay(d.copyWith(volumeKeys: v))),
+      ]),
+      // what's drawn over the page (set once, so Settings only - except the page number, also in the Reader panel)
+      SettingsGroup(title: 'On the page', children: [
+        pageNumberRow(s),
+        clockRow(s),
+        progressBarRow(s),
       ]),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
@@ -228,6 +233,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       SettingsGroup(title: 'Screen', children: [
         backgroundRow(s),
+        if (canRotate) rotationRow(s),
         screenOnRow(s),
       ]),
     ]);

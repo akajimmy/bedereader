@@ -5,6 +5,14 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**New**
+- **Rotation lock** (Android; Settings > Reader, and the reader's Reader panel): in the reader, follow the device, or
+  stay in portrait or landscape - for reading lying down.
+- **Clock and battery** in the reader (Settings > Reader), which hides the system's status bar: off, with the controls
+  (on the top bar, or just under it on a phone), or always (top right). The battery shows where the device has one.
+- **Progress bar** (Settings > Reader): a thin line along the bottom of the page showing how far through the book you
+  are, while the controls are hidden (with them up, the page slider shows it).
+
 **Changed**
 - **Next book follows Hide read.** Open a book from a series, read list or library with Hide read on, and the next book
   is the next one you haven't read, skipping books already read ("Next unread in the series" at the end of the

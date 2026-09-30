@@ -13,6 +13,7 @@ import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/reader_clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Komga stand-in: a 3-page book whose pages never finish loading (enough to drive the controls).
@@ -972,6 +973,65 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpWidget(const SizedBox());
     expect(calls, isEmpty); // Off: never held
+  });
+
+  testWidgets('clock and battery: Always shows it over the page; With the controls only on the top bar; Off never',
+      (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(clock: ShowWhen.withControls)));
+    for (final when in ShowWhen.values) {
+      s.setDisplay(s.display.copyWith(clock: when));
+      await openReader(tester);
+      expect(find.byType(ReaderClock), when == ShowWhen.always ? findsOneWidget : findsNothing, reason: '${when.name}, hidden');
+      await key(tester, LogicalKeyboardKey.enter); // the controls
+      expect(find.byType(ReaderClock), when == ShowWhen.off ? findsNothing : findsOneWidget, reason: '${when.name}, controls');
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('progress bar: a line along the bottom while the controls are hidden; the slider takes over with them',
+      (tester) async {
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.copyWith(progressBar: true));
+    addTearDown(() => s.setDisplay(s.display.copyWith(progressBar: false)));
+    await openReader(tester);
+    const bar = ValueKey('reading-progress');
+    expect(tester.widget<LinearProgressIndicator>(find.byKey(bar)).value, closeTo(1 / 3, 1e-9)); // page 1 of 3
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.widget<LinearProgressIndicator>(find.byKey(bar)).value, closeTo(2 / 3, 1e-9));
+    await key(tester, LogicalKeyboardKey.enter);
+    expect(find.byKey(bar), findsNothing); // the controls' slider shows it
+    await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('rotation: a lock holds while the book is open, and ends with it', (tester) async {
+    final calls = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setPreferredOrientations') calls.add(call.arguments);
+      return null;
+    });
+    final s = AppSettings.instance;
+    addTearDown(() {
+      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    await openReader(tester);
+    expect(calls.last, ['DeviceOrientation.portraitUp', 'DeviceOrientation.portraitDown']);
+    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape)); // changed mid-book (the Reader panel)
+    await tester.pump();
+    expect(calls.last, ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight']);
+    await tester.pumpWidget(const SizedBox());
+    expect(calls.last, isEmpty); // closed: the app follows the device again
+  });
+
+  test('rotation, clock and progress bar survive the saved form; older saves get the defaults', () {
+    const d = DisplayPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true);
+    final back = DisplayPrefs.fromJson(d.toJson());
+    expect([back.rotation, back.clock, back.progressBar], [Rotation.landscape, ShowWhen.always, true]);
+    final old = DisplayPrefs.fromJson({'night': true});
+    expect([old.rotation, old.clock, old.progressBar], [Rotation.auto, ShowWhen.withControls, false]);
   });
 
   test('double-tap zoom and volume keys: on unless switched off, and kept on the device', () {
