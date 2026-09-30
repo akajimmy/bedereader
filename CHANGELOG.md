@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 53 - 2026-09-30
+
 **New**
 - **Hold OK on the remote to open an item's menu** (a book, series, read list, collection or pin) - the same menu as
   a long press or a right-click. A short press still opens it.
@@ -22,10 +28,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   - The top bar's fit button still works either way: for a series with its own layout it changes the series' fit;
     otherwise it changes the fit for this book only, for now (not saved).
   - Series with settings of their own from before keep them (both parts overridden).
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 52 - 2026-09-30
 
