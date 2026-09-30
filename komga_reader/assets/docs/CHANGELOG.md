@@ -1,14 +1,17 @@
 # Changelog
 
-What changed in each build of BeDeReader, newest first. The version is on the About screen: **0.1.1 (build 32)**
-means version 0.1.1, build number 32. Build numbers only ever go up.
+What changed in each build of BeDeReader, newest first. The version is on the About screen: **1.2.0 (build 52)**
+means version 1.2.0, build number 52. Build numbers only ever go up.
+
+Versions follow the releases' names from 1.2 on: builds after the 1.1 release are 1.2.0 builds, a few of them
+become release candidates (`v1.2.0-rc.1`, ...), one becomes the release (`v1.2.0`), and the next build is the
+first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.0 line 0.1.0.
 
 ## Unreleased
 
-## 0.1.1 - offline reading and better pages
+## 1.2.0 - in development
 
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 51 - 2026-09-30
 
@@ -132,6 +135,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 - On the PC, the first Continue reading book showed the keyboard/remote highlight as soon as the app opened. The
   highlight now shows only once an arrow, Tab or Enter key is used, and goes away again with a click or a touch.
 
+## 0.1.1 - offline reading and better pages (the 1.1 release)
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 ### Build 39 - 2026-09-29
 
 **Changed**
