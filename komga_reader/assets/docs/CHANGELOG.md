@@ -13,7 +13,7 @@ Builds 21-26 still showed version 0.1.0.
 ### Build 39 - 2026-09-29
 
 **Changed**
-- **The app is now called BeDeReader** - a library and reader for Komga. (BéDé is Québec French for comics.)
+- **The app is now called BeDeReader** - a library and reader for Komga.
   Nothing to do: settings, downloads, reading progress and the Android install carry over. On Windows the program
   is now `BeDeReader.exe`, and the files in each release are named `BeDeReader-...`.
 - Errors are in plain words everywhere - what happened and what to do - instead of the raw error text: "Can't

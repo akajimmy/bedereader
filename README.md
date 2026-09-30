@@ -11,7 +11,7 @@ touch, keyboard, mouse or a remote page-turner, take books with you offline, and
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
 
-*BéDé is Québec French for comics (bande dessinée). Until September 2026 the app was called Komga Reader.*
+*Until September 2026 the app was called Komga Reader.*
 
 ## What it does
 

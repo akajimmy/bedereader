@@ -27,9 +27,10 @@ const materialIconsNotice = 'Material Icons by Google, licensed under the Creati
     'International licence (https://creativecommons.org/licenses/by/4.0/). Used unmodified, as the font supplied '
     'with Flutter.';
 
-/// The AI usage disclosure (About screen, README, THIRD_PARTY_NOTICES.md).
-const aiDisclosure = 'This application was developed with the aid of AI coding tools (Claude, by Anthropic, through '
-    'Claude Code), and reviewed and tested by a human.';
+/// The AI usage disclosure on the About screen (user's wording, 2026-09-29). README and THIRD_PARTY_NOTICES.md say
+/// which tools were used.
+const aiDisclosure =
+    'This application was developed with the aid of AI coding tools, but was designed, reviewed, and tested by a human.';
 
 /// The Android version also carries AndroidX, Kotlin and kotlinx.coroutines (through Flutter's Android layer and the
 /// settings package) - Apache 2.0, whose terms have to go with the app. Flutter's own notices don't cover them.
