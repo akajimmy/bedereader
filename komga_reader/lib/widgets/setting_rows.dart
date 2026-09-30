@@ -73,7 +73,9 @@ class SettingRow extends StatelessWidget {
   final double trailingWidth; // about how wide [trailing] is: it goes under the label if the label would get cramped
   final bool enabled;
 
-  static const _labelRoom = 220.0; // the least the label gets beside a control before the control moves under it
+  // the least room a label gets beside a control: past this it wraps onto more lines, so controls can stay lined up
+  // (user, 2026-09-30); only when even this is not left does a control move under its label
+  static const _labelRoom = 120.0;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,7 @@ class SettingRow extends StatelessWidget {
       child: LayoutBuilder(builder: (context, box) {
         final t = trailing;
         if (t == null) return label;
-        // the label keeps its one line beside the control, up to [_labelRoom] (a longer one may wrap)
+        // a short label keeps its one line; a long one gets [_labelRoom] and wraps
         final room = textWidth(context, title, 14.5).clamp(0.0, _labelRoom) + 12;
         if (stackWhenNarrow && box.maxWidth - trailingWidth < room) {
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
