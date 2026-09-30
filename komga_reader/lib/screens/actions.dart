@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
+import '../widgets/error_text.dart';
 import 'book_details.dart';
 import 'series.dart';
 import 'series_details.dart';
@@ -89,8 +91,8 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
         if (s != null) await nav.push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api, series: s)));
       }
       onChanged(); // read state may have changed there
-    } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      if (context.mounted) showErrorSnack(context, couldnt('open the series of "$title"', e, thing: 'series'), e, st);
     }
     return null;
   }
@@ -109,8 +111,12 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     }
     onChanged();
     return choice == 'delete' ? 'deleted' : choice;
-  } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+  } catch (e, st) {
+    if (context.mounted) {
+      showErrorSnack(context, choice == 'delete'
+          ? couldnt('delete "$title"', e, thing: 'book', forbidden: deleteNeedsAdmin)
+          : couldnt('mark "$title" as $choice', e, thing: 'book'), e, st);
+    }
     return null;
   }
 }
@@ -127,18 +133,23 @@ Future<void> bulkMark(BuildContext context, Komga api, List<dynamic> books, {req
   final todo = books.where((b) => needsChange(b, read: read)).toList();
   final messenger = ScaffoldMessenger.of(context);
   final word = read ? 'read' : 'unread';
+  var done = 0;
   try {
     for (var i = 0; i < todo.length; i += 4) {
+      final batch = todo.skip(i).take(4).toList();
       await Future.wait([
-        for (final b in todo.skip(i).take(4)) read ? api.markRead(b['id'] as String) : api.markUnread(b['id'] as String),
+        for (final b in batch) read ? api.markRead(b['id'] as String) : api.markUnread(b['id'] as String),
       ]);
+      done += batch.length;
     }
     final skipped = books.length - todo.length;
     messenger.showSnackBar(SnackBar(content: Text(todo.isEmpty
         ? 'All ${books.length} already $word'
         : '${todo.length} marked $word${skipped > 0 ? ' ($skipped already $word)' : ''}')));
-  } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('Stopped part-way: $e')));
+  } catch (e, st) {
+    showErrorOn(messenger, done == 0
+        ? couldnt('mark the books as $word', e)
+        : stoppedAfter('Marked $done of ${todo.length} as $word', e), e, st);
   }
 }
 
@@ -156,8 +167,10 @@ Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) as
       done++;
     }
     messenger.showSnackBar(SnackBar(content: Text('Deleted $done book${done == 1 ? '' : 's'}')));
-  } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('Deleted $done of $n, then stopped: $e')));
+  } catch (e, st) {
+    showErrorOn(messenger, done == 0
+        ? couldnt('delete the books', e, thing: 'book', forbidden: deleteNeedsAdmin)
+        : stoppedAfter('Deleted $done of $n', e, forbidden: deleteNeedsAdmin), e, st);
   }
   return done > 0;
 }
@@ -229,8 +242,12 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
       await api.deleteSeriesFiles(s['id']);
     }
     onChanged();
-  } catch (e) {
-    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+  } catch (e, st) {
+    if (context.mounted) {
+      showErrorSnack(context, choice == 'delete'
+          ? couldnt('delete "$title"', e, thing: 'series', forbidden: deleteNeedsAdmin)
+          : couldnt('mark "$title" as $choice', e, thing: 'series'), e, st);
+    }
   }
 }
 
@@ -268,9 +285,10 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
   if (!context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
   messenger.showSnackBar(SnackBar(content: Text('Updating "$name"…'), duration: const Duration(minutes: 5)));
+  final todo = <String>[];
+  var done = 0;
   try {
     // books that need changing: for "read" everything not finished, for "unread" everything with progress
-    final todo = <String>[];
     for (final status in read ? ['UNREAD', 'IN_PROGRESS'] : ['IN_PROGRESS', 'READ']) {
       var page = 0;
       while (true) {
@@ -281,19 +299,22 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
       }
     }
     for (var i = 0; i < todo.length; i += 4) {
+      final batch = todo.skip(i).take(4).toList();
       await Future.wait([
-        for (final id in todo.skip(i).take(4)) read ? api.markRead(id) : api.markUnread(id),
+        for (final id in batch) read ? api.markRead(id) : api.markUnread(id),
       ]);
+      done += batch.length;
     }
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(todo.isEmpty
           ? 'Nothing to change in "$name"'
           : '${todo.length} book${todo.length == 1 ? '' : 's'} marked ${read ? 'read' : 'unread'}')));
-  } catch (e) {
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('Stopped part-way: $e')));
+  } catch (e, st) {
+    final word = read ? 'read' : 'unread';
+    showErrorOn(messenger, done == 0
+        ? couldnt('mark "$name" as $word', e, thing: 'read list')
+        : stoppedAfter('Marked $done of ${todo.length} in "$name" as $word', e), e, st);
   }
   onChanged();
 }
@@ -354,7 +375,7 @@ Future<void> queueDownloads(BuildContext context, String name,
         ? 'Nothing new to download from "$name"'
         : 'Queued $added book${added == 1 ? '' : 's'} from "$name"'
             '${skipped > 0 ? ' ($skipped already downloaded or queued)' : ''}')));
-  } catch (e) {
-    messenger.showSnackBar(SnackBar(content: Text('$e')));
+  } catch (e, st) {
+    showErrorOn(messenger, couldnt('queue "$name" for download', e), e, st);
   }
 }

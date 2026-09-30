@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../widgets/fullscreen_exit.dart';
+import '../widgets/error_text.dart';
 import 'book_details.dart';
 import 'library.dart';
 import 'series.dart';
@@ -20,7 +22,7 @@ class SeriesDetailsScreen extends StatefulWidget {
 
 class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   late dynamic _series = widget.series;
-  String? _error;
+  Object? _error; // shown through lib/errors.dart
 
   Komga get api => widget.api;
 
@@ -35,7 +37,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
       final fresh = await api.oneSeries(_series['id'] as String);
       if (mounted) setState(() { if (fresh != null) _series = fresh; _error = null; });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = e);
     }
   }
 
@@ -97,7 +99,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
-              child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+              child: ErrorText(explain(_error!, thing: 'series').message, _error!)),
         wide
             ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 SizedBox(width: 220, child: poster),

@@ -40,6 +40,12 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   bool askPending = false; // the prompt should be shown
   bool reachableAgain = false; // offline after the prompt, and Komga answers again: offer to go back
   bool _declined = false; // "Stay online" for this outage: no more prompts until Komga answers
+
+  /// Komga refuses this device's API key (deleted in Komga, say): nothing online works until signing in again. The
+  /// app offers the downloaded books (which need no key) and Sign in again ([keyPromptPending]); while it lasts,
+  /// Komga answering doesn't count as "reachable again" - it would only refuse the key again (user, 2026-09-29).
+  bool keyRefused = false;
+  bool keyPromptPending = false;
   OfflineKomga? _offline;
   Timer? _poll;
   bool _observing = false;
@@ -64,7 +70,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     forcedOffline = prefs.getBool(_key) ?? false;
     autoSwitch = prefs.getBool(_autoKey) ?? false;
+    keyRefused = keyPromptPending = false; // (signed in again: a new key)
+    autoOffline = reachableAgain = false;
     Komga.onReachability = _onReachability;
+    Komga.onKeyRefused = _onKeyRefused;
     if (!_observing) {
       _observing = true;
       WidgetsBinding.instance.addObserver(this);
@@ -103,6 +112,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   /// The prompt was answered.
   void useDownloads() {
     askPending = false;
+    keyPromptPending = false;
     autoOffline = true;
     reachableAgain = false;
     _apply();
@@ -140,8 +150,24 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void _onKeyRefused(Komga api) {
+    if (!identical(api, online) || keyRefused) return; // a sign-in attempt says so itself
+    keyRefused = true;
+    keyPromptPending = true;
+    askPending = false; // this prompt instead of "can't reach Komga"
+    _apply();
+    notifyListeners();
+  }
+
+  /// The key prompt was closed without going offline (Sign in again).
+  void keyPromptAnswered() {
+    keyPromptPending = false;
+    notifyListeners();
+  }
+
   void _onReachability(Komga api, bool reachable) {
     if (!identical(api, online)) return; // the offline source, or a sign-in attempt at another server
+    if (keyRefused) return; // answering or not, the key is refused: the key prompt covers it
     if (reachable) {
       _declined = false; // the outage is over
       if (askPending) {
@@ -175,7 +201,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
     Pins.instance.useApi(api);
     OnDeckHidden.instance.useApi(api);
-    final poll = autoOffline && !forcedOffline && !reachableAgain;
+    final poll = autoOffline && !forcedOffline && !reachableAgain && !keyRefused; // a refused key won't come back
     if (poll && _poll == null) {
       _poll = Timer.periodic(pollEvery, (_) => check());
     } else if (!poll) {
@@ -191,7 +217,9 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _poll = null;
     online = null;
     forcedOffline = autoOffline = askPending = reachableAgain = _declined = autoSwitch = false;
+    keyRefused = keyPromptPending = false;
     _readers = 0;
     Komga.onReachability = null;
+    Komga.onKeyRefused = null;
   }
 }

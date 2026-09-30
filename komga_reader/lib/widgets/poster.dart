@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../paged.dart';
+import 'error_text.dart';
 
 /// One focusable grid item: poster (Komga thumbnail, incl. custom cover crops) + title + small status line.
 /// Works with touch and with the remote: D-pad moves focus between tiles, OK activates.
@@ -181,8 +183,10 @@ class PagedPosterGrid extends StatelessWidget {
                   children: [
                     SizedBox(
                       height: box.maxHeight,
-                      child: Center(child: Text(paged.error != null ? '${paged.error}' : empty,
-                          style: TextStyle(color: paged.error != null ? const Color(0xFFFF8A80) : const Color(0xFF9A9A9A)))),
+                      child: Center(child: paged.error != null
+                          ? Padding(padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: ErrorText(explain(paged.error!).message, paged.error!, centre: true))
+                          : Text(empty, style: const TextStyle(color: Color(0xFF9A9A9A)))),
                     ),
                   ],
                 )),
@@ -209,7 +213,8 @@ class PagedPosterGrid extends StatelessWidget {
             child: SizedBox(
               height: 56,
               child: paged.error != null
-                  ? Center(child: TextButton(onPressed: paged.more, child: const Text("Couldn't load more - retry")))
+                  ? Center(child: TextButton(onPressed: paged.more,
+                      child: Text("Couldn't load more: ${explain(paged.error!).reason}. Retry")))
                   : paged.hasMore
                   ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2)))
                   : Center(child: Text('${paged.items.length} shown', style: const TextStyle(color: Color(0xFF6A6A6A), fontSize: 12))),

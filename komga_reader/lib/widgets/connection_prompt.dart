@@ -1,6 +1,37 @@
 import 'package:flutter/material.dart';
 
+import '../api.dart';
+import '../errors.dart';
 import '../offline/connection.dart';
+
+/// Komga refuses this device's API key: say so, and offer the downloaded books (which need no key) or signing in
+/// again. Returns true for Sign in again. With nothing downloaded, Sign in again is the only way on.
+Future<bool> showKeyRefusedPrompt(BuildContext context) async {
+  final c = Connection.instance;
+  final downloads = c.hasDownloads;
+  final signIn = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.key_off, color: Color(0xFFFACC15)),
+      title: const Text('API key not accepted'),
+      content: Text([
+        explain(KomgaError(401, '')).message,
+        if (downloads) 'Your downloaded books can still be read meanwhile.',
+      ].join('\n\n')),
+      actions: [
+        if (downloads) TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Use downloaded books')),
+        FilledButton(autofocus: !downloads, onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign in again')),
+      ],
+    ),
+  );
+  if (signIn == true) {
+    c.keyPromptAnswered();
+    return true;
+  }
+  c.useDownloads();
+  return false;
+}
 
 /// "Can't reach Komga": Use downloaded books / Retry / Stay online. With nothing downloaded it just says so (Retry /
 /// OK). Closes itself if Komga answers meanwhile.
@@ -56,7 +87,8 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
       icon: const Icon(Icons.cloud_off, color: Color(0xFFFACC15)),
       title: const Text("Can't reach Komga"),
       content: Text([
-        'No answer from ${c.online?.baseUrl ?? 'the server'}.',
+        "No answer from ${displayAddress(c.online?.baseUrl ?? 'the server')}. Check you're on your home network and "
+            'the server is running.',
         if (_stillDown) 'Still no answer.',
         downloads ? 'Read your downloaded books instead?' : 'Nothing is downloaded on this device to read offline.',
       ].join('\n\n')),

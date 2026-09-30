@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'errors.dart';
 import 'screen.dart';
 
 enum FitMode { screen, width, height }
@@ -148,6 +149,12 @@ class AppSettings extends ChangeNotifier {
   DisplayPrefs display = const DisplayPrefs();
   String? syncError; // last Komga sync problem, shown in the Display panel
 
+  /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
+  void _syncNote(String note, Object error) {
+    if (note != syncError) ErrorLog.instance.record(note, error);
+    syncError = note;
+  }
+
   final Set<String> _dirtySeries = {};
   bool _dirtyDefault = false;
   Timer? _syncTimer;
@@ -182,7 +189,7 @@ class AppSettings extends ChangeNotifier {
       }
       syncError = null;
     } catch (e) {
-      syncError = 'Could not read settings from Komga: $e';
+      _syncNote('Using the settings saved on this device: ${explain(e).reason}.', e);
     }
   }
 
@@ -242,7 +249,7 @@ class AppSettings extends ChangeNotifier {
       if (sendDefault) _dirtyDefault = false;
       syncError = null;
     } catch (e) {
-      syncError = 'Settings not saved to Komga yet (kept on this device): $e';
+      _syncNote('Settings saved on this device, not on Komga yet: ${explain(e).reason}.', e);
       _syncTimer = Timer(const Duration(minutes: 1), _sync);
     }
     notifyListeners();

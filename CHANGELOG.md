@@ -5,6 +5,16 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Changed**
+- Errors are in plain words everywhere - what happened and what to do - instead of the raw error text: "Can't
+  reach Komga at 10.0.0.23:25600. Check you're on your home network and the server is running." A failed action
+  names itself ("Couldn't mark "Saga #3" as read: can't reach Komga."), and each message has a **Details** link
+  with the technical text (Copy). The last 50 errors are kept in **Settings > About > Error log**.
+- If Komga stops accepting the API key (deleted in Komga, say), the app says so and offers **Use downloaded
+  books** (they need no key) or **Sign in again**.
+- A page that won't load now says why under the icon, and a book that won't open says so instead of spinning.
+- Deleting without an admin account in Komga now says that's why, instead of blaming the API key.
+
 **Fixed**
 - Offline, the end of a book no longer skips ahead: if the book that comes next in the series or read list isn't
   downloaded, the end card says so and the arrow closes the book (it used to offer the next book that *was*

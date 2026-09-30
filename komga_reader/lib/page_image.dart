@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'errors.dart' show PageUnreadable;
 import 'enhance.dart';
 import 'settings.dart';
 
@@ -29,8 +30,12 @@ class PageLoader {
   Future<PageData> get(int i) => _cache.putIfAbsent(i, () async {
         try {
           final bytes = await api.pageBytes(bookId, pageNumbers[i]);
-          final codec = await ui.instantiateImageCodec(bytes);
-          final frame = await codec.getNextFrame();
+          final ui.FrameInfo frame;
+          try {
+            frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
+          } catch (e) {
+            throw PageUnreadable(e); // arrived, but can't be decoded: damaged, or a format this device can't read
+          }
           return PageData(frame.image, bytes);
         } catch (_) {
           _cache.remove(i); // let a later visit retry

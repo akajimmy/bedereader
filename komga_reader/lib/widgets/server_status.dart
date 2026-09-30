@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../offline/offline_komga.dart';
 
 enum ServerState { checking, ok, warning, down }
@@ -46,11 +47,11 @@ class _ServerStatusState extends State<ServerStatus> {
         detail = who == null ? 'Connected' : 'Connected as $who';
       }
     } on KomgaError catch (e) {
-      state = e.status == 401 || e.status == 403 ? ServerState.warning : ServerState.down;
-      detail = e.status == 401 || e.status == 403 ? 'Reachable, but the API key was refused' : '$e';
+      state = e.status == 401 || e.status == 403 ? ServerState.warning : ServerState.down; // it answered
+      detail = explain(e).message;
     } catch (e) {
       state = ServerState.down;
-      detail = '$e';
+      detail = explain(e).message;
     }
     if (mounted) setState(() { _state = state; _detail = detail; });
   }

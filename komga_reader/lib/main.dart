@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'app_identity.dart';
+import 'errors.dart';
 import 'licences.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -60,6 +61,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     restoreFullscreen(); // desktop: left in full screen last time
     if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
     Connection.instance.addListener(_onConnection);
@@ -85,6 +87,19 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   void _onConnection() {
     final c = Connection.instance;
+    if (c.keyPromptPending && !_prompting) {
+      final ctx = _nav.currentContext;
+      if (ctx != null) {
+        _prompting = true;
+        showKeyRefusedPrompt(ctx).then((signIn) {
+          _prompting = false;
+          if (signIn) {
+            _nav.currentState?.popUntil((r) => r.isFirst);
+            _signOut(); // to the sign-in screen, the server address kept
+          }
+        });
+      }
+    }
     if (c.askPending && !_prompting) {
       final ctx = _nav.currentContext;
       if (ctx != null) {
