@@ -86,6 +86,19 @@ class NotDownloadedKomga extends FakeKomga {
       throw NotAvailableOffline('The next book');
 }
 
+/// [FakeKomga] with a series B1, B2 (already read), B3 (not read).
+class ChainKomga extends FakeKomga {
+  static Map<String, dynamic> b(String id, String n, {bool read = false}) => {
+        'id': id, 'seriesTitle': 'Test', 'metadata': {'number': n, 'title': 'Book $n'},
+        'readProgress': read ? {'page': 3, 'completed': true} : null,
+      };
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
+    nextCalls++;
+    return switch (bookId) { 'B1' => b('B2', '2', read: true), 'B2' => b('B3', '3'), _ => null };
+  }
+}
+
 /// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
 class ImageKomga extends FakeKomga {
   static late Uint8List png;
@@ -383,6 +396,27 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(flashOpacity(tester, '2 / 3'), 0.0);
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('opened with read books hidden, the next book skips read ones; otherwise it is simply the next',
+      (tester) async {
+    for (final skip in [true, false]) {
+      api = ChainKomga();
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: skip)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await toEndCard(tester);
+      await tester.pump();
+      if (skip) {
+        expect(find.text('Next unread in the series'), findsOneWidget);
+        expect(find.text('Test #3'), findsOneWidget); // #2 is read: skipped
+      } else {
+        expect(find.text('Up next in the series'), findsOneWidget);
+        expect(find.text('Test #2'), findsOneWidget); // read or not, the next in order
+      }
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets('end card: the last book says so', (tester) async {

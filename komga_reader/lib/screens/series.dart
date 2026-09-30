@@ -112,7 +112,8 @@ class _SeriesScreenState extends State<SeriesScreen> {
         paged: _paged,
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
             selection: _sel, showViewSeries: false, onOpen: () async {
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: widget.api, book: b)));
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: widget.api, book: b,
+              skipRead: _filter == ReadFilter.hideRead)));
           _paged.refresh();
         }),
       ),

@@ -79,7 +79,8 @@ class _ReadListScreenState extends State<ReadListScreen> {
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0,
             readListId: rlId, onChanged: _paged.refresh, selection: _sel, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ReaderScreen(api: widget.api, book: b, readListId: rlId)));
+              builder: (_) => ReaderScreen(api: widget.api, book: b, readListId: rlId,
+                  skipRead: _filter == ReadFilter.hideRead)));
           _paged.refresh();
         }),
       ),
