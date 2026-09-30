@@ -7,6 +7,8 @@ import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
 import 'package:komga_reader/screens/series_details.dart';
 import 'package:komga_reader/screens/actions.dart';
+import 'package:komga_reader/side_menu.dart';
+import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final theBook = {
@@ -96,6 +98,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(scaffold.isDrawerOpen, isTrue, reason: '${screen.runtimeType}');
       await tester.pumpWidget(const SizedBox()); // next screen afresh
+    }
+  });
+
+  testWidgets('side menu pinned: it stays open beside a series, a collection and a read list (user, 2026-09-30)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900); // room to dock
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SideMenu.instance.pinned = true;
+    addTearDown(() => SideMenu.instance.pinned = false);
+    for (final screen in <Widget>[
+      SeriesScreen(api: FakeKomga(),
+          series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}),
+      SeriesListScreen(api: FakeKomga(), title: 'Cosmic', collectionId: 'C1'),
+      ReadListScreen(api: FakeKomga(), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
+    ]) {
+      await tester.pumpWidget(MaterialApp(home: screen));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AppDrawer), findsOneWidget, reason: '${screen.runtimeType}: docked beside the page');
+      expect(tester.getRect(find.byType(AppDrawer)).left, 0);
+      expect(tester.state<ScaffoldState>(find.byType(Scaffold).last).hasDrawer, isFalse,
+          reason: 'no slide-out copy as well');
+      await tester.pumpWidget(const SizedBox());
     }
   });
 

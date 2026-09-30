@@ -59,9 +59,9 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
   @override
   Widget build(BuildContext context) {
     final rlId = widget.readList['id'] as String;
-    return selectionScope(_sel, (context) => Scaffold(
+    return withSideMenu(widget.api, (docked) => selectionScope(_sel, (context) => Scaffold(
       key: menuScaffold,
-      drawer: menuDrawer(widget.api),
+      drawer: menuDrawer(widget.api, docked: docked),
       onDrawerChanged: onMenuChanged,
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
@@ -92,6 +92,6 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
                   skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),
-    ));
+    )));
   }
 }

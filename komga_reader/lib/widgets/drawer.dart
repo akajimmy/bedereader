@@ -215,7 +215,14 @@ class DrawerEdgeState extends State<DrawerEdge> {
 mixin SideMenuHere<T extends StatefulWidget> on State<T> {
   final menuScaffold = GlobalKey<ScaffoldState>();
   final _menuEdge = GlobalKey<DrawerEdgeState>();
-  Widget menuDrawer(Komga api) => AppDrawer(api: api);
+
+  /// The screen, with the side menu kept open beside it when it's pinned (on a wide screen) - as on Home and the
+  /// libraries (user, 2026-09-30: pinned, it vanished on a series). [page] gets whether it's docked: then no drawer.
+  Widget withSideMenu(Komga api, Widget Function(bool docked) page) =>
+      SideMenuFrame(api: api, page: (context, docked) => page(docked));
+
+  /// The slide-out menu - none when it's docked beside the page.
+  Widget? menuDrawer(Komga api, {bool docked = false}) => docked ? null : AppDrawer(api: api);
   void onMenuChanged(bool open) { if (!open) _menuEdge.currentState?.restore(); }
   Widget menuEdge(Widget body) => DrawerEdge(key: _menuEdge, scaffoldKey: menuScaffold, child: body);
 }
@@ -223,9 +230,9 @@ mixin SideMenuHere<T extends StatefulWidget> on State<T> {
 /// Wraps a screen that has the side menu: slide-out menu normally; docked beside the page (with the page shifted
 /// right) when pinned on a wide screen. [build] gets whether it's docked, to leave out the menu button / drawer.
 class SideMenuFrame extends StatelessWidget {
-  const SideMenuFrame({super.key, required this.api, required this.onSignOut, required this.page});
+  const SideMenuFrame({super.key, required this.api, this.onSignOut, required this.page});
   final Komga api;
-  final VoidCallback onSignOut;
+  final VoidCallback? onSignOut; // null: the app-wide one (AppDrawer.appSignOut)
   final Widget Function(BuildContext context, bool docked) page;
 
   @override
