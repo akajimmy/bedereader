@@ -204,6 +204,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           if (filterable && _filtered) ClearFiltersButton(onPressed: _clearFilters),
           if (_mode == BrowseMode.books) SelectButton(selection: _sel),
+          const PosterSizeButton(),
           PinButton(current: Pin(
             name: [_libraryName, _modeLabel(_mode), if (filterable && _filter == ReadFilter.hideRead) 'unread'].join(' · '),
             kind: 'library', id: _libraryId, title: _libraryName,

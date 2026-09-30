@@ -103,12 +103,52 @@ class SettingRow extends StatelessWidget {
         return Row(children: [
           Expanded(child: label),
           const SizedBox(width: 12),
-          // if the measurement was off, the control shrinks a little rather than overflow or crush the label
-          Flexible(child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: t)),
+          // flush with the right edge; if the measurement was off, the control shrinks a little rather than
+          // overflow or crush the label
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: (box.maxWidth - room).clamp(0.0, double.infinity)),
+            child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerRight, child: t),
+          ),
         ]);
       }),
     );
   }
+}
+
+/// Lines up the segmented choices of one page or panel: each reports how wide it needs to be, and all of them are
+/// drawn as wide as the widest, in one column flush with the right edge (user, 2026-09-30). A row too narrow for
+/// the shared width keeps its own; one too narrow for that goes under its label.
+class SettingsColumn extends StatefulWidget {
+  const SettingsColumn({super.key, required this.child});
+  final Widget child;
+
+  static _SettingsColumnState? _of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_ColumnScope>()?.state;
+
+  @override
+  State<SettingsColumn> createState() => _SettingsColumnState();
+}
+
+class _SettingsColumnState extends State<SettingsColumn> {
+  double width = 0;
+
+  /// A control needs [w]: widen the column for everyone (after this frame - it's reported while building).
+  void report(double w) {
+    if (w <= width + 0.5) return;
+    width = w;
+    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() {}); });
+  }
+
+  @override
+  Widget build(BuildContext context) => _ColumnScope(state: this, width: width, child: widget.child);
+}
+
+class _ColumnScope extends InheritedWidget {
+  const _ColumnScope({required this.state, required this.width, required super.child});
+  final _SettingsColumnState state;
+  final double width;
+  @override
+  bool updateShouldNotify(_ColumnScope old) => old.width != width;
 }
 
 /// On/off, the whole row tappable (and one focus stop for the remote).
@@ -160,12 +200,26 @@ class SegmentRow<T> extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => SettingRow(
+  Widget build(BuildContext context) {
+    final own = _width(context);
+    final column = SettingsColumn._of(context);
+    column?.report(own);
+    final shared = column == null || column.width < own ? own : column.width;
+    return LayoutBuilder(builder: (context, box) {
+      // the page's shared width if it fits beside the label, else this control's own
+      final room = textWidth(context, title, 14.5).clamp(0.0, SettingRow._labelRoom) + 12 + 28; // + row padding
+      final w = box.maxWidth - shared >= room ? shared : own;
+      return _row(context, w);
+    });
+  }
+
+  Widget _row(BuildContext context, double w) => SettingRow(
         title: title,
         subtitle: subtitle,
         stackWhenNarrow: true,
-        trailingWidth: _width(context),
-        trailing: SegmentedButton<T>(
+        trailingWidth: w,
+        trailing: SizedBox(width: w, child: SegmentedButton<T>(
+          expandedInsets: EdgeInsets.zero, // fills [w]: every segment as wide as the others
           style: const ButtonStyle(
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -184,7 +238,7 @@ class SegmentRow<T> extends StatelessWidget {
           ],
           selected: {value},
           onSelectionChanged: (v) => onChanged(v.first),
-        ),
+        )),
       );
 }
 

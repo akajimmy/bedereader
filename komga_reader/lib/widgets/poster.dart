@@ -6,6 +6,31 @@ import '../paged.dart';
 import '../settings.dart';
 import 'error_text.dart';
 
+/// Poster size in a screen's top bar (Home and the grids; user, 2026-09-30): a grid icon with S, M or L, opening
+/// Small / Medium / Large. The same setting as Settings > Library & Home.
+class PosterSizeButton extends StatelessWidget {
+  const PosterSizeButton({super.key});
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: AppSettings.instance,
+        builder: (context, _) {
+          final s = AppSettings.instance, size = s.display.posterSize;
+          return PopupMenuButton<PosterSize>(
+            tooltip: 'Poster size: ${size.label.toLowerCase()}',
+            icon: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.grid_view),
+              const SizedBox(width: 2),
+              Text(size.label[0], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            ]),
+            onSelected: (p) => s.setDisplay(s.display.copyWith(posterSize: p)),
+            itemBuilder: (_) => [
+              for (final p in PosterSize.values) CheckedPopupMenuItem(value: p, checked: p == size, child: Text(p.label)),
+            ],
+          );
+        },
+      );
+}
+
 /// Grid columns for the chosen poster size (Settings > Library & Home): about 170 px wide at Medium.
 SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: 170 * AppSettings.instance.display.posterSize.scale,

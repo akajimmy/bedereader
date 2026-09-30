@@ -62,6 +62,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
         actions: [
           Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
+          const PosterSizeButton(),
           PinButton(current: Pin(
             name: [widget.readList['name'] as String, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
             kind: 'readlist', id: rlId, title: widget.readList['name'] as String, filter: _filter.name,

@@ -125,7 +125,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       if (p.scope != null)
         Padding(padding: const EdgeInsets.only(top: 2), child: Text(p.scope!, style: const TextStyle(color: hintColour))),
       const SizedBox(height: 16),
-      ...switch (p) {
+      // the page's segmented choices share one width (a fresh column per page)
+      SettingsColumn(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
         SettingsPage.server => _server(context),
         SettingsPage.defaults => [_live(_defaults)],
         SettingsPage.reader => [_live(_reader)],
@@ -133,7 +134,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsPage.library => _library(),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
         SettingsPage.about => _about(context),
-      },
+      })),
     ];
   }
 

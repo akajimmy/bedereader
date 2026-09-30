@@ -10,6 +10,7 @@ import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
 import '../widgets/pin_tile.dart';
+import '../widgets/poster.dart' show PosterSizeButton;
 import '../widgets/poster_row.dart';
 import '../widgets/error_text.dart';
 import 'library.dart';
@@ -266,6 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search),
               onPressed: () => _push(SearchScreen(api: api))),
           IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _load),
+          const PosterSizeButton(),
           PopupMenuButton<String>(
             tooltip: 'Show or hide sections',
             onSelected: (k) => k == '_arrange' ? showHomeSectionsEditor(context) : _toggleSection(k),
