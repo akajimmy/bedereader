@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../hidden_libraries.dart';
 import '../home_sections.dart';
 import '../ondeck_hidden.dart';
+import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../screen.dart';
@@ -20,7 +22,7 @@ import 'document.dart';
 import 'downloads_screen.dart';
 
 /// The pages of Settings, in order.
-enum SettingsPage { server, defaults, reader, display, library, downloads, about }
+enum SettingsPage { server, defaults, reader, keys, display, library, downloads, about }
 
 extension on SettingsPage {
   String get label => switch (this) {
@@ -28,6 +30,7 @@ extension on SettingsPage {
         SettingsPage.defaults => 'Reading defaults',
         SettingsPage.reader => 'Reader',
         SettingsPage.display => 'Display',
+        SettingsPage.keys => 'Remote and keys',
         SettingsPage.library => 'Library & Home',
         SettingsPage.downloads => 'Downloads',
         SettingsPage.about => 'About',
@@ -37,6 +40,7 @@ extension on SettingsPage {
         SettingsPage.defaults => Icons.menu_book_outlined,
         SettingsPage.reader => Icons.chrome_reader_mode_outlined,
         SettingsPage.display => Icons.brightness_6_outlined,
+        SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
         SettingsPage.downloads => Icons.download_outlined,
         SettingsPage.about => Icons.info_outline,
@@ -134,6 +138,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsPage.display => [_live(_display)],
         SettingsPage.library => _library(),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
+        SettingsPage.keys => [ListenableBuilder(listenable: ReaderKeys.instance, builder: (context, _) => _keys(context))],
         SettingsPage.about => _about(context),
       })),
     ];
@@ -238,6 +243,50 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         screenOnRow(s),
       ]),
     ]);
+  }
+
+  // ---- Remote and keys -------------------------------------------------------------------------------------------
+  Widget _keys(BuildContext context) {
+    final k = ReaderKeys.instance;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      SettingsGroup(title: 'In the reader, with the controls hidden', children: [
+        for (final a in ReaderAction.values) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
+        const NoteRow('For a book read right to left, Left and Right swap. Shift+Space always goes back. Once the '
+            'controls are up, the arrows and OK move around them.'),
+        ActionRow(
+          title: 'Back to the usual keys',
+          button: TextButton(onPressed: k.isDefault ? null : k.reset, child: const Text('Reset keys')),
+        ),
+      ]),
+    ]);
+  }
+
+  /// "+ Add": the next key pressed (on the remote or a keyboard) goes to [action].
+  Future<void> _addKey(BuildContext context, ReaderAction action) async {
+    final key = await showDialog<LogicalKeyboardKey>(
+      context: context,
+      builder: (ctx) => Focus(
+        autofocus: true,
+        // every key is the answer, OK and Esc included - nothing in the dialog takes the remote's focus
+        onKeyEvent: (_, e) {
+          if (e is KeyDownEvent) Navigator.pop(ctx, e.logicalKey);
+          return KeyEventResult.handled;
+        },
+        child: AlertDialog(
+          title: Text('${action.label}: press a key'),
+          content: const Text('Press the key on the remote or keyboard. (Back, or a tap outside, cancels.)'),
+          actions: [
+            ExcludeFocus(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))), // touch
+          ],
+        ),
+      ),
+    );
+    if (key == null || !context.mounted) return;
+    final was = await ReaderKeys.instance.assign(action, key);
+    if (context.mounted && was != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+          content: Text('${ReaderKeys.nameOf(key)} now does ${action.label.toLowerCase()} (was: ${was.label.toLowerCase()})')));
+    }
   }
 
   // ---- Display ---------------------------------------------------------------------------------------------------
@@ -455,7 +504,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the Reader page, screen brightness, night mode and its schedule, text '
-            'size and accent colour, posters, the libraries shown, Home '
+            "size and accent colour, the reader's keys, posters, the libraries shown, Home "
             "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
             'settings, pins, On deck), your sign-in and your downloaded books.'),
@@ -469,6 +518,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     AppSettings.instance.setDisplay(const DisplayPrefs());
     await HomeSections.instance.reset();
     await HiddenLibraries.instance.clear(); // every library shown again
+    await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
     if (Connection.instance.available) await Connection.instance.setAutoSwitch(false);
     if (Downloads.instance.ready) {
@@ -495,6 +545,37 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ),
     );
     if (ok == true) AppSettings.instance.resetAllSeries();
+  }
+}
+
+/// One job's keys as chips (select one to remove it - Show the controls always keeps one), and + Add.
+class _KeyRow extends StatelessWidget {
+  const _KeyRow({required this.action, required this.onAdd});
+  final ReaderAction action;
+  final VoidCallback onAdd;
+  @override
+  Widget build(BuildContext context) {
+    final k = ReaderKeys.instance;
+    final removable = k.canRemove(action);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(action.label, style: const TextStyle(fontSize: 14.5)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          for (final key in k.keys[action]!)
+            InputChip(
+              label: Text(ReaderKeys.nameOf(key)),
+              visualDensity: VisualDensity.compact,
+              tooltip: removable ? 'Remove ${ReaderKeys.nameOf(key)}' : 'Show the controls keeps at least one key',
+              onDeleted: removable ? () => k.remove(action, key) : null,
+              onPressed: removable ? () => k.remove(action, key) : null,
+            ),
+          if (k.keys[action]!.isEmpty) const Text('No key', style: TextStyle(color: hintColour)),
+          TextButton.icon(onPressed: onAdd, icon: const Icon(Icons.add, size: 18), label: const Text('Add')),
+        ]),
+      ]),
+    );
   }
 }
 

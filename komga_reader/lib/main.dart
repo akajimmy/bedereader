@@ -16,6 +16,7 @@ import 'offline/downloads.dart';
 import 'offline/sync.dart';
 import 'ondeck_hidden.dart';
 import 'pins.dart';
+import 'reader_keys.dart';
 import 'settings.dart';
 import 'screen.dart';
 import 'side_menu.dart';
@@ -150,6 +151,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
+    ReaderKeys.instance.load(); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = p.getString('apiKey');
     setState(() {
