@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
@@ -138,5 +139,44 @@ void main() {
     expect(find.text("Can't reach Komga"), findsNothing);
     expect(conn.offline, isTrue);
     unawaited(conn.setForcedOffline(false));
+  });
+
+  test('API key refused: its own prompt, and Komga answering never counts as "back" (it would refuse again)', () {
+    Komga.onKeyRefused!(server); // what the server client does on HTTP 401
+    Komga.onReachability!(server, true); // ...right before reporting that Komga answered
+    expect(conn.keyRefused, isTrue);
+    expect(conn.keyPromptPending, isTrue);
+    expect(conn.askPending, isFalse); // not "can't reach Komga"
+
+    conn.useDownloads(); // the prompt's "Use downloaded books"
+    expect(conn.offline, isTrue);
+    expect(conn.keyPromptPending, isFalse);
+    Komga.onReachability!(server, true); // Komga still answers (and would refuse the key)
+    expect(conn.reachableAgain, isFalse); // no "Komga is reachable again - Go online"
+    expect(conn.offline, isTrue);
+  });
+
+  test('signing in again (a new key) starts clean', () async {
+    Komga.onKeyRefused!(server);
+    conn.useDownloads();
+    await conn.load(FakeKomga()); // the sign-in with a new key
+    expect(conn.keyRefused, isFalse);
+    expect(conn.offline, isFalse);
+  });
+
+  testWidgets('the key prompt: the message, Use downloaded books, Sign in again', (tester) async {
+    Komga.onKeyRefused!(server);
+    bool? signIn;
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () async => signIn = await showKeyRefusedPrompt(context), child: const Text('open')))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('API key not accepted'), findsOneWidget);
+    expect(find.textContaining("Komga no longer accepts this device's API key."), findsOneWidget);
+    expect(find.text('Use downloaded books'), findsOneWidget); // B1 is downloaded
+    await tester.tap(find.text('Sign in again'));
+    await tester.pumpAndSettle();
+    expect(signIn, isTrue);
+    expect(conn.offline, isFalse);
   });
 }

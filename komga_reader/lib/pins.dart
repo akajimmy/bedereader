@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'errors.dart';
 
 /// A view pinned to Home under a name of your choosing, e.g. "Ultimate Universe · unread" = that read list with
 /// read books hidden. Opening it restores exactly that view (list, hide-read, and for libraries mode and sort).
@@ -54,6 +55,12 @@ class Pins extends ChangeNotifier {
   List<Pin> items = [];
   String? syncError;
 
+  /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
+  void _syncNote(String note, Object error) {
+    if (note != syncError) ErrorLog.instance.record(note, error);
+    syncError = note;
+  }
+
   Future<void> load(Komga api) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
@@ -69,7 +76,7 @@ class Pins extends ChangeNotifier {
       }
       syncError = null;
     } catch (e) {
-      syncError = 'Could not read pins from Komga: $e';
+      _syncNote('Using the pins saved on this device: ${explain(e).reason}.', e);
     }
   }
 
@@ -97,7 +104,7 @@ class Pins extends ChangeNotifier {
     api.putClientSetting(komgaKey, raw).then((_) {
       syncError = null;
     }).catchError((Object e) {
-      syncError = 'Pins not saved to Komga yet (kept on this device): $e';
+      _syncNote('Pins saved on this device, not on Komga yet: ${explain(e).reason}.', e);
     }).whenComplete(notifyListeners);
   }
 

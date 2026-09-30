@@ -133,7 +133,7 @@ class _JobRow extends StatelessWidget {
           Theme.of(context).colorScheme.primary),
       JobState.queued => ('Waiting', const Color(0xFF9A9A9A)),
       JobState.paused => ('Paused', const Color(0xFFFACC15)),
-      JobState.failed => ('Failed: ${job.error ?? 'unknown error'}', const Color(0xFFFF8A80)),
+      JobState.failed => ('Failed: ${job.error ?? 'something unexpected went wrong'}.', const Color(0xFFFF8A80)),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),

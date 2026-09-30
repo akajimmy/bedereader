@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../widgets/fullscreen_exit.dart';
+import '../widgets/error_text.dart';
 import 'reader.dart';
 import 'series.dart';
 
@@ -23,7 +25,7 @@ const _roleOrder = ['writer', 'penciller', 'artist', 'inker', 'colorist', 'lette
 class _BookDetailsScreenState extends State<BookDetailsScreen> {
   late dynamic _book = widget.book;
   dynamic _series;
-  String? _error;
+  Object? _error; // shown through lib/errors.dart
 
   Komga get api => widget.api;
 
@@ -39,7 +41,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       final series = await api.oneSeries(_book['seriesId'] as String);
       if (mounted) setState(() { if (fresh != null) _book = fresh; _series = series; _error = null; });
     } catch (e) {
-      if (mounted) setState(() => _error = '$e');
+      if (mounted) setState(() => _error = e);
     }
   }
 
@@ -47,8 +49,11 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     try {
       completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
       await _load();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      final title = '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}';
+      if (mounted) {
+        showErrorSnack(context, couldnt('mark "$title" as ${completed ? 'unread' : 'read'}', e, thing: 'book'), e, st);
+      }
     }
   }
 
@@ -116,7 +121,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
-              child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+              child: ErrorText(explain(_error!, thing: 'book').message, _error!)),
         wide
             ? Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 SizedBox(width: 220, child: cover),

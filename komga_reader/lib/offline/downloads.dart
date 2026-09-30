@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../screen.dart';
 import 'store.dart';
 
@@ -298,7 +299,7 @@ class Downloads extends ChangeNotifier {
     notifyListeners();
     try {
       final book = await api.book(job.bookId);
-      if (book == null) throw Exception('no longer on the server');
+      if (book == null) throw KomgaError(404, '/api/v1/books/${job.bookId}'); // gone from Komga
       final pages = await api.pages(job.bookId);
       job.pagesTotal = pages.length;
 
@@ -409,10 +410,16 @@ class Downloads extends ChangeNotifier {
         recentlyDone.insert(0, job.title);
         if (recentlyDone.length > 20) recentlyDone.removeLast();
       }
-    } catch (e) {
+    } catch (e, st) {
+      // plain words for the Downloads screen ("Failed: can't reach Komga."); the room message is already plain
+      final room = '$e'.startsWith('Exception: not enough room');
+      final ex = explain(e, thing: 'book');
       job
         ..state = JobState.failed
-        ..error = '$e'.replaceFirst('Exception: ', '');
+        ..error = room
+            ? '$e'.replaceFirst('Exception: ', '')
+            : ex.kind == ErrorKind.gone ? 'this book is no longer on Komga' : ex.reason;
+      if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
     }
     await _saveQueue();
     notifyListeners();

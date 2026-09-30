@@ -39,8 +39,12 @@ class Komga {
       final r = await request().timeout(limit);
       onReachability?.call(this, true);
       return r;
-    } on KomgaError {
+    } on KomgaError catch (e) {
+      if (e.status == 401) onKeyRefused?.call(this); // before "it answered": the connection mustn't offer to go back
       onReachability?.call(this, true); // it answered, with an error
+      rethrow;
+    } on KomgaNotKomga {
+      onReachability?.call(this, false); // something answered, but nothing this app can use
       rethrow;
     } on TimeoutException {
       onReachability?.call(this, false);
@@ -48,17 +52,32 @@ class Komga {
     } on http.ClientException {
       onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl); // package:http wraps socket errors (refused, no route) in this
+    } catch (e) {
+      // https with a certificate this device doesn't trust (a TLS handshake error, which package:http passes on raw)
+      if ('${e.runtimeType}'.contains('Handshake') || '$e'.contains('CERTIFICATE_VERIFY_FAILED')) {
+        onReachability?.call(this, false);
+        throw KomgaCertificate(baseUrl);
+      }
+      rethrow;
     }
   }
 
   /// Told after every server call whether Komga answered (the connection uses it to offer offline mode).
   static void Function(Komga api, bool reachable)? onReachability;
 
+  /// Told when Komga refuses the API key (HTTP 401) - it was deleted, say (the connection offers downloaded books
+  /// and signing in again).
+  static void Function(Komga api)? onKeyRefused;
+
   Future<dynamic> _get(String path, [Map<String, Object?>? query]) => _net(() async {
         final r = await _http.get(_u(path, query), headers: headers);
         if (r.statusCode == 404) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
-        return jsonDecode(utf8.decode(r.bodyBytes));
+        try {
+          return jsonDecode(utf8.decode(r.bodyBytes));
+        } on FormatException {
+          throw KomgaNotKomga(baseUrl); // a web page (a router, another server on that port), not Komga's API
+        }
       });
 
   Future<void> _send(String method, String path, [Object? body]) => _net(() async {
@@ -219,17 +238,31 @@ class Komga {
   Future<void> deleteSeriesFiles(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/file');
 }
 
+/// Komga answered with an error status. What people see comes from lib/errors.dart; this text is for the error log.
 class KomgaError implements Exception {
   KomgaError(this.status, this.path);
   final int status;
   final String path;
   @override
-  String toString() => status == 401 || status == 403
-      ? 'Komga refused the API key (HTTP $status)'
-      : 'Komga error HTTP $status on $path';
+  String toString() => 'HTTP $status on $path';
 }
 
-/// No answer from the server (away from home, Komga or the PC off, wrong address).
+/// Something answered at the address, but not Komga's API (a web page: wrong port, a router, another server).
+class KomgaNotKomga implements Exception {
+  KomgaNotKomga(this.baseUrl);
+  final String baseUrl;
+  @override
+  String toString() => 'not a Komga API response from $baseUrl';
+}
+
+/// https to a server whose certificate this device doesn't trust (self-signed, expired, wrong name).
+class KomgaCertificate implements Exception {
+  KomgaCertificate(this.baseUrl);
+  final String baseUrl;
+  @override
+  String toString() => 'TLS certificate not trusted: $baseUrl';
+}
+
 /// A reading-progress change just written to Komga: one book, or every book of a series.
 class ProgressWrite {
   const ProgressWrite({this.bookId, this.seriesId, this.page, this.completed = false, this.unread = false});
@@ -238,11 +271,12 @@ class ProgressWrite {
   final bool completed, unread;
 }
 
+/// No answer from the server (away from home, Komga or the PC off, wrong address).
 class KomgaUnreachable implements Exception {
   KomgaUnreachable(this.baseUrl);
   final String baseUrl;
   @override
-  String toString() => "Can't reach Komga at $baseUrl";
+  String toString() => 'no answer from $baseUrl';
 }
 
 /// The one read filter (user's call): show everything, or hide what's read. In-progress counts as unread, so

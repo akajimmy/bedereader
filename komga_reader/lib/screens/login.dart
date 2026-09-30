@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../errors.dart';
+import '../widgets/error_text.dart';
 
 /// The server field tidied up: spaces removed (the tablet keyboard puts one after the colon), http:// added when no
 /// scheme was typed (Komga at home is usually plain http), slashes off the end. Null when it still isn't an address.
@@ -26,7 +28,7 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _server = TextEditingController();
   final _key = TextEditingController();
-  String? _error;
+  Object? _error; // shown through lib/errors.dart
   bool _busy = false;
 
   @override
@@ -42,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _connect() async {
     final server = serverAddress(_server.text);
     if (server == null) {
-      setState(() => _error = "That isn't a server address - it should look like http://192.168.1.10:25600");
+      setState(() => _error = FormatException('not a server address (scheme/host)', _server.text));
       return;
     }
     _server.text = server; // show what's actually used
@@ -50,10 +52,10 @@ class _LoginScreenState extends State<LoginScreen> {
     final api = Komga(server, _key.text.trim());
     try {
       final me = await api.me();
-      if (me == null) throw Exception('No user returned');
+      if (me == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga at that address
       await widget.onSignedIn(api);
     } catch (e) {
-      setState(() => _error = '$e');
+      if (mounted) setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -79,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               FilledButton(onPressed: _busy ? null : _connect, child: Text(_busy ? 'Connecting…' : 'Connect')),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
-                  child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+                  child: ErrorText(explain(_error!, signIn: true).message, _error!)),
             ]),
           ),
         ),

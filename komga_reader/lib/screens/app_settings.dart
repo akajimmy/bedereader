@@ -5,6 +5,7 @@ import '../ondeck_hidden.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../settings.dart';
+import '../widgets/error_text.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
@@ -201,6 +202,14 @@ class AppSettingsScreen extends StatelessWidget {
                 subtitle: const Text('Everything the app relies on, and its licences'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.thirdParty())),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.report_outlined),
+                title: const Text('Error log'),
+                subtitle: const Text('The last errors, with their technical details (kept on this device)'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ErrorLogScreen())),
               ),
             ]),
           ]),

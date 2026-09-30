@@ -4,6 +4,7 @@ import '../api.dart';
 import '../app_identity.dart';
 import '../licences.dart';
 import '../screen.dart';
+import '../widgets/error_text.dart';
 import '../widgets/fullscreen_exit.dart';
 import 'document.dart';
 
@@ -97,6 +98,11 @@ class _AboutScreenState extends State<AboutScreen> {
                       Navigator.of(context).push(MaterialPageRoute(builder: (_) => DocumentScreen.thirdParty())),
                   icon: const Icon(Icons.extension_outlined, size: 18),
                   label: const Text('Third-party software'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ErrorLogScreen())),
+                  icon: const Icon(Icons.report_outlined, size: 18),
+                  label: const Text('Error log'),
                 ),
               ]),
               const SizedBox(height: 12),

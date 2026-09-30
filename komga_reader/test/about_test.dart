@@ -53,12 +53,12 @@ void main() {
     api.next = 'refused';
     await tester.tap(find.text('Retry'));
     await tester.pump();
-    expect(find.text('Reachable, but the API key was refused'), findsOneWidget);
+    expect(find.textContaining("Komga no longer accepts this device's API key."), findsOneWidget);
 
     api.next = 'down';
     await tester.tap(find.text('Retry'));
     await tester.pump();
-    expect(find.text("Can't reach Komga at http://10.0.0.23:25600"), findsOneWidget);
+    expect(find.textContaining("Can't reach Komga at 10.0.0.23:25600."), findsOneWidget); // no http://
     expect(api.calls, 3);
   });
 

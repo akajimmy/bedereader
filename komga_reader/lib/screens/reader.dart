@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
@@ -15,6 +16,7 @@ import '../page_image.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/display_panel.dart';
+import '../widgets/error_text.dart';
 import '../widgets/focus_style.dart';
 import 'actions.dart';
 
@@ -134,8 +136,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   ScrollController _scrollFor(int i) => _scrolls.putIfAbsent(i, ScrollController.new);
 
+  (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
+
+  static String _titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();
+
   Future<void> _open(dynamic book) async {
-    setState(() { _loading = true; _book = book; _menu = false; });
+    setState(() { _loading = true; _book = book; _menu = false; _openError = null; });
     try {
       final fresh = await api.book(book['id']) ?? book; // current progress from the server
       final pages = await api.pages(book['id']);
@@ -162,10 +168,14 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         _loading = false;
       });
       _keys.requestFocus();
-    } catch (e) {
-      if (mounted) {
+    } catch (e, st) {
+      if (!mounted) return;
+      final message = couldnt('open "${_titleOf(book)}"', e, thing: 'book');
+      if (_pc == null) {
+        setState(() { _loading = false; _openError = (message, e, st); }); // nothing to show: say so on the screen
+      } else {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        showErrorSnack(context, message, e, st); // the book being read stays
       }
     }
   }
@@ -470,8 +480,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("The next book isn't downloaded")));
       Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('find the next book', e, thing: 'book'), e, st);
     }
   }
 
@@ -489,8 +499,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       } else {
         _open(prev);
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('find the previous book', e, thing: 'book'), e, st);
     }
   }
 
@@ -507,8 +517,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deleted $title')));
       Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      if (mounted) {
+        showErrorSnack(context, couldnt('delete "$title"', e, thing: 'book', forbidden: deleteNeedsAdmin), e, st);
+      }
     }
   }
 
@@ -675,7 +687,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           focusNode: _keys,
           autofocus: true,
           onKeyEvent: _onKey,
-          child: _loading || _pc == null
+          child: _openError != null && _pc == null
+              ? Center(child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
+                      style: const TextStyle(color: Colors.white70),
+                      action: Row(mainAxisSize: MainAxisSize.min, children: [
+                        TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
+                        TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+                      ])),
+                ))
+              : _loading || _pc == null
               ? const Center(child: CircularProgressIndicator())
               : Stack(children: [
                   LayoutBuilder(builder: (context, box) {
@@ -768,10 +790,19 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       future: _loader!.get(i),
       builder: (context, snap) {
         if (snap.hasError) {
-          return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.broken_image, color: Colors.white24, size: 48),
-            TextButton(onPressed: () => setState(() {}), child: const Text('Retry')),
-          ]));
+          // the reason on the page itself (user's mock-ups, 2026-09-29): "This page didn't load: can't reach Komga."
+          final e = snap.error!;
+          final ex = explain(e, thing: 'page');
+          final message = ex.kind == ErrorKind.unreadablePage ? ex.message : "This page didn't load: ${ex.reason}.";
+          return Center(child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(Icons.broken_image, color: Colors.white24, size: 48),
+              const SizedBox(height: 10),
+              ErrorText(message, e, stack: snap.stackTrace, centre: true, style: const TextStyle(color: Colors.white70),
+                  action: TextButton(onPressed: () => setState(() {}), child: const Text('Retry'))),
+            ]),
+          ));
         }
         if (!snap.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         return PageCanvas(
@@ -990,8 +1021,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                     try {
                       completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
                       await _afterMark();
-                    } catch (e) {
-                      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                    } catch (e, st) {
+                      if (mounted) {
+                        showErrorSnack(context,
+                            couldnt('mark "${_titleOf(_book)}" as ${completed ? 'unread' : 'read'}', e, thing: 'book'), e, st);
+                      }
                     }
                   },
                 ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../home_sections.dart';
 import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
@@ -10,6 +11,7 @@ import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
 import '../widgets/pin_tile.dart';
 import '../widgets/poster_row.dart';
+import '../widgets/error_text.dart';
 import 'library.dart';
 import 'reader.dart';
 import 'search.dart';
@@ -38,7 +40,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, bool> get _show => _sections.show;
   Set<String> _fetched = {}; // sections loaded with the last _load (optional rows are only fetched while shown)
   bool _loading = true;
-  String? _error;
+  Object? _error; // shown through lib/errors.dart
 
   Komga get api => widget.api;
 
@@ -104,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _releases = content(results[6]);
       _fetched = want;
     } catch (e) {
-      _error = '$e';
+      _error = e;
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -130,8 +132,8 @@ class _HomeScreenState extends State<HomeScreen> {
           screen = LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: p.id, pin: p);
       }
       if (mounted) await _push(screen);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('open "${p.title}"', e), e, st);
     }
   }
 
@@ -286,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 if (Connection.instance.offline) const _OfflineBanner(),
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
-                      child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+                      child: ErrorText(explain(_error!).message, _error!)),
                 if (!_show.values.any((v) => v))
                   const _Empty('Every section is hidden - use ⋮ at the top right to show them again.'),
                 for (final k in _sections.order)

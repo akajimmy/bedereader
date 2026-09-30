@@ -36,6 +36,19 @@ void main() {
     expect(s('http://'), isNull);
   });
 
+  testWidgets("not an address: a plain message with Details, not the raw FormatException", (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
+    await tester.pump();
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
+        'ftp://nas');
+    await tester.tap(find.text('Connect'));
+    await tester.pump();
+    expect(find.text("That isn't a server address. It should look like 192.168.1.10:25600."), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    expect(find.textContaining('FormatException'), findsNothing);
+  });
+
   testWidgets('an address typed without http:// connects, and the field shows what was used', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));

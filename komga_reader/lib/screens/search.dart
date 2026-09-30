@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/poster_row.dart';
 import '../widgets/readlist_tile.dart';
+import '../widgets/error_text.dart';
 import 'library.dart';
 import 'reader.dart';
 import 'readlist.dart';
@@ -30,7 +32,7 @@ class _SearchScreenState extends State<SearchScreen> {
   late bool _inLibrary = widget.libraryId != null;
   String _query = '';
   bool _searching = false;
-  String? _error;
+  Object? _error; // shown through lib/errors.dart
   Map<String, dynamic> _series = {}, _books = {}, _readLists = {}, _collections = {};
   int _generation = 0; // answers to an older query are dropped
 
@@ -68,7 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() { _series = r[0]; _books = r[1]; _readLists = r[2]; _collections = r[3]; _searching = false; });
     } catch (e) {
       if (gen != _generation || !mounted) return;
-      setState(() { _error = '$e'; _searching = false; });
+      setState(() { _error = e; _searching = false; });
     }
   }
 
@@ -119,7 +121,7 @@ class _SearchScreenState extends State<SearchScreen> {
       body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
         if (_searching) const LinearProgressIndicator(minHeight: 2),
         if (_error != null)
-          Padding(padding: const EdgeInsets.all(16), child: Text(_error!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+          Padding(padding: const EdgeInsets.all(16), child: ErrorText(explain(_error!).message, _error!)),
         if (_query.isEmpty)
           const Padding(padding: EdgeInsets.all(24),
               child: Text('Type to search.', style: TextStyle(color: Color(0xFF9A9A9A)))),

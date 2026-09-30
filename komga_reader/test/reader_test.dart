@@ -69,6 +69,16 @@ class CoverKomga extends FakeKomga {
   }
 }
 
+/// [FakeKomga] with Komga gone mid-book (pages fail), or before the book opened ([bookDown]).
+class DownKomga extends FakeKomga {
+  bool bookDown = false;
+  @override
+  Future<Map<String, dynamic>?> book(String id) async =>
+      bookDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : theBook;
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) async => throw KomgaUnreachable('http://192.168.1.10:25600');
+}
+
 /// [FakeKomga] offline, with the next book not downloaded.
 class NotDownloadedKomga extends FakeKomga {
   @override
@@ -281,6 +291,29 @@ void main() {
     expect(find.byType(ReaderScreen), findsNothing); // closed
     expect(api.marked, ['B1']); // and this one is read
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("a page that won't load says why, with Retry and Details (user's mock-up)", (tester) async {
+    api = DownKomga();
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text("This page didn't load: can't reach Komga."), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Details'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets("a book that won't open says so on the screen, with Retry and Close", (tester) async {
+    api = DownKomga()..bookDown = true;
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Couldn\'t open "Test #1": can\'t reach Komga.'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing); // not a spinner forever
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('end card: shows the next book in the series - title and poster', (tester) async {
