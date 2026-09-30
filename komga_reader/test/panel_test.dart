@@ -29,9 +29,14 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final done = tester.getRect(find.text('Done'));
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
-    expect(find.text('Planet Comics'), findsOneWidget);
+    expect(find.text('Planet Comics · this series'), findsOneWidget);
+    expect(find.text('This device'), findsOneWidget);
     expect(find.text('Follows the defaults'), findsOneWidget);
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
+    expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
+    expect(find.text('Page number after a turn'), findsOneWidget); // mid-book toggles, here too
+    expect(find.text('Double-tap to zoom'), findsOneWidget);
+    expect(find.text('Keep the screen on'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -43,13 +48,13 @@ void main() {
 
   testWidgets('a change gives the series its own settings; ⋮ Use the defaults goes back to them', (tester) async {
     await openPanel(tester, const Size(1280, 800), image: true);
+    expect(tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Use the defaults')).onPressed, isNull,
+        reason: 'already follows them');
     await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance'));
     await tester.pumpAndSettle();
     expect(AppSettings.instance.prefsFor('S1').sharpen, isTrue);
     expect(find.text('Own settings'), findsOneWidget);
-    await tester.tap(find.byTooltip('More'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Use the defaults'));
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Use the defaults')); // a button, not in a menu
     await tester.pumpAndSettle();
     expect(AppSettings.instance.hasOwn('S1'), isFalse);
     expect(find.text('Follows the defaults'), findsOneWidget);

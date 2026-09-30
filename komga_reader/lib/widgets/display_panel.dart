@@ -59,12 +59,11 @@ Future<void> _show(BuildContext context, Widget Function(bool side) panel) {
   );
 }
 
-/// Shared frame: title (with an optional ⋮ menu) and Done, the groups, any Komga sync problem at the bottom.
+/// Shared frame: title and Done, the groups, any Komga sync problem at the bottom.
 class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.groups, required this.side, this.menu});
+  const _Panel({required this.title, required this.groups, required this.side});
   final String title;
   final bool side;
-  final Widget? menu;
   final List<Widget> Function(AppSettings s) groups;
 
   @override
@@ -76,7 +75,6 @@ class _Panel extends StatelessWidget {
         final list = ListView(shrinkWrap: !side, padding: const EdgeInsets.fromLTRB(14, 4, 14, 16), children: [
           Row(children: [
             Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500))),
-            if (menu != null) menu!,
             TextButton(autofocus: true, onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
           ]),
           const SizedBox(height: 6),
@@ -115,7 +113,7 @@ class _ReaderPanel extends StatelessWidget {
       final p = s.prefsFor(id);
       return [
         if (id != null)
-          SettingsGroup(title: seriesTitle ?? 'This series', trailing: _seriesChip(s, id), children: [
+          SettingsGroup(title: '${seriesTitle ?? 'This series'} · this series', trailing: _seriesChip(s, id), children: [
             ...fitDirectionRows(p, (n) => s.setSeries(id, n), icons: true, komgaDirection: komgaDirection),
             ActionRow(
               title: 'Use this fit and direction for new series',
@@ -128,11 +126,15 @@ class _ReaderPanel extends StatelessWidget {
               ),
             ),
           ]),
-        SettingsGroup(title: 'Screen', children: [
+        // this device, the same settings as in Settings (Display and Reader), for changing mid-book
+        SettingsGroup(title: 'This device', children: [
           ...brightnessRows(s, compact: true),
           ...nightRows(s),
           backgroundRow(s),
           pageTurnRow(s),
+          pageNumberRow(s),
+          doubleTapRow(s),
+          screenOnRow(s),
         ]),
       ];
     });
@@ -147,42 +149,42 @@ class _ImagePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppSettings.instance;
     return _Panel(
       title: 'Image',
       side: side,
-      menu: PopupMenuButton<String>(
-        tooltip: 'More',
-        icon: const Icon(Icons.more_vert),
-        onSelected: (v) {
-          final p = s.prefsFor(seriesId);
-          switch (v) {
-            case 'original':
-              s.setSeries(seriesId, p.imageReset()); // the untouched scan for this series (fit is left alone)
-            case 'default':
-              s.setDefault(s.defaults.copyWith(brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen,
-                  autoLevels: p.autoLevels, crop: p.crop));
-              _toast(context, "Series you haven't adjusted will use these image settings");
-            case 'defaults':
-              s.useDefaults(seriesId);
-              _toast(context, 'This series follows the defaults again');
-          }
-        },
-        itemBuilder: (_) => [
-          const PopupMenuItem(value: 'original', child: Text('Reset to original')),
-          const PopupMenuItem(value: 'default', child: Text('Make these the default')),
-          PopupMenuItem(
-            value: 'defaults',
-            enabled: s.hasOwn(seriesId),
-            child: const Text('Use the defaults'),
-          ),
-        ],
-      ),
       groups: (s) {
         final p = s.prefsFor(seriesId);
         return [
-          SettingsGroup(title: seriesTitle ?? 'This series', trailing: _seriesChip(s, seriesId),
+          SettingsGroup(title: '${seriesTitle ?? 'This series'} · this series', trailing: _seriesChip(s, seriesId),
               children: imageRows(p, (n) => s.setSeries(seriesId, n))),
+          // the actions as buttons (user, 2026-09-30: not a ⋮ menu)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Wrap(spacing: 8, runSpacing: 8, children: [
+              OutlinedButton(
+                // the untouched scan for this series (fit and direction are left alone)
+                onPressed: () => s.setSeries(seriesId, p.imageReset()),
+                child: const Text('Reset to original'),
+              ),
+              OutlinedButton(
+                onPressed: () {
+                  s.setDefault(s.defaults.copyWith(brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen,
+                      autoLevels: p.autoLevels, crop: p.crop));
+                  _toast(context, "Series you haven't adjusted will use these image settings");
+                },
+                child: const Text('Make default'),
+              ),
+              OutlinedButton(
+                onPressed: s.hasOwn(seriesId)
+                    ? () {
+                        s.useDefaults(seriesId);
+                        _toast(context, 'This series follows the defaults again');
+                      }
+                    : null, // already does
+                child: const Text('Use the defaults'),
+              ),
+            ]),
+          ),
         ];
       },
     );
@@ -199,7 +201,8 @@ String _signed(double v) {
 
 // ---- rows shared with the Settings screen ---------------------------------------------------------------------------
 
-/// Fit and reading direction for [p] (a series, or the defaults). [icons]: fit as icons (the reader's narrow sheet).
+/// Fit and reading direction for [p] (a series, or the defaults). [icons]: both as icons (the reader's narrow
+/// sheet).
 List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
     String? komgaDirection}) {
   final komga = switch (komgaDirection) {
@@ -223,10 +226,10 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
     SegmentRow<ReadingDirection>(
       title: 'Direction',
       subtitle: komga == null ? 'Auto follows Komga' : 'Auto follows Komga: $komga',
-      choices: const [
-        Choice(ReadingDirection.auto, 'Auto'),
-        Choice(ReadingDirection.ltr, 'Left to right'),
-        Choice(ReadingDirection.rtl, 'Right to left'),
+      choices: [ // [icons]: a wand for Auto, arrows for the two directions (the names are their tooltips)
+        Choice(ReadingDirection.auto, 'Auto', icon: icons ? Icons.auto_fix_high : null),
+        Choice(ReadingDirection.ltr, 'Left to right', icon: icons ? Icons.arrow_forward : null),
+        Choice(ReadingDirection.rtl, 'Right to left', icon: icons ? Icons.arrow_back : null),
       ],
       value: p.direction,
       onChanged: (d) => setP(p.copyWith(direction: d)),
@@ -354,6 +357,35 @@ class _Swatch extends StatelessWidget {
       ),
     );
   }
+}
+
+Widget pageNumberRow(AppSettings s) => SwitchRow(
+      title: 'Page number after a turn',
+      subtitle: '"12 / 36" bottom left, for a moment',
+      value: s.display.pageNumber,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(pageNumber: v)),
+    );
+
+Widget doubleTapRow(AppSettings s) => SwitchRow(
+      title: 'Double-tap to zoom',
+      subtitle: 'Taps wait a moment for a second tap',
+      value: s.display.doubleTapZoom,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(doubleTapZoom: v)),
+    );
+
+Widget screenOnRow(AppSettings s) {
+  final d = s.display;
+  return SegmentRow<int>(
+    title: 'Keep the screen on',
+    subtitle: d.screenOn == 0
+        ? "The device's own timeout"
+        : d.screenOn == DisplayPrefs.alwaysOn
+            ? 'As long as a book is open'
+            : 'After the last page turn or touch',
+    choices: [for (final m in DisplayPrefs.screenOnChoices) Choice(m, screenOnLabel(m))],
+    value: d.screenOn,
+    onChanged: (m) => s.setDisplay(d.copyWith(screenOn: m)),
+  );
 }
 
 /// "Keep the screen on" choices, short enough for segmented buttons.
