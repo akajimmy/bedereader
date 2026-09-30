@@ -5,6 +5,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 43 - 2026-09-30
+
 **Changed**
 - **Settings, redesigned** to be easier to take in at a glance:
   - One page at a time. The pages are listed down the side on a wide screen, or across the top on a phone.
@@ -17,11 +24,6 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
   - Image: Enhance and Enhance colours come first. Reset to original, Make these the default and a new **Use the
     defaults**, which drops a series' own settings, are in the ⋮ menu. The panel says whether the series has its own
     settings or follows the defaults.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 42 - 2026-09-30
 
