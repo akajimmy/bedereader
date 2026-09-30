@@ -192,7 +192,8 @@ class DisplayPrefs {
         volumeKeys: j['volumeKeys'] != false,
         midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
         background: pick(ReaderBackground.values, j['background'], ReaderBackground.black),
-        screenOn: on is int && screenOnChoices.contains(on) ? on : 0, // default Off (user, 2026-09-30)
+        // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
+        screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
         posterTitleOnly: j['posterTitleOnly'] == true);
   }
