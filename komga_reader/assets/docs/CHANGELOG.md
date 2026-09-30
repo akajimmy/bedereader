@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 55 - 2026-09-30
+
 **Added**
 - Page previews setting (Settings > Reader, and the reader's panel): off, the slider shows just the page number
   while you pick a page, and nothing is asked of Komga - for when the link to your books is slow.
@@ -18,10 +24,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   at once, without asking Komga; while a page's picture is on its way the last one is shown faded under a spinner,
   so it isn't taken for this page; and a preview that takes too long no longer tells the app Komga is unreachable.
   (Komga makes each preview from the book file as it's asked: seconds each when the NAS is slow.)
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 54 - 2026-09-30
 
