@@ -1,7 +1,7 @@
 # Changelog
 
-What changed in each build of BeDeReader (called Komga Reader until build 38), newest first. The version is on the
-About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build numbers only ever go up.
+What changed in each build of BeDeReader, newest first. The version is on the About screen: **0.1.1 (build 32)**
+means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
