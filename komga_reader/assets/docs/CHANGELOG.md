@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- Remote: holding OK on a poster opened its menu and at once pressed the menu's first entry (Details), because the
+  held key kept repeating into it. The rest of a held press is now spent on opening the menu.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
