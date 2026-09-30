@@ -87,7 +87,8 @@ Settings (side menu) has everything in one place, each section labelled with whe
 
 ## Remote page-turners
 
-Bluetooth remotes that send arrow keys and Enter work throughout the app: arrows move between items, OK opens. In
+Bluetooth remotes that send arrow keys and Enter work throughout the app: arrows move between items, OK opens, and
+holding OK opens an item's menu (like a long press). In
 the reader, OK shows the controls, Left/Right turn pages, and Back closes the controls, then the book. If your remote
 sends other keys, Settings > Remote and keys chooses which keys turn pages, show the controls and close the book.
 
