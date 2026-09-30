@@ -4,6 +4,7 @@ import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
+import '../widgets/breadcrumb.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
@@ -28,6 +29,7 @@ class _SeriesScreenState extends State<SeriesScreen> {
       readStatus: _filter.api, sort: 'metadata.numberSort,${_newestFirst ? 'desc' : 'asc'}', page: page, size: size));
   String get _viewKey => 'view.series.${widget.series['id']}';
   final _sel = Selection();
+  late final Future<String?> _library = widget.api.libraryName(widget.series['libraryId'] as String?); // breadcrumb
 
   @override
   void initState() {
@@ -76,7 +78,10 @@ class _SeriesScreenState extends State<SeriesScreen> {
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
-        title: Text((s['metadata']?['title'] ?? s['name']) as String),
+        title: FutureBuilder<String?>(
+          future: _library,
+          builder: (context, lib) => Breadcrumb(parent: lib.data, title: (s['metadata']?['title'] ?? s['name']) as String),
+        ),
         actions: [
           Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
@@ -153,7 +158,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title),
+      appBar: AppBar(title: Breadcrumb(parent: 'Collections', title: widget.title),
           actions: [
             Center(child: CountBadge(paged: _paged)),
             HideReadButton(value: _filter, onChanged: _setFilter),

@@ -4,6 +4,7 @@ import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
+import '../widgets/breadcrumb.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/selection.dart';
@@ -57,7 +58,7 @@ class _ReadListScreenState extends State<ReadListScreen> {
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
-        title: Text(widget.readList['name'] as String),
+        title: Breadcrumb(parent: 'Read lists', title: widget.readList['name'] as String),
         actions: [
           Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
