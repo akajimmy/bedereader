@@ -2,167 +2,189 @@ import 'package:flutter/material.dart';
 
 import '../screen.dart';
 import '../settings.dart';
+import 'setting_rows.dart';
 
-/// The reader's two settings panels, opened from its bottom bar. The page stays visible above them so changes show
-/// live. Remote: Up/Down move between rows, Left/Right adjust a slider, OK toggles a switch; "Done" closes the panel.
+/// The reader's two settings panels, opened from its bottom bar: side sheets on a wide screen (the page stays in
+/// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
+/// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Reader settings: fit mode (this series) + screen brightness and night mode (whole app, this device). Also opened
-///   from the side menu, without the fit part.
-/// * Image settings: page brightness / contrast / enhance / enhance colours (this series).
+/// * Reader: fit and reading direction (this series), then the screen: brightness, night mode, background, page
+///   turn animation (this device).
+/// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); ⋮ has Reset to original, Make these
+///   the default and Use the defaults.
 ///
 /// A series you have never adjusted follows the defaults; the first change you make in a series gives it its own
-/// settings (starting from the defaults), which the defaults no longer affect.
+/// settings (starting from the defaults), which the defaults no longer affect - until Use the defaults.
+///
+/// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection}) =>
-    _show(context, _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection));
+    _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
+        side: side));
 
 Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
-    _show(context, _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle));
+    _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side));
 
-Future<void> _show(BuildContext context, Widget panel) => showModalBottomSheet<void>(
+const _sheetColour = Color(0xF2141416);
+const _sideWidth = 380.0;
+
+Future<void> _show(BuildContext context, Widget Function(bool side) panel) {
+  if (MediaQuery.sizeOf(context).width < 700) {
+    return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       barrierColor: Colors.transparent,
-      backgroundColor: const Color(0xF2141416),
+      backgroundColor: _sheetColour,
       constraints: const BoxConstraints(maxWidth: 640),
-      builder: (_) => panel,
+      builder: (_) => panel(false),
     );
+  }
+  return showGeneralDialog<void>(
+    context: context,
+    barrierDismissible: true, // a tap on the page closes it, like the bottom sheet
+    barrierLabel: 'Close',
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 200),
+    pageBuilder: (context, _, __) => Align(
+      alignment: Alignment.centerRight,
+      child: SizedBox(
+        width: _sideWidth,
+        height: double.infinity,
+        child: Material(color: _sheetColour, child: SafeArea(left: false, child: panel(true))),
+      ),
+    ),
+    transitionBuilder: (context, a, _, child) => SlideTransition(
+      position: Tween(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: a, curve: Curves.easeOut)),
+      child: child,
+    ),
+  );
+}
 
-/// Shared frame: title row with Done, the rows, and any Komga sync problem at the bottom.
+/// Shared frame: title (with an optional ⋮ menu) and Done, the groups, any Komga sync problem at the bottom.
 class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.rows});
+  const _Panel({required this.title, required this.groups, required this.side, this.menu});
   final String title;
-  final List<Widget> Function(AppSettings s) rows;
+  final bool side;
+  final Widget? menu;
+  final List<Widget> Function(AppSettings s) groups;
 
   @override
   Widget build(BuildContext context) {
     final s = AppSettings.instance;
     return ListenableBuilder(
       listenable: s,
-      builder: (context, _) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
-          child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(16, 4, 16, 16), children: [
-            Row(children: [
-              Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500))),
-              TextButton(autofocus: true, onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
-            ]),
-            ...rows(s),
-            if (s.syncError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(s.syncError!, style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 12)),
-              ),
+      builder: (context, _) {
+        final list = ListView(shrinkWrap: !side, padding: const EdgeInsets.fromLTRB(14, 4, 14, 16), children: [
+          Row(children: [
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500))),
+            if (menu != null) menu!,
+            TextButton(autofocus: true, onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
           ]),
-        ),
-      ),
+          const SizedBox(height: 6),
+          ...groups(s),
+          if (s.syncError != null)
+            Text(s.syncError!, style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 12)),
+        ]);
+        if (side) return list;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.7),
+            child: list,
+          ),
+        );
+      },
     );
   }
 }
 
+/// "Own settings" / "Follows the defaults", next to a series' name.
+Widget _seriesChip(AppSettings s, String seriesId) =>
+    s.hasOwn(seriesId) ? const StatusChip('Own settings', strong: true) : const StatusChip('Follows the defaults');
+
 class _ReaderPanel extends StatelessWidget {
-  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection});
+  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, required this.side});
   final String? seriesId;
   final String? seriesTitle;
-  final String? komgaDirection; // the series' reading direction in Komga, for the Auto label
-
-  static String _komgaLabel(String? d) => switch (d) {
-        'RIGHT_TO_LEFT' => 'right to left',
-        'VERTICAL' => 'vertical (read left to right)',
-        'WEBTOON' => 'webtoon (read left to right)',
-        _ => 'left to right',
-      };
+  final String? komgaDirection; // the series' reading direction in Komga, for Auto
+  final bool side;
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(title: 'Reader settings', rows: (s) {
+    return _Panel(title: 'Reader', side: side, groups: (s) {
       final id = seriesId;
       final p = s.prefsFor(id);
-      final fitName = p.fit.label.toLowerCase();
       return [
-        if (id != null) ...[
-          _Heading('Fit · ${seriesTitle ?? 'this series'}'),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: SegmentedButton<FitMode>(
-              segments: [
-                for (final f in FitMode.values) ButtonSegment(value: f, label: Text('Fit ${f.label.toLowerCase()}')),
-              ],
-              selected: {p.fit},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) => s.setSeries(id, p.copyWith(fit: v.first)),
+        if (id != null)
+          SettingsGroup(title: seriesTitle ?? 'This series', trailing: _seriesChip(s, id), children: [
+            ...fitDirectionRows(p, (n) => s.setSeries(id, n), icons: true, komgaDirection: komgaDirection),
+            ActionRow(
+              title: 'Use this fit and direction for new series',
+              button: TextButton(
+                onPressed: () {
+                  s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction));
+                  _toast(context, "Series you haven't adjusted will open like this one");
+                },
+                child: const Text('Make default'),
+              ),
             ),
-          ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () {
-                s.setDefault(s.defaults.copyWith(fit: p.fit));
-                _toast(context, "Series you haven't adjusted will open in fit $fitName");
-              },
-              child: Text('Make fit $fitName the default'),
-            ),
-          ),
-          _Heading('Reading direction · ${seriesTitle ?? 'this series'}'),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: SegmentedButton<ReadingDirection>(
-              segments: [
-                for (final r in ReadingDirection.values)
-                  ButtonSegment(
-                    value: r,
-                    // Auto shows what it resolves to, from the series' reading direction in Komga
-                    label: Text(r == ReadingDirection.auto ? 'Auto · ${_komgaLabel(komgaDirection)}' : r.label),
-                  ),
-              ],
-              selected: {p.direction},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) => s.setSeries(id, p.copyWith(direction: v.first)),
-            ),
-          ),
-        ],
-        const _Heading('Page turn animation · this device'),
-        const PageTurnControl(),
-        const _Heading('Screen · whole app, this device'),
-        const ScreenBrightnessControls(),
-        const NightModeControls(),
+          ]),
+        SettingsGroup(title: 'Screen', children: [
+          ...brightnessRows(s, compact: true),
+          ...nightRows(s),
+          backgroundRow(s),
+          pageTurnRow(s),
+        ]),
       ];
     });
   }
 }
 
 class _ImagePanel extends StatelessWidget {
-  const _ImagePanel({required this.seriesId, this.seriesTitle});
+  const _ImagePanel({required this.seriesId, this.seriesTitle, required this.side});
   final String seriesId;
   final String? seriesTitle;
+  final bool side;
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(title: 'Image settings', rows: (s) {
-      final p = s.prefsFor(seriesId);
-      void setP(ReaderPrefs n) => s.setSeries(seriesId, n);
-      return [
-        _Heading('Pages · ${seriesTitle ?? 'this series'}'),
-        ..._imageRows(p, setP),
-        const SizedBox(height: 4),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          // back to the untouched scan for this series (fit is left alone)
-          OutlinedButton(
-            onPressed: () => setP(p.imageReset()),
-            child: const Text('Reset to original'),
-          ),
-          // the image part of the defaults, used by every series you haven't adjusted
-          OutlinedButton(
-            onPressed: () {
-              s.setDefault(s.defaults.copyWith(
-                  brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen, autoLevels: p.autoLevels,
-                  crop: p.crop));
+    final s = AppSettings.instance;
+    return _Panel(
+      title: 'Image',
+      side: side,
+      menu: PopupMenuButton<String>(
+        tooltip: 'More',
+        icon: const Icon(Icons.more_vert),
+        onSelected: (v) {
+          final p = s.prefsFor(seriesId);
+          switch (v) {
+            case 'original':
+              s.setSeries(seriesId, p.imageReset()); // the untouched scan for this series (fit is left alone)
+            case 'default':
+              s.setDefault(s.defaults.copyWith(brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen,
+                  autoLevels: p.autoLevels, crop: p.crop));
               _toast(context, "Series you haven't adjusted will use these image settings");
-            },
-            child: const Text('Make these the default'),
+            case 'defaults':
+              s.useDefaults(seriesId);
+              _toast(context, 'This series follows the defaults again');
+          }
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'original', child: Text('Reset to original')),
+          const PopupMenuItem(value: 'default', child: Text('Make these the default')),
+          PopupMenuItem(
+            value: 'defaults',
+            enabled: s.hasOwn(seriesId),
+            child: const Text('Use the defaults'),
           ),
-        ]),
-      ];
-    });
+        ],
+      ),
+      groups: (s) {
+        final p = s.prefsFor(seriesId);
+        return [
+          SettingsGroup(title: seriesTitle ?? 'This series', trailing: _seriesChip(s, seriesId),
+              children: imageRows(p, (n) => s.setSeries(seriesId, n))),
+        ];
+      },
+    );
   }
 }
 
@@ -174,282 +196,168 @@ String _signed(double v) {
   return n == 0 ? '0' : (n > 0 ? '+$n' : '$n');
 }
 
-class _Heading extends StatelessWidget {
-  const _Heading(this.text);
-  final String text;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 14, bottom: 2),
-        child: Text(text, style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
-      );
+// ---- rows shared with the Settings screen ---------------------------------------------------------------------------
+
+/// Fit and reading direction for [p] (a series, or the defaults). [icons]: fit as icons (the reader's narrow sheet).
+List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
+    String? komgaDirection}) {
+  final komga = switch (komgaDirection) {
+    'RIGHT_TO_LEFT' => 'right to left',
+    'VERTICAL' => 'vertical (read left to right)',
+    'WEBTOON' => 'webtoon (read left to right)',
+    null => null,
+    _ => 'left to right',
+  };
+  return [
+    SegmentRow<FitMode>(
+      title: 'Fit',
+      choices: [
+        Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
+        Choice(FitMode.width, icons ? 'Fit width' : 'Width', icon: icons ? Icons.swap_horiz : null),
+        Choice(FitMode.height, icons ? 'Fit height' : 'Height', icon: icons ? Icons.swap_vert : null),
+      ],
+      value: p.fit,
+      onChanged: (f) => setP(p.copyWith(fit: f)),
+    ),
+    SegmentRow<ReadingDirection>(
+      title: 'Direction',
+      subtitle: komga == null ? 'Auto follows Komga' : 'Auto follows Komga: $komga',
+      choices: const [
+        Choice(ReadingDirection.auto, 'Auto'),
+        Choice(ReadingDirection.ltr, 'Left to right'),
+        Choice(ReadingDirection.rtl, 'Right to left'),
+      ],
+      value: p.direction,
+      onChanged: (d) => setP(p.copyWith(direction: d)),
+    ),
+  ];
 }
 
-/// Crop edges, page brightness, contrast, enhance, enhance colours for [p] (a series' settings, or the defaults).
-List<Widget> _imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
-      _SliderRow(label: 'Crop edges', value: p.crop, min: 0, max: ReaderPrefs.maxCrop,
-          divisions: 10, // 1% steps
+/// Enhance and Enhance colours first (the ones actually used), then crop, brightness and contrast.
+List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
+      SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
+          value: p.sharpen, onChanged: (v) => setP(p.copyWith(sharpen: v))),
+      SwitchRow(title: 'Enhance colours', subtitle: 'Whiter paper, deeper ink',
+          value: p.autoLevels, onChanged: (v) => setP(p.copyWith(autoLevels: v))),
+      SliderRow(label: 'Crop edges', value: p.crop, min: 0, max: ReaderPrefs.maxCrop, divisions: 10, // 1% steps
           valueText: p.crop == 0 ? 'Off' : '${(p.crop * 100).round()}%', onChanged: (v) => setP(p.copyWith(crop: v))),
-      _SliderRow(label: 'Page brightness', value: p.brightness, min: -0.3, max: 0.3,
+      SliderRow(label: 'Brightness', value: p.brightness, min: -0.3, max: 0.3,
           valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
-      _SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
+      SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
           valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Enhance'),
-        subtitle: const Text('Cleans up speckle and grain, then sharpens - for older or low-resolution scans'),
-        value: p.sharpen,
-        onChanged: (v) => setP(p.copyWith(sharpen: v)),
-      ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Enhance colours'),
-        subtitle: const Text('Whitens yellowed paper and deepens faded ink'),
-        value: p.autoLevels,
-        onChanged: (v) => setP(p.copyWith(autoLevels: v)),
-      ),
     ];
 
-/// Rebuilds [build] whenever the settings change (the shared controls below are used outside the panels too).
-class _Live extends StatelessWidget {
-  const _Live(this.build_);
-  final Widget Function(AppSettings s) build_;
-  @override
-  Widget build(BuildContext context) =>
-      ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build_(AppSettings.instance));
+/// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on a PC.
+/// [compact]: an icon instead of the "Screen brightness" label (the reader's narrow sheet).
+List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
+  final d = s.display;
+  final icon = compact ? Icons.brightness_6_outlined : null;
+  if (!DisplayPrefs.backlightControl) {
+    // a monitor's backlight can't be set, so the slider only dims (right = no dimming)
+    return [
+      SliderRow(
+        label: 'Screen brightness',
+        icon: icon,
+        value: d.brightness ?? 1,
+        valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
+      ),
+    ];
+  }
+  return [
+    SliderRow(
+      label: 'Screen brightness',
+      icon: icon,
+      value: d.brightness ?? 0.6,
+      enabled: d.brightness != null,
+      valueText: d.brightness == null
+          ? 'Auto'
+          : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
+      onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v)),
+    ),
+    SwitchRow(
+      title: 'Automatic brightness',
+      value: d.brightness == null,
+      onChanged: (auto) async {
+        if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
+        // start from the current screen level, so nothing jumps until the slider moves
+        final now = await getScreenBrightness();
+        s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
+      },
+    ),
+  ];
 }
 
-/// Page turn animation and the page number flash (this device). In the reader's Reader settings and Settings >
-/// Reader.
-class PageTurnControl extends StatelessWidget {
-  const PageTurnControl({super.key});
-  @override
-  Widget build(BuildContext context) => _Live((s) => Column(mainAxisSize: MainAxisSize.min, children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: SegmentedButton<PageTurn>(
-            segments: [for (final t in PageTurn.values) ButtonSegment(value: t, label: Text(t.label))],
-            selected: {s.display.pageTurn},
-            showSelectedIcon: false,
-            onSelectionChanged: (v) => s.setDisplay(s.display.copyWith(pageTurn: v.first)),
-          ),
-        ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Show the page number after a turn'),
-          subtitle: const Text('"12 / 36" in the corner for a moment'),
-          value: s.display.pageNumber,
-          onChanged: (v) => s.setDisplay(s.display.copyWith(pageNumber: v)),
-        ),
-      ]));
+/// Night mode, and its warmth while it's on. It tints the whole app, so it's in Settings > Display as well.
+List<Widget> nightRows(AppSettings s) {
+  final d = s.display;
+  return [
+    SwitchRow(title: 'Night mode', subtitle: 'Warm colours, whole app', value: d.night,
+        onChanged: (v) => s.setDisplay(s.display.copyWith(night: v))),
+    if (d.night)
+      SliderRow(label: 'Warmth', value: d.warmth, valueText: '${(d.warmth * 100).round()}%',
+          onChanged: (v) => s.setDisplay(s.display.copyWith(warmth: v))),
+  ];
 }
 
-/// How the reader behaves on this device - Settings > Reader, under the page turn: double-tap zoom, volume keys,
-/// next book before the last page, the background, and how long the screen stays on.
-class ReaderBehaviourControls extends StatelessWidget {
-  const ReaderBehaviourControls({super.key});
+Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
+      title: 'Page turn animation',
+      choices: [for (final t in PageTurn.values) Choice(t, t.label)],
+      value: s.display.pageTurn,
+      onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),
+    );
 
-  static String screenOnLabel(int minutes) => switch (minutes) {
-        DisplayPrefs.alwaysOn => 'Always',
-        0 => "Off (the device's own timeout)",
-        _ => '$minutes minutes',
-      };
+/// Black, dark grey or white around the page: three swatches.
+Widget backgroundRow(AppSettings s) => SettingRow(
+      title: 'Background',
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        for (final b in ReaderBackground.values)
+          _Swatch(background: b, selected: s.display.background == b,
+              onTap: () => s.setDisplay(s.display.copyWith(background: b))),
+      ]),
+    );
 
-  @override
-  Widget build(BuildContext context) => _Live((s) {
-        final d = s.display;
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Double-tap to zoom'),
-          subtitle: const Text('In fit screen. Taps wait a moment for a second one - switch off for instant tap turns'),
-          value: s.display.doubleTapZoom,
-          onChanged: (v) => s.setDisplay(s.display.copyWith(doubleTapZoom: v)),
-        ),
-        if (hasVolumeKeys)
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Volume keys turn pages'),
-            subtitle: const Text('Volume down: next page, volume up: previous. With the controls showing they change '
-                'the volume as usual'),
-            value: s.display.volumeKeys,
-            onChanged: (v) => s.setDisplay(s.display.copyWith(volumeKeys: v)),
-          ),
-        const _Heading('Next book before the last page'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: SegmentedButton<MidBook>(
-            segments: [for (final m in MidBook.values) ButtonSegment(value: m, label: Text(m.label))],
-            selected: {d.midBook},
-            showSelectedIcon: false,
-            onSelectionChanged: (v) => s.setDisplay(d.copyWith(midBook: v.first)),
-          ),
-        ),
-        Text(switch (d.midBook) {
-          MidBook.ask => 'Asks whether to mark the book you leave as read',
-          MidBook.markRead => 'The book you leave is marked read',
-          MidBook.keep => 'The book you leave stays in progress, at the page you were on',
-        }, style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
-        const _Heading('Background'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: SegmentedButton<ReaderBackground>(
-            segments: [for (final b in ReaderBackground.values) ButtonSegment(value: b, label: Text(b.label))],
-            selected: {d.background},
-            showSelectedIcon: false,
-            onSelectionChanged: (v) => s.setDisplay(d.copyWith(background: v.first)),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Row(children: [
-          const Expanded(child: Text('Keep the screen on')),
-          DropdownButton<int>(
-            value: d.screenOn,
-            items: [
-              for (final m in DisplayPrefs.screenOnChoices) DropdownMenuItem(value: m, child: Text(screenOnLabel(m))),
-            ],
-            onChanged: (m) => s.setDisplay(d.copyWith(screenOn: m)),
-          ),
-        ]),
-        const Text('While a book is open. The minutes count from the last page turn or touch.',
-            style: TextStyle(color: Color(0xFF9A9A9A), fontSize: 12)),
-      ]);
-      });
-}
-
-/// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on desktop.
-/// In the reader's Reader settings and Settings > Display.
-class ScreenBrightnessControls extends StatelessWidget {
-  const ScreenBrightnessControls({super.key});
-  @override
-  Widget build(BuildContext context) => _Live((s) {
-        final d = s.display;
-        if (!DisplayPrefs.backlightControl) {
-          // desktop: a monitor's backlight can't be set, so the slider only dims (right = no dimming)
-          return _SliderRow(
-            label: 'Screen brightness',
-            value: d.brightness ?? 1,
-            valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
-            onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
-          );
-        }
-        return Column(mainAxisSize: MainAxisSize.min, children: [
-          _SliderRow(
-            label: 'Screen brightness',
-            value: d.brightness ?? 0.6,
-            enabled: d.brightness != null,
-            valueText: d.brightness == null
-                ? 'Auto'
-                : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
-            onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v)),
-          ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Automatic brightness (tablet setting)'),
-            value: d.brightness == null,
-            onChanged: (auto) async {
-              if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
-              // start from the current screen level, so nothing jumps until the slider moves
-              final now = await getScreenBrightness();
-              s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
-            },
-          ),
-        ]);
-      });
-}
-
-/// The defaults every series you haven't adjusted follows (synced through Komga): fit, reading direction and the
-/// image adjustments - Settings > Reading. The reader's "Make ... the default" buttons set the same thing.
-class ReadingDefaults extends StatelessWidget {
-  const ReadingDefaults({super.key});
-  @override
-  Widget build(BuildContext context) => _Live((s) {
-        final p = s.defaults;
-        void setP(ReaderPrefs n) => s.setDefault(n);
-        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-          const _Heading('Fit'),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: SegmentedButton<FitMode>(
-              segments: [for (final f in FitMode.values) ButtonSegment(value: f, label: Text('Fit ${f.label.toLowerCase()}'))],
-              selected: {p.fit},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) => setP(p.copyWith(fit: v.first)),
-            ),
-          ),
-          const _Heading('Reading direction'),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: SegmentedButton<ReadingDirection>(
-              segments: [
-                for (final r in ReadingDirection.values)
-                  ButtonSegment(value: r, label: Text(r == ReadingDirection.auto ? 'Auto (from Komga)' : r.label)),
-              ],
-              selected: {p.direction},
-              showSelectedIcon: false,
-              onSelectionChanged: (v) => setP(p.copyWith(direction: v.first)),
-            ),
-          ),
-          const _Heading('Pages'),
-          ..._imageRows(p, setP),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(onPressed: () => setP(p.imageReset()), child: const Text('Reset to original')),
-          ),
-        ]);
-      });
-}
-
-/// Night mode switch + warmth. It tints the whole app (library views too), so it lives in Settings as well as in
-/// the reader's Reader settings - one setting, shown in both places.
-class NightModeControls extends StatelessWidget {
-  const NightModeControls({super.key});
+class _Swatch extends StatelessWidget {
+  const _Swatch({required this.background, required this.selected, required this.onTap});
+  final ReaderBackground background;
+  final bool selected;
+  final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
-    final s = AppSettings.instance;
-    return ListenableBuilder(
-      listenable: s,
-      builder: (context, _) {
-        final d = s.display;
-        return Column(mainAxisSize: MainAxisSize.min, children: [
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Night mode (warm colours)'),
-            value: d.night,
-            onChanged: (v) => s.setDisplay(s.display.copyWith(night: v)),
+    final accent = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: background.label,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '${background.label} background',
+        child: InkResponse(
+          onTap: onTap,
+          radius: 20,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: background.colour,
+                shape: BoxShape.circle,
+                border: Border.all(color: selected ? accent : const Color(0xFF55585F), width: selected ? 3 : 1),
+              ),
+              child: selected
+                  ? Icon(Icons.check, size: 16, color: background == ReaderBackground.white ? Colors.black : Colors.white)
+                  : null,
+            ),
           ),
-          _SliderRow(
-            label: 'Warmth',
-            value: d.warmth,
-            enabled: d.night,
-            valueText: '${(d.warmth * 100).round()}%',
-            onChanged: (v) => s.setDisplay(s.display.copyWith(warmth: v)),
-          ),
-        ]);
-      },
+        ),
+      ),
     );
   }
 }
 
-class _SliderRow extends StatelessWidget {
-  const _SliderRow({required this.label, required this.value, required this.onChanged, required this.valueText,
-      this.min = 0, this.max = 1, this.enabled = true, this.divisions});
-  final String label;
-  final double value, min, max;
-  final int? divisions; // steps, or smooth
-  final String valueText;
-  final bool enabled;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      SizedBox(width: 120, child: Text(label, style: TextStyle(color: enabled ? null : const Color(0xFF6A6A6A)))),
-      Expanded(
-        child: Slider(value: value.clamp(min, max), min: min, max: max, divisions: divisions,
-            onChanged: enabled ? onChanged : null),
-      ),
-      SizedBox(width: 64, child: Text(valueText, textAlign: TextAlign.right,
-          style: const TextStyle(color: Color(0xFF9A9A9A), fontSize: 12))),
-    ]);
-  }
-}
+/// "Keep the screen on" choices, short enough for segmented buttons.
+String screenOnLabel(int minutes) => switch (minutes) {
+      DisplayPrefs.alwaysOn => 'Always',
+      0 => 'Off',
+      _ => '$minutes min',
+    };

@@ -266,6 +266,16 @@ class AppSettings extends ChangeNotifier {
     _changedReader();
   }
 
+  /// Whether a series has its own settings (else it follows the defaults).
+  bool hasOwn(String seriesId) => series.containsKey(seriesId);
+
+  /// One series back to following the defaults (Image settings ⋮ > Use the defaults). Synced.
+  void useDefaults(String seriesId) {
+    if (series.remove(seriesId) == null) return;
+    _dirtySeries.add(seriesId); // sync removes it from Komga's copy
+    _changedReader();
+  }
+
   /// Every series back to following the defaults (Settings > Reading). Synced: other devices lose them too.
   void resetAllSeries() {
     _dirtySeries.addAll(series.keys); // sync removes each from Komga's copy

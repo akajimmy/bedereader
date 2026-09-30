@@ -6,6 +6,7 @@ import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/drawer.dart';
+import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeKomga extends Komga {
@@ -16,11 +17,17 @@ class FakeKomga extends Komga {
   Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'}; // the server status check
 }
 
-/// A portrait-tablet-sized test window: the whole settings screen fits, nothing to scroll to.
-void tall(WidgetTester tester) {
-  tester.view.physicalSize = const Size(800, 5200);
+/// A tall window, wide enough for the side list of pages: a whole page fits, nothing to scroll to.
+void tall(WidgetTester tester, {double width = 1000}) {
+  tester.view.physicalSize = Size(width, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+}
+
+Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server, VoidCallback? onSignOut}) async {
+  await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: onSignOut ?? () {},
+      initialPage: page)));
+  await tester.pump();
 }
 
 void main() {
@@ -40,14 +47,54 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
-    expect(find.text('http://192.168.1.10:25600'), findsOneWidget);
+    expect(find.text('http://192.168.1.10:25600'), findsOneWidget); // opens on Server
+  });
+
+  testWidgets('wide: the pages down the side, one shown at a time, each saying where it is kept', (tester) async {
+    tall(tester);
+    await open(tester);
+    await tester.pumpAndSettle();
+    final names = ['Server', 'Reading defaults', 'Reader', 'Display', 'Library & Home', 'About'];
+    final ys = [for (final n in names) tester.getTopLeft(find.widgetWithText(ListTile, n).first).dy];
+    expect(ys, [...ys]..sort()); // in that order, down the side
+    expect(find.text('Connected as nick@test'), findsOneWidget); // Server: the status, from Info
+    expect(find.text('Kept on this device'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, 'Reading defaults'));
+    await tester.pumpAndSettle();
+    expect(find.text('Synced through Komga - every device'), findsOneWidget);
+    expect(find.text('Connected as nick@test'), findsNothing); // one page at a time
+    await tester.tap(find.widgetWithText(ListTile, 'Display'));
+    await tester.pumpAndSettle();
+    expect(find.text('Screen brightness'), findsWidgets);
+    expect(find.text('Night mode'), findsOneWidget);
+  });
+
+  testWidgets('narrow: the pages as a table of contents at the top', (tester) async {
+    tall(tester, width: 420);
+    await open(tester);
+    expect(find.byType(ChoiceChip), findsNWidgets(6)); // no Downloads here (downloads not set up in tests)
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Reader'));
+    await tester.pumpAndSettle();
+    expect(find.text('Turning pages'), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Reader')).selected, isTrue);
+    expect(tester.takeException(), isNull); // no overflow at phone width
+  });
+
+  testWidgets('a segmented choice sits beside a short label, and under a long one when the row is narrow',
+      (tester) async {
+    tall(tester, width: 700); // still the narrow layout; the test font is wider than the real one
+    await open(tester, page: SettingsPage.reader);
+    Offset label(String t) => tester.getTopLeft(find.text(t));
+    Offset button(String t) => tester.getTopLeft(find.text(t).last);
+    expect(button('Wipe').dy, lessThan(label('Page turn animation').dy + 20)); // beside
+    expect(button('30 min').dy, greaterThan(label('Keep the screen on').dy + 20)); // under
   });
 
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {
     tall(tester);
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
+    await open(tester, page: SettingsPage.library);
     Finder onDeckSwitch() => find.descendant(
-        of: find.ancestor(of: find.text('On deck'), matching: find.byType(Row)).first, matching: find.byType(Switch));
+        of: find.ancestor(of: find.text('On deck').first, matching: find.byType(Row)).first, matching: find.byType(Switch));
     await tester.tap(onDeckSwitch());
     await tester.pump();
     expect(HomeSections.instance['ondeck'], isFalse);
@@ -61,20 +108,22 @@ void main() {
     tall(tester);
     final s = AppSettings.instance;
     s.setDisplay(s.display.copyWith(night: false));
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    final night = find.widgetWithText(SwitchListTile, 'Night mode (warm colours)');
+    await open(tester, page: SettingsPage.display);
+    final night = find.widgetWithText(SwitchListTile, 'Night mode');
     await tester.tap(night);
     await tester.pump();
     expect(s.display.night, isTrue);
+    expect(find.text('Warmth'), findsOneWidget); // shown while night mode is on
     s.setDisplay(s.display.copyWith(night: false)); // e.g. switched off in the reader
     await tester.pump();
     expect(tester.widget<SwitchListTile>(night).value, isFalse);
+    expect(find.text('Warmth'), findsNothing);
   });
 
   testWidgets('sign out asks first; Cancel keeps you signed in', (tester) async {
     tall(tester);
     var signedOut = 0;
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () => signedOut++)));
+    await open(tester, onSignOut: () => signedOut++);
     await tester.tap(find.text('Sign out / change server'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
@@ -87,30 +136,14 @@ void main() {
     expect(signedOut, 1);
   });
 
-  testWidgets('one place for everything: sections in order, each saying where it is kept; server status shown',
-      (tester) async {
-    tall(tester);
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.pumpAndSettle();
-    final titles = ['SERVER & CONNECTION', 'READING DEFAULTS', 'READER', 'DISPLAY', 'LIBRARY & HOME', 'ABOUT'];
-    final ys = [for (final t in titles) tester.getTopLeft(find.text(t)).dy];
-    expect(ys, [...ys]..sort()); // in that order
-    expect(find.text('This device'), findsWidgets);
-    expect(find.text('Synced through Komga'), findsOneWidget);
-    expect(find.text('Connected as nick@test'), findsOneWidget); // status, from Info
-    expect(find.text('Screen brightness'), findsOneWidget); // brightness moved here from the side-menu panel
-    expect(find.text('Night mode (warm colours)'), findsOneWidget);
-  });
-
-  testWidgets('Reading: defaults edited here; series with their own settings can all be reset', (tester) async {
+  testWidgets('Reading defaults: edited here; series with their own settings can all be reset', (tester) async {
     tall(tester);
     final s = AppSettings.instance;
     s.setDefault(const ReaderPrefs());
     s.setSeries('S1', const ReaderPrefs(fit: FitMode.width));
     s.setSeries('S2', const ReaderPrefs(sharpen: true));
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.pump();
-    await tester.tap(find.text('Fit height').first);
+    await open(tester, page: SettingsPage.defaults);
+    await tester.tap(find.text('Height'));
     await tester.pump();
     expect(s.defaults.fit, FitMode.height);
     expect(find.text('2 series have their own settings'), findsOneWidget);
@@ -129,25 +162,24 @@ void main() {
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
     addTearDown(() => s.setDisplay(const DisplayPrefs()));
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.pump();
-    Future<void> tap(String text) async {
-      await tester.tap(find.text(text).last);
+    await open(tester, page: SettingsPage.reader);
+    Future<void> tap(Finder f) async {
+      await tester.tap(f);
       await tester.pumpAndSettle();
     }
 
-    await tap('None');
+    await tap(find.text('None'));
     expect(s.display.pageTurn, PageTurn.flip); // "None" is the old Instant flip: saved choices carry over
-    await tap('Mark read');
+    await tap(find.text('Mark read'));
     expect(s.display.midBook, MidBook.markRead);
-    await tap('White');
+    await tap(find.bySemanticsLabel('White background'));
     expect(s.display.background, ReaderBackground.white);
-    await tap("Off (the device's own timeout)"); // the dropdown, on its default
-    await tap('10 minutes');
+    await tap(find.text('10 min'));
     expect(s.display.screenOn, 10);
-    await tap('Large');
+    await tap(find.widgetWithText(ListTile, 'Library & Home'));
+    await tap(find.text('Large'));
     expect(s.display.posterSize, PosterSize.large);
-    await tap('Title only');
+    await tap(find.text('Title only'));
     expect(s.display.posterTitleOnly, isTrue);
   });
 
@@ -160,8 +192,7 @@ void main() {
     await HomeSections.instance.set('ondeck', false);
     final p = await SharedPreferences.getInstance();
     await p.setString('view.library.all', '{"hideRead":true}');
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.pump();
+    await open(tester, page: SettingsPage.about);
     await tester.tap(find.widgetWithText(TextButton, 'Reset'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
@@ -193,12 +224,18 @@ void main() {
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0); // not a choice: the default
   });
 
+  testWidgets('settings groups: rows are separated by hairlines, not spacers', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsGroup(title: 'G', children: [
+      NoteRow('one'), NoteRow('two'), NoteRow('three'),
+    ]))));
+    expect(find.byType(Divider), findsNWidgets(2));
+  });
+
   testWidgets('full screen: an X at the right of the top bar leaves it; none otherwise', (tester) async {
     tall(tester);
     fullscreen.value = true;
     addTearDown(() => fullscreen.value = false);
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {})));
-    await tester.pump();
+    await open(tester);
     expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
     fullscreen.value = false;
     await tester.pump();
