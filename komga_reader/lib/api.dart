@@ -94,6 +94,24 @@ class Komga {
   Future<Map<String, dynamic>?> me() async => await _get('/api/v2/users/me') as Map<String, dynamic>?;
   Future<List<dynamic>> libraries() async => (await _get('/api/v1/libraries')) as List<dynamic>;
 
+  Future<List<dynamic>>? _librariesOnce;
+
+  /// A library's name, for breadcrumbs ("Ongoing › Absolute Flash"). The list is fetched once per connection; null
+  /// if it can't be had (tried again next time).
+  Future<String?> libraryName(String? id) async {
+    if (id == null) return null;
+    try {
+      final all = await (_librariesOnce ??= libraries());
+      for (final l in all) {
+        if (l['id'] == id) return l['name'] as String?;
+      }
+      return null;
+    } catch (_) {
+      _librariesOnce = null;
+      return null;
+    }
+  }
+
   // ---- browsing (Komga pages: {content, totalElements, last})
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {

@@ -21,7 +21,41 @@ class FakeKomga extends Komga {
 
 const series = {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 3, 'metadata': {'title': 'Silver Surfer'}};
 
+/// [FakeKomga] with libraries, for the breadcrumb.
+class LibrariesKomga extends FakeKomga {
+  int libraryCalls = 0;
+  @override
+  Future<List<dynamic>> libraries() async {
+    libraryCalls++;
+    return [{'id': 'L1', 'name': 'Archive'}, {'id': 'L2', 'name': 'Ongoing'}];
+  }
+}
+
 void main() {
+  testWidgets('breadcrumb: the series title bar shows its library first - "Ongoing › Absolute Flash"', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = LibrariesKomga();
+    const flash = {'id': 'S2', 'libraryId': 'L2', 'name': 'Absolute Flash', 'metadata': {'title': 'Absolute Flash'}};
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: api, series: flash)));
+    await tester.pump();
+    await tester.pump();
+    final bar = find.byType(AppBar);
+    expect(find.descendant(of: bar, matching: find.text('Ongoing')), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Absolute Flash')), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: flash))); // another visit
+    await tester.pump();
+    expect(api.libraryCalls, 1); // the library names are fetched once
+  });
+
+  testWidgets('breadcrumb: a series whose library is unknown just shows its title', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: FakeKomga(), series: series)));
+    await tester.pump();
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Silver Surfer')), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.textContaining('›')), findsNothing);
+  });
+
   Future<FakeKomga> open(WidgetTester tester, {Pin? pin}) async {
     final api = FakeKomga();
     await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: series, pin: pin)));
