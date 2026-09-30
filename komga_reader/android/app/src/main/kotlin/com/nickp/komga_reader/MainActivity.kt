@@ -1,6 +1,8 @@
 package com.nickp.komga_reader
 
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -102,6 +104,23 @@ class MainActivity : FlutterActivity() {
                     val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
                     val charging = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && bm.isCharging
                     result.success(if (level in 0..100) mapOf("level" to level, "charging" to charging) else null)
+                }
+                // What the app is connected through, for Downloads' "Wi-Fi only": "wifi" (Wi-Fi or a cable),
+                // "cellular", "none", or "other" (VPN over something unknown, Bluetooth...).
+                "network" -> {
+                    val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+                    val caps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        cm.getNetworkCapabilities(cm.activeNetwork)
+                    } else {
+                        null
+                    }
+                    result.success(when {
+                        caps == null -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) "none" else "wifi"
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "wifi"
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
+                        else -> "other"
+                    })
                 }
                 else -> result.notImplemented()
             }

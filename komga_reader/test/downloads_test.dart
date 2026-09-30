@@ -214,6 +214,46 @@ void main() {
     expect(d.store!.progress['B2']!['synced'], false);
   });
 
+  test('Wi-Fi only: on mobile data the queue waits and says so; back on Wi-Fi it carries on by itself', () async {
+    var wifi = false;
+    Downloads.isOnWifi = () async => wifi;
+    Downloads.wifiRecheck = const Duration(milliseconds: 30);
+    addTearDown(() async {
+      Downloads.isOnWifi = () async => true;
+      Downloads.wifiRecheck = const Duration(seconds: 30);
+      await d.setWifiOnly(false);
+    });
+    final api = FakeKomga();
+    await d.attach(api, root: dir);
+    await d.setWifiOnly(true);
+    await d.add([book('B1', 1)]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(api.pageRequests, 0, reason: 'nothing fetched on mobile data');
+    expect(d.waitingForWifi, isTrue);
+    expect(d.jobFor('B1')!.state, JobState.queued);
+
+    wifi = true; // back on Wi-Fi: the next look carries on
+    await settle(d);
+    for (var i = 0; i < 100 && !d.isDownloaded('B1'); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(d.isDownloaded('B1'), isTrue);
+    expect(d.waitingForWifi, isFalse);
+
+    await d.attach(FakeKomga(), root: dir); // "next launch": the choice is kept
+    expect(d.wifiOnly, isTrue);
+  });
+
+  test('Wi-Fi only off (the default): mobile data downloads as before', () async {
+    Downloads.isOnWifi = () async => false;
+    addTearDown(() => Downloads.isOnWifi = () async => true);
+    await d.attach(FakeKomga(), root: dir);
+    expect(d.wifiOnly, isFalse);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+  });
+
   test('the queue survives a restart, and pages already on disk are not fetched again', () async {
     // pause exactly after page 1 (deterministic, whatever the machine's speed)
     final api = FakeKomga()..onPage = (n) { if (n == 1) d.pauseAll(); };

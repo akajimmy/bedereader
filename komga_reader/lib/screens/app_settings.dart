@@ -444,6 +444,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ),
         ),
         const NoteRow("A book that won't fit stops in the queue, and carries on when space is available."),
+        if (canRotate) // Android: a PC has no mobile data to save (the same test: a phone or tablet)
+          SwitchRow(
+            title: 'Download on Wi-Fi only',
+            subtitle: d.waitingForWifi
+                ? 'Waiting for Wi-Fi - the queue carries on when you are back on it'
+                : 'On mobile data the queue waits, and carries on on Wi-Fi',
+            value: d.wifiOnly,
+            onChanged: d.setWifiOnly,
+          ),
         SegmentRow<DeleteRead>(
           title: "Delete a downloaded book once it's read",
           subtitle: switch (d.deleteRead) {

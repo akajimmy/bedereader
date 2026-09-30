@@ -62,6 +62,47 @@ class Downloads extends ChangeNotifier {
   }
 
   bool _hold = false;
+
+  // ---- Wi-Fi only (Settings > Downloads, this device; user, 2026-09-30) -----------------------------------------------
+  static const _wifiOnlyKey = 'downloads.wifiOnly';
+  bool wifiOnly = false;
+
+  /// On mobile data with Wi-Fi only on: the queue waits (a book part way through keeps its pages) and looks again
+  /// every [wifiRecheck].
+  bool waitingForWifi = false;
+  static Future<bool> Function() isOnWifi = onWifi; // swapped in tests
+  static Duration wifiRecheck = const Duration(seconds: 30);
+  Timer? _wifiTimer;
+
+  Future<void> setWifiOnly(bool v) async {
+    wifiOnly = v;
+    if (!v) {
+      waitingForWifi = false;
+      _wifiTimer?.cancel();
+    }
+    notifyListeners();
+    await (await SharedPreferences.getInstance()).setBool(_wifiOnlyKey, v);
+    _pump();
+  }
+
+  /// May the worker fetch now? Off Wi-Fi with Wi-Fi only on: no - it says so and looks again in a while.
+  Future<bool> _networkOk() async {
+    if (!wifiOnly || await isOnWifi()) {
+      if (waitingForWifi) {
+        waitingForWifi = false;
+        notifyListeners();
+      }
+      return true;
+    }
+    if (!waitingForWifi) {
+      waitingForWifi = true;
+      notifyListeners();
+    }
+    _wifiTimer?.cancel();
+    _wifiTimer = Timer(wifiRecheck, _pump);
+    return false;
+  }
+
   int? capBytes = defaultCap; // null = no limit
   bool _running = false;
   int _session = 0; // bumped by attach(); a worker from an older session stops instead of blocking the new one
@@ -118,6 +159,8 @@ class Downloads extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
+    wifiOnly = p.getBool(_wifiOnlyKey) ?? false;
+    waitingForWifi = false;
     final saved = p.getString(_deleteReadKey);
     deleteRead = saved != null
         ? DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never)
@@ -345,6 +388,7 @@ class Downloads extends ChangeNotifier {
           }
         }
         if (next == null) break;
+        if (!await _networkOk()) break; // Wi-Fi only, on mobile data: wait for Wi-Fi
         await _run(next);
       }
     } finally {
@@ -450,8 +494,13 @@ class Downloads extends ChangeNotifier {
 
       // pages - those already on disk (an interrupted earlier try) are skipped
       var bytes = 0;
-      for (final p in plan) {
+      var offWifi = false; // Wi-Fi went (checked every few pages): stop here, carry on from here on Wi-Fi
+      for (final (i, p) in plan.indexed) {
         if (job._cancel || paused || _hold) break;
+        if (i > 0 && i % 5 == 0 && !await _networkOk()) {
+          offWifi = true;
+          break;
+        }
         final f = s.file('${job.bookId}/${p['file']}');
         if (await f.exists() && await f.length() > 0) {
           bytes += await f.length();
@@ -470,8 +519,9 @@ class Downloads extends ChangeNotifier {
       if (job._cancel) {
         queue.remove(job);
         await _deleteFiles(job.bookId);
-      } else if (paused || _hold) {
-        job.state = _hold ? JobState.queued : JobState.paused; // held: carries on when back online
+      } else if (paused || _hold || offWifi) {
+        // held (offline) or off Wi-Fi: back in the queue, carries on later; paused by hand: paused
+        job.state = paused && !_hold && !offWifi ? JobState.paused : JobState.queued;
         entry['bytes'] = bytes;
         await s.put(job.bookId, entry);
       } else {

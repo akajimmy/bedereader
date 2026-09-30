@@ -85,7 +85,10 @@ class DownloadsScreen extends StatelessWidget {
                       ],
                     ]),
                   ),
-                  _Heading(queue.isEmpty ? 'Queue · empty' : 'Queue · ${queue.length}${d.paused ? ' · paused' : ''}'),
+                  _Heading(queue.isEmpty
+                      ? 'Queue · empty'
+                      : 'Queue · ${queue.length}${d.paused ? ' · paused' : ''}'
+                          '${d.waitingForWifi && !d.paused ? ' · waiting for Wi-Fi' : ''}'),
                   for (final j in queue) _JobRow(job: j),
                   if (d.recentlyDone.isNotEmpty) ...[
                     const _Heading('Finished this session'),
