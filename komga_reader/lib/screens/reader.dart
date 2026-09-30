@@ -34,10 +34,14 @@ import 'actions.dart';
 /// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
 /// goes straight to Komga (no local copy).
 class ReaderScreen extends StatefulWidget {
-  const ReaderScreen({super.key, required this.api, required this.book, this.readListId});
+  const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false});
   final Komga api;
   final dynamic book;
   final String? readListId; // continue within this read list at the end of the book
+
+  /// Opened from a series or read list with Hide read on: the next book is the next one not read yet (user,
+  /// 2026-09-30) - for the whole visit, books moved on to included. Elsewhere it's simply the next in order.
+  final bool skipRead;
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
@@ -547,11 +551,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       } else {
         _saveNow();
       }
-      final next = await api.nextBook(_book['id'], readListId: widget.readListId);
+      final next = await _nextFrom(_book['id'] as String);
       if (!mounted) return;
       if (next == null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(widget.readListId != null ? 'End of the read list' : 'End of the series')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_endText)));
         Navigator.of(context).pop();
       } else {
         _open(next);
@@ -916,7 +919,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final id = _book['id'] as String;
     if (_upNextFor != id || _upNextFuture == null) {
       _upNextFor = id;
-      _upNextFuture = api.nextBook(id, readListId: widget.readListId).then((next) {
+      _upNextFuture = _nextFrom(id).then((next) {
         if (next != null) _cover(next['id'] as String).ignore(); // fetched ahead, like the lookup itself
         return next;
       });
@@ -941,6 +944,25 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   String? _upNextFor;
   Future<Map<String, dynamic>?>? _upNextFuture;
 
+  /// The book after [id] in the read list it was opened from, else the series - or, opened from a view with read
+  /// books hidden ([ReaderScreen.skipRead]), the next one after it that isn't read yet.
+  Future<Map<String, dynamic>?> _nextFrom(String id) async {
+    var next = await api.nextBook(id, readListId: widget.readListId);
+    for (var hops = 0; widget.skipRead && next != null && _isRead(next) && hops < 500; hops++) {
+      next = await api.nextBook(next['id'] as String, readListId: widget.readListId);
+    }
+    return next;
+  }
+
+  static bool _isRead(Map<String, dynamic> book) => book['readProgress']?['completed'] == true;
+
+  String get _endText => switch ((widget.readListId != null, widget.skipRead)) {
+        (true, true) => 'No unread books left in the read list',
+        (true, false) => 'End of the read list',
+        (false, true) => 'No unread books left in the series',
+        (false, false) => 'End of the series',
+      };
+
   /// After the last page: what's next - its poster and title - or that this was the last one.
   Widget _endCard() {
     final where = widget.readListId != null ? 'this read list' : 'the series';
@@ -964,8 +986,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           body = [Text('$arrow : next book in $where', style: dim)]; // couldn't look it up: the turn still tries
         } else if (next == null) {
           body = [
-            Text(widget.readListId != null ? 'End of the read list' : 'End of the series',
-                style: TextStyle(color: _ink(0.7), fontSize: 16)),
+            Text(_endText, style: TextStyle(color: _ink(0.7), fontSize: 16)),
             const SizedBox(height: 12),
             Text('$arrow : close the book', style: dim),
           ];
@@ -974,7 +995,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           final title = (next['metadata']?['title'] ?? next['name']) as String?;
           final heading = '${next['seriesTitle'] ?? ''} #$number'.trim();
           body = [
-            Text('Up next in $where', style: dim),
+            Text(widget.skipRead ? 'Next unread in $where' : 'Up next in $where', style: dim),
             const SizedBox(height: 12),
             LayoutBuilder(builder: (context, c) {
               final h = (MediaQuery.sizeOf(context).height * 0.42).clamp(160.0, 520.0);

@@ -5,6 +5,11 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Changed**
+- **Next book follows Hide read.** Open a book from a series, read list or library with Hide read on, and the next book
+  is the next one you haven't read, skipping books already read ("Next unread in the series" at the end of the
+  book). Opened with Hide read off, or from Home or search, the next book is simply the next in order, as before.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
