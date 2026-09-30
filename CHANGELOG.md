@@ -7,8 +7,8 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## 0.1.1 - offline reading and better pages
 
-Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
-Builds 21-26 still showed version 0.1.0.
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 39 - 2026-09-29
 
