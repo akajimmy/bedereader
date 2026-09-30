@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../hidden_libraries.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../screens/app_settings.dart';
@@ -26,7 +27,17 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   void initState() {
     super.initState();
-    widget.api.libraries().then((l) { if (mounted) setState(() => _libraries = l); }).catchError((_) {});
+    HiddenLibraries.instance.addListener(_loadLibraries); // shown / hidden in Settings
+    _loadLibraries();
+  }
+
+  void _loadLibraries() =>
+      widget.api.visibleLibraries().then((l) { if (mounted) setState(() => _libraries = l); }).catchError((_) {});
+
+  @override
+  void dispose() {
+    HiddenLibraries.instance.removeListener(_loadLibraries);
+    super.dispose();
   }
 
   /// Close the slide-out menu (nothing to close when docked).

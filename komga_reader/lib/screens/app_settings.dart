@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../hidden_libraries.dart';
 import '../home_sections.dart';
 import '../ondeck_hidden.dart';
 import '../offline/connection.dart';
@@ -316,6 +317,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ),
           ]);
         }),
+        _librariesShown(),
         const SettingsGroup(title: 'Home sections', children: [
           NoteRow('Switch on or off; reorder with the arrows or the handle'),
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
@@ -336,6 +338,35 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           },
         ),
       ];
+
+  late final Future<List<dynamic>> _allLibraries = widget.api.libraries();
+
+  /// A switch per library: shown on this device or not. The last one shown can't be switched off.
+  Widget _librariesShown() => FutureBuilder<List<dynamic>>(
+        future: _allLibraries,
+        builder: (context, snap) {
+          final libs = snap.data;
+          if (libs == null || libs.isEmpty) return const SizedBox.shrink(); // can't list them (offline, say)
+          return ListenableBuilder(
+            listenable: HiddenLibraries.instance,
+            builder: (context, _) {
+              final h = HiddenLibraries.instance;
+              final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
+              return SettingsGroup(title: 'Libraries on this device', children: [
+                const NoteRow('Hidden ones are left out everywhere in the app on this device'),
+                for (final l in libs)
+                  SwitchRow(
+                    title: l['name'] as String? ?? '',
+                    value: !h.isHidden(l['id'] as String?),
+                    onChanged: !h.isHidden(l['id'] as String?) && shown <= 1
+                        ? null // the last one shown stays
+                        : (v) => h.setHidden(l['id'] as String, !v),
+                  ),
+              ]);
+            },
+          );
+        },
+      );
 
   // ---- Downloads -------------------------------------------------------------------------------------------------
   Widget _downloads(BuildContext context) {
@@ -424,7 +455,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the Reader page, screen brightness, night mode and its schedule, text '
-            'size and accent colour, posters, Home '
+            'size and accent colour, posters, the libraries shown, Home '
             "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
             'settings, pins, On deck), your sign-in and your downloaded books.'),
@@ -437,6 +468,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     if (ok != true) return;
     AppSettings.instance.setDisplay(const DisplayPrefs());
     await HomeSections.instance.reset();
+    await HiddenLibraries.instance.clear(); // every library shown again
     await ViewPrefs.clearAll();
     if (Connection.instance.available) await Connection.instance.setAutoSwitch(false);
     if (Downloads.instance.ready) {
