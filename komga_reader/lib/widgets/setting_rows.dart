@@ -186,7 +186,8 @@ class Choice<T> {
 /// A choice between a few options, as compact segmented buttons in the row.
 class SegmentRow<T> extends StatelessWidget {
   const SegmentRow({super.key, required this.title, this.subtitle, required this.choices, required this.value,
-      required this.onChanged});
+      required this.onChanged, this.enabled = true});
+  final bool enabled; // off: greyed out, showing the value (a series following the defaults)
   final String title;
   final String? subtitle;
   final List<Choice<T>> choices;
@@ -220,6 +221,7 @@ class SegmentRow<T> extends StatelessWidget {
 
   Widget _row(BuildContext context, double w) => SettingRow(
         title: title,
+        enabled: enabled,
         subtitle: subtitle,
         stackWhenNarrow: true,
         trailingWidth: w,
@@ -242,7 +244,7 @@ class SegmentRow<T> extends StatelessWidget {
               ),
           ],
           selected: {value},
-          onSelectionChanged: (v) => onChanged(v.first),
+          onSelectionChanged: enabled ? (v) => onChanged(v.first) : null,
         )),
       );
 }

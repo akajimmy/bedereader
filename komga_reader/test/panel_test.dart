@@ -29,9 +29,10 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final done = tester.getRect(find.text('Done'));
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
-    expect(find.text('Planet Comics · this series'), findsOneWidget);
+    expect(find.text('Settings for Series: Planet Comics'), findsOneWidget);
     expect(find.text('This device'), findsOneWidget);
-    expect(find.text('Follows the defaults'), findsOneWidget);
+    expect(find.text('Override the defaults'), findsOneWidget);
+    expect(find.text('Using the defaults'), findsOneWidget);
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
     expect(find.text('Page number after a turn'), findsOneWidget); // mid-book toggles, here too
@@ -46,20 +47,41 @@ void main() {
     expect(tester.takeException(), isNull); // nothing overflows at phone width
   });
 
-  testWidgets('a change gives the series its own settings; Use the defaults goes back to them', (tester) async {
+  testWidgets('Image: off, the controls are greyed out showing the defaults; on, they can be set; off again follows '
+      'the defaults', (tester) async {
+    final s = AppSettings.instance;
+    s.setDefault(const ReaderPrefs(sharpen: true)); // the defaults have Enhance on
+    addTearDown(() => s.setDefault(const ReaderPrefs()));
     await openPanel(tester, const Size(1280, 800), image: true);
     expect(find.text('Settings for Series: Planet Comics'), findsOneWidget); // the heading (user, 2026-09-30)
-    OutlinedButton useDefaults() => tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Use the defaults'));
-    expect(useDefaults().onPressed, isNull, reason: 'already follows them');
+    SwitchListTile row(String t) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, t));
+    expect(row('Override the defaults').value, isFalse);
+    expect(row('Enhance').value, isTrue, reason: "shows the defaults' value");
+    expect(row('Enhance').onChanged, isNull, reason: 'greyed out');
+    expect(find.text('Reset to original'), findsNothing); // only with the override on
+
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
+    await tester.pumpAndSettle();
+    expect(s.ownsImage('S1'), isTrue);
+    expect(s.ownsLayout('S1'), isFalse, reason: 'the layout part is separate');
+    expect(row('Enhance').value, isTrue, reason: 'starts from the defaults: nothing jumps');
     await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance'));
     await tester.pumpAndSettle();
-    expect(AppSettings.instance.prefsFor('S1').sharpen, isTrue);
-    expect(useDefaults().onPressed, isNotNull, reason: 'own settings now'); // a button, not in a menu
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Use the defaults'));
+    expect(s.prefsFor('S1').sharpen, isFalse); // the series' own now
+
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
     await tester.pumpAndSettle();
-    expect(AppSettings.instance.hasOwn('S1'), isFalse);
-    expect(useDefaults().onPressed, isNull);
-    await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
+    expect(s.hasOwn('S1'), isFalse, reason: 'neither part overridden: the series follows the defaults entirely');
+    expect(s.prefsFor('S1').sharpen, isTrue);
+    await tester.pump(const Duration(seconds: 5)); // the settings sync timer
+  });
+
+  test('series settings saved before the toggles override both parts; the flags survive the saved form', () {
+    expect(ReaderPrefs.fromJson({'fit': 'width'}).ownLayout, isTrue);
+    expect(ReaderPrefs.fromJson({'fit': 'width'}).ownImage, isTrue);
+    final p = ReaderPrefs.fromJson(const ReaderPrefs(ownLayout: false).toJson());
+    expect([p.ownLayout, p.ownImage], [false, true]);
+    expect(const ReaderPrefs().toJson().containsKey('ol'), isFalse); // unchanged form for everything saved before
   });
 
   testWidgets('narrow sheet: sliders go full width under their label and value; the remote can move off them',

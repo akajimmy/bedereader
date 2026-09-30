@@ -8,18 +8,19 @@ import 'setting_rows.dart';
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Reader: fit and reading direction (this series), then the screen: brightness, night mode, background, page
-///   turn animation (this device).
-/// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); ⋮ has Reset to original, Make these
-///   the default and Use the defaults.
+/// * Reader: fit and reading direction (this series), then this device: brightness, night mode, background,
+///   rotation, page turn animation and the rest.
+/// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
 ///
-/// A series you have never adjusted follows the defaults; the first change you make in a series gives it its own
-/// settings (starting from the defaults), which the defaults no longer affect - until Use the defaults.
+/// Each panel's series group starts with "Override the defaults" (user, 2026-09-30): off, the series follows the
+/// defaults for that part (page layout, or image) and its controls are greyed out showing the default values; on,
+/// they're the series' own - starting from the defaults, so nothing jumps. The two parts are separate.
 ///
 /// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
-Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection}) =>
+Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
+        FitMode? bookFit}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
-        side: side));
+        bookFit: bookFit, side: side));
 
 Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
     _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side));
@@ -95,15 +96,15 @@ class _Panel extends StatelessWidget {
   }
 }
 
-/// "Own settings" / "Follows the defaults", next to a series' name.
-Widget _seriesChip(AppSettings s, String seriesId) =>
-    s.hasOwn(seriesId) ? const StatusChip('Own settings', strong: true) : const StatusChip('Follows the defaults');
+/// "Settings for Series: *name*" - both panels' series group (user, 2026-09-30).
+String _seriesHeading(String? title) => title == null ? 'Settings for this series' : 'Settings for Series: $title';
 
 class _ReaderPanel extends StatelessWidget {
-  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, required this.side});
+  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, required this.side});
   final String? seriesId;
   final String? seriesTitle;
   final String? komgaDirection; // the series' reading direction in Komga, for Auto
+  final FitMode? bookFit; // a fit for this book only, from the top bar (while the series follows the defaults)
   final bool side;
 
   @override
@@ -111,20 +112,34 @@ class _ReaderPanel extends StatelessWidget {
     return _Panel(title: 'Reader', side: side, groups: (s) {
       final id = seriesId;
       final p = s.prefsFor(id);
+      final own = id != null && s.ownsLayout(id);
       return [
         if (id != null)
-          SettingsGroup(title: '${seriesTitle ?? 'This series'} · this series', trailing: _seriesChip(s, id), children: [
-            ...fitDirectionRows(p, (n) => s.setSeries(id, n), icons: true, komgaDirection: komgaDirection),
-            ActionRow(
-              title: 'Use this fit and direction for new series',
-              button: TextButton(
-                onPressed: () {
-                  s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction));
-                  _toast(context, "Series you haven't adjusted will open like this one");
-                },
-                child: const Text('Make default'),
-              ),
+          SettingsGroup(title: _seriesHeading(seriesTitle), children: [
+            // on: this series' own fit and direction; off: the defaults', greyed out (user, 2026-09-30)
+            SwitchRow(
+              title: 'Override the defaults',
+              subtitle: own
+                  ? 'Fit and direction for this series'
+                  : bookFit != null
+                      ? 'Using the defaults. This book: fit ${bookFit!.label.toLowerCase()}, for now'
+                      : 'Using the defaults',
+              value: own,
+              onChanged: (v) => s.setOverride(id, layout: v),
             ),
+            ...fitDirectionRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
+                enabled: own),
+            if (own)
+              ActionRow(
+                title: 'Use this fit and direction for new series',
+                button: TextButton(
+                  onPressed: () {
+                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction));
+                    _toast(context, "Series you haven't adjusted will open like this one");
+                  },
+                  child: const Text('Make default'),
+                ),
+              ),
           ]),
         // this device, the same settings as in Settings (Display and Reader), for changing mid-book
         SettingsGroup(title: 'This device', children: [
@@ -155,39 +170,37 @@ class _ImagePanel extends StatelessWidget {
       side: side,
       groups: (s) {
         final p = s.prefsFor(seriesId);
+        final own = s.ownsImage(seriesId);
         return [
-          // "Settings for Series: <name>" (user, 2026-09-30) - whether it follows the defaults shows in the buttons
-          // below (Use the defaults is greyed out when it does)
-          SettingsGroup(title: seriesTitle == null ? 'Settings for this series' : 'Settings for Series: $seriesTitle',
-              children: imageRows(p, (n) => s.setSeries(seriesId, n))),
-          // the actions as buttons (user, 2026-09-30: not a ⋮ menu)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(spacing: 8, runSpacing: 8, children: [
-              OutlinedButton(
-                // the untouched scan for this series (fit and direction are left alone)
-                onPressed: () => s.setSeries(seriesId, p.imageReset()),
-                child: const Text('Reset to original'),
-              ),
-              OutlinedButton(
-                onPressed: () {
-                  s.setDefault(s.defaults.copyWith(brightness: p.brightness, contrast: p.contrast, sharpen: p.sharpen,
-                      autoLevels: p.autoLevels, crop: p.crop));
-                  _toast(context, "Series you haven't adjusted will use these image settings");
-                },
-                child: const Text('Make default'),
-              ),
-              OutlinedButton(
-                onPressed: s.hasOwn(seriesId)
-                    ? () {
-                        s.useDefaults(seriesId);
-                        _toast(context, 'This series follows the defaults again');
-                      }
-                    : null, // already does
-                child: const Text('Use the defaults'),
-              ),
-            ]),
-          ),
+          SettingsGroup(title: _seriesHeading(seriesTitle), children: [
+            // on: this series' own image settings; off: the defaults', greyed out (user, 2026-09-30)
+            SwitchRow(
+              title: 'Override the defaults',
+              subtitle: own ? 'Image settings for this series' : 'Using the defaults',
+              value: own,
+              onChanged: (v) => s.setOverride(seriesId, image: v),
+            ),
+            ...imageRows(p, (n) => s.setSeriesImage(seriesId, n), enabled: own),
+          ]),
+          // the actions as buttons (user, 2026-09-30: not a ⋮ menu) - only with the override on
+          if (own)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Wrap(spacing: 8, runSpacing: 8, children: [
+                OutlinedButton(
+                  // the untouched scan for this series (fit and direction are left alone)
+                  onPressed: () => s.setSeriesImage(seriesId, p.imageReset()),
+                  child: const Text('Reset to original'),
+                ),
+                OutlinedButton(
+                  onPressed: () {
+                    s.setDefault(s.defaults.withImageOf(p));
+                    _toast(context, "Series you haven't adjusted will use these image settings");
+                  },
+                  child: const Text('Make default'),
+                ),
+              ]),
+            ),
         ];
       },
     );
@@ -216,7 +229,7 @@ Widget fitIcon(FitMode f, {double size = 20, Color? color}) => switch (f) {
 /// Fit and reading direction for [p] (a series, or the defaults). [icons]: both as icons (the reader's narrow
 /// sheet).
 List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
-    String? komgaDirection}) {
+    String? komgaDirection, bool enabled = true}) {
   final komga = switch (komgaDirection) {
     'RIGHT_TO_LEFT' => 'right to left',
     'VERTICAL' => 'vertical (read left to right)',
@@ -234,6 +247,7 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
       ],
       value: p.fit,
       onChanged: (f) => setP(p.copyWith(fit: f)),
+      enabled: enabled,
     ),
     SegmentRow<ReadingDirection>(
       title: 'Direction',
@@ -245,21 +259,22 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
       ],
       value: p.direction,
       onChanged: (d) => setP(p.copyWith(direction: d)),
+      enabled: enabled,
     ),
   ];
 }
 
 /// Enhance and Enhance colours first (the ones actually used), then crop, brightness and contrast.
-List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
+List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true}) => [
       SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
-          value: p.sharpen, onChanged: (v) => setP(p.copyWith(sharpen: v))),
+          value: p.sharpen, onChanged: enabled ? (v) => setP(p.copyWith(sharpen: v)) : null),
       SwitchRow(title: 'Enhance colours', subtitle: 'Whiter paper, deeper ink',
-          value: p.autoLevels, onChanged: (v) => setP(p.copyWith(autoLevels: v))),
-      SliderRow(label: 'Crop edges', value: p.crop, min: 0, max: ReaderPrefs.maxCrop, divisions: 10, // 1% steps
+          value: p.autoLevels, onChanged: enabled ? (v) => setP(p.copyWith(autoLevels: v)) : null),
+      SliderRow(label: 'Crop edges', enabled: enabled, value: p.crop, min: 0, max: ReaderPrefs.maxCrop, divisions: 10, // 1% steps
           valueText: p.crop == 0 ? 'Off' : '${(p.crop * 100).round()}%', onChanged: (v) => setP(p.copyWith(crop: v))),
-      SliderRow(label: 'Brightness', value: p.brightness, min: -0.3, max: 0.3, divisions: 40, // steps of 5 (-100..+100)
+      SliderRow(label: 'Brightness', enabled: enabled, value: p.brightness, min: -0.3, max: 0.3, divisions: 40, // steps of 5 (-100..+100)
           valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
-      SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5, divisions: 40, // steps of 5
+      SliderRow(label: 'Contrast', enabled: enabled, value: p.contrast, min: -0.5, max: 0.5, divisions: 40, // steps of 5
           valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
     ];
 
