@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
               const SizedBox(height: 24),
               TextField(controller: _server, keyboardType: TextInputType.url, autocorrect: false,
-                  enableSuggestions: false, // no predictive text: it adds spaces after "10.0.0.23:"
+                  enableSuggestions: false, // no predictive text: it adds spaces after "192.168.1.10:"
                   decoration: const InputDecoration(labelText: 'Server', hintText: 'http://192.168.1.10:25600')),
               const SizedBox(height: 12),
               TextField(controller: _key, obscureText: true, decoration: const InputDecoration(labelText: 'API key'),

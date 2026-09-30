@@ -12,16 +12,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Errors in plain words (user, 2026-09-29): every message from the agreed catalogue, and never the raw error text.
 void main() {
-  const home = 'http://10.0.0.23:25600';
+  const home = 'http://192.168.1.10:25600';
   String message(Object e, {bool signIn = false, String thing = 'item'}) =>
       explain(e, signIn: signIn, thing: thing).message;
 
   group('the catalogue, word for word', () {
     test('no answer', () {
       expect(message(KomgaUnreachable(home)),
-          "Can't reach Komga at 10.0.0.23:25600. Check you're on your home network and the server is running.");
+          "Can't reach Komga at 192.168.1.10:25600. Check you're on your home network and the server is running.");
       expect(message(KomgaUnreachable(home), signIn: true),
-          "Can't reach Komga at 10.0.0.23:25600. Check the address and port, and that the server is running.");
+          "Can't reach Komga at 192.168.1.10:25600. Check the address and port, and that the server is running.");
     });
 
     test('the API key', () {
@@ -43,8 +43,8 @@ void main() {
     });
 
     test('something else answered; https not trusted; not an address', () {
-      expect(message(KomgaNotKomga('http://10.0.0.23:8080')),
-          "Something answered at 10.0.0.23:8080, but it isn't Komga. Check the port; Komga's is usually 25600.");
+      expect(message(KomgaNotKomga('http://192.168.1.10:8080')),
+          "Something answered at 192.168.1.10:8080, but it isn't Komga. Check the port; Komga's is usually 25600.");
       expect(message(KomgaCertificate('https://komga.example.org')),
           "Couldn't make a secure connection to komga.example.org: this device doesn't trust the server's "
           'certificate. Use http:// at home, or a certificate from a trusted provider.');
@@ -78,7 +78,7 @@ void main() {
     });
 
     test('addresses are shown without http://', () {
-      expect(displayAddress('http://10.0.0.23:25600/'), '10.0.0.23:25600');
+      expect(displayAddress('http://192.168.1.10:25600/'), '192.168.1.10:25600');
       expect(displayAddress('https://komga.example.org'), 'komga.example.org');
     });
   });

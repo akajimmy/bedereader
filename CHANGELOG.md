@@ -10,7 +10,7 @@ About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build n
   Nothing to do: settings, downloads, reading progress and the Android install carry over. On Windows the program
   is now `BeDeReader.exe`, and the files in each release are named `BeDeReader-...`.
 - Errors are in plain words everywhere - what happened and what to do - instead of the raw error text: "Can't
-  reach Komga at 10.0.0.23:25600. Check you're on your home network and the server is running." A failed action
+  reach Komga at 192.168.1.10:25600. Check you're on your home network and the server is running." A failed action
   names itself ("Couldn't mark "Saga #3" as read: can't reach Komga."), and each message has a **Details** link
   with the technical text (Copy). The last 50 errors are kept in **Settings > About > Error log**.
 - If Komga stops accepting the API key (deleted in Komga, say), the app says so and offers **Use downloaded

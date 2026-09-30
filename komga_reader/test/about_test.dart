@@ -8,7 +8,7 @@ import 'package:komga_reader/widgets/server_status.dart';
 
 /// me() answers with whatever [next] says: 'ok', 'refused' or 'down'.
 class FakeKomga extends Komga {
-  FakeKomga() : super('http://10.0.0.23:25600', 'k');
+  FakeKomga() : super('http://192.168.1.10:25600', 'k');
   String next = 'ok';
   int calls = 0;
   @override
@@ -39,7 +39,7 @@ void main() {
     expect(find.text('Third-party software'), findsOneWidget);
     expect(find.text('komga.org'), findsOneWidget);
     // the server's address and status are in Settings > Server & connection now
-    expect(find.text('http://10.0.0.23:25600'), findsNothing);
+    expect(find.text('http://192.168.1.10:25600'), findsNothing);
     expect(find.byType(ServerStatus), findsNothing);
     expect(api.calls, 0);
   });
@@ -58,7 +58,7 @@ void main() {
     api.next = 'down';
     await tester.tap(find.text('Retry'));
     await tester.pump();
-    expect(find.textContaining("Can't reach Komga at 10.0.0.23:25600."), findsOneWidget); // no http://
+    expect(find.textContaining("Can't reach Komga at 192.168.1.10:25600."), findsOneWidget); // no http://
     expect(api.calls, 3);
   });
 
