@@ -46,6 +46,21 @@ Future<bool> setFullscreen(bool on) async {
   }
 }
 
+/// Only a phone or tablet turns; a PC window doesn't, so the reader's rotation lock is Android only.
+bool get canRotate => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
+/// The battery for the reader's clock: (level 0..100, charging), or null where there's none to read (a desktop PC,
+/// the web).
+Future<(int, bool)?> batteryState() async {
+  try {
+    final m = await _channel.invokeMethod<Map<Object?, Object?>>('battery');
+    if (m == null) return null;
+    return ((m['level'] as num).toInt(), m['charging'] == true);
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Stops the tablet from dimming and sleeping while a book is open (Android; a no-op on web/Windows).
 Future<void> keepScreenOn(bool on) async {
   try {

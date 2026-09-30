@@ -131,6 +131,7 @@ class _ReaderPanel extends StatelessWidget {
           ...brightnessRows(s, compact: true),
           ...nightRows(s),
           backgroundRow(s),
+          if (canRotate) rotationRow(s), // locked mid-book, lying down
           pageTurnRow(s),
           pageNumberRow(s),
           doubleTapRow(s),
@@ -358,6 +359,34 @@ class _Swatch extends StatelessWidget {
     );
   }
 }
+
+/// Rotation in the reader (Android only: a PC window doesn't turn).
+Widget rotationRow(AppSettings s) => SegmentRow<Rotation>(
+      title: 'Rotation',
+      subtitle: 'Follow the device, or stay put',
+      choices: [for (final r in Rotation.values) Choice(r, r.label)],
+      value: s.display.rotation,
+      onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
+    );
+
+Widget clockRow(AppSettings s) => SegmentRow<ShowWhen>(
+      title: 'Clock and battery',
+      subtitle: switch (s.display.clock) {
+        ShowWhen.off => 'Not shown',
+        ShowWhen.withControls => 'On the top bar when you tap the page',
+        ShowWhen.always => 'Top right, all the time',
+      },
+      choices: [for (final w in ShowWhen.values) Choice(w, w.label)],
+      value: s.display.clock,
+      onChanged: (w) => s.setDisplay(s.display.copyWith(clock: w)),
+    );
+
+Widget progressBarRow(AppSettings s) => SwitchRow(
+      title: 'Progress bar',
+      subtitle: 'A thin line along the bottom while the controls are hidden',
+      value: s.display.progressBar,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(progressBar: v)),
+    );
 
 Widget pageNumberRow(AppSettings s) => SwitchRow(
       title: 'Page number after a turn',

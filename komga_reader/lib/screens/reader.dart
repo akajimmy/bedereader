@@ -19,6 +19,7 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import '../widgets/focus_style.dart';
+import '../widgets/reader_clock.dart';
 import 'actions.dart';
 
 /// Page reader: full screen on the chosen background (black, dark grey or white), follows the tablet's rotation
@@ -101,8 +102,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     super.initState();
     Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
     Downloads.instance.readerOpened(); // Delete once read waits for it too
-    // Follow the sensor (the whole app does, via the manifest), hide the system bars, keep the screen on.
-    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    // Rotation as set (the app otherwise follows the sensor, via the manifest), hide the system bars, keep the screen on.
+    _applyRotation();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _awake();
     _settings.addListener(_onSettings);
@@ -129,6 +130,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _settings.removeListener(_onSettings);
     fullscreen.removeListener(_onFullscreen);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (_rotation != Rotation.auto) SystemChrome.setPreferredOrientations(const []); // a lock ends with the book
     if (_screenHeld) keepScreenOn(false);
     _pc?.dispose();
     _disposeScrolls();
@@ -140,8 +142,23 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  // ---- Rotation (Settings > Reader, and the Reader panel): follow the device, or hold portrait / landscape
+  Rotation? _rotation;
+
+  void _applyRotation() {
+    final r = _settings.display.rotation;
+    if (r == _rotation) return;
+    _rotation = r;
+    SystemChrome.setPreferredOrientations(switch (r) {
+      Rotation.auto => DeviceOrientation.values,
+      Rotation.portrait => const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
+      Rotation.landscape => const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+    });
+  }
+
   void _onSettings() {
     if (!mounted) return;
+    _applyRotation();
     if (_settings.display.screenOn != _screenOnFor) _awake(); // Keep the screen on changed
     setState(() {});
   }
@@ -867,6 +884,40 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                       ),
                     ),
                   ),
+                  // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
+                  if (!_menu && _settings.display.clock == ShowWhen.always)
+                    Positioned(
+                      top: 8,
+                      right: 10,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: const ReaderClock(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
+                  if (!_menu && _settings.display.progressBar && _pages.isNotEmpty && _index <= _last)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      height: 3,
+                      child: IgnorePointer(
+                        child: Directionality(
+                          textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, // fills from the reading side
+                          child: LinearProgressIndicator(
+                            key: const ValueKey('reading-progress'),
+                            value: (_index + 1) / _pages.length,
+                            minHeight: 3,
+                            backgroundColor: _ink(0.12),
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (_menu) ..._controls(),
                 ]),
         ),
@@ -1068,11 +1119,14 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final shown = _scrub ?? _index.clamp(0, _last);
     final night = _settings.display.night;
     const bar = Color(0xE6101012);
+    final showClock = _settings.display.clock != ShowWhen.off; // with the controls up: With the controls, or Always
+    final clockInBar = MediaQuery.sizeOf(context).width >= 700; // a phone's top bar has no room for it
     return [
       Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _hideControls)),
       Positioned(
         left: 0, right: 0, top: 0,
-        child: Material(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Material(
           color: bar,
           child: Theme(
           data: _controlsTheme(context),
@@ -1100,6 +1154,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 13)),
                   ]),
                 ),
+                // Clock and battery with the controls up, where the bar has room (else just under it, below)
+                if (showClock && clockInBar)
+                  const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
                 // one press = next fit mode (screen -> width -> height), label shows which
                 _iconCtl(
                   node: _ctl[_Ctl.fit]!,
@@ -1148,6 +1205,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           ),
           ),
         ),
+        // narrow screens: no room on the top bar - the clock sits just under it, at the right
+        if (showClock && !clockInBar)
+          Align(
+            alignment: Alignment.centerRight,
+            child: IgnorePointer(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(0, 8, 10, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: bar, borderRadius: BorderRadius.circular(10)),
+                child: const ReaderClock(fontSize: 12),
+              ),
+            ),
+          ),
+        ]),
       ),
       Positioned(
         left: 0, right: 0, bottom: 0,

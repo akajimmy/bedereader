@@ -88,6 +88,17 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       }
     } else if (m == "isFullscreen") {
       result->Success(flutter::EncodableValue(fullscreen_));
+    } else if (m == "battery") {
+      // for the reader's clock: level 0..100 and charging; nothing on a PC without a battery
+      SYSTEM_POWER_STATUS s;
+      if (GetSystemPowerStatus(&s) && s.BatteryLifePercent <= 100 && !(s.BatteryFlag & 128)) {
+        flutter::EncodableMap v;
+        v[flutter::EncodableValue("level")] = flutter::EncodableValue(static_cast<int32_t>(s.BatteryLifePercent));
+        v[flutter::EncodableValue("charging")] = flutter::EncodableValue(s.ACLineStatus == 1);
+        result->Success(flutter::EncodableValue(v));
+      } else {
+        result->Success();
+      }
     } else {
       result->NotImplemented();
     }

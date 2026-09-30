@@ -2,6 +2,7 @@ package com.nickp.komga_reader
 
 import android.content.Intent
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -95,6 +96,13 @@ class MainActivity : FlutterActivity() {
                 }
                 // App-private storage for downloaded books (removed with the app; no permissions needed).
                 "storageDir" -> result.success(filesDir.absolutePath)
+                // Battery level (0..100) and whether it's charging, for the reader's clock (no permission needed).
+                "battery" -> {
+                    val bm = getSystemService(BATTERY_SERVICE) as BatteryManager
+                    val level = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                    val charging = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && bm.isCharging
+                    result.success(if (level in 0..100) mapOf("level" to level, "charging" to charging) else null)
+                }
                 else -> result.notImplemented()
             }
         }
