@@ -5,6 +5,9 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**Changed**
+- The page number after a turn ("12 / 36") now shows in the bottom-left corner instead of the bottom right.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37

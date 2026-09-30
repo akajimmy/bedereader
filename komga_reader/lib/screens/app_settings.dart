@@ -211,7 +211,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'Turning pages', children: [
         pageTurnRow(s),
-        SwitchRow(title: 'Page number after a turn', subtitle: '"12 / 36" in the corner for a moment',
+        SwitchRow(title: 'Page number after a turn', subtitle: '"12 / 36" bottom left, for a moment',
             value: d.pageNumber, onChanged: (v) => s.setDisplay(d.copyWith(pageNumber: v))),
         SwitchRow(title: 'Double-tap to zoom', subtitle: 'Taps wait a moment for a second tap',
             value: d.doubleTapZoom, onChanged: (v) => s.setDisplay(d.copyWith(doubleTapZoom: v))),
