@@ -225,6 +225,26 @@ void main() {
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0); // not a choice: the default
   });
 
+  testWidgets('Display: text size and accent colour are set here; the schedule shows its times when on', (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    s.setDisplay(const DisplayPrefs());
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    await open(tester, page: SettingsPage.display);
+    await tester.tap(find.text('115%'));
+    await tester.pumpAndSettle();
+    expect(s.display.textScale, 1.15);
+    await tester.tap(find.bySemanticsLabel('Teal'));
+    await tester.pumpAndSettle();
+    expect(s.display.accent, Accent.teal);
+    expect(find.text('From / to'), findsNothing);
+    await tester.tap(find.widgetWithText(SwitchListTile, 'On a schedule'));
+    await tester.pumpAndSettle();
+    expect(s.display.nightSchedule, isTrue);
+    expect(find.text('From / to'), findsOneWidget);
+    expect(find.text('9:00 PM'), findsOneWidget); // 21:00, in the test's 12-hour format
+  });
+
   testWidgets('segmented choices on a page share one width (the widest), flush right', (tester) async {
     tall(tester, width: 1200);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SettingsColumn(child: Column(children: [

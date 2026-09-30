@@ -317,48 +317,10 @@ Widget backgroundRow(AppSettings s) => SettingRow(
       title: 'Background',
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         for (final b in ReaderBackground.values)
-          _Swatch(background: b, selected: s.display.background == b,
+          ColourSwatch(colour: b.colour, label: '${b.label} background', selected: s.display.background == b,
               onTap: () => s.setDisplay(s.display.copyWith(background: b))),
       ]),
     );
-
-class _Swatch extends StatelessWidget {
-  const _Swatch({required this.background, required this.selected, required this.onTap});
-  final ReaderBackground background;
-  final bool selected;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final accent = Theme.of(context).colorScheme.primary;
-    return Tooltip(
-      message: background.label,
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: '${background.label} background',
-        child: InkResponse(
-          onTap: onTap,
-          radius: 20,
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: background.colour,
-                shape: BoxShape.circle,
-                border: Border.all(color: selected ? accent : const Color(0xFF55585F), width: selected ? 3 : 1),
-              ),
-              child: selected
-                  ? Icon(Icons.check, size: 16, color: background == ReaderBackground.white ? Colors.black : Colors.white)
-                  : null,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// Rotation in the reader (Android only: a PC window doesn't turn).
 Widget rotationRow(AppSettings s) => SegmentRow<Rotation>(

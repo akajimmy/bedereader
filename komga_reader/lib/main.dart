@@ -7,6 +7,7 @@ import 'api.dart';
 import 'app_identity.dart';
 import 'errors.dart';
 import 'licences.dart';
+import 'night_schedule.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
@@ -29,13 +30,14 @@ void main() {
   runApp(const KomgaReaderApp());
 }
 
-/// Minimal dark theme. Focus is made clearly visible because the app is driven by a D-pad remote as well as touch.
-ThemeData buildTheme() {
-  const accent = Color(0xFF8AB4F8);
+/// Minimal dark theme in the chosen accent colour (Settings > Display). Focus is made clearly visible because the
+/// app is driven by a D-pad remote as well as touch.
+ThemeData buildTheme([Accent choice = Accent.blue]) {
+  final accent = choice.colour;
   final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
   return base.copyWith(
     scaffoldBackgroundColor: const Color(0xFF0B0B0C),
-    colorScheme: const ColorScheme.dark(primary: accent, secondary: accent, surface: Color(0xFF141416)),
+    colorScheme: ColorScheme.dark(primary: accent, secondary: accent, surface: const Color(0xFF141416)),
     appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF0B0B0C), elevation: 0, centerTitle: false),
     focusColor: accent.withValues(alpha: 0.4), // list rows (side menu, sheets) under the remote
     iconButtonTheme: IconButtonThemeData(style: strongFocusStyle(accent)),
@@ -64,6 +66,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.initState();
     SideMenu.instance.load();
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
+    NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time
     if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
     Connection.instance.addListener(_onConnection);
@@ -178,15 +181,37 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     setState(() => _api = null);
   }
 
+  // the theme is made again only when the accent colour changes, not on every settings change (a slider drag)
+  Accent? _themeFor;
+  ThemeData? _theme;
+  ThemeData _themeOf(Accent a) {
+    if (a != _themeFor || _theme == null) {
+      _themeFor = a;
+      _theme = buildTheme(a);
+    }
+    return _theme!;
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => _app());
+
+  Widget _app() {
+    final display = AppSettings.instance.display;
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
       navigatorKey: _nav,
       scaffoldMessengerKey: _messenger,
-      theme: buildTheme(),
-      builder: (context, child) => NightOverlay(child: child!),
+      theme: _themeOf(display.accent),
+      // this app's text size (Settings > Display), on top of the device's own
+      builder: (context, child) {
+        final mq = MediaQuery.of(context);
+        final scale = display.textScale;
+        return MediaQuery(
+          data: scale == 1.0 ? mq : mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
+          child: NightOverlay(child: child!),
+        );
+      },
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
           : _api == null
