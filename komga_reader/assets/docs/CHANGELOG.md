@@ -6,8 +6,10 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 ## Unreleased
 
 **Changed**
-- **Previous book follows Hide read too**: opened from a view with read books hidden, it goes back to the previous
-  book you haven't read, skipping read ones.
+- **Previous book goes back through what you've read**: it returns to the book you read before this one since
+  opening the reader (even though it's read now), and after going back, Next retraces forward again - like a
+  browser's back and forward. Before the first book of the visit it goes to the previous book - with Hide read on,
+  the previous one you haven't read.
 
 ## 0.1.1 - offline reading and better pages
 
