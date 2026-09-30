@@ -159,7 +159,9 @@ class _HoldOkForMenuState extends State<HoldOkForMenu> {
       _timer?.cancel();
       _timer = Timer(HoldOkForMenu.holdTime, () {
         _down = false; // held: the menu, and the release that follows does nothing more
-        if (mounted) hold();
+        if (!mounted) return;
+        HoldOkGuard.swallowRestOf(e.logicalKey); // the menu takes focus: the key's repeats mustn't press in it
+        hold();
       });
     } else if (e is KeyUpEvent) {
       _timer?.cancel();
@@ -178,6 +180,34 @@ class _HoldOkForMenuState extends State<HoldOkForMenu> {
   @override
   Widget build(BuildContext context) =>
       Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: widget.child);
+}
+
+/// Once a held OK has opened a menu, the rest of that press - the key's repeats while it's still held, and its
+/// release - is swallowed here, wherever focus has gone. The menu takes focus on its first item, and Flutter's OK
+/// shortcut acts on repeats too: holding OK opened the menu and at once pressed Details in it (tablet, build 55).
+/// Goes in MaterialApp.builder: under the app's shortcuts, over every screen and menu.
+class HoldOkGuard extends StatelessWidget {
+  const HoldOkGuard({super.key, required this.child});
+  final Widget child;
+
+  static LogicalKeyboardKey? _held;
+
+  static void swallowRestOf(LogicalKeyboardKey key) => _held = key;
+
+  static KeyEventResult _onKey(FocusNode _, KeyEvent e) {
+    final k = _held;
+    if (k == null || e.logicalKey != k) return KeyEventResult.ignored;
+    if (e is KeyDownEvent) {
+      _held = null; // a fresh press (the release was missed): not ours to swallow
+      return KeyEventResult.ignored;
+    }
+    if (e is KeyUpEvent) _held = null;
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: child);
 }
 
 /// Draws a clear outline around the tile while it has focus (the remote needs to see where it is).

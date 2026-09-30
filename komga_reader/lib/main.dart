@@ -26,6 +26,7 @@ import 'widgets/refresh_on_return.dart';
 import 'widgets/sync_alert.dart';
 import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
+import 'widgets/poster.dart' show HoldOkGuard;
 
 void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
@@ -253,7 +254,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         final scale = display.textScale;
         return MediaQuery(
           data: scale == 1.0 ? mq : mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
-          child: NightOverlay(child: child!),
+          child: HoldOkGuard(child: NightOverlay(child: child!)), // a held OK's repeats don't press in its menu
         );
       },
       home: !_loaded
