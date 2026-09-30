@@ -122,6 +122,22 @@ extension ShowWhenLabel on ShowWhen {
       switch (this) { ShowWhen.off => 'Off', ShowWhen.withControls => 'With the controls', ShowWhen.always => 'Always' };
 }
 
+/// The app's accent colour (buttons, switches, highlights): pale tones that read on the dark background.
+enum Accent { blue, teal, green, amber, orange, pink, purple }
+
+extension AccentColour on Accent {
+  Color get colour => switch (this) {
+        Accent.blue => const Color(0xFF8AB4F8),
+        Accent.teal => const Color(0xFF5DCAA5),
+        Accent.green => const Color(0xFF97C459),
+        Accent.amber => const Color(0xFFEFB04A),
+        Accent.orange => const Color(0xFFF0997B),
+        Accent.pink => const Color(0xFFED93B1),
+        Accent.purple => const Color(0xFFAFA9EC),
+      };
+  String get label => '${name[0].toUpperCase()}${name.substring(1)}';
+}
+
 /// Library grids and Home's rows: how big the posters are.
 enum PosterSize { small, medium, large }
 
@@ -137,8 +153,15 @@ class DisplayPrefs {
       this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
       this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
-      this.progressBar = false});
+      this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
+      this.textScale = 1.0, this.accent = Accent.blue});
   final bool night;
+  final bool nightSchedule; // night mode on at [nightFrom] and off at [nightTo] by itself (still switchable by hand)
+  final int nightFrom, nightTo; // minutes after midnight
+  final double textScale; // this app's text size, on top of the device's (one of [textScales])
+  final Accent accent;
+
+  static const textScales = [0.9, 1.0, 1.15, 1.3];
   final Rotation rotation; // reader: follow the device, or hold portrait / landscape (Android)
   final ShowWhen clock; // reader: the time and battery - top right, or on the top bar with the controls up
   final bool progressBar; // reader: a thin line along the bottom while the controls are hidden (their slider shows it)
@@ -186,8 +209,10 @@ class DisplayPrefs {
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
           bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
-          bool? progressBar}) =>
+          bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent}) =>
       DisplayPrefs(
+          nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
+          nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
           rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
           night: night ?? this.night, warmth: warmth ?? this.warmth,
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
@@ -199,11 +224,14 @@ class DisplayPrefs {
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
       'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
-      'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar};
+      'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
+      'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
+      'accent': accent.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final on = j['screenOn'];
+    int minutes(Object? v, int fallback) => v is int && v >= 0 && v < 24 * 60 ? v : fallback;
     return DisplayPrefs(
         night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
         brightness: (j['brightness'] as num?)?.toDouble(),
@@ -219,7 +247,12 @@ class DisplayPrefs {
         posterTitleOnly: j['posterTitleOnly'] == true,
         rotation: pick(Rotation.values, j['rotation'], Rotation.auto),
         clock: pick(ShowWhen.values, j['clock'], ShowWhen.withControls),
-        progressBar: j['progressBar'] == true);
+        progressBar: j['progressBar'] == true,
+        nightSchedule: j['nightSchedule'] == true,
+        nightFrom: minutes(j['nightFrom'], 21 * 60),
+        nightTo: minutes(j['nightTo'], 7 * 60),
+        textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
+        accent: pick(Accent.values, j['accent'], Accent.blue));
   }
 }
 

@@ -310,6 +310,45 @@ class NoteRow extends StatelessWidget {
       );
 }
 
+/// A round colour to pick (the reader's background, the accent colour): ringed and ticked when chosen.
+class ColourSwatch extends StatelessWidget {
+  const ColourSwatch({super.key, required this.colour, required this.label, required this.selected, required this.onTap});
+  final Color colour;
+  final String label; // tooltip and screen-reader name
+  final bool selected;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final tick = colour.computeLuminance() > 0.4 ? Colors.black : Colors.white;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 20,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: colour,
+                shape: BoxShape.circle,
+                border: Border.all(color: selected ? accent : const Color(0xFF55585F), width: selected ? 3 : 1),
+              ),
+              child: selected ? Icon(Icons.check, size: 16, color: tick) : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// A small status label ("Own settings", "Follows the defaults").
 class StatusChip extends StatelessWidget {
   const StatusChip(this.text, {super.key, this.strong = false});

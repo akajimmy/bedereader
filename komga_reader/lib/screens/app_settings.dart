@@ -242,13 +242,60 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // ---- Display ---------------------------------------------------------------------------------------------------
   Widget _display(AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SettingsGroup(title: 'Brightness', children: brightnessRows(s)),
-        SettingsGroup(title: 'Night', children: nightRows(s)),
+        SettingsGroup(title: 'Night', children: [
+          ...nightRows(s),
+          SwitchRow(
+            title: 'On a schedule',
+            subtitle: 'Turns night mode on and off by itself; you can still switch it in between',
+            value: s.display.nightSchedule,
+            onChanged: (v) => s.setDisplay(s.display.copyWith(nightSchedule: v)),
+          ),
+          if (s.display.nightSchedule)
+            SettingRow(
+              title: 'From / to',
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                _timeButton(s.display.nightFrom, 'Night mode starts',
+                    (m) => s.setDisplay(s.display.copyWith(nightFrom: m))),
+                const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('–')),
+                _timeButton(s.display.nightTo, 'Night mode ends', (m) => s.setDisplay(s.display.copyWith(nightTo: m))),
+              ]),
+            ),
+        ]),
+        SettingsGroup(title: 'Look', children: [
+          SegmentRow<double>(
+            title: 'Text size',
+            subtitle: 'This app only, on top of the device\'s own',
+            choices: [for (final t in DisplayPrefs.textScales) Choice(t, '${(t * 100).round()}%')],
+            value: s.display.textScale,
+            onChanged: (t) => s.setDisplay(s.display.copyWith(textScale: t)),
+          ),
+          SettingRow(
+            title: 'Accent colour',
+            trailing: Wrap(spacing: 2, children: [
+              for (final a in Accent.values)
+                ColourSwatch(colour: a.colour, label: a.label, selected: s.display.accent == a,
+                    onTap: () => s.setDisplay(s.display.copyWith(accent: a))),
+            ]),
+          ),
+        ]),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Text('The whole app, not just the reader. Also in the reader\'s Reader panel.',
               style: TextStyle(color: hintColour, fontSize: 12)),
         ),
       ]);
+
+  /// A time (minutes after midnight) as a button that opens the time picker.
+  Widget _timeButton(int minutes, String help, ValueChanged<int> onPicked) {
+    final t = TimeOfDay(hour: minutes ~/ 60, minute: minutes % 60);
+    return OutlinedButton(
+      onPressed: () async {
+        final picked = await showTimePicker(context: context, initialTime: t, helpText: help);
+        if (picked != null) onPicked(picked.hour * 60 + picked.minute);
+      },
+      child: Text(t.format(context)),
+    );
+  }
 
   // ---- Library & Home --------------------------------------------------------------------------------------------
   List<Widget> _library() => [
@@ -376,7 +423,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
-        content: const Text('Back to the defaults: the Reader page, screen brightness and night mode, posters, Home '
+        content: const Text('Back to the defaults: the Reader page, screen brightness, night mode and its schedule, text '
+            'size and accent colour, posters, Home '
             "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
             'settings, pins, On deck), your sign-in and your downloaded books.'),

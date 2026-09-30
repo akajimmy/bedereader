@@ -146,7 +146,8 @@ class MdHeading extends MdBlock {
     return Padding(
       padding: EdgeInsets.only(top: level == 1 ? 4 : 18, bottom: 6),
       child: Text.rich(TextSpan(children: inlineSpans(text,
-          TextStyle(fontSize: size, fontWeight: FontWeight.w600, color: level == 3 ? const Color(0xFF8AB4F8) : null),
+          TextStyle(fontSize: size, fontWeight: FontWeight.w600,
+              color: level == 3 ? Theme.of(context).colorScheme.primary : null), // the accent colour
           link: Theme.of(context).colorScheme.primary))),
     );
   }
