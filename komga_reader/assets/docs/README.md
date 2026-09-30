@@ -11,6 +11,14 @@ touch, keyboard, mouse or a remote page-turner, take books with you offline, and
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
 
+![A library of 19 series, as poster grids](docs/images/library.jpg)
+
+![Reading Planet Comics #1 (1940)](docs/images/reader.jpg)
+
+![The same page with Enhance and Enhance colours on, and the image settings open](docs/images/reader-enhance.jpg)
+
+*The screenshots show public-domain comics from the 1940s and 50s (Planet Comics, Web of Mystery and others).*
+
 ## What it does
 
 **Browsing**
