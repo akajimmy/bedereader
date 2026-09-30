@@ -337,6 +337,21 @@ void main() {
 
   final second = {'id': 'B2', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'The Second One'}};
 
+  testWidgets('remote, past the end card: Right opens the next book at its first page', (tester) async {
+    final chain = VisitKomga(); // B1 -> B2 -> B3
+    api = chain;
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: chain, book: chain.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await toEndCard(tester);
+    await key(tester, LogicalKeyboardKey.arrowRight); // on past the card
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(chain.opened.last, 'B2');
+    expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 0.0, reason: 'its first page');
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets("end card: the next book's cover page replaces the (small, blurry) thumbnail once it's in",
       (tester) async {
     late Uint8List png;
@@ -890,6 +905,27 @@ void main() {
       await tester.pump(); // the page animation starts on the next frame
       await tester.pump(const Duration(milliseconds: 600));
       expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('remote, past the end card: Left opens the book the card shows, not the one after (tablet, build 56)',
+        (tester) async {
+      final chain = VisitKomga(); // B1 -> B2 -> B3
+      api = chain;
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: chain, book: chain.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      for (var i = 0; i < 3; i++) { // right to left: Left goes forward - 3 pages, then the end card
+        await key(tester, LogicalKeyboardKey.arrowLeft);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.pump();
+      expect(find.text('Test #2'), findsOneWidget, reason: 'the end card shows B2');
+      await key(tester, LogicalKeyboardKey.arrowLeft); // on past it
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(chain.opened.last, 'B2');
+      expect(page(tester), 0.0, reason: 'its first page');
       await tester.pump(const Duration(seconds: 2));
     });
 
