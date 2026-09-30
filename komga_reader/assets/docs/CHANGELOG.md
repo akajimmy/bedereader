@@ -7,6 +7,13 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 **Changed**
 - The page number after a turn ("12 / 36") now shows in the bottom-left corner instead of the bottom right.
+- The reader's **Reader** panel:
+  - Its two groups say what they're for: "*Series* · this series" and "This device".
+  - Direction is three icons (Auto, left to right, right to left).
+  - Page number after a turn, Double-tap to zoom and Keep the screen on can now be changed there mid-book, as well as
+    in Settings.
+- The **Image** panel's Reset to original, Make default and Use the defaults are buttons under the settings instead of
+  a ⋮ menu.
 
 ## 0.1.1 - offline reading and better pages
 

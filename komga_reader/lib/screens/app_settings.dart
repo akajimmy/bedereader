@@ -211,10 +211,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'Turning pages', children: [
         pageTurnRow(s),
-        SwitchRow(title: 'Page number after a turn', subtitle: '"12 / 36" bottom left, for a moment',
-            value: d.pageNumber, onChanged: (v) => s.setDisplay(d.copyWith(pageNumber: v))),
-        SwitchRow(title: 'Double-tap to zoom', subtitle: 'Taps wait a moment for a second tap',
-            value: d.doubleTapZoom, onChanged: (v) => s.setDisplay(d.copyWith(doubleTapZoom: v))),
+        pageNumberRow(s),
+        doubleTapRow(s),
         if (hasVolumeKeys)
           SwitchRow(title: 'Volume keys turn pages', subtitle: 'Down: next page, up: previous',
               value: d.volumeKeys, onChanged: (v) => s.setDisplay(d.copyWith(volumeKeys: v))),
@@ -230,17 +228,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       SettingsGroup(title: 'Screen', children: [
         backgroundRow(s),
-        SegmentRow<int>(
-          title: 'Keep the screen on',
-          subtitle: d.screenOn == 0
-              ? "The device's own timeout"
-              : d.screenOn == DisplayPrefs.alwaysOn
-                  ? 'As long as a book is open'
-                  : 'After the last page turn or touch',
-          choices: [for (final m in DisplayPrefs.screenOnChoices) Choice(m, screenOnLabel(m))],
-          value: d.screenOn,
-          onChanged: (m) => s.setDisplay(d.copyWith(screenOn: m)),
-        ),
+        screenOnRow(s),
       ]),
     ]);
   }
