@@ -5,6 +5,12 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**New**
+- **Remote and keys** (a new Settings page): choose which keys turn to the next or previous page, show the controls
+  and close the book - for remotes that send other keys (media keys, letters). Press **Add** and then the key. A key
+  has one job at a time; Show the controls always keeps one key; Reset keys goes back to the usual ones. Moving
+  around the controls stays arrows and OK.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37

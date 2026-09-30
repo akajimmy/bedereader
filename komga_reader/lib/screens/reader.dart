@@ -14,6 +14,7 @@ import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
 import '../page_image.dart';
+import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/display_panel.dart';
@@ -675,6 +676,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     setState(() {});
   }
 
+  // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
+  // remote); with the controls hidden, keys go through ReaderKeys.
   bool _isOk(LogicalKeyboardKey k) =>
       k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter;
   // Left/Right follow the reading direction (right to left: Left goes forward); Up/Down and Page Up/Down don't.
@@ -724,17 +727,22 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _forward() : _back();
         return KeyEventResult.handled;
       }
-      if (_isFwd(k) || (k == LogicalKeyboardKey.space && !HardwareKeyboard.instance.isShiftPressed)) {
-        _forward();
-        return KeyEventResult.handled;
+      // Shift+Space goes back, whatever Space is set to do
+      if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) { _back(); return KeyEventResult.handled; }
+      // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
+      switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
+        case ReaderAction.next:
+          _forward();
+        case ReaderAction.previous:
+          _back();
+        case ReaderAction.controls:
+          if (e is KeyDownEvent) _showControls();
+        case ReaderAction.close: // closes the book (full screen stays)
+          if (e is KeyDownEvent) Navigator.of(context).maybePop();
+        case null:
+          return KeyEventResult.ignored;
       }
-      if (_isBack(k) || k == LogicalKeyboardKey.space) { _back(); return KeyEventResult.handled; }
-      if (_isOk(k) && e is KeyDownEvent) { _showControls(); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.escape && e is KeyDownEvent) { // nothing showing: Esc closes the book (full screen stays)
-        Navigator.of(context).maybePop();
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
+      return KeyEventResult.handled;
     }
     if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) { _hideControls(); return KeyEventResult.handled; }
     if (k == LogicalKeyboardKey.arrowRight) { _move(dx: 1); return KeyEventResult.handled; }
