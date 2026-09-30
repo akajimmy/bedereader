@@ -9,7 +9,7 @@ import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FakeKomga extends Komga {
-  FakeKomga() : super('http://10.0.0.23:25600', 'k');
+  FakeKomga() : super('http://192.168.1.10:25600', 'k');
   @override
   Future<List<dynamic>> libraries() async => [];
   @override
@@ -40,7 +40,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
-    expect(find.text('http://10.0.0.23:25600'), findsOneWidget);
+    expect(find.text('http://192.168.1.10:25600'), findsOneWidget);
   });
 
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {

@@ -31,7 +31,7 @@ class Explained {
   final String reason;
 }
 
-/// "http://10.0.0.23:25600/" -> "10.0.0.23:25600".
+/// "http://192.168.1.10:25600/" -> "192.168.1.10:25600".
 String displayAddress(String url) => url.replaceFirst(RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://'), '').replaceAll(RegExp(r'/+$'), '');
 
 String _sentence(String clause) => '${clause[0].toUpperCase()}${clause.substring(1)}.';

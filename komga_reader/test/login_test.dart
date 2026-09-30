@@ -27,12 +27,12 @@ void main() {
 
   test('the server address is tidied up: spaces out, http:// added, trailing slashes off', () {
     String? s(String typed) => serverAddress(typed);
-    expect(s('10.0.0.23: 25600'), 'http://10.0.0.23:25600'); // as typed on the tablet (user's screenshot)
+    expect(s('192.168.1.10: 25600'), 'http://192.168.1.10:25600'); // as typed on the tablet (user's screenshot)
     expect(s(' http://nas.local:25600/ '), 'http://nas.local:25600');
     expect(s('https://komga.example.org'), 'https://komga.example.org');
-    expect(s('HTTP://10.0.0.23:25600'), 'HTTP://10.0.0.23:25600');
+    expect(s('HTTP://192.168.1.10:25600'), 'HTTP://192.168.1.10:25600');
     expect(s(''), isNull);
-    expect(s('ftp://10.0.0.23'), isNull);
+    expect(s('ftp://192.168.1.10'), isNull);
     expect(s('http://'), isNull);
   });
 
@@ -54,10 +54,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
     await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
-        '10.0.0.23: 25600');
+        '192.168.1.10: 25600');
     await tester.tap(find.text('Connect'));
     await tester.pump();
-    expect(field(tester, 'Server').controller!.text, 'http://10.0.0.23:25600');
+    expect(field(tester, 'Server').controller!.text, 'http://192.168.1.10:25600');
     expect(find.textContaining('FormatException'), findsNothing);
   });
 }

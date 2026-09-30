@@ -35,7 +35,7 @@ void main() {
   });
 
   test('server URL loses trailing slashes', () {
-    expect(Komga('http://10.0.0.23:25600/', 'k').baseUrl, 'http://10.0.0.23:25600');
-    expect(Komga('http://10.0.0.23:25600', 'k').pageUrl('B1', 3), 'http://10.0.0.23:25600/api/v1/books/B1/pages/3');
+    expect(Komga('http://192.168.1.10:25600/', 'k').baseUrl, 'http://192.168.1.10:25600');
+    expect(Komga('http://192.168.1.10:25600', 'k').pageUrl('B1', 3), 'http://192.168.1.10:25600/api/v1/books/B1/pages/3');
   });
 }
