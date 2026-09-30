@@ -229,7 +229,8 @@ if ($Platforms -contains 'web') {
 
 # ---- 4. checksums + build info -------------------------------------------------------------------------------------
 $sums = foreach ($a in $artifacts) { '{0}  {1}' -f (Get-FileHash $a -Algorithm SHA256).Hash.ToLower(), (Split-Path $a -Leaf) }
-$sums | Out-File (Join-Path $out 'SHA256SUMS.txt') -Encoding ascii
+# plain \n line ends: `sha256sum -c` on Linux / macOS reads a Windows \r as part of the file name and fails (0.1.1)
+[IO.File]::WriteAllText((Join-Path $out 'SHA256SUMS.txt'), (($sums -join "`n") + "`n"), (New-Object Text.ASCIIEncoding))
 $commit = (Git 'rev-parse --short HEAD') | Select-Object -First 1
 $flutter = (cmd /c 'flutter --version --machine 2>nul' | Out-String)
 $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].Value
