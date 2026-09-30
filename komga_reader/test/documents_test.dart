@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/app_identity.dart';
 import 'package:komga_reader/licences.dart';
 import 'package:komga_reader/screens/document.dart';
 import 'package:komga_reader/widgets/markdown.dart';
@@ -100,7 +101,7 @@ Text after.
           for (final e in entries)
             if (e.packages.contains(package)) e.paragraphs.map((p) => p.text).join(' ')
         ];
-    expect(textOf('Komga Reader').single, contains('Permission is hereby granted'));
+    expect(textOf(appName).single, contains('Permission is hereby granted'));
     expect(textOf('AMD FidelityFX Super Resolution 1 (FSR 1)').single, contains('Advanced Micro Devices'));
     expect(textOf('Material Icons').single, contains('Creative Commons Attribution 4.0'));
   });

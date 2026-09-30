@@ -1,6 +1,6 @@
 # Third-party software and notices
 
-Komga Reader is MIT-licensed (see `LICENSE`). This file lists everything the project relies on - whether it ends up
+BeDeReader is MIT-licensed (see `LICENSE`). This file lists everything the project relies on - whether it ends up
 inside the app, is fetched while the app runs, or is only used to build and develop it - and carries the notices the
 included pieces require.
 
@@ -13,7 +13,7 @@ reviewed and tested by a human.
 
 | What | Licence | Role |
 |---|---|---|
-| [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app. Komga Reader is not affiliated with the Komga project. |
+| [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app. BeDeReader is not affiliated with the Komga project. |
 | Roboto font (web version only) | Google Fonts licence (Apache-2.0 / OFL-1.1) | Loaded from Google's font servers by the web version for its text. |
 
 ## Inside the app

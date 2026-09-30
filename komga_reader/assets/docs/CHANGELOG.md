@@ -1,9 +1,30 @@
 # Changelog
 
-What changed in each build of Komga Reader, newest first. The version is on the Info screen: **0.1.1 (build 32)**
-means version 0.1.1, build number 32. Build numbers only ever go up.
+What changed in each build of BeDeReader (called Komga Reader until build 38), newest first. The version is on the
+About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
+
+**Changed**
+- **The app is now called BeDeReader** - a library and reader for Komga. (BéDé is Québec French for comics.)
+  Nothing to do: settings, downloads, reading progress and the Android install carry over. On Windows the program
+  is now `BeDeReader.exe`, and the files in each release are named `BeDeReader-...`.
+- Errors are in plain words everywhere - what happened and what to do - instead of the raw error text: "Can't
+  reach Komga at 10.0.0.23:25600. Check you're on your home network and the server is running." A failed action
+  names itself ("Couldn't mark "Saga #3" as read: can't reach Komga."), and each message has a **Details** link
+  with the technical text (Copy). The last 50 errors are kept in **Settings > About > Error log**.
+- If Komga stops accepting the API key (deleted in Komga, say), the app says so and offers **Use downloaded
+  books** (they need no key) or **Sign in again**.
+- A page that won't load now says why under the icon, and a book that won't open says so instead of spinning.
+- Deleting without an admin account in Komga now says that's why, instead of blaming the API key.
+
+**Fixed**
+- Offline, the end of a book no longer skips ahead: if the book that comes next in the series or read list isn't
+  downloaded, the end card says so and the arrow closes the book (it used to offer the next book that *was*
+  downloaded, jumping over the missing ones). Books downloaded before this build still skip ahead in a series until
+  they're downloaded again.
+- End of book: the next book's poster was blurry (Komga's thumbnails are small). The book's cover page itself now
+  replaces it, sharp, fetched ahead as you reach the last pages.
 
 ## 0.1.1 - offline reading and better pages
 

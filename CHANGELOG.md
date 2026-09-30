@@ -1,11 +1,14 @@
 # Changelog
 
-What changed in each build of Komga Reader, newest first. The version is on the Info screen: **0.1.1 (build 32)**
-means version 0.1.1, build number 32. Build numbers only ever go up.
+What changed in each build of BeDeReader (called Komga Reader until build 38), newest first. The version is on the
+About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
 **Changed**
+- **The app is now called BeDeReader** - a library and reader for Komga. (BéDé is Québec French for comics.)
+  Nothing to do: settings, downloads, reading progress and the Android install carry over. On Windows the program
+  is now `BeDeReader.exe`, and the files in each release are named `BeDeReader-...`.
 - Errors are in plain words everywhere - what happened and what to do - instead of the raw error text: "Can't
   reach Komga at 10.0.0.23:25600. Check you're on your home network and the server is running." A failed action
   names itself ("Couldn't mark "Saga #3" as read: can't reach Komga."), and each message has a **Details** link

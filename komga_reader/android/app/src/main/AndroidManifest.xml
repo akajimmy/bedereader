@@ -4,7 +4,7 @@
     <!-- android:label is the display name only; the app ID (com.nickp.komga_reader, build.gradle.kts) never
          changes. Renaming: README > For developers > Renaming the app. -->
     <application
-        android:label="Komga Reader"
+        android:label="BeDeReader"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

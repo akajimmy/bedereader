@@ -91,13 +91,14 @@ BEGIN
         BEGIN
             // CompanyName + ProductName name the settings folder (%APPDATA%\com.nickp\Komga Reader):
             // internal and fixed - never change them, or the settings are left behind. The display name is
-            // FileDescription (Task Manager) and the window title (main.cpp).
+            // FileDescription (Task Manager) and the window title (main.cpp). ProductName keeps the app's old name,
+            // "Komga Reader", for that reason (renamed BeDeReader on 2026-09-29).
             VALUE "CompanyName", "com.nickp" "\0"
-            VALUE "FileDescription", "Komga Reader" "\0"
+            VALUE "FileDescription", "BeDeReader" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "KomgaReader" "\0"
+            VALUE "InternalName", "BeDeReader" "\0"
             VALUE "LegalCopyright", "Copyright (c) 2026 Nick Perusse. MIT licence." "\0"
-            VALUE "OriginalFilename", "KomgaReader.exe" "\0"
+            VALUE "OriginalFilename", "BeDeReader.exe" "\0"
             VALUE "ProductName", "Komga Reader" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

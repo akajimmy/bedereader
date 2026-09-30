@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Installs a Komga Reader APK on the paired tablet over wireless ADB (no browser, no prompts; settings kept).
+    Installs a BeDeReader APK on the paired tablet over wireless ADB (no browser, no prompts; settings kept).
 
 .DESCRIPTION
     Finds the tablet (already connected, or discovered on the Wi-Fi via mDNS), installs the APK as an update and
@@ -71,7 +71,7 @@ $result = Adb "-t $device install -r `"$Apk`""
 if ($result -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE') {
     # the tablet's copy is signed with another key (the debug key, before release signing): Android won't update it.
     # Uninstalling deletes the app's data on the tablet, so that's left to the user.
-    Say 'the tablet has a copy signed with a different key, so Android refuses to update it. Uninstall Komga Reader on'
+    Say 'the tablet has a copy signed with a different key, so Android refuses to update it. Uninstall BeDeReader (formerly Komga Reader) on'
     Say 'the tablet (this removes its settings and downloads there; what is synced through Komga comes back), then run'
     Say 'tools\install-android.ps1 again. This happens once, when moving to the release key.'
     exit 3

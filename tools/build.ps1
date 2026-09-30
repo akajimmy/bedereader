@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-    Builds Komga Reader for every platform into dist\<version>\ - after the checks pass.
+    Builds BeDeReader for every platform into dist\<version>\ - after the checks pass.
 
 .DESCRIPTION
     1. Checks: working tree clean (unless -AllowDirty), flutter analyze, flutter test. Any failure stops the build.
     2. -Bump: raises the build number in komga_reader\pubspec.yaml (0.1.0+17 -> 0.1.0+18).
     3. Builds the requested platforms:
-         android  -> KomgaReader-<ver>-android.apk
-         windows  -> KomgaReader-<ver>-windows.zip   (portable folder: unzip anywhere, run KomgaReader.exe)
-         web      -> KomgaReader-<ver>-web.zip
+         android  -> BeDeReader-<ver>-android.apk
+         windows  -> BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
+         web      -> BeDeReader-<ver>-web.zip
     4. Writes SHA256SUMS.txt and BUILD-INFO.txt next to them.
     5. With -Bump, commits the version change and tags it build-<n>.
     6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
@@ -82,10 +82,11 @@ if ($dirty -and -not $AllowDirty) {
 }
 # only a copy running from the build folder is in the way (a portable copy elsewhere is fine)
 $buildDir = Join-Path $app 'build\windows'
-$product = 'KomgaReader'  # file-name form of the display name (the .exe, the dist\ files)
-$blocking = Get-Process $product -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
+$product = 'BeDeReader'  # the app's name, also its file-name form (the .exe, the dist\ files)
+# (KomgaReader: the .exe's name before the app was renamed, 2026-09-29 - a copy built then may still be open)
+$blocking = Get-Process $product, 'KomgaReader' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
 if ($Platforms -contains 'windows' -and $blocking) {
-    throw "Komga Reader is running from the build folder ($($blocking[0].Path)) - close it first (the Windows build replaces its files)."
+    throw "$product is running from the build folder ($($blocking[0].Path)) - close it first (the Windows build replaces its files)."
 }
 Run 'flutter pub get' 'flutter pub get'
 Run 'flutter analyze' 'flutter analyze --no-fatal-infos'
@@ -226,7 +227,7 @@ $commit = (Git 'rev-parse --short HEAD') | Select-Object -First 1
 $flutter = (cmd /c 'flutter --version --machine 2>nul' | Out-String)
 $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].Value
 @(
-    "Komga Reader $name+$build",
+    "$product $name+$build",
     "built:    $(Get-Date -Format 'yyyy-MM-dd HH:mm')",
     "commit:   $commit$(if ($Bump) { ' (+ this version bump)' })$(if ($dirty) { ' - WORKING TREE HAD UNCOMMITTED CHANGES' })",
     "flutter:  $fv",

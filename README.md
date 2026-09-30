@@ -1,14 +1,17 @@
-# Komga Reader
+# BeDeReader
+
+**A library and reader for [Komga](https://komga.org)** - comics, BD and manga from your own server.
 
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
 
-A comic reader for your own [Komga](https://komga.org) server - for an Android tablet or phone, a Windows PC, or a
-web browser. Browse your libraries with proper posters, read with touch, keyboard, mouse or a remote page-turner,
-take books with you offline, and make old scans look their best.
+For an Android tablet or phone, a Windows PC, or a web browser. Browse your libraries with proper posters, read with
+touch, keyboard, mouse or a remote page-turner, take books with you offline, and make old scans look their best.
 
-Komga Reader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
+BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
+
+*BéDé is Québec French for comics (bande dessinée). Until September 2026 the app was called Komga Reader.*
 
 ## What it does
 
@@ -48,9 +51,9 @@ This app shows them and keeps everything in sync.
 
 1. In Komga's web interface, create an API key: your account (top right) > API keys > Create.
 2. Install the app:
-   - **Android**: install `KomgaReader-<version>-android.apk` (allow installs from this source when asked).
-   - **Windows**: unzip `KomgaReader-<version>-windows.zip` anywhere and run `KomgaReader.exe`.
-   - **Web**: serve the contents of `KomgaReader-<version>-web.zip`; Komga has to allow requests from that address
+   - **Android**: install `BeDeReader-<version>-android.apk` (allow installs from this source when asked).
+   - **Windows**: unzip `BeDeReader-<version>-windows.zip` anywhere and run `BeDeReader.exe`.
+   - **Web**: serve the contents of `BeDeReader-<version>-web.zip`; Komga has to allow requests from that address
      (CORS).
 3. Enter your Komga address (for example `http://192.168.1.10:25600`) and the API key.
 
@@ -82,7 +85,7 @@ the reader, OK shows the controls, Left/Right turn pages, and Back closes the co
 
 Made by **Nick Perusse** 🍁.
 
-Komga Reader is free software under the **MIT licence** (see `LICENSE`): use it, change it and share it, keeping the
+BeDeReader is free software under the **MIT licence** (see `LICENSE`): use it, change it and share it, keeping the
 copyright notice.
 
 It's an independent app, not part of the Komga project. [Komga](https://komga.org) is free, open-source software
@@ -153,7 +156,7 @@ builds Android, Windows and web into `dist\<version>\` with checksums and a BUIL
 
 Options: `-Platforms android` (or `windows`, `web`) builds a subset; `-SkipTests` skips the tests; `-NoInstall`
 skips the tablet; `-AllowDirty` allows uncommitted changes (for a throwaway build). Progress is in `dist\build.log`.
-Close Komga Reader on this PC before a Windows build.
+Close BeDeReader on this PC before a Windows build.
 
 After an Android build the APK is installed on the paired tablet over wireless ADB. Pairing is a one-time step:
 `& 'C:\Dev\android-sdk\platform-tools\adb.exe' pair <IP>:<port>` with the code from the tablet's Settings > Developer
@@ -171,14 +174,16 @@ app signed with the same key, so the release key must never change: back up the 
 password manager (the encrypted copy only works for this Windows account on this PC).
 
 Outputs in `dist\<version>\`:
-- `KomgaReader-<ver>-android.apk` - install on the tablet (sideload)
-- `KomgaReader-<ver>-windows.zip` - portable: unzip anywhere, run `KomgaReader.exe`
-- `KomgaReader-<ver>-web.zip` - static site; needs Komga to allow cross-origin requests (CORS) from where it's served
+- `BeDeReader-<ver>-android.apk` - install on the tablet (sideload)
+- `BeDeReader-<ver>-windows.zip` - portable: unzip anywhere, run `BeDeReader.exe`
+- `BeDeReader-<ver>-web.zip` - static site; needs Komga to allow cross-origin requests (CORS) from where it's served
 
 ### Renaming the app
 
-"Komga Reader" is a placeholder. A rename is a display-only change; everyone keeps their settings, downloads and
-updates, because the internal identifiers never change:
+The app was called "Komga Reader" until 2026-09-29, when it became BeDeReader - which is why some internal names
+below still say Komga Reader. A rename is a display-only change; everyone keeps their settings, downloads and updates,
+because the internal identifiers never change. Keep the name plain ASCII (BeDeReader, not BéDéReader): the same
+spelling is displayed, typed, searched and used in file names.
 
 - **Change** (the name people see): `komga_reader\lib\app_identity.dart` (`appName` - every screen);
   `android\app\src\main\AndroidManifest.xml` (`android:label`); `windows\runner\main.cpp` (window title);
