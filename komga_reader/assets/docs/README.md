@@ -33,10 +33,11 @@ This app shows them and keeps everything in sync.
   On deck.
 
 **Reading**
-- Fit to screen, width or height; pinch or Ctrl+wheel to zoom; a zoomed-in page is read across and down before
-  turning.
-- Tap the sides, swipe, use the arrow keys, the mouse wheel or a remote. Page turn animation: Wipe, Instant flip or
-  a 3D page curl that follows your finger.
+- Fit to screen, width or height; pinch, double-tap or Ctrl+wheel to zoom; a zoomed-in page is read across and down
+  before turning.
+- Tap the sides, swipe, use the arrow keys, the mouse wheel, a remote or (on Android) the volume keys. Page turn
+  animation: Wipe, Instant flip or a 3D page curl that follows your finger.
+- A page slider with a preview of the page you're picking.
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
 - **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
   sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).

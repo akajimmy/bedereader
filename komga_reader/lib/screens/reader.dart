@@ -25,10 +25,12 @@ import 'actions.dart';
 /// Remote: Right/Down = forward, Left/Up = back (in fit width/height that first scrolls through the page).
 /// OK = show/hide the controls, like a tap in the middle. With the controls up, the arrows step through them one at a
 /// time (after the last comes "nothing selected", where OK hides them again); OK on a control = tapping it; OK on the
-/// page slider starts scrubbing (arrows change the page, OK jumps there).
+/// page slider starts scrubbing (arrows change the page, OK jumps there). Picking a page on the slider shows a
+/// preview of it over the thumb.
 ///
 /// Touch: tap the left/right third to go back/forward, the middle for the controls; any tap off the controls hides
-/// them. Pinch to zoom in fit-screen mode. Progress goes straight to Komga (no local copy).
+/// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
+/// goes straight to Komga (no local copy).
 class ReaderScreen extends StatefulWidget {
   const ReaderScreen({super.key, required this.api, required this.book, this.readListId});
   final Komga api;
@@ -64,6 +66,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   bool _flash = false; // the page number shows for a moment after a turn (setting: Show the page number after a turn)
   final Map<int, ScrollController> _scrolls = {};
   final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
+  final Map<int, void Function(Offset global)> _zoomers = {}; // double-tap zoom, per page (page_image.dart)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
   final FocusNode _sliderInner = FocusNode(canRequestFocus: false, skipTraversal: true); // the wrapper takes focus
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
@@ -106,6 +109,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void dispose() {
     _saveTimer?.cancel();
     _flashTimer?.cancel();
+    _tapTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
     _idle?.complete(); // nothing left waiting
@@ -158,6 +162,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       final start = rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pages.length - 1);
       _pc?.dispose();
       _disposeScrolls();
+      _thumbs.clear();
       final loader = PageLoader(api, fresh['id'] as String,
           [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
       if (pages.isNotEmpty) loader.around(start);
@@ -258,6 +263,45 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       _pc!.jumpToPage(target);
     } else {
       _pc!.animateToPage(target, duration: _turn, curve: Curves.easeOut);
+    }
+  }
+
+  // ---- taps: the side you read towards goes forward, the other back, the middle shows the controls ----------------
+  // With Double-tap to zoom on (fit screen, a page showing), a tap waits [_doubleTapWait] to see whether a second
+  // one follows near it: a double tap zooms in on that spot (again: back out), and no single tap happens.
+  static const _doubleTapWait = Duration(milliseconds: 250);
+  static const _doubleTapSlop = 60.0; // how far apart the two taps may be
+  Timer? _tapTimer;
+  Offset? _firstTap; // waiting for a possible second tap
+
+  void _onTapUp(TapUpDetails d, double width) {
+    final zoomer = _settings.display.doubleTapZoom && _prefs.fit == FitMode.screen ? _zoomers[_index] : null;
+    final waiting = _firstTap;
+    final pending = waiting != null && (_tapTimer?.isActive ?? false);
+    _tapTimer?.cancel();
+    _firstTap = null;
+    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) _tap(waiting.dx / width); // not a pair
+    if (zoomer == null) {
+      _tap(d.localPosition.dx / width);
+    } else if (pending && (d.localPosition - waiting).distance <= _doubleTapSlop) {
+      zoomer(d.globalPosition);
+    } else {
+      _firstTap = d.localPosition;
+      _tapTimer = Timer(_doubleTapWait, () {
+        _firstTap = null;
+        if (mounted && !_menu) _tap(d.localPosition.dx / width);
+      });
+    }
+  }
+
+  /// A single tap at [x] (0..1 across the screen). Tap zones follow the reading direction.
+  void _tap(double x) {
+    if (x < 0.33) {
+      _rtl ? _forward() : _back();
+    } else if (x > 0.67) {
+      _rtl ? _back() : _forward();
+    } else {
+      _showControls();
     }
   }
 
@@ -616,6 +660,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
     if (!_menu) {
+      // Volume keys (Android, a setting): down = forward, up = back, in any reading direction. Handled keys don't
+      // reach the system, so the volume stays put; a held key turns one page (its repeats are swallowed).
+      if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) &&
+          hasVolumeKeys && _settings.display.volumeKeys) {
+        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _forward() : _back();
+        return KeyEventResult.handled;
+      }
       if (_isFwd(k) || (k == LogicalKeyboardKey.space && !HardwareKeyboard.instance.isShiftPressed)) {
         _forward();
         return KeyEventResult.handled;
@@ -720,13 +771,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                       onHorizontalDragStart: _curlDrag ? _curlDragStart : null,
                       onHorizontalDragUpdate: _curlDrag ? _curlDragUpdate : null,
                       onHorizontalDragEnd: _curlDrag ? _curlDragEnd : null,
-                      onTapUp: (d) {
-                        final x = d.localPosition.dx / box.maxWidth;
-                        // tap zones follow the reading direction: the side you read towards goes forward
-                        if (x < 0.33) { _rtl ? _forward() : _back(); }
-                        else if (x > 0.67) { _rtl ? _back() : _forward(); }
-                        else { _showControls(); }
-                      },
+                      onTapUp: (d) => _onTapUp(d, box.maxWidth),
                       child: RepaintBoundary(
                         key: _pagesKey,
                         child: NotificationListener<ScrollNotification>(
@@ -816,6 +861,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
           idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
+          onZoomToggle: (zoom) => zoom == null ? _zoomers.remove(i) : _zoomers[i] = zoom,
           rtl: _rtl,
           onStartedAtEnd: () => _startAtEnd = null,
         );
@@ -1118,26 +1164,89 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           data: SliderTheme.of(context).copyWith(
             trackHeight: 4,
             inactiveTrackColor: Colors.white24,
-            showValueIndicator: ShowValueIndicator.onDrag,
+            showValueIndicator: ShowValueIndicator.never, // the preview says which page
+            // a known inset, so the preview can sit over the thumb: the track runs edge to edge inside it
+            padding: const EdgeInsets.symmetric(horizontal: _sliderInset, vertical: 12),
           ),
-          child: Slider(
-            focusNode: _sliderInner,
-            min: 0,
-            max: _last.toDouble(),
-            divisions: _last,
-            value: shown.toDouble(),
-            label: 'Page ${shown + 1}',
-            onChanged: (v) => setState(() => _scrub = v.round()),
-            onChangeEnd: (v) {
-              _finishCurlNow();
-              _pc?.jumpToPage(v.round());
-              setState(() => _scrub = null);
-            },
-          ),
+          child: LayoutBuilder(builder: (context, box) => Stack(clipBehavior: Clip.none, children: [
+            _sliderItself(shown),
+            if (_scrub != null) _preview(shown, box.maxWidth),
+          ])),
         ),
       ),
     );
   }
+
+  static const _sliderInset = 20.0;
+  static const _previewSize = Size(120, 196);
+
+  /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
+  /// of it and its number, over the thumb.
+  Widget _preview(int shown, double width) {
+    final along = _sliderInset + (_last == 0 ? 0 : shown / _last) * (width - 2 * _sliderInset);
+    final x = _rtl ? width - along : along; // right to left: page 1 at the right end
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return Positioned(
+      left: x - _previewSize.width / 2,
+      top: -_previewSize.height - 18,
+      width: _previewSize.width,
+      height: _previewSize.height,
+      child: IgnorePointer(
+        child: Container(
+          key: const ValueKey('page-preview'),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white24)),
+          child: Column(children: [
+            Expanded(
+              child: FutureBuilder<Uint8List?>(
+                future: _thumb(shown),
+                // the previous picture stays until the next one is in (no blinking while dragging)
+                builder: (context, snap) => snap.data == null
+                    ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                    : Image.memory(snap.data!, fit: BoxFit.contain, gaplessPlayback: true,
+                        // offline it's the whole page: decoded small
+                        cacheWidth: (_previewSize.width * dpr).round(),
+                        errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('Page ${shown + 1}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  final Map<int, Future<Uint8List?>> _thumbs = {}; // page index -> its preview picture (null: none to be had)
+
+  /// Komga's small picture of a page (offline: the page itself), fetched once; the last few dozen are kept.
+  Future<Uint8List?> _thumb(int i) {
+    final f = _thumbs.remove(i) ??
+        api.pageThumbBytes(_book['id'] as String, _loader!.pageNumbers[i])
+            .then<Uint8List?>((b) => b)
+            .catchError((Object _) => null);
+    _thumbs[i] = f; // most recently used last
+    while (_thumbs.length > 24) {
+      _thumbs.remove(_thumbs.keys.first);
+    }
+    return f;
+  }
+
+  Widget _sliderItself(int shown) => Slider(
+        focusNode: _sliderInner,
+        min: 0,
+        max: _last.toDouble(),
+        divisions: _last,
+        value: shown.toDouble(),
+        label: 'Page ${shown + 1}',
+        onChanged: (v) => setState(() => _scrub = v.round()),
+        onChangeEnd: (v) {
+          _finishCurlNow();
+          _pc?.jumpToPage(v.round());
+          setState(() => _scrub = null);
+        },
+      );
 }
 
 /// A page turn in progress (3D page curl).

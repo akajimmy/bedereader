@@ -5,6 +5,15 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+**New**
+- **Double-tap to zoom** (fit screen): double-tap a spot to zoom in on it, double-tap again to zoom back out. To tell
+  a double tap from a single one, taps wait a quarter of a second before turning the page or showing the controls;
+  switch it off in Reader settings (or Settings > Reading) for instant taps.
+- **Page previews on the slider**: while you pick a page on the slider (by touch, mouse or remote), a small picture of
+  it shows over the thumb, with its page number.
+- **Volume keys turn pages** (Android): volume down for the next page, volume up for the previous one. With the
+  controls showing they change the volume as usual. On by default; switch it off in Reader settings.
+
 ## 0.1.1 - offline reading and better pages
 
 **Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37

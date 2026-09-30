@@ -237,6 +237,13 @@ class Komga {
         return r.bodyBytes;
       }, limit: pageTimeout);
 
+  /// A small picture of a page (Komga makes it, about 300 px wide) - the reader's slider previews.
+  Future<Uint8List> pageThumbBytes(String bookId, int number) => _net(() async {
+        final r = await _http.get(Uri.parse('${pageUrl(bookId, number)}/thumbnail'), headers: imageHeaders);
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'page $number thumbnail');
+        return r.bodyBytes;
+      });
+
   // ---- what a book belongs to (the download engine snapshots this for offline browsing)
   Future<List<dynamic>> bookReadLists(String bookId) async =>
       (await _get('/api/v1/books/$bookId/readlists') as List<dynamic>?) ?? [];

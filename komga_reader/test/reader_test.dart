@@ -86,6 +86,19 @@ class NotDownloadedKomga extends FakeKomga {
       throw NotAvailableOffline('The next book');
 }
 
+/// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
+class ImageKomga extends FakeKomga {
+  static late Uint8List png;
+  final thumbsAsked = <int>[];
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) async => png;
+  @override
+  Future<Uint8List> pageThumbBytes(String bookId, int number) async {
+    thumbsAsked.add(number);
+    return png;
+  }
+}
+
 void main() {
   // the reader starts loading the curl shader when it opens; load it once for real first, or that load starts inside
   // a test's fake clock, never finishes, and the curl tests wait on it forever
@@ -734,6 +747,137 @@ void main() {
     addTearDown(() => AppSettings.instance.series.remove('S1'));
     await openReader(tester);
     expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
+  });
+
+  group('with pages that load', () {
+    Future<void> openLoaded(WidgetTester tester) async {
+      await tester.runAsync(() async {
+        final rec = ui.PictureRecorder();
+        Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFE0D0B0));
+        final img = await rec.endRecording().toImage(200, 300);
+        ImageKomga.png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+      });
+      api = ImageKomga();
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100))); // pages decode for real
+      await tester.pump();
+      expect(find.byType(PageCanvas), findsWidgets);
+    }
+
+    double page(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+    double scale(WidgetTester tester) =>
+        tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first).transformationController!.value
+            .getMaxScaleOnAxis();
+
+    testWidgets('double-tap zooms in on the spot, again zooms back out - no controls, no page turn', (tester) async {
+      await openLoaded(tester);
+      final c = tester.getCenter(find.byType(PageView));
+      Future<void> doubleTap() async {
+        await tester.tapAt(c);
+        await tester.pump(const Duration(milliseconds: 80));
+        await tester.tapAt(c);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      await doubleTap();
+      expect(scale(tester), closeTo(2, 1e-6));
+      expect(find.byTooltip('Next book'), findsNothing); // the middle taps didn't show the controls
+      await doubleTap();
+      expect(scale(tester), closeTo(1, 1e-6));
+      expect(page(tester), 0.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('double-tap on: a single tap turns after a short wait; switched off: at once', (tester) async {
+      await openLoaded(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final right = Offset(size.width * 0.9, size.height / 2);
+      await tester.tapAt(right);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(page(tester), 0.0); // still waiting for a possible second tap
+      await tester.pump(const Duration(milliseconds: 200)); // the wait is over: the turn starts
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 1.0);
+
+      final s = AppSettings.instance;
+      s.setDisplay(s.display.copyWith(doubleTapZoom: false));
+      addTearDown(() => s.setDisplay(s.display.copyWith(doubleTapZoom: true)));
+      await tester.tapAt(right);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(page(tester), greaterThan(1.0)); // already sliding
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('slider: picking a page shows its preview over the thumb; letting go jumps there', (tester) async {
+      await openLoaded(tester);
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      const preview = ValueKey('page-preview');
+      expect(find.byKey(preview), findsNothing);
+      final r = tester.getRect(find.byType(Slider));
+      final g = await tester.startGesture(Offset(r.left + 20, r.center.dy)); // the thumb, on page 1
+      await g.moveTo(Offset(r.left + 60, r.center.dy));
+      await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last page
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // the picture decodes
+      await tester.pump();
+      expect(find.byKey(preview), findsOneWidget);
+      expect(find.text('Page 3'), findsOneWidget);
+      expect((api as ImageKomga).thumbsAsked, contains(3));
+      final p = tester.getRect(find.byKey(preview));
+      expect(p.center.dx, closeTo(r.right - 20, 1)); // over the thumb
+      expect(p.bottom, lessThan(r.top)); // above the bar, over the page
+      expect(find.descendant(of: find.byKey(preview), matching: find.byType(Image)), findsOneWidget);
+      await g.up();
+      await tester.pump();
+      expect(find.byKey(preview), findsNothing);
+      expect(page(tester), 2.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+  });
+
+  testWidgets('Android: volume down turns forward, up back; switched off, or on a PC, they stay volume keys',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    final s = AppSettings.instance;
+    try {
+      await openReader(tester);
+      double page() => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+      Future<void> turn() async {
+        await tester.pump(); // the page animation starts on the next frame
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.audioVolumeDown), isTrue); // used: no volume change
+      await turn();
+      expect(page(), 1.0);
+      await tester.sendKeyEvent(LogicalKeyboardKey.audioVolumeUp);
+      await turn();
+      expect(page(), 0.0);
+
+      s.setDisplay(s.display.copyWith(volumeKeys: false));
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.audioVolumeDown), isFalse); // left to the system
+      await turn();
+      expect(page(), 0.0);
+
+      s.setDisplay(s.display.copyWith(volumeKeys: true));
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      expect(await tester.sendKeyEvent(LogicalKeyboardKey.audioVolumeDown), isFalse);
+      await tester.pump(const Duration(seconds: 2));
+    } finally {
+      s.setDisplay(s.display.copyWith(volumeKeys: true));
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  test('double-tap zoom and volume keys: on unless switched off, and kept on the device', () {
+    expect(DisplayPrefs.fromJson({'night': true}).doubleTapZoom, isTrue);
+    expect(DisplayPrefs.fromJson({'night': true}).volumeKeys, isTrue);
+    final off = DisplayPrefs.fromJson(const DisplayPrefs(doubleTapZoom: false, volumeKeys: false).toJson());
+    expect(off.doubleTapZoom, isFalse);
+    expect(off.volumeKeys, isFalse);
   });
 
   test('reading direction survives the settings round trip; older settings are Auto', () {
