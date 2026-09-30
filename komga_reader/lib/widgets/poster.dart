@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../errors.dart';
 import '../paged.dart';
+import '../reader_keys.dart';
 import '../settings.dart';
 import 'error_text.dart';
 
@@ -65,9 +69,9 @@ class PosterTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
+    return HoldOkForMenu(
+      onTap: onOpen,
+      onHold: onMenu,
       child: Builder(builder: (context) {
         return InkWell(
           autofocus: autofocus,
@@ -122,6 +126,58 @@ class PosterTile extends StatelessWidget {
       }),
     );
   }
+}
+
+/// The remote's OK on a focused tile: a press opens it (as a tap), holding it for half a second opens its menu (as a
+/// long press or a right-click) - otherwise a remote couldn't reach the menu (user, 2026-09-30). OK is Enter / Select,
+/// and any keys given "Show the controls" in Remote and keys.
+class HoldOkForMenu extends StatefulWidget {
+  const HoldOkForMenu({super.key, required this.onTap, required this.onHold, required this.child});
+  final VoidCallback onTap;
+  final VoidCallback? onHold; // nothing to hold for: OK is left to the tile (a plain press)
+  final Widget child;
+
+  static const holdTime = Duration(milliseconds: 500);
+
+  @override
+  State<HoldOkForMenu> createState() => _HoldOkForMenuState();
+}
+
+class _HoldOkForMenuState extends State<HoldOkForMenu> {
+  Timer? _timer;
+  bool _down = false; // an OK press that started here, not yet let go (and not yet a hold)
+
+  bool _isOk(LogicalKeyboardKey k) =>
+      k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter ||
+      ReaderKeys.instance.actionFor(k) == ReaderAction.controls;
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    final hold = widget.onHold;
+    if (hold == null || !_isOk(e.logicalKey)) return KeyEventResult.ignored;
+    if (e is KeyDownEvent) {
+      _down = true;
+      _timer?.cancel();
+      _timer = Timer(HoldOkForMenu.holdTime, () {
+        _down = false; // held: the menu, and the release that follows does nothing more
+        if (mounted) hold();
+      });
+    } else if (e is KeyUpEvent) {
+      _timer?.cancel();
+      if (_down) widget.onTap(); // let go before the hold time: a plain press
+      _down = false;
+    }
+    return KeyEventResult.handled; // (repeats while held: swallowed)
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: widget.child);
 }
 
 /// Draws a clear outline around the tile while it has focus (the remote needs to see where it is).

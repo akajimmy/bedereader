@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **Hold OK on the remote to open an item's menu** (a book, series, read list, collection or pin) - the same menu as
+  a long press or a right-click. A short press still opens it.
+
 **Changed**
 - **Override the defaults**, at the top of both reader panels' series settings ("Settings for Series: *name*"):
   - Off: the series follows your defaults, and the controls below are greyed out showing the default values. On:
