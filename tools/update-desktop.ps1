@@ -12,7 +12,9 @@
 .PARAMETER Dest
     Default: <Desktop>\BeDeReader.
 .EXAMPLE
-    C:\Claude\KomgaClient\tools\update-desktop.ps1
+    C:\Claude\KomgaClient\tools\update-desktop.cmd
+    (or double-click it) - runs this script with the execution policy bypassed for that one run; Windows blocks
+    .ps1 files by default.
 #>
 param(
     [string]$Zip,
@@ -33,7 +35,7 @@ $open = Get-Process -ErrorAction SilentlyContinue | Where-Object {
     $_.Path -and $_.Path.StartsWith($Dest.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
 }
 if ($open) {
-    Say "Desktop copy not updated: $($open[0].ProcessName) is open from $Dest - close it, then run tools\update-desktop.ps1"
+    Say "Desktop copy not updated: $($open[0].ProcessName) is open from $Dest - close it, then run tools\update-desktop.cmd"
     exit 2
 }
 
