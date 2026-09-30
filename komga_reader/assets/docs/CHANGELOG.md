@@ -5,17 +5,19 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 44 - 2026-09-30
+
 **New**
 - **Poster size button** (a grid icon with S, M or L) at the top of Home, libraries, series, collections and read
   lists: Small, Medium or Large posters, the same setting as Settings > Library & Home.
 
 **Changed**
 - Settings and the reader panels: the choice buttons on a page are all the same width, lined up on the right.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 43 - 2026-09-30
 
