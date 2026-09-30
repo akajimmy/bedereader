@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../home_sections.dart';
+import 'setting_rows.dart' show RowNav;
 
 /// Show/hide and order Home's sections: a switch per section, ▲▼ buttons (remote-friendly) and a drag handle
 /// (touch). Used in Settings and in the sheet from Home's ⋮ menu (Arrange sections…).
@@ -21,7 +22,7 @@ class HomeSectionsEditor extends StatelessWidget {
           onReorderItem: sections.reorder,
           children: [
             for (var i = 0; i < order.length; i++)
-              Row(key: ValueKey(order[i]), children: [
+              RowNav(key: ValueKey(order[i]), child: Row(children: [ // one row per section for Up / Down
                 Switch(value: sections[order[i]], onChanged: (v) => sections.set(order[i], v)),
                 const SizedBox(width: 8),
                 Expanded(
@@ -42,7 +43,7 @@ class HomeSectionsEditor extends StatelessWidget {
                   index: i,
                   child: const Padding(padding: EdgeInsets.all(8), child: Icon(Icons.drag_handle, color: Color(0xFF8A8A8A))),
                 ),
-              ]),
+              ])),
           ],
         );
       },
