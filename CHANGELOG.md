@@ -5,17 +5,19 @@ means version 0.1.1, build number 32. Build numbers only ever go up.
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
+(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
+
+### Build 48 - 2026-09-30
+
 **New** (Settings > Display)
 - **Night mode on a schedule**: on at one time and off at another (21:00 to 07:00 to start with). You can still switch
   it by hand in between; the schedule takes over again at its next change.
 - **Text size**: 90 %, 100 %, 115 % or 130 % for this app, on top of the device's own text size.
 - **Accent colour**: blue (as before), teal, green, amber, orange, pink or purple, for buttons, switches and
   highlights.
-
-## 0.1.1 - offline reading and better pages
-
-**Released as build 40, tagged `v0.1.1`** (2026-09-29) - the first public release. Release candidates: build 37
-(`v0.1.1-rc.2`) and build 35 (`v0.1.1-rc.1`). Builds 21-26 still showed version 0.1.0.
 
 ### Build 47 - 2026-09-30
 
