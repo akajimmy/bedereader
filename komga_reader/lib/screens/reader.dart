@@ -113,6 +113,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _curlAnim
       ..addListener(_onCurlTick)
       ..addStatusListener((s) { if (s == AnimationStatus.completed) _endCurl(); });
+    _visited.add(Map<String, dynamic>.from(_book as Map)); // the visit starts here
     _open(_book);
   }
 
@@ -575,7 +576,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_endText)));
         Navigator.of(context).pop();
       } else {
-        _open(next);
+        _goTo(next, forward: true);
       }
     } on NotAvailableOffline {
       if (!mounted) return;
@@ -586,12 +587,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     }
   }
 
-  /// Previous book (in the read list it was opened from, else the series) - opened from a view with read books
+  /// Previous book: the one read before this in this visit (read or not now); from the book the visit started with,
+  /// the one before it in the read list it was opened from, else the series - opened from a view with read books
   /// hidden, the previous one not read yet (user, 2026-09-30). Nothing is marked; this book's place is kept if a
   /// page was turned.
   Future<void> _prevBook() async {
     _saveTimer?.cancel();
     _saveNow();
+    if (_at > 0) {
+      _goTo(_visited[_at - 1], forward: false);
+      return;
+    }
     try {
       var prev = await api.previousBook(_book['id'], readListId: widget.readListId);
       for (var hops = 0; widget.skipRead && prev != null && _isRead(prev) && hops < 500; hops++) {
@@ -604,7 +610,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
             ? 'No unread books before this one in the $where'
             : 'This is the first book of the $where')));
       } else {
-        _open(prev);
+        _goTo(prev, forward: false);
       }
     } catch (e, st) {
       if (mounted) showErrorSnack(context, couldnt('find the previous book', e, thing: 'book'), e, st);
@@ -1009,9 +1015,38 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   String? _upNextFor;
   Future<Map<String, dynamic>?>? _upNextFuture;
 
-  /// The book after [id] in the read list it was opened from, else the series - or, opened from a view with read
-  /// books hidden ([ReaderScreen.skipRead]), the next one after it that isn't read yet.
+  // ---- the books read in this visit, in order (user, 2026-09-30): Previous goes back through them, and after going
+  // back Next retraces them forward again, like a browser. Past either end, the next / previous book is looked up.
+  final List<Map<String, dynamic>> _visited = [];
+  int _at = 0; // where [_book] is in [_visited]
+
+  /// Moves to [book], the next (forward) or previous one: steps along the visited books when that's where it is,
+  /// else records it (going forward from the middle, the books after here are left behind).
+  void _goTo(Map<String, dynamic> book, {required bool forward}) {
+    final id = book['id'];
+    if (forward) {
+      if (_at + 1 < _visited.length && _visited[_at + 1]['id'] == id) {
+        _at++;
+      } else {
+        _visited
+          ..removeRange(_at + 1, _visited.length)
+          ..add(book);
+        _at = _visited.length - 1;
+      }
+    } else if (_at > 0 && _visited[_at - 1]['id'] == id) {
+      _at--;
+    } else {
+      _visited.insert(_at, book); // before where this visit started (or [_at] is 0 anyway)
+    }
+    _upNextFuture = null; // what's next depends on where in the visit this is
+    _open(book);
+  }
+
+  /// The book after [id]: the one moved on to before, when this visit went back from it; else the one after it in
+  /// the read list it was opened from, or the series - opened from a view with read books hidden
+  /// ([ReaderScreen.skipRead]), the next one after it that isn't read yet.
   Future<Map<String, dynamic>?> _nextFrom(String id) async {
+    if (_at + 1 < _visited.length && _visited[_at]['id'] == id) return _visited[_at + 1];
     var next = await api.nextBook(id, readListId: widget.readListId);
     for (var hops = 0; widget.skipRead && next != null && _isRead(next) && hops < 500; hops++) {
       next = await api.nextBook(next['id'] as String, readListId: widget.readListId);

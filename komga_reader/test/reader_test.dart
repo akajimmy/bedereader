@@ -116,6 +116,31 @@ class BackChainKomga extends FakeKomga {
   }
 }
 
+/// [ChainKomga] that returns each book by id (B1 unread, B2 read, B3 unread) and records what's opened; nothing
+/// before B1.
+class VisitKomga extends ChainKomga {
+  final opened = <String>[];
+  @override
+  Future<Map<String, dynamic>?> book(String id) async {
+    opened.add(id);
+    return id == 'B1' ? theBook : ChainKomga.b(id, id.substring(1), read: id == 'B2');
+  }
+
+  @override
+  Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async {
+    prevCalls++;
+    return null;
+  }
+
+  int prevCalls = 0;
+  final nextAsked = <String>[];
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) {
+    nextAsked.add(bookId);
+    return super.nextBook(bookId, readListId: readListId);
+  }
+}
+
 /// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
 class ImageKomga extends FakeKomga {
   static late Uint8List png;
@@ -450,6 +475,51 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpWidget(const SizedBox());
     }
+  });
+
+  testWidgets('previous goes back through the books read this visit (read now or not); next then retraces forward',
+      (tester) async {
+    final api = VisitKomga();
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: true)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    Future<void> settle() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    await toEndCard(tester); // finish B1
+    await key(tester, LogicalKeyboardKey.arrowRight); // on to the next unread: B3 (B2 is read)
+    await settle();
+    expect(api.opened.last, 'B3');
+    expect(api.marked, ['B1']); // B1 is read now
+
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.byTooltip('Previous book'));
+    await settle();
+    expect(api.opened.last, 'B1', reason: 'the book read before, though it is read now (not skipped)');
+    expect(api.prevCalls, 0, reason: 'from the visit, not looked up');
+
+    final asked = api.nextAsked.length;
+    await toEndCard(tester);
+    await settle();
+    expect(find.text('Test #3'), findsOneWidget); // the end card shows where Next goes: back to B3
+    await key(tester, LogicalKeyboardKey.arrowRight);
+    await settle();
+    expect(api.opened.last, 'B3');
+    // B1 -> B3 came from the visit: nothing after B1 was looked up (arriving at B3, what comes after it may be)
+    expect(api.nextAsked.sublist(asked), isNot(contains('B1')), reason: 'asked: ${api.nextAsked}');
+
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.byTooltip('Previous book'));
+    await settle();
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.byTooltip('Previous book')); // back at the start of the visit: now looked up
+    await settle();
+    expect(api.prevCalls, 1);
+    expect(find.text('No unread books before this one in the series'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('end card: the last book says so', (tester) async {
