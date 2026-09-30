@@ -5,6 +5,13 @@ About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build n
 
 ## Unreleased
 
+## 0.1.1 - offline reading and better pages
+
+Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
+Builds 21-26 still showed version 0.1.0.
+
+### Build 39 - 2026-09-29
+
 **Changed**
 - **The app is now called BeDeReader** - a library and reader for Komga. (BéDé is Québec French for comics.)
   Nothing to do: settings, downloads, reading progress and the Android install carry over. On Windows the program
@@ -25,11 +32,6 @@ About screen: **0.1.1 (build 32)** means version 0.1.1, build number 32. Build n
   they're downloaded again.
 - End of book: the next book's poster was blurry (Komga's thumbnails are small). The book's cover page itself now
   replaces it, sharp, fetched ahead as you reach the last pages.
-
-## 0.1.1 - offline reading and better pages
-
-Release candidate 2 is build 37, tagged `v0.1.1-rc.2`; release candidate 1 was build 35, tagged `v0.1.1-rc.1`.
-Builds 21-26 still showed version 0.1.0.
 
 ### Build 38 - 2026-09-29
 
