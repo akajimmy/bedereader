@@ -156,7 +156,9 @@ class _ImagePanel extends StatelessWidget {
       groups: (s) {
         final p = s.prefsFor(seriesId);
         return [
-          SettingsGroup(title: '${seriesTitle ?? 'This series'} · this series', trailing: _seriesChip(s, seriesId),
+          // "Settings for Series: <name>" (user, 2026-09-30) - whether it follows the defaults shows in the buttons
+          // below (Use the defaults is greyed out when it does)
+          SettingsGroup(title: seriesTitle == null ? 'Settings for this series' : 'Settings for Series: $seriesTitle',
               children: imageRows(p, (n) => s.setSeries(seriesId, n))),
           // the actions as buttons (user, 2026-09-30: not a ⋮ menu)
           Padding(
@@ -202,6 +204,15 @@ String _signed(double v) {
 
 // ---- rows shared with the Settings screen ---------------------------------------------------------------------------
 
+/// The fit modes' icon: fit screen as the usual frame, fit width and height as double-headed arrows, ↔ and ↕ (user,
+/// 2026-09-30 - the swap icons' two arrows read as "swap"). Flutter has only the vertical one (Icons.height), so
+/// width is it turned a quarter.
+Widget fitIcon(FitMode f, {double size = 20, Color? color}) => switch (f) {
+      FitMode.screen => Icon(Icons.fit_screen, size: size, color: color),
+      FitMode.width => RotatedBox(quarterTurns: 1, child: Icon(Icons.height, size: size, color: color)),
+      FitMode.height => Icon(Icons.height, size: size, color: color),
+    };
+
 /// Fit and reading direction for [p] (a series, or the defaults). [icons]: both as icons (the reader's narrow
 /// sheet).
 List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
@@ -218,8 +229,8 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
       title: 'Fit',
       choices: [
         Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
-        Choice(FitMode.width, icons ? 'Fit width' : 'Width', icon: icons ? Icons.swap_horiz : null),
-        Choice(FitMode.height, icons ? 'Fit height' : 'Height', icon: icons ? Icons.swap_vert : null),
+        Choice(FitMode.width, icons ? 'Fit width' : 'Width', iconWidget: icons ? fitIcon(FitMode.width) : null),
+        Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
       ],
       value: p.fit,
       onChanged: (f) => setP(p.copyWith(fit: f)),
@@ -246,9 +257,9 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP) => [
           value: p.autoLevels, onChanged: (v) => setP(p.copyWith(autoLevels: v))),
       SliderRow(label: 'Crop edges', value: p.crop, min: 0, max: ReaderPrefs.maxCrop, divisions: 10, // 1% steps
           valueText: p.crop == 0 ? 'Off' : '${(p.crop * 100).round()}%', onChanged: (v) => setP(p.copyWith(crop: v))),
-      SliderRow(label: 'Brightness', value: p.brightness, min: -0.3, max: 0.3,
+      SliderRow(label: 'Brightness', value: p.brightness, min: -0.3, max: 0.3, divisions: 40, // steps of 5 (-100..+100)
           valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
-      SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5,
+      SliderRow(label: 'Contrast', value: p.contrast, min: -0.5, max: 0.5, divisions: 40, // steps of 5
           valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
     ];
 
@@ -262,6 +273,7 @@ List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
     return [
       SliderRow(
         label: 'Screen brightness',
+        divisions: 20, // 5% steps
         icon: icon,
         value: d.brightness ?? 1,
         valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
@@ -272,6 +284,7 @@ List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
   return [
     SliderRow(
       label: 'Screen brightness',
+      divisions: 20, // 5% steps
       icon: icon,
       value: d.brightness ?? 0.6,
       enabled: d.brightness != null,
@@ -297,10 +310,11 @@ List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
 List<Widget> nightRows(AppSettings s) {
   final d = s.display;
   return [
-    SwitchRow(title: 'Night mode', subtitle: 'Warm colours, whole app', value: d.night,
+    SwitchRow(title: 'Night mode', value: d.night, // no sub-label (user, 2026-09-30)
         onChanged: (v) => s.setDisplay(s.display.copyWith(night: v))),
     if (d.night)
-      SliderRow(label: 'Warmth', value: d.warmth, valueText: '${(d.warmth * 100).round()}%',
+      SliderRow(label: 'Warmth', value: d.warmth, divisions: 20, // 5% steps
+          valueText: '${(d.warmth * 100).round()}%',
           onChanged: (v) => s.setDisplay(s.display.copyWith(warmth: v))),
   ];
 }

@@ -122,20 +122,33 @@ extension ShowWhenLabel on ShowWhen {
       switch (this) { ShowWhen.off => 'Off', ShowWhen.withControls => 'With the controls', ShowWhen.always => 'Always' };
 }
 
-/// The app's accent colour (buttons, switches, highlights): pale tones that read on the dark background.
-enum Accent { blue, teal, green, amber, orange, pink, purple }
+/// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark
+/// background (the "Rich" set, 2026-09-30 - the first, pale set was too muted). Listed in the order shown; the names
+/// are what's saved, so the original seven keep theirs (purple is now a violet).
+enum Accent { blue, sky, cyan, teal, green, lime, yellow, amber, orange, red, pink, fuchsia, purple, indigo }
 
 extension AccentColour on Accent {
   Color get colour => switch (this) {
-        Accent.blue => const Color(0xFF8AB4F8),
-        Accent.teal => const Color(0xFF5DCAA5),
-        Accent.green => const Color(0xFF97C459),
-        Accent.amber => const Color(0xFFEFB04A),
-        Accent.orange => const Color(0xFFF0997B),
-        Accent.pink => const Color(0xFFED93B1),
-        Accent.purple => const Color(0xFFAFA9EC),
+        Accent.blue => const Color(0xFF3B82F6),
+        Accent.sky => const Color(0xFF0EA5E9),
+        Accent.cyan => const Color(0xFF06B6D4),
+        Accent.teal => const Color(0xFF14B8A6),
+        Accent.green => const Color(0xFF22C55E),
+        Accent.lime => const Color(0xFF84CC16),
+        Accent.yellow => const Color(0xFFEAB308),
+        Accent.amber => const Color(0xFFF59E0B),
+        Accent.orange => const Color(0xFFF97316),
+        Accent.red => const Color(0xFFEF4444),
+        Accent.pink => const Color(0xFFEC4899),
+        Accent.fuchsia => const Color(0xFFD946EF),
+        Accent.purple => const Color(0xFF8B5CF6),
+        Accent.indigo => const Color(0xFF6366F1),
       };
-  String get label => '${name[0].toUpperCase()}${name.substring(1)}';
+
+  /// Text and icons on the accent (a selected choice, a filled button): black on the light ones, white on the dark.
+  Color get onColour => colour.computeLuminance() > 0.25 ? const Color(0xFF101012) : const Color(0xFFFFFFFF);
+
+  String get label => this == Accent.purple ? 'Violet' : '${name[0].toUpperCase()}${name.substring(1)}';
 }
 
 /// Library grids and Home's rows: how big the posters are.

@@ -98,8 +98,10 @@ class SettingRow extends StatelessWidget {
           return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             label,
             const SizedBox(height: 8),
+            // under the label, a control too wide for the row shrinks to fit rather than scroll off the edge (it cut
+            // off "Keep the screen on" in the reader's side sheet - tablet bug, 2026-09-30)
             Align(alignment: Alignment.centerLeft,
-                child: SingleChildScrollView(scrollDirection: Axis.horizontal, child: t)),
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: t)),
           ]);
         }
         return Row(children: [
@@ -174,10 +176,11 @@ class SwitchRow extends StatelessWidget {
 
 /// One option of a [SegmentRow]: a short label, or an icon with a tooltip.
 class Choice<T> {
-  const Choice(this.value, this.label, {this.icon});
+  const Choice(this.value, this.label, {this.icon, this.iconWidget});
   final T value;
   final String label;
   final IconData? icon; // shown instead of the label (the label becomes its tooltip)
+  final Widget? iconWidget; // or a ready-made icon (a turned one, say)
 }
 
 /// A choice between a few options, as compact segmented buttons in the row.
@@ -195,7 +198,7 @@ class SegmentRow<T> extends StatelessWidget {
   double _width(BuildContext context) {
     var widest = 0.0;
     for (final c in choices) {
-      final w = c.icon != null ? 22.0 : textWidth(context, c.label, 13);
+      final w = c.icon != null || c.iconWidget != null ? 22.0 : textWidth(context, c.label, 13);
       if (w > widest) widest = w;
     }
     return choices.length * (widest + 28);
@@ -233,9 +236,9 @@ class SegmentRow<T> extends StatelessWidget {
             for (final c in choices)
               ButtonSegment(
                 value: c.value,
-                label: c.icon == null ? Text(c.label) : null,
-                icon: c.icon == null ? null : Icon(c.icon, size: 20),
-                tooltip: c.icon == null ? null : c.label,
+                label: c.icon == null && c.iconWidget == null ? Text(c.label) : null,
+                icon: c.iconWidget ?? (c.icon == null ? null : Icon(c.icon, size: 20)),
+                tooltip: c.icon == null && c.iconWidget == null ? null : c.label,
               ),
           ],
           selected: {value},
@@ -257,25 +260,47 @@ class SliderRow extends StatelessWidget {
   final ValueChanged<double> onChanged;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
-        child: Row(children: [
-          if (icon != null)
-            Tooltip(message: label, child: Icon(icon, size: 20, color: enabled ? null : const Color(0xFF6A6A6A)))
-          else
-            SizedBox(width: 136, child: Text(label,
-                style: TextStyle(fontSize: 14.5, color: enabled ? null : const Color(0xFF6A6A6A)))),
-          Expanded(
-            child: Semantics(
-              label: label,
-              child: Slider(value: value.clamp(min, max), min: min, max: max, divisions: divisions,
-                  onChanged: enabled ? onChanged : null),
+  Widget build(BuildContext context) {
+    final muted = enabled ? null : const Color(0xFF6A6A6A);
+    final value_ = Text(valueText, textAlign: TextAlign.right, style: const TextStyle(color: hintColour, fontSize: 12.5));
+    final slider = Semantics(
+      label: label,
+      // directional navigation: Left/Right adjust, Up/Down move on to the next row - in Flutter's usual mode a slider
+      // keeps all four arrows, and the remote couldn't get off it (tablet bug, 2026-09-30)
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
+        child: Slider(value: value.clamp(min, max), min: min, max: max, divisions: divisions,
+            onChanged: enabled ? onChanged : null),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
+      child: LayoutBuilder(builder: (context, box) {
+        // a narrow row (the reader's side sheet): the label and value on a line, the slider the full width under
+        // them - beside a label it got only ~120 px there (tablet bug, 2026-09-30)
+        if (icon == null && box.maxWidth < 440) {
+          return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(children: [
+                Expanded(child: Text(label, style: TextStyle(fontSize: 14.5, color: muted))),
+                value_,
+              ]),
             ),
-          ),
-          SizedBox(width: 64, child: Text(valueText, textAlign: TextAlign.right,
-              style: const TextStyle(color: hintColour, fontSize: 12.5))),
-        ]),
-      );
+            slider,
+          ]);
+        }
+        return Row(children: [
+          if (icon != null)
+            Tooltip(message: label, child: Icon(icon, size: 20, color: muted))
+          else
+            SizedBox(width: 136, child: Text(label, style: TextStyle(fontSize: 14.5, color: muted))),
+          Expanded(child: slider),
+          SizedBox(width: 64, child: value_),
+        ]);
+      }),
+    );
+  }
 }
 
 /// A row that goes somewhere (chevron) or does something (a button on the right).

@@ -111,14 +111,15 @@ void main() {
     expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
-  test('Delete once read: off, nothing goes; on, a book read goes - after the reader closes if it was open', () async {
+  test('Delete once read: Never, nothing goes; Always, a book read goes - after the reader closes if it was open',
+      () async {
     await d.attach(FakeKomga(), root: dir);
     await d.add([book('B1', 1), book('B2', 2)]);
     await settle(d);
     final offline = OfflineKomga(d.store!);
     await offline.markRead('B1');
-    expect(d.isDownloaded('B1'), isTrue); // off (the default): stays
-    await d.setDeleteWhenRead(true);
+    expect(d.isDownloaded('B1'), isTrue); // Never (the default): stays
+    await d.setDeleteRead(DeleteRead.always);
     d.readerOpened();
     await offline.setProgress('B2', 3, completed: true); // finished in the reader
     await Future<void>.delayed(const Duration(milliseconds: 20));
@@ -130,7 +131,49 @@ void main() {
     expect(d.isDownloaded('B2'), isFalse);
     expect(d.store!.unsynced, contains('B2')); // the read mark is still on its way to Komga
     expect(d.isDownloaded('B1'), isTrue); // read before it was switched on: not touched
-    await d.setDeleteWhenRead(false);
+    await d.setDeleteRead(DeleteRead.never);
+  });
+
+  test('Delete once read, Ask: finished books are kept and gathered, handed over once no book is open', () async {
+    await d.attach(FakeKomga(), root: dir);
+    await d.add([book('B1', 1), book('B2', 2)]);
+    await settle(d);
+    await d.setDeleteRead(DeleteRead.ask);
+    final offline = OfflineKomga(d.store!);
+    d.readerOpened();
+    await offline.markRead('B1');
+    await offline.markRead('B2');
+    expect(d.isDownloaded('B1') && d.isDownloaded('B2'), isTrue); // nothing deleted without an answer
+    expect(d.noBookOpen, isFalse); // not asked while reading
+    d.readerClosed();
+    expect(d.noBookOpen, isTrue);
+    expect(d.takeAskPending(), ['B1', 'B2']);
+    expect(d.takeAskPending(), isEmpty); // asked once
+    await d.removeAll(['B1']); // the answer: delete (just one, say)
+    expect(d.isDownloaded('B1'), isFalse);
+    expect(d.isDownloaded('B2'), isTrue);
+    await d.setDeleteRead(DeleteRead.never);
+  });
+
+  test("the old on/off switch carries over: on is Always, off Never", () async {
+    SharedPreferences.setMockInitialValues({'downloads.deleteWhenRead': true});
+    await d.attach(FakeKomga(), root: dir);
+    expect(d.deleteRead, DeleteRead.always);
+    SharedPreferences.setMockInitialValues({'downloads.deleteWhenRead': false});
+    await d.attach(FakeKomga(), root: dir);
+    expect(d.deleteRead, DeleteRead.never);
+  });
+
+  test('a book stopped for lack of room carries on when space is available - a download removed', () async {
+    await d.attach(FakeKomga(), root: dir);
+    await d.setCap(500); // room for one book of 300
+    await d.add([book('B1', 1), book('B2', 2)]);
+    await settle(d);
+    expect(d.jobFor('B2')!.state, JobState.failed); // not enough room
+    await d.remove('B1'); // room again
+    await settle(d);
+    expect(d.isDownloaded('B2'), isTrue); // carried on by itself - no Retry needed
+    await d.setCap(null);
   });
 
   test('queuing the same book twice, or one already downloaded, does nothing', () async {

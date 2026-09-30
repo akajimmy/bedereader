@@ -170,7 +170,8 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
-      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle});
+      this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle,
+      this.onZoomStep});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
@@ -187,6 +188,9 @@ class PageCanvas extends StatefulWidget {
   /// Hands the reader this page's double-tap zoom (null when the page goes away): toggle(globalPosition) zooms in on
   /// that spot, or back out to fit when zoomed in. Fit screen only.
   final ValueChanged<void Function(Offset global)?>? onZoomToggle;
+
+  /// Hands the reader this page's zoom step (null when the page goes away): step(true) zooms in, step(false) out.
+  final ValueChanged<void Function(bool zoomIn)?>? onZoomStep;
 
   /// Optional outside controller for the zoom (tests); the page makes its own otherwise.
   final TransformationController? zoom;
@@ -248,6 +252,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     _anim.addListener(() { final m = _move; if (m != null) _zoom.value = m.value; });
     widget.onStepper?.call(_step);
     widget.onZoomToggle?.call(_toggleZoom);
+    widget.onZoomStep?.call(_zoomStep);
     _prepare();
   }
 
@@ -256,6 +261,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     if (_panning == true) widget.onPanChanged?.call(false);
     widget.onStepper?.call(null);
     widget.onZoomToggle?.call(null);
+    widget.onZoomStep?.call(null);
     _enhanceRun++;
     _enhanced?.dispose();
     _colourRun++;
@@ -340,13 +346,38 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     }
     const k = doubleTapScale;
     final p = box.globalToLocal(global);
-    // same bounds as the stepper's; a page narrower (or shorter) than the screen when zoomed stays centred
-    double keep(double t, double min, double max) => min >= max ? (min + max) / 2 : t.clamp(min, max);
-    final tx = keep(p.dx * (1 - k), vp.width - k * pic.right, -k * pic.left);
-    final ty = keep(p.dy * (1 - k), vp.height - k * pic.bottom, -k * pic.top);
+    final tx = _keep(p.dx * (1 - k), vp.width - k * pic.right, -k * pic.left);
+    final ty = _keep(p.dy * (1 - k), vp.height - k * pic.bottom, -k * pic.top);
     _animateTo(Matrix4.identity()
       ..translateByDouble(tx, ty, 0, 1)
       ..scaleByDouble(k, k, 1, 1));
+  }
+
+  /// Same bounds as the stepper's: the screen stays inside the page; a page narrower (or shorter) than the screen
+  /// when zoomed stays centred.
+  static double _keep(double t, double min, double max) => min >= max ? (min + max) / 2 : t.clamp(min, max);
+
+  /// Zoom one step in or out (Remote and keys: Zoom in / Zoom out), x1.5 a step between fit and 4x, the middle of
+  /// the screen staying on the same spot of the page. Fit screen only.
+  void _zoomStep(bool zoomIn) {
+    final vp = _viewport, pic = _picture;
+    if (vp == null || pic == null) return;
+    final m = _zoom.value;
+    final k = m.getMaxScaleOnAxis();
+    final target = (zoomIn ? k * 1.5 : k / 1.5).clamp(1.0, 4.0);
+    if ((target - k).abs() < 1e-3) return;
+    if (target <= 1.01) {
+      _animateTo(Matrix4.identity());
+      return;
+    }
+    final t = m.getTranslation();
+    final cx = vp.width / 2, cy = vp.height / 2;
+    final sx = (cx - t.x) / k, sy = (cy - t.y) / k; // the point of the page now in the middle of the screen
+    final tx = _keep(cx - target * sx, vp.width - target * pic.right, -target * pic.left);
+    final ty = _keep(cy - target * sy, vp.height - target * pic.bottom, -target * pic.top);
+    _animateTo(Matrix4.identity()
+      ..translateByDouble(tx, ty, 0, 1)
+      ..scaleByDouble(target, target, 1, 1));
   }
 
   @override
