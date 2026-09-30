@@ -207,9 +207,16 @@ if ($Platforms -contains 'android') {
 }
 if ($Platforms -contains 'windows') {
     Run 'Windows app' 'flutter build windows --release'
+    $release = Join-Path $app 'build\windows\x64\runner\Release'
+    # only this build's program goes in the zip: the build folder keeps any .exe built under an earlier name (build 39
+    # shipped KomgaReader.exe next to BeDeReader.exe). They're build output - the next build makes them again if needed.
+    Get-ChildItem $release -Filter *.exe | Where-Object { $_.Name -ne "$product.exe" } | ForEach-Object {
+        Say "left out of the zip (and removed from the build folder): $($_.Name), from an earlier build"
+        Remove-Item $_.FullName
+    }
     $zip = Join-Path $out "$product-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
-    Compress-Archive -Path (Join-Path $app 'build\windows\x64\runner\Release\*') -DestinationPath $zip
+    Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip
     $artifacts += $zip
 }
 if ($Platforms -contains 'web') {
