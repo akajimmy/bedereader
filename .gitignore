@@ -32,3 +32,6 @@ tools/extract_pages.py
 tools/icon_preview.png
 komga_reader/lib/dev_*.dart
 .claude/
+
+# raw screenshots for the README (the chosen ones go, sized, into docs/images/)
+screenshots/
