@@ -1000,6 +1000,27 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('Page previews off: just the page number over the thumb, and no pictures asked for', (tester) async {
+      final s = AppSettings.instance;
+      s.setDisplay(s.display.copyWith(pagePreviews: false));
+      addTearDown(() => s.setDisplay(s.display.copyWith(pagePreviews: true)));
+      await openLoaded(tester, pages: 20);
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      final r = tester.getRect(find.byType(Slider));
+      final g = await tester.startGesture(Offset(r.left + 20, r.center.dy));
+      await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last page
+      await tester.pump();
+      expect(find.byKey(const ValueKey('page-label')), findsOneWidget);
+      expect(find.text('Page 20'), findsOneWidget);
+      expect(find.byKey(const ValueKey('page-preview')), findsNothing);
+      await tester.pump();
+      expect((api as ImageKomga).thumbsAsked, isEmpty);
+      await g.up();
+      await tester.pump();
+      expect(page(tester), 19.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('slider: scrubbing back and forth never turns the page before letting go, asks only for the page '
         'the thumb is on, and uses pages already loaded (user, 2026-09-30)', (tester) async {
       await openLoaded(tester, pages: 20);

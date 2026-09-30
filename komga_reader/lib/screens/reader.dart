@@ -1388,6 +1388,25 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   Widget _preview(int shown, double width) {
     final along = _sliderInset + (_last == 0 ? 0 : shown / _last) * (width - 2 * _sliderInset);
     final x = _rtl ? width - along : along; // right to left: page 1 at the right end
+    if (!_settings.display.pagePreviews) {
+      // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
+      const w = 96.0;
+      return Positioned(
+        left: x - w / 2,
+        top: -48,
+        width: w,
+        child: IgnorePointer(
+          child: Container(
+            key: const ValueKey('page-label'),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white24)),
+            child: Text('Page ${shown + 1}', textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ),
+        ),
+      );
+    }
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return Positioned(
       left: x - _previewSize.width / 2,
