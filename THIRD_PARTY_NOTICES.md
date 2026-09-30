@@ -6,8 +6,7 @@ included pieces require.
 
 ## AI assistance
 
-This application was developed with the aid of AI coding tools (Claude, by Anthropic, through Claude Code), and
-reviewed and tested by a human.
+This application was developed with the aid of AI coding tools, but was designed, reviewed, and tested by a human.
 
 ## Needed at run time, not included
 
