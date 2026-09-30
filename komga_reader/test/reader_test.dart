@@ -145,6 +145,10 @@ class VisitKomga extends ChainKomga {
 /// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
 class ImageKomga extends FakeKomga {
   static late Uint8List png;
+  ImageKomga({this.pageCount = 3});
+  final int pageCount;
+  @override
+  Future<List<dynamic>> pages(String bookId) async => [for (var n = 1; n <= pageCount; n++) {'number': n}];
   final thumbsAsked = <int>[];
   Completer<void>? thumbsHeld; // set: thumbnails wait for it (a slow server)
   @override
@@ -908,14 +912,14 @@ void main() {
   });
 
   group('with pages that load', () {
-    Future<void> openLoaded(WidgetTester tester) async {
+    Future<void> openLoaded(WidgetTester tester, {int pages = 3}) async {
       await tester.runAsync(() async {
         final rec = ui.PictureRecorder();
         Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFE0D0B0));
         final img = await rec.endRecording().toImage(200, 300);
         ImageKomga.png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
       });
-      api = ImageKomga();
+      api = ImageKomga(pageCount: pages);
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100))); // pages decode for real
@@ -970,7 +974,7 @@ void main() {
     });
 
     testWidgets('slider: picking a page shows its preview over the thumb; letting go jumps there', (tester) async {
-      await openLoaded(tester);
+      await openLoaded(tester, pages: 20);
       await key(tester, LogicalKeyboardKey.enter); // controls
       const preview = ValueKey('page-preview');
       expect(find.byKey(preview), findsNothing);
@@ -982,44 +986,51 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // the picture decodes
       await tester.pump();
       expect(find.byKey(preview), findsOneWidget);
-      expect(find.text('Page 3'), findsOneWidget);
-      expect((api as ImageKomga).thumbsAsked, contains(3));
+      expect(find.text('Page 20'), findsOneWidget);
+      expect((api as ImageKomga).thumbsAsked, contains(20));
       final p = tester.getRect(find.byKey(preview));
       expect(p.center.dx, closeTo(r.right - 20, 1)); // over the thumb
       expect(p.bottom, lessThan(r.top)); // above the bar, over the page
       expect(find.descendant(of: find.byKey(preview), matching: find.byType(Image)), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-loading')), findsNothing); // its own picture: no spinner
       await g.up();
       await tester.pump();
       expect(find.byKey(preview), findsNothing);
-      expect(page(tester), 2.0);
+      expect(page(tester), 19.0);
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('slider: scrubbing back and forth never turns the page before letting go, and asks only for the '
-        'page the thumb is on (user, 2026-09-30)', (tester) async {
-      await openLoaded(tester);
+    testWidgets('slider: scrubbing back and forth never turns the page before letting go, asks only for the page '
+        'the thumb is on, and uses pages already loaded (user, 2026-09-30)', (tester) async {
+      await openLoaded(tester, pages: 20);
       final komga = api as ImageKomga..thumbsHeld = Completer<void>(); // a slow server
       await key(tester, LogicalKeyboardKey.enter); // controls
       final r = tester.getRect(find.byType(Slider));
-      Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 2, r.center.dy); // 3 pages
+      Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 19, r.center.dy); // 20 pages
       final g = await tester.startGesture(at(0));
       await tester.pump();
-      for (final i in [1, 2, 1, 0, 2, 1, 2]) { // to and fro
+      for (final i in [1, 10, 15, 5, 12, 19, 8, 19]) { // to and fro
         await g.moveTo(at(i));
         await tester.pump();
         expect(page(tester), 0.0, reason: 'the finger is still down');
       }
       await tester.pump();
-      expect(komga.thumbsAsked, [1, 2], reason: 'two at a time; the pages passed meanwhile are not queued up');
+      // page 2 is already loaded (the next page): shown from there, not asked for
+      expect(komga.thumbsAsked, [11, 16], reason: 'two at a time; the pages passed meanwhile are not queued up');
+      // waiting: the picture there is another page's, so it's faded under a spinner
+      expect(find.byKey(const ValueKey('preview-loading')), findsOneWidget);
       await tester.runAsync(() async => komga.thumbsHeld!.complete());
       await tester.pump();
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
       await tester.pump();
-      expect(komga.thumbsAsked, [1, 2, 3], reason: 'then the page the thumb is on now');
-      expect(find.text('Page 3'), findsOneWidget);
+      expect(komga.thumbsAsked, [11, 16, 20], reason: 'then the page the thumb is on now');
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+      expect(find.text('Page 20'), findsOneWidget);
+      expect(find.byKey(const ValueKey('preview-loading')), findsNothing);
       await g.up();
       await tester.pump();
-      expect(page(tester), 2.0);
+      expect(page(tester), 19.0);
       await tester.pump(const Duration(seconds: 2));
     });
   });

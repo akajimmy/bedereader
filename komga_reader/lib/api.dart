@@ -36,7 +36,8 @@ class Komga {
   static const pageTimeout = Duration(seconds: 45); // big scans on a slow link
 
   /// Runs a request with a time limit, turning "no answer" into one clear error instead of a spinner forever.
-  Future<T> _net<T>(Future<T> Function() request, {Duration limit = timeout}) async {
+  /// [slowIsNotDown]: running out of time isn't taken as Komga being unreachable (still an error for the caller).
+  Future<T> _net<T>(Future<T> Function() request, {Duration limit = timeout, bool slowIsNotDown = false}) async {
     try {
       final r = await request().timeout(limit);
       onReachability?.call(this, true);
@@ -49,7 +50,7 @@ class Komga {
       onReachability?.call(this, false); // something answered, but nothing this app can use
       rethrow;
     } on TimeoutException {
-      onReachability?.call(this, false);
+      if (!slowIsNotDown) onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl);
     } on http.ClientException {
       onReachability?.call(this, false);
@@ -257,12 +258,15 @@ class Komga {
         return r.bodyBytes;
       }, limit: pageTimeout);
 
-  /// A small picture of a page (Komga makes it, about 300 px wide) - the reader's slider previews.
+  /// A small picture of a page (Komga makes it, about 300 px wide) - the reader's slider previews. Komga makes each
+  /// one from the book file as it's asked, so on a slow share they can take seconds (2026-09-30: 0.2-3.7 s each, and
+  /// some queued past the time limit): one running out of time means slow, not gone - Komga isn't reported
+  /// unreachable for it.
   Future<Uint8List> pageThumbBytes(String bookId, int number) => _net(() async {
         final r = await _http.get(Uri.parse('${pageUrl(bookId, number)}/thumbnail'), headers: imageHeaders);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'page $number thumbnail');
         return r.bodyBytes;
-      });
+      }, slowIsNotDown: true);
 
   // ---- what a book belongs to (the download engine snapshots this for offline browsing)
   Future<List<dynamic>> bookReadLists(String bookId) async =>
