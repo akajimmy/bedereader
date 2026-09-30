@@ -13,6 +13,8 @@
     5. With -Bump, commits the version change and tags it build-<n>.
     6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
        if the tablet isn't reachable the build still counts and it says so.
+    7. Unzips the Windows build over Desktop\BeDeReader, the copy used on this PC (tools\update-desktop.ps1),
+       unless -NoInstall; if the app is open from there it's left as it is, and it says so.
 
     Each step prints a timestamped line; the tools' full output goes to dist\build.log
     (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
@@ -28,7 +30,7 @@ param(
     [string[]]$Platforms = @('android', 'windows', 'web'),
     [switch]$SkipTests,
     [switch]$AllowDirty,
-    [switch]$NoInstall      # don't install the APK on the paired tablet afterwards
+    [switch]$NoInstall      # don't install on the tablet or update the Desktop copy afterwards
 )
 
 $ErrorActionPreference = 'Stop'
@@ -270,6 +272,12 @@ if ($Platforms -contains 'android' -and -not $NoInstall) {
     & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
     if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1' }
     if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)' }
+}
+
+# ---- 7. and on this PC: the Windows build unzipped over Desktop\BeDeReader (user, 2026-09-29) ------------------
+if ($Platforms -contains 'windows' -and -not $NoInstall) {
+    $winZip = $artifacts | Where-Object { $_ -like '*-windows.zip' } | Select-Object -First 1
+    & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # exit 2 = the app is open there: it says so
 }
 
 Say ('all done in {0:N0} s' -f ((Get-Date) - $started).TotalSeconds)
