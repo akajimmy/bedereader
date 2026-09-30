@@ -184,8 +184,11 @@ class DisplayPrefs {
       this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue});
+      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true});
   final bool night;
+  /// reader: a picture of the page over the slider's thumb while picking one. Komga makes each from the book file as
+  /// it's asked, so on a slow link to the books they lag (user, 2026-09-30): off, just the page number.
+  final bool pagePreviews;
   final bool nightSchedule; // night mode on at [nightFrom] and off at [nightTo] by itself (still switchable by hand)
   final int nightFrom, nightTo; // minutes after midnight
   final double textScale; // this app's text size, on top of the device's (one of [textScales])
@@ -239,8 +242,10 @@ class DisplayPrefs {
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
           bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
-          bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent}) =>
+          bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
+          bool? pagePreviews}) =>
       DisplayPrefs(
+          pagePreviews: pagePreviews ?? this.pagePreviews,
           nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
           nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
           rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
@@ -256,7 +261,7 @@ class DisplayPrefs {
       'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name};
+      'accent': accent.name, 'pagePreviews': pagePreviews};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -282,7 +287,8 @@ class DisplayPrefs {
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
-        accent: pick(Accent.values, j['accent'], Accent.blue));
+        accent: pick(Accent.values, j['accent'], Accent.blue),
+        pagePreviews: j['pagePreviews'] != false); // on unless switched off
   }
 }
 

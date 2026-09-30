@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- Page previews setting (Settings > Reader, and the reader's panel): off, the slider shows just the page number
+  while you pick a page, and nothing is asked of Komga - for when the link to your books is slow.
+
 **Fixed**
 - Page slider previews on a slow server: pages the reader already has (the one showing, its neighbours) preview
   at once, without asking Komga; while a page's picture is on its way the last one is shown faded under a spinner,

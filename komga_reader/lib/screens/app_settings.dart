@@ -222,6 +222,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       // what's drawn over the page (set once, so Settings only - except the page number, also in the Reader panel)
       SettingsGroup(title: 'On the page', children: [
         pageNumberRow(s),
+        pagePreviewsRow(s),
         clockRow(s),
         progressBarRow(s),
       ]),

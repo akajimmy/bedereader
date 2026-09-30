@@ -149,6 +149,7 @@ class _ReaderPanel extends StatelessWidget {
           if (canRotate) rotationRow(s), // locked mid-book, lying down
           pageTurnRow(s),
           pageNumberRow(s),
+          pagePreviewsRow(s), // noticed mid-book, when they lag
           doubleTapRow(s),
           screenOnRow(s),
         ]),
@@ -377,6 +378,15 @@ Widget progressBarRow(AppSettings s) => SwitchRow(
       subtitle: 'A thin line along the bottom while the controls are hidden',
       value: s.display.progressBar,
       onChanged: (v) => s.setDisplay(s.display.copyWith(progressBar: v)),
+    );
+
+Widget pagePreviewsRow(AppSettings s) => SwitchRow(
+      title: 'Page previews',
+      subtitle: s.display.pagePreviews
+          ? 'A picture of the page over the slider while you pick one'
+          : 'Just the page number - for a slow link to your books',
+      value: s.display.pagePreviews,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
 Widget pageNumberRow(AppSettings s) => SwitchRow(
