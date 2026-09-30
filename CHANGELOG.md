@@ -20,6 +20,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   once; now only the page under your finger), and the page changes only when you let go.
 - A series, a collection or a read list: Left from the leftmost book opens the side menu, as on Home and the libraries
   (a swipe does too). The back arrow stays.
+- Home (Continue reading and the rest) could be out of date: it only reloaded when a screen it opened itself closed.
+  Now Home, the libraries, series, collections, read lists and search results load afresh whenever they're back on
+  top, however you got there (the side menu's Home, say), and when the app comes back into view.
 
 ## 1.2.0 - in development
 

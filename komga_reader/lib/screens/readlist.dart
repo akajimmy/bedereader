@@ -8,6 +8,7 @@ import '../widgets/breadcrumb.dart';
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
+import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'library.dart';
@@ -25,7 +26,10 @@ class ReadListScreen extends StatefulWidget {
   State<ReadListScreen> createState() => _ReadListScreenState();
 }
 
-class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere {
+class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, RefreshOnReturn {
+  @override
+  void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
+
   ReadFilter _filter = ReadFilter.all;
   late final Paged _paged = Paged((page, size) =>
       widget.api.readListBooks(widget.readList['id'], readStatus: _filter.api, page: page, size: size));
@@ -85,8 +89,7 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere {
             readListId: rlId, onChanged: _paged.refresh, selection: _sel, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(
               builder: (_) => ReaderScreen(api: widget.api, book: b, readListId: rlId,
-                  skipRead: _filter == ReadFilter.hideRead)));
-          _paged.refresh();
+                  skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),
     ));

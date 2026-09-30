@@ -10,6 +10,7 @@ import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
+import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'reader.dart';
@@ -30,7 +31,10 @@ class LibraryScreen extends StatefulWidget {
   State<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
+class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
+  @override
+  void refreshView() => _refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
+
   final _scaffold = GlobalKey<ScaffoldState>();
   final _edge = GlobalKey<DrawerEdgeState>(); // Left past the first item opens the side menu
   List<dynamic> _libraries = [];
@@ -271,10 +275,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  Future<void> _push(Widget w) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
-    _refresh(); // read state may have changed while away
-  }
+  // coming back loads afresh: refreshView
+  Future<void> _push(Widget w) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => w));
 
   static String _modeLabel(BrowseMode m) => switch (m) {
         BrowseMode.series => 'Series', BrowseMode.books => 'Books',
