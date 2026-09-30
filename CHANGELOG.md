@@ -9,6 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Override the defaults**, at the top of both reader panels' series settings ("Settings for Series: *name*"):
+  - Off: the series follows your defaults, and the controls below are greyed out showing the default values. On:
+    they're the series' own, starting from the defaults.
+  - The Reader panel's covers fit and direction, the Image panel's the image settings - separately. The Image panel's
+    Use the defaults button is gone (the toggle does it); Reset to original and Make default show with it on.
+  - The top bar's fit button still works either way: for a series with its own layout it changes the series' fit;
+    otherwise it changes the fit for this book only, for now (not saved).
+  - Series with settings of their own from before keep them (both parts overridden).
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.

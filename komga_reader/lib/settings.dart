@@ -27,7 +27,13 @@ extension ReadingDirectionLabel on ReadingDirection {
 @immutable
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
-      this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0});
+      this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0, this.ownLayout = true,
+      this.ownImage = true});
+
+  /// A series' settings come in two parts, each overriding the defaults or not (the panels' "Override the
+  /// defaults" toggles, user 2026-09-30): the page layout (fit, direction) and the image settings. A part not
+  /// overridden follows the defaults. Series saved before this override both (unchanged). Unused on the defaults.
+  final bool ownLayout, ownImage;
 
   final FitMode fit;
   final ReadingDirection direction; // auto = the series' reading direction in Komga
@@ -42,16 +48,25 @@ class ReaderPrefs {
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels && crop == 0;
 
   ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
-          ReadingDirection? direction, double? crop}) =>
+          ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
-          direction: direction ?? this.direction, crop: crop ?? this.crop);
+          direction: direction ?? this.direction, crop: crop ?? this.crop, ownLayout: ownLayout ?? this.ownLayout,
+          ownImage: ownImage ?? this.ownImage);
 
   /// Same fit and direction, image settings back to neutral.
-  ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction);
+  ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction, ownLayout: ownLayout, ownImage: ownImage);
 
-  Map<String, dynamic> toJson() =>
-      {'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name, 'x': crop};
+  /// This one's page layout (fit, direction) with [image]'s image settings.
+  ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(brightness: image.brightness, contrast: image.contrast,
+      sharpen: image.sharpen, autoLevels: image.autoLevels, crop: image.crop);
+
+  Map<String, dynamic> toJson() => {
+        'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name, 'x': crop,
+        // written only when off, so everything saved before (and the defaults) reads exactly as it did
+        if (!ownLayout) 'ol': false,
+        if (!ownImage) 'oi': false,
+      };
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
         fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
@@ -61,6 +76,8 @@ class ReaderPrefs {
         autoLevels: j['l'] == true,
         direction: ReadingDirection.values.firstWhere((d) => d.name == j['d'], orElse: () => ReadingDirection.auto),
         crop: ((j['x'] as num?)?.toDouble() ?? 0).clamp(0.0, maxCrop),
+        ownLayout: j['ol'] != false,
+        ownImage: j['oi'] != false,
       );
 
   @override
@@ -305,7 +322,42 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  ReaderPrefs prefsFor(String? seriesId) => (seriesId != null ? series[seriesId] : null) ?? defaults;
+  /// A series' settings as they apply: each part (page layout, image) its own when overridden, else the defaults'.
+  ReaderPrefs prefsFor(String? seriesId) {
+    final own = seriesId != null ? series[seriesId] : null;
+    if (own == null) return defaults.copyWith(ownLayout: false, ownImage: false);
+    final layout = own.ownLayout ? own : defaults;
+    final image = own.ownImage ? own : defaults;
+    return layout.withImageOf(image).copyWith(ownLayout: own.ownLayout, ownImage: own.ownImage);
+  }
+
+  bool ownsLayout(String seriesId) => series[seriesId]?.ownLayout ?? false;
+  bool ownsImage(String seriesId) => series[seriesId]?.ownImage ?? false;
+
+  /// The series' page layout (fit, direction) from [p] - overriding the defaults from now on.
+  void setSeriesLayout(String seriesId, ReaderPrefs p) {
+    final now = prefsFor(seriesId);
+    setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, ownLayout: true, ownImage: now.ownImage));
+  }
+
+  /// The series' image settings from [p] - overriding the defaults from now on.
+  void setSeriesImage(String seriesId, ReaderPrefs p) {
+    final now = prefsFor(seriesId);
+    setSeries(seriesId, now.withImageOf(p).copyWith(ownImage: true, ownLayout: now.ownLayout));
+  }
+
+  /// A panel's "Override the defaults" toggle. On: the part starts from the defaults' values (nothing on the page
+  /// changes) and can then be set; off: the part follows the defaults again. Neither part overridden: the series
+  /// follows the defaults entirely, and its entry goes (synced).
+  void setOverride(String seriesId, {bool? layout, bool? image}) {
+    final now = prefsFor(seriesId); // an overridden part keeps its values; one not overridden has the defaults'
+    final next = now.copyWith(ownLayout: layout ?? now.ownLayout, ownImage: image ?? now.ownImage);
+    if (!next.ownLayout && !next.ownImage) {
+      useDefaults(seriesId);
+    } else {
+      setSeries(seriesId, next);
+    }
+  }
 
   /// Local copy first (instant), then the Komga copy replaces it if the server has one.
   Future<void> load(Komga api) async {

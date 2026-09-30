@@ -231,9 +231,24 @@ void main() {
     expect(find.byTooltip('Fit screen'), findsOneWidget);
     await key(tester, LogicalKeyboardKey.enter);
     expect(find.byTooltip('Fit width'), findsOneWidget);
-    expect(AppSettings.instance.prefsFor('S1').fit, FitMode.width);
+    // the series follows the default layout: the fit is for this book only, for now - nothing saved
+    expect(AppSettings.instance.hasOwn('S1'), isFalse);
+    expect(AppSettings.instance.prefsFor('S1').fit, FitMode.screen);
     expect(find.byTooltip('Next book'), findsOneWidget); // controls stay up
     await tester.pump(const Duration(seconds: 3)); // let the settings sync timer fire
+  });
+
+  testWidgets("the top bar's fit button: saved for the series when it overrides the default layout", (tester) async {
+    final s = AppSettings.instance;
+    s.setOverride('S1', layout: true);
+    addTearDown(() => s.series.remove('S1'));
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.byTooltip('Fit screen'));
+    await tester.pump();
+    expect(s.prefsFor('S1').fit, FitMode.width); // the series' own fit, saved
+    expect(s.ownsImage('S1'), isFalse); // the image part still follows the defaults
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('back with controls up only hides them; back again closes the book', (tester) async {

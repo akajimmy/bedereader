@@ -84,7 +84,15 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int get _last => _pages.length - 1;
   AppSettings get _settings => AppSettings.instance;
   String? get _seriesId => _book['seriesId'] as String?;
-  ReaderPrefs get _prefs => _settings.prefsFor(_seriesId);
+  // the series' settings as they apply - with the fit for this book only (the top bar's fit button while the series
+  // follows the default layout) on top
+  ReaderPrefs get _prefs {
+    final p = _settings.prefsFor(_seriesId);
+    final f = _bookFit;
+    return f == null || p.ownLayout ? p : p.copyWith(fit: f);
+  }
+
+  FitMode? _bookFit; // this book only, for now: not saved; a book opening goes back to the default (user, 2026-09-30)
   Color get _bg => _settings.display.background.colour; // Settings > Reader > Background
   Color _ink(double alpha) => _settings.display.background.ink.withValues(alpha: alpha); // text on it
 
@@ -202,7 +210,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   static String _titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();
 
   Future<void> _open(dynamic book) async {
-    setState(() { _loading = true; _book = book; _menu = false; _openError = null; });
+    setState(() { _loading = true; _book = book; _menu = false; _openError = null; _bookFit = null; });
     try {
       final fresh = await api.book(book['id']) ?? book; // current progress from the server
       final pages = await api.pages(book['id']);
@@ -802,10 +810,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (pinch != wasPinch) setState(() {});
   }
 
+  /// The top bar's fit button: the series' own fit when it overrides the default layout (saved, synced); otherwise
+  /// this book only, for now (the Reader panel's toggle turns the override on). A book with no series: the default.
   void _setFit(FitMode f) {
     final id = _seriesId;
-    final p = _prefs.copyWith(fit: f);
-    id != null ? _settings.setSeries(id, p) : _settings.setDefault(p);
+    if (id == null) {
+      _settings.setDefault(_settings.defaults.copyWith(fit: f));
+    } else if (_settings.ownsLayout(id)) {
+      _settings.setSeriesLayout(id, _prefs.copyWith(fit: f));
+    } else {
+      setState(() => _bookFit = f);
+    }
   }
 
   @override
@@ -1308,7 +1323,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                     label: 'Reader settings',
                     onPressed: () => showReaderPanel(context,
                         seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
-                        komgaDirection: _komgaDirection)),
+                        komgaDirection: _komgaDirection, bookFit: _bookFit)),
                 IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
                     icon: const Icon(Icons.skip_next, size: 28)),
               ]),
