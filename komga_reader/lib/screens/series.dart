@@ -79,9 +79,9 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
   @override
   Widget build(BuildContext context) {
     final s = widget.series;
-    return selectionScope(_sel, (context) => Scaffold(
+    return withSideMenu(widget.api, (docked) => selectionScope(_sel, (context) => Scaffold(
       key: menuScaffold,
-      drawer: menuDrawer(widget.api),
+      drawer: menuDrawer(widget.api, docked: docked),
       onDrawerChanged: onMenuChanged,
       appBar: _sel.active
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
@@ -125,7 +125,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
               skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),
-    ));
+    )));
   }
 }
 
@@ -170,9 +170,9 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return withSideMenu(widget.api, (docked) => Scaffold(
       key: menuScaffold,
-      drawer: menuDrawer(widget.api),
+      drawer: menuDrawer(widget.api, docked: docked),
       onDrawerChanged: onMenuChanged,
       appBar: AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title),
           actions: [
@@ -193,7 +193,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: widget.api, series: it)));
         }),
       )),
-    );
+    ));
   }
 }
 
