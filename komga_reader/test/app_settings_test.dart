@@ -1,8 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/hidden_libraries.dart';
 import 'package:komga_reader/home_sections.dart';
+import 'package:komga_reader/offline/connection.dart';
+import 'package:komga_reader/offline/downloads.dart';
+import 'package:komga_reader/reader_keys.dart';
 import 'package:komga_reader/screen.dart';
+import 'package:komga_reader/screens/about.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/drawer.dart';
@@ -10,12 +18,20 @@ import 'package:komga_reader/widgets/poster.dart' show PosterSizeButton;
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// me() - the server status check - answers with whatever [next] says: 'ok', 'refused' or 'down'.
 class FakeKomga extends Komga {
   FakeKomga() : super('http://192.168.1.10:25600', 'k');
+  String next = 'ok';
+  int calls = 0;
   @override
   Future<List<dynamic>> libraries() async => [];
   @override
-  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'}; // the server status check
+  Future<Map<String, dynamic>?> me() async {
+    calls++;
+    if (next == 'refused') throw KomgaError(401, '/api/v2/users/me');
+    if (next == 'down') throw KomgaUnreachable(baseUrl);
+    return {'email': 'nick@test'};
+  }
 }
 
 /// A tall window, wide enough for the side list of pages: a whole page fits, nothing to scroll to.
@@ -25,11 +41,25 @@ void tall(WidgetTester tester, {double width = 1000}) {
   addTearDown(tester.view.reset);
 }
 
-Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server, VoidCallback? onSignOut}) async {
-  await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: onSignOut ?? () {},
+Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server, VoidCallback? onSignOut,
+    Komga? api}) async {
+  await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api ?? FakeKomga(), onSignOut: onSignOut ?? () {},
       initialPage: page)));
   await tester.pump();
 }
+
+/// Each page's name in the list and the line under its title saying where its settings are kept (null: none). A
+/// switch, so a new page doesn't compile here until it's added (test audit, 2026-09-30).
+(String, String?) pageInfo(SettingsPage p) => switch (p) {
+      SettingsPage.server => ('Server', 'Kept on this device'),
+      SettingsPage.defaults => ('Reading defaults', 'Synced through Komga - every device'),
+      SettingsPage.reader => ('Reader', 'Kept on this device'),
+      SettingsPage.keys => ('Remote and keys', 'Kept on this device'),
+      SettingsPage.display => ('Display', 'Kept on this device'),
+      SettingsPage.library => ('Library & Home', 'Kept on this device, except On deck (synced)'),
+      SettingsPage.downloads => ('Downloads', 'Kept on this device'),
+      SettingsPage.about => ('About', null),
+    };
 
 void main() {
   setUp(() async {
@@ -37,33 +67,58 @@ void main() {
     await HomeSections.instance.load();
   });
 
-  testWidgets('side menu: Settings after the libraries, and opens the screen', (tester) async {
+  testWidgets('side menu: Home and the libraries, then Settings, then About, last; each opens its screen; '
+      'no App settings / Info / Reader settings / Sign out', (tester) async {
+    // one test for the menu's order (about_test had a second with the same setup - test audit, 2026-09-30)
     final scaffold = GlobalKey<ScaffoldState>();
     await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
         drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
-    double y(String t) => tester.getTopLeft(find.textContaining(t)).dy;
-    expect(y('All libraries') < y('Settings'), isTrue); // Home, line, libraries, line, app items
+    double y(String t) => tester.getTopLeft(find.text(t)).dy;
+    expect(y('Home') < y('All libraries'), isTrue);
+    expect(y('All libraries') < y('Settings'), isTrue);
+    expect(y('Settings') < y('About'), isTrue);
+    for (final gone in ['App settings', 'Info', 'Reader settings', 'Sign out']) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
     expect(find.text('http://192.168.1.10:25600'), findsOneWidget); // opens on Server
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    scaffold.currentState!.openDrawer();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('About'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AboutScreen), findsOneWidget);
   });
 
-  testWidgets('wide: the pages down the side, one shown at a time, each saying where it is kept', (tester) async {
+  testWidgets('wide: every page down the side in order, one shown at a time, each saying where it is kept',
+      (tester) async {
     tall(tester);
     await open(tester);
     await tester.pumpAndSettle();
-    final names = ['Server', 'Reading defaults', 'Reader', 'Display', 'Library & Home', 'About'];
-    final ys = [for (final n in names) tester.getTopLeft(find.widgetWithText(ListTile, n).first).dy];
+    // every page but Downloads (shown only once downloads are set up - not in this test)
+    final pages = [for (final p in SettingsPage.values) if (p != SettingsPage.downloads) p];
+    final ys = [for (final p in pages) tester.getTopLeft(find.widgetWithText(ListTile, pageInfo(p).$1).first).dy];
     expect(ys, [...ys]..sort()); // in that order, down the side
-    expect(find.text('Connected as nick@test'), findsOneWidget); // Server: the status, from Info
-    expect(find.text('Kept on this device'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ListTile, 'Reading defaults'));
-    await tester.pumpAndSettle();
-    expect(find.text('Synced through Komga - every device'), findsOneWidget);
-    expect(find.text('Connected as nick@test'), findsNothing); // one page at a time
+    expect(find.widgetWithText(ListTile, 'Downloads'), findsNothing);
+    expect(find.text('Connected as nick@test'), findsOneWidget); // Server: the status
+    final scopes = {for (final p in SettingsPage.values) pageInfo(p).$2}.whereType<String>().toSet();
+    for (final p in pages) {
+      await tester.tap(find.widgetWithText(ListTile, pageInfo(p).$1).first);
+      await tester.pumpAndSettle();
+      final scope = pageInfo(p).$2;
+      for (final s in scopes) {
+        expect(find.text(s), s == scope ? findsOneWidget : findsNothing, reason: '${p.name}: "$s"');
+      }
+      if (p != SettingsPage.server) {
+        expect(find.text('Connected as nick@test'), findsNothing, reason: 'one page at a time (${p.name})');
+      }
+    }
     await tester.tap(find.widgetWithText(ListTile, 'Display'));
     await tester.pumpAndSettle();
     expect(find.text('Screen brightness'), findsWidgets);
@@ -81,14 +136,57 @@ void main() {
     expect(tester.takeException(), isNull); // no overflow at phone width
   });
 
-  testWidgets('a segmented choice sits beside a short label, and under a long one when the row is narrow',
+  testWidgets("server status (Settings > Server): connected, key refused, unreachable - Retry checks again",
       (tester) async {
-    tall(tester, width: 700); // still the narrow layout; the test font is wider than the real one
+    // moved from about_test: the status left About for Settings (test audit, 2026-09-30)
+    tall(tester);
+    final api = FakeKomga();
+    await open(tester, api: api);
+    await tester.pump();
+    expect(find.text('Connected as nick@test'), findsOneWidget);
+
+    api.next = 'refused';
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(find.textContaining("Komga no longer accepts this device's API key."), findsOneWidget);
+
+    api.next = 'down';
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    expect(find.textContaining("Can't reach Komga at 192.168.1.10:25600."), findsOneWidget); // no http://
+    expect(api.calls, 3);
+  });
+
+  testWidgets("a segmented choice sits beside its label while both fit, and drops under it when they don't "
+      '(the widths measured in the font in use)', (tester) async {
+    // it used to check one row at 700 px, which only stacked because the test font is about twice as wide as a real
+    // one; the window widths here come from the row's own measure, so the check holds in any font (test audit,
+    // 2026-09-30)
+    tall(tester, width: 700); // the narrow layout
     await open(tester, page: SettingsPage.reader);
-    Offset label(String t) => tester.getTopLeft(find.text(t));
-    Offset button(String t) => tester.getTopLeft(find.text(t).last);
-    expect(button('Wipe').dy, lessThan(label('Page turn animation').dy + 20)); // beside
-    expect(button('30 min').dy, greaterThan(label('Keep the screen on').dy + 20)); // under
+    await tester.pump();
+    final row = find.byWidgetPredicate((w) => w is SegmentRow && w.title == 'Page turn animation');
+    final seg = tester.widget<SegmentRow>(row);
+    final ctx = tester.element(row);
+    // SegmentRow's sum: every segment as wide as the widest label, plus 28 each; the label gets up to 120, plus 12
+    final widest = [for (final c in seg.choices) textWidth(ctx, c.label, 13)].reduce((a, b) => a > b ? a : b);
+    final own = seg.choices.length * (widest + 28);
+    final room = textWidth(ctx, seg.title, 14.5).clamp(0.0, 120.0) + 12;
+    final margin = 700 - tester.getSize(row).width; // the page's padding around the row
+    final fits = own + room + 28 + margin; // the narrowest window where the buttons sit beside the label
+    expect(fits + 10, lessThan(760), reason: 'both widths still in the narrow layout');
+
+    Future<bool> beside(double width) async {
+      tester.view.physicalSize = Size(width, 2400);
+      await tester.pump();
+      await tester.pump(); // the shared width settles
+      final buttons = tester.getRect(find.descendant(of: row, matching: find.byType(SegmentedButton<PageTurn>)));
+      return buttons.top < tester.getRect(find.text('Page turn animation')).bottom;
+    }
+
+    expect(await beside(fits + 10), isTrue, reason: 'room for both at ${fits + 10}');
+    expect(await beside(fits - 10), isFalse, reason: 'not at ${fits - 10}: under the label');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {
@@ -170,7 +268,7 @@ void main() {
     }
 
     await tap(find.text('None'));
-    expect(s.display.pageTurn, PageTurn.flip); // "None" is the old Instant flip: saved choices carry over
+    expect(s.display.pageTurn, PageTurn.flip); // "None" is the flip
     await tap(find.text('Mark read'));
     expect(s.display.midBook, MidBook.markRead);
     await tap(find.bySemanticsLabel('White background'));
@@ -184,30 +282,60 @@ void main() {
     expect(s.display.posterTitleOnly, isTrue);
   });
 
-  testWidgets("Reset this device's settings: asks first; this device's settings go back, synced ones stay",
-      (tester) async {
+  testWidgets("Reset this device's settings: asks first; every one of this device's settings goes back, synced ones "
+      'stay', (tester) async {
     tall(tester);
     final s = AppSettings.instance;
-    s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 5));
-    s.setSeries('S9', const ReaderPrefs(fit: FitMode.width)); // synced: untouched
+    final conn = Connection.instance, d = Downloads.instance;
+    // downloads set up, so the reset reaches "If Komga can't be reached" and the download settings too
+    final dir = (await tester.runAsync(() => Directory.systemTemp.createTemp('komga_reset_test')))!;
+    addTearDown(() {
+      conn.reset();
+      d.store = null; // downloads not set up again, for the other tests
+      dir.deleteSync(recursive: true);
+    });
+    await tester.runAsync(() async {
+      await d.attach(FakeKomga(), root: dir, start: false);
+      await d.setCap(Downloads.gb);
+      await d.setDeleteRead(DeleteRead.always);
+    });
+    await conn.setAutoSwitch(true);
+    // every setting kept on this device, away from its default (test audit, 2026-09-30)
+    s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 5, nightSchedule: true,
+        textScale: 1.3, accent: Accent.teal));
+    await ReaderKeys.instance.assign(ReaderAction.next, LogicalKeyboardKey.keyN);
+    await HiddenLibraries.instance.setHidden('L1', true);
     await HomeSections.instance.set('ondeck', false);
     final p = await SharedPreferences.getInstance();
     await p.setString('view.library.all', '{"hideRead":true}');
+    s.setSeries('S9', const ReaderPrefs(fit: FitMode.width)); // synced: untouched
+    expect(ReaderKeys.instance.isDefault, isFalse);
+
     await open(tester, page: SettingsPage.about);
     await tester.tap(find.widgetWithText(TextButton, 'Reset'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(s.display.night, isTrue); // cancelled: nothing changed
+    expect(ReaderKeys.instance.isDefault, isFalse);
+    expect(HiddenLibraries.instance.ids, {'L1'});
+    expect(conn.autoSwitch, isTrue);
+
     await tester.tap(find.widgetWithText(TextButton, 'Reset'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, 'Reset').last); // confirm
     await tester.pumpAndSettle();
-    expect(s.display.night, isFalse);
-    expect(s.display.posterSize, PosterSize.medium);
-    expect(s.display.screenOn, 0); // Off by default
+    final back = s.display;
+    expect([back.night, back.posterSize, back.screenOn, back.nightSchedule, back.textScale, back.accent],
+        [false, PosterSize.medium, 0, false, 1.0, Accent.blue]);
+    expect(ReaderKeys.instance.isDefault, isTrue, reason: "the reader's keys");
+    expect(ReaderKeys.instance.actionFor(LogicalKeyboardKey.keyN), isNull);
+    expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');
     expect(HomeSections.instance['ondeck'], isTrue);
     expect(p.getString('view.library.all'), isNull);
+    expect(conn.autoSwitch, isFalse, reason: "If Komga can't be reached: Ask");
+    expect(d.capBytes, Downloads.defaultCap);
+    expect(d.deleteRead, DeleteRead.never);
     expect(s.series['S9']?.fit, FitMode.width);
     s.series.remove('S9');
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
@@ -243,23 +371,6 @@ void main() {
     expect(s.display.nightSchedule, isTrue);
     expect(find.text('From / to'), findsOneWidget);
     expect(find.text('9:00 PM'), findsOneWidget); // 21:00, in the test's 12-hour format
-  });
-
-  testWidgets('segmented choices on a page share one width (the widest), flush right', (tester) async {
-    tall(tester, width: 1200);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SettingsColumn(child: Column(children: [
-      SettingsGroup(children: [
-        SegmentRow<int>(title: 'A', choices: const [Choice(1, 'x'), Choice(2, 'y')], value: 1, onChanged: (_) {}),
-        SegmentRow<String>(title: 'B', value: 'a', onChanged: (_) {},
-            choices: const [Choice('a', 'aaaa'), Choice('b', 'bbbb'), Choice('c', 'cccc')]),
-      ]),
-    ])))));
-    await tester.pump(); // the column widens after the first frame
-    final small = tester.getRect(find.byType(SegmentedButton<int>));
-    final wide = tester.getRect(find.byType(SegmentedButton<String>));
-    expect(small.width, closeTo(wide.width, 0.5));
-    expect(small.right, closeTo(wide.right, 0.5));
-    expect(small.right, greaterThan(1200 - 20)); // flush with the row's right edge (inside its padding)
   });
 
   testWidgets('poster size button in a top bar: S / M / L, the same setting as here', (tester) async {

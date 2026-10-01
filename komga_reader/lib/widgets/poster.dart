@@ -194,6 +194,10 @@ class HoldOkGuard extends StatelessWidget {
 
   static void swallowRestOf(LogicalKeyboardKey key) => _held = key;
 
+  /// Tests: nothing held (the held key is static, so it would carry from one test to the next).
+  @visibleForTesting
+  static void debugReset() => _held = null;
+
   static KeyEventResult _onKey(FocusNode _, KeyEvent e) {
     final k = _held;
     if (k == null || e.logicalKey != k) return KeyEventResult.ignored;

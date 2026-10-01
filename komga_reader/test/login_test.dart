@@ -49,7 +49,7 @@ void main() {
     expect(find.textContaining('FormatException'), findsNothing);
   });
 
-  testWidgets('an address typed without http:// connects, and the field shows what was used', (tester) async {
+  testWidgets('an address typed without http:// is tidied: the field shows the address used', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
     await tester.pump();

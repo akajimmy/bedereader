@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,8 +69,12 @@ Text after.
     await tester.pumpWidget(MaterialApp(home: DocumentScreen.whatsNew()));
     await tester.pumpAndSettle();
     expect(find.text("What's new"), findsOneWidget);
-    expect(find.textContaining('Build 1 - 2026-09-28', findRichText: true), findsNothing); // far down, not built yet
     expect(find.textContaining('Changelog', findRichText: true), findsOneWidget);
+    // the newest entry - the first heading under the title - is at the top (it used to check that the oldest build
+    // was too far down to be built, which depended on how long the changelog is - test audit, 2026-09-30)
+    final newest = File('assets/docs/CHANGELOG.md').readAsLinesSync().firstWhere((l) => RegExp(r'^#{2,3} ').hasMatch(l))
+        .replaceFirst(RegExp(r'^#+ '), '');
+    expect(find.textContaining(newest, findRichText: true), findsOneWidget, reason: newest);
   });
 
   testWidgets('Read me shows the README up to the developer part', (tester) async {
