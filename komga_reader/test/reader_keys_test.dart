@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,6 +53,67 @@ void main() {
     expect(await k.assign(ReaderAction.next, last), isNull);
     expect(k.keys[ReaderAction.controls], [last], reason: 'still there: the remote can always bring up the controls');
     expect(k.cantAssign(ReaderAction.next, LogicalKeyboardKey.keyN), isNull); // any other key: fine
+  });
+
+  // ---- loading old or damaged saves (test audit, 2026-09-30)
+
+  /// Starts the app with [raw] saved as the key map.
+  Future<void> loadSaved(String raw) async {
+    SharedPreferences.setMockInitialValues({'reader.keys': raw});
+    await k.load();
+  }
+
+  List<int> ids(ReaderAction a) => [for (final key in k.keys[a]!) key.keyId];
+  List<int> defaultIds(ReaderAction a) => [for (final key in ReaderKeys.defaults[a]!) key.keyId];
+
+  test('a save from before the zoom keys existed: its own keys kept, the zoom keys (missing from it) get theirs',
+      () async {
+    final next = LogicalKeyboardKey.mediaTrackNext.keyId, prev = LogicalKeyboardKey.mediaTrackPrevious.keyId;
+    await loadSaved(jsonEncode({ // the four actions of the first build with Remote and keys
+      'next': [next], 'previous': [prev],
+      'controls': [LogicalKeyboardKey.enter.keyId], 'close': [LogicalKeyboardKey.escape.keyId],
+    }));
+    expect(ids(ReaderAction.next), [next]);
+    expect(ids(ReaderAction.previous), [prev]);
+    expect(ids(ReaderAction.controls), [LogicalKeyboardKey.enter.keyId]);
+    expect(ids(ReaderAction.zoomIn), defaultIds(ReaderAction.zoomIn), reason: 'not in the save: the usual keys');
+    expect(ids(ReaderAction.zoomOut), defaultIds(ReaderAction.zoomOut));
+    expect(k.actionFor(LogicalKeyboardKey.equal), ReaderAction.zoomIn);
+
+    await loadSaved(jsonEncode({'next': [LogicalKeyboardKey.keyN.keyId]})); // only one action saved
+    for (final a in ReaderAction.values) {
+      if (a != ReaderAction.next) expect(ids(a), defaultIds(a), reason: '${a.name}: missing, so the usual keys');
+    }
+    expect(ids(ReaderAction.next), [LogicalKeyboardKey.keyN.keyId]);
+  });
+
+  test('a damaged save - not JSON, the wrong shape, an action this build has never heard of - loads the usual keys, '
+      'without a crash', () async {
+    for (final raw in [
+      'not json at all',
+      '[1, 2, 3]', // a list, not a map
+      '{"next": "Right"}', // keys not a list
+      '{"next": ["Right"]}', // not key ids
+      '{"next": [1.5]}',
+      '{"turbo": [65], "warp": "x"}', // actions that don't exist
+      '',
+    ]) {
+      await loadSaved(raw);
+      expect(k.isDefault, isTrue, reason: raw);
+      expect(k.actionFor(LogicalKeyboardKey.enter), ReaderAction.controls, reason: raw);
+    }
+  });
+
+  test('a save with no key left for Show the controls (builds before the code review allowed it) still has a key '
+      'that shows them - BUG: load() takes the empty list as it is, so no key brings up the controls',
+      skip: 'BUG: ReaderKeys.load() keeps a saved empty "controls" list - the remote is stranded with the controls '
+          "hidden; cantAssign/canRemove only stop new ones (90f37e8), they don't repair old saves",
+      () async {
+    await loadSaved(jsonEncode({
+      'next': [LogicalKeyboardKey.arrowRight.keyId, LogicalKeyboardKey.enter.keyId], // Enter given to Next page
+      'controls': <int>[],
+    }));
+    expect(k.keys[ReaderAction.controls], isNotEmpty);
   });
 
   testWidgets("the press-a-key dialog: Back and Esc cancel - they're never taken as the key (code review)",
