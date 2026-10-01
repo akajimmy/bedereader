@@ -132,6 +132,17 @@ void main() {
     expect(conn.offline, isTrue);
   });
 
+  test('offline by hand after the prompt took it offline: a late answer from Komga offers nothing either', () async {
+    server.up = false;
+    await conn.check();
+    conn.useDownloads(); // offline by the prompt ...
+    await conn.setForcedOffline(true); // ... then by hand (side menu): "no checks, no prompts, until switched off"
+    Komga.onReachability!(server, true); // a call already on its way gets its answer
+    expect(conn.reachableAgain, isFalse, reason: 'no "Komga is reachable again - Go online" while offline by hand');
+    expect(conn.offline, isTrue);
+  }, skip: 'BUG: Connection._onReachability sets reachableAgain (the "Go online" offer) when autoOffline is also set, '
+      'with no forcedOffline guard (lib/offline/connection.dart)');
+
   testWidgets('the prompt: Use downloaded books / Retry / Stay online', (tester) async {
     server.up = false;
     await tester.runAsync(() => conn.check());
