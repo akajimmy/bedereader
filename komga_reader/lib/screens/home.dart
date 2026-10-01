@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -87,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
 
   Future<void> _load() async {
     PinTile.invalidate(); // pin posters show the current first items
-    _checkOfflinePins();
+    unawaited(_checkOfflinePins()); // offline: which pins have something downloaded (runs alongside)
     setState(() { _loading = _inProgress.isEmpty && _libraries.isEmpty; _error = null; });
     try {
       final want = {for (final k in _optional) if (_sections[k]) k};

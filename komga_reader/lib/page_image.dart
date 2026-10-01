@@ -43,7 +43,7 @@ class PageLoader {
           if (_cache.containsKey(i)) _loaded[i] = bytes; // not if it was forgotten meanwhile
           return PageData(frame.image, bytes);
         } catch (_) {
-          _cache.remove(i); // let a later visit retry
+          _cache.remove(i)?.ignore(); // let a later visit retry (this failed attempt is reported by the rethrow)
           rethrow;
         }
       });

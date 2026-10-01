@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -103,7 +105,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     }
     if (!mounted) return;
     setState(() {});
-    _paged.more();
+    unawaited(_paged.more()); // Paged shows its own errors
     try {
       final libs = await api.visibleLibraries(); // the picker: those hidden on this device left out
       if (mounted) setState(() => _libraries = libs);
@@ -133,7 +135,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     await _restoreView();
     if (!mounted) return;
     setState(() {});
-    _paged.reset();
+    unawaited(_paged.reset()); // Paged shows its own errors
   }
 
   void _clearFilters() {

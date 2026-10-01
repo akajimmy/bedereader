@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -44,7 +46,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
 
   Future<void> _open() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api, series: _series)));
-    _load();
+    unawaited(_load()); // back from the series: read state may have changed
   }
 
   static String? _status(String? s) => switch (s) {

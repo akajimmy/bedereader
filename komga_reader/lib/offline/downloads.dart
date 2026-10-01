@@ -92,7 +92,7 @@ class Downloads extends ChangeNotifier {
     }
     notifyListeners();
     await (await SharedPreferences.getInstance()).setBool(_wifiOnlyKey, v);
-    _pump();
+    unawaited(_pump());
   }
 
   /// May the worker fetch now? Off Wi-Fi with Wi-Fi only on: no - it says so and looks again in a while.
@@ -192,7 +192,7 @@ class Downloads extends ChangeNotifier {
       } catch (_) {}
     }
     notifyListeners();
-    if (start) _pump();
+    if (start) unawaited(_pump());
   }
 
   /// Each server's downloads in a folder of their own (code review, 2026-09-30: with one folder for all, signing in
@@ -338,7 +338,7 @@ class Downloads extends ChangeNotifier {
     }
     if (any && ready) await _saveQueue();
     notifyListeners();
-    if (any) _pump();
+    if (any) unawaited(_pump());
   }
 
   /// Written to a temporary file and then moved over queue.json, so a crash (or a reader) never sees half a file.
@@ -366,7 +366,7 @@ class Downloads extends ChangeNotifier {
     if (added > 0) {
       await _saveQueue();
       notifyListeners();
-      _pump();
+      unawaited(_pump());
     }
     return added;
   }
