@@ -44,15 +44,19 @@ void main() {
     return api;
   }
 
-  testWidgets('book menu: mark as read and mark as unread always offered, no "clear progress", plus select multiple',
+  testWidgets('book menu: mark read / unread always offered - unread, read or in progress - plus select multiple',
       (tester) async {
+    // test audit, 2026-09-30: "always" now covers every read state, not just the unread book
     await open(tester);
-    await tester.longPress(find.text('S #A'));
-    await tester.pumpAndSettle();
-    expect(find.text('Mark as read'), findsOneWidget);
-    expect(find.text('Mark as unread'), findsOneWidget);
-    expect(find.textContaining('Clear progress'), findsNothing);
-    expect(find.text('Select multiple'), findsOneWidget);
+    for (final b in ['S #A', 'S #B', 'S #C']) { // unread, read, in progress
+      await tester.longPress(find.text(b));
+      await tester.pumpAndSettle();
+      expect(find.text('Mark as read'), findsOneWidget, reason: b);
+      expect(find.text('Mark as unread'), findsOneWidget, reason: b);
+      expect(find.text('Select multiple'), findsOneWidget, reason: b);
+      Navigator.of(tester.element(find.text('Mark as read'))).pop();
+      await tester.pumpAndSettle();
+    }
   });
 
   testWidgets('select multiple -> mark read touches only the books not yet read, then leaves selection', (tester) async {
