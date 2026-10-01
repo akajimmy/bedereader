@@ -107,6 +107,30 @@ void main() {
     await quiet(tester);
   });
 
+  testWidgets("Retry all in the top bar: every failed book goes back in the queue and downloads", (tester) async {
+    final api = noNetwork(LibraryServer.new)..booksFail = true;
+    await tester.runAsync(() async {
+      await d.attach(api, root: dir);
+      await d.add([
+        {'id': 'B1', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '1'}},
+        {'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}},
+      ]);
+      await waitUntil(() => d.queue.every((j) => j.state == JobState.failed) && !d.busy,
+          timeout: const Duration(seconds: 1), reason: 'both failed');
+    });
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    expect(find.textContaining('Failed: '), findsNWidgets(2));
+
+    api.booksFail = false; // Komga fixed
+    await tester.tap(find.text('Retry 2'));
+    expect(d.queue.map((j) => j.state), isNot(contains(JobState.failed)), reason: 'both back in the queue');
+    await waitUntil(() => d.isDownloaded('B1') && d.isDownloaded('B2') && !d.busy, tester: tester,
+        timeout: const Duration(seconds: 3), step: const Duration(milliseconds: 10), reason: 'both downloaded');
+    expect(find.textContaining('Failed:'), findsNothing);
+    expect(find.text('Downloaded · 2'), findsOneWidget);
+    await quiet(tester);
+  });
+
   testWidgets('multi-select: Download queues the ticked books in the order picked', (tester) async {
     final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() => d.attach(api, root: dir));
