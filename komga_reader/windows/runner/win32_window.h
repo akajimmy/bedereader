@@ -36,6 +36,10 @@ class Win32Window {
   // |Show| is called. Returns true if the window was created successfully.
   bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
+  // Creates the window at |screen|, a rectangle in physical screen pixels (as remembered from the last run), with no
+  // scaling: it opens on the monitor it was on, at the size it was.
+  bool CreateAt(const std::wstring& title, const RECT& screen);
+
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
 

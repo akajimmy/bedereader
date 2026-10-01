@@ -125,6 +125,10 @@ void DesktopChannel::SetFullscreen(bool on) {
   fullscreen_ = on;
 }
 
+// Remembered in physical screen pixels, restored as they are (code review, 2026-09-30): saving divided by this
+// monitor's scaling while opening picked the monitor from the divided point - with two monitors at different scaling
+// the window came back on the other one, at the wrong size - and the normal-size rectangle Windows keeps is in
+// "workspace" coordinates, so with the taskbar at the top or left the window crept by its height every time.
 void DesktopChannel::SaveWindow() {
   WINDOWPLACEMENT wp{};
   wp.length = sizeof(wp);
@@ -133,28 +137,42 @@ void DesktopChannel::SaveWindow() {
   } else if (!GetWindowPlacement(window_, &wp)) {
     return;
   }
-  const double scale = GetDpiForWindow(window_) / 96.0;
-  const RECT& r = wp.rcNormalPosition;
+  const bool maximized = wp.showCmd == SW_SHOWMAXIMIZED;
+  RECT r{};
+  if (!fullscreen_ && !maximized && GetWindowRect(window_, &r)) {
+    // as it is on screen (screen coordinates already)
+  } else {
+    // its normal size (maximized / full screen): workspace -> screen coordinates, by its monitor's work-area offset
+    r = wp.rcNormalPosition;
+    MONITORINFO mi{sizeof(mi)};
+    if (GetMonitorInfo(MonitorFromRect(&r, MONITOR_DEFAULTTONEAREST), &mi)) {
+      OffsetRect(&r, mi.rcWork.left - mi.rcMonitor.left, mi.rcWork.top - mi.rcMonitor.top);
+    }
+  }
   std::wstring file = WindowFile();
   if (file.empty()) return;
   std::ofstream out(file, std::ios::trunc);
-  // logical x y width height maximized, then the physical rect (used to check it is still on a screen)
-  out << static_cast<int>(r.left / scale) << ' ' << static_cast<int>(r.top / scale) << ' '
-      << static_cast<int>((r.right - r.left) / scale) << ' ' << static_cast<int>((r.bottom - r.top) / scale) << ' '
-      << (wp.showCmd == SW_SHOWMAXIMIZED ? 1 : 0) << ' ' << r.left << ' ' << r.top << ' ' << r.right << ' '
-      << r.bottom << '\n';
+  out << "v2 " << r.left << ' ' << r.top << ' ' << r.right << ' ' << r.bottom << ' ' << (maximized ? 1 : 0) << '\n';
 }
 
 bool LoadSavedWindow(SavedWindow* out) {
   std::wstring file = WindowFile();
   if (file.empty()) return false;
   std::ifstream in(file);
-  int x, y, w, h, max;
-  RECT phys{};
-  if (!(in >> x >> y >> w >> h >> max >> phys.left >> phys.top >> phys.right >> phys.bottom)) return false;
-  if (w < 400 || h < 300) return false;
-  // only restore if that spot is still on a connected monitor (a screen may have been unplugged)
-  if (!MonitorFromRect(&phys, MONITOR_DEFAULTTONULL)) return false;
-  *out = SavedWindow{x, y, w, h, max == 1};
+  std::string first;
+  if (!(in >> first)) return false;
+  RECT r{};
+  int max = 0;
+  if (first == "v2") {
+    if (!(in >> r.left >> r.top >> r.right >> r.bottom >> max)) return false;
+  } else {
+    // saved by an earlier build: logical x y w h, maximized, then the physical rectangle - that's the one used
+    int y, w, h;
+    if (!(in >> y >> w >> h >> max >> r.left >> r.top >> r.right >> r.bottom)) return false;
+  }
+  if (r.right - r.left < 400 || r.bottom - r.top < 300) return false;
+  // only restore if that spot is still on a connected monitor (a screen may have been unplugged): else the default
+  if (!MonitorFromRect(&r, MONITOR_DEFAULTTONULL)) return false;
+  *out = SavedWindow{r, max == 1};
   return true;
 }

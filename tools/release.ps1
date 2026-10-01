@@ -56,7 +56,10 @@ $clPath = Join-Path $root 'CHANGELOG.md'
 $raw = [IO.File]::ReadAllText($clPath)
 $nl = if ($raw.Contains("`r`n")) { "`r`n" } else { "`n" }
 $cl = $raw.Replace("`r`n", "`n")
-$sec = [regex]::Match($cl, "(?m)^## $([regex]::Escape($name))\b[^\n]*\n\n([^\n#][^\n]*(\n[^\n#][^\n]*)*)?")
+# the section's heading line, and its intro paragraph if it has one (build.ps1 starts a new version's section without
+# one: the heading, then straight its first "### Build"). The note replaces both and is always followed by a blank
+# line - without that, the next heading was glued onto the note (code review, 2026-09-30).
+$sec = [regex]::Match($cl, "(?m)^## $([regex]::Escape($name))\b[^\n]*\n(\n*[^\n#][^\n]*(\n[^\n#][^\n]*)*)?\n*")
 if (-not $sec.Success) { throw "No '## $name' section in CHANGELOG.md - nothing changed" }
 $rcs = @(Git "tag -l v$name-rc.*" | Where-Object { $_ })
 $candidates = @($rcs | ForEach-Object { [pscustomobject]@{ n = [int]($_ -replace '.*-rc\.', ''); tag = $_;
@@ -70,7 +73,7 @@ $note = if ($Final) {
 } else {
     "## $name - in development`n`nNot released yet. $rcText"
 }
-$cl = $cl.Substring(0, $sec.Index) + $note + $cl.Substring($sec.Index + $sec.Length)
+$cl = $cl.Substring(0, $sec.Index) + $note + "`n`n" + $cl.Substring($sec.Index + $sec.Length)
 
 $files = 'CHANGELOG.md komga_reader/assets/docs/CHANGELOG.md'
 $pub = Join-Path $root 'komga_reader\pubspec.yaml'

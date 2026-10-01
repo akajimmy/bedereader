@@ -51,6 +51,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   - Book details, series details and the documents (What's new, Read me...): the remote's Up / Down scroll the page
     once there's no button that way - long summaries and the changelog couldn't be read past the screen.
   - A read list whose remaining books are in progress no longer shows as read: in progress counts as still to read.
+- Windows: the window reopens where it was, at the size it was - with two monitors at different scaling it could come
+  back on the other one at the wrong size, and with the taskbar at the top or left it crept each time (code review).
+- Tools (code review): release.ps1 no longer glues the next build's heading onto the version note (it would have from
+  1.3.0 on); build.ps1 won't commit or tag a -Bump build that isn't signed with the release key, and a failed tablet
+  install or Desktop update is reported without stopping the rest.
 
 **Added**
 - Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book

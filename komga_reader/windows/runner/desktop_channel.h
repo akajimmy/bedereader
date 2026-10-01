@@ -28,9 +28,9 @@ class DesktopChannel {
   WINDOWPLACEMENT saved_placement_{};
 };
 
-// Window size/position between runs, in logical pixels (what Win32Window::Create expects).
+// Window size/position between runs: its normal-size rectangle in physical screen pixels (Win32Window::CreateAt).
 struct SavedWindow {
-  int x, y, width, height;
+  RECT screen;
   bool maximized;
 };
 bool LoadSavedWindow(SavedWindow* out);
