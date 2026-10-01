@@ -21,6 +21,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
     for Home's rows. Nothing is sent now; they load from this device.
   - Switched offline by hand after the "can't reach Komga" prompt, a late answer from Komga still offered "Komga is
     reachable again - Go online".
+- Settings with the remote (found auditing the tests):
+  - On Library & Home, Up and Down took the rows in the wrong order: up from the first library jumped down to Home
+    sections (off the screen), and down from Posters skipped the libraries.
+  - A page chosen from the list opened as far down as the page before it had been scrolled.
+- Remote and keys: keys saved by older builds could leave no key that shows the reader's controls. Its default keys
+  come back now.
 - Signing out: coming back to the app afterwards still checked Komga with the old key. The connection and the
   download queue now let go of it.
 - Tools (test audit): lint findings now fail the build and CI (they were all let through); a tagged build refuses

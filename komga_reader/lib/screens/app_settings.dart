@@ -96,7 +96,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 alignment: Alignment.topLeft,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 680),
-                  child: ListView(padding: const EdgeInsets.fromLTRB(24, 16, 24, 40), children: page),
+                  // a list per page: each opens at its top, not where the last one was scrolled to (missing-tests
+                  // audit, 2026-09-30)
+                  child: ListView(key: ValueKey(_page), padding: const EdgeInsets.fromLTRB(24, 16, 24, 40), children: page),
                 ),
               ),
             ),

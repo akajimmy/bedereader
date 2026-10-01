@@ -209,19 +209,17 @@ void main() {
 
   group('by remote: into the page from the list, every row reached with Up / Down and on screen when focused, Left '
       'back to the list, Back leaves Settings -', () {
-    // (testWidgets' skip takes no reason, so a skipped test says why in its name)
-    const libraryBug = "BUG: the library switches come after Home sections in RowNav's order (the focus tree's: they "
-        'are added once the libraries arrive), so Up from the first library jumps down into Home sections, off the '
-        'screen, and Down from Posters skips the libraries';
+    // bug found 2026-09-30 (missing-tests audit): on Library & Home the library switches came after Home sections in
+    // RowNav's order (the focus tree's: they're added once the libraries arrive); RowNav now goes by screen position
     for (final p in SettingsPage.values) {
-      final bug = p == SettingsPage.library;
-      testWidgets(bug ? '${label(p)} - $libraryBug' : label(p), (tester) => walk(tester, p), skip: bug);
+      testWidgets(label(p), (tester) => walk(tester, p));
     }
   });
 
-  testWidgets('a page chosen from the list opens at its top, not scrolled as far as the page before it was - BUG: the '
-      "page's ListView is the same one for every page, so the next page opens at the last one's scroll offset",
-      skip: true, (tester) async {
+  // bug found 2026-09-30 (missing-tests audit): every page shared one ListView, so the next page opened at the last
+  // one's scroll offset; each page has its own list now
+  testWidgets('a page chosen from the list opens at its top, not scrolled as far as the page before it was',
+      (tester) async {
     setView(tester, const Size(1280, 720));
     everyRowShown();
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
