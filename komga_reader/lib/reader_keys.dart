@@ -60,6 +60,15 @@ class ReaderKeys extends ChangeNotifier {
         // unreadable: the defaults
       }
     }
+    // Show the controls always has a key - saves from before that rule could have none, leaving the remote no way to
+    // the controls (missing-tests audit, 2026-09-30). Its default keys come back, taken off whatever else had them.
+    if (keys[ReaderAction.controls]!.isEmpty) {
+      final back = defaults[ReaderAction.controls]!;
+      for (final a in ReaderAction.values) {
+        keys[a]!.removeWhere(back.contains);
+      }
+      keys[ReaderAction.controls] = List.of(back);
+    }
     notifyListeners();
   }
 

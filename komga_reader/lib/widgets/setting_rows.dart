@@ -57,8 +57,16 @@ class _RowNavState extends State<RowNav> {
     if (current == null || scope == null) return KeyEventResult.ignored;
     final mine = _rowOf(current); // the innermost row the focus is in (a nested row handles it first)
     if (mine != _node) return KeyEventResult.ignored;
-    // every control on the page, in the order they're laid out
-    final all = [for (final n in scope.traversalDescendants) if (n.canRequestFocus && !n.skipTraversal) n];
+    // every control on the page, in the order they're laid out: by their row's place on screen, then the focus order
+    // within the row. The focus order alone is the order controls were attached - rows built later (the library
+    // switches, after the libraries arrive) came after everything else (missing-tests audit, 2026-09-30)
+    final found = [for (final n in scope.traversalDescendants) if (n.canRequestFocus && !n.skipTraversal) n];
+    double top(FocusNode n) => (_rowOf(n) ?? n).rect.top;
+    final order = {for (var i = 0; i < found.length; i++) found[i]: i};
+    final all = [...found]..sort((a, b) {
+        final byRow = top(a).compareTo(top(b));
+        return byRow != 0 ? byRow : order[a]!.compareTo(order[b]!);
+      });
     final at = all.indexOf(current);
     if (at < 0) return KeyEventResult.ignored;
     FocusNode? target;

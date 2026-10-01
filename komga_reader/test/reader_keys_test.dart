@@ -104,16 +104,16 @@ void main() {
     }
   });
 
+  // bug found 2026-09-30 (missing-tests audit): load() kept the saved empty list, stranding the remote; fixed in load()
   test('a save with no key left for Show the controls (builds before the code review allowed it) still has a key '
-      'that shows them - BUG: load() takes the empty list as it is, so no key brings up the controls',
-      skip: 'BUG: ReaderKeys.load() keeps a saved empty "controls" list - the remote is stranded with the controls '
-          "hidden; cantAssign/canRemove only stop new ones (90f37e8), they don't repair old saves",
-      () async {
+      'that shows them', () async {
     await loadSaved(jsonEncode({
       'next': [LogicalKeyboardKey.arrowRight.keyId, LogicalKeyboardKey.enter.keyId], // Enter given to Next page
       'controls': <int>[],
     }));
     expect(k.keys[ReaderAction.controls], isNotEmpty);
+    expect(k.actionFor(LogicalKeyboardKey.enter), ReaderAction.controls, reason: 'its default key, taken back');
+    expect(k.actionFor(LogicalKeyboardKey.arrowRight), ReaderAction.next, reason: 'the rest of the save kept');
   });
 
   testWidgets("the press-a-key dialog: Back and Esc cancel - they're never taken as the key (code review)",
