@@ -35,8 +35,10 @@ if ("$(Git 'status --porcelain')".Trim()) { throw 'The working tree has uncommit
 # the build: its tag, and the version it was built as (from pubspec.yaml at that commit)
 if ($Build -eq 0) {
     $Build = (Git 'tag -l build-*' | ForEach-Object { [int]($_ -replace 'build-', '') } | Measure-Object -Maximum).Maximum
+    if (-not $Build) { throw 'No build-<n> tags - make a build with tools\build.ps1 -Bump first.' }
 }
 $buildTag = "build-$Build"
+if (-not (Git "tag -l $buildTag")) { throw "No $buildTag tag." }
 $commit = (Git "rev-list -n1 $buildTag").Trim()
 $pubspecThen = Git "show ${commit}:komga_reader/pubspec.yaml"
 $m = [regex]::Match(($pubspecThen -join "`n"), '(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)')
@@ -44,6 +46,27 @@ if (-not $m.Success) { throw "No version line in pubspec.yaml at $buildTag" }
 $name = "$($m.Groups[1].Value).$($m.Groups[2].Value).$($m.Groups[3].Value)"
 $tag = if ($Final) { "v$name" } else { "v$name-rc.$Rc" }
 if ((Git "tag -l $tag")) { throw "$tag already exists." }
+
+# is that build fit to release? (test audit, 2026-09-30) Its BUILD-INFO must say the tests passed, the tree was clean
+# and the APK is signed with the release key; its files must still match SHA256SUMS.txt.
+$out = Join-Path $root "dist\$name+$Build"
+$info = Join-Path $out 'BUILD-INFO.txt'
+if (-not (Test-Path $info)) { throw "No $info - can't tell whether that build passed its checks." }
+$infoText = [IO.File]::ReadAllText($info)
+if ($infoText -notmatch '(?m)^tests:\s+passed') { throw "$buildTag didn't pass its tests (BUILD-INFO.txt) - not released." }
+if ($infoText -match 'UNCOMMITTED') { throw "$buildTag was built with uncommitted changes (BUILD-INFO.txt) - not released." }
+if ($infoText -match '(?m)^android:\s+signed with' -and $infoText -notmatch '(?m)^android:\s+signed with the release key') {
+    throw "$buildTag's APK isn't signed with the release key (BUILD-INFO.txt) - not released."
+}
+$sums = Join-Path $out 'SHA256SUMS.txt'
+if (-not (Test-Path $sums)) { throw "No $sums." }
+foreach ($line in [IO.File]::ReadAllLines($sums)) {
+    if (-not $line.Trim()) { continue }
+    $hash, $file = $line -split '\s+', 2
+    $p = Join-Path $out $file.Trim()
+    if (-not (Test-Path $p)) { throw "$file (in SHA256SUMS.txt) is missing from $out." }
+    if ((Get-FileHash $p -Algorithm SHA256).Hash.ToLower() -ne $hash.ToLower()) { throw "$file doesn't match SHA256SUMS.txt - not released." }
+}
 
 $date = Get-Date -Format 'yyyy-MM-dd'
 

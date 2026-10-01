@@ -3,8 +3,10 @@
     Builds BeDeReader for every platform into dist\<version>\ - after the checks pass.
 
 .DESCRIPTION
-    1. Checks: working tree clean (unless -AllowDirty), flutter analyze, flutter test. Any failure stops the build.
-    2. -Bump: raises the build number in komga_reader\pubspec.yaml (0.1.0+17 -> 0.1.0+18).
+    1. Checks: working tree clean (unless -AllowDirty) before and after flutter pub get, flutter analyze (lint
+       findings included), flutter test. Any failure stops the build. -Bump refuses -AllowDirty and -SkipTests.
+    2. -Bump: raises the build number in komga_reader\pubspec.yaml (0.1.0+17 -> 0.1.0+18); the APK must be signed
+       with the release key, and the build-<n> tag must not exist yet.
     3. Builds the requested platforms:
          android  -> BeDeReader-<ver>-android.apk
          windows  -> BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
@@ -78,6 +80,10 @@ function Git([string]$arguments) {
 }
 
 # ---- 1. checks ---------------------------------------------------------------------------------------------------
+# A real build (-Bump: committed and tagged) is built from committed code with its tests run - otherwise the tag
+# points at code that wasn't what was built, or that was never tested (test audit, 2026-09-30).
+if ($Bump -and $AllowDirty) { throw '-Bump with -AllowDirty: a tagged build has to be built from committed code - commit first.' }
+if ($Bump -and $SkipTests) { throw '-Bump with -SkipTests: a tagged build has to have passed its tests.' }
 $dirty = Git 'status --porcelain'
 if ($dirty -and -not $AllowDirty) {
     throw "Uncommitted changes - commit them first (or pass -AllowDirty for a throwaway build):`n$($dirty -join "`n")"
@@ -91,7 +97,13 @@ if ($Platforms -contains 'windows' -and $blocking) {
     throw "$product is running from the build folder ($($blocking[0].Path)) - close it first (the Windows build replaces its files)."
 }
 Run 'flutter pub get' 'flutter pub get'
-Run 'flutter analyze' 'flutter analyze --no-fatal-infos'
+# pub get can rewrite tracked files (pubspec.lock): what's built must still be what's committed
+if (-not $AllowDirty) {
+    $changed = Git 'status --porcelain'
+    if ($changed) { throw "flutter pub get changed tracked files - commit them first:`n$($changed -join "`n")" }
+}
+# lints count: every flutter_lints rule reports as an "info", so --no-fatal-infos let them all through (test audit)
+Run 'flutter analyze' 'flutter analyze'
 if (-not $SkipTests) { Run 'flutter test' 'flutter test' } else { Say 'tests skipped (-SkipTests)' }
 
 # ---- 2. version --------------------------------------------------------------------------------------------------
@@ -104,6 +116,8 @@ $name = $m.Groups[1].Value
 $build = [int]$m.Groups[2].Value
 if ($Bump) {
     $build++
+    # checked before building: a tag that already exists used to fail only after the bump was committed
+    if (Git "tag -l build-$build") { throw "tag build-$build already exists - pubspec.yaml's build number is behind the tags" }
     $text = $text.Substring(0, $m.Index) + "version: $name+$build" + $text.Substring($m.Index + $m.Length)
     [IO.File]::WriteAllText($pubspec, $text, (New-Object Text.UTF8Encoding($false)))  # no BOM
     Say "version bumped to $name+$build"
@@ -281,7 +295,7 @@ $notDone = @()
 if ($Platforms -contains 'android' -and -not $NoInstall) {
     $apk = $artifacts | Where-Object { $_ -like '*-android.apk' } | Select-Object -First 1
     try {
-        & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
+        & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk -ExpectedBuild $build # checks what's on the tablet
         if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1'; $notDone += 'tablet: not reachable' }
         if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)'; $notDone += 'tablet: signed with another key' }
     } catch {

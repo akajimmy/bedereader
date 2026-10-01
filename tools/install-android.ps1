@@ -12,10 +12,14 @@
 .PARAMETER Apk
     APK to install. Default: the newest one in dist\.
 
+.PARAMETER ExpectedBuild
+    The build number the APK was made as (build.ps1 passes it). After installing, the tablet must report that build
+    and the installed APK must be byte-for-byte this file (SHA-256) - otherwise it fails, saying what it found.
+
 .EXAMPLE
     .\tools\install-android.ps1
 #>
-param([string]$Apk)
+param([string]$Apk, [int]$ExpectedBuild = 0)
 
 $ErrorActionPreference = 'Stop'
 $adb = 'C:\Dev\android-sdk\platform-tools\adb.exe'
@@ -78,5 +82,20 @@ if ($result -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE') {
 }
 if (-not ($result -match '^Success')) { throw "install failed: $($result -join ' ')" }
 $after = (Adb "-t $device shell dumpsys package $package") | Select-String -Pattern 'versionCode=(\d+)' | Select-Object -First 1
+if (-not $after) { throw "installed, but the tablet reports no version for $package - check it by hand" }
 $b = if ($before) { $before.Matches[0].Groups[1].Value } else { 'none' }
-Say "installed: build $b -> build $($after.Matches[0].Groups[1].Value)"
+$now = $after.Matches[0].Groups[1].Value
+
+# what's on the tablet is what was built (test audit, 2026-09-30: this used to be checked by hand): the build number,
+# and the installed APK byte for byte
+if ($ExpectedBuild -gt 0 -and [int]$now -ne $ExpectedBuild) {
+    throw "the tablet reports build $now after installing, not build $ExpectedBuild"
+}
+$path = ((Adb "-t $device shell pm path $package") | Where-Object { $_ -match '^package:' } | Select-Object -First 1) -replace '^package:', ''
+$there = if ($path) { ((Adb "-t $device shell sha256sum $($path.Trim())") -split '\s+')[0] } else { '' }
+$here = (Get-FileHash $Apk -Algorithm SHA256).Hash.ToLower()
+if ($there -ne $here) {
+    throw "the APK on the tablet ($($there.Substring(0, [Math]::Min(16, $there.Length)))...) isn't the one just installed ($($here.Substring(0, 16))...)"
+}
+Say "installed: build $b -> build $now (the tablet's copy matches the APK)"
+exit 0
