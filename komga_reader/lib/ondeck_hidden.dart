@@ -24,12 +24,14 @@ class OnDeckHidden extends ChangeNotifier {
   bool get isEmpty => series.isEmpty && books.isEmpty;
   int get count => series.length + books.length;
 
-  Future<void> load(Komga api) async {
+  /// [fetch] false (offline mode): this device's copy only - nothing is sent or asked for.
+  Future<void> load(Komga api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_local);
     if (raw != null) _decode(raw);
     notifyListeners();
+    if (!fetch) return;
     try {
       if (p.getBool(_dirtyKey) ?? false) {
         await _send(p); // this device's changes haven't reached Komga: they win

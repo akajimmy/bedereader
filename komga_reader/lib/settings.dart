@@ -403,7 +403,8 @@ class AppSettings extends ChangeNotifier {
 
   /// Local copy first (instant), then Komga's copy: it's the truth for everything except this device's changes that
   /// haven't reached it yet - those stay, and are sent.
-  Future<void> load(Komga api) async {
+  /// [fetch] false (offline mode): this device's copy only - nothing is sent or asked for.
+  Future<void> load(Komga api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final d = p.getString(_localDisplay);
@@ -421,6 +422,7 @@ class AppSettings extends ChangeNotifier {
     if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>, remote: false);
     applyBacklight();
     notifyListeners();
+    if (!fetch) return; // offline mode: this device's copy; what's unsent goes once online (useApi)
     try {
       final remote = await _fetchRemote();
       if (remote != null) {

@@ -200,9 +200,19 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = p.getString('apiKey');
+    final api = url != null && key != null ? Komga(url, key) : null;
+    if (api != null) {
+      // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
+      // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
+      await _startDownloads(api);
+      final c = Connection.instance, online = !c.offline;
+      unawaited(AppSettings.instance.load(c.api, fetch: online)); // c.api: the offline source while offline
+      unawaited(Pins.instance.load(c.api, fetch: online));
+      unawaited(OnDeckHidden.instance.load(c.api, fetch: online));
+    }
+    if (!mounted) return;
     setState(() {
-      if (url != null && key != null) _api = Komga(url, key);
-      if (_api != null) { AppSettings.instance.load(_api!); Pins.instance.load(_api!); OnDeckHidden.instance.load(_api!); _startDownloads(_api!); }
+      _api = api;
       _loaded = true;
     });
   }
@@ -230,6 +240,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _signOut() async {
     final p = await SharedPreferences.getInstance();
     await p.remove('apiKey');
+    // nothing more goes to Komga with the old key (a return to the app used to check with it)
+    Connection.instance.signedOut();
+    Downloads.instance.detach();
     // the account's synced things go from this device - pins, reader settings, On deck hidden, anything unsent -
     // so they can't show under, or be sent to, the next account (code review, 2026-09-30). They come back from Komga
     // on signing in again; this device's own settings (display, keys, downloads) stay.

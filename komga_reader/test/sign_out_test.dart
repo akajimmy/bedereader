@@ -80,7 +80,8 @@ void main() {
     expect(find.byType(HomeScreen), findsNothing);
   });
 
-  // (testWidgets takes no skip reason: the group carries it)
+  // Bug found 2026-09-30 (missing-tests audit): sign-out left the connection and the download queue on the old
+  // client, so returning to the app checked Komga (GET users/me) with the removed key. Fixed in main.dart _signOut.
   group('after signing out', () {
     testWidgets('returning to the app sends nothing to Komga with the old key', (tester) async {
       final komga = await signedIn(tester);
@@ -98,6 +99,5 @@ void main() {
       await waitUntil(() => shows(find.byType(LoginScreen)), tester: tester, reason: 'signed out');
       expect(await backInTheApp(), isEmpty, reason: 'signed out: nothing');
     });
-  }, skip: 'BUG: main.dart _signOut leaves Connection.instance.online (and Downloads / ProgressSync) on the signed-out '
-      'client, so returning to the app runs Connection.check() - GET /api/v2/users/me with the removed key');
+  });
 }

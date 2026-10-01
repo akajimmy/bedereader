@@ -140,8 +140,7 @@ void main() {
     Komga.onReachability!(server, true); // a call already on its way gets its answer
     expect(conn.reachableAgain, isFalse, reason: 'no "Komga is reachable again - Go online" while offline by hand');
     expect(conn.offline, isTrue);
-  }, skip: 'BUG: Connection._onReachability sets reachableAgain (the "Go online" offer) when autoOffline is also set, '
-      'with no forcedOffline guard (lib/offline/connection.dart)');
+  }); // bug found 2026-09-30 (missing-tests audit): no forcedOffline guard there; fixed in Connection._onReachability
 
   testWidgets('the prompt: Use downloaded books / Retry / Stay online', (tester) async {
     server.up = false;
