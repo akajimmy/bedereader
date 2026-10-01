@@ -57,11 +57,21 @@ class _RowNavState extends State<RowNav> {
     if (current == null || scope == null) return KeyEventResult.ignored;
     final mine = _rowOf(current); // the innermost row the focus is in (a nested row handles it first)
     if (mine != _node) return KeyEventResult.ignored;
-    // every control on the page, in the order they're laid out: by their row's place on screen, then the focus order
+    // every control in a row, in the order they're laid out: by their row's place on screen, then the focus order
     // within the row. The focus order alone is the order controls were attached - rows built later (the library
-    // switches, after the libraries arrive) came after everything else (missing-tests audit, 2026-09-30)
-    final found = [for (final n in scope.traversalDescendants) if (n.canRequestFocus && !n.skipTraversal) n];
-    double top(FocusNode n) => (_rowOf(n) ?? n).rect.top;
+    // switches, after the libraries arrive) came after everything else. Controls outside rows (Settings' list of
+    // pages beside them, the top bar) aren't part of it (missing-tests audit, 2026-09-30).
+    final found = [
+      for (final n in scope.traversalDescendants)
+        if (n.canRequestFocus && !n.skipTraversal && _rowOf(n) != null) n,
+    ];
+    double top(FocusNode n) { // the outermost row's top: a row and the rows nested in it stay together, in focus order
+      FocusNode at = n;
+      for (final a in n.ancestors) {
+        if (a.debugLabel == RowNav._label) at = a;
+      }
+      return at.rect.top;
+    }
     final order = {for (var i = 0; i < found.length; i++) found[i]: i};
     final all = [...found]..sort((a, b) {
         final byRow = top(a).compareTo(top(b));
