@@ -3,8 +3,9 @@
     Unzips a Windows build over the copy on the Desktop (Desktop\BeDeReader), for everyday use on this PC.
 .DESCRIPTION
     The owner's own copy of the app ("dogfooding", 2026-09-29): tools\build.ps1 runs this after every Windows build,
-    next to installing on the tablet. Files are overwritten in place; nothing else in the folder is touched, and the
-    settings and downloads aren't in it (they live in %APPDATA% and %LOCALAPPDATA%).
+    next to installing on the tablet. The build is unpacked into a new folder and swapped in; the copy it replaces
+    stays beside it as BeDeReader.previous (the one before that goes). The settings and downloads aren't in these
+    folders (they live in %APPDATA% and %LOCALAPPDATA%).
     If the app is open from that folder its files are locked: nothing is changed, it says so and exits with code 2 -
     close the app and run this again.
 .PARAMETER Zip
@@ -39,7 +40,23 @@ if ($open) {
     exit 2
 }
 
-New-Item -ItemType Directory -Force $Dest | Out-Null
-Expand-Archive -Path $Zip -DestinationPath $Dest -Force
-Say "Desktop copy updated: $(Split-Path $Zip -Leaf) -> $Dest"
+# Unpacked into a new folder first, then swapped in (test audit, 2026-09-30): unpacking over the copy left files
+# from older builds behind, and a failure part way left a mixed copy. The copy it replaces is kept beside it as
+# "<Dest>.previous" (the one before that goes) - put it back by renaming if a build misbehaves.
+$fresh = "$($Dest.TrimEnd('\')).new"
+$previous = "$($Dest.TrimEnd('\')).previous"
+if (Test-Path $fresh) { Remove-Item $fresh -Recurse -Force }
+Expand-Archive -Path $Zip -DestinationPath $fresh
+$exe = Join-Path $fresh 'BeDeReader.exe'
+if (-not (Test-Path $exe)) {
+    Remove-Item $fresh -Recurse -Force
+    throw "$(Split-Path $Zip -Leaf) has no BeDeReader.exe - the Desktop copy was left as it was"
+}
+if (Test-Path $Dest) {
+    if (Test-Path $previous) { Remove-Item $previous -Recurse -Force }
+    Rename-Item $Dest (Split-Path $previous -Leaf)
+}
+Rename-Item $fresh (Split-Path $Dest -Leaf)
+$version = (Get-Item (Join-Path $Dest 'BeDeReader.exe')).VersionInfo.ProductVersion
+Say "Desktop copy updated: $(Split-Path $Zip -Leaf) -> $Dest (BeDeReader.exe $version; the copy before it: $previous)"
 exit 0

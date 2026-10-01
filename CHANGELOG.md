@@ -14,6 +14,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   focus could end up below the bottom edge (found auditing the tests).
 - On deck: hiding or showing something while offline reaches Komga as soon as the app is back online, not only at the
   next start (as pins and reader settings already did).
+- Tools (test audit): lint findings now fail the build and CI (they were all let through); a tagged build refuses
+  -AllowDirty / -SkipTests, files changed by pub get, and an existing tag; the tablet install checks the tablet reports
+  this build and holds this exact APK; the Desktop copy is unpacked fresh and swapped in (the old one kept as
+  BeDeReader.previous, files from older builds no longer linger); release.ps1 only tags a build whose BUILD-INFO
+  shows tests passed, a clean tree and release signing, and whose files match their checksums.
 - A pinned side menu stays open beside a series, a collection and a read list too (it went away on those).
 - Reader (from a code review):
   - A second "forward" while the next book was loading (a held key, a double press) opened the book after it and

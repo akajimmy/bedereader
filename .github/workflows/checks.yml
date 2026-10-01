@@ -19,5 +19,5 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos
+      - run: flutter analyze # lint findings count too (they report as infos)
       - run: flutter test
