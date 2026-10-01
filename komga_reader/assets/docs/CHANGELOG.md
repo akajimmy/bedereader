@@ -14,6 +14,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   focus could end up below the bottom edge (found auditing the tests).
 - On deck: hiding or showing something while offline reaches Komga as soon as the app is back online, not only at the
   next start (as pins and reader settings already did).
+- Reader: with Fit height, a page wider than the screen dropping out of the page view (two turns on) made the reader
+  rebuild at a moment Flutter doesn't allow - an error in debug builds (found auditing the tests).
 - Tools (test audit): lint findings now fail the build and CI (they were all let through); a tagged build refuses
   -AllowDirty / -SkipTests, files changed by pub get, and an existing tag; the tablet install checks the tablet reports
   this build and holds this exact APK; the Desktop copy is unpacked fresh and swapped in (the old one kept as
