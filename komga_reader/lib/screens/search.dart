@@ -136,14 +136,16 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
           PosterRow(
             title: _title('Series', _series),
             itemCount: series.length,
-            itemBuilder: (context, i) => seriesTile(context, api, series[i],
+            // after an action from a result's menu (delete, mark read...), the same search again (code review,
+            // 2026-09-30: a deleted book's tile stayed and opened a book that was gone)
+            itemBuilder: (context, i) => seriesTile(context, api, series[i], onChanged: refreshView,
                 onOpen: () => _push(SeriesScreen(api: api, series: series[i]))),
           ),
         if (books.isNotEmpty)
           PosterRow(
             title: _title('Books', _books),
             itemCount: books.length,
-            itemBuilder: (context, i) => bookTile(context, api, books[i],
+            itemBuilder: (context, i) => bookTile(context, api, books[i], onChanged: refreshView,
                 onOpen: () => _push(ReaderScreen(api: api, book: books[i]))),
           ),
         if (lists.isNotEmpty)

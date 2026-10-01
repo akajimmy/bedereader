@@ -7,14 +7,16 @@ import '../screen.dart';
 /// what they use: # headings (1-3), paragraphs, "- " bullets (one level of nesting) and "1. " lists, **bold**,
 /// *italic*, `code`, [links](url), ``` code blocks, | tables | and blank-line spacing. Not a general Markdown engine.
 class MarkdownView extends StatelessWidget {
-  const MarkdownView(this.text, {super.key, this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 40)});
+  const MarkdownView(this.text, {super.key, this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 40), this.controller});
   final String text;
   final EdgeInsets padding;
+  final ScrollController? controller; // the remote's arrows scroll it (widgets/arrow_scroll.dart)
 
   @override
   Widget build(BuildContext context) {
     final blocks = parseBlocks(text);
     return ListView.builder(
+      controller: controller,
       padding: padding,
       itemCount: blocks.length,
       itemBuilder: (context, i) => blocks[i].build(context),

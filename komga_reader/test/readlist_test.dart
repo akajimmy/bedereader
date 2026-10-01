@@ -65,12 +65,14 @@ void main() {
     expect(api.readCalls, isEmpty);
   });
 
-  testWidgets('read-list tile shows unread count from the unread lookup', (tester) async {
+  testWidgets('read-list tile: books still to read - unread and in progress - from the lookup', (tester) async {
+    // code review, 2026-09-30: in progress counts as not read yet, as everywhere else (a list whose last books were
+    // in progress showed as read)
     ReadListTile.invalidate();
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 150, height: 290,
         child: ReadListTile(api: FakeKomga(), readList: rl, onOpen: () {})))));
     await tester.pump();
-    expect(find.text('2 of 5 unread'), findsOneWidget);
+    expect(find.text('3 of 5 unread'), findsOneWidget); // a and d unread, c in progress
   });
 
   testWidgets('header count shows the total for the current filter, in a box left of Hide read',

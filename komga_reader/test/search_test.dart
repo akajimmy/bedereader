@@ -13,6 +13,9 @@ import 'offline_test.dart' show buildStore;
 class FakeKomga extends Komga {
   FakeKomga() : super('http://test', 'k');
   final scopes = <String?>[]; // library each search was limited to
+  final marked = <String>[];
+  @override
+  Future<void> markRead(String bookId) async => marked.add(bookId);
   Map<String, dynamic> page(List<Map<String, dynamic>> items) =>
       {'content': items, 'totalElements': items.length, 'last': true};
 
@@ -68,6 +71,29 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(api.scopes.last, isNull);
+  });
+
+  testWidgets("after an action from a result's menu, the search runs again (code review, 2026-09-30)",
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(1280, 1600); // tall enough for the Books row
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = FakeKomga();
+    await tester.pumpWidget(MaterialApp(home: SearchScreen(api: api)));
+    await tester.enterText(find.byType(TextField), 'surf');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+    final searches = api.scopes.length;
+    await tester.longPress(find.text('Silver Surfer #1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Details'), findsOneWidget, reason: "the book's menu");
+    await tester.ensureVisible(find.text('Mark as read')); // the sheet scrolls in a short window
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mark as read'));
+    await tester.pumpAndSettle();
+    expect(api.marked, ['B1']);
+    expect(api.scopes.length, searches + 1, reason: 'the results are fetched again (a deleted book would go)');
   });
 
   test('offline search looks through the downloaded titles', () async {

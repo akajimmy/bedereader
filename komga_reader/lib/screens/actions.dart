@@ -240,6 +240,13 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
           'This deletes all ${s['booksCount'] ?? ''} books of the series from the server. It cannot be undone from the app.');
       if (!ok) return;
       await api.deleteSeriesFiles(s['id']);
+      if (inSeries && context.mounted) {
+        // deleted from its own screen: there's nothing left to show here - back to where it was opened from (code
+        // review, 2026-09-30: the empty screen stayed, pin and actions and all)
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text('Deleted "$title"')));
+        Navigator.of(context).pop();
+        return;
+      }
     }
     onChanged();
   } catch (e, st) {

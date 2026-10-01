@@ -43,7 +43,9 @@ class _ReadListTileState extends State<ReadListTile> {
 
   void _lookup() {
     _unread = ReadListTile._cache.putIfAbsent(_id, () {
-      final f = widget.api.readListBooks(_id, readStatus: const ['UNREAD'], size: 4);
+      // books still to read: unread and in progress, as everywhere else in the app (code review, 2026-09-30: a list
+      // whose last books were in progress showed as read)
+      final f = widget.api.readListBooks(_id, readStatus: const ['UNREAD', 'IN_PROGRESS'], size: 4);
       f.catchError((Object _) {
         ReadListTile._cache.remove(_id);
         return <String, dynamic>{};
