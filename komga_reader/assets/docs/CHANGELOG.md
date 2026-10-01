@@ -16,6 +16,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   next start (as pins and reader settings already did).
 - Reader: with Fit height, a page wider than the screen dropping out of the page view (two turns on) made the reader
   rebuild at a moment Flutter doesn't allow - an error in debug builds (found auditing the tests).
+- Offline mode (found auditing the tests):
+  - Starting the app with offline mode on still asked Komga for the reader settings, pins and On deck hidden, and
+    for Home's rows. Nothing is sent now; they load from this device.
+  - Switched offline by hand after the "can't reach Komga" prompt, a late answer from Komga still offered "Komga is
+    reachable again - Go online".
+- Signing out: coming back to the app afterwards still checked Komga with the old key. The connection and the
+  download queue now let go of it.
 - Tools (test audit): lint findings now fail the build and CI (they were all let through); a tagged build refuses
   -AllowDirty / -SkipTests, files changed by pub get, and an existing tag; the tablet install checks the tablet reports
   this build and holds this exact APK; the Desktop copy is unpacked fresh and swapped in (the old one kept as
