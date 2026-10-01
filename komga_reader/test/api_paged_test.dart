@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/paged.dart';
 
+/// The read filter, Paged and the server address (api.dart, paged.dart) - this was widget_test.dart, a name left from
+/// the project template (test audit, 2026-09-30).
 void main() {
   test('read filters map to Komga read_status values', () {
     expect(ReadFilter.all.api, isNull);

@@ -8,6 +8,11 @@ import 'package:komga_reader/widgets/poster.dart';
 void main() {
   var opened = 0, menus = 0;
 
+  // the guard's held key is app-wide (static): one test's unfinished press mustn't swallow the next test's keys
+  // (test audit, 2026-09-30)
+  setUp(HoldOkGuard.debugReset);
+  tearDown(HoldOkGuard.debugReset);
+
   Future<void> tile(WidgetTester tester, {bool withMenu = true}) async {
     opened = menus = 0;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 170, height: 330, child: PosterTile(
