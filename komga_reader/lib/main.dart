@@ -97,6 +97,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onF11);
+    Connection.instance.removeListener(_onConnection);
+    ProgressSync.instance.removeListener(_onSync);
+    Downloads.instance.removeListener(_onDownloads);
     super.dispose();
   }
 
@@ -131,6 +134,14 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (now == _wasOffline) return;
     _wasOffline = now;
     if (c.autoSwitch && !c.forcedOffline) _say(now ? "Can't reach Komga - showing downloaded books" : 'Back online');
+    if (!now && c.online != null) {
+      // back online: the account's things from Komga again - changed on another device meanwhile, or never fetched
+      // (an offline start loads them from this device only). What changed here is sent first, as at a start (user,
+      // 2026-09-30)
+      unawaited(AppSettings.instance.load(c.api));
+      unawaited(Pins.instance.load(c.api));
+      unawaited(OnDeckHidden.instance.load(c.api));
+    }
     _nav.currentState?.popUntil((r) => r.isFirst);
     setState(() {});
   }

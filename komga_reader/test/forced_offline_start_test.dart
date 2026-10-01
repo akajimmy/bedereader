@@ -58,4 +58,16 @@ void main() {
     final komga = await start(tester);
     expect(komga.requests, isEmpty);
   });
+
+  // an offline start loads the account's things from this device only; going online fetches them (user, 2026-09-30)
+  testWidgets('then going online: the reader settings, pins and On deck hidden are fetched from Komga',
+      (tester) async {
+    final komga = await start(tester);
+    await tester.runAsync(Connection.instance.goOnline);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump();
+    expect(Connection.instance.offline, isFalse);
+    expect(komga.requests.where((r) => r == 'GET /api/v1/client-settings/user/list').length, 3,
+        reason: 'one each: reader settings, pins, On deck hidden - ${komga.requests}');
+  });
 }
