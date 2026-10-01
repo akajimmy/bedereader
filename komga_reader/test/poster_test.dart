@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/widgets/poster.dart';
+
+import 'support/no_network.dart';
 
 void main() {
   for (final scale in const [1.0, 1.3]) {
     testWidgets('a long title does not shrink the cover (text scale $scale)', (tester) async {
-      final api = Komga('http://test', 'k');
+      final api = plainKomga();
       Widget tile(String title) => SizedBox(
             width: 150,
             height: 290,

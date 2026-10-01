@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 
+import 'support/helpers.dart';
+
 /// The shared setting rows (widgets/setting_rows.dart): how they look and how they lay out. Moved here from
 /// row_nav_test, which is about Up / Down only (test audit, 2026-09-30).
 void main() {
@@ -21,9 +23,7 @@ void main() {
 
   testWidgets('alignment: choices beside their labels share one width, flush right; one under its label spans the row',
       (tester) async {
-    tester.view.physicalSize = const Size(700, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(700, 800));
     // six choices long enough not to fit beside their label at 700 px in any font - not only in the test font, which
     // is about twice as wide as a real one (test audit, 2026-09-30)
     const long = [

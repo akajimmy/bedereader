@@ -2,14 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+
 /// Records the sort each series request asks Komga for.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   final sorts = <String>[];
   @override
   Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}];
@@ -23,10 +24,8 @@ class FakeKomga extends Komga {
 
 void main() {
   Future<FakeKomga> open(WidgetTester tester, {Pin? pin}) async {
-    final api = FakeKomga();
-    tester.view.physicalSize = const Size(1280, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    final api = noNetwork(FakeKomga.new);
+    setView(tester, const Size(1280, 900));
     await tester.pumpWidget(MaterialApp(home: LibraryScreen(key: UniqueKey(), api: api, onSignOut: () {}, libraryId: 'L1', pin: pin)));
     await tester.pump();
     await tester.pump();

@@ -3,28 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'home_test.dart' as h;
-
-/// Twenty books in progress - a Continue reading row wider than the screen.
-class FakeKomga extends h.FakeKomga {
-  @override
-  Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) async => {
-        'content': [
-          for (var i = 1; i <= 20; i++)
-            {'id': 'B$i', 'seriesTitle': 'Series', 'name': 'b$i', 'metadata': {'number': '$i', 'title': 'T$i'}},
-        ],
-        'totalElements': 20,
-        'last': true,
-      };
-}
+import 'support/helpers.dart';
+import 'support/home_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   testWidgets('home rows have ‹ › buttons: greyed at the ends, each press scrolls about a screen', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    tester.view.physicalSize = const Size(1000, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: FakeKomga(), onSignOut: () {})));
+    setView(tester, const Size(1000, 900));
+    // twenty books in progress - a Continue reading row wider than the screen
+    final api = noNetwork(() => HomeServer(inProgressBooks: [
+          for (var i = 1; i <= 20; i++)
+            {'id': 'B$i', 'seriesTitle': 'Series', 'name': 'b$i', 'metadata': {'number': '$i', 'title': 'T$i'}},
+        ]));
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
     await tester.pump();
     await tester.pump();
 

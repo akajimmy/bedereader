@@ -8,7 +8,9 @@ import 'package:komga_reader/screens/downloads_screen.dart';
 import 'package:komga_reader/widgets/selection.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show FakeKomga;
+import 'support/helpers.dart';
+import 'support/library_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   late Directory dir;
@@ -34,16 +36,13 @@ void main() {
 
   /// Waits (real clock, 1 s at most) for [done], pumping between looks: work started by a tap runs in the test's zone
   /// and only moves on when pumped.
-  Future<void> until(WidgetTester tester, bool Function() done) async {
-    for (var i = 0; i < 100 && !done(); i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
-      await tester.pump();
-    }
-  }
+  Future<void> until(WidgetTester tester, bool Function() done, String reason) =>
+      waitUntil(done, tester: tester, timeout: const Duration(seconds: 1), step: const Duration(milliseconds: 10),
+          reason: reason);
 
   testWidgets('book menu: Download queues the book; the Downloads screen shows it, then Remove download frees it',
       (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() => d.attach(api, root: dir));
     d.pauseAll(); // keep it in the queue so the queue view can be checked
     final b = {'id': 'B1', 'seriesTitle': 'Silver Surfer', 'name': 'b1', 'metadata': {'number': '1', 'title': 'T'}};
@@ -63,9 +62,7 @@ void main() {
 
     await tester.runAsync(() async {
       d.resumeAll();
-      for (var i = 0; i < 100 && !d.isDownloaded('B1'); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
+      await waitUntil(() => d.isDownloaded('B1'), timeout: const Duration(seconds: 1), reason: 'B1 downloaded');
     });
     await tester.pump();
     expect(find.text('Downloaded · 1'), findsOneWidget);
@@ -75,7 +72,7 @@ void main() {
     // the button itself, not d.remove() (test audit, 2026-09-30)
     await tester.tap(find.byTooltip('Remove download'));
     // (the store forgets it before the save and the screen update finish: wait for the screen)
-    await until(tester, () => find.text('Downloaded · 0').evaluate().isNotEmpty);
+    await until(tester, () => find.text('Downloaded · 0').evaluate().isNotEmpty, 'the screen to show it gone');
     expect(d.isDownloaded('B1'), isFalse);
     expect(await tester.runAsync(() => Directory(d.store!.file('B1').path).exists()), isFalse, reason: 'files gone');
     expect(find.text('Downloaded · 0'), findsOneWidget);
@@ -84,14 +81,13 @@ void main() {
   });
 
   testWidgets('a failed download says why and offers Retry; Retry tries it again', (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() async {
       await d.attach(api, root: dir);
       await d.setCap(100); // smaller than any book
       await d.add([{'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}}]);
-      for (var i = 0; i < 100 && d.jobFor('B2')?.state != JobState.failed; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-      }
+      await waitUntil(() => d.jobFor('B2')?.state == JobState.failed, timeout: const Duration(seconds: 1),
+          reason: 'B2 stopped for lack of room');
     });
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     expect(find.textContaining('Failed: not enough room'), findsOneWidget);
@@ -104,7 +100,7 @@ void main() {
     d.capBytes = null;
     await tester.tap(find.byTooltip('Retry'));
     expect(d.jobFor('B2')?.state, isNot(JobState.failed), reason: 'back in the queue');
-    await until(tester, () => d.isDownloaded('B2') && !d.busy);
+    await until(tester, () => d.isDownloaded('B2') && !d.busy, 'B2 downloaded after Retry');
     expect(d.isDownloaded('B2'), isTrue);
     expect(find.textContaining('Failed:'), findsNothing);
     expect(find.text('Downloaded · 1'), findsOneWidget);
@@ -112,7 +108,7 @@ void main() {
   });
 
   testWidgets('multi-select: Download queues the ticked books in the order picked', (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() => d.attach(api, root: dir));
     d.pauseAll(); // keep them in the queue to check the order
     final sel = Selection()..start();

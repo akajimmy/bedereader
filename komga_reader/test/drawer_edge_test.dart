@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
-  @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}];
-}
+import 'support/home_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   testWidgets('Left from the leftmost item opens the side menu; Right closes it and returns focus', (tester) async {
@@ -19,7 +15,7 @@ void main() {
       home: Scaffold(
         key: scaffold,
         onDrawerChanged: (open) { if (!open) edge.currentState?.restore(); },
-        drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}),
+        drawer: AppDrawer(api: noNetwork(HomeServer.new), onSignOut: () {}),
         body: DrawerEdge(key: edge, scaffoldKey: scaffold, child: Row(children: [
           TextButton(focusNode: a, onPressed: () {}, child: const Text('A')),
           TextButton(focusNode: b, onPressed: () {}, child: const Text('B')),
@@ -51,7 +47,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         key: scaffold,
-        drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}),
+        drawer: AppDrawer(api: noNetwork(HomeServer.new), onSignOut: () {}),
         body: DrawerEdge(scaffoldKey: scaffold, child: Column(children: [
           SizedBox(height: 100, child: ListView(controller: row, scrollDirection: Axis.horizontal, children: [
             for (var i = 0; i < 20; i++) SizedBox(width: 100, child: Text('tile $i')),

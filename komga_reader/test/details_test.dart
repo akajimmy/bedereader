@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/book_details.dart';
+import 'package:komga_reader/screens/library.dart' show seriesStatus;
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
 import 'package:komga_reader/screens/series_details.dart';
@@ -11,6 +11,9 @@ import 'package:komga_reader/side_menu.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/helpers.dart';
+import 'support/no_network.dart';
 
 final theBook = {
   'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Silver Surfer', 'name': 'b1',
@@ -27,8 +30,7 @@ final theBook = {
   },
 };
 
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   @override
   Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}]; // the side menu's
   final deletedSeries = <String>[];
@@ -55,11 +57,17 @@ class FakeKomga extends Komga {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  // moved from reader_test: the series list's subtitle and the series details' Books line (test audit, 2026-09-30)
+  test('series status text counts unread and in-progress books separately', () {
+    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 0, 'booksInProgressCount': 0}), '12 books · read');
+    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 0, 'booksInProgressCount': 2}), '12 books · 2 in progress');
+    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 3, 'booksInProgressCount': 1}),
+        '12 books · 3 unread · 1 in progress');
+  });
+
   testWidgets('details: title, publisher, date, summary, credits in comic order', (tester) async {
-    tester.view.physicalSize = const Size(1280, 1600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: FakeKomga(), book: theBook)));
+    setView(tester, const Size(1280, 1600));
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: noNetwork(FakeKomga.new), book: theBook)));
     await tester.pump();
     await tester.pump();
     expect(find.text('The Origin of the Silver Surfer'), findsOneWidget);
@@ -78,7 +86,7 @@ void main() {
   });
 
   testWidgets('book menu in a read list offers Details and View series; View series opens the series', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: FakeKomga(),
+    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: noNetwork(FakeKomga.new),
         readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']})));
     await tester.pump();
     await tester.pump();
@@ -94,9 +102,9 @@ void main() {
   testWidgets('a series, a read list: Left from the leftmost book opens the side menu; the back arrow stays '
       '(user, 2026-09-30)', (tester) async {
     for (final screen in <Widget>[
-      SeriesScreen(api: FakeKomga(),
+      SeriesScreen(api: noNetwork(FakeKomga.new),
           series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}),
-      ReadListScreen(api: FakeKomga(), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
+      ReadListScreen(api: noNetwork(FakeKomga.new), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
     ]) {
       await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen)),
@@ -115,16 +123,14 @@ void main() {
 
   testWidgets('side menu pinned: it stays open beside a series, a collection and a read list (user, 2026-09-30)',
       (tester) async {
-    tester.view.physicalSize = const Size(1280, 900); // room to dock
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(1280, 900)); // room to dock
     SideMenu.instance.pinned = true;
     addTearDown(() => SideMenu.instance.pinned = false);
     for (final screen in <Widget>[
-      SeriesScreen(api: FakeKomga(),
+      SeriesScreen(api: noNetwork(FakeKomga.new),
           series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}),
-      SeriesListScreen(api: FakeKomga(), title: 'Cosmic', collectionId: 'C1'),
-      ReadListScreen(api: FakeKomga(), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
+      SeriesListScreen(api: noNetwork(FakeKomga.new), title: 'Cosmic', collectionId: 'C1'),
+      ReadListScreen(api: noNetwork(FakeKomga.new), readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']}),
     ]) {
       await tester.pumpWidget(MaterialApp(home: screen));
       await tester.pump();
@@ -139,7 +145,7 @@ void main() {
   });
 
   testWidgets("deleting a series from its own screen closes that screen (code review, 2026-09-30)", (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api,
             series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}))),
@@ -162,11 +168,9 @@ void main() {
 
   testWidgets('book details on a remote: Down past the last button scrolls the page (code review, 2026-09-30)',
       (tester) async {
-    tester.view.physicalSize = const Size(800, 600); // short: the summary and credits go below the screen
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(800, 600)); // short: the summary and credits go below the screen
     final long = {...theBook, 'metadata': {...theBook['metadata'] as Map, 'summary': 'A long summary. ' * 200}};
-    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: FakeKomga(), book: long)));
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: noNetwork(FakeKomga.new), book: long)));
     await tester.pump();
     await tester.pump();
     final list = find.byType(Scrollable).first;
@@ -180,7 +184,7 @@ void main() {
   });
 
   testWidgets('inside the series itself, the book menu has no View series', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: FakeKomga(),
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: noNetwork(FakeKomga.new),
         series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}})));
     await tester.pump();
     await tester.pump();
@@ -191,10 +195,8 @@ void main() {
   });
 
   testWidgets('book menu fits a short landscape screen: scrolls instead of overflowing', (tester) async {
-    tester.view.physicalSize = const Size(860, 400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: FakeKomga(),
+    setView(tester, const Size(860, 400));
+    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: noNetwork(FakeKomga.new),
         readList: const {'id': 'RL', 'name': 'List', 'bookIds': ['B1']})));
     await tester.pump();
     await tester.pump();
@@ -207,9 +209,7 @@ void main() {
   });
 
   testWidgets('series details: from the series menu - facts, genres and tags, summary, credits once each', (tester) async {
-    tester.view.physicalSize = const Size(1280, 1600);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(1280, 1600));
     final series = {
       'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 18, 'booksReadCount': 3, 'booksUnreadCount': 15,
       'booksInProgressCount': 0,
@@ -220,7 +220,7 @@ void main() {
         {'name': 'John Buscema', 'role': 'penciller'},
       ]},
     };
-    final api = _SeriesKomga(series);
+    final api = noNetwork(() => _SeriesKomga(series));
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
         onPressed: () => showSeriesActions(context, api, series, onChanged: () {}), child: const Text('menu'))))));
     await tester.tap(find.text('menu'));
@@ -240,7 +240,7 @@ void main() {
   });
 
   testWidgets('series details from inside that series: no Open series', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: SeriesDetailsScreen(api: FakeKomga(),
+    await tester.pumpWidget(MaterialApp(home: SeriesDetailsScreen(api: noNetwork(FakeKomga.new),
         series: const {'id': 'S1', 'name': 'Silver Surfer', 'metadata': {}}, showOpen: false)));
     await tester.pump();
     expect(find.text('Open series'), findsNothing);

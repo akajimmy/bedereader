@@ -10,6 +10,8 @@ import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/helpers.dart';
+
 /// Libraries hidden on this device: left out of every request that spans libraries, of the lists of libraries, and
 /// switchable in Settings (the last one shown can't be).
 void main() {
@@ -58,9 +60,7 @@ void main() {
   });
 
   testWidgets('Settings: a switch per library; the last one shown stays', (tester) async {
-    tester.view.physicalSize = const Size(1000, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(1000, 2400));
     final (api, _) = recorded();
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api, onSignOut: () {},
         initialPage: SettingsPage.library)));

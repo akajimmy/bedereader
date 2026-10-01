@@ -8,6 +8,8 @@ import 'package:komga_reader/licences.dart';
 import 'package:komga_reader/screens/document.dart';
 import 'package:komga_reader/widgets/markdown.dart';
 
+import 'support/helpers.dart';
+
 /// About > What's new / Read me: the bundled CHANGELOG and README, shown with the app's small Markdown renderer.
 void main() {
   test('markdown: headings, paragraphs joined across lines, bullets with continuation lines, numbers, code, tables', () {
@@ -78,9 +80,7 @@ Text after.
   });
 
   testWidgets('Read me shows the README up to the developer part', (tester) async {
-    tester.view.physicalSize = const Size(800, 20000); // everything built, so "not there" means not there
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(800, 20000)); // everything built, so "not there" means not there
     await tester.pumpWidget(MaterialApp(home: DocumentScreen.readMe()));
     await tester.pumpAndSettle();
     expect(find.textContaining('Getting started', findRichText: true), findsOneWidget);
@@ -89,9 +89,7 @@ Text after.
   });
 
   testWidgets('Third-party software lists what the app relies on, with the AI disclosure', (tester) async {
-    tester.view.physicalSize = const Size(900, 30000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(900, 30000));
     await tester.pumpWidget(MaterialApp(home: DocumentScreen.thirdParty()));
     await tester.pumpAndSettle();
     for (final t in ['AI assistance', 'Komga', 'Flutter', 'shared_preferences', 'AMD FidelityFX Super Resolution 1',

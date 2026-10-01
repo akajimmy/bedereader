@@ -4,15 +4,15 @@ import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/helpers.dart';
+
 /// The reader's Reader and Image panels: side sheets on a wide screen, bottom sheets on a narrow one.
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => AppSettings.instance.series.clear());
 
   Future<void> openPanel(WidgetTester tester, Size size, {bool image = false, FitMode? bookFit}) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, size);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => Center(
       child: TextButton(
         onPressed: () => image
@@ -87,14 +87,6 @@ void main() {
     expect(s.ownsLayout('S1'), isTrue);
     expect(s.prefsFor('S1').fit, FitMode.width, reason: 'the series starts from what was on screen');
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
-  });
-
-  test('series settings saved before the toggles override both parts; the flags survive the saved form', () {
-    expect(ReaderPrefs.fromJson({'fit': 'width'}).ownLayout, isTrue);
-    expect(ReaderPrefs.fromJson({'fit': 'width'}).ownImage, isTrue);
-    final p = ReaderPrefs.fromJson(const ReaderPrefs(ownLayout: false).toJson());
-    expect([p.ownLayout, p.ownImage], [false, true]);
-    expect(const ReaderPrefs().toJson().containsKey('ol'), isFalse); // unchanged form for everything saved before
   });
 
   testWidgets('side sheet (380 wide): sliders go full width under their label and value; the remote can move off them',

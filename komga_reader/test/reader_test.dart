@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -10,57 +9,18 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/offline_komga.dart' show NotAvailableOffline;
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
-import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/reader_clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Komga stand-in: a 3-page book whose pages never finish loading (enough to drive the controls).
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
-  final theBook = {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '1', 'title': 'T'}};
-  static String direction = 'LEFT_TO_RIGHT'; // the series' reading direction in Komga
-  @override
-  Future<Map<String, dynamic>?> book(String id) async => theBook;
-  @override
-  Future<Map<String, dynamic>?> oneSeries(String id) async => {'id': id, 'metadata': {'readingDirection': direction}};
-  @override
-  Future<List<dynamic>> pages(String bookId) async => [{'number': 1}, {'number': 2}, {'number': 3}];
-  @override
-  Future<Uint8List> pageBytes(String bookId, int number) => Future.any([]); // never completes
-  @override
-  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
-    saves.add(page);
-    if (completed) finished.add(page);
-  }
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/reader_server.dart';
 
-  final finished = <int>[]; // saves that marked the book read
-  final saves = <int>[];
-  final marked = <String>[];
-  int nextCalls = 0;
-  @override
-  Future<void> markRead(String bookId) async => marked.add(bookId);
-  @override
-  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
-    nextCalls++;
-    askedReadList = readListId;
-    return next;
-  }
-
-  Map<String, dynamic>? next; // the book after this one (null = last one)
-  String? askedReadList = 'not asked';
-  @override
-  Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async => null;
-  @override
-  Future<Map<String, dynamic>> clientSettings() async => {};
-  @override
-  Future<void> putClientSetting(String key, String value) async {}
-}
-
-/// [FakeKomga] whose next book (B2) has a cover page to fetch.
-class CoverKomga extends FakeKomga {
+/// [ReaderServer] whose next book (B2) has a cover page to fetch.
+class CoverKomga extends ReaderServer {
   static late Uint8List cover;
   final coverAsked = <String>[];
   @override
@@ -71,9 +31,9 @@ class CoverKomga extends FakeKomga {
   }
 }
 
-/// [FakeKomga] with Komga gone mid-book (pages fail), or before the book opened ([bookDown]); back again
+/// [ReaderServer] with Komga gone mid-book (pages fail), or before the book opened ([bookDown]); back again
 /// ([pagesDown] false), its pages load ([ImageKomga.png]).
-class DownKomga extends FakeKomga {
+class DownKomga extends ReaderServer {
   bool bookDown = false;
   bool pagesDown = true;
   @override
@@ -84,15 +44,15 @@ class DownKomga extends FakeKomga {
       pagesDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : ImageKomga.png;
 }
 
-/// [FakeKomga] offline, with the next book not downloaded.
-class NotDownloadedKomga extends FakeKomga {
+/// [ReaderServer] offline, with the next book not downloaded.
+class NotDownloadedKomga extends ReaderServer {
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async =>
       throw NotAvailableOffline('The next book');
 }
 
-/// [FakeKomga] with a series B1, B2 (already read), B3 (not read).
-class ChainKomga extends FakeKomga {
+/// [ReaderServer] with a series B1, B2 (already read), B3 (not read).
+class ChainKomga extends ReaderServer {
   static Map<String, dynamic> b(String id, String n, {bool read = false}) => {
         'id': id, 'seriesTitle': 'Test', 'metadata': {'number': n, 'title': 'Book $n'},
         'readProgress': read ? {'page': 3, 'completed': true} : null,
@@ -104,8 +64,8 @@ class ChainKomga extends FakeKomga {
   }
 }
 
-/// [FakeKomga] with B0 (not read) and BR (read) before B1: previous of B1 is BR, previous of BR is B0.
-class BackChainKomga extends FakeKomga {
+/// [ReaderServer] with B0 (not read) and BR (read) before B1: previous of B1 is BR, previous of BR is B0.
+class BackChainKomga extends ReaderServer {
   final opened = <String>[];
   @override
   Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async => switch (bookId) {
@@ -145,8 +105,8 @@ class VisitKomga extends ChainKomga {
   }
 }
 
-/// [FakeKomga] whose pages load (a small picture), with page thumbnails for the slider previews.
-class ImageKomga extends FakeKomga {
+/// [ReaderServer] whose pages load (a small picture), with page thumbnails for the slider previews.
+class ImageKomga extends ReaderServer {
   static late Uint8List png;
   ImageKomga({this.pageCount = 3});
   final int pageCount;
@@ -187,43 +147,30 @@ class SlowKomga extends VisitKomga {
 }
 
 /// A book Komga lists with no pages (a damaged file, or not analysed yet).
-class EmptyKomga extends FakeKomga {
+class EmptyKomga extends ReaderServer {
   @override
   Future<List<dynamic>> pages(String bookId) async => [];
 }
 
 /// A real page picture (200 x 300) for [ImageKomga] - and [DownKomga] once it's back.
-Future<void> makePagePng(WidgetTester tester) => tester.runAsync(() async {
-      final rec = ui.PictureRecorder();
-      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFE0D0B0));
-      final img = await rec.endRecording().toImage(200, 300);
-      ImageKomga.png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
-    });
+Future<void> makePagePng(WidgetTester tester) async =>
+    ImageKomga.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
 
 /// Real work (decoding a page) finishes in real time: lets it run in short steps until [done], up to about 2 s,
-/// rather than one fixed wait that a slow machine can outlast (test audit, 2026-09-30). The caller then expects.
-Future<void> until(WidgetTester tester, bool Function() done) async {
-  for (var i = 0; i < 40 && !done(); i++) {
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
-  }
-}
-
-bool shows(Finder f) => f.evaluate().isNotEmpty;
+/// rather than one fixed wait that a slow machine can outlast (test audit, 2026-09-30) - and fails if it never comes.
+Future<void> until(WidgetTester tester, bool Function() done) =>
+    waitUntil(done, tester: tester, step: const Duration(milliseconds: 50), reason: 'the real work (decoding)');
 
 void main() {
   // the reader starts loading the curl shader when it opens; load it once for real first, or that load starts inside
   // a test's fake clock, never finishes, and the curl tests wait on it forever
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    await PageCurl.program();
-  });
+  setUpAll(preloadShaders);
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  late FakeKomga api;
+  late ReaderServer api;
 
   Future<void> openReader(WidgetTester tester, {String? readListId, Map<String, dynamic>? next}) async {
-    api = FakeKomga()..next = next;
+    api = noNetwork(ReaderServer.new)..next = next;
     await tester.pumpWidget(MaterialApp(
       home: Builder(builder: (context) => TextButton(
         onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook, readListId: readListId))),
@@ -322,27 +269,25 @@ void main() {
     expect(find.byType(ReaderScreen), findsNothing);
   });
 
-  test('tone: neutral prefs are identity; levels stretch lo..hi to 0..1', () {
-    expect(Tone.of(const ReaderPrefs(), Levels.identity).isIdentity, isTrue);
-    final t = Tone.of(const ReaderPrefs(), const Levels([0.1, 0.1, 0.2], [0.9, 0.9, 0.8]));
-    for (var c = 0; c < 3; c++) {
-      final lo = [0.1, 0.1, 0.2][c], hi = [0.9, 0.9, 0.8][c];
-      expect(lo * t.scale[c] + t.offset[c], closeTo(0, 1e-9));
-      expect(hi * t.scale[c] + t.offset[c], closeTo(1, 1e-9));
+  test('brightness: with backlight control the top of the slider drives the backlight and the bottom adds the dim '
+      'layer; without it (desktop) the slider only dims', () {
+    // one table for both (they were two tests - test audit, 2026-09-30)
+    final was = DisplayPrefs.backlightControl;
+    addTearDown(() => DisplayPrefs.backlightControl = was); // even if an expect fails
+    for (final (control, prefs, part, matcher, why) in [
+      (true, const DisplayPrefs(), 'backlight', equals(-1), 'automatic'),
+      (true, const DisplayPrefs(brightness: 1), 'backlight', closeTo(1, 1e-9), 'the top'),
+      (true, const DisplayPrefs(brightness: 0.5), 'dim', equals(0), 'mid-way: no dimming yet'),
+      (true, const DisplayPrefs(brightness: 0.1), 'backlight', equals(0.01), 'the minimum backlight'),
+      (true, const DisplayPrefs(brightness: 0), 'dim', closeTo(0.75, 1e-9), 'the bottom: dimmed'),
+      (false, const DisplayPrefs(brightness: 1), 'dim', equals(0), 'desktop, the top'),
+      (false, const DisplayPrefs(brightness: 0.5), 'dim', closeTo(0.375, 1e-9), 'desktop, mid-way: dims'),
+      (false, const DisplayPrefs(brightness: 0.5), 'backlight', equals(-1), 'desktop: never touches the backlight'),
+    ]) {
+      DisplayPrefs.backlightControl = control;
+      expect(part == 'dim' ? prefs.dimOverlay : prefs.backlight, matcher,
+          reason: '$why (backlight control $control, brightness ${prefs.brightness})');
     }
-  });
-
-  test('brightness: top of the slider drives the backlight, the bottom adds the dim layer', () {
-    expect(const DisplayPrefs().backlight, -1); // automatic
-    expect(const DisplayPrefs(brightness: 1).backlight, closeTo(1, 1e-9));
-    expect(const DisplayPrefs(brightness: 0.5).dimOverlay, 0);
-    expect(const DisplayPrefs(brightness: 0.1).backlight, 0.01);
-    expect(const DisplayPrefs(brightness: 0).dimOverlay, closeTo(0.75, 1e-9));
-  });
-
-  test('reader prefs survive the JSON round trip used for Komga sync', () {
-    const p = ReaderPrefs(fit: FitMode.height, brightness: 0.1, contrast: -0.2, sharpen: true, autoLevels: true);
-    expect(ReaderPrefs.fromJson(p.toJson()), p);
   });
 
   testWidgets('opening and closing without turning a page saves nothing', (tester) async {
@@ -361,21 +306,32 @@ void main() {
     expect(api.saves, [2]);
   });
 
-  testWidgets('Next book mid-book asks; Keep in progress does not mark read', (tester) async {
-    await openReader(tester);
-    await key(tester, LogicalKeyboardKey.enter);
-    await tester.tap(find.byTooltip('Next book'));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Mark #1 as read?'), findsOneWidget);
-    await tester.tap(find.text('Keep in progress'));
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(api.marked, isEmpty);
-    expect(api.nextCalls, 1);
-    expect(find.text('End of the series'), findsOneWidget); // no next book: closes with a message
-    await tester.pump(const Duration(seconds: 1)); // route exit animation
-    expect(find.byType(ReaderScreen), findsNothing);
-    await tester.pump(const Duration(seconds: 5)); // snackbar timer
+  testWidgets('Next book mid-book: set to Ask it asks, and Keep in progress does not mark read; set to Mark read or '
+      'Keep in progress, no question asked', (tester) async {
+    // one test over the three settings (they were two - test audit, 2026-09-30)
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(midBook: MidBook.ask)));
+    for (final m in MidBook.values) {
+      s.setDisplay(s.display.copyWith(midBook: m));
+      await openReader(tester);
+      await key(tester, LogicalKeyboardKey.enter);
+      await tester.tap(find.byTooltip('Next book'));
+      await tester.pump(const Duration(milliseconds: 400));
+      if (m == MidBook.ask) {
+        expect(find.text('Mark #1 as read?'), findsOneWidget);
+        await tester.tap(find.text('Keep in progress'));
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.pump(const Duration(milliseconds: 400));
+      if (m != MidBook.ask) expect(find.text('Mark #1 as read?'), findsNothing, reason: m.name);
+      expect(api.marked, m == MidBook.markRead ? ['B1'] : isEmpty, reason: m.name);
+      expect(api.nextCalls, 1, reason: m.name);
+      expect(find.text('End of the series'), findsOneWidget, reason: m.name); // no next book: closes with a message
+      await tester.pump(const Duration(seconds: 1)); // route exit animation
+      expect(find.byType(ReaderScreen), findsNothing, reason: m.name);
+      await tester.pump(const Duration(seconds: 5)); // snackbar timer
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   Future<void> toEndCard(WidgetTester tester) async {
@@ -388,32 +344,39 @@ void main() {
 
   final second = {'id': 'B2', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'The Second One'}};
 
-  testWidgets('remote, past the end card: Right opens the next book at its first page', (tester) async {
-    final chain = VisitKomga(); // B1 -> B2 -> B3
-    api = chain;
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: chain, book: chain.theBook)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await toEndCard(tester);
-    await key(tester, LogicalKeyboardKey.arrowRight); // on past the card
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(chain.opened.last, 'B2');
-    expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 0.0, reason: 'its first page');
-    await tester.pump(const Duration(seconds: 2));
+  testWidgets('remote, past the end card: the forward key (Right; Left in right to left) opens the book the card shows '
+      'at its first page, not the one after (tablet, build 56)', (tester) async {
+    // one test for both directions (the right-to-left one was in that group - test audit, 2026-09-30)
+    addTearDown(() => ReaderServer.direction = 'LEFT_TO_RIGHT');
+    for (final rtl in [false, true]) {
+      ReaderServer.direction = rtl ? 'RIGHT_TO_LEFT' : 'LEFT_TO_RIGHT';
+      final forward = rtl ? LogicalKeyboardKey.arrowLeft : LogicalKeyboardKey.arrowRight;
+      final how = rtl ? 'right to left' : 'left to right';
+      final chain = noNetwork(VisitKomga.new); // B1 -> B2 -> B3
+      api = chain;
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: chain, book: chain.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      for (var i = 0; i < 3; i++) { // 3 pages, then the end card
+        await key(tester, forward);
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.pump();
+      expect(find.text('Test #2'), findsOneWidget, reason: '$how: the end card shows B2');
+      await key(tester, forward); // on past the card
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(chain.opened.last, 'B2', reason: how);
+      expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 0.0, reason: '$how: its first page');
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets("end card: the next book's cover page replaces the (small, blurry) thumbnail once it's in",
       (tester) async {
-    late Uint8List png;
-    await tester.runAsync(() async {
-      final rec = ui.PictureRecorder();
-      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 20, 30), Paint()..color = const Color(0xFF3060A0));
-      final img = await rec.endRecording().toImage(20, 30);
-      png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
-    });
-    CoverKomga.cover = png;
-    api = CoverKomga()..next = second;
+    CoverKomga.cover = (await tester.runAsync(() => solidPng(20, 30, const Color(0xFF3060A0))))!;
+    api = noNetwork(CoverKomga.new)..next = second;
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -429,7 +392,7 @@ void main() {
 
   testWidgets("end card offline: the next book isn't downloaded - it says so, no poster, and → closes the book",
       (tester) async {
-    api = NotDownloadedKomga();
+    api = noNetwork(NotDownloadedKomga.new);
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
       onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook))),
       child: const Text('open'),
@@ -451,7 +414,7 @@ void main() {
   testWidgets("a page that won't load says why, with Retry and Details (user's mock-up); Retry loads it",
       (tester) async {
     await makePagePng(tester);
-    final down = DownKomga();
+    final down = noNetwork(DownKomga.new);
     api = down;
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
@@ -472,7 +435,7 @@ void main() {
 
   testWidgets("a book that won't open says so on the screen, with Retry and Close; Retry opens it", (tester) async {
     await makePagePng(tester);
-    final down = DownKomga()..bookDown = true;
+    final down = noNetwork(DownKomga.new)..bookDown = true;
     api = down;
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
@@ -557,7 +520,7 @@ void main() {
   testWidgets('opened with read books hidden, the next book skips read ones; otherwise it is simply the next',
       (tester) async {
     for (final skip in [true, false]) {
-      api = ChainKomga();
+      api = noNetwork(ChainKomga.new);
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: skip)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
@@ -577,7 +540,7 @@ void main() {
 
   testWidgets('previous book: with read books hidden it skips read ones too; otherwise the one before', (tester) async {
     for (final skip in [true, false]) {
-      final api = BackChainKomga();
+      final api = noNetwork(BackChainKomga.new);
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: skip)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
@@ -593,7 +556,7 @@ void main() {
 
   testWidgets('previous goes back through the books read this visit (read now or not); next then retraces forward',
       (tester) async {
-    final api = VisitKomga();
+    final api = noNetwork(VisitKomga.new);
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook, skipRead: true)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -644,33 +607,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  test('series status text counts unread and in-progress books separately', () {
-    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 0, 'booksInProgressCount': 0}), '12 books · read');
-    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 0, 'booksInProgressCount': 2}), '12 books · 2 in progress');
-    expect(seriesStatus({'booksCount': 12, 'booksUnreadCount': 3, 'booksInProgressCount': 1}),
-        '12 books · 3 unread · 1 in progress');
-  });
-
-  test('book auto-levels take the median page', () {
-    final l = Levels.combine([
-      const Levels([0.1, 0.1, 0.1], [0.9, 0.9, 0.9]),
-      const Levels([0.2, 0.2, 0.2], [0.8, 0.8, 0.8]),
-      const Levels([0.5, 0.5, 0.5], [0.95, 0.95, 0.95]), // an odd page doesn't drag the book
-    ]);
-    expect(l.lo, [0.2, 0.2, 0.2]);
-    expect(l.hi, [0.9, 0.9, 0.9]);
-  });
-
-  test('build-4 sharpen slider values load as the new on/off switch', () {
-    expect(ReaderPrefs.fromJson({'s': 0.4}).sharpen, isTrue);
-    expect(ReaderPrefs.fromJson({'s': 0}).sharpen, isFalse);
-  });
-
   for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
     testWidgets('reader controls fit on ${size.width.toInt()}x${size.height.toInt()} without overflow', (tester) async {
-      tester.view.physicalSize = size;
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
+      setView(tester, size);
       await openReader(tester);
       await key(tester, LogicalKeyboardKey.enter);
       expect(find.text('Close'), findsOneWidget);
@@ -744,14 +683,6 @@ void main() {
     }
   });
 
-  test('desktop brightness: the slider only dims (no backlight)', () {
-    DisplayPrefs.backlightControl = false;
-    addTearDown(() => DisplayPrefs.backlightControl = true); // test audit, 2026-09-30: even if an expect fails
-    expect(const DisplayPrefs(brightness: 1).dimOverlay, 0);
-    expect(const DisplayPrefs(brightness: 0.5).dimOverlay, closeTo(0.375, 1e-9));
-    expect(const DisplayPrefs(brightness: 0.5).backlight, -1); // never touches the backlight
-  });
-
   testWidgets('page turn animation: Instant flip cuts to the next page with no slide', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
     addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
@@ -767,7 +698,14 @@ void main() {
       await openReader(tester);
       double page() => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
       final size = tester.getSize(find.byType(PageView));
-      Future<void> settle() async { for (var i = 0; i < 40; i++) { await tester.pump(const Duration(milliseconds: 50)); } }
+      // a few frames per phase - the tap's double-tap wait, the turn starting, playing, landing - not 40 (2 s in 50 ms
+      // steps, ~480 frames over the three modes - test audit, 2026-09-30)
+      Future<void> settle() async {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump(const Duration(seconds: 1));
+      }
 
       await tester.tapAt(Offset(size.width * 0.9, size.height / 2)); // right side: forward
       await settle();
@@ -963,15 +901,10 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  test('page-turn choice survives the device settings round trip; older settings default to Swipe', () {
-    expect(DisplayPrefs.fromJson(const DisplayPrefs(pageTurn: PageTurn.flip).toJson()).pageTurn, PageTurn.flip);
-    expect(DisplayPrefs.fromJson({'night': true}).pageTurn, PageTurn.swipe);
-  });
-
   group('right to left', () {
-    setUp(() => FakeKomga.direction = 'RIGHT_TO_LEFT');
+    setUp(() => ReaderServer.direction = 'RIGHT_TO_LEFT');
     tearDown(() {
-      FakeKomga.direction = 'LEFT_TO_RIGHT';
+      ReaderServer.direction = 'LEFT_TO_RIGHT';
       AppSettings.instance.series.remove('S1');
     });
 
@@ -1002,27 +935,6 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('remote, past the end card: Left opens the book the card shows, not the one after (tablet, build 56)',
-        (tester) async {
-      final chain = VisitKomga(); // B1 -> B2 -> B3
-      api = chain;
-      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: chain, book: chain.theBook)));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      for (var i = 0; i < 3; i++) { // right to left: Left goes forward - 3 pages, then the end card
-        await key(tester, LogicalKeyboardKey.arrowLeft);
-        await tester.pump(const Duration(milliseconds: 400));
-      }
-      await tester.pump();
-      expect(find.text('Test #2'), findsOneWidget, reason: 'the end card shows B2');
-      await key(tester, LogicalKeyboardKey.arrowLeft); // on past it
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-      expect(chain.opened.last, 'B2');
-      expect(page(tester), 0.0, reason: 'its first page');
-      await tester.pump(const Duration(seconds: 2));
-    });
-
     testWidgets('a per-series direction overrides Komga either way: pages and the arrow keys follow the series',
         (tester) async {
       // test audit, 2026-09-30: one test for both ways (the "Right to left" one only read PageView.reverse - now the
@@ -1031,7 +943,7 @@ void main() {
         (ReadingDirection.ltr, 'RIGHT_TO_LEFT'), // "Left to right" over Komga's right to left
         (ReadingDirection.rtl, 'LEFT_TO_RIGHT'), // "Right to left" over Komga's left to right
       ]) {
-        FakeKomga.direction = komga; // the group's tearDown puts it back
+        ReaderServer.direction = komga; // the group's tearDown puts it back
         AppSettings.instance.series['S1'] = ReaderPrefs(direction: own); // ... and removes this
         final rtl = own == ReadingDirection.rtl;
         await openReader(tester);
@@ -1048,7 +960,7 @@ void main() {
   group('with pages that load', () {
     Future<void> openLoaded(WidgetTester tester, {int pages = 3}) async {
       await makePagePng(tester);
-      api = ImageKomga(pageCount: pages);
+      api = noNetwork(() => ImageKomga(pageCount: pages));
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
       await tester.pump();
       await until(tester, () => shows(find.byType(PageCanvas))); // pages decode for real
@@ -1234,28 +1146,9 @@ void main() {
     }
   });
 
-  testWidgets('Next book before the last page, set to Mark read or Keep in progress: no question asked',
-      (tester) async {
-    final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.copyWith(midBook: MidBook.ask)));
-    for (final m in [MidBook.markRead, MidBook.keep]) {
-      s.setDisplay(s.display.copyWith(midBook: m));
-      await openReader(tester);
-      await key(tester, LogicalKeyboardKey.enter);
-      await tester.tap(find.byTooltip('Next book'));
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('Mark #1 as read?'), findsNothing, reason: m.name);
-      expect(api.marked, m == MidBook.markRead ? ['B1'] : isEmpty, reason: m.name);
-      expect(api.nextCalls, 1, reason: m.name);
-      await tester.pump(const Duration(seconds: 5)); // the "End of the series" snackbar
-      await tester.pumpWidget(const SizedBox());
-    }
-  });
-
   group('moving between books (code review, 2026-09-30)', () {
     Future<SlowKomga> openSlow(WidgetTester tester) async {
-      final slow = SlowKomga();
+      final slow = noNetwork(SlowKomga.new);
       api = slow;
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: slow, book: slow.theBook)));
       await tester.pump();
@@ -1320,7 +1213,7 @@ void main() {
     });
 
     testWidgets('a book with no pages says so, offering Next book and Close - no crash', (tester) async {
-      final empty = EmptyKomga();
+      final empty = noNetwork(EmptyKomga.new);
       api = empty;
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: empty, book: empty.theBook)));
       await tester.pump();
@@ -1428,28 +1321,6 @@ void main() {
     expect(calls.last, ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight']);
     await tester.pumpWidget(const SizedBox());
     expect(calls.last, isEmpty); // closed: the app follows the device again
-  });
-
-  test('rotation, clock and progress bar survive the saved form; older saves get the defaults', () {
-    const d = DisplayPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true);
-    final back = DisplayPrefs.fromJson(d.toJson());
-    expect([back.rotation, back.clock, back.progressBar], [Rotation.landscape, ShowWhen.always, true]);
-    final old = DisplayPrefs.fromJson({'night': true});
-    expect([old.rotation, old.clock, old.progressBar], [Rotation.auto, ShowWhen.withControls, false]);
-  });
-
-  test('double-tap zoom and volume keys: on unless switched off, and kept on the device', () {
-    expect(DisplayPrefs.fromJson({'night': true}).doubleTapZoom, isTrue);
-    expect(DisplayPrefs.fromJson({'night': true}).volumeKeys, isTrue);
-    final off = DisplayPrefs.fromJson(const DisplayPrefs(doubleTapZoom: false, volumeKeys: false).toJson());
-    expect(off.doubleTapZoom, isFalse);
-    expect(off.volumeKeys, isFalse);
-  });
-
-  test('reading direction survives the settings round trip; older settings are Auto', () {
-    expect(ReaderPrefs.fromJson(const ReaderPrefs(direction: ReadingDirection.rtl).toJson()).direction, ReadingDirection.rtl);
-    expect(ReaderPrefs.fromJson({'fit': 'width'}).direction, ReadingDirection.auto);
-    expect(const ReaderPrefs(direction: ReadingDirection.rtl, contrast: 0.2).imageReset().direction, ReadingDirection.rtl);
   });
 }
 

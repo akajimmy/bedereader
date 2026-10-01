@@ -1,31 +1,20 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/settings.dart';
 
+import 'support/helpers.dart';
+
 /// Walks a zoomed-in page along the reading path: right, then left edge one screen down, ... bottom-right = turn.
 void main() {
-  Future<ui.Image> blankImage(WidgetTester tester, int w, int h) async {
-    late ui.Image img;
-    await tester.runAsync(() async {
-      final rec = ui.PictureRecorder();
-      Canvas(rec).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..color = Colors.white);
-      img = await rec.endRecording().toImage(w, h);
-    });
-    return img;
-  }
-
   Future<(TransformationController, bool Function(bool))> setUpPage(WidgetTester tester, Size screen, int w, int h,
       {bool rtl = false, ValueChanged<void Function(Offset)?>? onZoomToggle}) async {
-    tester.view.physicalSize = screen;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, screen);
     final zoom = TransformationController();
     bool Function(bool)? step;
-    final img = await blankImage(tester, w, h);
+    final img = await testImage(tester, w, h);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
       data: PageData(img, Uint8List(0)),
       prefs: const ReaderPrefs(),

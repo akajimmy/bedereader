@@ -6,7 +6,9 @@ import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'reader_test.dart' show FakeKomga;
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/reader_server.dart';
 
 /// Settings > Remote and keys: the reader's keys, changed, kept, and used.
 void main() {
@@ -53,10 +55,8 @@ void main() {
 
   testWidgets("the press-a-key dialog: Back and Esc cancel - they're never taken as the key (code review)",
       (tester) async {
-    tester.view.physicalSize = const Size(1000, 2000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {},
+    setView(tester, const Size(1000, 2000));
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
     await tester.pump();
     for (final cancel in [LogicalKeyboardKey.goBack, LogicalKeyboardKey.escape]) {
@@ -75,7 +75,7 @@ void main() {
   testWidgets('the reader follows the map: a remapped key turns the page', (tester) async {
     await k.assign(ReaderAction.next, LogicalKeyboardKey.mediaTrackNext);
     await k.assign(ReaderAction.previous, LogicalKeyboardKey.arrowRight); // Right now goes back
-    final api = FakeKomga();
+    final api = noNetwork(ReaderServer.new);
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -94,10 +94,8 @@ void main() {
   });
 
   testWidgets('Settings: + Add takes the next key pressed; a chip removes its key', (tester) async {
-    tester.view.physicalSize = const Size(1000, 2000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {},
+    setView(tester, const Size(1000, 2000));
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
     await tester.pump();
     expect(find.text('Next page'), findsOneWidget);

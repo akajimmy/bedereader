@@ -1,4 +1,3 @@
-import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,19 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/settings.dart';
 
+import 'support/helpers.dart';
+
 /// Desktop mouse wheel over a page in fit screen: it turns pages (the reader decides), and never zooms - up or down,
 /// over the picture or the black margin beside it. Ctrl+wheel is the zoom.
 void main() {
   Future<(List<double>, TransformationController)> page(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1600, 1000); // landscape window, portrait page: margins left and right
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    late ui.Image img;
-    await tester.runAsync(() async {
-      final rec = ui.PictureRecorder();
-      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 600, 900), Paint()..color = Colors.white);
-      img = await rec.endRecording().toImage(600, 900);
-    });
+    setView(tester, const Size(1600, 1000)); // landscape window, portrait page: margins left and right
+    final img = await testImage(tester, 600, 900);
     final wheel = <double>[];
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
       data: PageData(img, Uint8List(0)),

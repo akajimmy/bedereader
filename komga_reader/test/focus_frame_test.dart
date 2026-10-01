@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/widgets/focus_style.dart';
 import 'package:komga_reader/widgets/poster.dart';
+
+import 'support/no_network.dart';
 
 void main() {
   /// Whether a tile's focus outline is drawn (whichever tile has focus: an arrow key can move it on).
@@ -16,7 +17,7 @@ void main() {
   }
 
   testWidgets('first tile has focus but no outline until an arrow key is pressed; touch hides it again', (tester) async {
-    final api = Komga('http://test', 'k');
+    final api = plainKomga();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Row(children: [
@@ -46,7 +47,7 @@ void main() {
     // tear-down, so a failing check can't leave it set for the other tests - test audit, 2026-09-30)
     addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
     focusHighlightFollowsInput(); // what main() does
-    final api = Komga('http://test', 'k');
+    final api = plainKomga();
     await tester.pumpWidget(MaterialApp(
       home: Scaffold(
         body: Row(children: [
@@ -77,7 +78,7 @@ void main() {
   testWidgets('right-click on a tile opens its menu, like a long-press', (tester) async {
     var menus = 0;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 150, height: 290,
-        child: PosterTile(api: Komga('http://test', 'k'), imageUrl: 'http://test/x', title: 'T', onOpen: () {},
+        child: PosterTile(api: plainKomga(), imageUrl: 'http://test/x', title: 'T', onOpen: () {},
             onMenu: () => menus++)))));
     await tester.tap(find.text('T'), buttons: kSecondaryButton);
     await tester.pump();

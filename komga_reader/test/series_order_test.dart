@@ -2,14 +2,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/series.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/no_network.dart';
+
 /// Records the sort each series-books request asks for.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   final sorts = <String>[];
   @override
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus, String sort = '', int page = 0,
@@ -34,7 +34,7 @@ class LibrariesKomga extends FakeKomga {
 void main() {
   testWidgets('breadcrumb: the series title bar shows its library first - "Ongoing › Absolute Flash"', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final api = LibrariesKomga();
+    final api = noNetwork(LibrariesKomga.new);
     const flash = {'id': 'S2', 'libraryId': 'L2', 'name': 'Absolute Flash', 'metadata': {'title': 'Absolute Flash'}};
     await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: api, series: flash)));
     await tester.pump();
@@ -50,14 +50,14 @@ void main() {
 
   testWidgets('breadcrumb: a series whose library is unknown just shows its title', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: FakeKomga(), series: series)));
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: noNetwork(FakeKomga.new), series: series)));
     await tester.pump();
     expect(find.descendant(of: find.byType(AppBar), matching: find.text('Silver Surfer')), findsOneWidget);
     expect(find.descendant(of: find.byType(AppBar), matching: find.textContaining('›')), findsNothing);
   });
 
   Future<FakeKomga> open(WidgetTester tester, {Pin? pin}) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: series, pin: pin)));
     await tester.pump();
     await tester.pump();
