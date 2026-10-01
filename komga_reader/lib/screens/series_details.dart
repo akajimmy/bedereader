@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../errors.dart';
+import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
 import 'book_details.dart';
@@ -93,9 +94,9 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
       ],
     ]);
 
-    return Scaffold(
+    return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
       appBar: AppBar(title: const Text('Series details'), actions: const [FullscreenExit()]),
-      body: RefreshIndicator(onRefresh: _load, child: ListView(
+      body: RefreshIndicator(onRefresh: _load, child: ListView(controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
@@ -121,6 +122,6 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
         ],
         ...creditsSection(bm['authors'] as List?),
       ])),
-    );
+    ));
   }
 }

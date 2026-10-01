@@ -82,8 +82,19 @@ class ReaderKeys extends ChangeNotifier {
     return null;
   }
 
-  /// Gives [key] to [action] - taken off whatever it did before, which is returned (to say so).
+  /// Why [key] can't go to [action], or null if it can: it's the only key that shows the controls (taking it would
+  /// leave no remote key to bring them up - code review, 2026-09-30).
+  String? cantAssign(ReaderAction action, LogicalKeyboardKey key) {
+    final controls = keys[ReaderAction.controls]!;
+    if (action == ReaderAction.controls || controls.length != 1 || controls.single != key) return null;
+    return '${nameOf(key)} is the only key that shows the controls - give "${ReaderAction.controls.label}" another '
+        'key first.';
+  }
+
+  /// Gives [key] to [action] - taken off whatever it did before, which is returned (to say so). Nothing changes if
+  /// [cantAssign] says no.
   Future<ReaderAction?> assign(ReaderAction action, LogicalKeyboardKey key) async {
+    if (cantAssign(action, key) != null) return null;
     ReaderAction? was;
     for (final e in keys.entries) {
       if (e.key != action && e.value.remove(key)) was = e.key;

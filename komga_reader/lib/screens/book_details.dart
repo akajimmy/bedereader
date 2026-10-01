@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../errors.dart';
+import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
 import 'reader.dart';
@@ -114,10 +115,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       ]),
     ]);
 
-    return Scaffold(
+    return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
       appBar: AppBar(title: const Text('Details'), actions: const [FullscreenExit()]),
       // pull down to refresh (re-reads the book and series from Komga)
-      body: RefreshIndicator(onRefresh: _load, child: ListView(
+      body: RefreshIndicator(onRefresh: _load, child: ListView(controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
@@ -139,7 +140,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
         ],
         ...creditsSection(m['authors'] as List?),
       ])),
-    );
+    ));
   }
 
 }

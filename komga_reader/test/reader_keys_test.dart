@@ -39,6 +39,39 @@ void main() {
     expect(k.isDefault, isTrue);
   });
 
+  test("the only key that shows the controls can't be given to another action - and it says why (code review)",
+      () async {
+    for (final key in List.of(k.keys[ReaderAction.controls]!)) {
+      await k.remove(ReaderAction.controls, key);
+    }
+    final last = k.keys[ReaderAction.controls]!.single;
+    expect(k.cantAssign(ReaderAction.next, last), contains('only key that shows the controls'));
+    expect(await k.assign(ReaderAction.next, last), isNull);
+    expect(k.keys[ReaderAction.controls], [last], reason: 'still there: the remote can always bring up the controls');
+    expect(k.cantAssign(ReaderAction.next, LogicalKeyboardKey.keyN), isNull); // any other key: fine
+  });
+
+  testWidgets("the press-a-key dialog: Back and Esc cancel - they're never taken as the key (code review)",
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: FakeKomga(), onSignOut: () {},
+        initialPage: SettingsPage.keys)));
+    await tester.pump();
+    for (final cancel in [LogicalKeyboardKey.goBack, LogicalKeyboardKey.escape]) {
+      await tester.tap(find.text('Add').first); // Next page
+      await tester.pumpAndSettle();
+      expect(find.text('Next page: press a key'), findsOneWidget);
+      // the remote's Back (the test kit knows no physical key for it, so one is named)
+      await tester.sendKeyEvent(cancel, physicalKey: PhysicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
+      expect(k.keys[ReaderAction.next], isNot(contains(cancel)), reason: '${ReaderKeys.nameOf(cancel)} not added');
+    }
+    expect(k.isDefault, isTrue);
+  });
+
   testWidgets('the reader follows the map: a remapped key turns the page', (tester) async {
     await k.assign(ReaderAction.next, LogicalKeyboardKey.mediaTrackNext);
     await k.assign(ReaderAction.previous, LogicalKeyboardKey.arrowRight); // Right now goes back

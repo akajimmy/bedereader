@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/markdown.dart';
 
@@ -32,7 +33,7 @@ class DocumentScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll the text
       appBar: AppBar(title: Text(title), actions: const [FullscreenExit()]),
       body: FutureBuilder<String>(
         future: _load(),
@@ -44,11 +45,11 @@ class DocumentScreen extends StatelessWidget {
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: MarkdownView(snap.data!),
+              child: MarkdownView(snap.data!, controller: scroll),
             ),
           );
         },
       ),
-    );
+    ));
   }
 }

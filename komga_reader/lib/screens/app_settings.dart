@@ -271,14 +271,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       context: context,
       builder: (ctx) => Focus(
         autofocus: true,
-        // every key is the answer, OK and Esc included - nothing in the dialog takes the remote's focus
+        // every key is the answer, OK included - nothing in the dialog takes the remote's focus - except Back and Esc,
+        // which cancel (code review, 2026-09-30: Back was taken as the key, and then no longer closed the book)
         onKeyEvent: (_, e) {
-          if (e is KeyDownEvent) Navigator.pop(ctx, e.logicalKey);
+          if (e is KeyDownEvent) {
+            final cancel = e.logicalKey == LogicalKeyboardKey.goBack || e.logicalKey == LogicalKeyboardKey.escape;
+            Navigator.pop(ctx, cancel ? null : e.logicalKey);
+          }
           return KeyEventResult.handled;
         },
         child: AlertDialog(
           title: Text('${action.label}: press a key'),
-          content: const Text('Press the key on the remote or keyboard. (Back, or a tap outside, cancels.)'),
+          content: const Text('Press the key on the remote or keyboard. (Back, Esc or a tap outside cancels.)'),
           actions: [
             ExcludeFocus(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))), // touch
           ],
@@ -286,6 +290,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ),
     );
     if (key == null || !context.mounted) return;
+    final no = ReaderKeys.instance.cantAssign(action, key);
+    if (no != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(no)));
+      return;
+    }
     final was = await ReaderKeys.instance.assign(action, key);
     if (context.mounted && was != null) {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(

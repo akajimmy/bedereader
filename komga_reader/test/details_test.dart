@@ -30,6 +30,9 @@ class FakeKomga extends Komga {
   FakeKomga() : super('http://test', 'k');
   @override
   Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}]; // the side menu's
+  final deletedSeries = <String>[];
+  @override
+  Future<void> deleteSeriesFiles(String seriesId) async => deletedSeries.add(seriesId);
   @override
   Future<Map<String, dynamic>?> book(String id) async => theBook;
   @override
@@ -123,6 +126,47 @@ void main() {
           reason: 'no slide-out copy as well');
       await tester.pumpWidget(const SizedBox());
     }
+  });
+
+  testWidgets("deleting a series from its own screen closes that screen (code review, 2026-09-30)", (tester) async {
+    final api = FakeKomga();
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api,
+            series: const {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}))),
+        child: const Text('open'))))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Series actions'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Delete series…')); // the sheet scrolls in a short window
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete series…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deletedSeries, ['S1']);
+    expect(find.byType(SeriesScreen), findsNothing, reason: 'nothing left to show: back to where it was opened from');
+    expect(find.text('Deleted "Silver Surfer"'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5)); // the snackbar
+  });
+
+  testWidgets('book details on a remote: Down past the last button scrolls the page (code review, 2026-09-30)',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 600); // short: the summary and credits go below the screen
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final long = {...theBook, 'metadata': {...theBook['metadata'] as Map, 'summary': 'A long summary. ' * 200}};
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: FakeKomga(), book: long)));
+    await tester.pump();
+    await tester.pump();
+    final list = find.byType(Scrollable).first;
+    double offset() => tester.state<ScrollableState>(list).position.pixels;
+    expect(offset(), 0);
+    for (var i = 0; i < 6; i++) { // through the buttons (if any), then the page
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+    }
+    expect(offset(), greaterThan(0), reason: 'the rest of the summary is reachable');
   });
 
   testWidgets('inside the series itself, the book menu has no View series', (tester) async {

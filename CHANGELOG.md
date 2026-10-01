@@ -43,6 +43,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
     Now they're skipped; a deleted series' downloads show "no longer on Komga".
   - A page slower than 45 s no longer makes the app think Komga is down (no "go offline?" prompt for it).
   - Delete once read = Ask no longer asks again about a book you chose to keep.
+- Screens and the remote (from a code review):
+  - Remote and keys: Back (and Esc) in the "press a key" dialog cancel - Back used to be taken as the key, and then
+    no longer closed the book. And the only key that shows the controls can't be given away: it says why.
+  - Search results update after deleting or marking a book or series from its menu.
+  - Deleting a series from its own screen closes that screen.
+  - Book details, series details and the documents (What's new, Read me...): the remote's Up / Down scroll the page
+    once there's no button that way - long summaries and the changelog couldn't be read past the screen.
+  - A read list whose remaining books are in progress no longer shows as read: in progress counts as still to read.
 
 **Added**
 - Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book
