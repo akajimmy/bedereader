@@ -68,9 +68,26 @@ void main() {
 
   testWidgets('fit width: coming back from the next page opens at its end, even if the page was still built',
       (tester) async {
-    await page(tester, FitMode.width, 800, 2400); // same state reused below, as a still-mounted neighbour page is
-    final scroll = await page(tester, FitMode.width, 800, 2400, startAtEnd: true); // the reader swaps in a fresh controller
-    expect(scroll.offset, scroll.position.maxScrollExtent);
+    // test audit, 2026-09-30: one PageData throughout, as for a still-mounted neighbour page - a new one each pump
+    // re-placed the page on its own, so the start-at-end / fresh-controller path wasn't what the test checked
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final data = PageData(await image(tester, 800, 2400), Uint8List(0)); // 800 x 2400 on a 1200-tall screen
+    Future<ScrollController> show({required bool startAtEnd}) async {
+      final scroll = ScrollController(); // the reader swaps in a fresh controller on the way back
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
+          data: data, prefs: const ReaderPrefs(fit: FitMode.width), scroll: scroll, startAtEnd: startAtEnd))));
+      await tester.pump();
+      await tester.pump();
+      return scroll;
+    }
+
+    final first = await show(startAtEnd: false);
+    expect(first.offset, 600); // centred: the page was built, and placed, before
+    final scroll = await show(startAtEnd: true); // same state, same page
+    expect(scroll.position.maxScrollExtent, 1200);
+    expect(scroll.offset, 1200, reason: 'at its end');
   });
 
   testWidgets('fit height on a wide page, then fit screen: page swipes are given back', (tester) async {
@@ -131,8 +148,12 @@ void main() {
   });
 
   testWidgets('a page that fits is simply centred, nothing to drag', (tester) async {
+    // test audit, 2026-09-30: `pans ?? false` passed if the reader was never told; the centring wasn't checked
     bool? pans;
     await page(tester, FitMode.height, 600, 1200, onPan: (p) => pans = p); // 600 wide fits in 800
-    expect(pans ?? false, isFalse);
+    expect(pans, isFalse, reason: 'told: page swipes stay on');
+    expect(find.byType(SingleChildScrollView), findsNothing); // nothing to drag
+    final shown = tester.getRect(find.byType(RawImage));
+    expect(shown, const Rect.fromLTWH(100, 0, 600, 1200)); // full height, centred across the 800-wide screen
   });
 }

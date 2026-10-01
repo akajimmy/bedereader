@@ -71,14 +71,17 @@ class CoverKomga extends FakeKomga {
   }
 }
 
-/// [FakeKomga] with Komga gone mid-book (pages fail), or before the book opened ([bookDown]).
+/// [FakeKomga] with Komga gone mid-book (pages fail), or before the book opened ([bookDown]); back again
+/// ([pagesDown] false), its pages load ([ImageKomga.png]).
 class DownKomga extends FakeKomga {
   bool bookDown = false;
+  bool pagesDown = true;
   @override
   Future<Map<String, dynamic>?> book(String id) async =>
       bookDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : theBook;
   @override
-  Future<Uint8List> pageBytes(String bookId, int number) async => throw KomgaUnreachable('http://192.168.1.10:25600');
+  Future<Uint8List> pageBytes(String bookId, int number) async =>
+      pagesDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : ImageKomga.png;
 }
 
 /// [FakeKomga] offline, with the next book not downloaded.
@@ -189,6 +192,25 @@ class EmptyKomga extends FakeKomga {
   Future<List<dynamic>> pages(String bookId) async => [];
 }
 
+/// A real page picture (200 x 300) for [ImageKomga] - and [DownKomga] once it's back.
+Future<void> makePagePng(WidgetTester tester) => tester.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFE0D0B0));
+      final img = await rec.endRecording().toImage(200, 300);
+      ImageKomga.png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    });
+
+/// Real work (decoding a page) finishes in real time: lets it run in short steps until [done], up to about 2 s,
+/// rather than one fixed wait that a slow machine can outlast (test audit, 2026-09-30). The caller then expects.
+Future<void> until(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 40 && !done(); i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+  }
+}
+
+bool shows(Finder f) => f.evaluate().isNotEmpty;
+
 void main() {
   // the reader starts loading the curl shader when it opens; load it once for real first, or that load starts inside
   // a test's fake clock, never finishes, and the curl tests wait on it forever
@@ -270,7 +292,8 @@ void main() {
     expect(AppSettings.instance.hasOwn('S1'), isFalse);
     expect(AppSettings.instance.prefsFor('S1').fit, FitMode.screen);
     expect(find.byTooltip('Next book'), findsOneWidget); // controls stay up
-    await tester.pump(const Duration(seconds: 3)); // let the settings sync timer fire
+    // let the reader's own timers run out (nothing was saved, so no settings sync is pending - test audit, 2026-09-30)
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets("the top bar's fit button: saved for the series when it overrides the default layout", (tester) async {
@@ -395,8 +418,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await toEndCard(tester);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await until(tester, () => tester.widgetList(find.byType(Image)).length >= 2); // the cover decodes for real
     expect((api as CoverKomga).coverAsked, ['B2']); // page 1 of the next book - once
     final images = tester.widgetList<Image>(find.byType(Image)).toList();
     expect(images.length, 2); // the thumbnail underneath, the cover over it
@@ -426,26 +448,50 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets("a page that won't load says why, with Retry and Details (user's mock-up)", (tester) async {
-    api = DownKomga();
+  testWidgets("a page that won't load says why, with Retry and Details (user's mock-up); Retry loads it",
+      (tester) async {
+    await makePagePng(tester);
+    final down = DownKomga();
+    api = down;
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text("This page didn't load: can't reach Komga."), findsOneWidget);
+    const failed = "This page didn't load: can't reach Komga.";
+    expect(find.text(failed), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Details'), findsOneWidget);
+    // test audit, 2026-09-30: Retry was found but never pressed - Komga back, it loads the page
+    down.pagesDown = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    await until(tester, () => shows(find.byType(PageCanvas)));
+    expect(find.byType(PageCanvas), findsOneWidget);
+    expect(find.text(failed), findsNothing);
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets("a book that won't open says so on the screen, with Retry and Close", (tester) async {
-    api = DownKomga()..bookDown = true;
+  testWidgets("a book that won't open says so on the screen, with Retry and Close; Retry opens it", (tester) async {
+    await makePagePng(tester);
+    final down = DownKomga()..bookDown = true;
+    api = down;
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Couldn\'t open "Test #1": can\'t reach Komga.'), findsOneWidget);
+    const failed = 'Couldn\'t open "Test #1": can\'t reach Komga.';
+    expect(find.text(failed), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
     expect(find.text('Close'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing); // not a spinner forever
+    // test audit, 2026-09-30: Retry was found but never pressed - Komga back, it opens the book
+    down
+      ..bookDown = false
+      ..pagesDown = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pump();
+    await until(tester, () => shows(find.byType(PageCanvas)));
+    expect(find.text(failed), findsNothing);
+    expect(find.byType(PageView), findsOneWidget);
+    expect(find.byType(PageCanvas), findsOneWidget); // its first page, showing
     await tester.pump(const Duration(seconds: 3));
   });
 
@@ -658,6 +704,8 @@ void main() {
 
   testWidgets('desktop: full screen is app-wide - the button toggles it, Esc closes the book and it stays on',
       (tester) async {
+    // test audit, 2026-09-30: restored in finally - restored only at the end, a failing expect left them set for the
+    // tests after it
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     final calls = <bool>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
@@ -667,37 +715,41 @@ void main() {
       }
       return null;
     });
-    await openReader(tester);
-    await key(tester, LogicalKeyboardKey.enter); // controls
-    await tester.tap(find.byTooltip('Full screen (F11)'));
-    await tester.pump();
-    await tester.pump();
-    expect(calls, [true]);
-    expect(fullscreen.value, isTrue);
-    expect((await SharedPreferences.getInstance()).getBool('desktop.fullscreen'), isTrue); // remembered
-    expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
-    await key(tester, LogicalKeyboardKey.escape); // hides the controls first
-    await key(tester, LogicalKeyboardKey.escape); // then closes the book - full screen stays (user)
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(ReaderScreen), findsNothing);
-    expect(calls, [true]);
-    expect(fullscreen.value, isTrue);
-    await tester.tap(find.text('open')); // the next book opens in full screen
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await key(tester, LogicalKeyboardKey.enter);
-    expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
-    fullscreen.value = false;
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
-    debugDefaultTargetPlatformOverride = null;
+    try {
+      await openReader(tester);
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      await tester.tap(find.byTooltip('Full screen (F11)'));
+      await tester.pump();
+      await tester.pump();
+      expect(calls, [true]);
+      expect(fullscreen.value, isTrue);
+      expect((await SharedPreferences.getInstance()).getBool('desktop.fullscreen'), isTrue); // remembered
+      expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
+      await key(tester, LogicalKeyboardKey.escape); // hides the controls first
+      await key(tester, LogicalKeyboardKey.escape); // then closes the book - full screen stays (user)
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(ReaderScreen), findsNothing);
+      expect(calls, [true]);
+      expect(fullscreen.value, isTrue);
+      await tester.tap(find.text('open')); // the next book opens in full screen
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await key(tester, LogicalKeyboardKey.enter);
+      expect(find.byTooltip('Leave full screen (F11)'), findsOneWidget);
+    } finally {
+      // in finally, not addTearDown: the platform override must be gone before the test's own end-of-test check
+      fullscreen.value = false;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   test('desktop brightness: the slider only dims (no backlight)', () {
     DisplayPrefs.backlightControl = false;
+    addTearDown(() => DisplayPrefs.backlightControl = true); // test audit, 2026-09-30: even if an expect fails
     expect(const DisplayPrefs(brightness: 1).dimOverlay, 0);
     expect(const DisplayPrefs(brightness: 0.5).dimOverlay, closeTo(0.375, 1e-9));
     expect(const DisplayPrefs(brightness: 0.5).backlight, -1); // never touches the backlight
-    DisplayPrefs.backlightControl = true;
   });
 
   testWidgets('page turn animation: Instant flip cuts to the next page with no slide', (tester) async {
@@ -902,18 +954,6 @@ void main() {
     });
   });
 
-  testWidgets('every page turn mode keeps the neighbouring pages built (processed before they are turned to)',
-      (tester) async {
-    for (final turn in PageTurn.values) {
-      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
-      await openReader(tester);
-      expect(tester.widget<PageView>(find.byType(PageView)).allowImplicitScrolling, isTrue, reason: turn.name);
-      await tester.pumpWidget(const SizedBox());
-    }
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe));
-    await tester.pump(const Duration(seconds: 3));
-  });
-
   testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.arrowRight);
@@ -983,37 +1023,35 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('a per-series "Left to right" overrides Komga', (tester) async {
-      AppSettings.instance.series['S1'] = const ReaderPrefs(direction: ReadingDirection.ltr);
-      await openReader(tester);
-      expect(tester.widget<PageView>(find.byType(PageView)).reverse, isFalse);
-      await key(tester, LogicalKeyboardKey.arrowRight);
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(page(tester), 1.0);
-      await tester.pump(const Duration(seconds: 2));
+    testWidgets('a per-series direction overrides Komga either way: pages and the arrow keys follow the series',
+        (tester) async {
+      // test audit, 2026-09-30: one test for both ways (the "Right to left" one only read PageView.reverse - now the
+      // key that goes forward is checked too)
+      for (final (own, komga) in [
+        (ReadingDirection.ltr, 'RIGHT_TO_LEFT'), // "Left to right" over Komga's right to left
+        (ReadingDirection.rtl, 'LEFT_TO_RIGHT'), // "Right to left" over Komga's left to right
+      ]) {
+        FakeKomga.direction = komga; // the group's tearDown puts it back
+        AppSettings.instance.series['S1'] = ReaderPrefs(direction: own); // ... and removes this
+        final rtl = own == ReadingDirection.rtl;
+        await openReader(tester);
+        expect(tester.widget<PageView>(find.byType(PageView)).reverse, rtl, reason: own.name);
+        await key(tester, rtl ? LogicalKeyboardKey.arrowLeft : LogicalKeyboardKey.arrowRight); // forward
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 1.0, reason: '${own.name}: the forward key turned');
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpWidget(const SizedBox());
+      }
     });
-  });
-
-  testWidgets('a per-series "Right to left" works even when Komga says left to right', (tester) async {
-    AppSettings.instance.series['S1'] = const ReaderPrefs(direction: ReadingDirection.rtl);
-    addTearDown(() => AppSettings.instance.series.remove('S1'));
-    await openReader(tester);
-    expect(tester.widget<PageView>(find.byType(PageView)).reverse, isTrue);
   });
 
   group('with pages that load', () {
     Future<void> openLoaded(WidgetTester tester, {int pages = 3}) async {
-      await tester.runAsync(() async {
-        final rec = ui.PictureRecorder();
-        Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFE0D0B0));
-        final img = await rec.endRecording().toImage(200, 300);
-        ImageKomga.png = (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
-      });
+      await makePagePng(tester);
       api = ImageKomga(pageCount: pages);
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
       await tester.pump();
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100))); // pages decode for real
-      await tester.pump();
+      await until(tester, () => shows(find.byType(PageCanvas))); // pages decode for real
       expect(find.byType(PageCanvas), findsWidgets);
     }
 
@@ -1021,6 +1059,24 @@ void main() {
     double scale(WidgetTester tester) =>
         tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first).transformationController!.value
             .getMaxScaleOnAxis();
+
+    testWidgets('every page turn mode keeps the neighbouring pages built (processed before they are turned to)',
+        (tester) async {
+      // test audit, 2026-09-30: it only read the page view's allowImplicitScrolling (a constant); now the next page
+      // must really be there, built and laid out off screen, in each mode
+      addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+      // the page after the one showing (on page 1 of 3, the only page that isn't current)
+      final next = find.byWidgetPredicate((w) => w is PageCanvas && !w.current, skipOffstage: false);
+      for (final turn in PageTurn.values) {
+        AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
+        await openLoaded(tester);
+        await until(tester, () => shows(next));
+        expect(next, findsOneWidget, reason: turn.name);
+        expect(page(tester), 0.0, reason: turn.name); // still on the first page: nothing turned to build it
+        await tester.pump(const Duration(seconds: 3));
+        await tester.pumpWidget(const SizedBox());
+      }
+    });
 
     testWidgets('double-tap zooms in on the spot, again zooms back out - no controls, no page turn', (tester) async {
       await openLoaded(tester);
@@ -1073,8 +1129,8 @@ void main() {
       await g.moveTo(Offset(r.left + 60, r.center.dy));
       await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last page
       await tester.pump();
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // the picture decodes
-      await tester.pump();
+      await until(tester, () => shows(find.descendant(of: find.byKey(preview), matching: find.byType(Image))) &&
+          !shows(find.byKey(const ValueKey('preview-loading')))); // the picture decodes
       expect(find.byKey(preview), findsOneWidget);
       expect(find.text('Page 20'), findsOneWidget);
       expect((api as ImageKomga).thumbsAsked, contains(20));
@@ -1132,11 +1188,9 @@ void main() {
       expect(find.byKey(const ValueKey('preview-loading')), findsOneWidget);
       await tester.runAsync(() async => komga.thumbsHeld!.complete());
       await tester.pump();
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await until(tester, () => komga.thumbsAsked.length > 2);
       expect(komga.thumbsAsked, [11, 16, 20], reason: 'then the page the thumb is on now');
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await tester.pump();
+      await until(tester, () => !shows(find.byKey(const ValueKey('preview-loading'))));
       expect(find.text('Page 20'), findsOneWidget);
       expect(find.byKey(const ValueKey('preview-loading')), findsNothing);
       await g.up();

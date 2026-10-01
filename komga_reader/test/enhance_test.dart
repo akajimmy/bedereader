@@ -5,8 +5,8 @@ import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/enhance.dart';
 
-/// Enhance runs the real shaders (denoise, Lanczos, RCAS) here: output size, a flat colour stays flat, light speckle
-/// is smoothed away, a hard edge stays hard.
+/// Enhance runs the real shaders (denoise; FSR 1 EASU to enlarge or Lanczos to shrink; RCAS) here: output size, a
+/// flat colour stays flat, light speckle is smoothed away, a hard edge stays hard.
 void main() {
   Future<ui.Image> fromPixels(int w, int h, int Function(int x, int y) grey) async {
     final bytes = Uint8List(w * h * 4);

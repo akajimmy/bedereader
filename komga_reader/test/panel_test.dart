@@ -97,7 +97,7 @@ void main() {
     expect(const ReaderPrefs().toJson().containsKey('ol'), isFalse); // unchanged form for everything saved before
   });
 
-  testWidgets('narrow sheet: sliders go full width under their label and value; the remote can move off them',
+  testWidgets('side sheet (380 wide): sliders go full width under their label and value; the remote can move off them',
       (tester) async {
     await openPanel(tester, const Size(1280, 800), image: true); // side sheet, 380 wide
     final slider = tester.getRect(find.byType(Slider).at(1)); // Brightness
@@ -106,7 +106,7 @@ void main() {
     expect(mq.data.navigationMode, NavigationMode.directional); // Up/Down leave the slider
   });
 
-  testWidgets('narrow sheet: Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
+  testWidgets('side sheet (380 wide): Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
     await openPanel(tester, const Size(1280, 800)); // Reader panel, side sheet
     await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
     final sheet = tester.getRect(find.byType(ListView).last);
