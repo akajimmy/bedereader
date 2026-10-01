@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,7 +36,27 @@ Future<Uint8List> greyPng() async {
   return (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
 }
 
+/// Real work (decoding, the GPU passes) finishes in real time: lets it run in short steps until [done], up to about
+/// 2 s, rather than one fixed wait that a slow machine can outlast (test audit, 2026-09-30). The caller then expects.
+Future<void> until(WidgetTester tester, bool Function() done) async {
+  for (var i = 0; i < 40 && !done(); i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+  }
+}
+
 void main() {
+  // Enhance colours loads its shaders once and keeps that future: load them for real first, or the load belongs to
+  // the first test that colours a page, and the tests after it wait on that test's fake clock forever (test audit,
+  // 2026-09-30 - found when the Enhance colours test started letting its page finish)
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    final rec = ui.PictureRecorder();
+    Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 4, 4), Paint()..color = const Color(0xFFD8C8A8));
+    final img = await rec.endRecording().toImage(4, 4);
+    (await Enhancer.colours(img, const [0, 0, 0], const [1, 1, 1]))?.dispose();
+    img.dispose();
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('book levels: five pages fetched together, then remembered for the next open', (tester) async {
@@ -70,8 +91,7 @@ void main() {
       scroll: ScrollController(),
     ))));
     expect(find.byType(RawImage), findsNothing); // waits for the crop, never shows the margin
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
-    await tester.pump();
+    await until(tester, () => find.byType(RawImage).evaluate().isNotEmpty);
     final shown = tester.widget<RawImage>(find.byType(RawImage)).image!;
     expect((shown.width, shown.height), (180, 270));
   });
@@ -93,6 +113,11 @@ void main() {
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byType(RawImage), findsNothing); // not the uncorrected page
+    // test audit, 2026-09-30: and once the colours are in, the page shows (it used to stop at the spinner)
+    levels.complete(Levels.identity);
+    await until(tester, () => find.byType(RawImage).evaluate().isNotEmpty);
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
   testWidgets('a page off screen waits for the page turn to finish before its colours are made', (tester) async {
@@ -112,13 +137,14 @@ void main() {
       levels: () async => Levels.identity,
       idle: () { asked++; return turn.future; },
     ))));
+    // a fixed wait on purpose: it gives processing that ignored the turn the time to show up; a slow machine can
+    // only make it pass more easily, never fail (test audit, 2026-09-30)
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
     await tester.pump();
     expect(asked, 1);
     expect(find.byType(RawImage), findsNothing); // still waiting: nothing processed mid-turn
     turn.complete(); // the turn is over
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
-    await tester.pump();
+    await until(tester, () => find.byType(RawImage).evaluate().isNotEmpty);
     expect(find.byType(RawImage), findsOneWidget); // processed now
   });
 }
