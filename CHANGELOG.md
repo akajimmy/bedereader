@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 58 - 2026-09-30
+
 **Fixed**
 - Settings with the remote: moving Up / Down a row now scrolls it into view - on a page taller than the screen the
   focus could end up below the bottom edge (found auditing the tests).
@@ -90,10 +96,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   already was. It stays readable until you remove it.
 - Going back online fetches the reader settings, pins and On deck hidden from Komga again (changed on another device
   meanwhile, or not fetched at all after starting offline); what was changed on this device is sent first.
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 57 - 2026-09-30
 
