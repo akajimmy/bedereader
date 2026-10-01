@@ -120,8 +120,14 @@ void main() {
       expect(log.first.detail, 'KomgaError: HTTP 500 on /p54'); // the technical text, for Details / Copy
       final saved = (await SharedPreferences.getInstance()).getStringList('errorLog')!;
       expect(saved.length, 50);
-      final back = ErrorEntry.fromJson(ErrorLog.instance.entries.first.toJson());
-      expect((back.message, back.detail), ('message 54', 'KomgaError: HTTP 500 on /p54'));
+
+      // the restart itself: memory gone, read back from the device (it never called load() - test audit, 2026-09-30)
+      ErrorLog.instance.reset();
+      expect(ErrorLog.instance.entries, isEmpty);
+      await ErrorLog.instance.load();
+      final back = ErrorLog.instance.entries;
+      expect(back.map((e) => e.message), [for (var i = 54; i >= 5; i--) 'message $i'], reason: 'newest first, all 50');
+      expect((back.first.message, back.first.detail), ('message 54', 'KomgaError: HTTP 500 on /p54'));
     });
   });
 

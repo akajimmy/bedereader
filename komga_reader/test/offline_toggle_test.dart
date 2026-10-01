@@ -35,8 +35,9 @@ void main() {
     expect(Downloads.instance.hold, isTrue); // nothing talks to the server
     expect((await SharedPreferences.getInstance()).getBool('offline.forced'), isTrue);
 
-    await conn.load(online); // "restart": still offline
-    expect(conn.offline, isTrue);
+    conn.reset(); // "restart": memory gone, only what was saved is left (test audit, 2026-09-30)
+    await conn.load(online);
+    expect(conn.offline, isTrue, reason: 'still offline after the restart');
 
     await conn.setForcedOffline(false);
     expect(conn.api, same(online));
