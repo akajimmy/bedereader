@@ -66,12 +66,14 @@ class Pins extends ChangeNotifier {
     syncError = note;
   }
 
-  Future<void> load(Komga api) async {
+  /// [fetch] false (offline mode): this device's copy only - nothing is sent or asked for.
+  Future<void> load(Komga api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(_local);
     if (raw != null) items = _decode(raw);
     notifyListeners();
+    if (!fetch) return;
     if (p.getBool(_dirtyKey) ?? false) {
       await _send(); // this device's changes haven't reached Komga: they win
       return;

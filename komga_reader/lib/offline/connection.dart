@@ -174,7 +174,9 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
         askPending = false;
         notifyListeners();
       }
-      if (autoOffline && !reachableAgain) {
+      // offline by hand stays offline: no offer to go back (missing-tests audit, 2026-09-30: the switch after the
+      // prompt left autoOffline set, and a late answer offered "Go online")
+      if (autoOffline && !forcedOffline && !reachableAgain) {
         reachableAgain = true;
         _apply();
         notifyListeners();
@@ -208,6 +210,16 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
       _poll?.cancel();
       _poll = null;
     }
+  }
+
+  /// Signed out: the old key is forgotten here - nothing more is sent with it (no check on returning to the app, no
+  /// polling) until [load] with the next sign-in (missing-tests audit, 2026-09-30).
+  void signedOut() {
+    _poll?.cancel();
+    _poll = null;
+    online = null;
+    autoOffline = askPending = reachableAgain = _declined = false;
+    keyRefused = keyPromptPending = false;
   }
 
   /// Tests: back to a clean state.

@@ -160,6 +160,16 @@ class Downloads extends ChangeNotifier {
   /// Starts (or restarts) the manager for this server. [root] overrides the storage folder (tests). [start] false:
   /// the queue waits for [hold] to be set - the app applies offline mode first, so a forced-offline start contacts
   /// nothing (code review, 2026-09-30).
+  /// Signed out: the queue stops and forgets the old key (the downloads stay on the device). The next sign-in attaches
+  /// again (missing-tests audit, 2026-09-30).
+  void detach() {
+    _api = null;
+    _session++; // a running worker stops
+    _running = false;
+    _serverTimer?.cancel();
+    waitingForServer = false;
+  }
+
   Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
     _api = api;
     _session++;

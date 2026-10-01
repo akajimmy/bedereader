@@ -51,14 +51,11 @@ void main() {
         reason: '$requests');
   });
 
-  // (testWidgets takes no skip reason: the group carries it)
-  group('forced-offline start', () {
-    testWidgets('nothing at all is sent to Komga', (tester) async {
-      final komga = await start(tester);
-      expect(komga.requests, isEmpty);
-    });
-  }, skip: 'BUG: a forced-offline start still contacts Komga - main.dart _restore loads AppSettings, Pins and '
-      'OnDeckHidden with the online client (3 x GET client-settings) before the connection applies offline mode, and '
-      'the first Home is built on the online client (GET libraries, books, books/ondeck) because '
-      'Connection.instance.online is still null then');
+  // Bug found 2026-09-30 (missing-tests audit): _restore loaded AppSettings, Pins and On deck hidden with the online
+  // client (3 x GET client-settings) before offline mode was applied, and the first Home was built on the online
+  // client (GET libraries, books, books/ondeck). Fixed in main.dart _restore.
+  testWidgets('forced-offline start: nothing at all is sent to Komga', (tester) async {
+    final komga = await start(tester);
+    expect(komga.requests, isEmpty);
+  });
 }
