@@ -26,17 +26,17 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  // last run's size/position if it's still on a connected screen, else a default
-  Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1280, 800);
-  SavedWindow saved{};
-  if (LoadSavedWindow(&saved)) {
-    origin = Win32Window::Point(saved.x, saved.y);
-    size = Win32Window::Size(saved.width, saved.height);
-    window.SetStartMaximized(saved.maximized);
-  }
+  // last run's size/position if it's still on a connected screen (in screen pixels, as it was), else a default
   // the window title: the display name (a rename changes it; see README > For developers > Renaming the app)
-  if (!window.Create(L"BeDeReader", origin, size)) {
+  SavedWindow saved{};
+  bool created;
+  if (LoadSavedWindow(&saved)) {
+    window.SetStartMaximized(saved.maximized);
+    created = window.CreateAt(L"BeDeReader", saved.screen);
+  } else {
+    created = window.Create(L"BeDeReader", Win32Window::Point(10, 10), Win32Window::Size(1280, 800));
+  }
+  if (!created) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

@@ -149,6 +149,22 @@ bool Win32Window::Create(const std::wstring& title,
   return OnCreate();
 }
 
+bool Win32Window::CreateAt(const std::wstring& title, const RECT& screen) {
+  Destroy();
+  const wchar_t* window_class =
+      WindowClassRegistrar::GetInstance()->GetWindowClass();
+  // physical screen pixels, as saved: no scaling - the window opens on the monitor it was on, at the size it was
+  HWND window = CreateWindow(
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW, screen.left, screen.top,
+      screen.right - screen.left, screen.bottom - screen.top,
+      nullptr, nullptr, GetModuleHandle(nullptr), this);
+  if (!window) {
+    return false;
+  }
+  UpdateTheme(window);
+  return OnCreate();
+}
+
 bool Win32Window::Show() {
   return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }

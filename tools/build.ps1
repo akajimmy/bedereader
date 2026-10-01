@@ -203,6 +203,12 @@ if ($Platforms -contains 'android') {
                elseif ($signer -match 'CN=Android Debug') { "the DEBUG key ($signer)" }
                else { "the release key ($signer)" }
     Say "APK signed with $signing"
+    # a real build (-Bump) must be signed with the release key: a debug-signed one won't install over the tablet's
+    # copy, and could end up tagged as a release (code review, 2026-09-30). Stops here - before the commit and tag;
+    # the version and changelog are put back below. Without -Bump a debug-signed test build is still allowed.
+    if ($Bump -and (-not $signer -or $signer -match 'CN=Android Debug')) {
+        throw "the APK isn't signed with the release key ($signing) - nothing committed or tagged. Check android\key.properties and $passFile (made on this Windows account)."
+    }
     $apk = Join-Path $out "$product-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
     $artifacts += $apk
@@ -266,22 +272,39 @@ if ($Bump) {
     Say "committed and tagged build-$build"
 }
 
+# Steps 6 and 7 come after the build is committed and tagged: a failure in either is reported, with its reason, and
+# the rest still runs - it used to stop the script there, skipping the Desktop copy and the summary (code review,
+# 2026-09-30).
+$notDone = @()
+
 # ---- 6. put it on the tablet ---------------------------------------------------------------------------------------
 if ($Platforms -contains 'android' -and -not $NoInstall) {
     $apk = $artifacts | Where-Object { $_ -like '*-android.apk' } | Select-Object -First 1
-    & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
-    if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1' }
-    if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)' }
+    try {
+        & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk
+        if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1'; $notDone += 'tablet: not reachable' }
+        if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)'; $notDone += 'tablet: signed with another key' }
+    } catch {
+        Say "installed on the tablet: NO - $($_.Exception.Message)"
+        $notDone += "tablet: $($_.Exception.Message)"
+    }
 }
 
 # ---- 7. and on this PC: the Windows build unzipped over Desktop\BeDeReader (user, 2026-09-29) ------------------
 if ($Platforms -contains 'windows' -and -not $NoInstall) {
     $winZip = $artifacts | Where-Object { $_ -like '*-windows.zip' } | Select-Object -First 1
-    & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # exit 2 = the app is open there: it says so
+    try {
+        & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # exit 2 = the app is open there: it says so
+        if ($LASTEXITCODE -eq 2) { $notDone += 'Desktop copy: the app is open there' }
+    } catch {
+        Say "Desktop copy updated: NO - $($_.Exception.Message)"
+        $notDone += "Desktop copy: $($_.Exception.Message)"
+    }
 }
 
 Say ('all done in {0:N0} s' -f ((Get-Date) - $started).TotalSeconds)
 $artifacts | ForEach-Object { Write-Host ('  {0}  ({1:N1} MB)' -f $_, ((Get-Item $_).Length / 1MB)) }
+if ($notDone) { Say "not done: $($notDone -join '; ')" }
 
 # the build itself succeeded (a skipped tablet install is reported above, not a failure)
 exit 0
