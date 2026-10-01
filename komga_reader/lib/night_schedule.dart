@@ -39,6 +39,10 @@ class NightSchedule with WidgetsBindingObserver {
 
   DateTime? _actedOn; // the schedule change last acted on: a hand-made change after it stands until the next one
 
+  /// The time now. Tests: a clock they set, to reach a schedule change exactly.
+  @visibleForTesting
+  static DateTime Function() clock = DateTime.now;
+
   /// Wired up once the settings are loaded; follows every settings change.
   void start() {
     if (_started) return;
@@ -66,7 +70,7 @@ class NightSchedule with WidgetsBindingObserver {
     final s = AppSettings.instance, d = s.display;
     _for = '${d.nightSchedule}/${d.nightFrom}/${d.nightTo}';
     if (!d.nightSchedule || d.nightFrom == d.nightTo) return;
-    final now = DateTime.now();
+    final now = clock();
     final last = lastChange(now, d.nightFrom, d.nightTo);
     // first time, or a change has passed since the last one acted on (at a timer, or while the app was away)
     if (_actedOn == null || last.isAfter(_actedOn!)) {
