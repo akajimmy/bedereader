@@ -10,6 +10,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **Fixed**
+- Settings with the remote: moving Up / Down a row now scrolls it into view - on a page taller than the screen the
+  focus could end up below the bottom edge (found auditing the tests).
+- On deck: hiding or showing something while offline reaches Komga as soon as the app is back online, not only at the
+  next start (as pins and reader settings already did).
 - A pinned side menu stays open beside a series, a collection and a read list too (it went away on those).
 - Reader (from a code review):
   - A second "forward" while the next book was loading (a held key, a double press) opened the book after it and
