@@ -94,6 +94,21 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     return true;
   }
 
+  /// Esc on a full screen goes back one, like the remote's Back (user, 2026-09-30) - when nothing on the screen took
+  /// it first (the reader has its own keys). Only from a full screen: a dialog or a menu closes itself (Flutter's
+  /// Esc, further up), and the side menu is left to its own keys. Home has nowhere to go back to.
+  KeyEventResult _onEsc(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.escape) return KeyEventResult.ignored;
+    final ctx = FocusManager.instance.primaryFocus?.context;
+    if (ctx == null || ModalRoute.of(ctx) is! PageRoute || ctx.findAncestorWidgetOfExactType<Drawer>() != null) {
+      return KeyEventResult.ignored;
+    }
+    final n = Navigator.maybeOf(ctx); // the navigator the screen is in
+    if (n == null || !n.canPop()) return KeyEventResult.ignored;
+    unawaited(n.maybePop()); // maybePop: a screen that asks before leaving still asks
+    return KeyEventResult.handled;
+  }
+
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onF11);
@@ -292,7 +307,12 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         final scale = display.textScale;
         return MediaQuery(
           data: scale == 1.0 ? mq : mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
-          child: HoldOkGuard(child: NightOverlay(child: child!)), // a held OK's repeats don't press in its menu
+          child: Focus(
+            canRequestFocus: false,
+            skipTraversal: true,
+            onKeyEvent: _onEsc,
+            child: HoldOkGuard(child: NightOverlay(child: child!)), // a held OK's repeats don't press in its menu
+          ),
         );
       },
       home: !_loaded
