@@ -67,7 +67,11 @@ void main() {
     expect(find.byIcon(Icons.priority_high), findsOneWidget);
 
     await show(tester, const DownloadBadge.book('nope'));
-    expect(find.byType(Container), findsNothing);
+    // within the badge only - any Container elsewhere on the page would have broken the old check (test audit,
+    // 2026-09-30)
+    final inBadge = find.descendant(of: find.byType(DownloadBadge), matching: find.byWidgetPredicate((w) => w is Container || w is Icon));
+    expect(inBadge, findsNothing);
+    expect(tester.getSize(find.byType(DownloadBadge)), Size.zero);
   });
 
   testWidgets('the counts follow changes to the store', (tester) async {

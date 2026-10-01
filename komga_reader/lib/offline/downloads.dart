@@ -290,6 +290,28 @@ class Downloads extends ChangeNotifier {
     }
   }
 
+  /// Tests: books read while a reader was open, waiting for it to close before they're deleted (Always).
+  @visibleForTesting
+  Set<String> get waitingForReaderToClose => Set.unmodifiable(_finished);
+
+  /// Tests: forget what one test leaves behind in this singleton - open readers, books waiting to be deleted or asked
+  /// about, this session's finished list, the timers (test audit, 2026-09-30). [attach] reloads the rest.
+  @visibleForTesting
+  void reset() {
+    _serverTimer?.cancel();
+    _serverTimer = null;
+    _wifiTimer?.cancel();
+    _wifiTimer = null;
+    _readers = 0;
+    _finished.clear();
+    askPending.clear();
+    keptRead.clear();
+    recentlyDone.clear();
+    paused = false;
+    waitingForServer = false;
+    waitingForWifi = false;
+  }
+
   Future<void> _deleteFinished() async {
     final ids = List.of(_finished);
     _finished.clear();

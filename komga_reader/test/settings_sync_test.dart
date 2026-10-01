@@ -105,12 +105,19 @@ void main() {
 
   testWidgets('signing out leaves nothing of the account: the next account starts clean and nothing is sent to it',
       (tester) async {
-    final a = FakeKomga({AppSettings.komgaKey: blob({'S1': FitMode.width})});
+    final a = FakeKomga({
+      AppSettings.komgaKey: blob({'S1': FitMode.width}),
+      OnDeckHidden.komgaKey: jsonEncode({'series': ['S5'], 'books': ['B5']}), // A's synced list
+    });
     await s.load(a);
     await Pins.instance.load(a);
     Pins.instance.add(const Pin(name: 'P', kind: 'series', id: 'S1', title: 'S'));
+    // loaded with A, so A's list from Komga is on the device too, not just a change (test audit, 2026-09-30)
+    await OnDeckHidden.instance.load(a);
+    expect(OnDeckHidden.instance.seriesHidden('S5'), isTrue);
     OnDeckHidden.instance.setSeries('S9', true);
     await tester.pump(const Duration(seconds: 1));
+    expect(a.written[OnDeckHidden.komgaKey], contains('S9'), reason: 'the change reached A');
 
     await s.clearAccount(); // what signing out does (main.dart)
     await Pins.instance.clearAccount();
@@ -123,7 +130,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(s.series, isEmpty);
     expect(Pins.instance.items, isEmpty);
-    expect(OnDeckHidden.instance.isEmpty, isTrue);
+    expect(OnDeckHidden.instance.isEmpty, isTrue, reason: "A's On deck list (S5, B5, S9) didn't follow");
     expect(b.written, isEmpty, reason: "nothing of account A's was sent to B");
   });
 }

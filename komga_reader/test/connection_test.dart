@@ -26,6 +26,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     dir = await Directory.systemTemp.createTemp('komga_conn_test');
     server = FakeKomga();
+    d.reset();
     await d.attach(server, root: dir);
     d.store!.books['B1'] = {'book': {'id': 'B1', 'seriesId': 'S1'}, 'readLists': [], 'state': 'done'};
     await conn.load(server);
@@ -118,9 +119,15 @@ void main() {
 
   test('offline by hand wins: no checks, no prompts, no offers', () async {
     await conn.setForcedOffline(true);
-    server.up = true;
-    expect(await conn.check(), isFalse); // doesn't even ask Komga
-    expect(conn.reachableAgain, isFalse);
+    final asked = server.meCalls;
+    expect(await conn.check(), isFalse);
+    conn.didChangeAppLifecycleState(AppLifecycleState.resumed); // back in the app: normally a look at Komga
+    await Future<void>.delayed(Duration.zero);
+    // Komga isn't even asked, so it can't offer "reachable again" (the old `reachableAgain isFalse` held whatever
+    // check() did - test audit, 2026-09-30)
+    expect(server.meCalls, asked, reason: 'no checks while offline by hand');
+    Komga.onReachability!(server, false); // a call already on its way finds Komga gone
+    expect(conn.askPending, isFalse, reason: 'no prompt');
     expect(conn.offline, isTrue);
   });
 
@@ -174,9 +181,15 @@ void main() {
     expect(find.text('API key not accepted'), findsOneWidget);
     expect(find.textContaining("Komga no longer accepts this device's API key."), findsOneWidget);
     expect(find.text('Use downloaded books'), findsOneWidget); // B1 is downloaded
+    expect(conn.keyPromptPending, isTrue);
     await tester.tap(find.text('Sign in again'));
     await tester.pumpAndSettle();
     expect(signIn, isTrue);
+    // answered: not asked again, and not switched to the downloaded books (offline isFalse alone held either way
+    // - test audit, 2026-09-30)
+    expect(conn.keyPromptPending, isFalse);
+    expect(conn.keyRefused, isTrue, reason: 'the key is still refused until signing in again');
+    expect(conn.autoOffline, isFalse);
     expect(conn.offline, isFalse);
   });
 }

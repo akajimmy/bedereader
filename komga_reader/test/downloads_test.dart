@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -51,8 +52,10 @@ class FakeKomga extends Komga {
 
   /// Reachability check: answers while [up], else "can't reach" - reported like every real server call.
   bool up = true;
+  int meCalls = 0; // how often Komga was asked whether it's there
   @override
   Future<Map<String, dynamic>?> me() async {
+    meCalls++;
     Komga.onReachability?.call(this, up);
     if (!up) throw KomgaUnreachable(baseUrl);
     return {'id': 'U1'};
@@ -62,10 +65,14 @@ class FakeKomga extends Komga {
 Map<String, dynamic> book(String id, int n) =>
     {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
 
+/// Waits (on the real clock, 2 s at most) until nothing is queued or downloading. Fails the test if that never happens:
+/// it used to return quietly, so the next expectation failed for the wrong reason (test audit, 2026-09-30).
 Future<void> settle(Downloads d) async {
-  for (var i = 0; i < 200 && d.queue.any((j) => j.state == JobState.queued || j.state == JobState.downloading); i++) {
+  bool working() => d.queue.any((j) => j.state == JobState.queued || j.state == JobState.downloading);
+  for (var i = 0; i < 200 && working(); i++) {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
+  if (working()) fail('the queue never settled: ${[for (final j in d.queue) '${j.bookId} ${j.state.name}']}');
 }
 
 void main() {
@@ -74,6 +81,7 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    d.reset(); // open readers, books waiting to go, timers: nothing carried over from the last test (test audit, 2026-09-30)
     dir = await Directory.systemTemp.createTemp('komga_downloads_test');
   });
   tearDown(() async {
@@ -124,8 +132,10 @@ void main() {
     await d.setDeleteRead(DeleteRead.always);
     d.readerOpened();
     await offline.setProgress('B2', 3, completed: true); // finished in the reader
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-    expect(d.isDownloaded('B2'), isTrue); // still open: waits
+    // still open: held back for the reader to close, not deleted - checked on what was scheduled rather than on a
+    // short wait outrunning the delete (test audit, 2026-09-30)
+    expect(d.waitingForReaderToClose, {'B2'});
+    expect(d.isDownloaded('B2'), isTrue);
     d.readerClosed();
     for (var i = 0; i < 100 && d.isDownloaded('B2'); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -183,6 +193,12 @@ void main() {
     await d.add([book('B1', 1)]);
     await settle(d);
     expect(await d.add([book('B1', 1), book('B1', 1)]), 0);
+    // one already in the queue (paused, so it stays there) - B1 above only reached the "downloaded" check (test
+    // audit, 2026-09-30)
+    d.pauseAll();
+    expect(await d.add([book('B2', 2), book('B2', 2)]), 1);
+    expect(await d.add([book('B2', 2)]), 0);
+    expect(d.queue.map((j) => j.bookId), ['B2']);
   });
 
   test('the size limit stops a book that would not fit, with a clear reason', () async {
@@ -309,14 +325,12 @@ void main() {
 
     wifi = true; // back on Wi-Fi: the next look carries on
     await settle(d);
-    for (var i = 0; i < 100 && !d.isDownloaded('B1'); i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
     expect(d.isDownloaded('B1'), isTrue);
     expect(d.waitingForWifi, isFalse);
 
-    await d.attach(FakeKomga(), root: dir); // "next launch": the choice is kept
-    expect(d.wifiOnly, isTrue);
+    d.wifiOnly = false; // forgotten in memory: "the next launch" has only what was saved (test audit, 2026-09-30)
+    await d.attach(FakeKomga(), root: dir);
+    expect(d.wifiOnly, isTrue, reason: 'the choice is kept');
   });
 
   test('Wi-Fi only off (the default): mobile data downloads as before', () async {
@@ -357,15 +371,21 @@ void main() {
     await settle(d);
     expect(d.isDownloaded('B1'), isTrue);
 
-    api.onPage = (n) {}; // B2 downloading while we cancel
-    api.slow = true;
+    // cancel exactly while B2's first page comes in, so B2 is certainly the book downloading (it used to be a 5 ms
+    // wait, which never checked that - test audit, 2026-09-30)
+    JobState? b2WhenCancelled;
+    api.onPage = (n) {
+      api.onPage = null; // once
+      b2WhenCancelled = d.jobFor('B2')?.state;
+      unawaited(d.cancelAll());
+    };
     await d.add([book('B2', 2), book('B3', 3)]);
-    await Future<void>.delayed(const Duration(milliseconds: 5));
-    await d.cancelAll();
     for (var i = 0; i < 300 && (d.busy || d.queue.isNotEmpty); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
+    expect(b2WhenCancelled, JobState.downloading);
     expect(d.queue, isEmpty);
+    expect(api.pageRequests, 3 + 1, reason: "B1's pages, then B2 stopped after the page it was on; B3 never started");
     expect(d.isDownloaded('B1'), isTrue); // finished download untouched
     expect(d.store!.books.containsKey('B2'), isFalse); // partial download cleaned up
     expect(await Directory(d.store!.file('B2').path).exists(), isFalse);

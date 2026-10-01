@@ -182,6 +182,14 @@ class ErrorLog extends ChangeNotifier {
     }
   }
 
+  /// Tests: as at start-up - nothing in memory and not loaded yet; the device's copy is left alone (test audit,
+  /// 2026-09-30).
+  @visibleForTesting
+  void reset() {
+    entries.clear();
+    _loaded = false;
+  }
+
   /// The whole log as text (Copy).
   String get asText => entries.map((e) => e.asText).join('\n\n');
 }
