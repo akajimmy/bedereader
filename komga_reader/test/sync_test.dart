@@ -25,6 +25,7 @@ class ProgressServer extends LibraryServer {
   bool down = false; // Komga (or the network) gone: every call "can't reach", reported as the real client does
   void Function(String id)? onBook; // called as each book is asked for (tests use it to drop Komga at an exact point)
   int bookCalls = 0, seriesCalls = 0;
+  bool morePages = false; // the series' list says it has more pages ('last': false)
 
   void _reach() {
     Komga.onReachability?.call(this, !down);
@@ -66,7 +67,7 @@ class ProgressServer extends LibraryServer {
     _reach();
     if (goneSeries.contains(seriesId)) throw KomgaError(404, '/api/v1/series/$seriesId/books');
     final ids = [for (final id in seriesId == 'S2' ? ['B3'] : ['B1', 'B2']) if (!missing.contains(id)) id];
-    return {'content': [for (final id in ids) {'id': id, 'readProgress': rp[id]}]};
+    return {'content': [for (final id in ids) {'id': id, 'readProgress': rp[id]}], if (morePages) 'last': false};
   }
 }
 
@@ -278,6 +279,16 @@ void main() {
     await sync.run();
     expect(d.store!.books['B2']!['gone'], isTrue);
     expect(d.store!.books['B1']!['gone'], isNull);
-  }, skip: 'BUG: the refresh marks downloads "gone" only when the whole series is gone (404); a book deleted from a '
-      'series Komga still has is never marked (lib/offline/sync.dart _refresh)');
+    server.missing.remove('B2'); // back (restored on Komga): the mark goes
+    await sync.run();
+    expect(d.store!.books['B2']!['gone'], isNull);
+  }); // found 2026-09-30 (missing-tests audit): only a whole deleted series was marked; the user chose to mark books too
+
+  test("a book not in a series' list that has more pages isn't marked: unlisted there proves nothing", () async {
+    server
+      ..missing.add('B2')
+      ..morePages = true;
+    await sync.run();
+    expect(d.store!.books['B2']!['gone'], isNull);
+  });
 }
