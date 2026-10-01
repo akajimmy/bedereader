@@ -85,30 +85,38 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     var sent = 0, gone = 0;
     final conflicts = <ProgressConflict>[];
     try {
-      for (final id in store.unsynced) {
-        final local = store.progress[id]!;
-        final book = await api.book(id);
-        if (book == null) {
-          store.progress.remove(id);
-          gone++;
-          continue;
+      // each book on its own: one Komga keeps refusing (a 403, a page it no longer has) waits for the next run
+      // instead of holding up all the others behind it (code review, 2026-09-30)
+      for (final id in List.of(store.unsynced)) {
+        try {
+          final local = store.progress[id]!;
+          final book = await api.book(id);
+          if (book == null) {
+            store.progress.remove(id);
+            gone++;
+            continue;
+          }
+          final server = OfflineStore.norm(book['readProgress'] as Map?);
+          final here = _norm(local);
+          final base = local['base'] as Map?;
+          final komgaChanged = base != null && !_same(server, base) && !_same(server, here);
+          if (!komgaChanged) {
+            if (!_same(server, here)) await _send(api, id, here, book);
+            sent++;
+            store.setServerProgress(id, _asReadProgress(here, book));
+          } else {
+            final keepHere = _rank(here) >= _rank(server);
+            if (keepHere) await _send(api, id, here, book);
+            store.setServerProgress(id, keepHere ? _asReadProgress(here, book) : book['readProgress'] as Map?);
+            conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
+                keptHere: keepHere));
+          }
+          await store.save();
+        } on KomgaUnreachable {
+          rethrow; // gone offline: stop, everything left stays queued
+        } catch (_) {
+          // this book: next time; the rest carry on
         }
-        final server = OfflineStore.norm(book['readProgress'] as Map?);
-        final here = _norm(local);
-        final base = local['base'] as Map?;
-        final komgaChanged = base != null && !_same(server, base) && !_same(server, here);
-        if (!komgaChanged) {
-          if (!_same(server, here)) await _send(api, id, here, book);
-          sent++;
-          store.setServerProgress(id, _asReadProgress(here, book));
-        } else {
-          final keepHere = _rank(here) >= _rank(server);
-          if (keepHere) await _send(api, id, here, book);
-          store.setServerProgress(id, keepHere ? _asReadProgress(here, book) : book['readProgress'] as Map?);
-          conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
-              keptHere: keepHere));
-        }
-        await store.save();
       }
       await _refresh(api, store);
     } on KomgaUnreachable {
@@ -132,8 +140,30 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     });
     var changed = false;
     final finishedElsewhere = <String>[];
+    // each series on its own: one deleted on Komga stopped the refresh of every series after it (code review,
+    // 2026-09-30); now its downloads are marked "no longer on Komga" and the rest carry on
     for (final entry in bySeries.entries) {
-      final r = await api.seriesBooks(entry.key);
+      final Map<String, dynamic> r;
+      try {
+        r = await api.seriesBooks(entry.key);
+      } on KomgaUnreachable {
+        rethrow;
+      } on KomgaError catch (e) {
+        if (e.status == 404) {
+          for (final id in entry.value) {
+            if (store.books[id]?['gone'] != true) {
+              store.books[id]?['gone'] = true;
+              changed = true;
+            }
+          }
+        }
+        continue;
+      } catch (_) {
+        continue;
+      }
+      for (final id in entry.value) {
+        if (store.books[id]?.remove('gone') != null) changed = true; // there after all
+      }
       for (final b in (r['content'] as List?) ?? const []) {
         final id = (b as Map)['id'] as String;
         if (!entry.value.contains(id) || store.progress[id]?['synced'] == false) continue;

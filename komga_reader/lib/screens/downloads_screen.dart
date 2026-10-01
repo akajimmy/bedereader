@@ -88,7 +88,8 @@ class DownloadsScreen extends StatelessWidget {
                   _Heading(queue.isEmpty
                       ? 'Queue · empty'
                       : 'Queue · ${queue.length}${d.paused ? ' · paused' : ''}'
-                          '${d.waitingForWifi && !d.paused ? ' · waiting for Wi-Fi' : ''}'),
+                          '${d.waitingForWifi && !d.paused ? ' · waiting for Wi-Fi' : ''}'
+                          '${d.waitingForServer && !d.paused ? " · waiting for Komga" : ''}'),
                   for (final j in queue) _JobRow(job: j),
                   if (d.recentlyDone.isNotEmpty) ...[
                     const _Heading('Finished this session'),
@@ -108,7 +109,8 @@ class DownloadsScreen extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.download_done),
                       title: Text('${(e.value['book'] as Map)['seriesTitle']} #${(e.value['book'] as Map)['metadata']?['number'] ?? ''}'),
-                      subtitle: Text('${(e.value['pages'] as List).length} pages · ${size((e.value['bytes'] as num).toInt())}'),
+                      subtitle: Text('${(e.value['pages'] as List).length} pages · ${size((e.value['bytes'] as num).toInt())}'
+                          '${e.value['gone'] == true ? ' · no longer on Komga' : ''}'),
                       trailing: IconButton(
                         tooltip: 'Remove download',
                         icon: const Icon(Icons.delete_outline),

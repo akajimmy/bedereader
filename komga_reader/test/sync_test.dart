@@ -15,6 +15,8 @@ class ProgressServer extends FakeKomga {
   final Map<String, Map<String, dynamic>> rp = {};
   final writes = <String>[];
   final missing = <String>{};
+  final refused = <String>{}; // books Komga refuses progress for (403)
+  final goneSeries = <String>{}; // series deleted on Komga
 
   @override
   Future<Map<String, dynamic>?> book(String id) async {
@@ -24,6 +26,7 @@ class ProgressServer extends FakeKomga {
 
   @override
   Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    if (refused.contains(bookId)) throw KomgaError(403, '/api/v1/books/$bookId/read-progress');
     writes.add('$bookId page $page');
     rp[bookId] = {'page': page, 'completed': completed};
   }
@@ -42,8 +45,11 @@ class ProgressServer extends FakeKomga {
 
   @override
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
-      String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async =>
-      {'content': [for (final id in ['B1', 'B2']) {'id': id, 'readProgress': rp[id]}]};
+      String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
+    if (goneSeries.contains(seriesId)) throw KomgaError(404, '/api/v1/series/$seriesId/books');
+    final ids = seriesId == 'S2' ? ['B3'] : ['B1', 'B2'];
+    return {'content': [for (final id in ids) {'id': id, 'readProgress': rp[id]}]};
+  }
 }
 
 /// Offline phase 5: progress made offline reaches Komga - as it is when only this device changed it, further-wins
@@ -84,6 +90,26 @@ void main() {
   });
 
   OfflineKomga offlineApi() => OfflineKomga(d.store!, baseUrl: 'offline');
+
+  test('one book Komga keeps refusing holds up nothing: the others are sent (code review, 2026-09-30)', () async {
+    final off = offlineApi();
+    await off.setProgress('B1', 2);
+    await off.setProgress('B2', 2);
+    server.refused.add('B1'); // first in the queue, and refused
+    await sync.run();
+    expect(server.writes, ['B2 page 2'], reason: 'B2 sent despite B1');
+    expect(sync.pending, 1, reason: 'B1 waits for the next run');
+  });
+
+  test('a series deleted on Komga: its downloads are marked, and the series after it still refresh', () async {
+    await d.store!.put('B3', {...entry('B3'), 'book': {'id': 'B3', 'seriesId': 'S2'}}); // another series, after S1
+    server.goneSeries.add('S1');
+    server.rp['B3'] = {'page': 2, 'completed': false}; // read on another device
+    await sync.run();
+    expect(d.store!.books['B1']!['gone'], isTrue);
+    expect(d.store!.books['B2']!['gone'], isTrue);
+    expect(d.store!.readProgressOf('B3')!['page'], 2, reason: 'S2 refreshed even though S1 failed before it');
+  });
 
   test('only this device changed: sent as it is, including mark as unread', () async {
     final off = offlineApi();

@@ -178,7 +178,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         ],
       ),
     ).then((delete) async {
-      if (delete == true) await d.removeAll(ids);
+      if (delete == true) {
+        await d.removeAll(ids);
+      } else {
+        await d.keep(ids); // Keep (or dismissed): not asked about these again
+      }
       _asking = false;
       _onDownloads(); // more may have been finished meanwhile
     });
@@ -214,7 +218,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   /// Downloads (1.1): not on web, which has no storage for them. Offline mode needs them, so it loads after.
   Future<void> _startDownloads(Komga api) async {
-    if (!kIsWeb) await Downloads.instance.attach(api);
+    // the queue starts once the connection has applied offline mode (a forced-offline start contacts nothing)
+    if (!kIsWeb) await Downloads.instance.attach(api, start: false);
     await Connection.instance.load(api);
     if (!kIsWeb) ProgressSync.instance.start(); // offline reading -> Komga
   }
