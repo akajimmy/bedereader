@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart';
@@ -56,7 +58,7 @@ void main() {
 
   testWidgets('a menu or dialog closing is not coming back', (tester) async {
     await start(tester);
-    showDialog<void>(context: tester.element(find.text('home')), builder: (_) => const Text('dialog'));
+    unawaited(showDialog<void>(context: tester.element(find.text('home')), builder: (_) => const Text('dialog')));
     await tester.pumpAndSettle();
     nav.pop();
     await tester.pumpAndSettle();

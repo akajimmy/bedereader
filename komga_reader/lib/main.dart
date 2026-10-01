@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -195,7 +197,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
-    ReaderKeys.instance.load(); // the reader's keys (Settings > Remote and keys)
+    unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = p.getString('apiKey');
     setState(() {
@@ -210,10 +212,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await p.setString('server', api.baseUrl);
     await p.setString('apiKey', api.apiKey);
     setState(() => _api = api);
-    AppSettings.instance.load(api);
-    Pins.instance.load(api);
-    OnDeckHidden.instance.load(api);
-    _startDownloads(api);
+    // in the background: each shows its local copy at once and its own sync problems
+    unawaited(AppSettings.instance.load(api));
+    unawaited(Pins.instance.load(api));
+    unawaited(OnDeckHidden.instance.load(api));
+    unawaited(_startDownloads(api));
   }
 
   /// Downloads (1.1): not on web, which has no storage for them. Offline mode needs them, so it loads after.

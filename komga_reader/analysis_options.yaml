@@ -30,6 +30,9 @@ linter:
   rules:
     # avoid_print: false  # Uncomment to disable the `avoid_print` rule
     # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # a Future started and forgotten inside an async function drops its errors silently: await it, or say it's on
+    # purpose with unawaited(...) (test audit, 2026-09-30)
+    unawaited_futures: true
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
