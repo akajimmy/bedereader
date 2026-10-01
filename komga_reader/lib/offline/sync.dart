@@ -161,8 +161,17 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       } catch (_) {
         continue;
       }
+      // the series is there: each downloaded book is marked by whether Komga still lists it (a single book deleted
+      // went unmarked - missing-tests audit, 2026-09-30). Only on a complete list: past one page, unlisted proves nothing.
+      final listed = {for (final b in (r['content'] as List?) ?? const []) (b as Map)['id'] as String};
+      final complete = r['last'] != false;
       for (final id in entry.value) {
-        if (store.books[id]?.remove('gone') != null) changed = true; // there after all
+        if (listed.contains(id)) {
+          if (store.books[id]?.remove('gone') != null) changed = true; // there after all
+        } else if (complete && store.books[id] != null && store.books[id]!['gone'] != true) {
+          store.books[id]!['gone'] = true;
+          changed = true;
+        }
       }
       for (final b in (r['content'] as List?) ?? const []) {
         final id = (b as Map)['id'] as String;
