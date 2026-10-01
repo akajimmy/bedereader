@@ -1,38 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Records what was written to Komga's client settings.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
-  final written = <String, String>{};
-  @override
-  Future<Map<String, dynamic>> clientSettings() async => {for (final e in written.entries) e.key: {'value': e.value}};
-  @override
-  Future<void> putClientSetting(String key, String value) async => written[key] = value;
+import 'support/client_settings.dart';
+import 'support/helpers.dart' show onePage;
+import 'support/no_network.dart';
+
+/// Komga's client settings (what's written, whether it can be reached), and an empty read list to open.
+class PinsServer extends SettingsServer {
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
-      {'content': [], 'totalElements': 0, 'last': true};
+      onePage([]);
 }
 
-/// [FakeKomga] that can't be reached while [down].
-class DownKomga extends FakeKomga {
-  bool down = false;
-  @override
-  Future<Map<String, dynamic>> clientSettings() async {
-    if (down) throw KomgaUnreachable(baseUrl);
-    return super.clientSettings();
-  }
-
-  @override
-  Future<void> putClientSetting(String key, String value) async {
-    if (down) throw KomgaUnreachable(baseUrl);
-    return super.putClientSetting(key, value);
-  }
-}
+PinsServer server() => noNetwork(PinsServer.new);
 
 void main() {
   setUp(() async {
@@ -49,7 +32,7 @@ void main() {
   });
 
   test('add, rename, remove - and each change is written to Komga', () async {
-    final api = FakeKomga();
+    final api = server();
     await Pins.instance.load(api);
     Pins.instance.add(uu);
     await pumpEventQueue();
@@ -70,7 +53,7 @@ void main() {
   });
 
   test('pins come back from Komga on another device', () async {
-    final api = FakeKomga();
+    final api = server();
     await Pins.instance.load(api);
     Pins.instance.add(uu);
     await pumpEventQueue();
@@ -82,7 +65,7 @@ void main() {
 
   test("a pin added while Komga was down survives the next start and is sent then - not replaced by Komga's older "
       'list (code review, 2026-09-30)', () async {
-    final api = DownKomga();
+    final api = server();
     await Pins.instance.load(api); // Komga has no pins
     api.down = true;
     Pins.instance.add(uu);
@@ -97,7 +80,7 @@ void main() {
   });
 
   testWidgets('a read list opened from a pin starts with that pin\'s filter, and its pin button shows pinned', (tester) async {
-    final api = FakeKomga();
+    final api = server();
     await Pins.instance.load(api);
     Pins.instance.add(uu);
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api, pin: uu,

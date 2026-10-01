@@ -18,32 +18,17 @@ import 'package:komga_reader/widgets/poster.dart' show PosterSizeButton;
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// me() - the server status check - answers with whatever [next] says: 'ok', 'refused' or 'down'.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://192.168.1.10:25600', 'k');
-  String next = 'ok';
-  int calls = 0;
-  @override
-  Future<List<dynamic>> libraries() async => [];
-  @override
-  Future<Map<String, dynamic>?> me() async {
-    calls++;
-    if (next == 'refused') throw KomgaError(401, '/api/v2/users/me');
-    if (next == 'down') throw KomgaUnreachable(baseUrl);
-    return {'email': 'nick@test'};
-  }
-}
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/status_server.dart';
 
 /// A tall window, wide enough for the side list of pages: a whole page fits, nothing to scroll to.
-void tall(WidgetTester tester, {double width = 1000}) {
-  tester.view.physicalSize = Size(width, 2400);
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.reset);
-}
+void tall(WidgetTester tester, {double width = 1000}) => setView(tester, Size(width, 2400));
 
 Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server, VoidCallback? onSignOut,
     Komga? api}) async {
-  await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api ?? FakeKomga(), onSignOut: onSignOut ?? () {},
+  await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api ?? noNetwork(StatusServer.new),
+      onSignOut: onSignOut ?? () {},
       initialPage: page)));
   await tester.pump();
 }
@@ -72,7 +57,7 @@ void main() {
     // one test for the menu's order (about_test had a second with the same setup - test audit, 2026-09-30)
     final scaffold = GlobalKey<ScaffoldState>();
     await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
-        drawer: AppDrawer(api: FakeKomga(), onSignOut: () {}), body: const SizedBox())));
+        drawer: AppDrawer(api: noNetwork(StatusServer.new), onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
     double y(String t) => tester.getTopLeft(find.text(t)).dy;
@@ -140,7 +125,7 @@ void main() {
       (tester) async {
     // moved from about_test: the status left About for Settings (test audit, 2026-09-30)
     tall(tester);
-    final api = FakeKomga();
+    final api = noNetwork(StatusServer.new);
     await open(tester, api: api);
     await tester.pump();
     expect(find.text('Connected as nick@test'), findsOneWidget);
@@ -295,7 +280,7 @@ void main() {
       dir.deleteSync(recursive: true);
     });
     await tester.runAsync(() async {
-      await d.attach(FakeKomga(), root: dir, start: false);
+      await d.attach(noNetwork(StatusServer.new), root: dir, start: false);
       await d.setCap(Downloads.gb);
       await d.setDeleteRead(DeleteRead.always);
     });
@@ -339,18 +324,6 @@ void main() {
     expect(s.series['S9']?.fit, FitMode.width);
     s.series.remove('S9');
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
-  });
-
-  test('new device settings survive the saved form; older saves get the defaults', () {
-    const d = DisplayPrefs(midBook: MidBook.keep, background: ReaderBackground.grey, screenOn: 20,
-        posterSize: PosterSize.small, posterTitleOnly: true, pageTurn: PageTurn.curl);
-    final back = DisplayPrefs.fromJson(d.toJson());
-    expect([back.midBook, back.background, back.screenOn, back.posterSize, back.posterTitleOnly, back.pageTurn],
-        [MidBook.keep, ReaderBackground.grey, 20, PosterSize.small, true, PageTurn.curl]);
-    final old = DisplayPrefs.fromJson({'night': true, 'pageTurn': 'flip'});
-    expect([old.midBook, old.background, old.screenOn, old.posterSize, old.posterTitleOnly, old.pageTurn],
-        [MidBook.ask, ReaderBackground.black, 0, PosterSize.medium, false, PageTurn.flip]);
-    expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0); // not a choice: the default
   });
 
   testWidgets('Display: text size and accent colour are set here; the schedule shows its times when on', (tester) async {

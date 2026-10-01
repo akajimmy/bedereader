@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/actions.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/no_network.dart';
 
 Map<String, dynamic> book(String id, {bool read = false, int? page}) => {
       'id': id, 'seriesTitle': 'S', 'name': id, 'metadata': {'number': id, 'title': 'T$id'},
@@ -12,8 +13,7 @@ Map<String, dynamic> book(String id, {bool read = false, int? page}) => {
     };
 
 /// Read list of three: A unread, B read, C in progress.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   final list = [book('A'), book('B', read: true), book('C', page: 5)];
   final marked = <String>[], unmarked = <String>[];
   @override
@@ -37,7 +37,7 @@ void main() {
   });
 
   Future<FakeKomga> open(WidgetTester tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api, readList: const {'id': 'RL', 'name': 'List', 'bookIds': []})));
     await tester.pump();
     await tester.pump();

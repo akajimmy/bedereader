@@ -9,7 +9,8 @@ import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show FakeKomga;
+import 'support/library_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   late Directory dir;
@@ -25,7 +26,7 @@ void main() {
   });
 
   test('offline mode switches every screen to the downloaded books, holds downloads, and is remembered', () async {
-    final online = FakeKomga();
+    final online = noNetwork(LibraryServer.new);
     await Downloads.instance.attach(online, root: dir);
     await conn.load(online);
     expect(conn.api, same(online));
@@ -45,7 +46,7 @@ void main() {
   });
 
   testWidgets('Home offline shows the banner; Go online switches back', (tester) async {
-    final online = FakeKomga();
+    final online = noNetwork(LibraryServer.new);
     await tester.runAsync(() async {
       await Downloads.instance.attach(online, root: dir);
       await conn.load(online);
@@ -61,7 +62,7 @@ void main() {
   });
 
   testWidgets('side menu has the Offline mode switch', (tester) async {
-    final online = FakeKomga();
+    final online = noNetwork(LibraryServer.new);
     await tester.runAsync(() async {
       await Downloads.instance.attach(online, root: dir);
       await conn.load(online);

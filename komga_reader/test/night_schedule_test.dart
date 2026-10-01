@@ -16,21 +16,28 @@ void main() {
   DateTime at(int h, int m) => DateTime(2026, 9, 30, h, m);
   const from = 21 * 60, to = 7 * 60; // 21:00 - 07:00, across midnight
 
-  test('the window, across midnight and within a day', () {
-    expect(NightSchedule.inWindow(at(22, 0), from, to), isTrue);
-    expect(NightSchedule.inWindow(at(3, 0), from, to), isTrue);
-    expect(NightSchedule.inWindow(at(7, 0), from, to), isFalse); // the end time is day again
-    expect(NightSchedule.inWindow(at(12, 0), from, to), isFalse);
-    expect(NightSchedule.inWindow(at(14, 0), 13 * 60, 15 * 60), isTrue); // an afternoon window
-    expect(NightSchedule.inWindow(at(16, 0), 13 * 60, 15 * 60), isFalse);
-    expect(NightSchedule.inWindow(at(16, 0), 600, 600), isFalse); // from = to: never
-  });
-
-  test('next and last change', () {
-    expect(NightSchedule.nextChange(at(12, 0), from, to), at(21, 0));
-    expect(NightSchedule.nextChange(at(22, 0), from, to), DateTime(2026, 10, 1, 7, 0));
-    expect(NightSchedule.lastChange(at(12, 0), from, to), at(7, 0));
-    expect(NightSchedule.lastChange(at(3, 0), from, to), DateTime(2026, 9, 29, 21, 0));
+  test('the window (across midnight and within a day), and the next and last change', () {
+    // one table for the three (they were two tests - test audit, 2026-09-30)
+    const afternoon = (13 * 60, 15 * 60);
+    for (final (now, (f, t), inside, why) in [
+      (at(22, 0), (from, to), true, 'evening'),
+      (at(3, 0), (from, to), true, 'after midnight'),
+      (at(7, 0), (from, to), false, 'the end time is day again'),
+      (at(12, 0), (from, to), false, 'midday'),
+      (at(14, 0), afternoon, true, 'an afternoon window'),
+      (at(16, 0), afternoon, false, 'after the afternoon window'),
+      (at(16, 0), (600, 600), false, 'from = to: never'),
+    ]) {
+      expect(NightSchedule.inWindow(now, f, t), inside, reason: 'inWindow: $why');
+    }
+    for (final (now, next, last) in [
+      (at(12, 0), at(21, 0), at(7, 0)),
+      (at(22, 0), DateTime(2026, 10, 1, 7, 0), at(21, 0)),
+      (at(3, 0), at(7, 0), DateTime(2026, 9, 29, 21, 0)),
+    ]) {
+      expect(NightSchedule.nextChange(now, from, to), next, reason: 'next change after $now');
+      expect(NightSchedule.lastChange(now, from, to), last, reason: 'last change before $now');
+    }
   });
 
   testWidgets('switching the schedule on sets night mode for now; a change by hand then stands', (tester) async {
@@ -45,16 +52,5 @@ void main() {
     NightSchedule.instance.didChangeAppLifecycleState(AppLifecycleState.resumed); // back to the app
     expect(s.display.night, isFalse, reason: 'no change has passed since: the hand-made choice stands');
     NightSchedule.instance.stop(); // its timer to the next change
-  });
-
-  test('the schedule, text size and accent survive the saved form; older saves get the defaults', () {
-    const d = DisplayPrefs(nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal);
-    final back = DisplayPrefs.fromJson(d.toJson());
-    expect([back.nightSchedule, back.nightFrom, back.nightTo, back.textScale, back.accent],
-        [true, 1320, 360, 1.15, Accent.teal]);
-    final old = DisplayPrefs.fromJson({'night': true});
-    expect([old.nightSchedule, old.nightFrom, old.nightTo, old.textScale, old.accent],
-        [false, 21 * 60, 7 * 60, 1.0, Accent.blue]);
-    expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0); // not a choice: the default
   });
 }

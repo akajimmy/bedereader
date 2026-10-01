@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/widgets/poster.dart';
+
+import 'support/no_network.dart';
 
 /// The remote's OK on a poster: a press opens it, holding it opens its menu (like a long press or a right-click).
 void main() {
@@ -16,7 +17,7 @@ void main() {
   Future<void> tile(WidgetTester tester, {bool withMenu = true}) async {
     opened = menus = 0;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 170, height: 330, child: PosterTile(
-      api: Komga('http://test', 'k'),
+      api: plainKomga(),
       imageUrl: '',
       image: const ColoredBox(color: Colors.grey), // no network in tests
       title: 'Planet Comics',
@@ -50,7 +51,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       builder: (context, child) => HoldOkGuard(child: child!), // as in main.dart
       home: Scaffold(body: Builder(builder: (context) => SizedBox(width: 170, height: 330, child: PosterTile(
-        api: Komga('http://test', 'k'),
+        api: plainKomga(),
         imageUrl: '',
         image: const ColoredBox(color: Colors.grey),
         title: 'Planet Comics',

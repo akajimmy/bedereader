@@ -1,40 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/home_sections.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
-  @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}];
-  @override
-  Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) async =>
-      {'content': [], 'totalElements': 0, 'last': true};
-  @override
-  Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async =>
-      {'content': [], 'totalElements': 0, 'last': true};
-  final booksSorts = <String>[];
-  @override
-  Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
-      String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
-    booksSorts.add(sort);
-    return {'content': [
-      {'id': 'N1', 'seriesTitle': 'New Series', 'name': 'n1', 'metadata': {'number': '1', 'title': 'Fresh'}},
-    ], 'totalElements': 1, 'last': true};
-  }
-
-  @override
-  Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
-          String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async =>
-      {'content': [], 'totalElements': 0, 'last': true};
-}
+import 'support/home_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   testWidgets('the ⋮ menu shows or hides each Home section, and the choice is remembered', (tester) async {
     SharedPreferences.setMockInitialValues({'showOnDeck': false}); // old build-15 setting carries over
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: FakeKomga(), onSignOut: () {})));
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();
     expect(find.text('Continue reading'), findsOneWidget);
@@ -63,7 +39,7 @@ void main() {
 
   testWidgets('Home draws the sections in the chosen order; a switched-on new row loads and shows', (tester) async {
     SharedPreferences.setMockInitialValues({'home.order': ['libraries', 'continue'], 'home.show.recentBooks': true});
-    final api = FakeKomga();
+    final api = noNetwork(HomeServer.new);
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
     await tester.pump();
     await tester.pump();

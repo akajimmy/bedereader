@@ -1,0 +1,48 @@
+import 'dart:typed_data';
+
+import 'no_network.dart';
+
+/// Komga for the reader: a 3-page book (B1, "Test #1", series S1) whose pages never finish loading - enough to drive
+/// the controls. Records progress saves, read marks and next-book requests; [next] is the book after this one (null:
+/// the last). Build with `noNetwork(ReaderServer.new)`.
+///
+/// Was reader_test's FakeKomga, imported from there by reader_keys_test (test audit, 2026-09-30).
+class ReaderServer extends TestKomga {
+  final theBook = {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '1', 'title': 'T'}};
+  static String direction = 'LEFT_TO_RIGHT'; // the series' reading direction in Komga
+  @override
+  Future<Map<String, dynamic>?> book(String id) async => theBook;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) async => {'id': id, 'metadata': {'readingDirection': direction}};
+  @override
+  Future<List<dynamic>> pages(String bookId) async => [{'number': 1}, {'number': 2}, {'number': 3}];
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) => Future.any([]); // never completes
+  @override
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    saves.add(page);
+    if (completed) finished.add(page);
+  }
+
+  final finished = <int>[]; // saves that marked the book read
+  final saves = <int>[];
+  final marked = <String>[];
+  int nextCalls = 0;
+  @override
+  Future<void> markRead(String bookId) async => marked.add(bookId);
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
+    nextCalls++;
+    askedReadList = readListId;
+    return next;
+  }
+
+  Map<String, dynamic>? next; // the book after this one (null = last one)
+  String? askedReadList = 'not asked';
+  @override
+  Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async => null;
+  @override
+  Future<Map<String, dynamic>> clientSettings() async => {};
+  @override
+  Future<void> putClientSetting(String key, String value) async {}
+}

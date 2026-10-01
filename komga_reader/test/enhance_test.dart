@@ -32,23 +32,20 @@ void main() {
     return math.sqrt(v.map((x) => (x - mean) * (x - mean)).reduce((a, b) => a + b) / v.length);
   }
 
-  testWidgets('scales to the asked size; a flat colour stays flat', (tester) async {
+  testWidgets('scales to the asked size, enlarging (EASU) or shrinking (the Lanczos path); a flat colour stays flat',
+      (tester) async {
+    // one test for both directions (they were two, the same steps - test audit, 2026-09-30)
     await tester.runAsync(() async {
-      final src = await fromPixels(40, 60, (x, y) => 128);
-      final out = await Enhancer.run(src, 55, 82);
-      expect(out, isNotNull, reason: 'shaders should compile and run in tests');
-      expect((out!.width, out.height), (55, 82));
-      final g = await greys(out);
-      expect(g.every((v) => (v - 128).abs() <= 1), isTrue);
-    });
-  });
-
-  testWidgets('shrinking (Lanczos path, not EASU): the asked size, a flat colour stays flat', (tester) async {
-    await tester.runAsync(() async {
-      final src = await fromPixels(80, 120, (x, y) => 90);
-      final out = (await Enhancer.run(src, 61, 92))!;
-      expect((out.width, out.height), (61, 92));
-      expect((await greys(out)).every((v) => (v - 90).abs() <= 1), isTrue);
+      for (final (how, (w, h), grey, (outW, outH)) in [
+        ('enlarging', (40, 60), 128, (55, 82)),
+        ('shrinking', (80, 120), 90, (61, 92)),
+      ]) {
+        final src = await fromPixels(w, h, (x, y) => grey);
+        final out = await Enhancer.run(src, outW, outH);
+        expect(out, isNotNull, reason: '$how: shaders should compile and run in tests');
+        expect((out!.width, out.height), (outW, outH), reason: how);
+        expect((await greys(out)).every((v) => (v - grey).abs() <= 1), isTrue, reason: '$how: still flat');
+      }
     });
   });
 

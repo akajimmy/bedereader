@@ -2,16 +2,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/screens/search.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'offline_test.dart' show buildStore;
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/offline_store.dart';
 
 /// Answers searches for "surf" with one series and two books; records the library each search was limited to.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   final scopes = <String?>[]; // library each search was limited to
   final marked = <String>[];
   @override
@@ -43,7 +43,7 @@ class FakeKomga extends Komga {
 void main() {
   testWidgets('results appear as you type, in rows with counts; nothing found says so', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: SearchScreen(api: FakeKomga())));
+    await tester.pumpWidget(MaterialApp(home: SearchScreen(api: noNetwork(FakeKomga.new))));
     expect(find.text('Type to search.'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'surf');
     await tester.pump(const Duration(milliseconds: 400)); // typing pause
@@ -61,7 +61,7 @@ void main() {
 
   testWidgets('opened from a library it searches there; the chip widens it to all libraries', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await tester.pumpWidget(MaterialApp(home: SearchScreen(api: api, libraryId: 'L1', libraryName: 'Events')));
     await tester.enterText(find.byType(TextField), 'surf');
     await tester.pump(const Duration(milliseconds: 400));
@@ -76,10 +76,8 @@ void main() {
   testWidgets("after an action from a result's menu, the search runs again (code review, 2026-09-30)",
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    tester.view.physicalSize = const Size(1280, 1600); // tall enough for the Books row
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final api = FakeKomga();
+    setView(tester, const Size(1280, 1600)); // tall enough for the Books row
+    final api = noNetwork(FakeKomga.new);
     await tester.pumpWidget(MaterialApp(home: SearchScreen(api: api)));
     await tester.enterText(find.byType(TextField), 'surf');
     await tester.pump(const Duration(milliseconds: 400));

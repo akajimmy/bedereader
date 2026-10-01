@@ -2,35 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/api.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Komga's client settings: what's written there, whether it can be reached, and (optionally) a write held in flight.
-class FakeKomga extends Komga {
-  FakeKomga([Map<String, String>? start]) : super('http://test', 'k') {
-    if (start != null) written.addAll(start);
-  }
-  final written = <String, String>{};
-  bool down = false;
-  Completer<void>? holdPut; // a write on its way, until completed
-  int puts = 0;
-  @override
-  Future<Map<String, dynamic>> clientSettings() async {
-    if (down) throw KomgaUnreachable(baseUrl);
-    return {for (final e in written.entries) e.key: {'value': e.value}};
-  }
+import 'support/client_settings.dart';
+import 'support/no_network.dart';
 
-  @override
-  Future<void> putClientSetting(String key, String value) async {
-    if (down) throw KomgaUnreachable(baseUrl);
-    puts++;
-    await holdPut?.future;
-    written[key] = value;
-  }
+/// Komga's client settings ([start]: already saved there).
+SettingsServer server([Map<String, String>? start]) => noNetwork(() => SettingsServer(start));
 
+extension on SettingsServer {
+  /// The fit saved in Komga for [seriesId] (null: none).
   FitMode? fitOn(String seriesId) {
     final raw = written[AppSettings.komgaKey];
     if (raw == null) return null;
@@ -61,7 +45,7 @@ void main() {
 
   testWidgets('a change made while Komga was down survives a restart and is sent then - not replaced by Komga\'s '
       'older copy', (tester) async {
-    final api = FakeKomga({AppSettings.komgaKey: blob({'S1': FitMode.screen})});
+    final api = server({AppSettings.komgaKey: blob({'S1': FitMode.screen})});
     await s.load(api);
     expect(s.series['S1']!.fit, FitMode.screen);
     api.down = true;
@@ -78,7 +62,7 @@ void main() {
   });
 
   testWidgets("series settings removed on another device go here too; Komga's copy is the truth", (tester) async {
-    final api = FakeKomga({AppSettings.komgaKey: blob({'S1': FitMode.width, 'S2': FitMode.height})});
+    final api = server({AppSettings.komgaKey: blob({'S1': FitMode.width, 'S2': FitMode.height})});
     await s.load(api);
     expect(s.series.keys, unorderedEquals(['S1', 'S2']));
     api.written[AppSettings.komgaKey] = blob({'S1': FitMode.width}); // the PC: S2 back to the defaults
@@ -87,7 +71,7 @@ void main() {
   });
 
   testWidgets("a change made while a send is on its way still reaches Komga (it was marked sent)", (tester) async {
-    final api = FakeKomga();
+    final api = server();
     await s.load(api);
     api.holdPut = Completer<void>();
     s.setSeries('S1', const ReaderPrefs(fit: FitMode.width));
@@ -105,7 +89,7 @@ void main() {
 
   testWidgets('signing out leaves nothing of the account: the next account starts clean and nothing is sent to it',
       (tester) async {
-    final a = FakeKomga({
+    final a = server({
       AppSettings.komgaKey: blob({'S1': FitMode.width}),
       OnDeckHidden.komgaKey: jsonEncode({'series': ['S5'], 'books': ['B5']}), // A's synced list
     });
@@ -123,7 +107,7 @@ void main() {
     await Pins.instance.clearAccount();
     await OnDeckHidden.instance.clearAccount();
 
-    final b = FakeKomga(); // another account, nothing saved there yet
+    final b = server(); // another account, nothing saved there yet
     await s.load(b);
     await Pins.instance.load(b);
     await OnDeckHidden.instance.load(b);

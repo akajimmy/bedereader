@@ -9,8 +9,9 @@ import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show FakeKomga;
-import 'offline_test.dart' show buildStore;
+import 'support/library_server.dart';
+import 'support/no_network.dart';
+import 'support/offline_store.dart';
 
 void main() {
   testWidgets('offline, pins whose view has nothing downloaded are hidden', (tester) async {
@@ -18,12 +19,12 @@ void main() {
     late Directory dir;
     await tester.runAsync(() async {
       dir = await Directory.systemTemp.createTemp('komga_offline_pins');
-      await Downloads.instance.attach(FakeKomga(), root: dir);
+      await Downloads.instance.attach(noNetwork(LibraryServer.new), root: dir);
       Downloads.instance.store!.books.addAll((await buildStore(Directory('${dir.path}/built'))).books);
       Downloads.instance.hold = true;
     });
     Connection.instance
-      ..online = FakeKomga()
+      ..online = noNetwork(LibraryServer.new)
       ..forcedOffline = true;
     Pins.instance.items = const [
       Pin(name: 'Surfer', kind: 'series', id: 'S1', title: 'Silver Surfer'), // downloaded

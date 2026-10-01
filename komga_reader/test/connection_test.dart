@@ -10,7 +10,8 @@ import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/widgets/connection_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show FakeKomga;
+import 'support/library_server.dart';
+import 'support/no_network.dart';
 
 /// Phase 4: when Komga can't be reached the app asks (or, with the Automatic setting, switches by itself); once
 /// offline that way it notices Komga coming back and offers (or switches back when no book is open). Offline by hand
@@ -20,12 +21,12 @@ void main() {
   late Directory dir;
   final conn = Connection.instance;
   final d = Downloads.instance;
-  late FakeKomga server;
+  late LibraryServer server;
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     dir = await Directory.systemTemp.createTemp('komga_conn_test');
-    server = FakeKomga();
+    server = noNetwork(LibraryServer.new);
     d.reset();
     await d.attach(server, root: dir);
     d.store!.books['B1'] = {'book': {'id': 'B1', 'seriesId': 'S1'}, 'readLists': [], 'state': 'done'};
@@ -166,7 +167,7 @@ void main() {
   test('signing in again (a new key) starts clean', () async {
     Komga.onKeyRefused!(server);
     conn.useDownloads();
-    await conn.load(FakeKomga()); // the sign-in with a new key
+    await conn.load(noNetwork(LibraryServer.new)); // the sign-in with a new key
     expect(conn.keyRefused, isFalse);
     expect(conn.offline, isFalse);
   });

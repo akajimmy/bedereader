@@ -4,17 +4,17 @@ import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/side_menu.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'home_test.dart' show FakeKomga;
+import 'support/helpers.dart';
+import 'support/home_server.dart';
+import 'support/no_network.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => SideMenu.instance.pinned = false);
 
   Future<void> home(WidgetTester tester, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: FakeKomga(), onSignOut: () {})));
+    setView(tester, size);
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();
   }

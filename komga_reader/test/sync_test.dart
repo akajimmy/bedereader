@@ -8,10 +8,11 @@ import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/offline/sync.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show FakeKomga;
+import 'support/library_server.dart';
+import 'support/no_network.dart';
 
 /// Komga with reading progress kept in memory (bookId -> readProgress; absent = unread).
-class ProgressServer extends FakeKomga {
+class ProgressServer extends LibraryServer {
   final Map<String, Map<String, dynamic>> rp = {};
   final writes = <String>[];
   final missing = <String>{};
@@ -70,7 +71,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     dir = await Directory.systemTemp.createTemp('komga_sync_test');
-    server = ProgressServer();
+    server = noNetwork(ProgressServer.new);
     server.rp['B1'] = {'page': 1, 'completed': false}; // B1 started on page 1, B2 unread, when downloaded
     await d.attach(server, root: dir);
     await d.store!.put('B1', entry('B1'));

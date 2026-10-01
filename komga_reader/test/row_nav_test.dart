@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 
+import 'support/helpers.dart';
+
 /// Settings with the remote: Up / Down go row to row, never skipping a row because a wide control sat over a short
 /// one (user, 2026-09-30). How the rows look and lay out: setting_rows_test.
 void main() {
@@ -16,9 +18,7 @@ void main() {
 
   testWidgets('a page taller than the screen: Down keeps the focused row on screen, scrolling as it goes (test audit)',
       (tester) async {
-    tester.view.physicalSize = const Size(900, 500);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(900, 500));
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
       SettingsGroup(title: 'G', children: [
         for (var i = 0; i < 20; i++) SwitchRow(title: 'Row $i', value: false, onChanged: (_) {}),
@@ -45,9 +45,7 @@ void main() {
     // Down goes to what is straight below - the row after next - skipping the button's row. (The old version of this
     // test started from the far right, over the skipped row's switch, and passed without RowNav - test audit,
     // 2026-09-30.)
-    tester.view.physicalSize = const Size(1000, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(1000, 800));
     var a = 1, c = 1, pressed = 0;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: StatefulBuilder(builder: (context, set) => SettingsColumn(
       child: ListView(children: [

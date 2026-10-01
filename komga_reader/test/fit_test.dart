@@ -1,31 +1,20 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/settings.dart';
 
+import 'support/helpers.dart';
+
 /// Fit width / fit height: an overflowing page opens centred; in fit height a wide page can be dragged sideways,
 /// and dragging on past its edge turns the page.
 void main() {
-  Future<ui.Image> image(WidgetTester tester, int w, int h) async {
-    late ui.Image img;
-    await tester.runAsync(() async {
-      final rec = ui.PictureRecorder();
-      Canvas(rec).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..color = Colors.white);
-      img = await rec.endRecording().toImage(w, h);
-    });
-    return img;
-  }
-
   Future<ScrollController> page(WidgetTester tester, FitMode fit, int w, int h,
       {bool startAtEnd = false, ValueChanged<bool>? onPan, ValueChanged<bool>? onEdge}) async {
-    tester.view.physicalSize = const Size(800, 1200); // portrait tablet
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(800, 1200)); // portrait tablet
     final scroll = ScrollController();
-    final img = await image(tester, w, h);
+    final img = await testImage(tester, w, h);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
       data: PageData(img, Uint8List(0)),
       prefs: ReaderPrefs(fit: fit),
@@ -70,10 +59,8 @@ void main() {
       (tester) async {
     // test audit, 2026-09-30: one PageData throughout, as for a still-mounted neighbour page - a new one each pump
     // re-placed the page on its own, so the start-at-end / fresh-controller path wasn't what the test checked
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final data = PageData(await image(tester, 800, 2400), Uint8List(0)); // 800 x 2400 on a 1200-tall screen
+    setView(tester, const Size(800, 1200));
+    final data = PageData(await testImage(tester, 800, 2400), Uint8List(0)); // 800 x 2400 on a 1200-tall screen
     Future<ScrollController> show({required bool startAtEnd}) async {
       final scroll = ScrollController(); // the reader swaps in a fresh controller on the way back
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
@@ -102,13 +89,11 @@ void main() {
   testWidgets('going round the fits again: a wide page in fit height is centred every time, not at the left edge',
       (tester) async {
     // user's repro (2026-09-30): the top bar's fit button, round twice - same page, same scroll controller
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(800, 1200));
     // the reader keeps one per page; its offset isn't restored when the page's scroll view comes back (in the reader
     // it wasn't - hence the left edge), so no keepScrollOffset here
     final scroll = ScrollController(keepScrollOffset: false);
-    final data = PageData(await image(tester, 1600, 1200), Uint8List(0)); // one page: the same data throughout, as in the reader
+    final data = PageData(await testImage(tester, 1600, 1200), Uint8List(0)); // one page: the same data throughout, as in the reader
     Future<void> show(FitMode fit) async {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
           data: data, prefs: ReaderPrefs(fit: fit), scroll: scroll))));
@@ -126,11 +111,9 @@ void main() {
 
   testWidgets('moving off a zoomed page puts it back to fit (the reader forgets the zoom on a turn)', (tester) async {
     // code review, 2026-09-30: coming back, the page was still zoomed while the reader thought it wasn't
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
+    setView(tester, const Size(800, 1200));
     final zoom = TransformationController();
-    final data = PageData(await image(tester, 800, 1200), Uint8List(0));
+    final data = PageData(await testImage(tester, 800, 1200), Uint8List(0));
     final zoomed = <bool>[];
     Future<void> show({required bool current}) async {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(data: data, prefs: const ReaderPrefs(),

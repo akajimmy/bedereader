@@ -7,9 +7,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:komga_reader/widgets/poster.dart';
 import 'package:komga_reader/widgets/readlist_tile.dart';
 
+import 'support/no_network.dart';
+
 /// A 5-book read list: 2 unread, 1 in progress, 2 read.
-class FakeKomga extends Komga {
-  FakeKomga() : super('http://test', 'k');
+class FakeKomga extends TestKomga {
   final status = {'a': 'UNREAD', 'b': 'READ', 'c': 'IN_PROGRESS', 'd': 'UNREAD', 'e': 'READ'};
   final readCalls = <String>[], unreadCalls = <String>[];
 
@@ -47,20 +48,20 @@ void main() {
   }
 
   testWidgets('mark all read touches only the unfinished books', (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await run(tester, api, 'Mark all as read', confirm: true);
     expect(api.readCalls..sort(), ['a', 'c', 'd']);
     expect(find.text('3 books marked read'), findsOneWidget);
   });
 
   testWidgets('mark all unread touches only books with progress', (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await run(tester, api, 'Mark all as unread', confirm: true);
     expect(api.unreadCalls..sort(), ['b', 'c', 'e']);
   });
 
   testWidgets('cancel changes nothing', (tester) async {
-    final api = FakeKomga();
+    final api = noNetwork(FakeKomga.new);
     await run(tester, api, 'Mark all as unread', confirm: false);
     expect(api.unreadCalls, isEmpty);
     expect(api.readCalls, isEmpty);
@@ -71,7 +72,7 @@ void main() {
     // in progress showed as read)
     ReadListTile.invalidate();
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 150, height: 290,
-        child: ReadListTile(api: FakeKomga(), readList: rl, onOpen: () {})))));
+        child: ReadListTile(api: noNetwork(FakeKomga.new), readList: rl, onOpen: () {})))));
     await tester.pump();
     expect(find.text('3 of 5 unread'), findsOneWidget); // a and d unread, c in progress
   });
@@ -79,7 +80,7 @@ void main() {
   testWidgets('header count shows the total for the current filter, in a box left of Hide read',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: FakeKomga(), readList: rl)));
+    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: noNetwork(FakeKomga.new), readList: rl)));
     await tester.pump();
     await tester.pump();
     // the count read from the badge itself, not any "5" on screen (test audit, 2026-09-30)
@@ -94,7 +95,7 @@ void main() {
 
   // test audit, 2026-09-30: every fake answered in one page, so paging was never exercised
   testWidgets('mark all read reaches the books on every page of the list, not just the first', (tester) async {
-    final api = _LongListKomga(unread: 520, read: 3); // the action asks 500 at a time: two pages of unread
+    final api = noNetwork(() => _LongListKomga(unread: 520, read: 3)); // the action asks 500 at a time: two pages of unread
     await run(tester, api, 'Mark all as read', confirm: true);
     expect(api.asked, containsAll(['UNREAD p0', 'UNREAD p1']));
     expect(api.readCalls.toSet(), {for (var i = 0; i < 520; i++) 'u$i'});
@@ -104,7 +105,7 @@ void main() {
 
   testWidgets('the read list grid loads the next page when scrolled to the end', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final api = _LongListKomga(unread: 150, read: 0); // the grid asks 100 at a time (Paged.pageSize)
+    final api = noNetwork(() => _LongListKomga(unread: 150, read: 0)); // the grid asks 100 at a time (Paged.pageSize)
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api,
         readList: {'id': 'RL', 'name': 'Long', 'bookIds': [for (var i = 0; i < 150; i++) 'u$i']})));
     await tester.pump();
@@ -124,8 +125,8 @@ void main() {
 
 /// A read list longer than one page: `unread` unread books (u0, u1...) then `read` read ones (r0...). Answers each
 /// page as Komga does - `size` books from `page * size`, last only on the final page - and records what was asked.
-class _LongListKomga extends Komga {
-  _LongListKomga({required int unread, required int read}) : super('http://test', 'k') {
+class _LongListKomga extends TestKomga {
+  _LongListKomga({required int unread, required int read}) {
     entries = [
       for (var i = 0; i < unread; i++) {'id': 'u$i', 'status': 'UNREAD'},
       for (var i = 0; i < read; i++) {'id': 'r$i', 'status': 'READ'},
