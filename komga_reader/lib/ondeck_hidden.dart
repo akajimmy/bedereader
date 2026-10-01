@@ -46,8 +46,14 @@ class OnDeckHidden extends ChangeNotifier {
     }
   }
 
-  /// Switch connection (online / offline) without reloading.
-  void useApi(Komga api) => _api = api;
+  /// Switch connection (online / offline) without reloading; a change made while Komga couldn't be reached goes now
+  /// (it used to wait for the next start - test audit, 2026-09-30; pins and reader settings already did this).
+  void useApi(Komga api) {
+    _api = api;
+    SharedPreferences.getInstance().then((p) async {
+      if (p.getBool(_dirtyKey) ?? false) await _send(p);
+    });
+  }
 
   bool seriesHidden(String? id) => id != null && series.contains(id);
   bool bookHidden(String? id) => id != null && books.contains(id);

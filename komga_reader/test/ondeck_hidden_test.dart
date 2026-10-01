@@ -75,6 +75,20 @@ void main() {
     expect(api.settings[OnDeckHidden.komgaKey], contains('B1'));
   });
 
+  test('changed while offline: sent as soon as the app is back online, not only at the next start (test audit)',
+      () async {
+    final api = DeckKomga()..settings[OnDeckHidden.komgaKey] = '{"series":[],"books":[]}';
+    await h.load(api);
+    api.down = true;
+    h.setSeries('S2', true); // offline: can't be sent
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(api.settings[OnDeckHidden.komgaKey], isNot(contains('S2')));
+    api.down = false;
+    h.useApi(api); // back online (what Connection does)
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(api.settings[OnDeckHidden.komgaKey], contains('S2'));
+  });
+
   testWidgets('Home leaves hidden series out of On deck, and brings them back', (tester) async {
     final api = DeckKomga();
     h.setSeries('S1', true);

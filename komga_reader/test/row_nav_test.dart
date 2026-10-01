@@ -47,6 +47,30 @@ void main() {
     expect(c.right, closeTo(row.right - 14, 1));
   });
 
+  testWidgets('a page taller than the screen: Down keeps the focused row on screen, scrolling as it goes (test audit)',
+      (tester) async {
+    tester.view.physicalSize = const Size(900, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
+      SettingsGroup(title: 'G', children: [
+        for (var i = 0; i < 20; i++) SwitchRow(title: 'Row $i', value: false, onChanged: (_) {}),
+      ]),
+    ]))));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // the first row
+    await tester.pump();
+    final screen = tester.getRect(find.byType(ListView));
+    for (var i = 1; i < 15; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      final focused = FocusManager.instance.primaryFocus!.context!;
+      final r = tester.getRect(find.byWidget(focused.widget).first);
+      expect(r.top >= screen.top - 0.5 && r.bottom <= screen.bottom + 0.5, isTrue,
+          reason: 'after $i Downs the focused row ($r) is inside the screen ($screen)');
+    }
+  });
+
   testWidgets('Down from the far end of a wide choice goes to the next row, then the one after; Up comes back',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 800);

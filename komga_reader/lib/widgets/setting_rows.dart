@@ -84,6 +84,15 @@ class _RowNavState extends State<RowNav> {
     }
     if (target == null || _rowOf(target) == null) return KeyEventResult.ignored; // not a row: the usual way
     target.requestFocus();
+    // and into view, as Flutter's own arrow navigation does: on a page taller than the screen, Down left the focus
+    // on a row below the bottom edge (test audit, 2026-09-30)
+    final ctx = target.context;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx,
+          duration: const Duration(milliseconds: 150),
+          alignmentPolicy:
+              down ? ScrollPositionAlignmentPolicy.keepVisibleAtEnd : ScrollPositionAlignmentPolicy.keepVisibleAtStart);
+    }
     return KeyEventResult.handled;
   }
 
