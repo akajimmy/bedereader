@@ -9,6 +9,7 @@ import 'package:komga_reader/screens/series_details.dart';
 import 'package:komga_reader/screens/actions.dart';
 import 'package:komga_reader/side_menu.dart';
 import 'package:komga_reader/widgets/drawer.dart';
+import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final theBook = {
@@ -35,6 +36,11 @@ class FakeKomga extends Komga {
   Future<void> deleteSeriesFiles(String seriesId) async => deletedSeries.add(seriesId);
   @override
   Future<Map<String, dynamic>?> book(String id) async => theBook;
+  @override // the collection screen's listing (test audit, 2026-09-30: without it that screen showed an HTTP 400)
+  Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
+      String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async =>
+      {'content': [{'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}],
+        'totalElements': 1, 'last': true};
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async =>
       {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer', 'publisher': 'Marvel'}};
@@ -61,10 +67,13 @@ void main() {
     expect(find.text('1 August 1968'), findsOneWidget);
     expect(find.text('Norrin Radd leaves Zenn-La.'), findsOneWidget);
     expect(find.text('View series'), findsOneWidget);
-    final writer = tester.getTopLeft(find.text('Stan Lee')).dy;
-    final penciller = tester.getTopLeft(find.text('John Buscema')).dy;
-    final letterer = tester.getTopLeft(find.text('Sam Rosen')).dy;
-    expect(writer < penciller && penciller < letterer, isTrue); // writer, penciller, inker, colorist, letterer...
+    // every credited person, top to bottom: writer, penciller, inker, letterer (the book lists them penciller first;
+    // test audit, 2026-09-30: the inker was never placed)
+    final credited = ['Stan Lee', 'John Buscema', 'Joe Sinnott', 'Sam Rosen'];
+    final rows = [for (final n in credited) tester.getTopLeft(find.text(n)).dy];
+    for (var i = 1; i < credited.length; i++) {
+      expect(rows[i], greaterThan(rows[i - 1]), reason: '${credited[i]} on a row below ${credited[i - 1]}');
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -120,6 +129,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: screen));
       await tester.pump();
       await tester.pump();
+      expect(find.byType(ErrorText), findsNothing, reason: '${screen.runtimeType}: its listing loaded (test audit, 2026-09-30)');
       expect(find.byType(AppDrawer), findsOneWidget, reason: '${screen.runtimeType}: docked beside the page');
       expect(tester.getRect(find.byType(AppDrawer)).left, 0);
       expect(tester.state<ScaffoldState>(find.byType(Scaffold).last).hasDrawer, isFalse,

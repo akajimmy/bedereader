@@ -79,7 +79,7 @@ void main() {
     expect(find.byTooltip('Newest first (switch to oldest first)'), findsOneWidget);
   });
 
-  testWidgets('a filter saved before this change still loads (and order defaults to oldest first)', (tester) async {
+  testWidgets('a saved view without newestFirst defaults to oldest first', (tester) async {
     SharedPreferences.setMockInitialValues({'view.series.S1': jsonEncode({'filter': 'hideRead'})});
     final api = await open(tester);
     expect(api.sorts.last, 'metadata.numberSort,asc');
