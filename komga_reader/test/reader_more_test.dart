@@ -534,13 +534,11 @@ void main() {
     });
   });
 
-  // BUG (found 2026-09-30, missing-tests audit): a fit-height page wider than the screen tells the reader "no longer
-  // panning" from PageCanvas.dispose (page_image.dart, `if (_panning == true) widget.onPanChanged?.call(false)`), and
-  // the reader's onPanChanged (reader.dart, `_page`) calls setState at once - while the framework is unmounting that
-  // page at the end of a frame. Debug builds assert "setState() or markNeedsBuild() called when widget tree was
-  // locked" whenever such a page drops out of the page view (two turns on). Not fixed here: tests only.
+  // Bug found 2026-09-30 (missing-tests audit): a fit-height page wider than the screen tells the reader "no longer
+  // panning" from PageCanvas.dispose, and the reader called setState at once - while the framework was unmounting
+  // that page at the end of a frame. Debug builds asserted "setState() or markNeedsBuild() called when widget tree
+  // was locked" whenever such a page dropped out of the page view (two turns on). Fixed: reader.dart _setSideways.
   testWidgets('fit height, wide pages: turning on until the first spread leaves the page view raises no error',
-      skip: true, // BUG: reader setState from PageCanvas.dispose while the tree is locked (see above)
       (tester) async {
     await openLoaded(tester, w: 400, h: 200); // 3 spreads, 1200 x 600 in fit height
     await key(tester, LogicalKeyboardKey.enter);

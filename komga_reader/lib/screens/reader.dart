@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
@@ -65,6 +66,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int _openedAt = 0;
   bool _zoomed = false; // pinch-zoomed in: page swiping is paused so a drag pans the page
   final Set<int> _sideways = {}; // pages (fit height, wider than the screen) that a drag moves sideways
+  /// A page says whether a drag moves it sideways. It also says "no longer" from its dispose - while the framework is
+  /// unmounting it at the end of a frame, when setState isn't allowed - so the rebuild then waits for the frame to end
+  /// (missing-tests audit, 2026-09-30: debug builds asserted "widget tree was locked" two turns past a wide page).
+  void _setSideways(int i, bool pans) {
+    if (!(pans ? _sideways.add(i) : _sideways.remove(i))) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() {}); });
+    } else {
+      setState(() {});
+    }
+  }
   bool get _fullscreen => fullscreen.value; // desktop, whole app: F11 / the full-screen button (lib/screen.dart)
   double _wheelAcc = 0; // mouse wheel travel towards the next page turn
   DateTime _lastWheelTurn = DateTime(0);
@@ -1101,7 +1113,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           levels: _loader!.bookLevels,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
-          onPanChanged: (pans) => setState(() => pans ? _sideways.add(i) : _sideways.remove(i)),
+          onPanChanged: (pans) => _setSideways(i, pans),
           onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
           onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
           idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
