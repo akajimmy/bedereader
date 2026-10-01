@@ -52,7 +52,17 @@ class Downloads extends ChangeNotifier {
   OfflineStore? store;
   final List<DownloadJob> queue = [];
   final List<String> recentlyDone = []; // this session, newest first (titles)
+
+  /// Pause all: kept across restarts until Resume (code review, 2026-09-30: a restart ran the queue again and left
+  /// the paused book stuck).
   bool paused = false;
+  static const _pausedKey = 'downloads.paused';
+
+  /// Komga couldn't be reached: the book goes back in the queue (not failed) and the worker waits, looking again every
+  /// [serverRecheck], then carries on by itself (code review, 2026-09-30: an outage failed the whole queue).
+  bool waitingForServer = false;
+  static Duration serverRecheck = const Duration(seconds: 30);
+  Timer? _serverTimer;
 
   /// Offline mode: nothing downloads (and the server isn't contacted) until it's released.
   bool get hold => _hold;
@@ -147,20 +157,28 @@ class Downloads extends ChangeNotifier {
 
   File get _queueFile => store!.file('queue.json');
 
-  /// Starts (or restarts) the manager for this server. [root] overrides the storage folder (tests).
-  Future<void> attach(Komga api, {Directory? root}) async {
+  /// Starts (or restarts) the manager for this server. [root] overrides the storage folder (tests). [start] false:
+  /// the queue waits for [hold] to be set - the app applies offline mode first, so a forced-offline start contacts
+  /// nothing (code review, 2026-09-30).
+  Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
     _api = api;
     _session++;
     _running = false; // any older worker notices the new session and stops
     _queueWrites = Future.value(); // a fresh start: nothing to wait behind
+    _serverTimer?.cancel();
+    waitingForServer = false;
     final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
-    store = OfflineStore(base);
+    store = OfflineStore(await serverFolder(base, api.baseUrl));
     await store!.load();
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
     wifiOnly = p.getBool(_wifiOnlyKey) ?? false;
     waitingForWifi = false;
+    paused = p.getBool(_pausedKey) ?? false;
+    keptRead
+      ..clear()
+      ..addAll(p.getStringList(_keptKey) ?? const []);
     final saved = p.getString(_deleteReadKey);
     deleteRead = saved != null
         ? DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never)
@@ -174,7 +192,39 @@ class Downloads extends ChangeNotifier {
       } catch (_) {}
     }
     notifyListeners();
-    _pump();
+    if (start) _pump();
+  }
+
+  /// Each server's downloads in a folder of their own (code review, 2026-09-30: with one folder for all, signing in
+  /// to another server deleted the first one's unsent reading progress as "gone"). The folder there already is
+  /// belongs to the first server that uses it (recorded in server.json - nothing is moved); any other server gets
+  /// `downloads-(its address)` beside it.
+  @visibleForTesting
+  static Future<Directory> serverFolder(Directory base, String baseUrl) async {
+    String norm(String u) => u.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    final me = norm(baseUrl);
+    Future<String?> owner(Directory d) async {
+      final f = File('${d.path}${Platform.pathSeparator}server.json');
+      if (!await f.exists()) return null;
+      try {
+        return norm((jsonDecode(await f.readAsString()) as Map)['url'] as String);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    Future<Directory> claim(Directory d) async {
+      await d.create(recursive: true);
+      await File('${d.path}${Platform.pathSeparator}server.json').writeAsString(jsonEncode({'url': me}));
+      return d;
+    }
+
+    final first = await owner(base);
+    if (first == me) return base;
+    if (first == null) return claim(base); // today's folder: this server's
+    final safe = me.replaceAll(RegExp(r'^[a-z]+://'), '').replaceAll(RegExp(r'[^a-z0-9.]+'), '_');
+    final other = Directory('${base.path}-$safe');
+    return await owner(other) == me ? other : claim(other);
   }
 
   // ---- Delete once read (Settings > Downloads, this device): Never / Ask / Always (tablet bug, 2026-09-30) -----------
@@ -184,6 +234,16 @@ class Downloads extends ChangeNotifier {
   final Set<String> _finished = {}; // Always: read while a book was open - deleted once the reader closes
   final Set<String> askPending = {}; // Ask: finished, waiting to be asked about once no book is open
   int _readers = 0;
+
+  /// Ask, answered Keep: not asked about again (the read reaching Komga later asked a second time - code review,
+  /// 2026-09-30). Remembered until the download goes.
+  final Set<String> keptRead = {};
+  static const _keptKey = 'downloads.keptRead';
+
+  Future<void> keep(Iterable<String> ids) async {
+    keptRead.addAll(ids);
+    await (await SharedPreferences.getInstance()).setStringList(_keptKey, keptRead.toList());
+  }
 
   /// No book is open: the moment to ask about [askPending] (the app shows the question - main.dart).
   bool get noBookOpen => _readers == 0;
@@ -201,6 +261,7 @@ class Downloads extends ChangeNotifier {
   void bookFinished(String bookId) {
     if (deleteRead == DeleteRead.never || !isDownloaded(bookId)) return;
     if (deleteRead == DeleteRead.ask) {
+      if (keptRead.contains(bookId)) return; // asked already: Keep
       if (askPending.add(bookId)) notifyListeners();
       return;
     }
@@ -292,10 +353,12 @@ class Downloads extends ChangeNotifier {
   void pauseAll() {
     paused = true;
     notifyListeners();
+    SharedPreferences.getInstance().then((p) => p.setBool(_pausedKey, true));
   }
 
   void resumeAll() {
     paused = false;
+    SharedPreferences.getInstance().then((p) => p.setBool(_pausedKey, false));
     for (final j in queue) {
       if (j.state == JobState.paused) j.state = JobState.queued;
     }
@@ -365,6 +428,9 @@ class Downloads extends ChangeNotifier {
   }
 
   Future<void> _deleteFiles(String bookId) async {
+    if (keptRead.remove(bookId)) {
+      await (await SharedPreferences.getInstance()).setStringList(_keptKey, keptRead.toList());
+    }
     final s = store!;
     final dir = Directory(s.file(bookId).path);
     if (await dir.exists()) await dir.delete(recursive: true);
@@ -389,10 +455,26 @@ class Downloads extends ChangeNotifier {
         }
         if (next == null) break;
         if (!await _networkOk()) break; // Wi-Fi only, on mobile data: wait for Wi-Fi
+        if (!await _serverOk()) break; // Komga couldn't be reached: wait for it
         await _run(next);
       }
     } finally {
       if (session == _session) _running = false;
+    }
+  }
+
+  /// After Komga couldn't be reached: does it answer now? No: look again in [serverRecheck].
+  Future<bool> _serverOk() async {
+    if (!waitingForServer) return true;
+    try {
+      await _api!.me();
+      waitingForServer = false;
+      notifyListeners();
+      return true;
+    } catch (_) {
+      _serverTimer?.cancel();
+      _serverTimer = Timer(serverRecheck, _pump);
+      return false;
     }
   }
 
@@ -507,7 +589,11 @@ class Downloads extends ChangeNotifier {
         } else {
           final data = await api.pageBytes(job.bookId, p['number'] as int);
           await f.parent.create(recursive: true);
-          await f.writeAsBytes(data, flush: true);
+          // to a .part file first, renamed once it's all there: the app killed mid-write left a cut-off page that the
+          // next run counted as downloaded - unreadable for good (code review, 2026-09-30)
+          final part = File('${f.path}.part');
+          await part.writeAsBytes(data, flush: true);
+          await part.rename(f.path);
           bytes += data.length;
         }
         job
@@ -534,15 +620,26 @@ class Downloads extends ChangeNotifier {
         if (recentlyDone.length > 20) recentlyDone.removeLast();
       }
     } catch (e, st) {
-      // plain words for the Downloads screen ("Failed: can't reach Komga."); the room message is already plain
-      final room = '$e'.startsWith('Exception: not enough room');
-      final ex = explain(e, thing: 'book');
-      job
-        ..state = JobState.failed
-        ..error = room
-            ? '$e'.replaceFirst('Exception: ', '')
-            : ex.kind == ErrorKind.gone ? 'this book is no longer on Komga' : ex.reason;
-      if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
+      if (e is KomgaUnreachable) {
+        // Komga (or the network) gone for now: back in the queue - pages so far kept - and wait for it
+        job
+          ..state = JobState.queued
+          ..error = null;
+        waitingForServer = true;
+        _serverTimer?.cancel();
+        _serverTimer = Timer(serverRecheck, _pump);
+      } else {
+        // plain words for the Downloads screen ("Failed: this book is no longer on Komga."); the room message is
+        // already plain
+        final room = '$e'.startsWith('Exception: not enough room');
+        final ex = explain(e, thing: 'book');
+        job
+          ..state = JobState.failed
+          ..error = room
+              ? '$e'.replaceFirst('Exception: ', '')
+              : ex.kind == ErrorKind.gone ? 'this book is no longer on Komga' : ex.reason;
+        if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
+      }
     }
     await _saveQueue();
     notifyListeners();

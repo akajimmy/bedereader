@@ -31,6 +31,18 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   - A change made while an earlier one was still being sent could be marked sent without reaching Komga.
   - Signing out now clears the account's pins, reader settings and On deck list from the device, so they can't show
     under - or be sent to - the next account. They come back from Komga when you sign in again.
+- Downloads and offline (from a code review):
+  - A page cut off mid-download (the app closed or killed) was counted as downloaded and stayed unreadable. Pages
+    are now saved whole or not at all.
+  - When Komga or the network went away, every queued book failed in turn. Now they wait ("waiting for Komga") and
+    carry on by themselves when Komga answers. Offline mode is applied before the queue starts.
+  - Pause is kept across a restart (it showed Pause while a book stayed stuck as paused).
+  - Each server's downloads are kept apart: signing in to another server deleted the first one's unsent reading
+    progress. Today's downloads stay where they are, as the current server's.
+  - A deleted series, or one book Komga kept refusing, stopped the offline progress sync for everything after it.
+    Now they're skipped; a deleted series' downloads show "no longer on Komga".
+  - A page slower than 45 s no longer makes the app think Komga is down (no "go offline?" prompt for it).
+  - Delete once read = Ask no longer asks again about a book you chose to keep.
 
 **Added**
 - Download on Wi-Fi only (Settings > Downloads, Android; off by default): on mobile data the queue waits - a book

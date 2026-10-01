@@ -159,8 +159,10 @@ class Komga {
 
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
       String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
-    return await _get('/api/v1/series/$seriesId/books',
-        {'read_status': readStatus, 'sort': sort, 'page': page, 'size': size}) as Map<String, dynamic>;
+    final path = '/api/v1/series/$seriesId/books';
+    final r = await _get(path, {'read_status': readStatus, 'sort': sort, 'page': page, 'size': size});
+    if (r == null) throw KomgaError(404, path); // the series is gone (a null here broke the offline refresh - review)
+    return r as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> collections({String? libraryId, int page = 0, int size = 200}) async =>
@@ -256,7 +258,9 @@ class Komga {
         final r = await _http.get(Uri.parse(pageUrl(bookId, number)), headers: imageHeaders);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'page $number');
         return r.bodyBytes;
-      }, limit: pageTimeout);
+        // a page that runs out of time is slow, not Komga gone: it fails on its own (Retry on the page), without the
+        // "can't reach Komga" prompt or a switch to offline mode (code review, 2026-09-30)
+      }, limit: pageTimeout, slowIsNotDown: true);
 
   /// A small picture of a page (Komga makes it, about 300 px wide) - the reader's slider previews. Komga makes each
   /// one from the book file as it's asked, so on a slow share they can take seconds (2026-09-30: 0.2-3.7 s each, and

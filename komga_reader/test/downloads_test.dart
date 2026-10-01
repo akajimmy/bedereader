@@ -25,8 +25,10 @@ class FakeKomga extends Komga {
   @override
   Future<List<dynamic>> pages(String bookId) async =>
       [for (var n = 1; n <= 3; n++) {'number': n, 'mediaType': 'image/jpeg', 'sizeBytes': 100}];
+  bool pagesDown = false; // pages can't be fetched (Komga or the network gone)
   @override
   Future<Uint8List> pageBytes(String bookId, int number) async {
+    if (pagesDown) throw KomgaUnreachable(baseUrl);
     pageRequests++;
     if (slow) await Future<void>.delayed(const Duration(milliseconds: 20));
     onPage?.call(number);
@@ -212,6 +214,79 @@ void main() {
     expect(d.isDownloaded('B2'), isFalse);
     expect(await Directory(d.store!.file('B2').path).exists(), isFalse);
     expect(d.store!.progress['B2']!['synced'], false);
+  });
+
+  test("Komga out of reach: the books go back in the queue (not failed) and it carries on by itself once Komga answers "
+      '(code review, 2026-09-30)', () async {
+    Downloads.serverRecheck = const Duration(milliseconds: 30);
+    addTearDown(() => Downloads.serverRecheck = const Duration(seconds: 30));
+    final api = FakeKomga()..pagesDown = true;
+    await d.attach(api, root: dir);
+    api.up = false; // its "are you there" check fails too
+    await d.add([book('B1', 1), book('B2', 2)]);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(d.queue.map((j) => j.state), everyElement(JobState.queued), reason: 'waiting, not failed');
+    expect(d.waitingForServer, isTrue);
+
+    api
+      ..pagesDown = false
+      ..up = true; // back
+    for (var i = 0; i < 100 && !(d.isDownloaded('B1') && d.isDownloaded('B2')); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(d.isDownloaded('B1') && d.isDownloaded('B2'), isTrue);
+    expect(d.waitingForServer, isFalse);
+  });
+
+  test('Pause all is kept across a restart (the queue stays paused, with Resume)', () async {
+    await d.attach(FakeKomga(), root: dir);
+    d.pauseAll();
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    d.paused = false; // forgotten in memory: "the next start"
+    final api = FakeKomga();
+    await d.attach(api, root: dir);
+    expect(d.paused, isTrue);
+    await d.add([book('B1', 1)]);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(api.pageRequests, 0, reason: 'nothing downloads while paused');
+    d.resumeAll();
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+  });
+
+  test("each server's downloads in a folder of their own; today's folder belongs to the first server that uses it",
+      () async {
+    await File('${dir.path}${Platform.pathSeparator}index.json').writeAsString('{}'); // downloads from before
+    final a = await Downloads.serverFolder(dir, 'http://10.0.0.23:25600');
+    expect(a.path, dir.path, reason: 'the folder there already: claimed by this server, nothing moved');
+    final b = await Downloads.serverFolder(dir, 'https://komga.example.org/');
+    expect(b.path, isNot(dir.path));
+    expect(await File('${dir.path}${Platform.pathSeparator}index.json').exists(), isTrue);
+    expect((await Downloads.serverFolder(dir, 'http://10.0.0.23:25600/')).path, dir.path, reason: 'A again');
+    expect((await Downloads.serverFolder(dir, 'https://komga.example.org')).path, b.path, reason: 'B again');
+    await Directory(b.path).delete(recursive: true);
+  });
+
+  test("Delete once read = Ask, answered Keep: that book isn't asked about again", () async {
+    await d.attach(FakeKomga(), root: dir);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    await d.setDeleteRead(DeleteRead.ask);
+    addTearDown(() => d.setDeleteRead(DeleteRead.never));
+    d.bookFinished('B1');
+    expect(d.takeAskPending(), ['B1']);
+    await d.keep(['B1']); // the answer
+    d.bookFinished('B1'); // the read reaching Komga later says so again
+    expect(d.askPending, isEmpty);
+  });
+
+  test('pages are written whole: no half-written page files are left behind', () async {
+    await d.attach(FakeKomga(), root: dir);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    final files = Directory(d.store!.file('B1/pages').path).listSync().map((f) => f.path).toList();
+    expect(files.where((p) => p.endsWith('.part')), isEmpty);
+    expect(files.length, 3);
   });
 
   test('Wi-Fi only: on mobile data the queue waits and says so; back on Wi-Fi it carries on by itself', () async {
