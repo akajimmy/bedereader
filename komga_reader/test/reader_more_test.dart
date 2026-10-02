@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -251,12 +252,14 @@ void main() {
     };
 
     for (final MapEntry(key: how, value: cancel) in cancels.entries) {
-      testWidgets('a finger scrubbing, then $how: no page change, even when the finger lifts', (tester) async {
+      // a finger and a mouse drag reach the slider the same way (raw pointer events): both are tried
+      for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
+      testWidgets('dragging (${kind.name}), then $how: no page change, even when it lets go', (tester) async {
         await openLoaded(tester, pages: 20);
         await key(tester, LogicalKeyboardKey.enter); // controls
         final r = tester.getRect(find.byType(Slider));
         Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 19, r.center.dy);
-        final g = await tester.startGesture(at(0));
+        final g = await tester.startGesture(at(0), kind: kind);
         await g.moveTo(at(12));
         await tester.pump();
         expect(find.text('Page 13'), findsOneWidget);
@@ -268,13 +271,14 @@ void main() {
         expect(page(tester), 0.0, reason: 'cancelled: still on page 1');
         // and the slider works again afterwards (the cancelled finger isn't still holding it)
         await key(tester, LogicalKeyboardKey.enter);
-        final g2 = await tester.startGesture(at(0));
+        final g2 = await tester.startGesture(at(0), kind: kind);
         await g2.moveTo(at(5));
         await g2.up();
         await tester.pump(const Duration(milliseconds: 400));
         expect(page(tester), 5.0, reason: 'a scrub after the cancelled one goes where it was taken');
         await tester.pump(const Duration(seconds: 2));
       });
+      }
 
       testWidgets('the remote scrubbing, then $how: no page change', (tester) async {
         await openLoaded(tester, pages: 20);

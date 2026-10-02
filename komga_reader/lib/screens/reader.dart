@@ -1516,7 +1516,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           ),
           child: LayoutBuilder(builder: (context, box) => Stack(clipBehavior: Clip.none, children: [
             _sliderItself(shown, box.maxWidth),
-            if (_scrub != null) _startMark(box.maxWidth), // over the track, under the preview
+            // over the track, under the preview: while scrubbing, and whenever there's a page to go back to
+            if (_scrub != null || _returnTo != null) _startMark(box.maxWidth),
             if (_scrub != null) _preview(shown, box.maxWidth),
           ])),
         ),
@@ -1694,7 +1695,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _pc?.jumpToPage(target);
   }
 
-  /// While scrubbing: a line across the slider at the page it started from.
+  /// A line across the slider at the page to go back to - shown while scrubbing (the page it started from) and, after
+  /// a jump, all the time until it's forgotten (user, 2026-10-02).
   Widget _startMark(double width) {
     final accent = Theme.of(context).colorScheme.primary;
     return Positioned(
