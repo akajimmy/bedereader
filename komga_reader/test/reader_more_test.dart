@@ -240,6 +240,63 @@ void main() {
     expect(api.finished, [5], reason: 'jumped to the last page: read');
   });
 
+  // Esc / Back in the middle of a scrub cancel it: the page picked isn't gone to, the controls go away, and the next
+  // scrub works as usual (user, 2026-10-02)
+  group('cancelling a scrub', () {
+    // the ways out: Esc (keyboard), the remote's Back key, Android's system Back
+    final cancels = <String, Future<void> Function(WidgetTester)>{
+      'Esc': (t) => t.sendKeyEvent(LogicalKeyboardKey.escape),
+      "the remote's Back": (t) => t.sendKeyEvent(LogicalKeyboardKey.goBack, physicalKey: PhysicalKeyboardKey.escape),
+      "Android's Back": (t) => t.binding.handlePopRoute(),
+    };
+
+    for (final MapEntry(key: how, value: cancel) in cancels.entries) {
+      testWidgets('a finger scrubbing, then $how: no page change, even when the finger lifts', (tester) async {
+        await openLoaded(tester, pages: 20);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        final r = tester.getRect(find.byType(Slider));
+        Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 19, r.center.dy);
+        final g = await tester.startGesture(at(0));
+        await g.moveTo(at(12));
+        await tester.pump();
+        expect(find.text('Page 13'), findsOneWidget);
+        await cancel(tester);
+        await tester.pump();
+        expect(find.byType(Slider), findsNothing, reason: 'the controls are gone');
+        await g.up();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 0.0, reason: 'cancelled: still on page 1');
+        // and the slider works again afterwards (the cancelled finger isn't still holding it)
+        await key(tester, LogicalKeyboardKey.enter);
+        final g2 = await tester.startGesture(at(0));
+        await g2.moveTo(at(5));
+        await g2.up();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 5.0, reason: 'a scrub after the cancelled one goes where it was taken');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets('the remote scrubbing, then $how: no page change', (tester) async {
+        await openLoaded(tester, pages: 20);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await key(tester, LogicalKeyboardKey.arrowDown); // the bottom bar
+        await key(tester, LogicalKeyboardKey.arrowRight);
+        expect(focused('ctl-slider'), isTrue);
+        await key(tester, LogicalKeyboardKey.enter); // scrub
+        for (var i = 0; i < 6; i++) {
+          await key(tester, LogicalKeyboardKey.arrowRight);
+        }
+        expect(find.text('Page 7'), findsOneWidget);
+        await cancel(tester);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(Slider), findsNothing, reason: 'the controls are gone');
+        expect(page(tester), 0.0, reason: 'cancelled: still on page 1');
+        expect(find.byType(ReaderScreen), findsOneWidget, reason: 'the book stays open');
+        await tester.pump(const Duration(seconds: 2));
+      });
+    }
+  });
+
   // ---- 4
   testWidgets('zoom keys: + zooms in a step at a time, - back out to fit; in fit width they do nothing', (tester) async {
     await openLoaded(tester);
