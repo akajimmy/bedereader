@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- Reader, the page slider: while you pick a page, a line marks the page you started from, and a drag that comes close
+  to it snaps onto it - so after looking at another page you can get straight back. The mark stays after you jump away
+  (it still shows the page you came from the next time you scrub) until you're back on that page.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
