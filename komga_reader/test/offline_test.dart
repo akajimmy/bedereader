@@ -9,6 +9,7 @@ import 'package:komga_reader/offline/store.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/helpers.dart';
 import 'support/offline_store.dart';
 
 List<String> ids(Map<String, dynamic> page) => [for (final b in page['content'] as List) b['id'] as String];
@@ -24,7 +25,7 @@ void main() {
     store = await buildStore(dir);
     api = OfflineKomga(store);
   });
-  tearDown(() => dir.delete(recursive: true));
+  tearDown(() => deleteTemp(dir));
 
   test('libraries and series show only what is downloaded, with counts for the downloaded books', () async {
     expect((await api.libraries()).map((l) => l['name']), ['Events']);

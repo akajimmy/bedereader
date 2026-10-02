@@ -23,7 +23,7 @@ void main() {
   });
   tearDown(() async {
     d.paused = false;
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   /// Pause and wait (on a real clock) until the worker has finished its last save, so the folder can go.

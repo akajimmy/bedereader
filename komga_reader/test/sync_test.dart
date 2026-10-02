@@ -105,7 +105,7 @@ void main() {
     sync.reset();
     conn.reset();
     await Future<void>.delayed(const Duration(milliseconds: 20));
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   OfflineKomga offlineApi() => OfflineKomga(d.store!, baseUrl: 'offline');

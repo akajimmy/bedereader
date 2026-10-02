@@ -9,6 +9,7 @@ import 'package:komga_reader/main.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/sync.dart';
+import 'helpers.dart';
 
 /// The real app shell (main.dart's KomgaReaderApp) builds its own server client from the saved sign-in - not a fake.
 /// [pumpApp] builds it with this behind it instead: an empty Komga (no libraries, empty lists, no client settings),
@@ -54,7 +55,7 @@ Directory appStorage(WidgetTester tester) {
     Downloads.instance.reset();
     ProgressSync.instance.reset();
     Connection.instance.reset();
-    await tester.runAsync(() => dir.delete(recursive: true));
+    await tester.runAsync(() => deleteTemp(dir));
   });
   return dir;
 }
