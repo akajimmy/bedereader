@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -5,6 +6,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_curl.dart';
+
+/// Deletes a test's temp folder after it. Windows can hold a file just written for a moment (a virus scanner,
+/// the indexer): "being used by another process" failed a passing test in its tear-down (2026-10-02). So it tries
+/// again for a while, and if the folder still can't go, says so and leaves it rather than failing the test.
+Future<void> deleteTemp(Directory dir) async {
+  for (var i = 0; ; i++) {
+    try {
+      if (await dir.exists()) await dir.delete(recursive: true);
+      return;
+    } on FileSystemException catch (e) {
+      if (i >= 20) {
+        // ignore: avoid_print
+        print('left behind (still in use): ${dir.path} - $e');
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+  }
+}
 
 /// Sets the test window to [size] logical pixels (device pixel ratio 1), put back when the test ends.
 void setView(WidgetTester tester, Size size) {

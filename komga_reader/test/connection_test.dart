@@ -11,6 +11,7 @@ import 'package:komga_reader/widgets/connection_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/library_server.dart';
+import 'support/helpers.dart';
 import 'support/no_network.dart';
 
 /// Phase 4: when Komga can't be reached the app asks (or, with the Automatic setting, switches by itself); once
@@ -35,7 +36,7 @@ void main() {
   });
   tearDown(() async {
     conn.reset();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('Komga answering: nothing happens', () {

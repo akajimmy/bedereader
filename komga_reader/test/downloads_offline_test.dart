@@ -58,7 +58,7 @@ void main() {
     d.reset();
     sync.reset();
     conn.reset();
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   Future<void> settle() => waitUntil(

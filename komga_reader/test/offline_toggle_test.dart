@@ -10,6 +10,7 @@ import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/library_server.dart';
+import 'support/helpers.dart';
 import 'support/no_network.dart';
 
 void main() {
@@ -22,7 +23,7 @@ void main() {
   });
   tearDown(() async {
     await conn.setForcedOffline(false);
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('offline mode switches every screen to the downloaded books, holds downloads, and is remembered', () async {

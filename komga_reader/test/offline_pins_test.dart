@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/library_server.dart';
 import 'support/no_network.dart';
+import 'support/helpers.dart';
 import 'support/offline_store.dart';
 
 void main() {
@@ -43,6 +44,6 @@ void main() {
 
     Connection.instance.forcedOffline = false;
     Pins.instance.items = [];
-    await tester.runAsync(() => dir.delete(recursive: true));
+    await tester.runAsync(() => deleteTemp(dir));
   });
 }

@@ -42,7 +42,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     d.paused = false;
-    await dir.delete(recursive: true);
+    await deleteTemp(dir);
   });
 
   test('a queued book downloads page by page, with its place in the tree, and shows up offline', () async {
