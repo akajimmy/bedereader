@@ -1111,6 +1111,37 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('slider: after a jump away, an ordinary page turn forgets the way back - reading on from there '
+        '(user, 2026-10-02)', (tester) async {
+      await openLoaded(tester, pages: 200);
+      await key(tester, LogicalKeyboardKey.enter); // controls
+      final r = tester.getRect(find.byType(Slider));
+      Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 199, r.center.dy);
+      double markX() => tester.getRect(find.byKey(const ValueKey('scrub-start'))).center.dx;
+      var g = await tester.startGesture(at(0));
+      await g.moveTo(at(100));
+      await g.up();
+      await tester.pump();
+      expect(page(tester), 100.0);
+      g = await tester.startGesture(at(100));
+      await tester.pump();
+      expect(markX(), closeTo(at(0).dx, 1), reason: 'the way back is kept over the jump');
+      await g.up();
+      await tester.pump();
+      await key(tester, LogicalKeyboardKey.escape); // controls away
+      await tester.pump();
+      await key(tester, LogicalKeyboardKey.arrowRight); // a page turn: reading on from here
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(page(tester), 101.0);
+      await key(tester, LogicalKeyboardKey.enter);
+      g = await tester.startGesture(at(101));
+      await g.moveTo(at(150));
+      await tester.pump();
+      expect(markX(), closeTo(at(101).dx, 1), reason: 'forgotten: the mark is where the reader is now');
+      await g.up();
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('slider: a mark where scrubbing started, kept after a jump away; a drag near it snaps back to it, '
         'and once back the mark follows the reader again (user, 2026-10-02)', (tester) async {
       await openLoaded(tester, pages: 200); // ~4 px a page on the slider: hard to hit one page by hand

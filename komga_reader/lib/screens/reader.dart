@@ -61,9 +61,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int? _scrub; // page picked on the slider but not jumped to yet
   bool _scrubbing = false; // remote is driving the slider
   // Where the reader was before the slider took them elsewhere - marked on the slider while scrubbing, and a drag near
-  // it snaps to it, so after a look at another page they can get back (user, 2026-10-02). Kept over several jumps;
-  // gone once that page is reached again (however) or another book opens.
+  // it snaps to it, so after a look at another page they can get back (user, 2026-10-02). Kept over slider jumps
+  // only: an ordinary page turn means reading on from here, so it's forgotten (else reading on from a page looked at
+  // kept the old place for good - user, 2026-10-02); also once that page is reached again, or another book opens.
   int? _returnTo;
+  int? _jumpingTo; // the page a slider jump is going to: its page change isn't a page turn
   int get _scrubOrigin => _returnTo ?? _index.clamp(0, _last);
   int? _startAtEnd; // page to show from its bottom/right end (came back from the next page)
   bool _loading = true;
@@ -322,7 +324,13 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   // ---- progress: saved 1.5 s after the page settles, and on leaving
   void _onPage(int i) {
     _awake();
-    setState(() { _index = i; _zoomed = false; if (i == _returnTo) _returnTo = null; }); // back where it was
+    final jump = i == _jumpingTo;
+    _jumpingTo = null;
+    setState(() {
+      _index = i;
+      _zoomed = false;
+      if (!jump || i == _returnTo) _returnTo = null; // read on from here, or back where it was
+    });
     if (i <= _last) _loader?.around(i);
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
@@ -1678,6 +1686,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (target == _index) return;
     _finishCurlNow();
     if (_index <= _last) _returnTo ??= _index;
+    _jumpingTo = target;
     _pc?.jumpToPage(target);
   }
 
