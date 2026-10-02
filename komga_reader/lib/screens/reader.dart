@@ -60,6 +60,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   bool _menu = false; // controls shown
   int? _scrub; // page picked on the slider but not jumped to yet
   bool _scrubbing = false; // remote is driving the slider
+  // Where the reader was before the slider took them elsewhere - marked on the slider while scrubbing, and a drag near
+  // it snaps to it, so after a look at another page they can get back (user, 2026-10-02). Kept over several jumps;
+  // gone once that page is reached again (however) or another book opens.
+  int? _returnTo;
+  int get _scrubOrigin => _returnTo ?? _index.clamp(0, _last);
   int? _startAtEnd; // page to show from its bottom/right end (came back from the next page)
   bool _loading = true;
   bool _turned = false; // progress is only saved once a page has been turned in this visit
@@ -255,7 +260,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
       loader.around(start);
       setState(() {
-        _book = fresh; _pages = pages; _index = start; _loader = loader;
+        _book = fresh; _pages = pages; _index = start; _loader = loader; _returnTo = null;
         _openedAt = start; _turned = false; _zoomed = false; _bookFit = null;
         _pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
         _loading = false;
@@ -317,7 +322,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   // ---- progress: saved 1.5 s after the page settles, and on leaving
   void _onPage(int i) {
     _awake();
-    setState(() { _index = i; _zoomed = false; });
+    setState(() { _index = i; _zoomed = false; if (i == _returnTo) _returnTo = null; }); // back where it was
     if (i <= _last) _loader?.around(i);
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
@@ -899,7 +904,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (_scrubbing) {
         final target = _scrub ?? _index;
         setState(() { _scrubbing = false; _scrub = null; });
-        if (target != _index) _pc?.jumpToPage(target);
+        _sliderJump(target);
       } else {
         _thumbShown = null; // not the last scrub's page
         setState(() { _scrubbing = true; _scrub = _index.clamp(0, _last); });
@@ -1499,6 +1504,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           ),
           child: LayoutBuilder(builder: (context, box) => Stack(clipBehavior: Clip.none, children: [
             _sliderItself(shown, box.maxWidth),
+            if (_scrub != null) _startMark(box.maxWidth), // over the track, under the preview
             if (_scrub != null) _preview(shown, box.maxWidth),
           ])),
         ),
@@ -1512,8 +1518,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
   /// of it and its number, over the thumb.
   Widget _preview(int shown, double width) {
-    final along = _sliderInset + (_last == 0 ? 0 : shown / _last) * (width - 2 * _sliderInset);
-    final x = _rtl ? width - along : along; // right to left: page 1 at the right end
+    final x = _xOf(shown, width);
     if (!_settings.display.pagePreviews) {
       // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
       const w = 96.0;
@@ -1656,25 +1661,64 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     return ((_rtl ? 1 - along : along) * _last).round();
   }
 
+  /// Where page [i] sits on the slider (right to left: page 1 at the right end).
+  double _xOf(int i, double width) {
+    final along = _sliderInset + (_last == 0 ? 0 : i / _last) * (width - 2 * _sliderInset);
+    return _rtl ? width - along : along;
+  }
+
+  static const _snap = 14.0; // a finger this close to the start mark lands on it
+
+  /// The page under a finger dragging along the slider: the start mark's page when it's close to it.
+  int _dragPageAt(double x, double width) =>
+      (x - _xOf(_scrubOrigin, width)).abs() <= _snap ? _scrubOrigin : _pageAt(x, width);
+
+  /// Off to the page picked on the slider - remembering where the reader was, to come back to.
+  void _sliderJump(int target) {
+    if (target == _index) return;
+    _finishCurlNow();
+    if (_index <= _last) _returnTo ??= _index;
+    _pc?.jumpToPage(target);
+  }
+
+  /// While scrubbing: a line across the slider at the page it started from.
+  Widget _startMark(double width) {
+    final accent = Theme.of(context).colorScheme.primary;
+    return Positioned(
+      left: _xOf(_scrubOrigin, width) - 1.5,
+      top: 0,
+      bottom: 0,
+      width: 3,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            key: const ValueKey('scrub-start'),
+            height: 22,
+            decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(1.5),
+                boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 2)]),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _sliderItself(int shown, double width) => Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: (e) {
           if (_sliderPointer != null) return; // one finger scrubs
           _sliderPointer = e.pointer;
           _thumbShown = null; // not the last scrub's page
-          setState(() => _scrub = _pageAt(e.localPosition.dx, width));
+          setState(() => _scrub = _dragPageAt(e.localPosition.dx, width));
         },
         onPointerMove: (e) {
           if (e.pointer != _sliderPointer) return;
-          final p = _pageAt(e.localPosition.dx, width);
+          final p = _dragPageAt(e.localPosition.dx, width);
           if (p != _scrub) setState(() => _scrub = p);
         },
         onPointerUp: (e) {
           if (e.pointer != _sliderPointer) return;
           _sliderPointer = null;
-          final target = _pageAt(e.localPosition.dx, width);
-          _finishCurlNow();
-          if (target != _index) _pc?.jumpToPage(target);
+          _sliderJump(_dragPageAt(e.localPosition.dx, width));
           setState(() => _scrub = null);
         },
         onPointerCancel: (e) {
