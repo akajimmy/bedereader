@@ -780,6 +780,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void _showControls() => setState(() { _menu = true; _scrubbing = false; _scrub = null; });
 
   void _hideControls() {
+    // a finger still on the slider is let go of: hidden by Esc / Back mid-scrub, the scrub is cancelled - its lift
+    // still reaches the slider's listener (Flutter sends a pointer's events where it went down) and jumped to the page
+    // picked (user, 2026-10-02)
+    _sliderPointer = null;
     setState(() { _menu = false; _scrub = null; _scrubbing = false; });
     _keys.requestFocus();
   }

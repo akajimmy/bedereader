@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- Reader: Esc or Back while dragging along the page slider cancels the pick - the controls close and you stay on your
+  page. Lifting the finger afterwards still jumped to the page picked.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
