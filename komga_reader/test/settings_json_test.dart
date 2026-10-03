@@ -41,7 +41,8 @@ void main() {
     const changed = DisplayPrefs(pageTurn: PageTurn.curl, rotation: Rotation.landscape, clock: ShowWhen.always,
         progressBar: true, doubleTapZoom: false, volumeKeys: false, midBook: MidBook.keep,
         background: ReaderBackground.grey, screenOn: 20, posterSize: PosterSize.small, posterTitleOnly: true,
-        nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal);
+        nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
+        pagePreviews: false, pageStrip: true);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
       ('rotation', (d) => d.rotation, Rotation.landscape, Rotation.auto),
@@ -59,6 +60,8 @@ void main() {
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
       ('textScale', (d) => d.textScale, 1.15, 1.0),
       ('accent', (d) => d.accent, Accent.teal, Accent.blue),
+      ('pagePreviews', (d) => d.pagePreviews, false, true),
+      ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
     final old = DisplayPrefs.fromJson({'night': true}); // a save from before all of these

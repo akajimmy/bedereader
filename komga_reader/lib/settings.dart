@@ -190,8 +190,11 @@ class DisplayPrefs {
       this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true});
+      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false});
   final bool night;
+  /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
+  /// button (user, 2026-10-02)
+  final bool pageStrip;
   /// reader: a picture of the page over the slider's thumb while picking one. Komga makes each from the book file as
   /// it's asked, so on a slow link to the books they lag (user, 2026-09-30): off, just the page number.
   final bool pagePreviews;
@@ -249,9 +252,9 @@ class DisplayPrefs {
           bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pagePreviews}) =>
+          bool? pagePreviews, bool? pageStrip}) =>
       DisplayPrefs(
-          pagePreviews: pagePreviews ?? this.pagePreviews,
+          pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
           nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
           nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
           rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
@@ -267,7 +270,7 @@ class DisplayPrefs {
       'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name, 'pagePreviews': pagePreviews};
+      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -294,7 +297,8 @@ class DisplayPrefs {
         nightTo: minutes(j['nightTo'], 7 * 60),
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
         accent: pick(Accent.values, j['accent'], Accent.blue),
-        pagePreviews: j['pagePreviews'] != false); // on unless switched off
+        pagePreviews: j['pagePreviews'] != false, // on unless switched off
+        pageStrip: j['pageStrip'] == true);
   }
 }
 

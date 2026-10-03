@@ -1217,6 +1217,52 @@ void main() {
     group('page strip', () {
       const strip = ValueKey('page-strip');
       Finder tile(int i) => find.byKey(ValueKey('strip-$i'));
+      // open or closed is a device setting (AppSettings is shared by the tests): closed after each
+      tearDown(() {
+        final s = AppSettings.instance;
+        s.setDisplay(s.display.copyWith(pageStrip: false));
+      });
+
+      testWidgets('once opened it stays: the controls hidden and shown again after reading on, it is there, on the '
+          'page being read; closing the book and opening another, still there - until the button closes it '
+          '(user, 2026-10-02)', (tester) async {
+        await openLoaded(tester, pages: 40);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await tester.tap(tile(5)); // browsed there, and stays
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 5.0);
+        await key(tester, LogicalKeyboardKey.escape); // controls away
+        await tester.pump();
+        expect(find.byKey(strip), findsNothing, reason: 'not over the page while reading');
+        for (var i = 0; i < 12; i++) { // reading on, to page 18
+          await key(tester, LogicalKeyboardKey.arrowRight);
+          await tester.pump(const Duration(milliseconds: 400));
+        }
+        expect(page(tester), 17.0);
+        await key(tester, LogicalKeyboardKey.enter); // controls again
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(strip), findsOneWidget, reason: 'still open');
+        final now = tester.getRect(tile(17));
+        final screen = tester.getRect(find.byKey(strip));
+        expect(now.left >= screen.left && now.right <= screen.right, isTrue, reason: 'page 18 in view: $now in $screen');
+        expect(now.center.dx, closeTo(screen.center.dx, now.width), reason: 'in the middle of the strip');
+
+        // the book closed, another opened: still open there
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpWidget(const SizedBox());
+        await openLoaded(tester, pages: 40);
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.pump();
+        expect(find.byKey(strip), findsOneWidget, reason: 'kept on the device, book after book');
+        await tester.tap(find.byTooltip('Hide pages'));
+        await tester.pump();
+        expect(find.byKey(strip), findsNothing);
+        expect(AppSettings.instance.display.pageStrip, isFalse, reason: 'closed with the button: closed for good');
+        await tester.pump(const Duration(seconds: 2));
+      });
 
       testWidgets('the Pages button opens it at the page shown; a page tapped is gone to and the strip stays, the way '
           'back marked; the button closes it', (tester) async {
@@ -1255,7 +1301,7 @@ void main() {
           setView(tester, Size(width, 800));
           await openLoaded(tester, pages: 40);
           await key(tester, LogicalKeyboardKey.enter);
-          await tester.tap(find.byTooltip('Show pages'));
+          if (!AppSettings.instance.display.pageStrip) await tester.tap(find.byTooltip('Show pages')); // (stays open)
           await tester.pump();
           await tester.pump();
           final first = tester.getRect(tile(0));
