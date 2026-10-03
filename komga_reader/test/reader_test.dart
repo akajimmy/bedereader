@@ -211,9 +211,10 @@ void main() {
     }
     expect(focused('ctl-delete'), isTrue); // stops at the right end
     await key(tester, LogicalKeyboardKey.arrowDown);
-    expect(focused('ctl-nextBook'), isTrue); // same position in the bottom bar (5th of 5)
-    await key(tester, LogicalKeyboardKey.arrowLeft);
+    // same position in the bottom bar (5th of 6: previous book, slider, pages, image, reader, next book)
     expect(focused('ctl-reader'), isTrue);
+    await key(tester, LogicalKeyboardKey.arrowLeft);
+    expect(focused('ctl-image'), isTrue);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focused('ctl-read'), isTrue); // back up, same position (4th)
     await key(tester, LogicalKeyboardKey.arrowUp);
@@ -1211,6 +1212,106 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
     }
+
+    // the page strip (user, 2026-10-02): a film strip of the pages above the bottom bar, behind the Pages button
+    group('page strip', () {
+      const strip = ValueKey('page-strip');
+      Finder tile(int i) => find.byKey(ValueKey('strip-$i'));
+
+      testWidgets('the Pages button opens it at the page shown; a page tapped is gone to and the strip stays, the way '
+          'back marked; the button closes it', (tester) async {
+        await openLoaded(tester, pages: 40);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        expect(find.byKey(strip), findsNothing, reason: 'closed until asked for');
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(strip), findsOneWidget);
+        expect(tile(0), findsOneWidget, reason: 'opened at page 1, the page shown');
+        await until(tester, () => (api as ImageKomga).thumbsAsked.isNotEmpty);
+        final asked = (api as ImageKomga).thumbsAsked;
+        // ~11 tiles on an 800-wide screen, plus the few the list builds just past its edge; pages 1-3 are loaded
+        // already (no thumbnail needed) - not the whole book
+        expect(asked.every((n) => n <= 16), isTrue, reason: 'only pages on or near the strip are asked for: $asked');
+        expect(asked.toSet().length, asked.length, reason: 'none twice');
+
+        await tester.tap(tile(5));
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 5.0, reason: 'page 6');
+        expect(find.byKey(strip), findsOneWidget, reason: 'the strip stays');
+        expect(find.byTooltip('Hide pages'), findsOneWidget, reason: 'and the controls');
+        final mark = tester.getRect(find.byKey(const ValueKey('strip-way-back')));
+        expect(mark.center.dx, closeTo(tester.getRect(tile(0)).center.dx, 1), reason: 'the way back: under page 1');
+
+        await tester.tap(find.byTooltip('Hide pages'));
+        await tester.pump();
+        expect(find.byKey(strip), findsNothing);
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets('thumbnails are up to 100 px tall, smaller on a narrow screen so at least 8 always fit across',
+          (tester) async {
+        for (final (width, height) in [(1200.0, 100.0), (400.0, null)]) {
+          setView(tester, Size(width, 800));
+          await openLoaded(tester, pages: 40);
+          await key(tester, LogicalKeyboardKey.enter);
+          await tester.tap(find.byTooltip('Show pages'));
+          await tester.pump();
+          await tester.pump();
+          final first = tester.getRect(tile(0));
+          if (height != null) expect(first.height, closeTo(height, 0.5), reason: '$width wide: full size');
+          expect(first.height, lessThanOrEqualTo(100.5));
+          expect(tester.getRect(tile(7)).right, lessThanOrEqualTo(width), reason: '$width wide: 8 pages fit');
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpWidget(const SizedBox());
+        }
+      });
+
+      testWidgets('remote: Up from the bottom bar into the strip on the page shown, Right along it, OK goes there '
+          '(strip stays), Down back to the bottom bar', (tester) async {
+        await openLoaded(tester, pages: 40);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await key(tester, LogicalKeyboardKey.arrowDown); // the bottom bar
+        expect(focused('ctl-prevBook'), isTrue);
+        await key(tester, LogicalKeyboardKey.arrowUp); // into the strip
+        expect(focused('ctl-strip'), isTrue);
+        for (var i = 0; i < 3; i++) {
+          await key(tester, LogicalKeyboardKey.arrowRight);
+        }
+        expect(page(tester), 0.0, reason: 'moving along the strip turns nothing');
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 3.0, reason: 'OK: page 4');
+        expect(find.byKey(strip), findsOneWidget);
+        expect(focused('ctl-strip'), isTrue, reason: 'still in the strip');
+        await key(tester, LogicalKeyboardKey.arrowDown);
+        expect(focused('ctl-pages'), isTrue, reason: 'down: the Pages button below');
+        await key(tester, LogicalKeyboardKey.arrowUp);
+        await key(tester, LogicalKeyboardKey.arrowUp);
+        expect(focused('ctl-close'), isTrue, reason: 'up from the strip: the top bar');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets('right to left: page 1 at the right end, and Left goes on through the book', (tester) async {
+        ReaderServer.direction = 'RIGHT_TO_LEFT';
+        addTearDown(() => ReaderServer.direction = 'LEFT_TO_RIGHT');
+        await openLoaded(tester, pages: 40);
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        expect(tester.getRect(tile(0)).left, greaterThan(tester.getRect(tile(1)).left), reason: 'page 1 right of 2');
+        await key(tester, LogicalKeyboardKey.arrowDown);
+        await key(tester, LogicalKeyboardKey.arrowUp);
+        await key(tester, LogicalKeyboardKey.arrowLeft);
+        await key(tester, LogicalKeyboardKey.arrowLeft);
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(page(tester), 2.0, reason: 'two to the left: page 3');
+        await tester.pump(const Duration(seconds: 2));
+      });
+    });
   });
 
   testWidgets('Android: volume down turns forward, up back; switched off, or on a PC, they stay volume keys',

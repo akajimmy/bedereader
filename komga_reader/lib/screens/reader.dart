@@ -49,7 +49,7 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, image, reader, nextBook }
+enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, pages, image, reader, nextBook, strip }
 
 class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderStateMixin {
   late dynamic _book = widget.book;
@@ -166,6 +166,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _disposeScrolls();
     _keys.dispose();
     _sliderInner.dispose();
+    _stripScroll.dispose();
     for (final n in _ctl.values) {
       n.dispose();
     }
@@ -792,27 +793,37 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   List<_Ctl> get _topBar => [_Ctl.close, _Ctl.fit, _Ctl.night, if (isDesktop) _Ctl.fullscreen, _Ctl.read, _Ctl.delete];
   List<_Ctl> get _bottomBar => [
         _Ctl.prevBook,
-        if (_pages.length > 1) _Ctl.slider,
+        if (_pages.length > 1) ...[_Ctl.slider, _Ctl.pages],
         if (_seriesId != null) _Ctl.image,
         _Ctl.reader, _Ctl.nextBook,
       ];
+  bool get _stripShown => _stripOpen && _pages.length > 1;
 
   /// Remote in the controls (user's layout): Left/Right move along a bar and stop at its ends; Up/Down switch between
   /// the top and bottom bar (keeping the position as near as possible). Up from the top bar or Down from the bottom
   /// bar leaves the bars ("nothing selected", where OK hides the controls). From nothing selected: Up or Left/Right
   /// -> top bar, Down -> bottom bar.
+  /// With the page strip open it's a row of its own, just above the bottom bar: Up from the bottom bar goes into it,
+  /// Down from it to the bottom bar, Up from it to the top bar (Left / Right in it are the strip's own, _onStripKey).
   void _move({int dx = 0, int dy = 0}) {
     final top = _topBar, bottom = _bottomBar;
     final inTop = top.indexWhere((c) => _ctl[c]!.hasFocus);
     final inBottom = bottom.indexWhere((c) => _ctl[c]!.hasFocus);
     _Ctl? target;
-    if (inTop < 0 && inBottom < 0) {
+    if (_ctl[_Ctl.strip]!.hasFocus) {
+      if (dy == 0) return;
+      target = dy < 0 ? top.first : bottom[bottom.indexOf(_Ctl.pages).clamp(0, bottom.length - 1)];
+    } else if (inBottom >= 0 && dy < 0 && dx == 0 && _stripShown) {
+      _stripFocus(); // up from the bottom bar: into the strip, on the page shown
+      return;
+    } else if (inTop < 0 && inBottom < 0) {
       target = dy > 0 ? bottom.first : top.first;
     } else {
       final bar = inTop >= 0 ? top : bottom, i = inTop >= 0 ? inTop : inBottom;
       if (dx != 0) {
         target = bar[(i + dx).clamp(0, bar.length - 1)];
       } else if (inTop >= 0) {
+        if (dy > 0 && _stripShown) { _stripFocus(); return; } // down from the top bar: the strip comes first
         target = dy > 0 ? bottom[i.clamp(0, bottom.length - 1)] : null;
       } else {
         target = dy < 0 ? top[i.clamp(0, top.length - 1)] : null;
@@ -1435,7 +1446,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       ),
       Positioned(
         left: 0, right: 0, bottom: 0,
-        child: Material(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (_stripShown) _filmStrip(bar),
+        Material(
           color: bar,
           child: Theme(
           data: _controlsTheme(context),
@@ -1459,6 +1472,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                       // right to left: page 1 at the right end of the slider
                       : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
                 ),
+                if (_pages.length > 1)
+                  _iconCtl(node: _ctl[_Ctl.pages]!, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
+                      label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip),
                 if (_seriesId != null)
                   _iconCtl(node: _ctl[_Ctl.image]!, icon: Icons.settings_brightness, label: 'Image settings',
                       onPressed: () => showImagePanel(context,
@@ -1475,8 +1491,142 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           ),
           ),
         ),
+        ]),
       ),
     ];
+  }
+
+  // ---- the page strip (user, 2026-10-02): a film strip of the book's pages above the bottom bar, opened by the
+  // Pages button. A page tapped (or OK on it) is gone to; the strip and the controls stay up. Right to left, page 1
+  // is at the right.
+  bool _stripOpen = false;
+  int? _stripAt; // the page the remote is on in the strip
+  final _stripScroll = ScrollController();
+  static const _stripGap = 6.0, _stripMaxHeight = 100.0, _stripAtLeast = 8, _stripAspect = 2 / 3;
+
+  /// A thumbnail's width for a strip [width] wide: at most ~100 px tall, smaller so at least 8 always fit across.
+  double _tileWidth(double width) =>
+      math.min(_stripMaxHeight * _stripAspect, (width - 16 - (_stripAtLeast - 1) * _stripGap) / _stripAtLeast);
+
+  void _toggleStrip() {
+    setState(() => _stripOpen = !_stripOpen);
+    if (_stripOpen) _stripCentre(_index.clamp(0, _last), jump: true);
+  }
+
+  /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow).
+  void _stripCentre(int i, {bool jump = false}) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stripScroll.hasClients) return;
+      final p = _stripScroll.position;
+      final tile = _tileWidth(p.viewportDimension + 16) + _stripGap; // the list sits inside 8 px of padding each side
+      final target = (i * tile - (p.viewportDimension - tile) / 2).clamp(0.0, p.maxScrollExtent);
+      jump ? _stripScroll.jumpTo(target) : _stripScroll.animateTo(target,
+          duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
+    });
+  }
+
+  void _stripFocus() {
+    _stripAt = _index.clamp(0, _last);
+    _ctl[_Ctl.strip]!.requestFocus();
+    _stripCentre(_stripAt!);
+    setState(() {});
+  }
+
+  void _stripGo(int i) {
+    _stripAt = i;
+    _sliderJump(i); // as the slider: the way back is kept
+    setState(() {});
+  }
+
+  /// The remote in the strip: Left / Right along it (on screen: right to left, Right is back a page), OK goes there.
+  /// Up / Down are the controls' own (_move).
+  KeyEventResult _onStripKey(FocusNode _, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    final at = _stripAt ?? _index.clamp(0, _last);
+    if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowRight) {
+      final step = (k == LogicalKeyboardKey.arrowRight) != _rtl ? 1 : -1;
+      setState(() => _stripAt = (at + step).clamp(0, _last));
+      _stripCentre(_stripAt!);
+      return KeyEventResult.handled;
+    }
+    if (_isOk(k)) {
+      if (e is KeyDownEvent) _stripGo(at);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  Widget _filmStrip(Color bar) {
+    final accent = Theme.of(context).colorScheme.primary;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final node = _ctl[_Ctl.strip]!;
+    return Focus(
+      focusNode: node,
+      onKeyEvent: _onStripKey,
+      onFocusChange: (_) => setState(() {}),
+      child: Material(
+        key: const ValueKey('page-strip'),
+        color: bar,
+        child: LayoutBuilder(builder: (context, box) {
+          final w = _tileWidth(box.maxWidth), h = w / _stripAspect;
+          return SizedBox(
+            height: h + 16 + 10, // room for the way-back mark under a tile
+            child: ListView.builder(
+              controller: _stripScroll,
+              scrollDirection: Axis.horizontal,
+              reverse: _rtl,
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              itemExtent: w + _stripGap,
+              itemCount: _last + 1,
+              itemBuilder: (context, i) {
+                final current = i == _index;
+                final remote = node.hasFocus && i == (_stripAt ?? _index);
+                return Padding(
+                  padding: const EdgeInsetsDirectional.only(end: _stripGap),
+                  child: Column(children: [
+                    GestureDetector(
+                      key: ValueKey('strip-$i'),
+                      onTap: () => _stripGo(i),
+                      child: Container(
+                        width: w, height: h,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1C1D22),
+                          border: Border.all(
+                              color: remote ? Colors.white : current ? accent : Colors.white12,
+                              width: remote || current ? 3 : 1),
+                        ),
+                        child: Stack(fit: StackFit.expand, children: [
+                          Builder(builder: (context) {
+                            final bytes = _thumbFor(i, queued: true);
+                            if (bytes == null) return const SizedBox.shrink();
+                            return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
+                                cacheHeight: (h * dpr).round(),
+                                errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24));
+                          }),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              color: const Color(0xB0000000),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11)),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    // the page to go back to (as on the slider)
+                    if (i == _returnTo)
+                      Container(key: const ValueKey('strip-way-back'), margin: const EdgeInsets.only(top: 4),
+                          width: w * 0.6, height: 3, color: accent),
+                  ]),
+                );
+              },
+            ),
+          );
+        }),
+      ),
+    );
   }
 
   /// The control the remote is on gets a thick accent outline and a strong accent fill, so it can be seen from the
@@ -1603,32 +1753,51 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   final Set<int> _thumbsLoading = {};
   int? _thumbWanted; // the page to fetch next, when a slot is free
   Uint8List? _thumbShown; // the last picture shown, kept up while the next comes in
-  static const _thumbsAtOnce = 2, _thumbsKept = 48;
+  static const _thumbsAtOnce = 2, _thumbsKept = 64; // (64: a wide screen's page strip shows ~35)
 
   /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
-  Uint8List? _thumbFor(int i) {
+  /// [queued]: for the page strip - many wanted at once, the ones asked for most recently (on screen now) first,
+  /// after the slider's own page; it doesn't touch the slider preview's last picture.
+  Uint8List? _thumbFor(int i, {bool queued = false}) {
     final page = _loader?.loadedBytes(i); // the page itself is already here (this one, its neighbours)
-    if (page != null) return _thumbShown = page;
+    if (page != null) return queued ? page : _thumbShown = page;
     if (_thumbs.containsKey(i)) {
       final b = _thumbs.remove(i);
       _thumbs[i] = b; // most recently used last
-      if (b != null) _thumbShown = b;
+      if (b != null && !queued) _thumbShown = b;
       return b;
     }
     final failed = _thumbsFailed[i];
     if (failed != null && DateTime.now().difference(failed) < _thumbRetry) return null;
     if (!_thumbsLoading.contains(i)) {
-      _thumbWanted = i;
+      if (queued) {
+        _thumbQueue..remove(i)..add(i);
+        while (_thumbQueue.length > _stripQueued) {
+          _thumbQueue.removeAt(0); // scrolled past long ago
+        }
+      } else {
+        _thumbWanted = i;
+      }
       Future.microtask(_nextThumb); // not during the build
     }
     return null;
   }
 
+  final List<int> _thumbQueue = []; // the strip's pages wanted, most recent last
+  static const _stripQueued = 40;
+
   void _nextThumb() {
-    final i = _thumbWanted;
-    if (!mounted || i == null || _thumbsLoading.length >= _thumbsAtOnce) return;
-    _thumbWanted = null;
-    if (_thumbs.containsKey(i) || _thumbsLoading.contains(i) || i > _last) return;
+    if (!mounted || _thumbsLoading.length >= _thumbsAtOnce) return;
+    final int i;
+    if (_thumbWanted != null) {
+      i = _thumbWanted!;
+      _thumbWanted = null;
+    } else if (_thumbQueue.isNotEmpty) {
+      i = _thumbQueue.removeLast();
+    } else {
+      return;
+    }
+    if (_thumbs.containsKey(i) || _thumbsLoading.contains(i) || i > _last) { _nextThumb(); return; }
     final bookId = _book['id'] as String;
     _thumbsLoading.add(i);
     void done(void Function() record) {
@@ -1638,7 +1807,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       while (_thumbs.length > _thumbsKept) {
         _thumbs.remove(_thumbs.keys.first);
       }
-      if (_scrub != null) setState(() {});
+      if (_scrub != null || (_menu && _stripShown)) setState(() {});
       _nextThumb();
     }
     api.pageThumbBytes(bookId, _loader!.pageNumbers[i]).then(
@@ -1651,6 +1820,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         }
       }),
     );
+    _nextThumb(); // the other slot, if the strip wants more
   }
 
   final Map<int, DateTime> _thumbsFailed = {}; // page index -> when its picture last didn't come in time
@@ -1661,6 +1831,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _thumbsFailed.clear();
     _thumbsLoading.clear();
     _thumbWanted = null;
+    _thumbQueue.clear();
     _thumbShown = null;
   }
 
