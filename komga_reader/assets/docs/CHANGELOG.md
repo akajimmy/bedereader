@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 61 - 2026-10-03
+
 **Added**
 - Reader: **Original size**, a fourth fit next to screen, width and height - one page pixel to one screen pixel.
   A page bigger than the screen opens centred and scrolls whichever way it overflows: down with the keys, taps and
@@ -32,10 +38,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Posters are never enlarged (Large tiles looked blurry: Komga's thumbnails are 300 px tall, a Large tile on a 1440p
   screen is taller). A poster smaller than its tile now shows at its own size, centred, instead of stretched; where it
   covers the tile it fills it as before. Uploaded posters over 500 px tall are shrunk to 500 first.
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 60 - 2026-10-02
 
