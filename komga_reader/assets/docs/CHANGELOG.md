@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
+
+### Build 62 - 2026-10-03
+
 **Changed**
 - Reader: scrubbing the page slider (finger, mouse or remote) moves the page strip with it, to the page being picked.
 - Posters fill their tiles again: build 61's "never enlarged" posters (shown at their own size inside Large tiles)
   are undone.
-
-## 1.2.0 - in development
-
-Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
 
 ### Build 61 - 2026-10-03
 
