@@ -4,8 +4,10 @@
 #include <shellapi.h>
 #include <shlobj.h>
 
+#include <cstring>
 #include <fstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -42,6 +44,75 @@ std::wstring Widen(const std::string& s) {
   std::wstring w(n, L'\0');
   MultiByteToWideChar(CP_UTF8, 0, s.c_str(), static_cast<int>(s.size()), w.data(), n);
   return w;
+}
+
+// Pictures\BeDeReader (created if missing): where Save page puts pages. The known folder, so a Pictures moved
+// elsewhere (or into OneDrive) is the one used.
+std::wstring PicturesDir() {
+  PWSTR base = nullptr;
+  std::wstring path;
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &base))) {
+    path = std::wstring(base) + L"\\BeDeReader";
+    CreateDirectoryW(path.c_str(), nullptr);
+  }
+  CoTaskMemFree(base);
+  return path;
+}
+
+// A clipboard block holding [size] bytes copied from [data] (the clipboard owns it once set).
+HGLOBAL Block(const void* data, size_t size) {
+  HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, size);
+  if (!h) return nullptr;
+  void* p = GlobalLock(h);
+  memcpy(p, data, size);
+  GlobalUnlock(h);
+  return h;
+}
+
+// Copy page: the picture as a device-independent bitmap (CF_DIB - every program pastes it; 32-bit, rows bottom-up as
+// the format expects) and as PNG (the registered "PNG" format - Office, browsers and image editors prefer it).
+bool CopyPicture(HWND window, int width, int height, const std::vector<uint8_t>& rgba,
+                 const std::vector<uint8_t>& png) {
+  if (width <= 0 || height <= 0 || rgba.size() < static_cast<size_t>(width) * height * 4) return false;
+  BITMAPINFOHEADER bi{};
+  bi.biSize = sizeof(bi);
+  bi.biWidth = width;
+  bi.biHeight = height;  // positive: bottom-up
+  bi.biPlanes = 1;
+  bi.biBitCount = 32;
+  bi.biCompression = BI_RGB;
+  const size_t row = static_cast<size_t>(width) * 4;
+  std::vector<uint8_t> dib(sizeof(bi) + row * height);
+  memcpy(dib.data(), &bi, sizeof(bi));
+  for (int y = 0; y < height; y++) {
+    const uint8_t* src = rgba.data() + static_cast<size_t>(height - 1 - y) * row;
+    uint8_t* dst = dib.data() + sizeof(bi) + static_cast<size_t>(y) * row;
+    for (int x = 0; x < width; x++) {  // RGBA -> BGRA
+      dst[x * 4] = src[x * 4 + 2];
+      dst[x * 4 + 1] = src[x * 4 + 1];
+      dst[x * 4 + 2] = src[x * 4];
+      dst[x * 4 + 3] = src[x * 4 + 3];
+    }
+  }
+  if (!OpenClipboard(window)) return false;
+  EmptyClipboard();
+  bool ok = false;
+  if (HGLOBAL h = Block(dib.data(), dib.size())) {
+    ok = SetClipboardData(CF_DIB, h) != nullptr;
+    if (!ok) GlobalFree(h);
+  }
+  if (!png.empty()) {
+    if (HGLOBAL h = Block(png.data(), png.size())) {
+      if (!SetClipboardData(RegisterClipboardFormatW(L"PNG"), h)) GlobalFree(h);
+    }
+  }
+  CloseClipboard();
+  return ok;
+}
+
+const flutter::EncodableValue* Arg(const flutter::EncodableMap& m, const char* key) {
+  auto it = m.find(flutter::EncodableValue(key));
+  return it == m.end() ? nullptr : &it->second;
 }
 
 }  // namespace
@@ -86,6 +157,27 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       } else {
         result->Success(flutter::EncodableValue(Narrow(dir)));
       }
+    } else if (m == "picturesDir") {
+      std::wstring dir = PicturesDir();
+      if (dir.empty()) {
+        result->Success();
+      } else {
+        result->Success(flutter::EncodableValue(Narrow(dir)));
+      }
+    } else if (m == "copyPicture") {
+      bool ok = false;
+      if (args && std::holds_alternative<flutter::EncodableMap>(*args)) {
+        const auto& a = std::get<flutter::EncodableMap>(*args);
+        const auto *w = Arg(a, "width"), *h = Arg(a, "height"), *px = Arg(a, "rgba"), *png = Arg(a, "png");
+        if (w && h && px && std::holds_alternative<int32_t>(*w) && std::holds_alternative<int32_t>(*h) &&
+            std::holds_alternative<std::vector<uint8_t>>(*px)) {
+          static const std::vector<uint8_t> none;
+          ok = CopyPicture(window_, std::get<int32_t>(*w), std::get<int32_t>(*h), std::get<std::vector<uint8_t>>(*px),
+                           png && std::holds_alternative<std::vector<uint8_t>>(*png)
+                               ? std::get<std::vector<uint8_t>>(*png) : none);
+        }
+      }
+      result->Success(flutter::EncodableValue(ok));
     } else if (m == "isFullscreen") {
       result->Success(flutter::EncodableValue(fullscreen_));
     } else if (m == "battery") {

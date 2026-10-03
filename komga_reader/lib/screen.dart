@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -118,6 +121,74 @@ Future<String?> appStorageDir() async {
     return await _channel.invokeMethod<String>('storageDir');
   } catch (_) {
     return null;
+  }
+}
+
+// ---- Save page / Copy page (the reader, user 2026-10-02): the page's own image file, as Komga sends it ----------
+
+/// Save and Copy are there to be had: Android and Windows (not the web, which has neither a Pictures folder nor an
+/// image clipboard the app can reach).
+bool get canSaveCopyPictures =>
+    !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows);
+
+/// What a picture file is, from its first bytes: (file extension, MIME type). Unknown: a JPEG, as Komga's pages
+/// mostly are.
+(String, String) pictureType(Uint8List b) {
+  bool starts(List<int> sig, [int at = 0]) =>
+      b.length >= at + sig.length && [for (var i = 0; i < sig.length; i++) b[at + i] == sig[i]].every((x) => x);
+  if (starts([0x89, 0x50, 0x4E, 0x47])) return ('png', 'image/png');
+  if (starts([0x52, 0x49, 0x46, 0x46]) && starts([0x57, 0x45, 0x42, 0x50], 8)) return ('webp', 'image/webp');
+  if (starts([0x47, 0x49, 0x46, 0x38])) return ('gif', 'image/gif');
+  return ('jpg', 'image/jpeg');
+}
+
+/// A file name Windows and Android both accept: no \ / : * ? " < > | and no trailing dots or spaces.
+String safeFileName(String name) =>
+    name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').replaceAll(RegExp(r'[. ]+$'), '').trim();
+
+/// Saves a picture where the device keeps pictures - Android: the Pictures/BeDeReader album; Windows:
+/// Pictures\BeDeReader (" (2)" etc. added if the name is taken). [name] without its extension. Returns where it went,
+/// for the message.
+Future<String> savePicture(Uint8List bytes, String name) async {
+  final (ext, mime) = pictureType(bytes);
+  final file = '${safeFileName(name)}.$ext';
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    final where = await _channel.invokeMethod<String>('savePicture', {'bytes': bytes, 'name': file, 'mime': mime});
+    if (where == null) throw StateError('nowhere to save pictures');
+    return where;
+  }
+  final dir = await _channel.invokeMethod<String>('picturesDir');
+  if (dir == null) throw StateError('no Pictures folder');
+  final dot = file.lastIndexOf('.');
+  var path = '$dir${Platform.pathSeparator}$file';
+  for (var n = 2; await File(path).exists(); n++) {
+    path = '$dir${Platform.pathSeparator}${file.substring(0, dot)} ($n)${file.substring(dot)}';
+  }
+  await File(path).writeAsBytes(bytes, flush: true);
+  return path;
+}
+
+/// Puts a picture on the clipboard. Windows: as a bitmap and as PNG (what Paint, Office and browsers paste);
+/// Android: as an image (shared from the app's cache).
+Future<void> copyPicture(Uint8List bytes, String name) async {
+  final (ext, mime) = pictureType(bytes);
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    final ok = await _channel.invokeMethod<bool>('copyPicture',
+        {'bytes': bytes, 'name': '${safeFileName(name)}.$ext', 'mime': mime});
+    if (ok != true) throw StateError('the clipboard took nothing');
+    return;
+  }
+  final codec = await ui.instantiateImageCodec(bytes);
+  final image = (await codec.getNextFrame()).image;
+  try {
+    final rgba = (await image.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+    final png = (await image.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    final ok = await _channel.invokeMethod<bool>('copyPicture',
+        {'width': image.width, 'height': image.height, 'rgba': rgba, 'png': png});
+    if (ok != true) throw StateError('the clipboard took nothing');
+  } finally {
+    image.dispose();
+    codec.dispose();
   }
 }
 

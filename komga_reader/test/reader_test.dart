@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -1212,6 +1213,127 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
     }
+
+    // Save page / Copy page (user, 2026-10-02): one line at the top of the Reader panel; the page's own picture file.
+    // The platform side (MainActivity.kt / desktop_channel.cpp) is stood in for by a fake channel.
+    group('save / copy page', () {
+      const channel = MethodChannel('komga_reader/screen');
+      late List<MethodCall> calls;
+      Object? Function(MethodCall c) answer = (c) => null;
+      setUp(() {
+        calls = [];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (c) async {
+          calls.add(c);
+          return answer(c);
+        });
+      });
+      tearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+        debugDefaultTargetPlatformOverride = null;
+      });
+      Future<void> openPanel(WidgetTester tester) async {
+        await openLoaded(tester, pages: 3);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Reader settings'));
+        await tester.pumpAndSettle();
+      }
+
+      List<MethodCall> named(String m) => [for (final c in calls) if (c.method == m) c];
+      // a message read: gone at once, so nothing covers the next tap
+      Future<void> clearMessages(WidgetTester tester) async {
+        tester.state<ScaffoldMessengerState>(find.byType(ScaffoldMessenger).first).removeCurrentSnackBar();
+        await tester.pump();
+      }
+
+      testWidgets('Android: Save and Copy on one line; Save puts the page file in the Pictures album, Copy on the '
+          'clipboard - the page as Komga sends it, named for the book and page', (tester) async {
+        answer = (c) => c.method == 'savePicture' ? 'Pictures/BeDeReader/${(c.arguments as Map)['name']}'
+            : c.method == 'copyPicture' ? true : null;
+        await openPanel(tester);
+        final save = find.widgetWithText(OutlinedButton, 'Save page'), copy = find.widgetWithText(OutlinedButton, 'Copy page');
+        expect(save, findsOneWidget);
+        expect(copy, findsOneWidget);
+        expect(tester.getCenter(save).dy, tester.getCenter(copy).dy, reason: 'one horizontal line');
+        expect(tester.getRect(find.text('This page')).top, lessThan(tester.getRect(save).top), reason: 'its own group');
+
+        await tester.tap(save);
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+        final s = named('savePicture').single.arguments as Map;
+        expect(s['bytes'], ImageKomga.png, reason: "the page's own file");
+        expect(s['name'], 'Test #1 - page 1.png');
+        expect(s['mime'], 'image/png');
+        expect(find.text('Page saved: Pictures/BeDeReader/Test #1 - page 1.png'), findsOneWidget);
+
+        await clearMessages(tester);
+        await tester.tap(copy);
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+        final c = named('copyPicture').single.arguments as Map;
+        expect(c['bytes'], ImageKomga.png);
+        expect(c['name'], 'Test #1 - page 1.png');
+        expect(find.text('Page copied'), findsOneWidget);
+        await clearMessages(tester);
+      });
+
+      testWidgets("Windows: Save writes into the Pictures folder, ' (2)' when the name's taken; Copy hands over the "
+          'decoded pixels and a PNG', (tester) async {
+        final dir = (await tester.runAsync(() => Directory.systemTemp.createTemp('komga_pictures')))!;
+        addTearDown(() { if (dir.existsSync()) dir.deleteSync(recursive: true); }); // (sync: runAsync is over by then)
+        answer = (c) => c.method == 'picturesDir' ? dir.path : c.method == 'copyPicture' ? true : null;
+        debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+        await openPanel(tester);
+        for (var i = 1; i <= 2; i++) {
+          await tester.tap(find.widgetWithText(OutlinedButton, 'Save page'));
+          // real file work, a step at a time: until the message says it's saved
+          await waitUntil(() => shows(find.textContaining('Page saved:')), tester: tester,
+              step: const Duration(milliseconds: 20), reason: 'save $i');
+          await clearMessages(tester);
+        }
+        final files = (await tester.runAsync(() async => [for (final f in dir.listSync()) f.path.split(Platform.pathSeparator).last]))!
+          ..sort();
+        expect(files, ['Test #1 - page 1 (2).png', 'Test #1 - page 1.png']);
+        final saved = (await tester.runAsync(() => File('${dir.path}${Platform.pathSeparator}Test #1 - page 1.png').readAsBytes()))!;
+        expect(saved, ImageKomga.png);
+
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Copy page'));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+        await tester.pump();
+        final c = named('copyPicture').single.arguments as Map;
+        final w = c['width'] as int, h = c['height'] as int;
+        expect((w, h), (200, 300), reason: "the page's own size");
+        expect((c['rgba'] as Uint8List).length, w * h * 4, reason: 'every pixel, RGBA');
+        expect((c['png'] as Uint8List).sublist(0, 4), [0x89, 0x50, 0x4E, 0x47], reason: 'and as PNG');
+        expect(find.text('Page copied'), findsOneWidget);
+        await clearMessages(tester);
+        debugDefaultTargetPlatformOverride = null;
+      });
+
+      testWidgets("saving that fails says so; on the end card there's no page, so no Save / Copy", (tester) async {
+        answer = (c) => c.method == 'savePicture' ? throw PlatformException(code: 'save', message: 'disk full') : null;
+        await openPanel(tester);
+        await tester.tap(find.widgetWithText(OutlinedButton, 'Save page'));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+        expect(find.textContaining("Couldn't save the page"), findsOneWidget);
+        await clearMessages(tester);
+
+        Navigator.of(tester.element(find.text('This page'))).pop(); // the panel away
+        await tester.pumpAndSettle();
+        await key(tester, LogicalKeyboardKey.escape); // controls away
+        for (var i = 0; i < 3; i++) { // past the last page: the end card
+          await key(tester, LogicalKeyboardKey.arrowRight);
+          await tester.pump(const Duration(milliseconds: 400));
+        }
+        expect(page(tester), 3.0);
+        await key(tester, LogicalKeyboardKey.enter);
+        await tester.tap(find.byTooltip('Reader settings'));
+        await tester.pumpAndSettle();
+        expect(find.text('This page'), findsNothing);
+        expect(find.widgetWithText(OutlinedButton, 'Save page'), findsNothing);
+        await tester.pump(const Duration(seconds: 2));
+      });
+    });
 
     // the page strip (user, 2026-10-02): a film strip of the pages above the bottom bar, behind the Pages button
     group('page strip', () {

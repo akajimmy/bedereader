@@ -9,7 +9,8 @@
 #include <memory>
 
 // The Windows side of the "komga_reader/screen" channel (lib/screen.dart); the Android side is MainActivity.kt.
-// keepOn, appVersion, openUrl and fullscreen do real work here; brightness/getBrightness are no-ops because a
+// keepOn, appVersion, openUrl, fullscreen, picturesDir and copyPicture (the reader's Save / Copy page) do real work
+// here; brightness/getBrightness are no-ops because a
 // monitor's backlight can't be set (the app dims with an overlay instead).
 class DesktopChannel {
  public:

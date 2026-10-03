@@ -1,5 +1,8 @@
 package com.nickp.komga_reader
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -7,13 +10,17 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
 
 class MainActivity : FlutterActivity() {
     // Android 8+ outlines the focused view once a key is pressed; here that's the whole Flutter view, which showed as a
@@ -121,6 +128,54 @@ class MainActivity : FlutterActivity() {
                         caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
                         else -> "other"
                     })
+                }
+                // Save page (the reader): into the Pictures/BeDeReader album - the gallery shows it; no permission
+                // asked (Android 10+). Older Android: the app's own Pictures folder. Returns where, for the message.
+                "savePicture" -> {
+                    try {
+                        val bytes = call.argument<ByteArray>("bytes")!!
+                        val name = call.argument<String>("name")!!
+                        val mime = call.argument<String>("mime")!!
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val values = ContentValues().apply {
+                                put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                                put(MediaStore.Images.Media.MIME_TYPE, mime)
+                                put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/BeDeReader")
+                                put(MediaStore.Images.Media.IS_PENDING, 1)
+                            }
+                            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
+                            contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+                            values.clear()
+                            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                            contentResolver.update(uri, values, null, null)
+                            result.success("Pictures/BeDeReader/$name")
+                        } else {
+                            val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "BeDeReader")
+                            dir.mkdirs()
+                            val file = File(dir, name)
+                            file.writeBytes(bytes)
+                            result.success(file.absolutePath)
+                        }
+                    } catch (e: Exception) {
+                        result.error("save", e.message, null)
+                    }
+                }
+                // Copy page (the reader): the picture on the clipboard, shared from the app's cache through its file
+                // provider (the app pasting into is let read it).
+                "copyPicture" -> {
+                    try {
+                        val dir = File(cacheDir, "shared")
+                        dir.mkdirs()
+                        dir.listFiles()?.forEach { it.delete() } // only the last page copied is kept
+                        val file = File(dir, call.argument<String>("name")!!)
+                        file.writeBytes(call.argument<ByteArray>("bytes")!!)
+                        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newUri(contentResolver, file.name, uri))
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("copy", e.message, null)
+                    }
                 }
                 else -> result.notImplemented()
             }
