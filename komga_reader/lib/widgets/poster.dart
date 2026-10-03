@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,77 @@ class PosterSizeButton extends StatelessWidget {
 SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: 170 * AppSettings.instance.display.posterSize.scale,
     childAspectRatio: 0.52, mainAxisSpacing: 10, crossAxisSpacing: 8);
+
+/// A poster picture that is never enlarged (user, 2026-10-02: Large tiles looked blurry - Komga's thumbnails are
+/// 300 px tall, a Large tile on a 1440p screen ~330): where it covers the tile it fills it as before (cropped to
+/// it); where the tile is bigger than the picture, it's shown at its own size, one picture pixel to one screen
+/// pixel, centred. Bigger pictures (uploaded posters) are first shrunk to at most [maxPixels] tall.
+class PosterImage extends StatefulWidget {
+  const PosterImage(this.provider, {super.key});
+  final ImageProvider provider;
+  static const maxPixels = 500;
+  @override
+  State<PosterImage> createState() => _PosterImageState();
+}
+
+class _PosterImageState extends State<PosterImage> {
+  ImageStream? _stream;
+  late final _listener = ImageStreamListener(
+    (info, _) { if (mounted) setState(() { _info?.dispose(); _info = info; }); },
+    onError: (_, __) {}, // none to be had: the plain tile stays
+  );
+  ImageInfo? _info;
+
+  ImageProvider get _sized => ResizeImage(widget.provider, height: PosterImage.maxPixels,
+      policy: ResizeImagePolicy.fit, allowUpscaling: false);
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(PosterImage old) {
+    super.didUpdateWidget(old);
+    if (old.provider != widget.provider) _resolve();
+  }
+
+  void _resolve() {
+    final s = _sized.resolve(createLocalImageConfiguration(context));
+    if (s.key == _stream?.key) return;
+    _stream?.removeListener(_listener);
+    _stream = s..addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    _info?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _info;
+    if (info == null) return Container(color: const Color(0xFF1C1C1F)); // loading, or none to be had
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return LayoutBuilder(builder: (context, box) {
+      final native = Size(info.image.width / dpr, info.image.height / dpr); // its own size, in logical pixels
+      final covers = native.width >= box.maxWidth - 0.5 && native.height >= box.maxHeight - 0.5;
+      return covers
+          ? RawImage(image: info.image, fit: BoxFit.cover, width: box.maxWidth, height: box.maxHeight,
+              filterQuality: FilterQuality.medium)
+          : ColoredBox(
+              color: const Color(0xFF1C1C1F),
+              // the tile is bigger than the picture: at its own size (shrunk only if it's larger along one side)
+              child: Center(child: RawImage(image: info.image, fit: BoxFit.scaleDown,
+                  width: math.min(native.width, box.maxWidth), height: math.min(native.height, box.maxHeight),
+                  filterQuality: FilterQuality.medium)),
+            );
+    });
+  }
+}
 
 /// One focusable grid item: poster (Komga thumbnail, incl. custom cover crops) + title + small status line.
 /// Works with touch and with the remote: D-pad moves focus between tiles, OK activates.
@@ -85,8 +157,7 @@ class PosterTile extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: Stack(fit: StackFit.expand, children: [
-                  image ?? Image(image: ResizeImage(api.thumbImage(imageUrl), width: 400), fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F))),
+                  image ?? PosterImage(api.thumbImage(imageUrl)),
                   if (read) Container(color: Colors.black.withValues(alpha: 0.45)),
                   if (read) const Positioned(right: 6, top: 6, child: _ReadBadge()),
                   if (selected != null) ...[

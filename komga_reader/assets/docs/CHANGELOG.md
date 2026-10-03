@@ -28,6 +28,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   "Collections" open those. If you came from that library screen, it goes back to it (showing the right view) instead of
   opening another.
 
+**Changed**
+- Posters are never enlarged (Large tiles looked blurry: Komga's thumbnails are 300 px tall, a Large tile on a 1440p
+  screen is taller). A poster smaller than its tile now shows at its own size, centred, instead of stretched; where it
+  covers the tile it fills it as before. Uploaded posters over 500 px tall are shrunk to 500 first.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
