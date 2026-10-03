@@ -33,6 +33,9 @@ import 'widgets/poster.dart' show HoldOkGuard;
 void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
+  // web: right-click is the app's (a poster's menu, as on the PC) - the browser's own menu opened over it (user,
+  // 2026-10-03)
+  if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
   runApp(const KomgaReaderApp());
 }
