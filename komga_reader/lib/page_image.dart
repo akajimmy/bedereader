@@ -278,6 +278,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     _coloured?.dispose();
     _cropped?.dispose();
     _anim.dispose();
+    _across.dispose();
     if (widget.zoom == null) _zoom.dispose();
     super.dispose();
   }
@@ -422,6 +423,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd) ||
         old.prefs.fit != widget.prefs.fit) {
       _placed = false;
+      _acrossPlaced = false;
     }
   }
 
@@ -555,8 +557,46 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
               ? _wheel(Center(child: picture(s)))
               : _edgeSwipe(SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal,
                   reverse: widget.rtl, child: _wheel(picture(s))));
+        case FitMode.original:
+          return _original(picture, base, dpr, w, h);
       }
     });
+  }
+
+  // Original size, a page wider and taller than the screen: the reader's scroll is the vertical one (keys and taps
+  // scroll down, then turn); across is this one, dragged
+  final _across = ScrollController();
+  bool _acrossPlaced = false;
+
+  /// Original size (user, 2026-10-02): one page pixel to one screen pixel. Smaller than the screen: centred. Taller:
+  /// scrolls down, as in fit width. Wider: scrolls across, as a wide page in fit height (page swipes pause; dragging
+  /// on past the edge turns). Both: down with the reader's scroll, across by dragging. Overflowing, it opens centred.
+  Widget _original(Widget Function(Size) picture, ui.Image base, double dpr, double w, double h) {
+    final s = Size(base.width / dpr, base.height / dpr);
+    final tall = s.height > h, wide = s.width > w;
+    final shown = Rect.fromLTWH(wide ? 0 : (w - s.width) / 2, tall ? 0 : (h - s.height) / 2,
+        wide ? w : s.width, tall ? h : s.height);
+    widget.onPageRect?.call(shown);
+    _placeScroll(tall || wide);
+    _setPan(wide);
+    if (!tall && !wide) return _wheel(Center(child: picture(s)));
+    if (!tall) { // wide only: across, with the reader's scroll
+      return _edgeSwipe(SingleChildScrollView(controller: widget.scroll, scrollDirection: Axis.horizontal,
+          reverse: widget.rtl, child: _wheel(SizedBox(height: h, child: Center(child: picture(s))))));
+    }
+    if (!wide) { // tall only: down, with the reader's scroll
+      return SingleChildScrollView(controller: widget.scroll,
+          child: _wheel(SizedBox(width: w, child: Center(child: picture(s)))));
+    }
+    if (!_acrossPlaced) {
+      _acrossPlaced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_across.hasClients) _across.jumpTo(_across.position.maxScrollExtent / 2);
+      });
+    }
+    return SingleChildScrollView(controller: widget.scroll,
+        child: _edgeSwipe(SingleChildScrollView(controller: _across, scrollDirection: Axis.horizontal,
+            reverse: widget.rtl, child: _wheel(picture(s)))));
   }
 
   /// Claims mouse-wheel events over the page before a scroll view can (it would scroll on its own); the reader

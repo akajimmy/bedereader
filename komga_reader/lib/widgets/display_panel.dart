@@ -230,6 +230,9 @@ Widget fitIcon(FitMode f, {double size = 20, Color? color}) => switch (f) {
       FitMode.screen => Icon(Icons.fit_screen, size: size, color: color),
       FitMode.width => RotatedBox(quarterTurns: 1, child: Icon(Icons.height, size: size, color: color)),
       FitMode.height => Icon(Icons.height, size: size, color: color),
+      // original size: "1:1" (no Material icon says it)
+      FitMode.original => SizedBox(width: size, height: size, child: Center(child: Text('1:1',
+          style: TextStyle(fontSize: size * 0.55, fontWeight: FontWeight.w800, color: color, height: 1)))),
     };
 
 /// Fit and reading direction for [p] (a series, or the defaults). [icons]: both as icons (the reader's narrow
@@ -250,6 +253,8 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
         Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
         Choice(FitMode.width, icons ? 'Fit width' : 'Width', iconWidget: icons ? fitIcon(FitMode.width) : null),
         Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
+        Choice(FitMode.original, icons ? 'Original size' : 'Original',
+            iconWidget: icons ? fitIcon(FitMode.original) : null),
       ],
       value: p.fit,
       onChanged: (f) => setP(p.copyWith(fit: f)),

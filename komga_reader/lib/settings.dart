@@ -9,10 +9,16 @@ import 'api.dart';
 import 'errors.dart';
 import 'screen.dart';
 
-enum FitMode { screen, width, height }
+/// [original]: the page at its own size, one page pixel to one screen pixel (user, 2026-10-02).
+enum FitMode { screen, width, height, original }
 
 extension FitModeLabel on FitMode {
-  String get label => switch (this) { FitMode.screen => 'Screen', FitMode.width => 'Width', FitMode.height => 'Height' };
+  String get label => switch (this) {
+        FitMode.screen => 'Screen',
+        FitMode.width => 'Width',
+        FitMode.height => 'Height',
+        FitMode.original => 'Original',
+      };
 }
 
 /// Page order for a series: follow Komga's reading direction for it (auto), or force one.

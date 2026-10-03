@@ -328,6 +328,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byTooltip('Fit height'));
     await tester.pump();
+    await tester.tap(find.byTooltip('Original size')); // the fourth fit (user, 2026-10-02), then round again
+    await tester.pump();
     expect(find.byTooltip('Fit screen'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 400));
     expect(scale(), closeTo(1, 1e-6), reason: 'the key pressed in fit width left the page at fit');
