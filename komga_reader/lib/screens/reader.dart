@@ -1370,10 +1370,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                 // Clock and battery with the controls up, where the bar has room (else just under it, below)
                 if (showClock && clockInBar)
                   const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
-                // one press = next fit mode (screen -> width -> height), label shows which
+                // one press = next fit mode (screen -> width -> height -> original size), label shows which
                 IconButton(
                   focusNode: _ctl[_Ctl.fit],
-                  tooltip: 'Fit ${_prefs.fit.label.toLowerCase()}',
+                  tooltip: _prefs.fit == FitMode.original ? 'Original size' : 'Fit ${_prefs.fit.label.toLowerCase()}',
                   onPressed: () => _setFit(FitMode.values[(_prefs.fit.index + 1) % FitMode.values.length]),
                   icon: fitIcon(_prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
                 ),

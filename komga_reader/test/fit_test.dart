@@ -130,6 +130,76 @@ void main() {
     expect(zoomed, [true, false]);
   });
 
+  // Original size (user, 2026-10-02): one page pixel to one screen pixel; the screen here is 800 x 1200 at 1x
+  group('original size', () {
+    testWidgets('a page smaller than the screen: at its own size, centred, nothing to drag', (tester) async {
+      bool? pans;
+      await page(tester, FitMode.original, 400, 600, onPan: (p) => pans = p);
+      expect(tester.getRect(find.byType(RawImage)), const Rect.fromLTWH(200, 300, 400, 600));
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(pans, isFalse);
+    });
+
+    testWidgets('taller than the screen: at its own size, scrolls down, opens centred; page swipes stay on',
+        (tester) async {
+      bool? pans;
+      final scroll = await page(tester, FitMode.original, 600, 2400, onPan: (p) => pans = p);
+      expect(tester.getSize(find.byType(RawImage)), const Size(600, 2400), reason: 'not stretched to the width');
+      expect(scroll.position.axis, Axis.vertical);
+      expect(scroll.position.maxScrollExtent, 1200);
+      expect(scroll.offset, 600, reason: 'centred');
+      expect(pans, isFalse);
+    });
+
+    testWidgets('wider than the screen: scrolls across, opens centred, page swipes pause; pulling on past the edge '
+        'turns', (tester) async {
+      bool? pans;
+      final turns = <bool>[];
+      final scroll = await page(tester, FitMode.original, 1600, 1000, onPan: (p) => pans = p, onEdge: turns.add);
+      expect(tester.getSize(find.byType(RawImage)), const Size(1600, 1000));
+      expect(scroll.position.axis, Axis.horizontal);
+      expect(scroll.position.maxScrollExtent, 800);
+      expect(scroll.offset, 400);
+      expect(pans, isTrue);
+      scroll.jumpTo(scroll.position.maxScrollExtent);
+      await tester.pump();
+      await tester.drag(find.byType(PageCanvas), const Offset(-200, 0));
+      await tester.pumpAndSettle();
+      expect(turns, [true]);
+    });
+
+    testWidgets('wider and taller: down with the reader\'s scroll, across by dragging - both open centred',
+        (tester) async {
+      bool? pans;
+      final scroll = await page(tester, FitMode.original, 1600, 2400, onPan: (p) => pans = p);
+      await tester.pump();
+      expect(tester.getSize(find.byType(RawImage)), const Size(1600, 2400));
+      expect(scroll.position.axis, Axis.vertical, reason: "the reader's scroll goes down");
+      expect(scroll.position.maxScrollExtent, 1200);
+      expect(scroll.offset, 600);
+      final across = tester.state<ScrollableState>(find.byWidgetPredicate(
+          (w) => w is Scrollable && w.axisDirection == AxisDirection.right)).position;
+      expect(across.maxScrollExtent, 800);
+      expect(across.pixels, 400, reason: 'centred across too');
+      expect(pans, isTrue);
+      await tester.drag(find.byType(PageCanvas), const Offset(300, 0));
+      await tester.pumpAndSettle();
+      expect(across.pixels, lessThan(400), reason: 'dragged across');
+    });
+
+    testWidgets('on a high-density screen, one page pixel to one physical pixel', (tester) async {
+      tester.view.physicalSize = const Size(1600, 2400);
+      tester.view.devicePixelRatio = 2; // 800 x 1200 logical
+      addTearDown(tester.view.reset);
+      final img = await testImage(tester, 800, 1200);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(data: PageData(img, Uint8List(0)),
+          prefs: const ReaderPrefs(fit: FitMode.original), scroll: ScrollController()))));
+      await tester.pump();
+      expect(tester.getRect(find.byType(RawImage)), const Rect.fromLTWH(200, 300, 400, 600),
+          reason: '800 x 1200 page pixels = 400 x 600 logical at 2x');
+    });
+  });
+
   testWidgets('a page that fits is simply centred, nothing to drag', (tester) async {
     // test audit, 2026-09-30: `pans ?? false` passed if the reader was never told; the centring wasn't checked
     bool? pans;
