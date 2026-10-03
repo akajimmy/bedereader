@@ -16,7 +16,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   top bar's fit button goes round all four.
 - Reader: **a page strip** - the book's pages as a film strip above the bottom bar, opened and closed with the new
   Pages button next to the slider. It opens at the page you're on; tap a page (or OK on it with the remote) to go
-  there, and the strip stays up. Thumbnails are up to 100 px tall, smaller on narrow screens so at least 8 pages
+  there, and the strip stays up. Once opened it stays open - every time the controls come up, book after book and
+  after a restart - until you close it with the same button; each time it's centred on the page you're reading. Thumbnails are up to 100 px tall, smaller on narrow screens so at least 8 pages
   always fit. The page you came from is marked, as on the slider. With the remote: Up from the bottom bar goes into
   the strip, Left / Right move along it. Right to left books start from the right.
 

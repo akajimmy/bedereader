@@ -778,7 +778,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   }
 
   // ---- controls
-  void _showControls() => setState(() { _menu = true; _scrubbing = false; _scrub = null; });
+  void _showControls() {
+    setState(() { _menu = true; _scrubbing = false; _scrub = null; });
+    if (_stripShown) _stripCentre(_index.clamp(0, _last), jump: true); // on the page being read now
+  }
 
   void _hideControls() {
     // a finger still on the slider is let go of: hidden by Esc / Back mid-scrub, the scrub is cancelled - its lift
@@ -1499,7 +1502,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   // ---- the page strip (user, 2026-10-02): a film strip of the book's pages above the bottom bar, opened by the
   // Pages button. A page tapped (or OK on it) is gone to; the strip and the controls stay up. Right to left, page 1
   // is at the right.
-  bool _stripOpen = false;
+  // open or closed is kept on the device: open, it's there every time the controls come up, book after book, until
+  // closed with the button (user, 2026-10-02)
+  bool get _stripOpen => _settings.display.pageStrip;
   int? _stripAt; // the page the remote is on in the strip
   final _stripScroll = ScrollController();
   static const _stripGap = 6.0, _stripMaxHeight = 100.0, _stripAtLeast = 8, _stripAspect = 2 / 3;
@@ -1509,8 +1514,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       math.min(_stripMaxHeight * _stripAspect, (width - 16 - (_stripAtLeast - 1) * _stripGap) / _stripAtLeast);
 
   void _toggleStrip() {
-    setState(() => _stripOpen = !_stripOpen);
-    if (_stripOpen) _stripCentre(_index.clamp(0, _last), jump: true);
+    final open = !_stripOpen;
+    _settings.setDisplay(_settings.display.copyWith(pageStrip: open));
+    if (open) _stripCentre(_index.clamp(0, _last), jump: true);
   }
 
   /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow).
