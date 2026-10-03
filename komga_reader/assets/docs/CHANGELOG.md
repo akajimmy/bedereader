@@ -20,6 +20,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   after a restart - until you close it with the same button; each time it's centred on the page you're reading. Thumbnails are up to 100 px tall, smaller on narrow screens so at least 8 pages
   always fit. The page you came from is marked, as on the slider. With the remote: Up from the bottom bar goes into
   the strip, Left / Right move along it. Right to left books start from the right.
+- Reader: **Save page** and **Copy page**, side by side at the top of the Reader panel (the sliders button). They take
+  the page's own picture as Komga has it (not the adjusted picture on screen). Save puts it in Pictures\BeDeReader on
+  Windows, or the Pictures/BeDeReader album on Android, named for the book and page; Copy puts it on the clipboard,
+  ready to paste.
 
 ## 1.2.0 - in development
 

@@ -747,6 +747,45 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   }
 
   /// Delete the open book's file on the server (confirmed first, Cancel focused), then close the reader.
+  // ---- Save page / Copy page (the Reader panel; user, 2026-10-02): the page's own image as Komga sends it - not
+  // the picture on screen (no crop, levels or Enhance) - from what's loaded already, else asked for
+
+  /// The page being read: (its picture file, a name for it). Null on the end card.
+  Future<(Uint8List, String)?> _pageFile() async {
+    final i = _index;
+    if (i > _last || _loader == null) return null;
+    final bytes = _loader!.loadedBytes(i) ?? await api.pageBytes(_book['id'] as String, _loader!.pageNumbers[i]);
+    return (bytes, '${_titleOf(_book)} - page ${i + 1}');
+  }
+
+  Future<void> _savePage() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final f = await _pageFile();
+      if (f == null) return;
+      final where = await savePicture(f.$1, f.$2);
+      messenger // a message for each save, the last one shown at once (not queued behind the one before)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Page saved: $where')));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('save the page', e), e, st);
+    }
+  }
+
+  Future<void> _copyPage() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final f = await _pageFile();
+      if (f == null) return;
+      await copyPicture(f.$1, f.$2);
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Page copied')));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('copy the page', e), e, st);
+    }
+  }
+
   Future<void> _deleteBook() async {
     final title = '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}';
     final ok = await confirmDelete(context, 'Delete "$title"?',
@@ -1486,7 +1525,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                     label: 'Reader settings',
                     onPressed: () => showReaderPanel(context,
                         seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
-                        komgaDirection: _komgaDirection, bookFit: _bookFit)),
+                        komgaDirection: _komgaDirection, bookFit: _bookFit,
+                        page: canSaveCopyPictures && _index <= _last
+                            ? PageActions(save: _savePage, copy: _copyPage) : null)),
                 IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
                     icon: const Icon(Icons.skip_next, size: 28)),
               ]),

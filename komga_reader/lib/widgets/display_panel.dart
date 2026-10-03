@@ -17,10 +17,39 @@ import 'setting_rows.dart';
 /// they're the series' own - starting from the defaults, so nothing jumps. The two parts are separate.
 ///
 /// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
+/// [page]: Save page / Copy page for the page shown (null where there's no page to save, or no way to).
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
-        FitMode? bookFit}) =>
+        FitMode? bookFit, PageActions? page}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
-        bookFit: bookFit, side: side));
+        bookFit: bookFit, page: page, side: side));
+
+/// The reader's Save page and Copy page (user, 2026-10-02): on one line at the top of its panel.
+class PageActions {
+  const PageActions({required this.save, required this.copy});
+  final VoidCallback save, copy;
+}
+
+class _PageActionsRow extends StatelessWidget {
+  const _PageActionsRow(this.actions);
+  final PageActions actions;
+  @override
+  Widget build(BuildContext context) => RowNav(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 10),
+          child: Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(onPressed: actions.save, icon: const Icon(Icons.save_alt, size: 20),
+                  label: const Text('Save page')),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(onPressed: actions.copy, icon: const Icon(Icons.copy, size: 20),
+                  label: const Text('Copy page')),
+            ),
+          ]),
+        ),
+      );
+}
 
 Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
     _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side));
@@ -100,7 +129,9 @@ class _Panel extends StatelessWidget {
 String _seriesHeading(String? title) => title == null ? 'Settings for this series' : 'Settings for Series: $title';
 
 class _ReaderPanel extends StatelessWidget {
-  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, required this.side});
+  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page,
+      required this.side});
+  final PageActions? page;
   final String? seriesId;
   final String? seriesTitle;
   final String? komgaDirection; // the series' reading direction in Komga, for Auto
@@ -114,6 +145,7 @@ class _ReaderPanel extends StatelessWidget {
       final p = s.prefsFor(id);
       final own = id != null && s.ownsLayout(id);
       return [
+        if (page != null) SettingsGroup(title: 'This page', children: [_PageActionsRow(page!)]),
         if (id != null)
           SettingsGroup(title: _seriesHeading(seriesTitle), children: [
             // on: this series' own fit and direction; off: the defaults', greyed out (user, 2026-09-30)
