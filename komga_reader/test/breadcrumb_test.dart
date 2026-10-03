@@ -61,10 +61,12 @@ void main() {
     expect(find.byType(SeriesScreen), findsOneWidget);
     expect(find.descendant(of: find.byKey(parent), matching: find.text('Events')), findsOneWidget,
         reason: 'the library, as a link');
+    // counted with skipOffstage false: a screen hidden under another still counts (a second library screen on top
+    // of the first is what this guards against)
     await tester.tap(find.byKey(parent));
     await settle(tester);
-    expect(find.byType(SeriesScreen), findsNothing, reason: 'gone back');
-    expect(find.byType(LibraryScreen), findsOneWidget, reason: 'the same library screen - not a new one on top');
+    expect(find.byType(SeriesScreen, skipOffstage: false), findsNothing, reason: 'gone back');
+    expect(find.byType(LibraryScreen, skipOffstage: false), findsOneWidget, reason: 'the same library screen - not a new one on top');
     expect(shownMode(tester), BrowseMode.series);
   });
 
@@ -78,8 +80,8 @@ void main() {
     expect(find.byType(ReadListScreen), findsOneWidget);
     await tester.tap(find.byKey(parent));
     await settle(tester);
-    expect(find.byType(ReadListScreen), findsNothing);
-    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byType(ReadListScreen, skipOffstage: false), findsNothing);
+    expect(find.byType(LibraryScreen, skipOffstage: false), findsOneWidget);
     expect(shownMode(tester), BrowseMode.readLists);
 
     // the library on Series, a read list on top of it (as from search): back to it, switched to its read lists
@@ -91,8 +93,8 @@ void main() {
     await settle(tester);
     await tester.tap(find.byKey(parent));
     await settle(tester);
-    expect(find.byType(ReadListScreen), findsNothing);
-    expect(find.byType(LibraryScreen), findsOneWidget);
+    expect(find.byType(ReadListScreen, skipOffstage: false), findsNothing);
+    expect(find.byType(LibraryScreen, skipOffstage: false), findsOneWidget);
     expect(shownMode(tester), BrowseMode.readLists);
   });
 
