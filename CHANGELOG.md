@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- Reader: **Original size**, a fourth fit next to screen, width and height - one page pixel to one screen pixel.
+  A page bigger than the screen opens centred and scrolls whichever way it overflows: down with the keys, taps and
+  wheel as in fit width; across by dragging (page swipes pause, and pulling on past the edge turns the page). The
+  top bar's fit button goes round all four.
+
 ## 1.2.0 - in development
 
 Everything built since the 1.1 release (build 40). Not released yet; no release candidate chosen yet.
