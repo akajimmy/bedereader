@@ -24,6 +24,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   the page's own picture as Komga has it (not the adjusted picture on screen). Save puts it in Pictures\BeDeReader on
   Windows, or the Pictures/BeDeReader album on Android, named for the book and page; Copy puts it on the clipboard,
   ready to paste.
+- Breadcrumbs are links: in "Ongoing › Absolute Flash", tap (or OK on) "Ongoing" to open that library; "Read lists" and
+  "Collections" open those. If you came from that library screen, it goes back to it (showing the right view) instead of
+  opening another.
 
 ## 1.2.0 - in development
 
