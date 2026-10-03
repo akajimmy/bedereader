@@ -1560,10 +1560,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (open) _stripCentre(_index.clamp(0, _last), jump: true);
   }
 
-  /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow).
-  void _stripCentre(int i, {bool jump = false}) {
+  /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow); null: the page being read, as it
+  /// is once this frame is drawn.
+  void _stripCentre(int? at, {bool jump = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_stripScroll.hasClients) return;
+      final i = at ?? _index.clamp(0, _last);
       final p = _stripScroll.position;
       final tile = _tileWidth(p.viewportDimension + 16) + _stripGap; // the list sits inside 8 px of padding each side
       final target = (i * tile - (p.viewportDimension - tile) / 2).clamp(0.0, p.maxScrollExtent);
@@ -1604,7 +1606,21 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     return KeyEventResult.ignored;
   }
 
+  int? _stripFollowed; // the slider's page the strip last followed (null: not scrubbing)
+
   Widget _filmStrip(Color bar) {
+    // scrubbing the slider (finger, mouse or remote): the strip follows the page picked; when the scrub ends (gone
+    // there, or cancelled), back to the page being read (user, 2026-10-03)
+    final follow = _scrub;
+    if (follow != _stripFollowed) {
+      final wasScrubbing = _stripFollowed != null;
+      _stripFollowed = follow;
+      if (follow != null) {
+        _stripCentre(follow, jump: true);
+      } else if (wasScrubbing) {
+        _stripCentre(null, jump: true);
+      }
+    }
     final accent = Theme.of(context).colorScheme.primary;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final node = _ctl[_Ctl.strip]!;
@@ -1628,7 +1644,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               itemCount: _last + 1,
               itemBuilder: (context, i) {
                 final current = i == _index;
-                final remote = node.hasFocus && i == (_stripAt ?? _index);
+                // white: where the remote is in the strip, or the page being picked on the slider
+                final remote = (node.hasFocus && i == (_stripAt ?? _index)) || i == _scrub;
                 return Padding(
                   padding: const EdgeInsetsDirectional.only(end: _stripGap),
                   child: Column(children: [

@@ -1417,6 +1417,48 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
       });
 
+      testWidgets('scrubbing the slider moves the strip with it, to the page being picked; letting go, it stays on '
+          'the page gone to (user, 2026-10-03)', (tester) async {
+        await openLoaded(tester, pages: 60);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await tester.pump();
+        void centred(int i, String why) {
+          final t = tester.getRect(tile(i)), s = tester.getRect(find.byKey(strip));
+          expect(t.center.dx, closeTo(s.center.dx, t.width), reason: '$why: page ${i + 1} in the middle');
+        }
+
+        final r = tester.getRect(find.byType(Slider));
+        Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 59, r.center.dy);
+        final g = await tester.startGesture(at(0));
+        await g.moveTo(at(40));
+        await tester.pump();
+        await tester.pump();
+        centred(40, 'picking page 41');
+        expect(page(tester), 0.0, reason: 'nothing turned yet');
+        await g.moveTo(at(20));
+        await tester.pump();
+        await tester.pump();
+        centred(20, 'back to page 21');
+        await g.up();
+        await tester.pump(const Duration(milliseconds: 400));
+        await tester.pump();
+        expect(page(tester), 20.0);
+        centred(20, 'gone there');
+
+        // the remote on the slider: the same
+        await key(tester, LogicalKeyboardKey.arrowDown); // bottom bar
+        await key(tester, LogicalKeyboardKey.arrowRight); // the slider
+        await key(tester, LogicalKeyboardKey.enter); // scrub
+        for (var i = 0; i < 15; i++) {
+          await key(tester, LogicalKeyboardKey.arrowRight);
+        }
+        await tester.pump();
+        centred(35, 'the remote picking page 36');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
       testWidgets('thumbnails are up to 100 px tall, smaller on a narrow screen so at least 8 always fit across',
           (tester) async {
         for (final (width, height) in [(1200.0, 100.0), (400.0, null)]) {
