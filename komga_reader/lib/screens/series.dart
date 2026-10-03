@@ -89,7 +89,9 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
         leading: const BackButton(),
         title: FutureBuilder<String?>(
           future: _library,
-          builder: (context, lib) => Breadcrumb(parent: lib.data, title: (s['metadata']?['title'] ?? s['name']) as String),
+          builder: (context, lib) => Breadcrumb(parent: lib.data, title: (s['metadata']?['title'] ?? s['name']) as String,
+              onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api,
+                  libraryId: s['libraryId'] as String?, mode: BrowseMode.series)),
         ),
         actions: [
           Center(child: CountBadge(paged: _paged)),
@@ -174,7 +176,9 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
       key: menuScaffold,
       drawer: menuDrawer(widget.api, docked: docked),
       onDrawerChanged: onMenuChanged,
-      appBar: AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title),
+      appBar: AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title,
+              onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
+                  mode: BrowseMode.collections)),
           actions: [
             Center(child: CountBadge(paged: _paged)),
             HideReadButton(value: _filter, onChanged: _setFilter),

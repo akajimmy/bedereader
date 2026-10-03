@@ -67,7 +67,9 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
         leading: const BackButton(),
-        title: Breadcrumb(parent: 'Read lists', title: widget.readList['name'] as String),
+        title: Breadcrumb(parent: 'Read lists', title: widget.readList['name'] as String,
+            onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
+                mode: BrowseMode.readLists)),
         actions: [
           Center(child: CountBadge(paged: _paged)),
           HideReadButton(value: _filter, onChanged: _setFilter),
