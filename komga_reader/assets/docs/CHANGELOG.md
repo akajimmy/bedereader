@@ -11,6 +11,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 - Reader: scrubbing the page slider (finger, mouse or remote) moves the page strip with it, to the page being picked.
+- Posters fill their tiles again: build 61's "never enlarged" posters (shown at their own size inside Large tiles)
+  are undone.
 
 ## 1.2.0 - in development
 
