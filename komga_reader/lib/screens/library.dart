@@ -24,16 +24,42 @@ enum BrowseMode { series, books, collections, readLists }
 
 /// One library (or all of them) browsed four ways: series, books, collections, read lists.
 class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({super.key, required this.api, required this.onSignOut, this.libraryId, this.pin});
+  const LibraryScreen({super.key, required this.api, required this.onSignOut, this.libraryId, this.pin,
+      this.startMode});
   final Komga api;
   final VoidCallback onSignOut;
   final String? libraryId; // null = all libraries
   final Pin? pin; // opened from a Home pin: start in that view instead of the remembered one
+  final BrowseMode? startMode; // opened from a breadcrumb: this way of browsing (filter and sort as remembered)
   @override
   State<LibraryScreen> createState() => _LibraryScreenState();
+
+  /// A breadcrumb's parent (user, 2026-10-02): the library screen the user came through, if one is open under this
+  /// screen, gone back to and shown [mode]; else a new one opened. [libraryId]: a library screen showing that one
+  /// ([anyLibrary]: whichever it shows - read lists and collections span libraries).
+  static Future<void> openFromBreadcrumb(BuildContext context, Komga api,
+      {String? libraryId, bool anyLibrary = false, required BrowseMode mode}) async {
+    for (final s in _LibraryScreenState._open.reversed) {
+      final route = s.mounted ? ModalRoute.of(s.context) : null;
+      if (route == null || !route.isActive || route.isCurrent) continue;
+      if (!anyLibrary && s._libraryId != libraryId) continue;
+      Navigator.of(context).popUntil((r) => r == route);
+      s._show(mode);
+      return;
+    }
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => LibraryScreen(
+        api: api, onSignOut: AppDrawer.appSignOut, libraryId: libraryId, startMode: mode)));
+  }
 }
 
 class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
+  static final List<_LibraryScreenState> _open = []; // library screens in the app now, oldest first
+
+  /// Shows [m] (a breadcrumb back to this screen), as picking its chip would.
+  void _show(BrowseMode m) {
+    if (_mode == m) return;
+    _sel.end(); _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); _load();
+  }
   @override
   void refreshView() => _refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
 
@@ -67,11 +93,13 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   @override
   void initState() {
     super.initState();
+    _open.add(this);
     _init();
   }
 
   @override
   void dispose() {
+    _open.remove(this);
     _paged.dispose();
     _sel.dispose();
     super.dispose();
@@ -102,6 +130,8 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
       _desc = parts.length > 1 ? parts[1] == 'desc' : _defaultDesc(_sortKey);
     } else {
       await _restoreView();
+      final m = widget.startMode;
+      if (m != null && m != _mode) { _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); }
     }
     if (!mounted) return;
     setState(() {});
