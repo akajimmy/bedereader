@@ -11,6 +11,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 - Web: right-click on a poster opened the browser's own menu on top of the app's.
+- Reader, the end card: the next book's picture is its poster as Komga has it (a poster picked in Komga included),
+  at its own size - no bigger than the card - instead of its first page, which showed the middle of a double-page
+  spread when the book opened with one. Its size now follows Komga's thumbnail size.
 
 ## 1.2.0 - in development
 
