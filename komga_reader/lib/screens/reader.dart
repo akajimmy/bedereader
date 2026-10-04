@@ -1204,26 +1204,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final id = _book['id'] as String;
     if (_upNextFor != id || _upNextFuture == null) {
       _upNextFor = id;
-      _upNextFuture = _nextFrom(id).then((next) {
-        if (next != null) _cover(next['id'] as String).ignore(); // fetched ahead, like the lookup itself
-        return next;
-      });
+      _upNextFuture = _nextFrom(id);
     }
     return _upNextFuture!;
-  }
-
-  String? _coverFor;
-  Future<Uint8List?>? _coverFuture;
-
-  /// The next book's first page - its cover at full resolution. Komga's thumbnails are small (300 px wide by
-  /// default), and blurry at the end card's poster size (user, 2026-09-29). Null if it can't be had (offline and not
-  /// downloaded, say): the thumbnail stays.
-  Future<Uint8List?> _cover(String bookId) {
-    if (_coverFor != bookId || _coverFuture == null) {
-      _coverFor = bookId;
-      _coverFuture = api.pageBytes(bookId, 1).then<Uint8List?>((b) => b).catchError((Object _) => null);
-    }
-    return _coverFuture!;
   }
 
   String? _upNextFor;
@@ -1315,34 +1298,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
             const SizedBox(height: 12),
             LayoutBuilder(builder: (context, c) {
               final h = (MediaQuery.sizeOf(context).height * 0.42).clamp(160.0, 520.0);
-              final dpr = MediaQuery.devicePixelRatioOf(context);
-              final id = next['id'] as String;
-              // the thumbnail at once, then the cover page itself (sharp) over it when it's in
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: SizedBox(
-                  height: h,
-                  width: h * 0.66,
-                  child: Stack(fit: StackFit.expand, children: [
-                    Image(
-                      image: api.thumbImage(api.bookThumb(id)),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F)),
-                    ),
-                    FutureBuilder<Uint8List?>(
-                      future: _cover(id),
-                      builder: (context, cover) => cover.data == null
-                          ? const SizedBox.shrink()
-                          : Image.memory(cover.data!,
-                              fit: BoxFit.cover,
-                              // decoded at about the size shown (a little over, for covers narrower than the frame)
-                              cacheHeight: (h * dpr * 1.25).round(),
-                              filterQuality: FilterQuality.medium,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
-                    ),
-                  ]),
-                ),
-              );
+              // the book's poster as Komga has it (a poster picked in Komga included), at its own size - so its size
+              // follows the server's thumbnail size - and no bigger than the plate (user, 2026-10-03; the cover page
+              // used before showed the middle of a spread when page 1 was one)
+              return _NativePoster(api.thumbImage(api.bookThumb(next['id'] as String)), max: Size(h * 0.8, h));
             }),
             const SizedBox(height: 14),
             Text(heading, textAlign: TextAlign.center, style: TextStyle(color: _ink(1), fontSize: 18)),
@@ -1992,6 +1951,76 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class _NoPages implements Exception {}
+
+/// The end card's poster (user, 2026-10-03): at its own size, one poster pixel to one screen pixel, never enlarged;
+/// shrunk to fit [max] if it's bigger. Until it's in (or if there's none): an empty plate of the usual shape.
+class _NativePoster extends StatefulWidget {
+  const _NativePoster(this.provider, {required this.max});
+  final ImageProvider provider;
+  final Size max;
+  @override
+  State<_NativePoster> createState() => _NativePosterState();
+}
+
+class _NativePosterState extends State<_NativePoster> {
+  ImageStream? _stream;
+  ImageInfo? _info;
+  late final _listener = ImageStreamListener(
+    (info, _) { if (mounted) setState(() { _info?.dispose(); _info = info; }); },
+    onError: (_, __) {}, // none to be had: the empty plate stays
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_NativePoster old) {
+    super.didUpdateWidget(old);
+    if (old.provider != widget.provider) _resolve();
+  }
+
+  void _resolve() {
+    final s = widget.provider.resolve(createLocalImageConfiguration(context));
+    if (s.key == _stream?.key) return;
+    _stream?.removeListener(_listener);
+    _stream = s..addListener(_listener);
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    _info?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _info;
+    final max = widget.max;
+    Size size;
+    if (info == null) {
+      size = Size(max.height * 0.66, max.height); // waiting: a plate of the usual shape
+    } else {
+      final dpr = MediaQuery.devicePixelRatioOf(context);
+      size = Size(info.image.width / dpr, info.image.height / dpr); // its own size, in logical pixels
+      final shrink = math.min(1.0, math.min(max.width / size.width, max.height / size.height));
+      size = size * shrink;
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox.fromSize(
+        key: const ValueKey('next-poster'),
+        size: size,
+        child: info == null
+            ? const ColoredBox(color: Color(0xFF1C1C1F))
+            : RawImage(image: info.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
+      ),
+    );
+  }
+}
 
 /// A page turn in progress (3D page curl).
 class _Curl {

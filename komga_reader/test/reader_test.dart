@@ -20,15 +20,16 @@ import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
-/// [ReaderServer] whose next book (B2) has a cover page to fetch.
-class CoverKomga extends ReaderServer {
-  static late Uint8List cover;
-  final coverAsked = <String>[];
+/// [ReaderServer] whose books have a poster ([poster]: Komga's thumbnail), and that records any page asked for.
+class PosterKomga extends ReaderServer {
+  static late Uint8List poster;
+  final pagesAsked = <String>[];
+  @override
+  ImageProvider thumbImage(String ref) => MemoryImage(poster);
   @override
   Future<Uint8List> pageBytes(String bookId, int number) {
-    if (bookId != 'B2' || number != 1) return super.pageBytes(bookId, number);
-    coverAsked.add(bookId);
-    return Future.value(cover);
+    pagesAsked.add('$bookId p$number');
+    return super.pageBytes(bookId, number);
   }
 }
 
@@ -375,22 +376,32 @@ void main() {
     }
   });
 
-  testWidgets("end card: the next book's cover page replaces the (small, blurry) thumbnail once it's in",
-      (tester) async {
-    CoverKomga.cover = (await tester.runAsync(() => solidPng(20, 30, const Color(0xFF3060A0))))!;
-    api = noNetwork(CoverKomga.new)..next = second;
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await toEndCard(tester);
-    await until(tester, () => tester.widgetList(find.byType(Image)).length >= 2); // the cover decodes for real
-    expect((api as CoverKomga).coverAsked, ['B2']); // page 1 of the next book - once
-    final images = tester.widgetList<Image>(find.byType(Image)).toList();
-    expect(images.length, 2); // the thumbnail underneath, the cover over it
-    expect(images.last.image, isA<ResizeImage>()); // decoded at about the size shown
-    expect((images.last.image as ResizeImage).imageProvider, isA<MemoryImage>());
-    await tester.pump(const Duration(seconds: 2));
-  });
+  // the end card shows the next book's poster as Komga has it, at its own size, no bigger than the plate - not its
+  // first page (a spread showed its middle, spine and all) (user, 2026-10-03)
+  for (final (poster, shown, why) in [
+    (const Size(195, 300), const Size(195, 300), "Komga's usual thumbnail: at its own size, not enlarged"),
+    (const Size(649, 1000), const Size(218.4, 336), 'a big poster: shrunk to the plate (336 tall on an 800-tall screen)'),
+  ]) {
+    testWidgets("end card: the next book's poster, ${poster.width.round()} x ${poster.height.round()} - $why; its "
+        'first page is never asked for', (tester) async {
+      setView(tester, const Size(1280, 800));
+      PosterKomga.poster =
+          (await tester.runAsync(() => solidPng(poster.width.round(), poster.height.round(), const Color(0xFF3060A0))))!;
+      api = noNetwork(PosterKomga.new)..next = second;
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await toEndCard(tester);
+      await until(tester, () => find.descendant(of: find.byKey(const ValueKey('next-poster')),
+          matching: find.byType(RawImage)).evaluate().isNotEmpty); // decodes for real
+      final size = tester.getSize(find.byKey(const ValueKey('next-poster')));
+      expect(size.width, closeTo(shown.width, 0.5), reason: why);
+      expect(size.height, closeTo(shown.height, 0.5), reason: why);
+      expect((api as PosterKomga).pagesAsked.where((p) => p.startsWith('B2')), isEmpty,
+          reason: "the next book's pages: not fetched for the card");
+      await tester.pump(const Duration(seconds: 2));
+    });
+  }
 
   testWidgets("end card offline: the next book isn't downloaded - it says so, no poster, and → closes the book",
       (tester) async {
@@ -466,7 +477,7 @@ void main() {
     expect(find.text('Up next in the series'), findsOneWidget);
     expect(find.text('Test #2'), findsOneWidget);
     expect(find.text('The Second One'), findsOneWidget);
-    expect(find.byType(Image), findsOneWidget); // its poster
+    expect(find.byKey(const ValueKey('next-poster')), findsOneWidget); // its poster (its size: the tests below)
     expect(api.askedReadList, isNull); // opened outside a read list: the series
     await tester.pump(const Duration(seconds: 2));
   });
