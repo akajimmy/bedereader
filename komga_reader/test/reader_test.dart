@@ -41,7 +41,7 @@ class DownKomga extends ReaderServer {
   bool pagesDown = true;
   @override
   Future<Map<String, dynamic>?> book(String id) async =>
-      bookDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : theBook;
+      bookDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : withProgress(theBook);
   @override
   Future<Uint8List> pageBytes(String bookId, int number) async =>
       pagesDown ? throw KomgaUnreachable('http://192.168.1.10:25600') : ImageKomga.png;
@@ -77,9 +77,11 @@ class BackChainKomga extends ReaderServer {
         _ => null,
       };
   @override
-  Future<Map<String, dynamic>?> book(String id) async {
-    opened.add(id);
-    return id == 'B1' ? theBook : ChainKomga.b(id, id);
+  Future<Map<String, dynamic>?> book(String id) async => withProgress(id == 'B1' ? theBook : ChainKomga.b(id, id));
+  @override
+  Future<List<dynamic>> pages(String bookId) {
+    opened.add(bookId); // a book opened (its pages asked for once per opening; book() is asked before saves too)
+    return super.pages(bookId);
   }
 }
 
@@ -88,9 +90,12 @@ class BackChainKomga extends ReaderServer {
 class VisitKomga extends ChainKomga {
   final opened = <String>[];
   @override
-  Future<Map<String, dynamic>?> book(String id) async {
-    opened.add(id);
-    return id == 'B1' ? theBook : ChainKomga.b(id, id.substring(1), read: id == 'B2');
+  Future<Map<String, dynamic>?> book(String id) async =>
+      withProgress(id == 'B1' ? theBook : ChainKomga.b(id, id.substring(1), read: id == 'B2'));
+  @override
+  Future<List<dynamic>> pages(String bookId) {
+    opened.add(bookId); // a book opened (its pages asked for once per opening; book() is asked before saves too)
+    return super.pages(bookId);
   }
 
   @override

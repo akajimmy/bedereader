@@ -74,13 +74,13 @@ class ChainServer extends ReaderServer {
       };
 
   @override
-  Future<Map<String, dynamic>?> book(String id) async {
-    opened.add(id);
-    return b(id);
-  }
+  Future<Map<String, dynamic>?> book(String id) async => withProgress(b(id));
 
   @override
-  Future<List<dynamic>> pages(String bookId) async => empty.contains(bookId) ? [] : [{'number': 1}, {'number': 2}, {'number': 3}];
+  Future<List<dynamic>> pages(String bookId) async {
+    opened.add(bookId); // a book opened (its pages asked for once per opening; book() is asked before saves too)
+    return empty.contains(bookId) ? [] : [{'number': 1}, {'number': 2}, {'number': 3}];
+  }
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
     nextCalls++;
@@ -299,6 +299,114 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
       });
     }
+  });
+
+  // Progress moved on another device while the book was open here (user, 2026-10-05): before a save, and on coming
+  // back to the app, the reader asks Komga again and asks you. "Another device" is Komga's progress (BookServer's)
+  // changed under the reader.
+  group('read elsewhere meanwhile', () {
+    Future<BookServer> reading(WidgetTester tester) async {
+      final api = noNetwork(() => BookServer(pageCount: 8));
+      await open(tester, api);
+      await keyAndSettle(tester, LogicalKeyboardKey.arrowRight); // page 2 here
+      await tester.pump(const Duration(seconds: 2)); // saved
+      expect(api.progress, {'page': 2, 'completed': false});
+      return api;
+    }
+
+    // a dialog opening or closing, a page jump (no settle: this book's pages never load, a spinner keeps turning)
+    Future<void> frames(WidgetTester tester) async {
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    Future<void> turnAndWait(WidgetTester tester) async {
+      await keyAndSettle(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(seconds: 2)); // the save is due: the check first
+      await tester.pump();
+    }
+
+    testWidgets('read further elsewhere: the next save asks; Go to page takes you there and saves nothing over it',
+        (tester) async {
+      final api = await reading(tester);
+      api.progress = {'page': 6, 'completed': false}; // on the PC
+      await turnAndWait(tester); // page 3 here
+      expect(find.text('Read further on another device'), findsOneWidget);
+      expect(find.text('On another device this book is on page 6.'), findsOneWidget);
+      expect(find.text('Stay on page 3'), findsOneWidget);
+      await tester.tap(find.text('Go to page 6'));
+      await frames(tester);
+      expect(page(tester), 5.0, reason: 'page 6');
+      await tester.pump(const Duration(seconds: 2));
+      expect(api.progress, {'page': 6, 'completed': false}, reason: "the other device's, not page 3 over it");
+      await turnAndWait(tester); // on from there: saved, no question (it's this reader's now)
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(api.progress, {'page': 7, 'completed': false});
+    });
+
+    testWidgets('read further elsewhere: Stay saves this page', (tester) async {
+      final api = await reading(tester);
+      api.progress = {'page': 6, 'completed': false};
+      await turnAndWait(tester);
+      await tester.tap(find.text('Stay on page 3'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(page(tester), 2.0);
+      expect(api.progress, {'page': 3, 'completed': false}, reason: 'this page, saved');
+    });
+
+    testWidgets('finished elsewhere: Mark as read goes to the end card and the book stays read; Stay here carries '
+        'on, in progress again', (tester) async {
+      var api = await reading(tester);
+      api.progress = {'page': 8, 'completed': true}; // finished on the PC
+      await turnAndWait(tester);
+      expect(find.text('Finished on another device'), findsOneWidget);
+      await tester.tap(find.text('Mark as read'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(find.text('End of book'), findsOneWidget, reason: 'the end card, with the next book');
+      expect(api.progress!['completed'], isTrue, reason: 'still read');
+      await tester.pumpWidget(const SizedBox());
+
+      api = await reading(tester);
+      api.progress = {'page': 8, 'completed': true};
+      await turnAndWait(tester);
+      await tester.tap(find.text('Stay here'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(api.progress, {'page': 3, 'completed': false}, reason: 'in progress again, here');
+    });
+
+    testWidgets('coming back to the app with the book open asks at once (no page turn needed); OK on the remote is '
+        'Stay', (tester) async {
+      final api = await reading(tester);
+      api.progress = {'page': 6, 'completed': false};
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused, // locked
+        AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) { // unlocked
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Read further on another device'), findsOneWidget);
+      expect(find.text('Stay on page 2'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // OK: Stay (focused)
+      await frames(tester);
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(page(tester), 1.0, reason: 'stayed on page 2');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('closing the book after it moved elsewhere: nothing saved over it, and no question', (tester) async {
+      final api = await reading(tester);
+      await keyAndSettle(tester, LogicalKeyboardKey.arrowRight); // page 3 here, its save still to come
+      api.progress = {'page': 6, 'completed': false}; // the PC, meanwhile
+      await tester.binding.handlePopRoute(); // close
+      await frames(tester);
+      expect(find.byType(ReaderScreen), findsNothing);
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(api.progress, {'page': 6, 'completed': false}, reason: "the other device's stands");
+    });
   });
 
   // ---- 4

@@ -11,7 +11,7 @@ class ReaderServer extends TestKomga {
   final theBook = {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '1', 'title': 'T'}};
   static String direction = 'LEFT_TO_RIGHT'; // the series' reading direction in Komga
   @override
-  Future<Map<String, dynamic>?> book(String id) async => theBook;
+  Future<Map<String, dynamic>?> book(String id) async => withProgress(theBook);
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async => {'id': id, 'metadata': {'readingDirection': direction}};
   @override
@@ -22,6 +22,18 @@ class ReaderServer extends TestKomga {
   Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
     saves.add(page);
     if (completed) finished.add(page);
+    // kept, as Komga keeps it: asked for the book again, it comes with it (the reader checks before saving whether
+    // another device moved it - 2026-10-05)
+    savedProgress[bookId] = {'page': page, 'completed': completed};
+  }
+
+  /// Progress saved here, by book ([withProgress] puts it on a book as Komga would).
+  final savedProgress = <String, Map<String, dynamic>?>{};
+
+  /// [b] as Komga would return it now: with the progress saved for it, if any.
+  Map<String, dynamic>? withProgress(Map<String, dynamic>? b) {
+    if (b == null || !savedProgress.containsKey(b['id'])) return b;
+    return {...b, 'readProgress': savedProgress[b['id']]};
   }
 
   final finished = <int>[]; // saves that marked the book read
@@ -29,7 +41,10 @@ class ReaderServer extends TestKomga {
   final marked = <String>[];
   int nextCalls = 0;
   @override
-  Future<void> markRead(String bookId) async => marked.add(bookId);
+  Future<void> markRead(String bookId) async {
+    marked.add(bookId);
+    savedProgress[bookId] = {'page': 3, 'completed': true};
+  }
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
     nextCalls++;
