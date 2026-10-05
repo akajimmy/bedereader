@@ -95,7 +95,9 @@ class Pins extends ChangeNotifier {
       final changes = _changes;
       _fetchedAt = DateTime.now();
       final remote = (await api.clientSettings())[komgaKey]?['value'];
-      if (_changes != changes) return; // pinned / unpinned here meanwhile: that goes to Komga, not the other way
+      // pinned / unpinned here meanwhile (that goes to Komga, not the other way), or sync switched off meanwhile (this
+      // device's own list stays as it is)
+      if (_changes != changes || !sync) return;
       if (remote is String) {
         items = _decode(remote);
         await p.setString(_local, remote);

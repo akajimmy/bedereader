@@ -5,6 +5,7 @@ import '../api.dart';
 import '../hidden_libraries.dart';
 import '../home_sections.dart';
 import '../ondeck_hidden.dart';
+import '../pins.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -387,6 +388,22 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ]);
         }),
         _librariesShown(),
+        ListenableBuilder(
+          listenable: Pins.instance,
+          builder: (context, _) {
+            final pins = Pins.instance;
+            return SettingsGroup(title: 'Pins', children: [
+              SwitchRow(
+                title: 'Sync pins across devices',
+                subtitle: pins.sync
+                    ? 'The same pins on every device signed in to this account'
+                    : 'This device has its own pins',
+                value: pins.sync,
+                onChanged: (on) => _setPinSync(context, on),
+              ),
+            ]);
+          },
+        ),
         const SettingsGroup(title: 'Home sections', children: [
           NoteRow('Switch on or off; reorder with the arrows or the handle'),
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
@@ -407,6 +424,32 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           },
         ),
       ];
+
+  /// Sync pins across devices (user, 2026-10-05). Back on, the shared list returns: this device's pins that it
+  /// doesn't have would go - asked first, naming how many.
+  Future<void> _setPinSync(BuildContext context, bool on) async {
+    if (on) {
+      final only = await Pins.instance.deviceOnly();
+      if (only.isNotEmpty && context.mounted) {
+        final n = only.length;
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('Sync pins across devices?'),
+            content: Text("This device has $n pin${n == 1 ? '' : 's'} the shared list doesn't "
+                "(${only.map((p) => p.name).join(', ')}). Syncing shows the shared list instead - "
+                "${n == 1 ? 'that pin goes' : 'those pins go'} from this device."),
+            actions: [
+              TextButton(autofocus: true, onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+              TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Sync')),
+            ],
+          ),
+        );
+        if (ok != true) return;
+      }
+    }
+    await Pins.instance.setSync(on);
+  }
 
   late final Future<List<dynamic>> _allLibraries = widget.api.libraries();
 
