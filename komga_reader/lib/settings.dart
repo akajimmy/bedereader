@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'errors.dart';
+import 'refresh_gate.dart';
 import 'screen.dart';
 
 /// [original]: the page at its own size, one page pixel to one screen pixel (user, 2026-10-02).
@@ -438,6 +439,8 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
     if (!fetch) return; // offline mode: this device's copy; what's unsent goes once online (useApi)
     try {
+      _gate.asked();
+      // (changed here meanwhile: unsent, so this device's version stays when Komga's arrives - _applyBlob)
       final remote = await _fetchRemote();
       if (remote != null) {
         _applyBlob(remote, remote: true);
@@ -493,6 +496,15 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
     SharedPreferences.getInstance().then((p) => p.setString(_localDisplay, jsonEncode(d.toJson())));
   }
+
+  /// The reader settings from Komga again - Home calls it each time it reloads, so a change made on another device
+  /// arrives without a restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
+  Future<void> refresh() {
+    final api = _api;
+    return api == null ? Future.value() : _gate.run(() => load(api));
+  }
+
+  final _gate = RefreshGate();
 
   // Screen brightness (and the extra dim below the screen's minimum) is the reader's: it applies while a book is open,
   // and everywhere else the screen follows the system (user, 2026-10-05: left at extra dim from reading in bed, the

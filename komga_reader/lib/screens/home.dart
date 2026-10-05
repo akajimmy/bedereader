@@ -9,6 +9,7 @@ import '../home_sections.dart';
 import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
+import '../settings.dart';
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
@@ -89,8 +90,12 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
 
   Future<void> _load() async {
     PinTile.invalidate(); // pin posters show the current first items
-    // the pins from Komga again: ones made on another device arrive (user, 2026-10-05) - not while offline
-    if (!Connection.instance.offline) unawaited(Pins.instance.refresh());
+    // what's synced through Komga, again: changes made on another device arrive (user, 2026-10-05) - not while offline
+    if (!Connection.instance.offline) {
+      unawaited(Pins.instance.refresh());
+      unawaited(AppSettings.instance.refresh());
+      unawaited(OnDeckHidden.instance.refresh());
+    }
     unawaited(_checkOfflinePins()); // offline: which pins have something downloaded (runs alongside)
     setState(() { _loading = _inProgress.isEmpty && _libraries.isEmpty; _error = null; });
     try {
