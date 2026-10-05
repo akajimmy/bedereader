@@ -132,6 +132,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
     Downloads.instance.readerOpened(); // Delete once read waits for it too
     AppSettings.instance.readerOpened(); // the screen brightness setting is the reader's
+    // back in the app (unlocked, switched back to): read further elsewhere meanwhile?
+    _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
     // Rotation as set (the app otherwise follows the sensor, via the manifest), hide the system bars, keep the screen on.
     _applyRotation();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -157,7 +159,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
     AppSettings.instance.readerClosed(); // the screen follows the system again
-    _saveNow(); // before Downloads hears the book closed: a book finished here is marked read first
+    _life?.dispose();
+    // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
+    // if another device moved the book on meanwhile, nothing is saved over it
+    _saveNow(ask: false);
     Downloads.instance.readerClosed();
     _settings.removeListener(_onSettings);
     fullscreen.removeListener(_onFullscreen);
@@ -267,6 +272,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       setState(() {
         _book = fresh; _pages = pages; _index = start; _loader = loader; _returnTo = null;
         _openedAt = start; _turned = false; _zoomed = false; _bookFit = null;
+        _known[fresh['id'] as String] = _progressOf(fresh); // as Komga has it now: a change elsewhere is from here on
         _pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
         _loading = false;
       });
@@ -359,13 +365,105 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   }
 
   /// Opening a book and closing it without turning a page leaves no trace. Turning pages in a finished book starts
-  /// it over (Komga's own behaviour).
-  void _saveNow() {
+  /// it over (Komga's own behaviour). [ask]: false while closing (no question then): if another device has moved the
+  /// book on meanwhile, nothing is saved over it.
+  void _saveNow({bool ask = true}) {
     if (!_turned || _pages.isEmpty) return;
     // the end card counts as the last page: finished (closing from it used to save nothing if the last page's
     // save hadn't happened yet - the 1.5 s settle timer is cancelled by the turn onto the card)
     final page = math.min(_index, _last);
-    api.setProgress(_book['id'], page + 1, completed: page >= _last).catchError((_) {});
+    final id = _book['id'] as String;
+    _saves = _saves.then((_) => _save(id, page + 1, page >= _last, ask: ask)); // one at a time, in order
+  }
+
+  // ---- progress moved on another device while this book was open (user, 2026-10-05: read on the PC, then the
+  // tablet - left open on that book - saved its old page over it). Before a save, and on coming back to the app, the
+  // reader asks Komga again; if Komga's progress isn't what this reader last loaded, saved or accepted, another device
+  // changed it, and it asks: finished there -> Stay here / Mark as read; another page -> Stay / Go to that page.
+  // Content is compared, not times: Komga doesn't hand back the time of the reader's own saves.
+
+  // per book (a book left for the next one is saved after that one has opened): (page from 1, or null: not started;
+  // finished)
+  final Map<String, (int?, bool)> _known = {};
+  Future<void> _saves = Future.value();
+  bool _asking = false;
+  AppLifecycleListener? _life;
+
+  static (int?, bool) _progressOf(dynamic book) {
+    final rp = book?['readProgress'];
+    return rp == null ? (null, false) : ((rp['page'] as num?)?.toInt(), rp['completed'] == true);
+  }
+
+  /// Komga's progress for [id] if it's not what this reader knows (another device moved it); null if it is, or if
+  /// Komga can't say (offline, unreachable - the save goes ahead as before).
+  Future<(int?, bool)?> _movedElsewhere(String id) async {
+    if (Connection.instance.offline) return null;
+    try {
+      final now = _progressOf(await api.book(id));
+      final known = _known[id];
+      return known == null || now == known ? null : now;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _save(String id, int page, bool completed, {required bool ask}) async {
+    final moved = await _movedElsewhere(id);
+    if (moved != null) {
+      if (!ask || !mounted || _book['id'] != id) return; // closing, or another book by now: theirs stands
+      if (!await _askAboutElsewhere(moved)) return; // gone with theirs: nothing of this one's to save
+    }
+    _known[id] = (page, completed);
+    await api.setProgress(id, page, completed: completed).catchError((_) {});
+  }
+
+  /// Back in the app with the book open: has it moved on elsewhere meanwhile?
+  Future<void> _checkElsewhere() async {
+    if (_loading || _pages.isEmpty || _asking) return;
+    final moved = await _movedElsewhere(_book['id'] as String);
+    if (moved != null && mounted) await _askAboutElsewhere(moved);
+  }
+
+  /// The question. True: stay here (this reader's progress is saved next); false: went with the other device's.
+  Future<bool> _askAboutElsewhere((int?, bool) moved) async {
+    if (_asking) return true;
+    _asking = true;
+    try {
+      final (page, finished) = moved;
+      final here = math.min(_index, _last) + 1;
+      final goTo = finished ? null : (page ?? 1).clamp(1, _pages.length);
+      final stay = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text(finished ? 'Finished on another device' : 'Read further on another device'),
+          content: Text(finished
+              ? 'This book was read to the end on another device.'
+              : page == null
+                  ? 'This book was marked unread on another device.'
+                  : 'On another device this book is on page $page.'),
+          actions: [
+            TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true),
+                child: Text(finished ? 'Stay here' : 'Stay on page $here')),
+            TextButton(onPressed: () => Navigator.pop(c, false),
+                child: Text(finished ? 'Mark as read' : 'Go to page $goTo')),
+          ],
+        ),
+      );
+      _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
+      if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
+      _saveTimer?.cancel();
+      setState(() => _book = {..._book, 'readProgress': finished
+          ? {'page': _pages.length, 'completed': true}
+          : page == null ? null : {'page': page, 'completed': false}});
+      _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
+      _finishCurlNow();
+      final target = finished ? _pages.length : goTo! - 1; // finished: the end card, with the next book
+      _openedAt = target;
+      _pc?.jumpToPage(target);
+      return false;
+    } finally {
+      _asking = false;
+    }
   }
 
   // ---- navigation (the page after the last is the "end of book" card)
@@ -686,6 +784,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     try {
       if (markRead) {
         await api.markRead(_book['id']);
+        _known[_book['id'] as String] = (_pages.length, true); // this reader's own: not a change from elsewhere
       } else {
         _saveNow();
       }
@@ -814,6 +913,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _openedAt = _index;
     final id = _book['id'];
     final fresh = await api.book(id).catchError((_) => null);
+    if (fresh != null) _known[id as String] = _progressOf(fresh); // this reader's own mark: not another device's
     // only if that book is still the one open (a quick Next book meanwhile: the answer is for the book left behind)
     if (mounted && fresh != null && _book['id'] == id && !_busy) setState(() => _book = fresh);
   }
