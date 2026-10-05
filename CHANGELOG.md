@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Screen brightness is the reader's**: your brightness - extra dim included - applies while a book is open; the rest
+  of the app (Home, libraries, Settings) uses the screen's own brightness. Left at extra dim from reading in the dark,
+  the app opened too dark to see in daylight, Settings included. The setting moved from Settings > Display to
+  Settings > Reader ("Brightness while reading"); the reader's panel still has it.
+
 **Added**
 - **Sync pins across devices** (Settings > Library & Home; on by default): switched off, a device keeps its own pins -
   a copy of the shared ones to start with - and pins made there stay there. Switched back on, the shared pins return;
