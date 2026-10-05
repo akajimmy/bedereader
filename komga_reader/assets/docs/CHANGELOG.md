@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 63 - 2026-10-05
+
 **Changed**
 - **Screen brightness is the reader's**: your brightness - extra dim included - applies while a book is open; the rest
   of the app (Home, libraries, Settings) uses the screen's own brightness. Left at extra dim from reading in the dark,
@@ -38,10 +44,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Reader, the end card: the next book's picture is its poster as Komga has it (a poster picked in Komga included),
   at its own size - no bigger than the card - instead of its first page, which showed the middle of a double-page
   spread when the book opened with one. Its size now follows Komga's thumbnail size.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 62 - 2026-10-03
 
