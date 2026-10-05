@@ -12,12 +12,16 @@ mixin ClientSettingsStore on Komga {
   final written = <String, String>{};
   bool down = false;
   Completer<void>? holdPut; // a write on its way, until completed
-  int puts = 0;
+  Completer<void>? holdGet; // a read on its way, until completed (what it answers is what was there when asked)
+  int puts = 0, gets = 0;
 
   @override
   Future<Map<String, dynamic>> clientSettings() async {
     if (down) throw KomgaUnreachable(baseUrl);
-    return {for (final e in written.entries) e.key: {'value': e.value}};
+    gets++;
+    final now = {for (final e in written.entries) e.key: {'value': e.value}};
+    await holdGet?.future;
+    return now;
   }
 
   @override
