@@ -126,7 +126,7 @@ void main() {
 
   test('refresh: a pin made here while the list from Komga was on its way is kept - the older list is dropped, and '
       'the new pin reaches Komga', () async {
-    final api = server();
+    final api = server()..written[Pins.komgaKey] = '[]'; // Komga has a pin list (empty): that's what comes back
     await Pins.instance.load(api);
     api.holdGet = Completer<void>();
     final refreshing = Pins.instance.refresh(); // asked Komga: an empty list on its way
