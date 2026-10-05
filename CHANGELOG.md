@@ -20,6 +20,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   white starts from the default (black) - pick it again once, as the default or for a series.
 
 **Added**
+- **Read on another device meanwhile**: with a book open (say the tablet locked mid-book, then read on the PC),
+  BeDeReader checks Komga before saving your page and when you come back to the app. Finished elsewhere: **Stay
+  here** (carry on; the book is in progress again) or **Mark as read** (it stays read, and you're on the end card for
+  the next book). On another page elsewhere: **Stay on page N** or **Go to page M**. OK on the remote (or Back)
+  stays. Closing the book never saves over the other device's progress. Before, the first page turn here quietly
+  overwrote it.
 - **Sync pins across devices** (Settings > Library & Home; on by default): switched off, a device keeps its own pins -
   a copy of the shared ones to start with - and pins made there stay there. Switched back on, the shared pins return;
   if the device has pins the shared list doesn't, it asks first.
