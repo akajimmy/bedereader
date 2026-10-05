@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'errors.dart';
+import 'refresh_gate.dart';
 
 /// A view pinned to Home under a name of your choosing, e.g. "Ultimate Universe · unread" = that read list with
 /// read books hidden. Opening it restores exactly that view (list, hide-read, and for libraries mode and sort).
@@ -93,7 +94,7 @@ class Pins extends ChangeNotifier {
     }
     try {
       final changes = _changes;
-      _fetchedAt = DateTime.now();
+      _gate.asked();
       final remote = (await api.clientSettings())[komgaKey]?['value'];
       // pinned / unpinned here meanwhile (that goes to Komga, not the other way), or sync switched off meanwhile (this
       // device's own list stays as it is)
@@ -112,22 +113,13 @@ class Pins extends ChangeNotifier {
   /// Komga's list again - Home calls it each time it reloads, so pins made on another device show up without
   /// restarting the app (user, 2026-10-05: one pinned on the tablet never reached a PC app left open). Changes made
   /// here and not sent yet go first, as at a start.
-  /// Several reloads in a row (going online rebuilds Home, and Home reloads as it comes back) ask once: one fetch at a
-  /// time, and none within [refreshGap] of the last.
+  /// Several reloads in a row ask once ([RefreshGate]).
   Future<void> refresh() {
     final api = _api;
-    if (api == null) return Future.value();
-    final running = _refreshing;
-    if (running != null) return running;
-    final at = _fetchedAt;
-    if (at != null && DateTime.now().difference(at) < refreshGap) return Future.value();
-    return _refreshing = load(api).whenComplete(() => _refreshing = null);
+    return api == null ? Future.value() : _gate.run(() => load(api));
   }
 
-  @visibleForTesting
-  static Duration refreshGap = const Duration(seconds: 10);
-  DateTime? _fetchedAt; // the last time Komga was asked
-  Future<void>? _refreshing;
+  final _gate = RefreshGate();
 
   int _changes = 0; // pins changed on this device: a list from Komga that was asked for before is out of date
 

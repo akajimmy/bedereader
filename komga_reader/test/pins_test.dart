@@ -3,10 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
+import 'package:komga_reader/refresh_gate.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/readlist.dart';
+import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,9 +39,9 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     Pins.instance.items = [];
-    Pins.refreshGap = Duration.zero; // each refresh asks (the one-per-10-s limit has its own test)
+    RefreshGate.gap = Duration.zero; // each refresh asks (the one-per-10-s limit has its own test)
   });
-  tearDown(() => Pins.refreshGap = const Duration(seconds: 10));
+  tearDown(() => RefreshGate.gap = const Duration(seconds: 10));
 
   const uu = Pin(name: 'Ultimate Universe · unread', kind: 'readlist', id: 'RL1', title: 'Ultimate Universe',
       filter: 'hideRead');
@@ -111,13 +114,13 @@ void main() {
 
   test('refresh: one fetch at a time, and none within 10 s of the last (going online reloads Home several times)',
       () async {
-    Pins.refreshGap = const Duration(seconds: 10);
+    RefreshGate.gap = const Duration(seconds: 10);
     final api = server();
     await Pins.instance.load(api);
     final asked = api.gets;
     await Future.wait([Pins.instance.refresh(), Pins.instance.refresh(), Pins.instance.refresh()]);
     expect(api.gets, asked, reason: 'just asked at the start: none again within 10 s');
-    Pins.refreshGap = Duration.zero;
+    RefreshGate.gap = Duration.zero;
     api.holdGet = Completer<void>();
     final a = Pins.instance.refresh(), b = Pins.instance.refresh();
     await pumpEventQueue();
@@ -142,20 +145,36 @@ void main() {
     expect(api.written[Pins.komgaKey], contains('RL1'));
   });
 
-  testWidgets('Home reloading (back on Home, pull to refresh) fetches the pins from Komga', (tester) async {
+  testWidgets('Home reloading (back on Home, pull to refresh) fetches the pins, the reader settings and On deck '
+      'hidden from Komga', (tester) async {
     final api = noNetwork(PinnedHome.new);
     await Pins.instance.load(api);
+    await tester.runAsync(() async {
+      await AppSettings.instance.load(api);
+      await OnDeckHidden.instance.load(api);
+    });
+    addTearDown(() async {
+      await AppSettings.instance.clearAccount();
+      await OnDeckHidden.instance.clearAccount();
+    });
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
     await tester.pump();
     await tester.pump();
     expect(find.text('Ultimate Universe · unread'), findsNothing);
-    api.written[Pins.komgaKey] = jsonEncode([uu.toJson()]); // pinned on the tablet
+    // on the tablet: pinned a read list, made fit width the default, hid a series from On deck
+    api.written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+    api.written[AppSettings.komgaKey] =
+        jsonEncode({'default': const ReaderPrefs(fit: FitMode.width).toJson(), 'series': <String, dynamic>{}});
+    api.written[OnDeckHidden.komgaKey] = jsonEncode({'series': ['S9'], 'books': <String>[]});
     (tester.state(find.byType(HomeScreen)) as RefreshOnReturn).refreshView(); // as coming back to Home
+    await tester.runAsync(pumpEventQueue);
     await tester.pump();
     await tester.pump();
     await tester.pump();
     expect(Pins.instance.items.single.id, 'RL1');
     expect(find.text('Ultimate Universe · unread'), findsOneWidget, reason: 'its tile on Home');
+    expect(AppSettings.instance.defaults.fit, FitMode.width, reason: 'the reader settings too');
+    expect(OnDeckHidden.instance.seriesHidden('S9'), isTrue, reason: 'and On deck hidden');
   });
 
   // Sync pins across devices, a switch per device (user, 2026-10-05): on by default
@@ -241,6 +260,23 @@ void main() {
       expect(Pins.instance.items.single.id, 'RL1', reason: 'the shared list');
       expect(find.text('The same pins on every device signed in to this account'), findsOneWidget);
     });
+  });
+
+  test('On deck hidden, refreshed: something hidden here while the list from Komga was on its way is kept, and '
+      'reaches Komga', () async {
+    final api = server()..written[OnDeckHidden.komgaKey] = jsonEncode({'series': <String>[], 'books': <String>[]});
+    await OnDeckHidden.instance.load(api);
+    addTearDown(OnDeckHidden.instance.clearAccount);
+    api.holdGet = Completer<void>();
+    final refreshing = OnDeckHidden.instance.refresh(); // an empty list on its way
+    await pumpEventQueue();
+    OnDeckHidden.instance.setSeries('S1', true); // hidden here meanwhile
+    await pumpEventQueue();
+    api.holdGet!.complete();
+    await refreshing;
+    await pumpEventQueue();
+    expect(OnDeckHidden.instance.seriesHidden('S1'), isTrue, reason: 'not replaced by the list asked for before');
+    expect(api.written[OnDeckHidden.komgaKey], contains('S1'));
   });
 
   testWidgets('a read list opened from a pin starts with that pin\'s filter, and its pin button shows pinned', (tester) async {

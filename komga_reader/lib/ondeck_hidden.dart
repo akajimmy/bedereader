@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'refresh_gate.dart';
 
 /// Series and books left out of On deck (book / series menu > "Hide from On deck"). Komga has no such setting, so
 /// the app keeps the list and filters On deck with it:
@@ -37,7 +38,10 @@ class OnDeckHidden extends ChangeNotifier {
         await _send(p); // this device's changes haven't reached Komga: they win
         return;
       }
+      final changes = _changes;
+      _gate.asked();
       final remote = (await api.clientSettings())[komgaKey]?['value'];
+      if (_changes != changes) return; // hidden / shown here meanwhile: that goes to Komga, not the other way
       if (remote is String) {
         _decode(remote);
         await p.setString(_local, remote);
@@ -47,6 +51,16 @@ class OnDeckHidden extends ChangeNotifier {
       // offline / not reachable: the device's copy stands
     }
   }
+
+  /// Komga's list again - Home calls it each time it reloads, so what's hidden on another device arrives without a
+  /// restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
+  Future<void> refresh() {
+    final api = _api;
+    return api == null ? Future.value() : _gate.run(() => load(api));
+  }
+
+  final _gate = RefreshGate();
+  int _changes = 0; // changed on this device: a list from Komga asked for before is out of date
 
   /// Switch connection (online / offline) without reloading; a change made while Komga couldn't be reached goes now
   /// (it used to wait for the next start - test audit, 2026-09-30; pins and reader settings already did this).
@@ -71,6 +85,7 @@ class OnDeckHidden extends ChangeNotifier {
 
   void _change(void Function() f) {
     f();
+    _changes++;
     notifyListeners();
     SharedPreferences.getInstance().then((p) async {
       await p.setString(_local, _raw);

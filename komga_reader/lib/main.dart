@@ -156,9 +156,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       // back online: the account's things from Komga again - changed on another device meanwhile, or never fetched
       // (an offline start loads them from this device only). What changed here is sent first, as at a start (user,
       // 2026-09-30)
-      unawaited(AppSettings.instance.load(c.api));
-      unawaited(Pins.instance.refresh()); // (Home, rebuilt on the new connection, would ask too: once is enough)
-      unawaited(OnDeckHidden.instance.load(c.api));
+      // (Home, rebuilt on the new connection, asks too: refresh asks once)
+      unawaited(AppSettings.instance.refresh());
+      unawaited(Pins.instance.refresh());
+      unawaited(OnDeckHidden.instance.refresh());
     }
     _nav.currentState?.popUntil((r) => r.isFirst);
     setState(() {});
