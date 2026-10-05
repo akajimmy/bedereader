@@ -40,7 +40,7 @@ extension on SettingsPage {
         SettingsPage.server => Icons.dns_outlined,
         SettingsPage.defaults => Icons.menu_book_outlined,
         SettingsPage.reader => Icons.chrome_reader_mode_outlined,
-        SettingsPage.display => Icons.brightness_6_outlined,
+        SettingsPage.display => Icons.palette_outlined, // (brightness moved to Reader: it's the reader's now)
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
         SettingsPage.downloads => Icons.download_outlined,
@@ -50,7 +50,7 @@ extension on SettingsPage {
   /// Where the page's settings are kept, said once under its title.
   String? get scope => switch (this) {
         SettingsPage.defaults => 'Synced through Komga - every device',
-        SettingsPage.library => 'Kept on this device, except On deck (synced)',
+        SettingsPage.library => 'Kept on this device, except On deck and pins (synced)',
         SettingsPage.about => null,
         _ => 'Kept on this device',
       };
@@ -238,6 +238,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
         ),
       ]),
+      // the reader's alone: everywhere else the screen follows the system (user, 2026-10-05)
+      SettingsGroup(title: 'Brightness while reading', children: brightnessRows(s)),
       SettingsGroup(title: 'Screen', children: [
         backgroundRow(s),
         if (canRotate) rotationRow(s),
@@ -307,7 +309,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   // ---- Display ---------------------------------------------------------------------------------------------------
   Widget _display(AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingsGroup(title: 'Brightness', children: brightnessRows(s)),
         SettingsGroup(title: 'Night', children: [
           ...nightRows(s),
           SwitchRow(

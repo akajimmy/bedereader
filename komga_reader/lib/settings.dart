@@ -490,7 +490,30 @@ class AppSettings extends ChangeNotifier {
     SharedPreferences.getInstance().then((p) => p.setString(_localDisplay, jsonEncode(d.toJson())));
   }
 
-  void applyBacklight() => setScreenBrightness(display.backlight);
+  // Screen brightness (and the extra dim below the screen's minimum) is the reader's: it applies while a book is open,
+  // and everywhere else the screen follows the system (user, 2026-10-05: left at extra dim from reading in bed, the
+  // app opened unreadably dark in daylight - Settings included, where it could be undone).
+  int _readers = 0;
+  bool get inReader => _readers > 0;
+
+  /// A book opened / closed ([ReaderScreen]): the reader's brightness on, back to the system's. Called from its
+  /// initState / dispose, where the overlay above can't be rebuilt there and then: it's told just after.
+  void readerOpened() {
+    if (_readers++ == 0) {
+      applyBacklight();
+      scheduleMicrotask(notifyListeners);
+    }
+  }
+
+  void readerClosed() {
+    if (_readers == 0) return;
+    if (--_readers == 0) {
+      applyBacklight();
+      scheduleMicrotask(notifyListeners);
+    }
+  }
+
+  void applyBacklight() => setScreenBrightness(inReader ? display.backlight : -1);
 
   void _changedReader() {
     notifyListeners();

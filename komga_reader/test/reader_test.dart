@@ -13,6 +13,7 @@ import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/night.dart';
 import 'package:komga_reader/widgets/reader_clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -291,6 +292,56 @@ void main() {
       expect(part == 'dim' ? prefs.dimOverlay : prefs.backlight, matcher,
           reason: '$why (backlight control $control, brightness ${prefs.brightness})');
     }
+  });
+
+  // the screen brightness setting is the reader's: left at extra dim from reading in bed, the app opened unreadably
+  // dark in daylight - Settings too, where it could have been undone (user, 2026-10-05)
+  testWidgets('brightness applies only while a book is open: elsewhere the system brightness and no dim layer; '
+      'opening a book applies it, closing it gives the system its screen back', (tester) async {
+    final was = DisplayPrefs.backlightControl;
+    addTearDown(() => DisplayPrefs.backlightControl = was);
+    DisplayPrefs.backlightControl = true; // a tablet
+    final asked = <double>[]; // what the app asks the screen for (-1 = the system's own)
+    const channel = MethodChannel('komga_reader/screen');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (c) async {
+      if (c.method == 'brightness') asked.add((c.arguments as num).toDouble());
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final s = AppSettings.instance;
+    final before = s.display;
+    addTearDown(() => s.setDisplay(before));
+    s.setDisplay(s.display.copyWith(brightness: () => 0.0)); // extra dim, as set in bed
+    expect(asked.last, -1, reason: 'no book open: the system brightness');
+
+    Finder dimLayer() => find.byWidgetPredicate((w) => w is ColoredBox && w.color.a > 0.5 && w.color.r == 0);
+    api = noNetwork(ReaderServer.new);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => NightOverlay(child: child!),
+      home: Builder(builder: (context) => TextButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: api, book: api.theBook))),
+        child: const Text('open'),
+      )),
+    ));
+    await tester.pump();
+    expect(dimLayer(), findsNothing, reason: 'Home and the rest: not dimmed');
+    expect(find.text('open'), findsOneWidget);
+
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(asked.last, 0.01, reason: 'a book open: the lowest backlight');
+    expect(dimLayer(), findsOneWidget, reason: 'and the extra-dim layer');
+
+    await tester.binding.handlePopRoute(); // closed
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1)); // the way out; the reader goes at its end
+    await tester.pump(); // the overlay hears of it just after (not during the reader's dispose): the next frame
+    expect(find.byType(ReaderScreen), findsNothing);
+    expect(asked.last, -1, reason: 'closed: the system brightness again');
+    expect(dimLayer(), findsNothing, reason: 'no dim layer');
+    expect(s.display.brightness, 0.0, reason: 'the setting itself is kept for the next book');
   });
 
   testWidgets('opening and closing without turning a page saves nothing', (tester) async {

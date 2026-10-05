@@ -41,7 +41,7 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
       SettingsPage.reader => ('Reader', 'Kept on this device'),
       SettingsPage.keys => ('Remote and keys', 'Kept on this device'),
       SettingsPage.display => ('Display', 'Kept on this device'),
-      SettingsPage.library => ('Library & Home', 'Kept on this device, except On deck (synced)'),
+      SettingsPage.library => ('Library & Home', 'Kept on this device, except On deck and pins (synced)'),
       SettingsPage.downloads => ('Downloads', 'Kept on this device'),
       SettingsPage.about => ('About', null),
     };
@@ -106,8 +106,13 @@ void main() {
     }
     await tester.tap(find.widgetWithText(ListTile, 'Display'));
     await tester.pumpAndSettle();
-    expect(find.text('Screen brightness'), findsWidgets);
     expect(find.text('Night mode'), findsOneWidget);
+    // screen brightness is the reader's (user, 2026-10-05): under Reader, not Display
+    expect(find.text('Screen brightness'), findsNothing);
+    await tester.tap(find.widgetWithText(ListTile, 'Reader'));
+    await tester.pumpAndSettle();
+    expect(find.text('Brightness while reading'), findsOneWidget);
+    expect(find.text('Screen brightness'), findsWidgets);
   });
 
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {

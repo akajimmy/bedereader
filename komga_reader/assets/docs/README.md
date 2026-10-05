@@ -41,7 +41,8 @@ This app shows them and keeps everything in sync.
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
 - **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
   sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).
-- Night mode (warm tint), a brightness slider that can go darker than the screen's minimum, a black, grey or white
+- Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
+  keeps the screen's own brightness, so it never opens too dark to use), a black, grey or white
   background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
 - At the end of a book: the next one in the series or read list, with its poster.
 
@@ -72,7 +73,7 @@ This app shows them and keeps everything in sync.
 - **On Komga, for every device**: reading progress, per-series reader and image settings and their defaults, pins
   (unless Settings > Library & Home > Sync pins across devices is off on a device - then it has its own), and what's
   hidden from On deck.
-- **On this device**: the server address and API key, screen brightness and night mode, how the reader behaves (page
+- **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
   turn animation, taps, volume keys, background, keeping the screen on), poster size, Home's layout, remembered
   filters and sort orders, downloads and the offline mode switch. Settings > About can reset all of these at once.
 

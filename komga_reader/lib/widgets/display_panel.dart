@@ -321,7 +321,8 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ena
           valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
     ];
 
-/// Screen brightness (whole app, this device): the backlight plus extra dimming on Android, dimming only on a PC.
+/// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
+/// extra dimming on Android, dimming only on a PC.
 /// [compact]: an icon instead of the "Screen brightness" label (the reader's narrow sheet).
 List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
   final d = s.display;

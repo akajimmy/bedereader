@@ -131,6 +131,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     super.initState();
     Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
     Downloads.instance.readerOpened(); // Delete once read waits for it too
+    AppSettings.instance.readerOpened(); // the screen brightness setting is the reader's
     // Rotation as set (the app otherwise follows the sensor, via the manifest), hide the system bars, keep the screen on.
     _applyRotation();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -155,6 +156,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _curl?.dispose();
     _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
+    AppSettings.instance.readerClosed(); // the screen follows the system again
     _saveNow(); // before Downloads hears the book closed: a book finished here is marked read first
     Downloads.instance.readerClosed();
     _settings.removeListener(_onSettings);
