@@ -16,6 +16,14 @@ void main() {
       expect(ReaderPrefs.fromJson(ReaderPrefs(direction: direction).toJson()).direction, direction,
           reason: 'direction ${direction.name}');
     }
+    // the background: a reading setting since 2026-10-05; black (as everything saved before) isn't written
+    for (final bg in ReaderBackground.values) {
+      expect(ReaderPrefs.fromJson(ReaderPrefs(background: bg).toJson()).background, bg, reason: 'background ${bg.name}');
+    }
+    expect(const ReaderPrefs().toJson().containsKey('bg'), isFalse);
+    expect(ReaderPrefs.fromJson({'fit': 'width'}).background, ReaderBackground.black, reason: 'saved before: black');
+    expect(const ReaderPrefs(background: ReaderBackground.white, contrast: 0.2).imageReset().background,
+        ReaderBackground.white, reason: 'part of the layout: kept by an image reset');
     final flags = ReaderPrefs.fromJson(const ReaderPrefs(ownLayout: false).toJson());
     expect([flags.ownLayout, flags.ownImage], [false, true], reason: 'the override flags');
     expect(const ReaderPrefs().toJson().containsKey('ol'), isFalse); // unchanged form for everything saved before
@@ -40,7 +48,7 @@ void main() {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(pageTurn: PageTurn.curl, rotation: Rotation.landscape, clock: ShowWhen.always,
         progressBar: true, doubleTapZoom: false, volumeKeys: false, midBook: MidBook.keep,
-        background: ReaderBackground.grey, screenOn: 20, posterSize: PosterSize.small, posterTitleOnly: true,
+        screenOn: 20, posterSize: PosterSize.small, posterTitleOnly: true,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
         pagePreviews: false, pageStrip: true);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
@@ -51,7 +59,6 @@ void main() {
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('volumeKeys', (d) => d.volumeKeys, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
-      ('background', (d) => d.background, ReaderBackground.grey, ReaderBackground.black),
       ('screenOn', (d) => d.screenOn, 20, 0),
       ('posterSize', (d) => d.posterSize, PosterSize.small, PosterSize.medium),
       ('posterTitleOnly', (d) => d.posterTitleOnly, true, false),

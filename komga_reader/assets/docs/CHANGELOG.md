@@ -14,6 +14,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   of the app (Home, libraries, Settings) uses the screen's own brightness. Left at extra dim from reading in the dark,
   the app opened too dark to see in daylight, Settings included. The setting moved from Settings > Display to
   Settings > Reader ("Brightness while reading"); the reader's panel still has it.
+- **The page background is a reading setting**: black, dark grey or white is now one of the reading defaults (Settings
+  > Reading defaults, synced to every device), and a series can have its own with fit and direction ("Override the
+  defaults" in the reader's panel). It was a setting of each device; that one is gone, so a device that had grey or
+  white starts from the default (black) - pick it again once, as the default or for a series.
 
 **Added**
 - **Sync pins across devices** (Settings > Library & Home; on by default): switched off, a device keeps its own pins -

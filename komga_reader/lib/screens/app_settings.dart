@@ -199,7 +199,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Text("For every series you haven't adjusted. A series' own settings are changed in the reader.",
             style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages', children: fitDirectionRows(p, s.setDefault)),
+      SettingsGroup(title: 'Pages', children: layoutRows(p, s.setDefault)),
       SettingsGroup(title: 'Image', children: [
         ...imageRows(p, s.setDefault),
         ActionRow(title: 'Image settings back to the original scan',
@@ -241,7 +241,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       // the reader's alone: everywhere else the screen follows the system (user, 2026-10-05)
       SettingsGroup(title: 'Brightness while reading', children: brightnessRows(s)),
       SettingsGroup(title: 'Screen', children: [
-        backgroundRow(s),
         if (canRotate) rotationRow(s),
         screenOnRow(s),
       ]),
