@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../settings.dart';
 
-/// Sits over the whole app (MaterialApp.builder): the night-mode warm tint and the "darker than minimum" layer.
+/// Sits over the whole app (MaterialApp.builder): the night-mode warm tint (everywhere), and the "darker than
+/// minimum" layer - only while a book is open, as the brightness setting is the reader's (user, 2026-10-05).
 /// Neither takes touches. The app itself stays child 0 of the Stack, so switching these on and off never rebuilds it.
 class NightOverlay extends StatelessWidget {
   const NightOverlay({super.key, required this.child});
@@ -30,7 +31,7 @@ class NightOverlay extends StatelessWidget {
             IgnorePointer(
               child: BackdropFilter(filter: ColorFilter.matrix(warmMatrix(d.warmth)), child: const SizedBox.expand()),
             ),
-          if (d.dimOverlay > 0)
+          if (s.inReader && d.dimOverlay > 0)
             IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: d.dimOverlay))),
         ]);
       },
