@@ -53,6 +53,12 @@ class Pins extends ChangeNotifier {
   // changed while Komga couldn't be reached: kept on the device, sent when it can be, and it wins at start-up (code
   // review, 2026-09-30: Komga's older list used to replace it at the next start) - as On deck hidden does
   static const _dirtyKey = 'pins.unsent';
+  // Sync pins across devices (Settings > Library & Home; user, 2026-10-05) - this device's choice, on by default.
+  // Off: this device has its own list ([_deviceKey]), started as a copy of the shared one; nothing is sent to or
+  // taken from Komga. Back on: the shared list returns (cached in [_local], as last known) and the device's own goes.
+  static const _syncKey = 'pins.sync';
+  static const _deviceKey = 'pins.device';
+  bool sync = true;
 
   Komga? _api;
   List<Pin> items = [];
@@ -70,6 +76,13 @@ class Pins extends ChangeNotifier {
   Future<void> load(Komga api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
+    sync = p.getBool(_syncKey) ?? true;
+    if (!sync) { // this device's own pins: nothing to send or fetch
+      items = _decode(p.getString(_deviceKey) ?? '[]');
+      syncError = null;
+      notifyListeners();
+      return;
+    }
     final raw = p.getString(_local);
     if (raw != null) items = _decode(raw);
     notifyListeners();
@@ -82,7 +95,9 @@ class Pins extends ChangeNotifier {
       final changes = _changes;
       _fetchedAt = DateTime.now();
       final remote = (await api.clientSettings())[komgaKey]?['value'];
-      if (_changes != changes) return; // pinned / unpinned here meanwhile: that goes to Komga, not the other way
+      // pinned / unpinned here meanwhile (that goes to Komga, not the other way), or sync switched off meanwhile (this
+      // device's own list stays as it is)
+      if (_changes != changes || !sync) return;
       if (remote is String) {
         items = _decode(remote);
         await p.setString(_local, remote);
@@ -119,7 +134,38 @@ class Pins extends ChangeNotifier {
   /// Switch connection (online / offline) without reloading; changes waiting to be sent go now.
   void useApi(Komga api) {
     _api = api;
+    if (!sync) return;
     SharedPreferences.getInstance().then((p) { if (p.getBool(_dirtyKey) ?? false) _send(); });
+  }
+
+  /// This device's pins that the shared list (as last known) doesn't have - what switching sync back on would drop.
+  Future<List<Pin>> deviceOnly() async {
+    if (sync) return const [];
+    final shared = _decode((await SharedPreferences.getInstance()).getString(_local) ?? '[]');
+    return [for (final d in items) if (!shared.any((s) => s.sameView(d))) d];
+  }
+
+  /// Sync pins across devices on or off (this device). Off: its own list, a copy of the shared one to start with.
+  /// On: the shared list again - from Komga, or as last known if it can't be reached; this device's own goes.
+  Future<void> setSync(bool on) async {
+    if (on == sync) return;
+    final p = await SharedPreferences.getInstance();
+    if (!on) {
+      _retry?.cancel();
+      await p.setString(_deviceKey, _raw);
+      await p.setBool(_syncKey, false);
+      sync = false;
+      syncError = null;
+      notifyListeners();
+      return;
+    }
+    await p.setBool(_syncKey, true);
+    await p.remove(_deviceKey);
+    sync = true;
+    items = _decode(p.getString(_local) ?? '[]');
+    notifyListeners();
+    final api = _api;
+    if (api != null) await load(api); // as at a start: changes not sent yet go now, else Komga's list
   }
 
   /// Signed out: the account's pins go from this device (they come back from Komga on signing in again).
@@ -132,6 +178,7 @@ class Pins extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.remove(_local);
     await p.remove(_dirtyKey);
+    await p.remove(_deviceKey); // this device's own pins were the account's too (its series, its read lists)
   }
 
   Pin? find(Pin view) {
@@ -151,6 +198,10 @@ class Pins extends ChangeNotifier {
     items = next;
     _changes++;
     notifyListeners();
+    if (!sync) { // this device's own list: kept here only
+      SharedPreferences.getInstance().then((p) => p.setString(_deviceKey, _raw));
+      return;
+    }
     SharedPreferences.getInstance().then((p) async {
       await p.setString(_local, _raw);
       await p.setBool(_dirtyKey, true); // until Komga has it

@@ -69,8 +69,9 @@ This app shows them and keeps everything in sync.
 
 ## Where your settings live
 
-- **On Komga, for every device**: reading progress, per-series reader and image settings and their defaults, pins,
-  and what's hidden from On deck.
+- **On Komga, for every device**: reading progress, per-series reader and image settings and their defaults, pins
+  (unless Settings > Library & Home > Sync pins across devices is off on a device - then it has its own), and what's
+  hidden from On deck.
 - **On this device**: the server address and API key, screen brightness and night mode, how the reader behaves (page
   turn animation, taps, volume keys, background, keeping the screen on), poster size, Home's layout, remembered
   filters and sort orders, downloads and the offline mode switch. Settings > About can reset all of these at once.

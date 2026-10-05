@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- **Sync pins across devices** (Settings > Library & Home; on by default): switched off, a device keeps its own pins -
+  a copy of the shared ones to start with - and pins made there stay there. Switched back on, the shared pins return;
+  if the device has pins the shared list doesn't, it asks first.
+
 **Fixed**
 - Web: right-click on a poster opened the browser's own menu on top of the app's.
 - Pins made on another device only showed up after restarting the app (they were fetched from Komga at start-up
