@@ -157,7 +157,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       // (an offline start loads them from this device only). What changed here is sent first, as at a start (user,
       // 2026-09-30)
       unawaited(AppSettings.instance.load(c.api));
-      unawaited(Pins.instance.load(c.api));
+      unawaited(Pins.instance.refresh()); // (Home, rebuilt on the new connection, would ask too: once is enough)
       unawaited(OnDeckHidden.instance.load(c.api));
     }
     _nav.currentState?.popUntil((r) => r.isFirst);

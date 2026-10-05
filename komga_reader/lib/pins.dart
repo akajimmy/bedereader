@@ -79,7 +79,10 @@ class Pins extends ChangeNotifier {
       return;
     }
     try {
+      final changes = _changes;
+      _fetchedAt = DateTime.now();
       final remote = (await api.clientSettings())[komgaKey]?['value'];
+      if (_changes != changes) return; // pinned / unpinned here meanwhile: that goes to Komga, not the other way
       if (remote is String) {
         items = _decode(remote);
         await p.setString(_local, remote);
@@ -90,6 +93,28 @@ class Pins extends ChangeNotifier {
       _syncNote('Using the pins saved on this device: ${explain(e).reason}.', e);
     }
   }
+
+  /// Komga's list again - Home calls it each time it reloads, so pins made on another device show up without
+  /// restarting the app (user, 2026-10-05: one pinned on the tablet never reached a PC app left open). Changes made
+  /// here and not sent yet go first, as at a start.
+  /// Several reloads in a row (going online rebuilds Home, and Home reloads as it comes back) ask once: one fetch at a
+  /// time, and none within [refreshGap] of the last.
+  Future<void> refresh() {
+    final api = _api;
+    if (api == null) return Future.value();
+    final running = _refreshing;
+    if (running != null) return running;
+    final at = _fetchedAt;
+    if (at != null && DateTime.now().difference(at) < refreshGap) return Future.value();
+    return _refreshing = load(api).whenComplete(() => _refreshing = null);
+  }
+
+  @visibleForTesting
+  static Duration refreshGap = const Duration(seconds: 10);
+  DateTime? _fetchedAt; // the last time Komga was asked
+  Future<void>? _refreshing;
+
+  int _changes = 0; // pins changed on this device: a list from Komga that was asked for before is out of date
 
   /// Switch connection (online / offline) without reloading; changes waiting to be sent go now.
   void useApi(Komga api) {
@@ -124,6 +149,7 @@ class Pins extends ChangeNotifier {
 
   void _save(List<Pin> next) {
     items = next;
+    _changes++;
     notifyListeners();
     SharedPreferences.getInstance().then((p) async {
       await p.setString(_local, _raw);
