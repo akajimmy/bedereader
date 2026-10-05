@@ -8,7 +8,7 @@ import 'setting_rows.dart';
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Reader: fit and reading direction (this series), then this device: brightness, night mode, background,
+/// * Reader: fit, reading direction and background (this series), then this device: brightness, night mode,
 ///   rotation, page turn animation and the rest.
 /// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
 ///
@@ -152,7 +152,7 @@ class _ReaderPanel extends StatelessWidget {
             SwitchRow(
               title: 'Override the defaults',
               subtitle: own
-                  ? 'Fit and direction for this series'
+                  ? 'Fit, direction and background for this series'
                   : bookFit != null
                       ? 'Using the defaults. This book: fit ${bookFit!.label.toLowerCase()}, for now'
                       : 'Using the defaults',
@@ -164,14 +164,14 @@ class _ReaderPanel extends StatelessWidget {
                 if (v && f != null) s.setSeriesLayout(id, s.prefsFor(id).copyWith(fit: f));
               },
             ),
-            ...fitDirectionRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
+            ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
                 enabled: own),
             if (own)
               ActionRow(
-                title: 'Use this fit and direction for new series',
+                title: 'Use this layout for new series',
                 button: TextButton(
                   onPressed: () {
-                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction));
+                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background));
                     _toast(context, "Series you haven't adjusted will open like this one");
                   },
                   child: const Text('Make default'),
@@ -182,7 +182,6 @@ class _ReaderPanel extends StatelessWidget {
         SettingsGroup(title: 'This device', children: [
           ...brightnessRows(s, compact: true),
           ...nightRows(s),
-          backgroundRow(s),
           if (canRotate) rotationRow(s), // locked mid-book, lying down
           pageTurnRow(s),
           pageNumberRow(s),
@@ -267,9 +266,9 @@ Widget fitIcon(FitMode f, {double size = 20, Color? color}) => switch (f) {
           style: TextStyle(fontSize: size * 0.55, fontWeight: FontWeight.w800, color: color, height: 1)))),
     };
 
-/// Fit and reading direction for [p] (a series, or the defaults). [icons]: both as icons (the reader's narrow
-/// sheet).
-List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
+/// The page layout for [p] (a series, or the defaults): fit, reading direction and background. [icons]: fit and
+/// direction as icons (the reader's narrow sheet).
+List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
     String? komgaDirection, bool enabled = true}) {
   final komga = switch (komgaDirection) {
     'RIGHT_TO_LEFT' => 'right to left',
@@ -303,6 +302,21 @@ List<Widget> fitDirectionRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {b
       value: p.direction,
       onChanged: (d) => setP(p.copyWith(direction: d)),
       enabled: enabled,
+    ),
+    // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
+    SettingRow(
+      title: 'Background',
+      trailing: IgnorePointer(
+        ignoring: !enabled,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.4, // following the defaults: shown, not set here
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            for (final b in ReaderBackground.values)
+              ColourSwatch(colour: b.colour, label: '${b.label} background', selected: p.background == b,
+                  onTap: () => setP(p.copyWith(background: b))),
+          ]),
+        ),
+      ),
     ),
   ];
 }
@@ -383,16 +397,6 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
       value: s.display.pageTurn,
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),
-    );
-
-/// Black, dark grey or white around the page: three swatches.
-Widget backgroundRow(AppSettings s) => SettingRow(
-      title: 'Background',
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        for (final b in ReaderBackground.values)
-          ColourSwatch(colour: b.colour, label: '${b.label} background', selected: s.display.background == b,
-              onTap: () => s.setDisplay(s.display.copyWith(background: b))),
-      ]),
     );
 
 /// Rotation in the reader (Android only: a PC window doesn't turn).

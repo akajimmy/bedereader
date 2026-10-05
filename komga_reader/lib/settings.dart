@@ -34,15 +34,17 @@ extension ReadingDirectionLabel on ReadingDirection {
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
       this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0, this.ownLayout = true,
-      this.ownImage = true});
+      this.ownImage = true, this.background = ReaderBackground.black});
 
   /// A series' settings come in two parts, each overriding the defaults or not (the panels' "Override the
-  /// defaults" toggles, user 2026-09-30): the page layout (fit, direction) and the image settings. A part not
-  /// overridden follows the defaults. Series saved before this override both (unchanged). Unused on the defaults.
+  /// defaults" toggles, user 2026-09-30): the page layout (fit, direction, background) and the image settings. A part
+  /// not overridden follows the defaults. Series saved before this override both (unchanged). Unused on the defaults.
   final bool ownLayout, ownImage;
 
   final FitMode fit;
   final ReadingDirection direction; // auto = the series' reading direction in Komga
+  // around the page - a reading default with a series' own (user, 2026-10-05; it was a setting of each device)
+  final ReaderBackground background;
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
@@ -54,16 +56,17 @@ class ReaderPrefs {
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels && crop == 0;
 
   ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
-          ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage}) =>
+          ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage, ReaderBackground? background}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
           direction: direction ?? this.direction, crop: crop ?? this.crop, ownLayout: ownLayout ?? this.ownLayout,
-          ownImage: ownImage ?? this.ownImage);
+          ownImage: ownImage ?? this.ownImage, background: background ?? this.background);
 
-  /// Same fit and direction, image settings back to neutral.
-  ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction, ownLayout: ownLayout, ownImage: ownImage);
+  /// Same page layout (fit, direction, background), image settings back to neutral.
+  ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction, ownLayout: ownLayout, ownImage: ownImage,
+      background: background);
 
-  /// This one's page layout (fit, direction) with [image]'s image settings.
+  /// This one's page layout (fit, direction, background) with [image]'s image settings.
   ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(brightness: image.brightness, contrast: image.contrast,
       sharpen: image.sharpen, autoLevels: image.autoLevels, crop: image.crop);
 
@@ -72,6 +75,7 @@ class ReaderPrefs {
         // written only when off, so everything saved before (and the defaults) reads exactly as it did
         if (!ownLayout) 'ol': false,
         if (!ownImage) 'oi': false,
+        if (background != ReaderBackground.black) 'bg': background.name, // (likewise: black, as before, unwritten)
       };
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
@@ -84,6 +88,7 @@ class ReaderPrefs {
         crop: ((j['x'] as num?)?.toDouble() ?? 0).clamp(0.0, maxCrop),
         ownLayout: j['ol'] != false,
         ownImage: j['oi'] != false,
+        background: ReaderBackground.values.firstWhere((b) => b.name == j['bg'], orElse: () => ReaderBackground.black),
       );
 
   @override
@@ -187,7 +192,7 @@ extension PosterSizeLabel on PosterSize {
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
       this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
-      this.background = ReaderBackground.black, this.screenOn = 0, this.posterSize = PosterSize.medium,
+      this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false});
@@ -211,7 +216,6 @@ class DisplayPrefs {
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
   final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
   final MidBook midBook; // reader: Next book before the last page
-  final ReaderBackground background; // reader: around the page
   final int screenOn; // reader: minutes the screen stays on after the last page turn; 0 = the system's timeout
   final PosterSize posterSize; // library grids and Home's rows
   final bool posterTitleOnly; // book posters: just the title, not "Series #N" over it
@@ -249,7 +253,7 @@ class DisplayPrefs {
   }
 
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook, ReaderBackground? background,
+          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip}) =>
@@ -262,12 +266,12 @@ class DisplayPrefs {
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
           pageNumber: pageNumber ?? this.pageNumber, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
           volumeKeys: volumeKeys ?? this.volumeKeys, midBook: midBook ?? this.midBook,
-          background: background ?? this.background, screenOn: screenOn ?? this.screenOn,
+          screenOn: screenOn ?? this.screenOn,
           posterSize: posterSize ?? this.posterSize, posterTitleOnly: posterTitleOnly ?? this.posterTitleOnly);
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
-      'midBook': midBook.name, 'background': background.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
+      'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip};
@@ -284,7 +288,6 @@ class DisplayPrefs {
         pageNumber: j['pageNumber'] != false, doubleTapZoom: j['doubleTapZoom'] != false,
         volumeKeys: j['volumeKeys'] != false,
         midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
-        background: pick(ReaderBackground.values, j['background'], ReaderBackground.black),
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
@@ -386,10 +389,11 @@ class AppSettings extends ChangeNotifier {
   bool ownsLayout(String seriesId) => series[seriesId]?.ownLayout ?? false;
   bool ownsImage(String seriesId) => series[seriesId]?.ownImage ?? false;
 
-  /// The series' page layout (fit, direction) from [p] - overriding the defaults from now on.
+  /// The series' page layout (fit, direction, background) from [p] - overriding the defaults from now on.
   void setSeriesLayout(String seriesId, ReaderPrefs p) {
     final now = prefsFor(seriesId);
-    setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, ownLayout: true, ownImage: now.ownImage));
+    setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, background: p.background, ownLayout: true,
+        ownImage: now.ownImage));
   }
 
   /// The series' image settings from [p] - overriding the defaults from now on.

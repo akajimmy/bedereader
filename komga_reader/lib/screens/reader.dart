@@ -112,8 +112,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   }
 
   FitMode? _bookFit; // this book only, for now: not saved; a book opening goes back to the default (user, 2026-09-30)
-  Color get _bg => _settings.display.background.colour; // Settings > Reader > Background
-  Color _ink(double alpha) => _settings.display.background.ink.withValues(alpha: alpha); // text on it
+  Color get _bg => _prefs.background.colour; // the series' own, or the reading defaults'
+  Color _ink(double alpha) => _prefs.background.ink.withValues(alpha: alpha); // text on it
 
   /// The series' reading direction in Komga (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON), fetched on open.
   String? _komgaDirection;

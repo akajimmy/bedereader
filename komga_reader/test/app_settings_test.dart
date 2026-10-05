@@ -246,6 +246,20 @@ void main() {
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
 
+  testWidgets('Reading defaults: the background is set there, for every series that follows the defaults (synced) '
+      '(user, 2026-10-05)', (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    final before = s.defaults;
+    addTearDown(() => s.setDefault(before));
+    await open(tester, page: SettingsPage.defaults);
+    await tester.tap(find.bySemanticsLabel('White background'));
+    await tester.pumpAndSettle();
+    expect(s.defaults.background, ReaderBackground.white);
+    expect(s.prefsFor('S-follows-defaults').background, ReaderBackground.white);
+    await tester.pump(const Duration(seconds: 3)); // the settings sync timer
+  });
+
   testWidgets('Reader and Library & Home: the new device settings are set here', (tester) async {
     tall(tester);
     final s = AppSettings.instance;
@@ -261,8 +275,8 @@ void main() {
     expect(s.display.pageTurn, PageTurn.flip); // "None" is the flip
     await tap(find.text('Mark read'));
     expect(s.display.midBook, MidBook.markRead);
-    await tap(find.bySemanticsLabel('White background'));
-    expect(s.display.background, ReaderBackground.white);
+    // (the background is a reading default now - Reading defaults, test below)
+    expect(find.bySemanticsLabel('White background'), findsNothing, reason: 'not a device setting any more');
     await tap(find.text('10 min'));
     expect(s.display.screenOn, 10);
     await tap(find.widgetWithText(ListTile, 'Library & Home'));

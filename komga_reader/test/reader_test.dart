@@ -1700,14 +1700,26 @@ void main() {
     });
   });
 
-  testWidgets('background: White makes the reader white, with dark text on the end card', (tester) async {
+  testWidgets('background: the reading defaults\' White makes the reader white, with dark text on the end card; a '
+      "series' own background overrides it (user, 2026-10-05)", (tester) async {
     final s = AppSettings.instance;
-    s.setDisplay(s.display.copyWith(background: ReaderBackground.white));
-    addTearDown(() => s.setDisplay(s.display.copyWith(background: ReaderBackground.black)));
-    await openReader(tester);
+    final defaults = s.defaults;
+    addTearDown(() {
+      s.setDefault(defaults);
+      s.series.remove('S1');
+    });
+    s.setDefault(s.defaults.copyWith(background: ReaderBackground.white));
+    await openReader(tester); // series S1, following the defaults
     expect(tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor, const Color(0xFFFFFFFF));
     await toEndCard(tester);
     expect(tester.widget<Text>(find.text('End of book')).style!.color!.computeLuminance(), lessThan(0.2));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpWidget(const SizedBox());
+
+    s.setSeriesLayout('S1', s.prefsFor('S1').copyWith(background: ReaderBackground.grey)); // S1's own
+    await openReader(tester);
+    expect(tester.widget<Scaffold>(find.byType(Scaffold).last).backgroundColor, ReaderBackground.grey.colour,
+        reason: "the series' own, over the defaults' white");
     await tester.pump(const Duration(seconds: 2));
   });
 

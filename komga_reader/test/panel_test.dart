@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
+import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -75,6 +76,33 @@ void main() {
     expect(s.hasOwn('S1'), isFalse, reason: 'neither part overridden: the series follows the defaults entirely');
     expect(s.prefsFor('S1').sharpen, isTrue);
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
+  });
+
+  testWidgets("Reader: the background follows the defaults until Override is on; then it's this series' own "
+      '(user, 2026-10-05)', (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.series.remove('S1'));
+    s.series.remove('S1');
+    await openPanel(tester, const Size(1280, 1000));
+    final grey = find.bySemanticsLabel('Dark grey background');
+    await tester.ensureVisible(grey);
+    await tester.tap(grey, warnIfMissed: false); // greyed out: following the defaults
+    await tester.pumpAndSettle();
+    expect(s.ownsLayout('S1'), isFalse);
+    expect(s.prefsFor('S1').background, s.defaults.background, reason: 'still the defaults');
+    final override = find.widgetWithText(SwitchRow, 'Override the defaults').first;
+    await tester.ensureVisible(override);
+    await tester.pumpAndSettle();
+    await tester.tap(override);
+    await tester.pumpAndSettle();
+    expect(s.ownsLayout('S1'), isTrue, reason: 'Override on');
+    await tester.ensureVisible(grey);
+    await tester.pumpAndSettle();
+    await tester.tap(grey);
+    await tester.pumpAndSettle();
+    expect(s.prefsFor('S1').background, ReaderBackground.grey, reason: "the series' own");
+    expect(s.defaults.background, isNot(ReaderBackground.grey), reason: 'the defaults untouched');
+    await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
 
   testWidgets('Reader: turning Override on with a fit picked for this book keeps that fit (nothing jumps)',
