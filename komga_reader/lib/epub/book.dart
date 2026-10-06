@@ -292,8 +292,8 @@ class EpubBook extends ChangeNotifier {
   (int, double) chapterAtFraction(double fraction) {
     final n = _chapters.length;
     final f = fraction.clamp(0.0, 1.0);
-    final lengths = [for (final c in _chapters) c.length];
-    if (lengths.any((l) => l == 0)) {
+    final lengths = _weights;
+    if (lengths == null) {
       final at = f * n;
       final i = at.floor().clamp(0, n - 1);
       return (i, (at - i).clamp(0.0, 1.0));
@@ -309,16 +309,38 @@ class EpubBook extends ChangeNotifier {
     return (n - 1, 1);
   }
 
-  /// How far through the book [p] is, 0..1: chapters count by their length once known, else equally.
+  /// How far through the book [p] is, 0..1: chapters count by their length once known, by [estimateFrom]'s shares
+  /// till then, else equally.
   double progression(EpubPosition p) {
-    final lengths = [for (final c in _chapters) c.length];
-    if (lengths.any((l) => l == 0)) {
-      final within = _chapters[p.chapter].length == 0 ? 0.0 : p.position / _chapters[p.chapter].length;
-      return ((p.chapter + within) / _chapters.length).clamp(0.0, 1.0);
-    }
+    final own = _chapters[p.chapter].length;
+    final within = own == 0 ? 0.0 : (p.position / own).clamp(0.0, 1.0);
+    final lengths = _weights;
+    if (lengths == null) return ((p.chapter + within) / _chapters.length).clamp(0.0, 1.0);
     final total = lengths.fold(0, (a, b) => a + b);
     final before = lengths.take(p.chapter).fold(0, (a, b) => a + b);
-    return total == 0 ? 0 : ((before + p.position) / total).clamp(0.0, 1.0);
+    return total == 0 ? 0 : ((before + within * lengths[p.chapter]) / total).clamp(0.0, 1.0);
+  }
+
+  /// Each chapter's share of the book before they've all been read in (the counting does that): from Komga's
+  /// positions, about one per 1,000 characters of a chapter's file. With every chapter counted as equal, a book with
+  /// long and short chapters showed 24% that became 2% once counted (The Dispossessed, build 74).
+  List<int>? _estimate;
+
+  /// Sets the chapters' shares from the chapter path of each of Komga's positions (a chapter with none counts as one).
+  void estimateFrom(Iterable<String> positionPaths) {
+    final per = <String, int>{};
+    for (final p in positionPaths) {
+      per[p] = (per[p] ?? 0) + 1;
+    }
+    final est = [for (final s in info.spine) per[s] ?? 1];
+    if (per.isEmpty) return;
+    _estimate = est;
+  }
+
+  /// The chapters' lengths when all are known, else the estimate (null: none - equal shares).
+  List<int>? get _weights {
+    final lengths = [for (final c in _chapters) c.length];
+    return lengths.every((l) => l > 0) ? lengths : _estimate;
   }
 
   /// The chapter a book path is in (a table-of-contents entry, a link); null if it isn't one of the chapters.

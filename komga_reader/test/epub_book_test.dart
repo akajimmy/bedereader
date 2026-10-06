@@ -58,4 +58,32 @@ void main() {
       book.dispose();
     });
   });
+
+  testWidgets("how far through the book, before it's counted: chapters weighed by Komga's positions, not as equals (a "
+      "short chapter then long ones: 24% became 2% once counted - user, build 74, The Dispossessed); once they're all "
+      'read in, by their lengths', (tester) async {
+    await tester.runAsync(() async {
+      final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
+      final spine = ['c0.xhtml', 'c1.xhtml', 'c2.xhtml', 'c3.xhtml'];
+      final words = [20, 180, 200, 200];
+      final info = EpubInfo(spine: spine, toc: const []);
+      EpubBook make() => EpubBook(
+          MemorySource({for (var i = 0; i < 4; i++) spine[i]: '<html><body>${para('word', words[i])}</body></html>'},
+              info),
+          info, hy);
+      final book = make();
+      expect(book.progression(const EpubPosition(1, 0)), 0.25, reason: 'nothing known: equal shares');
+      // Komga's positions: 1 in the short chapter, 9, 10, 10 in the others
+      book.estimateFrom([for (var i = 0; i < 4; i++) ...List.filled(i == 0 ? 1 : words[i] ~/ 20, spine[i])]);
+      expect(book.progression(const EpubPosition(1, 0)), closeTo(1 / 30, 1e-9));
+      expect(book.chapterAtFraction(0.5).$1, 2, reason: 'half way is in chapter 2, not chapter 1');
+      // every chapter read in (a book of 4: the text-size sample loads them all): their lengths
+      await book.measureTextSize();
+      final lengths = [for (var i = 0; i < 4; i++) book.lengthOf(i)];
+      expect(lengths.every((l) => l > 0), isTrue);
+      expect(book.progression(const EpubPosition(1, 0)),
+          closeTo(lengths[0] / lengths.fold(0, (a, b) => a + b), 1e-9));
+      book.dispose();
+    });
+  });
 }

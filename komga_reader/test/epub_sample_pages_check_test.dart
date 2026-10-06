@@ -1,5 +1,5 @@
 // Opt-in: sample pages of many books, drawn as the reader draws them on the tablet (800 x 1230 page area at 1.5 screen
-// pixels a point, Literata 19, the reader's own formatting, dark), saved as PNGs for looking through - to find what
+// pixels a point, the tablet's settings, the reader's own formatting, dark), saved as PNGs for looking through - to find what
 // the engine gets wrong across a real library. BEDEREADER_EPUB_LIST: a text file with one EPUB path a line;
 // BEDEREADER_EPUB_OUT: the folder for the pictures (book number - which page .png). Skipped unless both are given.
 import 'dart:io';
@@ -25,8 +25,9 @@ void main() {
           .load();
       final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
       const size = Size(800, 1230);
-      const theme = EpubTheme(fontFamily: 'Literata', bookFormatting: false, pixelRatio: 1.5,
-          margins: EdgeInsets.fromLTRB(77, 40, 77, 40), accent: Color(0xFF26A69A));
+      // the tablet's settings (2026-10-06): Literata 24, Large paragraph spacing, Wide margins
+      const theme = EpubTheme(fontFamily: 'Literata', fontSize: 24, bookFormatting: false, pixelRatio: 1.5,
+          paragraphGap: 1, margins: EdgeInsets.fromLTRB(64, 56, 64, 56), accent: Color(0xFF26A69A));
       final paths = File(list!).readAsLinesSync().where((l) => l.trim().isNotEmpty).toList();
       for (final (n, path) in paths.indexed) {
         final log = File('$out${Platform.pathSeparator}log.txt');
