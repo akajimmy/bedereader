@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/epub_reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/no_network.dart';
@@ -44,7 +45,10 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    // instant turns: the slide's animation doesn't advance on these tests' clock (taps every 50 ms restarted it)
+    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.none));
   });
+  tearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
 
   Future<void> step(WidgetTester tester, int ms) async {
     await tester.runAsync(() => Future<void>.delayed(Duration(milliseconds: ms)));
@@ -79,7 +83,7 @@ void main() {
         '${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).toList()} '
         '${find.byType(CircularProgressIndicator).evaluate().length} spinners, ${find.byType(PageView).evaluate().length} '
         'page views');
-    expect(find.textContaining('took too long'), findsWidgets);
+    expect(find.byType(ErrorText), findsOneWidget, reason: 'why, in plain words');
     source.down = false; // Komga answers again
     await tester.tap(find.text('Retry'));
     for (var i = 0; i < 20 && find.text('Retry').evaluate().isNotEmpty; i++) {

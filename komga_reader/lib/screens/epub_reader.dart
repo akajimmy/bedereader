@@ -249,6 +249,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// Shows chapter [chapter] at [position] (laying it out first).
+  /// Chapter [i] laid out ahead (a neighbour, ready to turn into); a failure is the chapter's, shown when it's reached.
+  void _prefetch(int i) => unawaited(_book!.pages(i).then<void>((_) {}, onError: (Object _) {}));
+
   /// The reader moved somewhere (contents, a link, the slider): shown, and saved once it settles.
   Future<void> _jump(int chapter, int position) async {
     _moved = true;
@@ -300,8 +303,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       unawaited(b.countAll(current: () => _chapter));
     }
     // the neighbours ready for turning into
-    if (chapter + 1 < b.chapterCount) unawaited(b.pages(chapter + 1));
-    if (chapter > 0) unawaited(b.pages(chapter - 1));
+    if (chapter + 1 < b.chapterCount) _prefetch(chapter + 1);
+    if (chapter > 0) _prefetch(chapter - 1);
   }
 
   // ---- turning
@@ -329,8 +332,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _page = p;
         _end = false;
       });
-      if (c + 1 < b.chapterCount) unawaited(b.pages(c + 1));
-      if (c > 0) unawaited(b.pages(c - 1));
+      if (c + 1 < b.chapterCount) _prefetch(c + 1);
+      if (c > 0) _prefetch(c - 1);
     } else {
       final n = b.pagesNow(_chapter)?.length ?? 0;
       setState(() {
