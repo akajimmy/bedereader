@@ -531,8 +531,12 @@ class Downloads extends ChangeNotifier {
     try {
       final book = await api.book(job.bookId);
       if (book == null) throw KomgaError(404, '/api/v1/books/${job.bookId}'); // gone from Komga
-      final pages = await api.pages(job.bookId);
-      job.pagesTotal = pages.length;
+      // an EPUB: the book's file itself (read offline by the EPUB reader) and Komga's positions (its "pages": offline
+      // progress is kept as one, sent to Komga later as the read progress) - not page pictures
+      final epub = book['media']?['mediaProfile'] == 'EPUB';
+      final pages = epub ? const <dynamic>[] : await api.pages(job.bookId);
+      final positions = epub ? await api.epubPositions(job.bookId) : null;
+      job.pagesTotal = epub ? 1 : pages.length;
 
       // room? (Komga reports page sizes; the book's file size as a fallback)
       final pageSizes = pages.fold<int>(0, (sum, p) => sum + ((p['sizeBytes'] as num?)?.toInt() ?? 0));
@@ -580,6 +584,8 @@ class Downloads extends ChangeNotifier {
         'book': book, 'series': series, 'library': {'id': library['id'], 'name': library['name']},
         'readLists': readLists, 'collections': collections, 'pages': plan, 'bytes': 0, 'state': 'partial',
         if (nextKnown) 'nextId': nextId,
+        if (epub) 'epubFile': 'book.epub',
+        if (epub) 'positions': positions,
       };
       await s.put(job.bookId, entry);
 
@@ -630,6 +636,25 @@ class Downloads extends ChangeNotifier {
         }
         job
           ..pagesDone += 1
+          ..bytes = bytes;
+        notifyListeners();
+      }
+
+      // an EPUB: its one file (kept if already whole from an earlier try)
+      if (epub && !(job._cancel || paused || _hold)) {
+        final f = s.file('${job.bookId}/book.epub');
+        if (await f.exists() && await f.length() > 0) {
+          bytes = await f.length();
+        } else {
+          final data = await api.bookFileBytes(job.bookId);
+          await f.parent.create(recursive: true);
+          final part = File('${f.path}.part'); // whole or not at all (see pages above)
+          await part.writeAsBytes(data, flush: true);
+          await part.rename(f.path);
+          bytes = data.length;
+        }
+        job
+          ..pagesDone = 1
           ..bytes = bytes;
         notifyListeners();
       }
