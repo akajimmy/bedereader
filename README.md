@@ -46,6 +46,17 @@ This app shows them and keeps everything in sync.
   background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
 - At the end of a book: the next one in the series or read list, with its poster.
 
+**Books (EPUB)** - Android and Windows
+- Novels and other EPUBs are laid out by the app itself, page by page: justified and hyphenated (English and French),
+  with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
+  over the page).
+- Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
+  spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > Books. *Book's formatting*
+  switches between the publisher's alignment and spacing and your own for every book.
+- Contents, a slider and "page X of Y" over the whole book, and the place you stopped kept on Komga in the same form
+  its own web reader uses - pick up in either.
+- Downloaded EPUBs read offline too.
+
 **Offline**
 - Download single books, or a series or read list's unread (or all) books, with a storage limit; optionally deleted
   once read, and optionally only on Wi-Fi (Android). A download cut off part way carries on where it stopped.
@@ -71,7 +82,7 @@ This app shows them and keeps everything in sync.
 ## Where your settings live
 
 - **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, background)
-  and image settings and their defaults, pins
+  and image settings and their defaults, the EPUB settings (font, size, theme...), pins
   (unless Settings > Library & Home > Sync pins across devices is off on a device - then it has its own), and what's
   hidden from On deck.
 - **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
