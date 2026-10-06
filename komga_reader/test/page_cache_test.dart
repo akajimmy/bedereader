@@ -33,7 +33,7 @@ void main() {
       await second;
       api.requests[0].completeError(StateError('timed out')); // then the old one fails
       await first.then((_) {}, onError: (Object _) {});
-      await loader.get(0); // the page again: from the cache
+      loader.get(0).ignore(); // the page again: from the cache
       expect(api.requests, hasLength(2), reason: 'not downloaded a third time');
     });
   });
