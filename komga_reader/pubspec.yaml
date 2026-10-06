@@ -32,3 +32,34 @@ flutter:
     - assets/docs/CHANGELOG.md
     - assets/docs/THIRD_PARTY_NOTICES.md
     - assets/licences/apache-2.0.txt
+    # EPUB: hyphenation patterns (hyph-utf8; licences in LICENSE.txt) and the reading fonts' licences (OFL)
+    - assets/hyphenation/hyph-en-us.pat.txt
+    - assets/hyphenation/hyph-en-us.hyp.txt
+    - assets/hyphenation/hyph-fr.pat.txt
+    - assets/hyphenation/LICENSE.txt
+    - assets/fonts/Literata-OFL.txt
+    - assets/fonts/Lora-OFL.txt
+    - assets/fonts/AtkinsonHyperlegibleNext-OFL.txt
+    - assets/fonts/EBGaramond-OFL.txt
+  # EPUB reading fonts (user, 2026-10-06), variable: weight from the wght axis (layout.dart)
+  fonts:
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata.ttf
+        - asset: assets/fonts/Literata-Italic.ttf
+          style: italic
+    - family: Lora
+      fonts:
+        - asset: assets/fonts/Lora.ttf
+        - asset: assets/fonts/Lora-Italic.ttf
+          style: italic
+    - family: Atkinson Hyperlegible Next
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegibleNext.ttf
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Italic.ttf
+          style: italic
+    - family: EB Garamond
+      fonts:
+        - asset: assets/fonts/EBGaramond.ttf
+        - asset: assets/fonts/EBGaramond-Italic.ttf
+          style: italic

@@ -48,6 +48,16 @@ void registerLicences() {
     yield const LicenseEntryWithLineBreaks([appName], appLicence);
     yield const LicenseEntryWithLineBreaks(['AMD FidelityFX Super Resolution 1 (FSR 1)'], amdFsrNotice);
     yield const LicenseEntryWithLineBreaks(['Material Icons'], materialIconsNotice);
+    // EPUB reading fonts (SIL Open Font Licence 1.1) and hyphenation patterns (hyph-utf8): their own texts
+    for (final (name, file) in const [
+      ('Literata', 'assets/fonts/Literata-OFL.txt'),
+      ('Lora', 'assets/fonts/Lora-OFL.txt'),
+      ('Atkinson Hyperlegible Next', 'assets/fonts/AtkinsonHyperlegibleNext-OFL.txt'),
+      ('EB Garamond', 'assets/fonts/EBGaramond-OFL.txt'),
+      ('Hyphenation patterns (hyph-utf8): English, French', 'assets/hyphenation/LICENSE.txt'),
+    ]) {
+      yield LicenseEntryWithLineBreaks([name], await rootBundle.loadString(file));
+    }
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       final apache = await rootBundle.loadString('assets/licences/apache-2.0.txt');
       yield LicenseEntryWithLineBreaks(androidLibraries, '$androidLibrariesNotice\n\n$apache');
