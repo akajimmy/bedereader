@@ -499,6 +499,13 @@ class _TextPiece extends Piece {
   final _Laid laid;
   final Offset at; // where the painter's line [from] goes
   final double from, to; // the painter's own y range shown here
+
+  /// A line-end hyphen drawn on this piece: if its middle is in its range (its top can sit a little above the first
+  /// line).
+  bool shows(Offset mark) {
+    final mid = mark.dy + laid.hyphen.height / 2;
+    return mid >= from && mid < to;
+  }
   @override
   void paint(Canvas c) {
     final tp = laid.tp;
@@ -506,7 +513,7 @@ class _TextPiece extends Piece {
     c.clipRect(Rect.fromLTWH(at.dx - 2, at.dy, tp.width + laid.hyphen.width + 4, to - from));
     tp.paint(c, Offset(at.dx, at.dy - from));
     for (final m in laid.marks) {
-      if (m.dy + 1 >= from && m.dy < to) laid.hyphen.paint(c, Offset(at.dx + m.dx, at.dy - from + m.dy));
+      if (shows(m)) laid.hyphen.paint(c, Offset(at.dx + m.dx, at.dy - from + m.dy));
     }
     c.restore();
   }
@@ -559,6 +566,16 @@ class EpubPage {
   /// Where each run of text lines starts on the page (tests: indents, wrapping).
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
+
+  /// How many line-end hyphens the page's text has (tests) - [hyphensShown] of them should be drawn.
+  @visibleForTesting
+  int get hyphenMarks => {for (final p in pieces) if (p is _TextPiece) p.laid}
+      .fold(0, (n, l) => n + l.marks.length);
+
+  /// How many line-end hyphens are drawn on the page (tests).
+  @visibleForTesting
+  int get hyphensShown => [for (final p in pieces) if (p is _TextPiece) p.laid.marks.where(p.shows).length]
+      .fold(0, (a, b) => a + b);
 
   /// Where each picture is drawn on the page (tests).
   @visibleForTesting
@@ -699,8 +716,10 @@ class Paginator {
 
   // every painter made, so the pages can be let go of (a chapter far from the one being read)
   final List<TextPainter> _made = [];
+  // the hyphen at the book's own text size - the text's (at the default size it came out bigger in a book with a size
+  // of its own, sat above the first line of a paragraph and wasn't drawn - user, build 74: Exile)
   late final TextPainter _hyphen = TextPainter(
-      text: TextSpan(text: '-', style: _style(const InlineStyle())), textDirection: TextDirection.ltr)
+      text: TextSpan(text: '-', style: _style(InlineStyle(size: baseSize))), textDirection: TextDirection.ltr)
     ..layout();
 
   /// Frees the laid-out text of [pages] (they mustn't be painted after this).

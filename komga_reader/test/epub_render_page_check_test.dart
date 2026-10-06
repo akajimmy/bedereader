@@ -26,14 +26,17 @@ void main() {
       final s = FileEpubSource(File(path!));
       final info = await s.info();
       final loader = ChapterLoader(s);
-      const size = Size(646, 1000);
+      // the tablet's page: 800 x 1230 at 1.5 screen pixels a point, the reader's margins there
+      const size = Size(800, 1230);
       for (var i = 0; i < info.spine.length; i++) {
         final c = await loader.load(info.spine[i]);
         if (Platform.environment['BEDEREADER_EPUB_CHAPTER'] case final w? when !info.spine[i].endsWith(w)) continue;
         // the book's own text size and weight, as the reader measures them
         final book = EpubBook(s, info, hy);
         await book.measureTextSize();
-        final pages = Paginator(const EpubTheme(fontFamily: 'Literata', bookFormatting: false), size,
+        // the tablet's settings (2026-10-06): Literata 24, Large paragraph spacing, Wide margins (64 / 56)
+        final pages = Paginator(const EpubTheme(fontFamily: 'Literata', fontSize: 24, bookFormatting: false,
+                pixelRatio: 1.5, paragraphGap: 1, margins: EdgeInsets.fromLTRB(64, 56, 64, 56)), size,
             hy.forLang(c.lang), baseSize: book.textSize, baseBold: book.textBold).run(c.blocks);
         // BEDEREADER_EPUB_CHAPTER (a file name in the book): that chapter's first page; else the first note link's
         final wanted = Platform.environment['BEDEREADER_EPUB_CHAPTER'];
