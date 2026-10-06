@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **EPUB: the reader's trace now records how smoothly pages move** - frame times each second while pages are moving,
+  and how long each chapter takes to lay out - to find what makes page turns less smooth than in comics.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
