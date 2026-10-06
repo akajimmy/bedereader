@@ -384,10 +384,11 @@ class ChapterReader {
     // a <div> holding only running text is a paragraph too - some books write every one so (Codex Alera's and Dune's
     // div.tx): the reader's paragraph spacing and formatting missed them all (user, 2026-10-06 survey). Not one with
     // blocks inside, nor one set larger than round it (a title).
-    if (e.name == 'div' && blocks.length == startAt && identical(_cur, para) && st.size <= inh.size + 0.001) {
-      para.paragraph = true;
-    }
-    final isPara = para.paragraph;
+    final plainDiv = e.name == 'div' && st.size <= inh.size + 0.001;
+    final isPara = para.paragraph || (plainDiv && blocks.length == startAt && identical(_cur, para));
+    // text opening a div before its paragraphs is one too (the Belgariad's chapters open so: the paragraph after had
+    // no indent or spacing) - a bold one is a title
+    if (isPara || (plainDiv && !st.bold && !para.isEmpty)) para.paragraph = true;
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
       final first = para.runs.first;
       final t = first.text.trimLeft();
@@ -886,10 +887,12 @@ class Paginator {
     const gap = 14.0;
     final cols = t.rows.fold(0, (n, r) => math.max(n, r.length));
     final widths = List<double>.filled(cols, 0);
-    final least = List<double>.filled(cols, 0); // each column's longest word (or hyphenated part)
+    // each column's longest word. Cells aren't hyphenated (as in a browser): names in a narrow column came out
+    // "Yang Wein-ing"
+    final least = List<double>.filled(cols, 0);
     for (final row in t.rows) {
       for (var c = 0; c < row.length; c++) {
-        final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity).tp;
+        final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity, hyphenate: false).tp;
         widths[c] = math.max(widths[c], tp.maxIntrinsicWidth.ceilToDouble());
         least[c] = math.max(least[c], tp.minIntrinsicWidth.ceilToDouble());
       }
@@ -914,7 +917,7 @@ class Paginator {
     for (final row in t.rows) {
       final laid = [
         for (var c = 0; c < row.length; c++)
-          _painter(TextBlock()..runs.addAll(row[c]), row[c], math.max(1.0, widths[c]), base: pos),
+          _painter(TextBlock()..runs.addAll(row[c]), row[c], math.max(1.0, widths[c]), hyphenate: false, base: pos),
       ];
       final h = laid.fold(0.0, (m, l) => math.max(m, l.tp.height));
       if (_y + h > _bottom && !_pageEmpty) _newPage();
@@ -956,7 +959,7 @@ class Paginator {
   /// [prepared]: the runs already carry their soft hyphens (a slice).
   /// [base]: the chapter position of [runs]' first character (default: the block's start).
   _Laid _painter(TextBlock b, List<TextRun> runs, double width,
-      {bool indent = true, bool prepared = false, int? base}) {
+      {bool indent = true, bool prepared = false, bool hyphenate = true, int? base}) {
     final spans = <InlineSpan>[];
     final ind = indent && _indent > 0 && _align != TextAlign.center;
     if (ind) {
@@ -967,7 +970,7 @@ class Paginator {
     var at = ind ? 1 : 0; // painter offset (the indent's placeholder is one character)
     final linkRanges = <(int, int, String, String)>[];
     // headings aren't hyphenated ("DEMOS-THENES" - Ender's Game)
-    final hyphens = !prepared && hyphenator != null && theme.hyphenate && !isHeading(b);
+    final hyphens = hyphenate && !prepared && hyphenator != null && theme.hyphenate && !isHeading(b);
     // a note marker is a link in running text: a block that is all link (Ender's chapter number "8", a link back to
     // the contents) isn't one
     final running = runs.any((r) => r.style.link == null && r.text.trim().isNotEmpty);

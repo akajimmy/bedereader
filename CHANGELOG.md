@@ -13,6 +13,18 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: a hyphen missing where a word was split at the end of a paragraph's first line** ("power / ful"), in books
   with a text size of their own (since build 72): the hyphen was drawn at the wrong size, just above the line, and
   left out.
+- **EPUB: books that write their paragraphs as plain blocks** (Codex Alera, Dune) now get Paragraph spacing and the
+  reader's own formatting like any other, and Dune's text, set smaller all through, shows at your text size.
+- **EPUB: the book's % no longer jumps when page counting finishes** (24% → 2% in The Dispossessed): until then,
+  chapters are weighed by their length as Komga measures it, not counted as equal.
+- **EPUB: boxes in place of dashes and quotes** in older, badly converted books (The Forever War's "Sir□we") show
+  the characters they stood for.
+- **EPUB: headings are no longer hyphenated** ("DEMOS-THENES"), and get a little space under them when the book
+  leaves none (New Sun, Xanth, the Belgariad).
+- **EPUB: a chapter number that links back to the contents no longer looks like a footnote marker** (Ender's Game).
+- **EPUB: table columns are never narrower than their longest word** (the Three-Body Problem's list of characters).
+- **EPUB: drop caps drawn as pictures are at least two lines tall** (Homeland's were a speck beside one line);
+  larger ones still show at their own size.
 
 ## 1.2.0 - in development
 

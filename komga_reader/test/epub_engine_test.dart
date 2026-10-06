@@ -397,10 +397,13 @@ void main() {
     double second(double gap) =>
         Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(dune).single.textOrigins[1].dy;
     expect(second(1) - second(0), closeTo(19, 0.01), reason: 'Paragraph spacing: 1 em more');
-    final others = read('.big { font-size: x-large }',
-        '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div>Before <p>a block</p></div></body>');
-    expect(others.cast<TextBlock>().where((b) => b.paragraph).map((b) => b.runs.map((r) => r.text).join()),
-        ['Inside.', 'a block'], reason: 'only the <p>s: the large title and the wrappers are not paragraphs');
+    final others = read('.big { font-size: x-large } .b { font-weight: bold }',
+        '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div>'
+        '<div>They were nine days <p>a block</p></div></body>');
+    expect(others.cast<TextBlock>().where((b) => b.paragraph).map((b) => b.runs.map((r) => r.text).join().trim()),
+        ['Inside.', 'Text.', 'They were nine days', 'a block'],
+        reason: "not the large title, nor the bold one opening its div; the text opening a plain div is (the "
+            "Belgariad's chapters open so)");
   });
 
   test("a book's Windows dashes and quotes read as control characters (The Forever War's \"Sir\\u0097we\") are shown "
@@ -462,5 +465,9 @@ void main() {
     final firstWidth = page.textOrigins[1].dx - page.textOrigins[0].dx - 14;
     expect(firstWidth, greaterThanOrEqualTo(114));
     expect(page.textOrigins[1].dx + 4 * 19, lessThanOrEqualTo(364 + 0.5), reason: 'the second still fits its words');
+    // cells aren't hyphenated, as in a browser ("Yang Wein-ing" in a narrow column)
+    final names = ChapterReader(StyleSheet(), (h) => h)
+      ..read(parseXhtml('<body><table><tr><td>Yang Weining</td><td>$long recrimination</td></tr></table></body>'));
+    expect(Paginator(const EpubTheme(), const Size(400, 900), hy.forLang('en')).run(names.blocks).single.hyphenMarks, 0);
   });
 }
