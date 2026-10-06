@@ -1456,7 +1456,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         Material(
           color: bar,
           child: Theme(
-          data: _controlsTheme(context),
+          data: readerControlsTheme(context),
           child: SafeArea(
             bottom: false,
             child: Padding(
@@ -1554,7 +1554,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         Material(
           color: bar,
           child: Theme(
-          data: _controlsTheme(context),
+          data: readerControlsTheme(context),
           child: SafeArea(
             top: false,
             child: Padding(
@@ -1753,19 +1753,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       ),
     );
   }
-
-  /// The control the remote is on gets a thick accent outline and a strong accent fill, so it can be seen from the
-  /// sofa. Touch never focuses these buttons, so this only ever shows while using the remote.
-  ThemeData _controlsTheme(BuildContext context) {
-    final t = Theme.of(context);
-    final style = strongFocusStyle(t.colorScheme.primary); // same as the rest of the app (main.dart)
-    return t.copyWith(
-      iconButtonTheme: IconButtonThemeData(style: style),
-      textButtonTheme: TextButtonThemeData(style: style),
-      filledButtonTheme: FilledButtonThemeData(style: style),
-    );
-  }
-
 
   Widget _slider(int shown) {
     final node = _ctl[_Ctl.slider]!;

@@ -43,3 +43,16 @@ ButtonStyle strongFocusStyle(Color accent) {
     overlayColor: onFocus(Colors.transparent),
   );
 }
+
+/// The readers' control bars (comics and EPUB): the control the remote is on gets a thick accent outline and a strong
+/// accent fill, so it can be seen from the sofa. Touch never focuses these buttons, so this only ever shows while
+/// using the remote.
+ThemeData readerControlsTheme(BuildContext context) {
+  final t = Theme.of(context);
+  final style = strongFocusStyle(t.colorScheme.primary); // same as the rest of the app (main.dart)
+  return t.copyWith(
+    iconButtonTheme: IconButtonThemeData(style: style),
+    textButtonTheme: TextButtonThemeData(style: style),
+    filledButtonTheme: FilledButtonThemeData(style: style),
+  );
+}

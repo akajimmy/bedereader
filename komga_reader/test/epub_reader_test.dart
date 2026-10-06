@@ -1,8 +1,8 @@
 // The EPUB reader screen (lib/screens/epub_reader.dart) over a small book held in memory.
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/epub_reader.dart';
@@ -121,8 +121,10 @@ void main() {
       'Done on a wide screen', (tester) async {
     await open(tester, twoChapters());
     for (final (tooltip, title) in [('Text and page settings', 'Text and page'), ('Contents', 'Contents')]) {
-      await tester.tapAt(const Offset(400, 600));
-      await tester.pump();
+      if (find.byTooltip(tooltip).evaluate().isEmpty) {
+        await tester.tapAt(const Offset(400, 600)); // the controls (they stay up behind a panel, as with comics)
+        await tester.pump();
+      }
       await tester.tap(find.byTooltip(tooltip));
       await tester.pumpAndSettle();
       expect(find.text(title), findsWidgets);
@@ -133,6 +135,60 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('the remote: Right turns forward, Left back, OK shows the controls', (tester) async {
+    await open(tester, twoChapters());
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settle(tester);
+    expect(await label(tester), startsWith('Page 2 of '));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await settle(tester);
+    expect(await label(tester), startsWith('Page 1 of '));
+  });
+
+  testWidgets("with the controls up the remote walks them (the comic reader's model): Down to the bottom bar, Right "
+      'along it, OK presses; Back closes the controls, not the book', (tester) async {
+    await open(tester, twoChapters());
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // OK: the controls
+    await tester.pump();
+    expect(find.text('Close'), findsOneWidget, reason: "the comic reader's Close button");
+    final before = await (() async => tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data!)();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown); // the bottom bar: Previous book
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // the slider
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // Contents
+    await tester.pump();
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data, before, reason: 'Right moved, not turned');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // presses Contents
+    await tester.pumpAndSettle();
+    expect(find.text('Contents'), findsWidgets);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    // Back: the controls go, the book stays
+    final nav = tester.state<NavigatorState>(find.byType(Navigator));
+    await nav.maybePop();
+    await tester.pumpAndSettle();
+    expect(find.text('Close'), findsNothing);
+    expect(find.byType(EpubReaderScreen), findsOneWidget);
+  });
+
+  testWidgets('the slider: the position shown follows the finger while dragging; the page changes when it lifts',
+      (tester) async {
+    await open(tester, twoChapters());
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    final slider = find.byType(Slider);
+    final r = tester.getRect(slider);
+    final g = await tester.startGesture(r.centerLeft + const Offset(24, 0));
+    await tester.pump();
+    final start = tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data!;
+    await g.moveTo(r.centerRight - const Offset(24, 0));
+    await tester.pump();
+    final dragged = tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data!;
+    expect(dragged, isNot(start), reason: 'the label moves with the finger');
+    await g.up();
+    await settle(tester);
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data, dragged, reason: 'gone there');
   });
 
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
