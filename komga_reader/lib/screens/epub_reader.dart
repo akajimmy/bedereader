@@ -21,9 +21,9 @@ import '../offline/downloads.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
+import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
-import '../widgets/setting_rows.dart';
 
 /// The EPUB reader (plan: reports\epub-plan-2026-10-06.md): the book laid out by the app itself (lib/epub/), page by
 /// page. Taps: left third back, right third forward, the middle shows the controls; swipes turn; the remote and the
@@ -494,32 +494,31 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   Future<void> _contents() async {
     final b = _book!;
     final toc = b.info.toc;
-    final picked = await showModalBottomSheet<TocEntry>(
-      context: context,
-      isScrollControlled: true,
-      builder: (c) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        builder: (c, scroll) => toc.isEmpty
-            ? const Center(child: Text('This book has no table of contents'))
-            : ListView.builder(
-                controller: scroll,
-                itemCount: toc.length,
-                itemBuilder: (c, i) {
-                  final t = toc[i];
-                  final here = b.chapterOf(t.path) == _chapter;
-                  return ListTile(
-                    contentPadding: EdgeInsets.only(left: 16 + 20.0 * t.depth, right: 16),
-                    title: Text(t.title.isEmpty ? '(untitled)' : t.title,
-                        style: TextStyle(fontWeight: here ? FontWeight.bold : FontWeight.normal)),
-                    autofocus: here,
-                    onTap: () => Navigator.pop(c, t),
-                  );
-                },
-              ),
-      ),
-    );
-    if (picked == null || !mounted) return;
+    TocEntry? picked;
+    setState(() => _controls = false);
+    // the comic reader's panel look (user, 2026-10-06): a side sheet on a wide screen, a bottom sheet on a narrow one
+    await showReaderPanelFrame(context, title: 'Contents', children: (c, _) => [
+          if (toc.isEmpty) const Padding(padding: EdgeInsets.all(14), child: Text('This book has no table of contents')),
+          for (final t in toc)
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.only(left: 4 + 18.0 * t.depth, right: 4),
+              title: Text(t.title.isEmpty ? '(untitled)' : t.title,
+                  style: TextStyle(fontSize: 15, fontWeight: b.chapterOf(t.path) == _chapter
+                      ? FontWeight.bold
+                      : FontWeight.normal)),
+              onTap: () {
+                picked = t;
+                Navigator.of(c).pop();
+              },
+            ),
+        ]);
+    final chosen = picked;
+    if (chosen == null || !mounted) return;
+    await _jumpTo(b, chosen);
+  }
+
+  Future<void> _jumpTo(EpubBook b, TocEntry picked) async {
     final ch = b.chapterOf(picked.path);
     if (ch == null) return;
     final hash = picked.href.indexOf('#');
@@ -530,26 +529,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   /// The Aa panel: the EPUB settings while reading; the page changes behind it as they're set.
   Future<void> _settingsPanel() async {
     setState(() => _controls = false);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      barrierColor: Colors.black26,
-      builder: (c) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.55,
-        maxChildSize: 0.9,
-        builder: (c, scroll) => Material(
-          // a solid sheet: the page stays visible above it, not through it (the tablet, 2026-10-06)
-          color: Theme.of(c).colorScheme.surface,
-          child: ListenableBuilder(
-            listenable: AppSettings.instance,
-            builder: (c, _) => SettingsColumn(child: ListView(controller: scroll, padding:
-                const EdgeInsets.fromLTRB(12, 8, 12, 24), children: epubSettingRows(
-                    c, AppSettings.instance.epub, AppSettings.instance.setEpub))),
-          ),
-        ),
-      ),
-    );
+    // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live
+    await showReaderPanelFrame(context, title: 'Text and page',
+        children: (c, s) => epubSettingRows(c, s.epub, s.setEpub));
   }
 
   // ---- what's shown
