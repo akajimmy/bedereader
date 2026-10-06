@@ -9,6 +9,17 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Hiding a book or series from On deck could be undone at once** when Home was open underneath: Home's refresh put
+  back the list from before the hide. Synced lists (pins, On deck hidden) and reader settings now take only Komga's
+  copy when refreshing, and never over a change made here that hasn't reached Komga yet.
+- **Starting the app could send an empty pins or On deck hidden list to Komga** (when a change from last time hadn't
+  been sent): the list is now read from the device before anything goes.
+- **Two quick On deck hides could reach Komga out of order, or one not at all**: they now go one at a time, and a
+  failed one is tried again a minute later (as pins do).
+- **Turning pin sync off while a send was failing** still sent this device's list over the shared pins a minute later.
+- **Home loaded everything three times on each refresh** (and twice on opening): once now.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).

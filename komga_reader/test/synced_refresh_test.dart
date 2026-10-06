@@ -121,7 +121,7 @@ void main() {
     expect(s.epub.size, 24, reason: "this device's change, not Komga's older copy");
     api.holdPut!.complete();
     api.holdPut = null;
-    s.clearAccount();
+    await s.clearAccount();
   });
 
   testWidgets('#34: one Home load per reload - the refreshes told everyone twice even when nothing had changed, '
