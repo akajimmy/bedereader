@@ -24,6 +24,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   asked. A page now counts as saved only once Komga has it.
 - **A save went through while that question was on screen**, putting this device's page over the other device's
   before you'd answered. It now waits for your answer, and is dropped if you go to the other device's page.
+- **Connections piled up during reading**: page saves, settings saves and deletes left Komga's reply unread, so the
+  connection couldn't be used again. Replies are now read to the end.
+- **A page could stay on a spinner** when Enhance, Enhance colours or Crop edges failed (a page too big for the
+  graphics chip, say): it now shows plain.
+- **The page strip was off-centre on phones**, more the further into a book (about 200 pixels by page 100): the page
+  picked is now in the middle.
+- **Signing out didn't stop the book being downloaded**: it carried on to its last page with the old account. It now
+  stops at once and waits in the queue.
 
 ## 1.2.0 - in development
 

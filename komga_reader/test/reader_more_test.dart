@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screens/reader.dart';
@@ -465,6 +466,23 @@ void main() {
   });
 
   // ---- 4
+  testWidgets('Enhance colours, Enhance and crop failing (a GPU that can\'t, a page past its limits): the page shows '
+      'plain, not a spinner for good (code review 2026-10-05, #8)', (tester) async {
+    AppSettings.instance.setDefault(const ReaderPrefs(autoLevels: true, sharpen: true, crop: 0.05));
+    Enhancer.failWith = StateError('no GPU here');
+    addTearDown(() {
+      Enhancer.failWith = null;
+      AppSettings.instance.setDefault(const ReaderPrefs());
+    });
+    await openLoaded(tester);
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget, reason: 'the page, plain');
+    expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
+  });
+
   testWidgets('zoom keys: + zooms in a step at a time, - back out to fit; in fit width they do nothing', (tester) async {
     await openLoaded(tester);
     double scale() => zoomOf(tester).getMaxScaleOnAxis();

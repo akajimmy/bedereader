@@ -523,6 +523,10 @@ class Downloads extends ChangeNotifier {
 
   Future<void> _run(DownloadJob job) async {
     final api = _api!, s = store!;
+    // signed out (or another server attached) meanwhile: this book stops where it is - it carried on with the old key
+    // to its last page (code review 2026-10-05, #14)
+    final session = _session;
+    bool gone() => session != _session;
     job
       ..state = JobState.downloading
       ..error = null
@@ -616,7 +620,7 @@ class Downloads extends ChangeNotifier {
       var bytes = 0;
       var offWifi = false; // Wi-Fi went (checked every few pages): stop here, carry on from here on Wi-Fi
       for (final (i, p) in plan.indexed) {
-        if (job._cancel || paused || _hold) break;
+        if (job._cancel || paused || _hold || gone()) break;
         if (i > 0 && i % 5 == 0 && !await _networkOk()) {
           offWifi = true;
           break;
@@ -641,7 +645,7 @@ class Downloads extends ChangeNotifier {
       }
 
       // an EPUB: its one file (kept if already whole from an earlier try)
-      if (epub && !(job._cancel || paused || _hold)) {
+      if (epub && !(job._cancel || paused || _hold || gone())) {
         final f = s.file('${job.bookId}/book.epub');
         if (await f.exists() && await f.length() > 0) {
           bytes = await f.length();
@@ -659,6 +663,10 @@ class Downloads extends ChangeNotifier {
         notifyListeners();
       }
 
+      if (gone()) {
+        job.state = JobState.queued; // the pages so far stay; it goes on when this account is back
+        return;
+      }
       if (job._cancel) {
         queue.remove(job);
         await _deleteFiles(job.bookId);
@@ -677,6 +685,10 @@ class Downloads extends ChangeNotifier {
         if (recentlyDone.length > 20) recentlyDone.removeLast();
       }
     } catch (e, st) {
+      if (gone()) {
+        job.state = JobState.queued; // (a page refused once signed out: not this book's failure)
+        return;
+      }
       if (e is KomgaUnreachable) {
         // Komga (or the network) gone for now: back in the queue - pages so far kept - and wait for it
         job

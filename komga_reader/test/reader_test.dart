@@ -1453,6 +1453,31 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
       });
 
+      testWidgets('on a phone-width screen the page picked is in the middle of the strip, far into a book too (its '
+          'tiles were taken as 2 px wider than they are: ~200 px off by page 100 - code review 2026-10-05, #10)',
+          (tester) async {
+        tester.view.physicalSize = const Size(400, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await openLoaded(tester, pages: 120);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await tester.pump();
+        await key(tester, LogicalKeyboardKey.arrowDown); // the bottom bar
+        await key(tester, LogicalKeyboardKey.arrowUp); // into the strip
+        expect(focused('ctl-strip'), isTrue);
+        for (var i = 0; i < 99; i++) {
+          await key(tester, LogicalKeyboardKey.arrowRight);
+        }
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pump(const Duration(milliseconds: 300)); // (the last centring's animation runs)
+        final picked = tester.getRect(tile(99));
+        final screen = tester.getRect(find.byKey(strip));
+        expect(picked.center.dx, closeTo(screen.center.dx, 2), reason: 'page 100 in the middle: $picked in $screen');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
       testWidgets('the Pages button opens it at the page shown; a page tapped is gone to and the strip stays, the way '
           'back marked; the button closes it', (tester) async {
         await openLoaded(tester, pages: 40);
