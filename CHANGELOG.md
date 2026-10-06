@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 75 - 2026-10-06
+
 **Fixed**
 - **EPUB: a hyphen missing where a word was split at the end of a paragraph's first line** ("power / ful"), in books
   with a text size of their own (since build 72): the hyphen was drawn at the wrong size, just above the line, and
@@ -25,10 +31,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: table columns are never narrower than their longest word** (the Three-Body Problem's list of characters).
 - **EPUB: drop caps drawn as pictures are at least two lines tall** (Homeland's were a speck beside one line);
   larger ones still show at their own size.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 74 - 2026-10-06
 
