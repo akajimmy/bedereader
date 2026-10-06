@@ -94,6 +94,7 @@ class TextBlock extends Block {
   TextRun? drop; // a drop cap / floated chapter number, set beside the first lines
   bool dropBoxed = false;
   ImageBlock? floatImage; // a picture floated left, the first lines beside it
+  bool floatImageFirst = false; // it starts the paragraph: if small (a letter), a drop cap
 
   bool get isEmpty => runs.every((r) => r.text.trim().isEmpty);
 }
@@ -128,6 +129,7 @@ class ChapterReader {
   TextBlock? _cur;
   TextRun? _pendingDrop;
   bool _pendingDropBoxed = false;
+  ImageBlock? _pendingDropImage; // a floated picture just before its paragraph
 
   /// The chapter's language (lang / xml:lang on `html` or `body`), for hyphenation; null if it doesn't say.
   String? lang;
@@ -291,8 +293,27 @@ class ChapterReader {
       return;
     }
 
-    // a short floated element (the chapter number "1" in a box, a drop cap): beside the next paragraph's lines
+    // a floated picture with (next to) no text: a drop cap drawn as a picture (Homeland, the Hitchhiker's books:
+    // <span class="dropcaps"><img/></span> starting the paragraph) or a small floated picture - beside the
+    // paragraph's first lines, not a picture on its own line (user, 2026-10-06)
     final fl = d['float'];
+    final floatImg = fl == 'left' || fl == 'right' ? (e.find('img') ?? e.find('image')) : null;
+    if (floatImg != null && _textOf(e).trim().length <= 3) {
+      final src = floatImg.attr('src') ?? floatImg.attr('href');
+      if (src != null) {
+        final img = ImageBlock(resolve(src));
+        images.add(img);
+        final cur = _cur;
+        if (cur == null) {
+          _pendingDropImage = img; // before its paragraph: the next one's
+        } else {
+          cur.floatImage ??= img;
+          cur.floatImageFirst = cur.runs.every((r) => r.text.trim().isEmpty); // starts the paragraph
+        }
+      }
+      return;
+    }
+    // a short floated element (the chapter number "1" in a box, a drop cap): beside the next paragraph's lines
     if ((fl == 'left' || fl == 'right') && e.find('img') == null) {
       final t = _textOf(e).trim();
       if (t.isNotEmpty && t.length <= 3) {
@@ -335,6 +356,12 @@ class ChapterReader {
       para.drop = _pendingDrop;
       para.dropBoxed = _pendingDropBoxed;
       _pendingDrop = null;
+    }
+    if (_pendingDropImage != null) {
+      para
+        ..floatImage ??= _pendingDropImage
+        ..floatImageFirst = true;
+      _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
@@ -829,6 +856,14 @@ class Paginator {
     if (carried) {
       boxW = _floatW;
       boxH = _floatBottom - _y - 8;
+    } else if (fimg != null && b.floatImageFirst && _letterSized(fimg)) {
+      // a drop cap drawn as a picture: as tall as the text drop caps (about three lines), beside them
+      final h = lineH * 2.6;
+      final w = fimg.width * h / fimg.height;
+      boxW = w + 6;
+      boxH = lineH * 3;
+      if (_y + boxH > _bottom && !_pageEmpty) _newPage();
+      floatPiece = _ImagePiece(fimg, Rect.fromLTWH(x, _y + (boxH - h) / 2 - 2, w, h));
     } else if (fimg != null) {
       final s = math.min(1.0, math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
       boxW = fimg.width * s;
@@ -870,6 +905,9 @@ class Paginator {
     final soft = narrow.tp.plainText.substring(0, math.min(cut, narrow.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, rest, width, indent: false, prepared: true, base: b.start + cut - soft), x);
   }
+
+  /// A picture the size of a letter (the drop caps drawn as pictures are 15-60 px; a floated illustration is bigger).
+  static bool _letterSized(ui.Image img) => img.width <= 120 && img.height <= 120;
 
   /// A hanging indent (text-indent below 0: glossaries, references, footnotes): the first line starts further left,
   /// out into the paragraph's own left margin (never past the page's), the rest at the paragraph's margin. Flutter
