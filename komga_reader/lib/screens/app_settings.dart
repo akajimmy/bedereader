@@ -12,6 +12,7 @@ import '../offline/downloads.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../view_prefs.dart';
+import '../widgets/epub_settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -23,12 +24,13 @@ import 'document.dart';
 import 'downloads_screen.dart';
 
 /// The pages of Settings, in order.
-enum SettingsPage { server, defaults, reader, keys, display, library, downloads, about }
+enum SettingsPage { server, defaults, books, reader, keys, display, library, downloads, about }
 
 extension on SettingsPage {
   String get label => switch (this) {
         SettingsPage.server => 'Server',
         SettingsPage.defaults => 'Reading defaults',
+        SettingsPage.books => 'Books (EPUB)',
         SettingsPage.reader => 'Reader',
         SettingsPage.display => 'Display',
         SettingsPage.keys => 'Remote and keys',
@@ -39,6 +41,7 @@ extension on SettingsPage {
   IconData get icon => switch (this) {
         SettingsPage.server => Icons.dns_outlined,
         SettingsPage.defaults => Icons.menu_book_outlined,
+        SettingsPage.books => Icons.text_fields,
         SettingsPage.reader => Icons.chrome_reader_mode_outlined,
         SettingsPage.display => Icons.palette_outlined, // (brightness moved to Reader: it's the reader's now)
         SettingsPage.keys => Icons.settings_remote_outlined,
@@ -50,6 +53,7 @@ extension on SettingsPage {
   /// Where the page's settings are kept, said once under its title.
   String? get scope => switch (this) {
         SettingsPage.defaults => 'Synced through Komga - every device',
+        SettingsPage.books => 'Synced through Komga - every device; also in the book reader (Aa)',
         SettingsPage.library => 'Kept on this device, except On deck and pins (synced)',
         SettingsPage.about => null,
         _ => 'Kept on this device',
@@ -137,6 +141,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsColumn(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
         SettingsPage.server => _server(context),
         SettingsPage.defaults => [_live(_defaults)],
+        SettingsPage.books => [_live((s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: epubSettingRows(context, s.epub, s.setEpub)))],
         SettingsPage.reader => [_live(_reader)],
         SettingsPage.display => [_live(_display)],
         SettingsPage.library => _library(),

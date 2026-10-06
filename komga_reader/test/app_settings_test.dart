@@ -38,6 +38,7 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
 (String, String?) pageInfo(SettingsPage p) => switch (p) {
       SettingsPage.server => ('Server', 'Kept on this device'),
       SettingsPage.defaults => ('Reading defaults', 'Synced through Komga - every device'),
+      SettingsPage.books => ('Books (EPUB)', 'Synced through Komga - every device; also in the book reader (Aa)'),
       SettingsPage.reader => ('Reader', 'Kept on this device'),
       SettingsPage.keys => ('Remote and keys', 'Kept on this device'),
       SettingsPage.display => ('Display', 'Kept on this device'),
@@ -115,10 +116,29 @@ void main() {
     expect(find.text('Screen brightness'), findsWidgets);
   });
 
+  testWidgets("Books (EPUB): the font, size and the book's formatting set the EPUB settings (synced)", (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    addTearDown(() => s.setEpub(const EpubPrefs()));
+    await open(tester, page: SettingsPage.books);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Lora'));
+    await tester.pump();
+    expect(s.epub.font, EpubFont.lora);
+    await tester.tap(find.byTooltip('Larger'));
+    await tester.pump();
+    expect(s.epub.size, 20);
+    await tester.tap(find.widgetWithText(SwitchListTile, "Book's formatting"));
+    await tester.pump();
+    expect(s.epub.bookFormatting, isTrue);
+    await tester.tap(find.text('Loose'));
+    await tester.pump();
+    expect(s.epub.lineSpacing, 1.7);
+  });
+
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {
     tall(tester, width: 420);
     await open(tester);
-    expect(find.byType(ChoiceChip), findsNWidgets(7)); // no Downloads here (downloads not set up in tests)
+    expect(find.byType(ChoiceChip), findsNWidgets(8)); // no Downloads here (downloads not set up in tests)
     await tester.tap(find.widgetWithText(ChoiceChip, 'Reader'));
     await tester.pumpAndSettle();
     expect(find.text('Turning pages'), findsOneWidget);

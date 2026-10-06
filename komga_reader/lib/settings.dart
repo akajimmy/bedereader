@@ -314,6 +314,97 @@ class DisplayPrefs {
 /// Holds reader prefs (global default + per series, synced to the user's Komga client settings) and display prefs
 /// (this device). Changes apply immediately; the Komga copy is written a moment later, merged with whatever is on
 /// the server so two devices don't wipe each other's series.
+// ---- EPUB books (reports\epub-plan-2026-10-06.md; user's choices 2026-10-06): one set for every book, synced
+
+enum EpubFont {
+  literata('Literata', 'Literata'),
+  lora('Lora', 'Lora'),
+  garamond('EB Garamond', 'EB Garamond'),
+  atkinson('Atkinson Hyperlegible Next', 'Atkinson'),
+  deviceSerif(null, 'Device serif'),
+  deviceSans(null, 'Device sans');
+
+  const EpubFont(this.family, this.label);
+  final String? family; // a bundled font's family; null: the device's own
+  final String label;
+}
+
+enum EpubColours {
+  dark(Color(0xFF1B1B1D), Color(0xFFE4E0D8), 'Dark'),
+  sepia(Color(0xFFF4ECD8), Color(0xFF5B4636), 'Sepia'),
+  light(Color(0xFFFFFFFF), Color(0xFF1A1A1A), 'Light');
+
+  const EpubColours(this.background, this.text, this.label);
+  final Color background, text;
+  final String label;
+}
+
+enum EpubMargins {
+  narrow(18, 28, 'Narrow'),
+  normal(36, 40, 'Normal'),
+  wide(64, 56, 'Wide');
+
+  const EpubMargins(this.side, this.topBottom, this.label);
+  final double side, topBottom;
+  final String label;
+}
+
+enum EpubTurn { slide, none }
+
+/// What the position line reads (user: all three, a setting).
+enum EpubPositionStyle { pageAndPercent, chapterPage, percent }
+
+@immutable
+class EpubPrefs {
+  const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
+      this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.bookFormatting = false,
+      this.turn = EpubTurn.slide, this.position = EpubPositionStyle.pageAndPercent});
+  final EpubFont font;
+  final double size; // px at the app's text size
+  final double lineSpacing;
+  final EpubMargins margins;
+  final EpubColours colours;
+  final bool bookFormatting; // the publisher's alignment, indents and spacing (default off: the reader's own)
+  final EpubTurn turn;
+  final EpubPositionStyle position;
+
+  static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
+  static const spacings = [1.25, 1.45, 1.7];
+
+  EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
+          bool? bookFormatting, EpubTurn? turn, EpubPositionStyle? position}) =>
+      EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
+          margins: margins ?? this.margins, colours: colours ?? this.colours,
+          bookFormatting: bookFormatting ?? this.bookFormatting, turn: turn ?? this.turn,
+          position: position ?? this.position);
+
+  Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
+      'margins': margins.name, 'colours': colours.name, 'bookFormatting': bookFormatting, 'turn': turn.name,
+      'position': position.name};
+
+  factory EpubPrefs.fromJson(Map<String, dynamic> j) {
+    T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
+        values.firstWhere((v) => v.name == name, orElse: () => fallback);
+    final size = (j['size'] as num?)?.toDouble();
+    final spacing = (j['lineSpacing'] as num?)?.toDouble();
+    return EpubPrefs(
+      font: pick(EpubFont.values, j['font'], EpubFont.literata),
+      size: size != null && size >= 10 && size <= 48 ? size : 19,
+      lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.45,
+      margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
+      colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
+      bookFormatting: j['bookFormatting'] == true,
+      turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
+      position: pick(EpubPositionStyle.values, j['position'], EpubPositionStyle.pageAndPercent),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is EpubPrefs && jsonEncode(other.toJson()) == jsonEncode(toJson());
+  @override
+  int get hashCode => jsonEncode(toJson()).hashCode;
+}
+
 class AppSettings extends ChangeNotifier {
   AppSettings._();
   static final AppSettings instance = AppSettings._();
@@ -326,6 +417,7 @@ class AppSettings extends ChangeNotifier {
   ReaderPrefs defaults = const ReaderPrefs();
   final Map<String, ReaderPrefs> series = {};
   DisplayPrefs display = const DisplayPrefs();
+  EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
   String? syncError; // last Komga sync problem, shown in the Display panel
 
   /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
@@ -339,6 +431,8 @@ class AppSettings extends ChangeNotifier {
   static const _unsentKey = 'readerPrefs.unsent';
   final Set<String> _dirtySeries = {};
   bool _dirtyDefault = false;
+  bool _dirtyEpub = false;
+  int _epubVersion = 0;
   // how many times each entry has changed: a send only clears the entries that didn't change again while it was on
   // its way (a change made mid-send used to be marked sent without being sent)
   final Map<String, int> _versions = {};
@@ -349,7 +443,7 @@ class AppSettings extends ChangeNotifier {
   /// Switch connection (online / offline) without reloading; a failed sync retries on its own.
   void useApi(Komga api) {
     _api = api;
-    if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncSoon();
+    if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncSoon();
   }
 
   void _syncSoon([Duration after = const Duration(seconds: 2)]) {
@@ -359,10 +453,11 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> _saveUnsent() async {
     final p = await SharedPreferences.getInstance();
-    if (_dirtySeries.isEmpty && !_dirtyDefault) {
+    if (_dirtySeries.isEmpty && !_dirtyDefault && !_dirtyEpub) {
       await p.remove(_unsentKey);
     } else {
-      await p.setString(_unsentKey, jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault}));
+      await p.setString(_unsentKey,
+          jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault, 'epub': _dirtyEpub}));
     }
   }
 
@@ -372,9 +467,11 @@ class AppSettings extends ChangeNotifier {
     _syncTimer?.cancel();
     _api = null;
     defaults = const ReaderPrefs();
+    epub = const EpubPrefs();
     series.clear();
     _dirtySeries.clear();
     _dirtyDefault = false;
+    _dirtyEpub = false;
     _versions.clear();
     syncError = null;
     notifyListeners();
@@ -435,6 +532,7 @@ class AppSettings extends ChangeNotifier {
         ..clear()
         ..addAll([for (final id in (u['series'] as List? ?? const [])) id as String]);
       _dirtyDefault = u['default'] == true;
+      _dirtyEpub = u['epub'] == true;
     } catch (_) {
       // damaged: nothing counts as unsent
     }
@@ -456,7 +554,16 @@ class AppSettings extends ChangeNotifier {
     } catch (e) {
       _syncNote('Using the settings saved on this device: ${explain(e).reason}.', e);
     }
-    if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncSoon(); // what didn't reach Komga last time goes now
+    if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncSoon(); // what didn't reach Komga goes now
+  }
+
+  /// The EPUB settings (the reader's Aa panel, Settings > Books). Synced.
+  void setEpub(EpubPrefs prefs) {
+    if (prefs == epub) return;
+    epub = prefs;
+    _dirtyEpub = true;
+    _epubVersion++;
+    _changedReader();
   }
 
   void setSeries(String seriesId, ReaderPrefs prefs) {
@@ -540,7 +647,7 @@ class AppSettings extends ChangeNotifier {
     notifyListeners();
     SharedPreferences.getInstance().then((p) => p.setString(_localReader, jsonEncode(_blob())));
     _saveUnsent();
-    _syncSoon();
+    if (_api != null) _syncSoon(); // not connected yet: it's unsent, and goes when Komga is (load / useApi)
   }
 
   Future<void> _sync() async {
@@ -549,11 +656,13 @@ class AppSettings extends ChangeNotifier {
       return;
     }
     final api = _api;
-    if (api == null || (_dirtySeries.isEmpty && !_dirtyDefault)) return;
+    if (api == null || (_dirtySeries.isEmpty && !_dirtyDefault && !_dirtyEpub)) return;
     _syncing = true;
     final sending = {for (final id in _dirtySeries) id: _versions[id] ?? 0};
     final sendDefault = _dirtyDefault;
     final defaultVersion = _defaultVersion;
+    final sendEpub = _dirtyEpub;
+    final epubVersion = _epubVersion;
     try {
       final merged = await _fetchRemote() ?? <String, dynamic>{};
       final remoteSeries = Map<String, dynamic>.from((merged['series'] as Map?) ?? {});
@@ -564,15 +673,17 @@ class AppSettings extends ChangeNotifier {
       merged['v'] = 1;
       merged['series'] = remoteSeries;
       if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
+      if (sendEpub) merged['epub'] = epub.toJson();
       await api.putClientSetting(komgaKey, jsonEncode(merged));
       // sent - unless it changed again meanwhile: then it's still to send
       for (final e in sending.entries) {
         if ((_versions[e.key] ?? 0) == e.value) _dirtySeries.remove(e.key);
       }
       if (sendDefault && _defaultVersion == defaultVersion) _dirtyDefault = false;
+      if (sendEpub && _epubVersion == epubVersion) _dirtyEpub = false;
       await _saveUnsent();
       syncError = null;
-      if (_dirtySeries.isNotEmpty || _dirtyDefault) _syncAgain = true;
+      if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncAgain = true;
     } catch (e) {
       _syncNote('Settings saved on this device, not on Komga yet: ${explain(e).reason}.', e);
       _syncSoon(const Duration(minutes: 1));
@@ -594,6 +705,7 @@ class AppSettings extends ChangeNotifier {
   Map<String, dynamic> _blob() => {
         'v': 1,
         'default': defaults.toJson(),
+        'epub': epub.toJson(),
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
       };
 
@@ -603,6 +715,8 @@ class AppSettings extends ChangeNotifier {
   void _applyBlob(Map<String, dynamic> b, {required bool remote}) {
     final d = b['default'];
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
+    final e = b['epub'];
+    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = EpubPrefs.fromJson(e);
     final s = b['series'];
     if (s is! Map) return;
     final next = <String, ReaderPrefs>{

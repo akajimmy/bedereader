@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -19,7 +20,9 @@ import '../offline/downloads.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
+import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
+import '../widgets/setting_rows.dart';
 
 /// The EPUB reader (plan: reports\epub-plan-2026-10-06.md): the book laid out by the app itself (lib/epub/), page by
 /// page. Taps: left third back, right third forward, the middle shows the controls; swipes turn; the remote and the
@@ -54,12 +57,37 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   String get _title => (widget.book['metadata']?['title'] ?? widget.book['name'] ?? '') as String;
 
-  EpubTheme get _theme => const EpubTheme(); // the EPUB settings come with step 5 of the plan
+  Size _size = Size.zero; // the page area, from the last layout
+
+  /// The book's look from the EPUB settings (synced; the Aa panel): font, size, spacing, margins, theme, formatting.
+  /// Lines stay a comfortable length on a wide window (~34 em): the extra width goes to the margins.
+  EpubTheme get _theme {
+    final e = AppSettings.instance.epub;
+    final family = e.font.family ?? switch (e.font) {
+      EpubFont.deviceSerif => defaultTargetPlatform == TargetPlatform.windows ? 'Georgia' : 'serif',
+      _ => null,
+    };
+    final side = math.max(e.margins.side, (_size.width - e.size * 34) / 2);
+    return EpubTheme(
+      background: e.colours.background,
+      text: e.colours.text,
+      fontFamily: family,
+      fontSize: e.size,
+      lineHeight: e.lineSpacing,
+      margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
+      bookFormatting: e.bookFormatting,
+    );
+  }
+
+  void _onSettings() {
+    if (mounted) setState(() {}); // a new look: laid out again on the next build (same place kept)
+  }
 
   @override
   void initState() {
     super.initState();
     Connection.instance.readerOpened();
+    AppSettings.instance.addListener(_onSettings);
     Downloads.instance.readerOpened();
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -70,6 +98,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   @override
   void dispose() {
     Connection.instance.readerClosed();
+    AppSettings.instance.removeListener(_onSettings);
     AppSettings.instance.readerClosed();
     Downloads.instance.readerClosed();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -170,6 +199,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   void _layout(Size size) {
     final b = _book!;
+    _size = size;
     if (b.size == size && b.theme == _theme) return;
     // still opening (the saved place not shown yet): the saved place again, not what's on screen - the system bars
     // hiding right after opening change the size before it's shown (found on the tablet)
@@ -238,7 +268,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     });
     final target = _bookWide ? b.bookPage(chapter, page)! : page;
     if (_pc.hasClients) {
+      // the reader's own move (opening, laid out again, a jump): not a turn - it saves nothing by itself
+      _ownJump = true;
       _pc.jumpToPage(target);
+      _ownJump = false;
     } else {
       final old = _pc;
       setState(() => _pc = PageController(initialPage: target));
@@ -287,6 +320,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _page = math.min(i, math.max(0, n - 1));
       });
     }
+    if (_ownJump) return; // the reader moved the page itself: not the reader's turn (a jump saves via _jump)
     _moved = true;
     if (_end) {
       _reachedEnd();
@@ -295,9 +329,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
   }
 
-  Duration get _turnTime => AppSettings.instance.display.pageTurn == PageTurn.flip
-      ? Duration.zero
-      : const Duration(milliseconds: 220);
+  bool _ownJump = false;
+
+  Duration get _turnTime =>
+      AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 220);
 
   Future<void> _turn(int by) async {
     final b = _book;
@@ -307,11 +342,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       final n = b.pagesNow(_chapter)?.length ?? 0;
       final next = _page + by;
       if (by > 0 && next >= n && !(_chapter == b.chapterCount - 1)) {
-        await _show(_chapter + 1, 0); // into the next chapter (by chapter until the book is counted)
+        await _jump(_chapter + 1, 0); // into the next chapter (by chapter until the book is counted) - a turn
         return;
       }
       if (by < 0 && next < 0) {
-        if (_chapter > 0) await _show(_chapter - 1, 1 << 30); // the previous chapter's last page
+        if (_chapter > 0) await _jump(_chapter - 1, 1 << 30); // the previous chapter's last page
         return;
       }
     }
@@ -464,16 +499,50 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     await _jump(ch, hash < 0 ? 0 : await b.positionOfFragment(ch, picked.href.substring(hash + 1)));
   }
 
+  /// The Aa panel: the EPUB settings while reading; the page changes behind it as they're set.
+  Future<void> _settingsPanel() async {
+    setState(() => _controls = false);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      barrierColor: Colors.black26,
+      builder: (c) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.55,
+        maxChildSize: 0.9,
+        builder: (c, scroll) => ListenableBuilder(
+          listenable: AppSettings.instance,
+          builder: (c, _) => SettingsColumn(child: ListView(controller: scroll, children: epubSettingRows(
+              c, AppSettings.instance.epub, AppSettings.instance.setEpub))),
+        ),
+      ),
+    );
+  }
+
   // ---- what's shown
 
+  /// The chapter's name from the contents (the last entry for its file), else "Chapter N of M".
+  String get _chapterName {
+    final b = _book!;
+    final path = b.info.spine[_chapter];
+    final named = b.info.toc.where((t) => t.path == path && t.title.isNotEmpty);
+    return named.isEmpty ? 'Chapter ${_chapter + 1} of ${b.chapterCount}' : named.first.title;
+  }
+
+  /// The position line, as Settings > Books > Position shows says (user: all three styles).
   String get _positionLabel {
     final b = _book!;
     final pct = (b.progression(b.positionOf(_chapter, _page)) * 100).round();
     final at = b.bookPage(_chapter, _page);
     final total = b.totalPages;
-    if (at != null && total != null) return 'Page ${at + 1} of $total · $pct%';
     final n = b.pageCount(_chapter);
-    return 'Chapter ${_chapter + 1} of ${b.chapterCount} · page ${_page + 1}${n == null ? '' : ' of $n'}';
+    final inChapter = '$_chapterName · page ${_page + 1}${n == null ? '' : ' of $n'}';
+    return switch (AppSettings.instance.epub.position) {
+      EpubPositionStyle.pageAndPercent =>
+        at != null && total != null ? 'Page ${at + 1} of $total · $pct%' : inChapter,
+      EpubPositionStyle.chapterPage => inChapter,
+      EpubPositionStyle.percent => '$pct%',
+    };
   }
 
   Widget _pageAt(int i, Size size) {
@@ -591,6 +660,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Close', onPressed: () => Navigator.of(context).maybePop()),
         Expanded(child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16))),
         IconButton(icon: const Icon(Icons.toc), tooltip: 'Contents', onPressed: _contents),
+        IconButton(icon: const Icon(Icons.text_fields), tooltip: 'Text and page settings', onPressed: _settingsPanel),
       ])))),
       Positioned(left: 0, right: 0, bottom: 0, child: Material(color: bar, child: SafeArea(top: false, child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
