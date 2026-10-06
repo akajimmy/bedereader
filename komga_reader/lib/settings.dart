@@ -436,6 +436,13 @@ class AppSettings extends ChangeNotifier {
   ReaderPrefs defaults = const ReaderPrefs();
   final Map<String, ReaderPrefs> series = {};
   DisplayPrefs display = const DisplayPrefs();
+
+  /// Tells only of changes to how posters look (size, title only, release date): poster grids listen to this, not to
+  /// every setting - a brightness slider drag rebuilt every grid under the reader (code review 2026-10-05, #44).
+  final posterLook = ValueNotifier<(PosterSize, bool, bool)>((PosterSize.medium, false, true));
+
+  void _posterLookFollows() =>
+      posterLook.value = (display.posterSize, display.posterTitleOnly, display.posterDate);
   EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
   String? syncError; // last Komga sync problem, shown in the Display panel
 
@@ -546,6 +553,7 @@ class AppSettings extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     final d = p.getString(_localDisplay);
     if (d != null) display = DisplayPrefs.fromJson(jsonDecode(d) as Map<String, dynamic>);
+    _posterLookFollows();
     try {
       final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
       _dirtySeries
@@ -637,6 +645,7 @@ class AppSettings extends ChangeNotifier {
   void setDisplay(DisplayPrefs d) {
     final backlightChanged = d.backlight != display.backlight;
     display = d;
+    _posterLookFollows();
     if (backlightChanged) applyBacklight();
     notifyListeners();
     SharedPreferences.getInstance().then((p) => p.setString(_localDisplay, jsonEncode(d.toJson())));

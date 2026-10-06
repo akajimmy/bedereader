@@ -272,7 +272,7 @@ class PosterGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: AppSettings.instance, // poster size
+        listenable: AppSettings.instance.posterLook, // poster size (only: not every setting - #44)
         builder: (context, _) => GridView.builder(
           controller: controller,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
@@ -298,7 +298,7 @@ class PagedPosterGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([paged, AppSettings.instance]), // AppSettings: poster size
+      listenable: Listenable.merge([paged, AppSettings.instance.posterLook]), // poster size (#44)
       builder: (context, _) {
         if (paged.firstLoad) return const Center(child: CircularProgressIndicator());
         final refresh = onRefresh ?? paged.refresh;

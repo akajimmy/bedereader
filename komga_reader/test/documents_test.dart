@@ -79,6 +79,24 @@ Text after.
     expect(find.textContaining(newest, findRichText: true), findsOneWidget, reason: newest);
   });
 
+  testWidgets("What's new rebuilt (a setting changed elsewhere in the app) stays where it was scrolled to - it loaded "
+      'again and jumped to the top (code review 2026-10-05, #48)', (tester) async {
+    final rebuild = ValueNotifier(0);
+    await tester.pumpWidget(ValueListenableBuilder(valueListenable: rebuild, builder: (_, n, __) => MaterialApp(
+        theme: ThemeData(visualDensity: n.isEven ? VisualDensity.standard : VisualDensity.compact),
+        // a new screen widget each time, as a rebuild hands down (a const one would be skipped)
+        // ignore: prefer_const_constructors
+        home: DocumentScreen(title: "What's new", asset: 'assets/docs/CHANGELOG.md'))));
+    await tester.pumpAndSettle();
+    final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    scroll.jumpTo(1500);
+    await tester.pump();
+    rebuild.value++; // the app rebuilt round it
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsNothing, reason: 'not loading again');
+    expect(tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels, 1500);
+  });
+
   testWidgets('Read me shows the README up to the developer part', (tester) async {
     setView(tester, const Size(800, 20000)); // everything built, so "not there" means not there
     await tester.pumpWidget(MaterialApp(home: DocumentScreen.readMe()));

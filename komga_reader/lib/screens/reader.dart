@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -38,6 +39,10 @@ import 'actions.dart';
 /// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
 /// goes straight to Komga (no local copy).
 class ReaderScreen extends StatefulWidget {
+  /// Times the reader has been built (debug builds only; tests).
+  @visibleForTesting
+  static int debugBuilds = 0;
+
   const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false});
   final Komga api;
   final dynamic book;
@@ -157,6 +162,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _awakeTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
+    _curlShader?.dispose();
+    _curlMoved.dispose();
     _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
     AppSettings.instance.readerClosed(); // the screen follows the system again
@@ -199,7 +206,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (!mounted) return;
     _applyRotation();
     if (_settings.display.screenOn != _screenOnFor) _awake(); // Keep the screen on changed
+    // rebuilt only for what it shows: brightness and night warmth are drawn over the whole app, not by the reader
+    // (a brightness slider drag rebuilt the reader many times a second - code review 2026-10-05, #44)
+    final shown = _shownSettings();
+    if (shown == _lastShownSettings) return;
+    _lastShownSettings = shown;
     setState(() {});
+  }
+
+  String? _lastShownSettings;
+  String _shownSettings() {
+    final d = _settings.display.toJson()
+      ..remove('brightness')
+      ..remove('warmth');
+    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson()});
   }
 
   // ---- Keep the screen on (Settings > Reader): always while a book is open, for N minutes after the last page turn
@@ -591,6 +611,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   late final AnimationController _curlAnim =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
   _Curl? _curl;
+  // the curl moving (each animation tick, each drag move) repaints its own layer only - it rebuilt the whole reader
+  // ~23 times a turn, with a new shader each paint (code review 2026-10-05, #38)
+  final _curlMoved = ValueNotifier<int>(0);
+  ui.FragmentShader? _curlShader;
   Size _area = Size.zero;
   Offset? _dragStart;
   final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
@@ -686,7 +710,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void _onCurlTick() {
     final c = _curl;
     if (c == null) return;
-    setState(() => c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!);
+    c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!;
+    _curlMoved.value++;
   }
 
   /// A curl is playing out after the finger let go (turning, or springing back): taps and keys wait for it (user,
@@ -749,9 +774,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
     // a diagonal drag tilts the page by half its height change (PageCurl.pinned keeps the spine down)
     final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy) * 0.5;
-    setState(() {
-      c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
-    });
+    c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
+    _curlMoved.value++;
   }
 
   void _curlDragEnd(DragEndDetails d) {
@@ -1136,6 +1160,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    assert(() {
+      ReaderScreen.debugBuilds++;
+      return true;
+    }());
     return PopScope(
       // Back (tablet or remote) closes the controls first, then the book
       canPop: !_menu,
@@ -1218,8 +1246,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         child: Stack(fit: StackFit.expand, children: [
                           if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
                           if (!_curl!.pending)
-                            CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: _curl!.sheet,
-                                page: _curl!.page, grab: _curl!.grab, finger: _curl!.finger, mirror: _rtl)),
+                            CustomPaint(painter: _CurlLayer(_curl!, mirror: _rtl, moved: _curlMoved,
+                                shader: _curlShader ??= PageCurl.loaded!.fragmentShader())),
                         ]),
                       ),
                     ),
@@ -1312,6 +1340,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           data: snap.data!, prefs: _prefs, scroll: _scrollFor(i),
           startAtEnd: _startAtEnd == i,
           levels: _loader!.bookLevels,
+          levelsNow: () => _loader?.levelsNow,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
           onPanChanged: (pans) => _setSideways(i, pans),
@@ -1909,6 +1938,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int? _thumbWanted; // the page to fetch next, when a slot is free
   Uint8List? _thumbShown; // the last picture shown, kept up while the next comes in
   static const _thumbsAtOnce = 2, _thumbsKept = 64; // (64: a wide screen's page strip shows ~35)
+  // and no more than this much: offline the pictures are the pages themselves, 2-5 MB each - 64 of them held
+  // 130-320 MB (code review 2026-10-05, #40; user's cap: ~128 MB). Ones let go of are read again from the downloaded
+  // file when wanted
+  static const _thumbsBytesKept = 128 * 1024 * 1024;
 
   /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
   /// [queued]: for the page strip - many wanted at once, the ones asked for most recently (on screen now) first,
@@ -1959,9 +1992,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!mounted || _book['id'] != bookId) return; // another book since
       _thumbsLoading.remove(i);
       record();
-      while (_thumbs.length > _thumbsKept) {
-        _thumbs.remove(_thumbs.keys.first);
-      }
+      trimPictures(_thumbs, count: _thumbsKept, bytes: _thumbsBytesKept);
       if (_scrub != null || (_menu && _stripShown)) setState(() {});
       _nextThumb();
     }
@@ -2084,6 +2115,29 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class _NoPages implements Exception {}
 
+/// What a test can see of the curl being drawn.
+@visibleForTesting
+abstract interface class CurlLayer {
+  bool get mirror;
+}
+
+/// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
+class _CurlLayer extends CustomPainter implements CurlLayer {
+  _CurlLayer(this.curl, {required this.mirror, required Listenable moved, required this.shader}) : super(repaint: moved);
+  final _Curl curl;
+  @override
+  final bool mirror;
+  final ui.FragmentShader shader;
+
+  @override
+  void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
+          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader)
+      .paint(canvas, size);
+
+  @override
+  bool shouldRepaint(_CurlLayer o) => !identical(o.curl, curl) || o.mirror != mirror;
+}
+
 /// A page turn in progress (3D page curl).
 class _Curl {
   _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
@@ -2102,5 +2156,16 @@ class _Curl {
   void dispose() {
     sheet.dispose();
     if (under != null && !identical(under, sheet)) under!.dispose();
+  }
+}
+
+/// Lets go of the least recently used pictures in [pictures] (most recent last) until there are at most [count] of
+/// them and they come to at most [bytes] - the most recent one always kept.
+@visibleForTesting
+void trimPictures(Map<int, Uint8List?> pictures, {required int count, required int bytes}) {
+  var total = pictures.values.fold<int>(0, (n, b) => n + (b?.length ?? 0));
+  while (pictures.length > 1 && (pictures.length > count || total > bytes)) {
+    final first = pictures.keys.first;
+    total -= pictures.remove(first)?.length ?? 0;
   }
 }

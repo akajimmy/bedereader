@@ -67,9 +67,11 @@ class PageCurl {
 /// bars around it), cut from [sheet], a snapshot of the whole area. [grab] and [finger] are in the page's own
 /// coordinates in reading direction (origin at its top-left, or top-right for a right-to-left book: [mirror]).
 class PageCurlPainter extends CustomPainter {
+  /// [shader]: one kept by the caller and used for every paint (else one is made, and freed, per paint).
   PageCurlPainter({required this.program, required this.sheet, required this.page, required this.grab,
-      required this.finger, required this.mirror});
+      required this.finger, required this.mirror, this.shader});
   final ui.FragmentProgram program;
+  final ui.FragmentShader? shader;
   final ui.Image sheet;
   final Rect page;
   final Offset grab, finger;
@@ -88,14 +90,14 @@ class PageCurlPainter extends CustomPainter {
     }
     final (point, normal) = f;
     var i = 0;
-    final shader = program.fragmentShader();
+    final s = shader ?? program.fragmentShader();
     for (final v in [size.width, size.height, page.left, page.top, page.width, page.height, point.dx, point.dy,
         normal.dx, normal.dy, r, mirror ? 1.0 : 0.0]) {
-      shader.setFloat(i++, v);
+      s.setFloat(i++, v);
     }
-    shader.setImageSampler(0, sheet, filterQuality: FilterQuality.medium);
-    canvas.drawRect(Offset.zero & size, Paint()..shader = shader);
-    shader.dispose();
+    s.setImageSampler(0, sheet, filterQuality: FilterQuality.medium);
+    canvas.drawRect(Offset.zero & size, Paint()..shader = s);
+    if (shader == null) s.dispose();
   }
 
   @override

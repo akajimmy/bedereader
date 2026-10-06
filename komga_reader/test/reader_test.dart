@@ -803,7 +803,7 @@ void main() {
     }
 
     double page(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
-    Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter);
+    Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CurlLayer);
 
     testWidgets('a tap plays the curl and lands on the next page', (tester) async {
       await openCurling(tester);
