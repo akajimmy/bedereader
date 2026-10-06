@@ -185,7 +185,7 @@ class ChapterReader {
   TableBlock _table(XElement t, InlineStyle st) {
     final tb = TableBlock()
       ..bordered = (t.attr('border') ?? '0') != '0' || t.classes.any((c) => c.contains('border')) ||
-          sheet.declsFor(t).keys.any((k) => k.startsWith('border'));
+          showsBorder(sheet.declsFor(t));
     void rows(XElement e) {
       for (final c in e.elements) {
         if (c.name == 'tr') {
@@ -279,7 +279,9 @@ class ChapterReader {
     }
     var ind = indent;
     final ti = d['text-indent'];
-    if (ti != null) ind = (cssLength(ti, em: 1, percentOf: 30) ?? 0) / (ti.endsWith('px') ? 16 : 1);
+    // in the reader's em, as margins are: "8pt" was taken as 10.7 em (pt wasn't scaled down, only px) - Exile's first
+    // lines started a third of the way across (user, build 73)
+    if (ti != null) ind = _em(ti, st) ?? 0;
 
     // images (also SVG <image> covers)
     if (e.name == 'img' || e.name == 'image') {
@@ -332,7 +334,7 @@ class ChapterReader {
       if (t.isNotEmpty && t.length <= 3) {
         _flush();
         _pendingDrop = TextRun(t, st.copy(bold: st.bold));
-        _pendingDropBoxed = d.keys.any((k) => k.startsWith('border')) || d.containsKey('background-color');
+        _pendingDropBoxed = showsBorder(d) || d.containsKey('background-color');
         return;
       }
     }
@@ -387,7 +389,7 @@ class ChapterReader {
     _insetL = outerL;
     _insetR = outerR;
     // a bordered element (a letter, a notice, a sidebar): its blocks share the border
-    final bordered = d.entries.any((x) => x.key.startsWith('border') && !RegExp(r'\bnone\b|^0').hasMatch(x.value));
+    final bordered = showsBorder(d);
     if (bordered && blocks.length > startAt) {
       final id = ++_boxes;
       for (var i = startAt; i < blocks.length; i++) {
@@ -590,6 +592,55 @@ int pageFor(List<EpubPage> pages, int position) {
 /// smaller or larger all through doesn't override the reader's size; a size on a few blocks (a prelude, a letter,
 /// notes) stays (user, 2026-10-06: "don't let explicit css styling over-ride the default font size of the whole
 /// book").
+/// Whether a border shows by these declarations: a style that draws (not none / hidden) and a width above 0 - Exile's
+/// "border-style: solid; border-width: 0" drew a box round every chapter (user, build 73). Per side too.
+bool showsBorder(Map<String, String> d) {
+  const styles = {'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset'};
+  bool positive(String w) => switch (w) {
+        'thin' || 'medium' || 'thick' => true,
+        _ => (double.tryParse(RegExp(r'^-?[\d.]+').stringMatch(w) ?? '') ?? 0) > 0,
+      };
+  bool side(String? short, String? style, String? width) {
+    var st = style, w = width;
+    for (final t in (short ?? '').trim().split(RegExp(r'\s+'))) {
+      if (t.isEmpty) continue;
+      if (t == 'none' || t == 'hidden' || styles.contains(t)) {
+        st ??= t;
+      } else if (RegExp(r'^[\d.]').hasMatch(t) || t == 'thin' || t == 'medium' || t == 'thick') {
+        w ??= t;
+      }
+    }
+    if (st == null || !styles.contains(st)) return false;
+    return w == null || w.trim().split(RegExp(r'\s+')).any(positive); // no width given: medium
+  }
+  final all = side(d['border'], d['border-style'], d['border-width']);
+  if (all) return true;
+  for (final s in ['top', 'right', 'bottom', 'left']) {
+    if (side(d['border-$s'], d['border-$s-style'] ?? d['border-style'], d['border-$s-width'] ?? d['border-width'])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Whether most of a book's paragraph text (sampled chapters' [blocks]) is bold - a book set in bold all through
+/// (Exile: its text wrapped in a bold class) is shown in the reader's normal weight; bold on a few parts stays (the
+/// font-size rule's reasoning: explicit CSS doesn't override the whole book's text - user, 2026-10-06).
+bool bookTextBold(Iterable<List<Block>> chapters) {
+  var bold = 0, total = 0;
+  for (final blocks in chapters) {
+    for (final b in blocks) {
+      if (b is! TextBlock || !b.paragraph) continue;
+      for (final r in b.runs) {
+        final n = r.text.trim().length;
+        total += n;
+        if (r.style.bold) bold += n;
+      }
+    }
+  }
+  return total > 0 && bold * 2 > total;
+}
+
 double bookTextSize(Iterable<List<Block>> chapters) {
   final chars = <double, int>{};
   var total = 0;
@@ -613,8 +664,14 @@ double bookTextSize(Iterable<List<Block>> chapters) {
 class Paginator {
   /// [baseSize]: the book's own text size ([bookTextSize]) - the reader's size stands for it, other sizes in
   /// proportion.
-  Paginator(this.theme, this.size, this.hyphenator, {this.baseSize = 1});
+  Paginator(this.theme, this.size, this.hyphenator, {this.baseSize = 1, this.baseBold = false});
   final double baseSize;
+
+  /// The book's text is bold all through ([bookTextBold]): its text at the book's own size is shown in normal weight
+  /// (headings and other sizes keep their bold).
+  final bool baseBold;
+
+  bool _bold(InlineStyle s) => s.bold && !(baseBold && (s.size - baseSize).abs() < 0.01);
 
   /// The book's em: its margins, indents and spacing are in its own text size's ems - in proportion to it, as its
   /// text is.
@@ -811,9 +868,9 @@ class Paginator {
         fontSize: theme.fontSize * s.size / baseSize,
         height: theme.lineHeight,
         fontStyle: s.italic ? FontStyle.italic : FontStyle.normal,
-        fontWeight: s.bold ? FontWeight.w700 : FontWeight.w400,
+        fontWeight: _bold(s) ? FontWeight.w700 : FontWeight.w400,
         // the bundled reading fonts are variable: their weight comes from the axis (device fonts ignore it)
-        fontVariations: [FontVariation('wght', s.bold ? 700 : 400)],
+        fontVariations: [FontVariation('wght', _bold(s) ? 700 : 400)],
         fontFeatures: [if (s.smallCaps) const FontFeature.enable('smcp')],
       );
 

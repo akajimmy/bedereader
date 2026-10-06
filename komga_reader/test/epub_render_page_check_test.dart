@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/painting.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/epub/book.dart';
 import 'package:komga_reader/epub/chapter.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
 import 'package:komga_reader/epub/layout.dart';
@@ -28,8 +29,16 @@ void main() {
       const size = Size(646, 1000);
       for (var i = 0; i < info.spine.length; i++) {
         final c = await loader.load(info.spine[i]);
-        final pages = Paginator(const EpubTheme(fontFamily: 'Literata'), size, hy.forLang(c.lang)).run(c.blocks);
-        final page = pages.where((p) => p.links.any((l) => l.text.length <= 6)).firstOrNull;
+        if (Platform.environment['BEDEREADER_EPUB_CHAPTER'] case final w? when !info.spine[i].endsWith(w)) continue;
+        // the book's own text size and weight, as the reader measures them
+        final book = EpubBook(s, info, hy);
+        await book.measureTextSize();
+        final pages = Paginator(const EpubTheme(fontFamily: 'Literata', bookFormatting: false), size,
+            hy.forLang(c.lang), baseSize: book.textSize, baseBold: book.textBold).run(c.blocks);
+        // BEDEREADER_EPUB_CHAPTER (a file name in the book): that chapter's first page; else the first note link's
+        final wanted = Platform.environment['BEDEREADER_EPUB_CHAPTER'];
+        if (wanted != null && !info.spine[i].endsWith(wanted)) continue;
+        final page = wanted != null ? pages.first : pages.where((p) => p.links.any((l) => l.text.length <= 6)).firstOrNull;
         if (page == null) continue;
         final rec = ui.PictureRecorder();
         final canvas = Canvas(rec)..drawRect(Offset.zero & size, Paint()..color = const EpubTheme().background);
