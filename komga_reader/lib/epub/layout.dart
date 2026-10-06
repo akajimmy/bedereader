@@ -75,6 +75,7 @@ String superscript(String s) => s.replaceAllMapped(RegExp('[0-9]'), (m) => '‚Å∞¬
 sealed class Block {
   double marginTop = 0, marginBottom = 0;
   double wrapTop = 0, wrapBottom = 0; // the part of those from wrappers round the block (kept by own formatting)
+  double paraTop = 0, paraBottom = 0; // a paragraph's own (own formatting keeps them only if they're out of the usual)
   bool breakBefore = false;
   int? box; // inside a bordered element: blocks with the same number share its border
 
@@ -366,6 +367,9 @@ class ChapterReader {
       if (e.name != 'p') {
         blocks[startAt].wrapTop = math.max(blocks[startAt].wrapTop, mt);
         blocks.last.wrapBottom = math.max(blocks.last.wrapBottom, mb);
+      } else {
+        blocks[startAt].paraTop = mt; // the paragraph's own (compared with the chapter's usual)
+        blocks.last.paraBottom = mb;
       }
     }
   }
@@ -537,7 +541,25 @@ class Paginator {
   TextAlign _align = TextAlign.left;
   double _indent = 0;
 
+  // the chapter's usual paragraph spacing (the most common), which the reader's own formatting takes out
+  double _usualTop = 0, _usualBottom = 0;
+
+  void _findUsual(List<Block> blocks) {
+    final count = <(double, double), int>{};
+    for (final b in blocks) {
+      if (b is TextBlock && b.paragraph) {
+        final k = ((b.paraTop * 100).roundToDouble() / 100, (b.paraBottom * 100).roundToDouble() / 100);
+        count[k] = (count[k] ?? 0) + 1;
+      }
+    }
+    if (count.isEmpty) return;
+    final usual = count.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+    _usualTop = usual.$1;
+    _usualBottom = usual.$2;
+  }
+
   List<EpubPage> run(List<Block> blocks) {
+    _findUsual(blocks);
     // a chapter that is only a picture (a cover, a map, a plate): the whole page, centred, enlarged to fit
     if (blocks.length == 1 && blocks.single is ImageBlock) {
       final b = blocks.single as ImageBlock;
@@ -560,11 +582,19 @@ class Paginator {
         _indent = b.indent;
         final plain = b.paragraph && const {TextAlign.start, TextAlign.left, TextAlign.justify}.contains(b.align);
         if (!theme.bookFormatting && plain) {
-          // the reader's own: justified, indented after another paragraph, no gaps between paragraphs
+          // the reader's own: justified, indented after another paragraph, no gaps between paragraphs. Only the
+          // book's ordinary gap goes: spacing the book asks for specifically - round a wrapper, or on a paragraph
+          // that differs from the chapter's usual one (a scene break, the first paragraph after one) - is kept (user,
+          // 2026-10-06: "specific spacing requirements defined in the book are respected")
+          // each side on its own: one that differs from the usual is the book's own wish, kept; the usual one goes
+          final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
           _align = TextAlign.justify;
-          _indent = prev is TextBlock && prev.paragraph && !b.breakBefore ? 1.5 : 0;
-          mt = b.wrapTop; // no gap between paragraphs - but a wrapper's space (an epigraph's, a quotation's) stays
-          mb = b.wrapBottom;
+          _indent = prev is TextBlock && prev.paragraph && !b.breakBefore && !(ownTop && b.paraTop > _usualTop) &&
+                  !(prev.paraBottom - _usualBottom > 0.01)
+              ? 1.5
+              : 0; // no indent after a space the book asked for (a scene break), as in print
+          mt = ownTop ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
+          mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
       }
       final gap = math.max(_pendingGap, mt * theme.fontSize);

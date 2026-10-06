@@ -226,6 +226,19 @@ void main() {
         reason: "own formatting keeps the epigraph's space after, not just the heading's own");
   });
 
+  test("own formatting takes out only the book's usual gap between paragraphs: a paragraph that asks for its own "
+      'spacing (a scene break) keeps it, and starts without an indent', () {
+    const css = 'p { margin: 1em 0 } p.break { margin-top: 3em }';
+    final src = '<body><p>One.</p><p>Two.</p><p>Three.</p><p class="break">After the break.</p><p>Five.</p></body>';
+    final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
+    final o = page.textOrigins;
+    final line = o[1].dy - o[0].dy; // ordinary paragraphs: one line apart, no gap
+    expect(o[2].dy - o[1].dy, closeTo(line, 0.5), reason: 'the usual 1em gap is gone');
+    expect(o[3].dy - o[2].dy, closeTo(line + 3 * 19, 0.5), reason: "the break's own 3em above stays");
+    expect(o[4].dy - o[3].dy, closeTo(line, 0.5), reason: "the break's usual 1em below goes like the others'");
+  });
+
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';
