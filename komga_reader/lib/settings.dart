@@ -485,6 +485,7 @@ class AppSettings extends ChangeNotifier {
   Future<void> clearAccount() async {
     _syncTimer?.cancel();
     _api = null;
+    _loaded = false;
     defaults = const ReaderPrefs();
     epub = const EpubPrefs();
     series.clear();
@@ -559,15 +560,26 @@ class AppSettings extends ChangeNotifier {
     if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>, remote: false);
     applyBacklight();
     notifyListeners();
+    _loaded = true;
     if (!fetch) return; // offline mode: this device's copy; what's unsent goes once online (useApi)
+    await _fetch(p);
+  }
+
+  /// Komga's copy over this one - except this device's unsent changes (they stay, and go). Never re-reads the
+  /// device's copy, and a copy asked for before a change here is dropped (code review 2026-10-05, #12); nobody is
+  /// told when nothing changed (#45: each Home reload re-ran the whole load - re-parse, backlight, two app rebuilds).
+  Future<void> _fetch(SharedPreferences p) async {
     try {
       _gate.asked();
-      // (changed here meanwhile: unsent, so this device's version stays when Komga's arrives - _applyBlob)
+      final before = jsonEncode(_blob());
       final remote = await _fetchRemote();
-      if (remote != null) {
+      if (remote != null && jsonEncode(_blob()) == before) {
         _applyBlob(remote, remote: true);
-        await p.setString(_localReader, jsonEncode(_blob()));
-        notifyListeners();
+        final after = jsonEncode(_blob());
+        if (after != before) {
+          await p.setString(_localReader, after);
+          notifyListeners();
+        }
       }
       syncError = null;
     } catch (e) {
@@ -575,6 +587,8 @@ class AppSettings extends ChangeNotifier {
     }
     if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncSoon(); // what didn't reach Komga goes now
   }
+
+  bool _loaded = false;
 
   /// The EPUB settings (the reader's Aa panel, Settings > Books). Synced.
   void setEpub(EpubPrefs prefs) {
@@ -630,9 +644,10 @@ class AppSettings extends ChangeNotifier {
 
   /// The reader settings from Komga again - Home calls it each time it reloads, so a change made on another device
   /// arrives without a restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() {
-    final api = _api;
-    return api == null ? Future.value() : _gate.run(() => load(api));
+  Future<void> refresh() async {
+    if (_api == null || !_loaded) return;
+    final p = await SharedPreferences.getInstance();
+    await _gate.run(() => _fetch(p));
   }
 
   final _gate = RefreshGate();
