@@ -25,6 +25,7 @@
     .\tools\build.ps1 -Bump
     .\tools\build.ps1 -Platforms android
     .\tools\build.ps1 -Platforms windows,web -SkipTests
+    .\tools\build.ps1 -Bump -Timing     (a measuring build: the EPUB reader's frame timings in its trace and logcat)
 #>
 param(
     [switch]$Bump,
@@ -32,8 +33,11 @@ param(
     [string[]]$Platforms = @('android', 'windows', 'web'),
     [switch]$SkipTests,
     [switch]$AllowDirty,
-    [switch]$NoInstall      # don't install on the tablet or update the Desktop copy afterwards
+    [switch]$NoInstall,     # don't install on the tablet or update the Desktop copy afterwards
+    [switch]$Timing         # the EPUB reader's timing instruments compiled in (frame times, page-change timer, the
+                            # trace mirrored to the system log for adb) - for measuring; off in everyday builds
 )
+$defines = if ($Timing) { ' --dart-define=BEDEREADER_TIMING=true' } else { '' }
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot          # C:\Claude\KomgaClient
@@ -177,6 +181,7 @@ $version = "$name-b$build"
 $out = Join-Path $dist "$name+$build"
 New-Item -ItemType Directory -Force $out | Out-Null
 Say "building $name+$build for: $($Platforms -join ', ') -> $out"
+if ($Timing) { Say 'with the EPUB timing instruments (-Timing): a measuring build, not an everyday one' }
 
 # ---- 3. platforms ------------------------------------------------------------------------------------------------
 $artifacts = @()
@@ -202,7 +207,7 @@ if ($Platforms -contains 'android') {
         Say "WARNING: no $passFile - unless key.properties holds the password, the APK will be signed with the debug key"
     }
     try {
-        Run 'Android APK' 'flutter build apk --release'
+        Run 'Android APK' "flutter build apk --release$defines"
     } finally {
         Remove-Item Env:KOMGA_SIGNING_PASSWORD -ErrorAction SilentlyContinue
     }
@@ -228,7 +233,7 @@ if ($Platforms -contains 'android') {
     $artifacts += $apk
 }
 if ($Platforms -contains 'windows') {
-    Run 'Windows app' 'flutter build windows --release'
+    Run 'Windows app' "flutter build windows --release$defines"
     $release = Join-Path $app 'build\windows\x64\runner\Release'
     # only this build's program goes in the zip: the build folder keeps any .exe built under an earlier name (build 39
     # shipped KomgaReader.exe next to BeDeReader.exe). They're build output - the next build makes them again if needed.
@@ -242,7 +247,7 @@ if ($Platforms -contains 'windows') {
     $artifacts += $zip
 }
 if ($Platforms -contains 'web') {
-    Run 'Web app' 'flutter build web --release'
+    Run 'Web app' "flutter build web --release$defines"
     $zip = Join-Path $out "$product-$version-web.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $app 'build\web\*') -DestinationPath $zip
