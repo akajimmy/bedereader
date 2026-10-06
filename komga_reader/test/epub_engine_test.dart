@@ -125,6 +125,23 @@ void main() {
     expect(links[0].rect.right, lessThan(links[1].rect.left), reason: 'the marker comes before the later link');
   });
 
+  test("note markers (Hogfather's *, Snuff's [**], a number) are told from other links (a contents page's INDEX, "
+      'the "th" of 50th), and drawn bigger without making their line taller', () {
+    for (final m in ['*', '**', '[**]', '†', '‡', '31', '³¹', '(7)', ' 12 ']) {
+      expect(Paginator.noteMarker.hasMatch(m), isTrue, reason: m);
+    }
+    for (final m in ['INDEX', 'MAPS', 'TH', 'a', '1234', 'Chapter 1']) {
+      expect(Paginator.noteMarker.hasMatch(m), isFalse, reason: m);
+    }
+    List<double> lines(String a) {
+      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>Shed by the deserving$a, and '
+          'then wondered where the stories went, and why, and where to.</p><p>Next.</p></body>'));
+      return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.textOrigins.map((o) => o.dy).toList()
+        ..add(blocks.length.toDouble());
+    }
+    expect(lines('<a href="n.html#f1">*</a>'), lines('*'));
+  });
+
   test('superscripts: digits become superscript characters (footnote numbers); other text stays itself', () {
     expect(superscript('12'), '¹²');
     final b = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>x<sup>23</sup> 1<sup>st</sup></p></body>'))
