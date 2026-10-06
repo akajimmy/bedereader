@@ -128,6 +128,7 @@ class ChapterReader {
   TextBlock? _cur;
   TextRun? _pendingDrop;
   bool _pendingDropBoxed = false;
+  ImageBlock? _pendingDropImage; // a floated picture just before its paragraph
 
   /// The chapter's language (lang / xml:lang on `html` or `body`), for hyphenation; null if it doesn't say.
   String? lang;
@@ -291,8 +292,26 @@ class ChapterReader {
       return;
     }
 
-    // a short floated element (the chapter number "1" in a box, a drop cap): beside the next paragraph's lines
+    // a floated picture with (next to) no text: a drop cap drawn as a picture (Homeland, the Hitchhiker's books:
+    // <span class="dropcaps"><img/></span> starting the paragraph) or a small floated picture - beside the
+    // paragraph's first lines, not a picture on its own line (user, 2026-10-06)
     final fl = d['float'];
+    final floatImg = fl == 'left' || fl == 'right' ? (e.find('img') ?? e.find('image')) : null;
+    if (floatImg != null && _textOf(e).trim().length <= 3) {
+      final src = floatImg.attr('src') ?? floatImg.attr('href');
+      if (src != null) {
+        final img = ImageBlock(resolve(src));
+        images.add(img);
+        final cur = _cur;
+        if (cur == null) {
+          _pendingDropImage = img; // before its paragraph: the next one's
+        } else {
+          cur.floatImage ??= img;
+        }
+      }
+      return;
+    }
+    // a short floated element (the chapter number "1" in a box, a drop cap): beside the next paragraph's lines
     if ((fl == 'left' || fl == 'right') && e.find('img') == null) {
       final t = _textOf(e).trim();
       if (t.isNotEmpty && t.length <= 3) {
@@ -335,6 +354,10 @@ class ChapterReader {
       para.drop = _pendingDrop;
       para.dropBoxed = _pendingDropBoxed;
       _pendingDrop = null;
+    }
+    if (_pendingDropImage != null) {
+      para.floatImage ??= _pendingDropImage;
+      _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
@@ -830,6 +853,8 @@ class Paginator {
       boxW = _floatW;
       boxH = _floatBottom - _y - 8;
     } else if (fimg != null) {
+      // a floated picture - a drop cap drawn as one included - at its own size, as the book has it, the text flowing
+      // beside it (user, 2026-10-06: "as they would in the proper formatting", not resized like the text drop caps)
       final s = math.min(1.0, math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
       boxW = fimg.width * s;
       boxH = fimg.height * s;

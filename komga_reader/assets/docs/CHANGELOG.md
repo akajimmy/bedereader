@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **EPUB: drop caps drawn as pictures sit beside the text**, as the book lays them out (Homeland, Sea of Swords, the
+  Hitchhiker's books): a small picture floated at a paragraph's start is drawn at its own size with the first lines
+  flowing beside it, instead of on a line of its own above the paragraph.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
