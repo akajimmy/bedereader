@@ -50,7 +50,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source)));
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source, saveProgress: false)));
     // loading, laying out and counting run on real futures: until the pages show and the book is counted
     for (var i = 0; i < 200; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));

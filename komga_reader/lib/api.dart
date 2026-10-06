@@ -291,6 +291,13 @@ class Komga {
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) =>
       _send('PUT', '/api/v1/books/$bookId/progression', progression);
 
+  /// The book's own file (an EPUB, for reading offline).
+  Future<Uint8List> bookFileBytes(String bookId) => _net(() async {
+        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/file'), headers: {'X-API-Key': apiKey});
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book file');
+        return r.bodyBytes;
+      }, limit: const Duration(minutes: 5), slowIsNotDown: true);
+
   /// The book's positions (Readium): roughly one per screenful, numbered from 1; Komga's page count for an EPUB.
   Future<List<dynamic>> epubPositions(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/positions'),

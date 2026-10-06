@@ -276,9 +276,39 @@ class OfflineKomga extends Komga {
     if (completed) Downloads.instance.bookFinished(bookId); // Delete once read (the progress stays queued for Komga)
   }
 
+  // ---- EPUB books: the downloaded file, Komga's positions, the place saved here ----------------------------------------
+  /// The downloaded EPUB file of [bookId] (null if it isn't one, or isn't downloaded whole).
+  File? epubFile(String bookId) {
+    final e = store.books[bookId];
+    final f = e?['epubFile'];
+    return f is String && e?['state'] == 'done' ? store.file('$bookId/$f') : null;
+  }
+
+  @override
+  Future<List<dynamic>> epubPositions(String bookId) async =>
+      (store.books[bookId]?['positions'] as List?) ?? (throw NotAvailableOffline('This book'));
+
+  /// The place saved on this device while offline (null: the read progress's page through the positions).
+  @override
+  Future<Map<String, dynamic>?> epubProgression(String bookId) async =>
+      (store.books[bookId]?['epubProgression'] as Map?)?.cast<String, dynamic>();
+
+  /// Kept on the device: the exact place (for reopening here) and its position as the read progress (sent to Komga
+  /// later, like a comic's page).
+  @override
+  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
+    final entry = store.books[bookId];
+    if (entry == null) throw NotAvailableOffline('This book');
+    entry['epubProgression'] = progression;
+    await store.put(bookId, entry);
+    final position = ((progression['locator'] as Map?)?['locations'] as Map?)?['position'] as num?;
+    if (position != null) await store.setProgress(bookId, page: position.toInt(), completed: false);
+  }
+
   @override
   Future<void> markRead(String bookId) async {
-    final pages = (store.books[bookId]?['pages'] as List?)?.length;
+    final positions = (store.books[bookId]?['positions'] as List?)?.length; // an EPUB: its positions are its pages
+    final pages = positions ?? (store.books[bookId]?['pages'] as List?)?.length;
     await store.setProgress(bookId, page: pages, completed: true);
     Downloads.instance.bookFinished(bookId);
   }

@@ -81,7 +81,7 @@ void main() {
     addTearDown(tester.view.reset);
     final MemorySource source = twoChapters();
     await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source)));
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source, saveProgress: false)));
     Future<void> settle() async {
       for (var i = 0; i < 40; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));

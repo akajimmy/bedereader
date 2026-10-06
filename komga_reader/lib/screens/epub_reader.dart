@@ -29,7 +29,11 @@ import '../widgets/setting_rows.dart';
 /// volume keys as in the comic reader. The slider and "page X of Y" cover the whole book once every chapter has
 /// been counted (in the background after the first page shows); until then they go by chapter.
 class EpubReaderScreen extends StatefulWidget {
-  const EpubReaderScreen({super.key, required this.api, required this.book, this.source});
+  const EpubReaderScreen({super.key, required this.api, required this.book, this.source, this.saveProgress = true});
+
+  /// Opens at, and saves, the reading place through [api] (Komga online; the device offline, sent later). Off: neither
+  /// (a book shown from memory in tests).
+  final bool saveProgress;
   final Komga api;
   final Map<String, dynamic> book;
 
@@ -158,7 +162,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   // ---- progress (Komga's progression; plan step 4)
 
   late final EpubProgress _progress = EpubProgress(widget.api, widget.book['id'] as String);
-  bool get _online => widget.source == null && !Connection.instance.offline;
+  bool get _online => widget.saveProgress; // (offline the api is OfflineKomga: kept on the device, sent later)
   double? _startFraction; // the saved place in the opening chapter, 0..1
   Timer? _saveTimer;
   EpubPosition? _saved; // the last place saved (not saved again)
