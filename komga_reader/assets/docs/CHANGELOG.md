@@ -20,6 +20,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   lines, Wide shorter - as well as the margin on a phone.
 - **EPUB: the font choices in the reader's Text and page panel were shrunk until they couldn't be read**: they now
   sit under the Font label at full size, wrapping onto two lines.
+- **EPUB: the slider only went through the current chapter** until the whole book had been counted (a big book
+  takes a while), so it couldn't take you far. It now always runs through the whole book - by percentage until the
+  book is counted, by page after.
 
 **Added**
 - **EPUB: Paragraph spacing** (Text and page, Settings > Books): None, Small or Large space between paragraphs, on

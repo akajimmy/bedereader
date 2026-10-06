@@ -268,6 +268,28 @@ class EpubBook extends ChangeNotifier {
     return EpubPosition(chapter, s == null || s.isEmpty ? 0 : s[page.clamp(0, s.length - 1)]);
   }
 
+  /// The chapter [fraction] (0..1) of the way through the book falls in, and how far through that chapter (0..1) -
+  /// [progression] the other way round.
+  (int, double) chapterAtFraction(double fraction) {
+    final n = _chapters.length;
+    final f = fraction.clamp(0.0, 1.0);
+    final lengths = [for (final c in _chapters) c.length];
+    if (lengths.any((l) => l == 0)) {
+      final at = f * n;
+      final i = at.floor().clamp(0, n - 1);
+      return (i, (at - i).clamp(0.0, 1.0));
+    }
+    final total = lengths.fold(0, (a, b) => a + b);
+    var before = 0;
+    for (var i = 0; i < n; i++) {
+      if (f * total < before + lengths[i] || i == n - 1) {
+        return (i, ((f * total - before) / lengths[i]).clamp(0.0, 1.0));
+      }
+      before += lengths[i];
+    }
+    return (n - 1, 1);
+  }
+
   /// How far through the book [p] is, 0..1: chapters count by their length once known, else equally.
   double progression(EpubPosition p) {
     final lengths = [for (final c in _chapters) c.length];
