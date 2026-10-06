@@ -385,6 +385,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               value: d.posterTitleOnly,
               onChanged: (v) => s.setDisplay(d.copyWith(posterTitleOnly: v)),
             ),
+            SwitchRow(
+              title: 'Release date',
+              subtitle: 'Under the title on book posters',
+              value: d.posterDate,
+              onChanged: (v) => s.setDisplay(d.copyWith(posterDate: v)),
+            ),
           ]);
         }),
         _librariesShown(),

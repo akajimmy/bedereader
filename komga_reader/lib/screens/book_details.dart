@@ -199,6 +199,15 @@ String? detailsDate(String? iso) {
   return '${d.day} ${months[d.month - 1]} ${d.year}';
 }
 
+/// A release date for a poster: "13 Mar 2024" (user, 2026-10-06); null if there's none.
+String? posterDate(String? iso) {
+  if (iso == null || iso.isEmpty) return null;
+  final d = DateTime.tryParse(iso);
+  if (d == null) return null;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return '${d.day} ${months[d.month - 1]} ${d.year}';
+}
+
 Widget detailsFact(String label, String? value) => value == null || value.isEmpty
     ? const SizedBox.shrink()
     : Padding(

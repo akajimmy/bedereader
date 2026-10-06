@@ -50,7 +50,7 @@ void main() {
         progressBar: true, doubleTapZoom: false, volumeKeys: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterTitleOnly: true,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
-        pagePreviews: false, pageStrip: true);
+        pagePreviews: false, pageStrip: true, posterDate: false);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
       ('rotation', (d) => d.rotation, Rotation.landscape, Rotation.auto),
@@ -69,6 +69,7 @@ void main() {
       ('accent', (d) => d.accent, Accent.teal, Accent.blue),
       ('pagePreviews', (d) => d.pagePreviews, false, true),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
+      ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
     final old = DisplayPrefs.fromJson({'night': true}); // a save from before all of these

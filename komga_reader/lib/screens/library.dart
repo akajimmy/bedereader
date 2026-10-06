@@ -15,6 +15,7 @@ import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
+import 'book_details.dart' show posterDate;
 import 'reader.dart';
 import 'search.dart';
 import 'readlist.dart';
@@ -353,11 +354,14 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final completed = rp != null && rp['completed'] == true;
   final number = b['metadata']?['number'] ?? b['number'];
   final title = (b['metadata']?['title'] ?? b['name']) as String;
-  final titleOnly = AppSettings.instance.display.posterTitleOnly; // Settings > Library & Home > Poster text
+  final display = AppSettings.instance.display;
+  final titleOnly = display.posterTitleOnly; // Settings > Library & Home > Poster text
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.bookThumb(b['id']),
     title: titleOnly ? title : '${b['seriesTitle'] ?? ''} #$number',
     subtitle: titleOnly ? null : title,
+    // the release date (Settings > Library & Home > Posters); '' keeps the line for a book without one
+    caption: display.posterDate ? posterDate(b['metadata']?['releaseDate'] as String?) ?? '' : null,
     read: completed,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,
