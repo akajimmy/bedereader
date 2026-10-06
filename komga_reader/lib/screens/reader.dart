@@ -270,6 +270,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       final loader = PageLoader(api, fresh['id'] as String,
           [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
       loader.around(start);
+      // the last book's page shapes (the curl drew the new book's first turn in them - #17) and a page left to
+      // open at its end (a later page with that number opened scrolled to its end - #22) go with it
+      _pageRects.clear();
+      _startAtEnd = null;
       setState(() {
         _book = fresh; _pages = pages; _index = start; _loader = loader; _returnTo = null;
         _openedAt = start; _turned = false; _zoomed = false; _bookFit = null;
@@ -336,6 +340,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _awake();
     final jump = i == _jumpingTo;
     _jumpingTo = null;
+    if (_startAtEnd != null && _startAtEnd != i) _startAtEnd = null; // (#22) only the page turned back to
     setState(() {
       _index = i;
       _zoomed = false;
@@ -796,16 +801,25 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       markRead = answer;
     }
     _saveTimer?.cancel();
-    try {
-      if (markRead) {
+    if (markRead) {
+      try {
         await api.markRead(_book['id']);
         _known[_book['id'] as String] = (_pages.length, true); // this reader's own: not a change from elsewhere
-      } else {
-        _saveNow();
+      } catch (e, st) {
+        // said as what it is - it used to say "Couldn't find the next book" (#16); the book stays open
+        if (mounted) {
+          showErrorSnack(context, couldnt('mark "${_titleOf(_book)}" as read', e, thing: 'book'), e, st);
+        }
+        return;
       }
+    } else {
+      _saveNow();
+    }
+    try {
       // settled: nothing more to save for this book on leaving - closing used to save the page over "read" (review)
       _turned = false;
-      final next = await _nextFrom(_book['id'] as String);
+      final next = await _upNext(); // looked up already for the end card: not asked again (#46 - with skip-read,
+      // up to 500 requests)
       if (!mounted) return;
       if (next == null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_endText)));
@@ -1321,7 +1335,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final id = _book['id'] as String;
     if (_upNextFor != id || _upNextFuture == null) {
       _upNextFor = id;
-      _upNextFuture = _nextFrom(id);
+      final f = _nextFrom(id);
+      _upNextFuture = f;
+      // a lookup that failed isn't kept: Next book asks again
+      f.then((_) {}, onError: (Object _) {
+        if (identical(_upNextFuture, f)) _upNextFuture = null;
+      });
     }
     return _upNextFuture!;
   }
@@ -1638,19 +1657,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow); null: the page being read, as it
   /// is once this frame is drawn.
-  void _stripCentre(int? at, {bool jump = false}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_stripScroll.hasClients) return;
-      final i = at ?? _index.clamp(0, _last);
-      final p = _stripScroll.position;
-      // the padding is inside the scroll view: the tiles are as wide as the strip's own width makes them (adding it
-      // again made each 2 px too wide on a phone, ~200 px off by page 100 - code review 2026-10-05, #10), the first
-      // starting 8 px in; the tile itself centred, not with the gap after it
-      final tile = _tileWidth(p.viewportDimension) + _stripGap;
-      final target = (8 + i * tile - (p.viewportDimension - tile + _stripGap) / 2).clamp(0.0, p.maxScrollExtent);
-      jump ? _stripScroll.jumpTo(target) : _stripScroll.animateTo(target,
-          duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
-    });
+  void _stripCentre(int? at, {bool jump = false}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) => _stripCentreNow(at, jump: jump));
+
+  void _stripCentreNow(int? at, {bool jump = false}) {
+    if (!mounted || !_stripScroll.hasClients) return;
+    final i = at ?? _index.clamp(0, _last);
+    final p = _stripScroll.position;
+    // the padding is inside the scroll view: the tiles are as wide as the strip's own width makes them (adding it
+    // again made each 2 px too wide on a phone, ~200 px off by page 100 - code review 2026-10-05, #10), the first
+    // starting 8 px in; the tile itself centred, not with the gap after it
+    final tile = _tileWidth(p.viewportDimension) + _stripGap;
+    final target = (8 + i * tile - (p.viewportDimension - tile + _stripGap) / 2).clamp(0.0, p.maxScrollExtent);
+    jump ? _stripScroll.jumpTo(target) : _stripScroll.animateTo(target,
+        duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
   }
 
   void _stripFocus() {
@@ -1687,19 +1707,24 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   int? _stripFollowed; // the slider's page the strip last followed (null: not scrubbing)
 
+  void _followScrub() {
+    if (!mounted) return;
+    final follow = _scrub;
+    if (follow == _stripFollowed) return;
+    final wasScrubbing = _stripFollowed != null;
+    _stripFollowed = follow;
+    if (follow != null) {
+      _stripCentreNow(follow, jump: true); // (already after the frame)
+    } else if (wasScrubbing) {
+      _stripCentreNow(null, jump: true);
+    }
+  }
+
   Widget _filmStrip(Color bar) {
     // scrubbing the slider (finger, mouse or remote): the strip follows the page picked; when the scrub ends (gone
     // there, or cancelled), back to the page being read (user, 2026-10-03)
-    final follow = _scrub;
-    if (follow != _stripFollowed) {
-      final wasScrubbing = _stripFollowed != null;
-      _stripFollowed = follow;
-      if (follow != null) {
-        _stripCentre(follow, jump: true);
-      } else if (wasScrubbing) {
-        _stripCentre(null, jump: true);
-      }
-    }
+    // (looked at after the frame: changing state and scrolling from inside build was the wrong place - #55)
+    if (_scrub != _stripFollowed) WidgetsBinding.instance.addPostFrameCallback((_) => _followScrub());
     final accent = Theme.of(context).colorScheme.primary;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final node = _ctl[_Ctl.strip]!;
