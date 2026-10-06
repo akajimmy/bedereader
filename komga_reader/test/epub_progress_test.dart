@@ -58,6 +58,9 @@ class EpubKomga extends TestKomga {
 
   @override
   Future<void> markRead(String bookId) async => marked.add(bookId);
+
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async => null; // the series' last
 }
 
 Map<String, dynamic> _saved(String href, double progression) =>
@@ -197,7 +200,7 @@ void main() {
       await run(tester, const Duration(milliseconds: 300));
     }
     expect(api.marked, ['B1']);
-    expect(find.text('The end'), findsOneWidget);
+    expect(find.text('The End'), findsOneWidget);
   });
 }
 

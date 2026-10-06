@@ -12,6 +12,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 - **EPUB: the numbers over the slider say what they are**: "Book · Pg. 112/342 · 33%" at the left, "Ch. 7 · Pg. 4/12"
   at the right (the chapter numbered as the book's files run, so front matter counts).
+- **EPUB: the end card shows what's next**, as the comic reader's does: "The End", then the next book's poster
+  (at its own size) and title, with Next book and Close. The remote works on it: it starts on Next book, Up / Down
+  move between the two, OK presses, Right goes on to the next book (or closes after the series' last), Left goes
+  back to the last page.
 
 ## 1.2.0 - in development
 

@@ -1,10 +1,12 @@
 // The EPUB reader screen (lib/screens/epub_reader.dart) over a small book held in memory.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/epub_reader.dart';
 import 'package:komga_reader/screens/open_book.dart';
@@ -42,6 +44,20 @@ class SlowSource extends MemorySource {
   }
 }
 
+/// A Komga that knows the book after this one ([next]; null: the series' last) and serves a 1-pixel poster.
+class EndKomga extends TestKomga {
+  EndKomga(this.next);
+  final Map<String, dynamic>? next;
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async => next;
+  @override
+  ImageProvider thumbImage(String ref) => MemoryImage(onePixelPng);
+}
+
+/// A 1 x 1 PNG.
+final onePixelPng = Uint8List.fromList(base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
+
 String para(String word, int n) => '<p>${List.filled(n, word).join(' ')}</p>';
 
 MemorySource twoChapters() => MemorySource({
@@ -60,11 +76,11 @@ void main() {
     AppSettings.instance.setDisplay(const DisplayPrefs());
   });
 
-  Future<void> open(WidgetTester tester, MemorySource source) async {
+  Future<void> open(WidgetTester tester, MemorySource source, {Komga? api}) async {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api ?? noNetwork(() => EndKomga(null)),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source, saveProgress: false)));
     // loading, laying out and counting run on real futures: until the pages show and the book is counted
     for (var i = 0; i < 200; i++) {
@@ -129,7 +145,7 @@ void main() {
       await tester.tapAt(const Offset(750, 600));
       await settle(tester);
     }
-    expect(find.text('The end'), findsOneWidget);
+    expect(find.text('The End'), findsOneWidget);
   });
 
   testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
@@ -282,6 +298,52 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('epub-corner')), findsNothing);
     AppSettings.instance.setEpub(const EpubPrefs());
+  });
+
+  testWidgets("the end card: the next book's poster and title (as in the comic reader); the remote on Next book, "
+      'Down to Close, Up back, Left to the last page; OK on Close closes the book (user, build 71: the remote could '
+      'reach neither)', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Text('home')));
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+        api: noNetwork(() => EndKomga(const {'id': 'B2', 'seriesTitle': 'Homeland', 'metadata': {'number': '2',
+            'title': 'Exile'}})),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        source: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
+            const EpubInfo(spine: ['c1.xhtml'], toc: [])),
+        saveProgress: false))));
+    for (var i = 0; i < 60 && find.byType(PageView).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    String? focused() => FocusManager.instance.primaryFocus?.debugLabel;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // the only page -> the end card
+    await settle(tester);
+    expect(find.text('The End'), findsOneWidget);
+    expect(find.text('Homeland #2'), findsOneWidget);
+    expect(find.text('Exile'), findsOneWidget);
+    expect(find.byKey(const ValueKey('next-poster')), findsOneWidget);
+    expect(focused(), 'epub-end-next', reason: 'the remote starts on Next book');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(focused(), 'epub-end-close');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(focused(), 'epub-end-next');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft); // back to the last page
+    await settle(tester);
+    expect(find.text('The End'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // OK on Close
+    await settle(tester);
+    await tester.pumpAndSettle();
+    expect(find.byType(EpubReaderScreen), findsNothing, reason: 'closed');
+    expect(find.text('home'), findsOneWidget);
   });
 
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
