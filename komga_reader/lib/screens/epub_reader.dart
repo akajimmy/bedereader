@@ -249,6 +249,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// Shows chapter [chapter] at [position] (laying it out first).
+  /// Chapter [i] laid out ahead (a neighbour, ready to turn into); a failure is the chapter's, shown when it's reached.
+  void _prefetch(int i) => unawaited(_book!.pages(i).then<void>((_) {}, onError: (Object _) {}));
+
   /// The reader moved somewhere (contents, a link, the slider): shown, and saved once it settles.
   Future<void> _jump(int chapter, int position) async {
     _moved = true;
@@ -259,7 +262,21 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   /// Shows chapter [chapter] at [position] - or at [fraction] of the way through it (a saved place).
   Future<void> _show(int chapter, int position, {double? fraction}) async {
     final b = _book!;
-    final pages = await b.pages(chapter);
+    final List<EpubPage>? pages;
+    try {
+      pages = await b.pages(chapter);
+    } catch (_) {
+      // that chapter, showing why it can't be shown, with Retry (the book has the error) - not the page before, as if
+      // nothing had happened
+      if (mounted) {
+        setState(() {
+          _chapter = chapter;
+          _page = 0;
+          _end = false;
+        });
+      }
+      return;
+    }
     if (!mounted || pages == null) return;
     if (fraction != null) position = (fraction * b.lengthOf(chapter)).round();
     final page = pageFor(pages, position);
@@ -286,8 +303,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       unawaited(b.countAll(current: () => _chapter));
     }
     // the neighbours ready for turning into
-    if (chapter + 1 < b.chapterCount) unawaited(b.pages(chapter + 1));
-    if (chapter > 0) unawaited(b.pages(chapter - 1));
+    if (chapter + 1 < b.chapterCount) _prefetch(chapter + 1);
+    if (chapter > 0) _prefetch(chapter - 1);
   }
 
   // ---- turning
@@ -315,8 +332,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _page = p;
         _end = false;
       });
-      if (c + 1 < b.chapterCount) unawaited(b.pages(c + 1));
-      if (c > 0) unawaited(b.pages(c - 1));
+      if (c + 1 < b.chapterCount) _prefetch(c + 1);
+      if (c > 0) _prefetch(c - 1);
     } else {
       final n = b.pagesNow(_chapter)?.length ?? 0;
       setState(() {
@@ -568,10 +585,34 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     final pages = b.pagesNow(c);
     if (pages == null) {
-      unawaited(b.pages(c));
+      if (b.errorOf(c) != null) return _chapterError(b, c, theme);
+      unawaited(b.pages(c).then<void>((_) {}, onError: (Object _) {})); // a failure shows here, with Retry
       return ColoredBox(color: theme.background, child: const Center(child: CircularProgressIndicator()));
     }
     return CustomPaint(size: size, painter: _PagePainter(pages[p.clamp(0, pages.length - 1)], theme.background));
+  }
+
+  /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
+  Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) {
+    final e = b.errorOf(chapter)!;
+    return ColoredBox(
+      color: theme.background,
+      child: Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ErrorText(couldnt('show this chapter', e, thing: 'book'), e, centre: true),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () {
+              b.retry(chapter);
+              unawaited(_show(chapter, b.positionOf(chapter, chapter == _chapter ? _page : 0).position));
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ]),
+      )),
+    );
   }
 
   Widget _endCard(EpubTheme theme) => ColoredBox(
@@ -632,6 +673,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           final size = box.biggest;
           _layout(size);
           if (b.pagesNow(_chapter) == null) {
+            if (b.errorOf(_chapter) != null) return _chapterError(b, _chapter, theme);
             unawaited(_show(_chapter, 0, fraction: _startFraction));
             return const Center(child: CircularProgressIndicator());
           }

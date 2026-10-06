@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -37,6 +38,17 @@ void main() {
   // 2026-10-03)
   if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
+  // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
+  // trace to go on - user, build 65); they're still reported as before
+  final flutterError = FlutterError.onError;
+  FlutterError.onError = (d) {
+    ErrorLog.instance.record('Unexpected error (${d.library ?? 'the app'})', d.exception, d.stack);
+    flutterError?.call(d);
+  };
+  PlatformDispatcher.instance.onError = (e, st) {
+    ErrorLog.instance.record('Unexpected error', e, st);
+    return false; // not handled: reported as usual
+  };
   runApp(const KomgaReaderApp());
 }
 
