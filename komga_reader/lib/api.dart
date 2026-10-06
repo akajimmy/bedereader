@@ -253,6 +253,30 @@ class Komga {
   Future<void> putClientSetting(String key, String value) =>
       _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
 
+  // ---- EPUB books (Readium web publication): the manifest (reading order, table of contents) and the book's files
+  /// Komga answers 406 to Accept: application/json here (its API docs list it; the server doesn't serve it), so it's
+  /// asked for as Readium's own type.
+  Future<Map<String, dynamic>?> epubManifest(String bookId) => _net(() async {
+        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/manifest/epub'),
+            headers: {'X-API-Key': apiKey, 'Accept': 'application/webpub+json'});
+        if (r.statusCode == 404) return null;
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book contents');
+        try {
+          return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+        } on FormatException {
+          throw KomgaNotKomga(baseUrl);
+        }
+      });
+
+  /// One file of an EPUB (a chapter, a stylesheet, a picture, a font) by its path inside the book.
+  Future<Uint8List> epubResource(String bookId, String path) => _net(() async {
+        final r = await _http.get(
+            Uri.parse('$baseUrl/api/v1/books/$bookId/resource/${path.split('/').map(Uri.encodeComponent).join('/')}'),
+            headers: {'X-API-Key': apiKey});
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book file $path');
+        return r.bodyBytes;
+      }, limit: pageTimeout, slowIsNotDown: true);
+
   // ---- raw page bytes (the reader decodes and adjusts them itself)
   Future<Uint8List> pageBytes(String bookId, int number) => _net(() async {
         final r = await _http.get(Uri.parse(pageUrl(bookId, number)), headers: imageHeaders);
