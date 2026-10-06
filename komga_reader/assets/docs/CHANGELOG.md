@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 73 - 2026-10-06
+
 **Fixed**
 - **Hiding a book or series from On deck could be undone at once** when Home was open underneath: Home's refresh put
   back the list from before the hide. Synced lists (pins, On deck hidden) and reader settings now take only Komga's
@@ -60,10 +66,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **What's new / Read me** load once when opened, not again on every settings change. And the colour levels
   remembered for books opened with Enhance colours are kept for the 300 most recent books, not every book ever
   opened.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 72 - 2026-10-06
 
