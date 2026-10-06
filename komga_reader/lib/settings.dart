@@ -340,12 +340,28 @@ enum EpubColours {
 }
 
 enum EpubMargins {
-  narrow(18, 28, 'Narrow'),
-  normal(36, 40, 'Normal'),
-  wide(64, 56, 'Wide');
+  narrow(18, 28, 40, 'Narrow'),
+  normal(36, 40, 34, 'Normal'),
+  wide(64, 56, 28, 'Wide');
 
-  const EpubMargins(this.side, this.topBottom, this.label);
+  const EpubMargins(this.side, this.topBottom, this.lineEms, this.label);
   final double side, topBottom;
+
+  /// The longest a line gets, in ems: on a wide screen the rest goes to the margins - so on a tablet or the PC the
+  /// margins are set by this, not [side] (user, 2026-10-06: the setting "doesn't seem to do anything").
+  final double lineEms;
+  final String label;
+}
+
+/// Space added between paragraphs, in ems of the text (user, 2026-10-06: "an option to increase the spacing between
+/// paragraphs"): on top of the book's own spacing, or of none with the reader's own formatting.
+enum EpubParagraphGap {
+  none(0, 'None'),
+  small(0.5, 'Small'),
+  large(1, 'Large');
+
+  const EpubParagraphGap(this.ems, this.label);
+  final double ems;
   final String label;
 }
 
@@ -359,7 +375,7 @@ enum EpubCorner { always, afterTurn, off }
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.bookFormatting = false,
-      this.turn = EpubTurn.slide, this.corner = EpubCorner.always});
+      this.turn = EpubTurn.slide, this.corner = EpubCorner.always, this.paragraphGap = EpubParagraphGap.none});
   final EpubFont font;
   final double size; // px at the app's text size
   final double lineSpacing;
@@ -368,20 +384,21 @@ class EpubPrefs {
   final bool bookFormatting; // the publisher's alignment, indents and spacing (default off: the reader's own)
   final EpubTurn turn;
   final EpubCorner corner;
+  final EpubParagraphGap paragraphGap;
 
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   static const spacings = [1.25, 1.45, 1.7];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          bool? bookFormatting, EpubTurn? turn, EpubCorner? corner}) =>
+          bool? bookFormatting, EpubTurn? turn, EpubCorner? corner, EpubParagraphGap? paragraphGap}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours,
           bookFormatting: bookFormatting ?? this.bookFormatting, turn: turn ?? this.turn,
-          corner: corner ?? this.corner);
+          corner: corner ?? this.corner, paragraphGap: paragraphGap ?? this.paragraphGap);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'bookFormatting': bookFormatting, 'turn': turn.name,
-      'corner': corner.name};
+      'corner': corner.name, 'paragraphGap': paragraphGap.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -397,6 +414,7 @@ class EpubPrefs {
       bookFormatting: j['bookFormatting'] == true,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       corner: pick(EpubCorner.values, j['corner'], EpubCorner.always),
+      paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
     );
   }
 

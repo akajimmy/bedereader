@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -22,7 +24,10 @@ class DocumentScreen extends StatelessWidget {
       const DocumentScreen(title: 'Read me', asset: 'assets/docs/README.md', stopAt: '## For developers');
 
   Future<String> _load() async {
-    var text = await rootBundle.loadString(asset);
+    // decoded here, not by loadString: past 50 KB that hands the decoding to a background isolate (the changelog
+    // passed it on 2026-10-06, and What's new stayed on its spinner in the tests); a few dozen KB is nothing to decode
+    final data = await rootBundle.load(asset);
+    var text = utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
     final stop = stopAt;
     if (stop != null) {
       final at = text.indexOf('\n$stop');
