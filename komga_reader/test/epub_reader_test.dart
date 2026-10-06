@@ -102,13 +102,13 @@ void main() {
   testWidgets('opens on the first page; once every chapter is counted the position reads "page X of Y"; a tap on '
       'the right turns forward, on the left back', (tester) async {
     await open(tester, twoChapters());
-    expect(await label(tester), startsWith('1 / '));
+    expect(await label(tester), startsWith('Book · Pg. 1/'));
     await tester.tapAt(const Offset(750, 600));
     await settle(tester);
-    expect(await label(tester), startsWith('2 / '));
+    expect(await label(tester), startsWith('Book · Pg. 2/'));
     await tester.tapAt(const Offset(50, 600));
     await settle(tester);
-    expect(await label(tester), startsWith('1 / '));
+    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
@@ -121,8 +121,8 @@ void main() {
     await tester.tap(find.text('Two'));
     await settle(tester);
     final atTwo = await label(tester);
-    final total = int.parse(RegExp(r'/ (\d+)').firstMatch(atTwo)!.group(1)!);
-    final here = int.parse(RegExp(r'^(\d+) /').firstMatch(atTwo)!.group(1)!);
+    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(atTwo)!.group(1)!);
+    final here = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(atTwo)!.group(1)!);
     expect(here, greaterThan(1), reason: 'chapter two is past chapter one');
     // to the end and past it
     for (var i = here; i <= total; i++) {
@@ -156,10 +156,10 @@ void main() {
     await open(tester, twoChapters());
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await settle(tester);
-    expect(await label(tester), startsWith('2 / '));
+    expect(await label(tester), startsWith('Book · Pg. 2/'));
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await settle(tester);
-    expect(await label(tester), startsWith('1 / '));
+    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets("with the controls up the remote walks them (the comic reader's model): Down to the bottom bar, Right "
@@ -168,12 +168,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter); // OK: the controls
     await tester.pump();
     expect(find.text('Close'), findsOneWidget, reason: "the comic reader's Close button");
-    final before = await (() async => tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data!)();
+    final before = await (() async => tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data!)();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown); // the bottom bar: Previous book
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // the slider
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // Contents
     await tester.pump();
-    expect(tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data, before, reason: 'Right moved, not turned');
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data, before, reason: 'Right moved, not turned');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter); // presses Contents
     await tester.pumpAndSettle();
     expect(find.text('Contents'), findsWidgets);
@@ -196,8 +196,8 @@ void main() {
     await open(tester, source);
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    for (var i = 0; i < 100 && find.textContaining(RegExp(r'^\d+ / \d+ · ')).evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20))); // counted: "X / Y · n%"
+    for (var i = 0; i < 100 && find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · ')).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20))); // counted: "Book · Pg. X/Y - n%"
       await tester.pump(const Duration(milliseconds: 50)); // (counting pauses between chapters on the test's clock)
     }
     source.slow = true;
@@ -205,17 +205,17 @@ void main() {
     final r = tester.getRect(slider);
     final g = await tester.startGesture(r.centerLeft + const Offset(24, 0));
     await tester.pump();
-    final start = tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data!;
+    final start = tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data!;
     await g.moveTo(r.centerRight - const Offset(24, 0));
     await tester.pump();
-    final dragged = tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data!;
+    final dragged = tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data!;
     expect(dragged, isNot(start), reason: 'the label moves with the finger');
     await g.up();
     await tester.pump(); // the finger up: still on the page picked while the reader goes there - not back to where it
     // was for a moment, then the new page (the slider jumped - user, build 70)
-    expect(tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data, dragged);
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data, dragged);
     await settle(tester);
-    expect(tester.widget<Text>(find.textContaining(RegExp(r'^\d+ / \d+ · '))).data, dragged, reason: 'gone there');
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data, dragged, reason: 'gone there');
   });
 
   testWidgets('a big picture tapped in the middle opens full screen over the book; a tap closes it; a small one '
@@ -262,9 +262,9 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('epub-corner')), findsNothing, reason: 'not under the controls');
     expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-title'))).data, 'One');
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, matches(RegExp(r'^Ch\. 1 / \d+$')));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, matches(RegExp(r'^Ch\. 1 · Pg\. 1/\d+$')));
     expect(tester.widget<Text>(find.byKey(const ValueKey('epub-book-position'))).data,
-        matches(RegExp(r'^1 / \d+ · \d+%$')));
+        matches(RegExp(r'^Book · Pg\. 1/\d+ · \d+%$')));
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     // After a turn: hidden until a page turns, then for a moment

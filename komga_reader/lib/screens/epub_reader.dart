@@ -668,8 +668,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     return named.isEmpty ? 'Chapter ${chapter + 1} of ${b.chapterCount}' : named.first.title;
   }
 
-  /// Where chapter [chapter]'s page [page] is (option F, user 2026-10-06): the book's page and % ("112 / 342 · 33%";
-  /// just the % until the book is counted), the chapter's name, and the page in the chapter ("Ch. 4 / 12").
+  /// Where chapter [chapter]'s page [page] is (option F, user 2026-10-06): the book's page and % ("Book · Pg. 112/342 ·
+  /// 33%"; just the % until the book is counted), the chapter's name, and the chapter's page ("Ch. 7 · Pg. 4/12";
+  /// the chapter counted as the book's files run, as everywhere in the reader).
   (String book, String title, String inChapter) _positionOf(int chapter, int page) {
     final b = _book!;
     final pct = (b.progression(b.positionOf(chapter, page)) * 100).round();
@@ -677,9 +678,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final total = b.totalPages;
     final n = b.pageCount(chapter);
     return (
-      at != null && total != null ? '${at + 1} / $total · $pct%' : '$pct%',
+      at != null && total != null ? 'Book · Pg. ${at + 1}/$total · $pct%' : 'Book · $pct%',
       _chapterNameOf(chapter),
-      n == null ? 'Ch. page ${page + 1}' : 'Ch. ${page + 1} / $n', // (user: "Ch." ahead of it)
+      'Ch. ${chapter + 1} · Pg. ${page + 1}${n == null ? '' : '/$n'}',
     );
   }
 
@@ -1186,15 +1187,24 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                         child: Row(children: [
-                          Text(bookAt, key: const ValueKey('epub-book-position'), style: numbers),
+                          Expanded(
+                            flex: 2,
+                            child: Text(bookAt, key: const ValueKey('epub-book-position'), style: numbers,
+                                maxLines: 1, overflow: TextOverflow.ellipsis),
+                          ),
                           const SizedBox(width: 12),
                           Expanded(
+                            flex: 3,
                             child: Text(title, key: const ValueKey('epub-chapter-title'), maxLines: 1,
                                 overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
                                 style: TextStyle(color: picked != null ? accent : Colors.white, fontSize: 14)),
                           ),
                           const SizedBox(width: 12),
-                          Text(inChapter, key: const ValueKey('epub-chapter-position'), style: numbers),
+                          Expanded(
+                            flex: 2,
+                            child: Text(inChapter, key: const ValueKey('epub-chapter-position'), style: numbers,
+                                maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right),
+                          ),
                         ]),
                       ),
                       _slider(),
