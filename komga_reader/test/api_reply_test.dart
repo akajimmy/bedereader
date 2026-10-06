@@ -13,9 +13,8 @@ class _Watching extends http.BaseClient {
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     replies++;
     final body = StreamController<List<int>>(onListen: () => drained++);
-    body
-      ..add('{}'.codeUnits)
-      ..close();
+    body.add('{}'.codeUnits);
+    unawaited(body.close());
     return http.StreamedResponse(body.stream, 200);
   }
 }

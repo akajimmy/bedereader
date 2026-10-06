@@ -72,6 +72,19 @@ void main() {
     expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
+  test('signing out mid-book stops that book at once: no more pages asked for with the old key (it carried on to the '
+      'last page - code review 2026-10-05, #14)', () async {
+    final api = server()..pageCount = 20;
+    api.onPage = (n) {
+      if (n == 3) d.detach(); // signed out while page 3 comes
+    };
+    await d.attach(api, root: dir);
+    await d.add([book('B1', 1)]);
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    expect(api.pageRequests, 3, reason: 'none after signing out');
+    expect(d.queue.single.state, JobState.queued, reason: 'kept, to go on when this account is back - not failed');
+  });
+
   test('Delete once read: Never, nothing goes; Always, a book read goes - after the reader closes if it was open',
       () async {
     await d.attach(server(), root: dir);
