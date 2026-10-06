@@ -802,7 +802,10 @@ class Paginator {
             baseline: TextBaseline.alphabetic, baselineOffset: 0),
       ]);
     }
-    tp.layout(maxWidth: width);
+    // the full width, not the longest line's: Flutter shrinks a painter to its longest line otherwise, and right-aligned
+    // or centred lines lined up on that, drawn from the left margin (Homeland's list of other books - user, build 70).
+    // (A table cell measured at no limit keeps its own width.)
+    tp.layout(minWidth: width.isFinite ? width : 0, maxWidth: width);
     _made.add(tp);
     final hyphen = _hyphen;
     final laid = _Laid(tp, hyphen, base ?? b.start);

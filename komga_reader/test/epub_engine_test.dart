@@ -218,6 +218,17 @@ void main() {
     }
   });
 
+  test("right-aligned and centred lines line up on the text column, not on their paragraph's longest line (Homeland's "
+      'list of other books: each group was flush left, its short lines right-aligned to its longest)', () {
+    final blocks = ChapterReader(StyleSheet()..add('p.r { text-align: right } p.c { text-align: center }'), (h) => h)
+        .read(parseXhtml('<body><p class="r"><a href="a.html">Homeland</a><br/><a href="b.html">The Halfling</a></p><p class="c"><a href="c.html">Exile</a></p></body>'));
+    final links = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.links;
+    // the text column: 36..364 (the test font: 19 px a letter - The Halfling, 12, is the longest line)
+    expect(links[0].rect.right, closeTo(364, 1), reason: 'Homeland: at the right edge');
+    expect(links[1].rect.right, closeTo(364, 1), reason: 'the longer line too');
+    expect(links[2].rect.center.dx, closeTo(200, 1), reason: 'centred on the column');
+  });
+
   test('a bordered passage gets a border; the same text without one has none', () {
     int pieces(String css) {
       final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)
