@@ -351,14 +351,15 @@ enum EpubMargins {
 
 enum EpubTurn { slide, none }
 
-/// What the position line reads (user: all three, a setting).
-enum EpubPositionStyle { pageAndPercent, chapterPage, percent }
+/// The note in the page's corner while reading - pages left in the chapter and the book's % (user, 2026-10-06:
+/// option H): always there, for a moment after each turn, or not at all.
+enum EpubCorner { always, afterTurn, off }
 
 @immutable
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.bookFormatting = false,
-      this.turn = EpubTurn.slide, this.position = EpubPositionStyle.pageAndPercent});
+      this.turn = EpubTurn.slide, this.corner = EpubCorner.always});
   final EpubFont font;
   final double size; // px at the app's text size
   final double lineSpacing;
@@ -366,21 +367,21 @@ class EpubPrefs {
   final EpubColours colours;
   final bool bookFormatting; // the publisher's alignment, indents and spacing (default off: the reader's own)
   final EpubTurn turn;
-  final EpubPositionStyle position;
+  final EpubCorner corner;
 
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   static const spacings = [1.25, 1.45, 1.7];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          bool? bookFormatting, EpubTurn? turn, EpubPositionStyle? position}) =>
+          bool? bookFormatting, EpubTurn? turn, EpubCorner? corner}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours,
           bookFormatting: bookFormatting ?? this.bookFormatting, turn: turn ?? this.turn,
-          position: position ?? this.position);
+          corner: corner ?? this.corner);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'bookFormatting': bookFormatting, 'turn': turn.name,
-      'position': position.name};
+      'corner': corner.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -395,7 +396,7 @@ class EpubPrefs {
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       bookFormatting: j['bookFormatting'] == true,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
-      position: pick(EpubPositionStyle.values, j['position'], EpubPositionStyle.pageAndPercent),
+      corner: pick(EpubCorner.values, j['corner'], EpubCorner.always),
     );
   }
 

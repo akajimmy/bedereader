@@ -122,6 +122,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     Downloads.instance.readerClosed();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _awakeTimer?.cancel();
+    _cornerTimer?.cancel();
     if (_screenHeld) keepScreenOn(false);
     _saveNow(); // closing: the place goes now, not after the settle time
     _book?.removeListener(_onBook);
@@ -371,6 +372,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _page = math.min(i, math.max(0, n - 1));
       });
     }
+    _flashCorner();
     if (_ownJump) return; // the reader moved the page itself: not the reader's turn (a jump saves via _jump)
     _moved = true;
     if (_end) {
@@ -666,21 +668,42 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     return named.isEmpty ? 'Chapter ${chapter + 1} of ${b.chapterCount}' : named.first.title;
   }
 
-  /// The position line, as Settings > Books > Position shows says (user: all three styles) - for the page shown, or
-  /// the one picked on the slider.
-  String _labelAt(int chapter, int page) {
+  /// Where chapter [chapter]'s page [page] is (option F, user 2026-10-06): the book's page and % ("112 / 342 · 33%";
+  /// just the % until the book is counted), the chapter's name, and the page in the chapter ("4 / 12").
+  (String book, String title, String inChapter) _positionOf(int chapter, int page) {
     final b = _book!;
     final pct = (b.progression(b.positionOf(chapter, page)) * 100).round();
     final at = b.bookPage(chapter, page);
     final total = b.totalPages;
     final n = b.pageCount(chapter);
-    final inChapter = '${_chapterNameOf(chapter)} · page ${page + 1}${n == null ? '' : ' of $n'}';
-    return switch (AppSettings.instance.epub.position) {
-      EpubPositionStyle.pageAndPercent =>
-        at != null && total != null ? 'Page ${at + 1} of $total · $pct%' : inChapter,
-      EpubPositionStyle.chapterPage => inChapter,
-      EpubPositionStyle.percent => '$pct%',
-    };
+    return (
+      at != null && total != null ? '${at + 1} / $total · $pct%' : '$pct%',
+      _chapterNameOf(chapter),
+      n == null ? 'page ${page + 1}' : '${page + 1} / $n',
+    );
+  }
+
+  /// The page corner (option H): pages left in the chapter and the book's %.
+  String get _cornerText {
+    final b = _book!;
+    final pct = (b.progression(b.positionOf(_chapter, _page)) * 100).round();
+    final n = b.pageCount(_chapter);
+    if (n == null) return '$pct%';
+    final left = n - _page - 1;
+    return '${left <= 0 ? 'End of chapter' : '$left left in chapter'} · $pct%';
+  }
+
+  // the corner note "After a turn": shown for a moment after each turn
+  bool _cornerFlash = false;
+  Timer? _cornerTimer;
+
+  void _flashCorner() {
+    if (AppSettings.instance.epub.corner != EpubCorner.afterTurn) return;
+    _cornerTimer?.cancel();
+    setState(() => _cornerFlash = true);
+    _cornerTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _cornerFlash = false);
+    });
   }
 
   Widget _pageAt(int i, Size size) {
@@ -885,6 +908,21 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                     ),
                   ),
                 ),
+              // the page corner (option H): quiet, in the page's own colour, bottom right
+              if (!_controls && !_end && AppSettings.instance.epub.corner != EpubCorner.off)
+                Positioned(
+                  right: math.max(12, theme.margins.right - 4),
+                  bottom: 8,
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: AppSettings.instance.epub.corner == EpubCorner.always || _cornerFlash ? 1 : 0,
+                      duration: const Duration(milliseconds: 250),
+                      child: Text(_cornerText, key: const ValueKey('epub-corner'),
+                          style: TextStyle(color: theme.text.withValues(alpha: 0.5), fontSize: 12,
+                              fontFeatures: const [FontFeature.tabularFigures()])),
+                    ),
+                  ),
+                ),
               // Progress bar (Settings > Reader, as for comics): a thin line along the bottom while the controls are
               // hidden - through the book
               if (!_controls && display.progressBar && !_end)
@@ -1059,7 +1097,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final (at, _) = _sliderRange;
     final picked = _scrub ?? _seeking;
     final (sc, sp) = _sliderPage(picked ?? at);
-    final label = picked == null ? _labelAt(_chapter, _page) : _labelAt(sc, sp);
+    final (bookAt, title, inChapter) = picked == null ? _positionOf(_chapter, _page) : _positionOf(sc, sp);
+    final numbers = TextStyle(color: picked != null ? accent : Colors.white70, fontSize: 13,
+        fontFeatures: const [FontFeature.tabularFigures()]);
     final series = _bookNow['seriesTitle'] as String?;
     final number = _bookNow['metadata']?['number'];
     final completed = _completed;
@@ -1139,14 +1179,27 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   IconButton(focusNode: _ctl[_Ctl.prevBook], tooltip: 'Previous book', onPressed: _prevBook,
                       icon: const Icon(Icons.skip_previous, size: 28)),
                   const SizedBox(width: 4),
-                  // where: as Settings > Books > Position shows says - the page picked while the slider moves
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(minWidth: 92, maxWidth: 210),
-                    child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: _scrub != null ? accent : Colors.white, fontSize: 14,
-                            fontFeatures: const [FontFeature.tabularFigures()])),
+                  // option F (user, 2026-10-06): the chapter's name over the slider, the book's page and % at the
+                  // left, the chapter's page at the right - of the page picked while the slider moves
+                  Expanded(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(children: [
+                          Text(bookAt, key: const ValueKey('epub-book-position'), style: numbers),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(title, key: const ValueKey('epub-chapter-title'), maxLines: 1,
+                                overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+                                style: TextStyle(color: picked != null ? accent : Colors.white, fontSize: 14)),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(inChapter, key: const ValueKey('epub-chapter-position'), style: numbers),
+                        ]),
+                      ),
+                      _slider(),
+                    ]),
                   ),
-                  Expanded(child: _slider()),
                   _iconCtl(_Ctl.contents, Icons.toc, 'Contents', _contents),
                   _iconCtl(_Ctl.settings, Icons.text_fields, 'Text and page settings', _settingsPanel),
                   IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
