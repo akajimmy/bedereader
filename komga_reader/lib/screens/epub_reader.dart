@@ -13,6 +13,7 @@ import '../epub/hyphenator.dart';
 import '../epub/layout.dart';
 import '../epub/progress.dart';
 import '../epub/source.dart';
+import '../epub/trace.dart';
 import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
@@ -101,6 +102,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   @override
   void dispose() {
+    EpubTrace.instance.log('closed');
     Connection.instance.readerClosed();
     AppSettings.instance.removeListener(_onSettings);
     AppSettings.instance.readerClosed();
@@ -134,6 +136,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   Future<void> _open() async {
+    unawaited(EpubTrace.instance.open());
+    EpubTrace.instance.log('open ${widget.book['id']} "$_title" ${widget.source == null ? 'from Komga' : 'from a file'}');
     try {
       final hy = _hyphenators ??= await Hyphenators.load(rootBundle.loadString);
       final source = widget.source ?? KomgaEpubSource(widget.api, widget.book['id'] as String);
@@ -262,6 +266,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   /// Shows chapter [chapter] at [position] - or at [fraction] of the way through it (a saved place).
   Future<void> _show(int chapter, int position, {double? fraction}) async {
     final b = _book!;
+    EpubTrace.instance.log('show chapter $chapter at ${fraction ?? position}');
     final List<EpubPage>? pages;
     try {
       pages = await b.pages(chapter);
@@ -318,6 +323,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   void _onPageChanged(int i) {
     final b = _book!;
+    EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');
     _awake();
     if (_bookWide) {
       if (i >= b.totalPages!) {
@@ -357,6 +363,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   Future<void> _turn(int by) async {
     final b = _book;
+    EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
     if (b == null || !_pc.hasClients) return;
     _awake();
     if (!_bookWide) {

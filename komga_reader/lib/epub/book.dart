@@ -6,12 +6,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'chapter.dart';
 import 'hyphenator.dart';
 import 'layout.dart';
 import 'source.dart';
+import 'trace.dart';
 
 class _Chapter {
   LoadedChapter? content;
@@ -52,8 +54,23 @@ class EpubBook extends ChangeNotifier {
   Size _size = Size.zero;
   int _generation = 0; // a new theme or size: everything laid out before is out of date
 
-  /// How many chapters stay laid out either side of the one being read.
-  static const around = 1;
+  /// How many chapters stay laid out either side of the one being read (2: a page being turned away from, or one
+  /// the page view still holds, is never let go of - see [_retire]).
+  static const around = 2;
+
+  /// Lets go of a chapter's laid-out text and pictures two frames from now, not at once: a page still on screen (or
+  /// in the frame being drawn) must not be drawn from freed text or pictures. A crash in Flutter's engine on the PC
+  /// after turning back and forth (build 66, "illegal instruction" in flutter_windows.dll) was most likely that.
+  void _retire(Paginator? p, LoadedChapter? content) {
+    if (p == null && content == null) return;
+    void free() {
+      p?.dispose();
+      content?.dispose();
+    }
+    final binding = SchedulerBinding.instance;
+    binding.addPostFrameCallback((_) => binding.addPostFrameCallback((_) => free()));
+    binding.scheduleFrame();
+  }
 
   int get chapterCount => _chapters.length;
   EpubTheme get theme => _theme;
@@ -62,11 +79,13 @@ class EpubBook extends ChangeNotifier {
   /// Lays the book out for [theme] at [size] from now on (what was laid out before is let go of).
   void setLayout(EpubTheme theme, Size size) {
     if (theme == _theme && size == _size) return;
+    EpubTrace.instance.log('layout ${size.width.round()}x${size.height.round()} font ${theme.fontFamily} '
+        '${theme.fontSize} (was ${_size.width.round()}x${_size.height.round()})');
     _theme = theme;
     _size = size;
     _generation++;
     for (final c in _chapters) {
-      c.paginator?.dispose();
+      _retire(c.paginator, null);
       c
         ..paginator = null
         ..pages = null
@@ -87,6 +106,7 @@ class EpubBook extends ChangeNotifier {
     } catch (e) {
       // a failed try isn't kept: the chapter stuck on a spinner for good when it was (user, build 65 on the PC,
       // turning quickly) - the error is shown with Retry, and the next try loads it afresh
+      EpubTrace.instance.log('chapter $i failed: $e');
       c
         ..laying = null
         ..error = e;
@@ -115,9 +135,10 @@ class EpubBook extends ChangeNotifier {
     final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null);
     final pages = p.run(content.blocks);
     if (gen != _generation) {
-      p.dispose();
+      p.dispose(); // never shown
       return const [];
     }
+    EpubTrace.instance.log('chapter $i laid out: ${pages.length} pages');
     c
       ..paginator = p
       ..pages = pages
@@ -130,17 +151,19 @@ class EpubBook extends ChangeNotifier {
 
   /// Keeps the pages of the chapters around [current] and lets go of the rest (their counts stay).
   void keepAround(int current) {
+    final gone = <int>[];
     for (var i = 0; i < _chapters.length; i++) {
       if ((i - current).abs() <= around) continue;
       final c = _chapters[i];
       if (c.pages == null) continue;
-      c.paginator?.dispose();
+      _retire(c.paginator, c.content);
       c
         ..paginator = null
-        ..pages = null;
-      c.content?.dispose();
-      c.content = null;
+        ..pages = null
+        ..content = null;
+      gone.add(i);
     }
+    if (gone.isNotEmpty) EpubTrace.instance.log('around chapter $current: let go of $gone');
   }
 
   /// Counts every chapter's pages (in the background after the book opens): lays each out and lets it go again
