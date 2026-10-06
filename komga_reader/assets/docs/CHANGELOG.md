@@ -13,6 +13,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
+### Build 66 - 2026-10-06
+
+**Fixed**
+- **EPUB: stuck on a spinner** after turning back and forth (seen on the PC): a chapter that failed to load once - a
+  request to Komga timing out, say - stayed failed for good. Now the next try loads it afresh, and a chapter that
+  can't be shown says why, with **Retry**. Unexpected errors are now also kept in Settings > Error log.
+
 ### Build 65 - 2026-10-06
 
 **Added**
