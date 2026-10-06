@@ -72,6 +72,32 @@ class EpubBook extends ChangeNotifier {
     binding.scheduleFrame();
   }
 
+  /// The book's own text size ([bookTextSize]), found by [measureTextSize] before the first layout: shown at the
+  /// reader's size, the book's other sizes in proportion.
+  double textSize = 1;
+
+  /// Finds [textSize] from up to [samples] chapters spread through the book (the front and back matter left out where
+  /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped.
+  Future<void> measureTextSize({int samples = 5}) async {
+    final n = _chapters.length;
+    final picks = n <= samples
+        ? [for (var i = 0; i < n; i++) i]
+        : {for (var k = 0; k < samples; k++) (n * (0.2 + 0.6 * k / (samples - 1))).floor().clamp(0, n - 1)}.toList();
+    final sampled = <List<Block>>[];
+    for (final i in picks) {
+      try {
+        final c = _chapters[i];
+        final content = c.content ??= await loader.load(info.spine[i]);
+        c.length = content.length;
+        sampled.add(content.blocks);
+      } catch (_) {
+        // can't be read: not counted (it shows its error when reached)
+      }
+    }
+    textSize = bookTextSize(sampled);
+    EpubTrace.instance.log('book text size $textSize (from chapters $picks)');
+  }
+
   int get chapterCount => _chapters.length;
   EpubTheme get theme => _theme;
   Size get size => _size;
@@ -137,7 +163,8 @@ class EpubBook extends ChangeNotifier {
     final content = c.content ??= await loader.load(info.spine[i]);
     c.length = content.length;
     if (gen != _generation) return const [];
-    final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null);
+    final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null,
+        baseSize: textSize);
     final pages = p.run(content.blocks);
     if (gen != _generation) {
       p.dispose(); // never shown

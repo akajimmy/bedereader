@@ -544,8 +544,40 @@ int pageFor(List<EpubPage> pages, int position) {
   return i;
 }
 
+/// The text size most of a book's paragraphs are set in (sampled chapters' [blocks]), as the book's own sizes run
+/// (1 = the reader's size) - when one size covers more than half their text; else 1. A book that sets its text
+/// smaller or larger all through doesn't override the reader's size; a size on a few blocks (a prelude, a letter,
+/// notes) stays (user, 2026-10-06: "don't let explicit css styling over-ride the default font size of the whole
+/// book").
+double bookTextSize(Iterable<List<Block>> chapters) {
+  final chars = <double, int>{};
+  var total = 0;
+  for (final blocks in chapters) {
+    for (final b in blocks) {
+      if (b is! TextBlock || !b.paragraph) continue;
+      for (final r in b.runs) {
+        final n = r.text.trim().length;
+        if (n == 0) continue;
+        final size = (r.style.size * 100).roundToDouble() / 100;
+        chars[size] = (chars[size] ?? 0) + n;
+        total += n;
+      }
+    }
+  }
+  if (total == 0) return 1;
+  final top = chars.entries.reduce((a, b) => a.value >= b.value ? a : b);
+  return top.value * 2 > total && top.key > 0 ? top.key : 1;
+}
+
 class Paginator {
-  Paginator(this.theme, this.size, this.hyphenator);
+  /// [baseSize]: the book's own text size ([bookTextSize]) - the reader's size stands for it, other sizes in
+  /// proportion.
+  Paginator(this.theme, this.size, this.hyphenator, {this.baseSize = 1});
+  final double baseSize;
+
+  /// The book's em: its margins, indents and spacing are in its own text size's ems - in proportion to it, as its
+  /// text is.
+  double get _bookEm => theme.fontSize / baseSize;
   final EpubTheme theme;
   final Size size;
   final Hyphenator? hyphenator;
@@ -638,13 +670,13 @@ class Paginator {
           _align = TextAlign.justify;
           _indent = prev is TextBlock && prev.paragraph && !b.breakBefore && !(ownTop && b.paraTop > _usualTop) &&
                   !(prev.paraBottom - _usualBottom > 0.01)
-              ? 1.5
+              ? 1.5 * baseSize // (the reader's own 1.5 em, not the book's)
               : 0; // no indent after a space the book asked for (a scene break), as in print
           mt = ownTop ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
           mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
       }
-      final gap = math.max(_pendingGap, mt * theme.fontSize);
+      final gap = math.max(_pendingGap, mt * _bookEm);
       if (!_pageEmpty) _y += gap;
       final p0 = pages.length - 1, y0 = _y;
       switch (b) {
@@ -657,7 +689,7 @@ class Paginator {
       }
       final box = b.box;
       if (box != null) _boxSpan(box, p0, y0);
-      _pendingGap = mb * theme.fontSize;
+      _pendingGap = mb * _bookEm;
       prev = b;
     }
     // bordered passages: one border per page they reach, round their blocks there
@@ -731,7 +763,7 @@ class Paginator {
   TextStyle _style(InlineStyle s) => TextStyle(
         color: theme.text,
         fontFamily: theme.fontFamily,
-        fontSize: theme.fontSize * s.size,
+        fontSize: theme.fontSize * s.size / baseSize,
         height: theme.lineHeight,
         fontStyle: s.italic ? FontStyle.italic : FontStyle.normal,
         fontWeight: s.bold ? FontWeight.w700 : FontWeight.w400,
@@ -779,7 +811,7 @@ class Paginator {
         // they were specks); a lone * or † is a small glyph, drawn larger. The line no taller either way.
         t = superscript(t);
         final grow = RegExp(r'[0-9⁰¹²³⁴⁵⁶⁷⁸⁹\[]').hasMatch(t) ? 1.15 : 1.4;
-        final size = theme.fontSize * math.max(r.style.size, 0.9) * grow;
+        final size = theme.fontSize * math.max(r.style.size / baseSize, 0.9) * grow;
         spans.add(TextSpan(text: t, style: _style(r.style).copyWith(color: _linkColour, fontWeight: FontWeight.w700,
             fontVariations: [const FontVariation('wght', 700)], fontSize: size,
             height: theme.lineHeight * theme.fontSize / size)));
@@ -798,7 +830,7 @@ class Paginator {
     );
     if (ind) {
       tp.setPlaceholderDimensions([
-        PlaceholderDimensions(size: Size(_indent * theme.fontSize, 0), alignment: PlaceholderAlignment.baseline,
+        PlaceholderDimensions(size: Size(_indent * _bookEm, 0), alignment: PlaceholderAlignment.baseline,
             baseline: TextBaseline.alphabetic, baselineOffset: 0),
       ]);
     }
@@ -882,8 +914,8 @@ class Paginator {
   void _text(TextBlock b) {
     // margins inside the page (a negative one - "margin-left: -6px" - doesn't push text off it), and a line's room
     final left = math.max(0.0, b.left), right = math.max(0.0, b.right);
-    final x = theme.margins.left + left * theme.fontSize;
-    final width = math.max(theme.fontSize * 4, _width - (left + right) * theme.fontSize);
+    final x = theme.margins.left + left * _bookEm;
+    final width = math.max(theme.fontSize * 4, _width - (left + right) * _bookEm);
     final drop = b.drop;
     final fimg = b.floatImage?.image;
     final carried = drop == null && fimg == null && _floatBottom > _y + 4; // an earlier float still alongside
@@ -950,7 +982,7 @@ class Paginator {
   /// out into the paragraph's own left margin (never past the page's), the rest at the paragraph's margin. Flutter
   /// can't indent lines after the first, so the first line is laid out on its own and the rest from where it ends.
   void _hanging(TextBlock b, double x, double width) {
-    final hang = math.min(-_indent * theme.fontSize, x - theme.margins.left);
+    final hang = math.min(-_indent * _bookEm, x - theme.margins.left);
     final indent = _indent;
     _indent = 0;
     final first = _painter(b, b.runs, width + hang, indent: false);

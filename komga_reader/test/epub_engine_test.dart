@@ -229,6 +229,26 @@ void main() {
     expect(links[2].rect.center.dx, closeTo(200, 1), reason: 'centred on the column');
   });
 
+  test("the book's own text size: a size set on most of its paragraphs is the book's (shown at the reader's size, "
+      'the rest in proportion); a size on a few blocks (a prelude) is not', () {
+    List<Block> read(String css, String html) => ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html));
+    final words = List.filled(30, 'word').join(' ');
+    // small all through, on its paragraphs (p { font-size: small }; a size on <body> is never taken - the reader's
+    // size stands for it already): most paragraph text at 0.85
+    final small = read('p { font-size: small }', '<body><p>$words</p><p>$words</p><p>$words</p></body>');
+    expect(bookTextSize([small, small]), 0.85);
+    // a prelude in a small wrapper, the chapters plain: the book's size is the reader's
+    final prelude = read('div.preface { font-size: small }', '<body><div class="preface"><p>$words</p></div></body>');
+    final chapter = read('', '<body><p>$words</p><p>$words</p><p>$words</p></body>');
+    expect(bookTextSize([prelude, chapter, chapter]), 1);
+    // laid out with it, the small-all-through book's paragraphs come out as a plain book's: the same pages, same lines
+    List<Offset> lay(List<Block> b, double base) =>
+        Paginator(const EpubTheme(), const Size(400, 600), null, baseSize: base).run(b).first.textOrigins;
+    final plain = read('', '<body><p>$words</p><p>$words</p><p>$words</p></body>');
+    expect(lay(small, 0.85), lay(plain, 1));
+    expect(lay(small, 1), isNot(lay(plain, 1)), reason: 'without it, the small text lays out differently');
+  });
+
   test('a bordered passage gets a border; the same text without one has none', () {
     int pieces(String css) {
       final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)

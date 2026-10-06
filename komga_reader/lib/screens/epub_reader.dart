@@ -174,7 +174,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         }
       }
       if (!mounted) return;
-      setState(() => _book = EpubBook(source, info, hy)..addListener(_onBook));
+      // the book's own text size first (a book set smaller or larger all through shows at the reader's size)
+      final book = EpubBook(source, info, hy);
+      await book.measureTextSize();
+      if (!mounted) {
+        book.dispose();
+        return;
+      }
+      setState(() => _book = book..addListener(_onBook));
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
