@@ -10,7 +10,7 @@ import '../widgets/markdown.dart';
 /// One of the app's own documents, bundled by the build (tools/build.ps1 copies them into assets/docs):
 /// What's new (CHANGELOG.md), Read me (README.md - the part before "For developers") and Third-party software
 /// (THIRD_PARTY_NOTICES.md).
-class DocumentScreen extends StatelessWidget {
+class DocumentScreen extends StatefulWidget {
   const DocumentScreen({super.key, required this.title, required this.asset, this.stopAt});
   final String title;
   final String asset;
@@ -37,11 +37,20 @@ class DocumentScreen extends StatelessWidget {
   }
 
   @override
+  State<DocumentScreen> createState() => _DocumentScreenState();
+}
+
+class _DocumentScreenState extends State<DocumentScreen> {
+  // loaded once, when the screen opens: made in build, any rebuild (a settings change anywhere) loaded it again and
+  // jumped back to the top (code review 2026-10-05, #48)
+  late final Future<String> _text = widget._load();
+
+  @override
   Widget build(BuildContext context) {
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll the text
-      appBar: AppBar(title: Text(title), actions: const [FullscreenExit()]),
+      appBar: AppBar(title: Text(widget.title), actions: const [FullscreenExit()]),
       body: FutureBuilder<String>(
-        future: _load(),
+        future: _text,
         builder: (context, snap) {
           if (snap.hasError) {
             return const Center(child: Text('Not included in this build.', style: TextStyle(color: Color(0xFF9A9A9A))));
