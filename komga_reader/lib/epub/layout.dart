@@ -21,8 +21,12 @@ class EpubTheme {
     this.margins = const EdgeInsets.fromLTRB(36, 40, 36, 40),
     this.bookFormatting = true,
     this.hyphenate = true,
+    this.accent = const Color(0xFF3D8BE0),
   });
   final Color background, text;
+
+  /// Note markers' colour: the app's accent colour (user, 2026-10-06: they follow the app's colouring).
+  final Color accent;
   final String? fontFamily;
   final double fontSize, lineHeight;
   final EdgeInsets margins;
@@ -37,9 +41,11 @@ class EpubTheme {
   @override
   bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
       other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
-      other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate;
+      other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate &&
+      other.accent == accent;
   @override
-  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate);
+  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate,
+      accent);
 }
 
 // ---- blocks
@@ -727,8 +733,11 @@ class Paginator {
   @visibleForTesting
   static final noteMarker = RegExp(r'^\s*[\[(]?(\*{1,3}|[†‡§]|[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3})[\])]?\s*$');
 
-  /// Note markers' colour: blue, mixed with the text colour so it suits a dark page and a light one.
-  Color get _linkColour => Color.lerp(theme.text, const Color(0xFF3D8BE0), 0.65)!;
+  /// Note markers' colour: the app's accent, as it is (it's picked to show on the app's dark pages); on a light page
+  /// darkened towards the text so it still reads.
+  Color get _linkColour => theme.background.computeLuminance() > 0.4
+      ? Color.lerp(theme.accent, theme.text, 0.35)!
+      : theme.accent;
 
   /// [prepared]: the runs already carry their soft hyphens (a slice).
   /// [base]: the chapter position of [runs]' first character (default: the block's start).

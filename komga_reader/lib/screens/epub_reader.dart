@@ -24,6 +24,10 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
+import '../widgets/focus_style.dart';
+import '../widgets/reader_clock.dart';
+import '../widgets/setting_rows.dart';
+import 'open_book.dart';
 
 /// The EPUB reader (plan: reports\epub-plan-2026-10-06.md): the book laid out by the app itself (lib/epub/), page by
 /// page. Taps: left third back, right third forward, the middle shows the controls; swipes turn; the remote and the
@@ -45,6 +49,9 @@ class EpubReaderScreen extends StatefulWidget {
   State<EpubReaderScreen> createState() => _EpubReaderScreenState();
 }
 
+/// The controls the remote walks (the comic reader's model): the top bar, then the bottom bar.
+enum _Ctl { close, fullscreen, read, prevBook, slider, contents, settings, nextBook }
+
 class _EpubReaderScreenState extends State<EpubReaderScreen> {
   static Hyphenators? _hyphenators; // loaded once (the value, not the future: a future is tied to where it began)
 
@@ -57,6 +64,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   bool _bookWide = false; // the page view runs over the whole book (all counted) - else over [_chapter]
   bool _controls = false;
   final _focus = FocusNode();
+  final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'epub-${c.name}')};
+  late Map<String, dynamic> _bookNow = widget.book; // refreshed after Mark read / unread
   Timer? _awakeTimer;
   bool _screenHeld = false;
 
@@ -81,6 +90,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       lineHeight: e.lineSpacing,
       margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
       bookFormatting: e.bookFormatting,
+      accent: Theme.of(context).colorScheme.primary,
     );
   }
 
@@ -93,6 +103,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     super.initState();
     Connection.instance.readerOpened();
     AppSettings.instance.addListener(_onSettings);
+    fullscreen.addListener(_onSettings);
     Downloads.instance.readerOpened();
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -115,6 +126,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _book?.dispose();
     _pc.dispose();
     _focus.dispose();
+    for (final n in _ctl.values) {
+      n.dispose();
+    }
+    fullscreen.removeListener(_onSettings);
     super.dispose();
   }
 
@@ -397,26 +412,88 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     final x = d.localPosition.dx / size.width;
     if (_controls) {
-      setState(() => _controls = false);
+      _hideControls();
     } else if (x < 1 / 3) {
       _turn(-1);
     } else if (x > 2 / 3) {
       _turn(1);
     } else {
-      setState(() => _controls = true);
+      _showControls();
     }
   }
+
+  void _showControls() => setState(() {
+        _controls = true;
+        _scrub = null;
+        _scrubbing = false;
+      });
+
+  void _hideControls() {
+    _sliderPointer = null; // a finger still on the slider: its scrub is let go of (the comic reader's rule)
+    setState(() {
+      _controls = false;
+      _scrub = null;
+      _scrubbing = false;
+    });
+    _focus.requestFocus();
+  }
+
+  // ---- the remote in the controls (the comic reader's model): Left / Right along a bar, Up / Down between the bars;
+  // Up from the top bar or Down from the bottom one leaves them (OK then hides the controls); OK on a control presses it
+
+  List<_Ctl> get _topBar => [_Ctl.close, if (isDesktop) _Ctl.fullscreen, _Ctl.read];
+  List<_Ctl> get _bottomBar => [_Ctl.prevBook, _Ctl.slider, _Ctl.contents, _Ctl.settings, _Ctl.nextBook];
+
+  void _move({int dx = 0, int dy = 0}) {
+    final top = _topBar, bottom = _bottomBar;
+    final inTop = top.indexWhere((c) => _ctl[c]!.hasFocus);
+    final inBottom = bottom.indexWhere((c) => _ctl[c]!.hasFocus);
+    _Ctl? target;
+    if (inTop < 0 && inBottom < 0) {
+      target = dy > 0 ? bottom.first : top.first;
+    } else {
+      final bar = inTop >= 0 ? top : bottom, i = inTop >= 0 ? inTop : inBottom;
+      if (dx != 0) {
+        target = bar[(i + dx).clamp(0, bar.length - 1)];
+      } else if (inTop >= 0) {
+        target = dy > 0 ? bottom[i.clamp(0, bottom.length - 1)] : null;
+      } else {
+        target = dy < 0 ? top[i.clamp(0, top.length - 1)] : null;
+      }
+    }
+    target == null ? _focus.requestFocus() : _ctl[target]!.requestFocus();
+    setState(() {});
+  }
+
+  static bool _isOk(LogicalKeyboardKey k) =>
+      k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    if (_controls) {
+      if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) {
+        _hideControls();
+        return KeyEventResult.handled;
+      }
+      if (k == LogicalKeyboardKey.arrowRight) { _move(dx: 1); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.arrowLeft) { _move(dx: -1); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.arrowDown) { _move(dy: 1); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.arrowUp) { _move(dy: -1); return KeyEventResult.handled; }
+      if (_isOk(k) && _focus.hasPrimaryFocus) {
+        if (e is KeyDownEvent) _hideControls(); // nothing selected: OK hides, like a tap
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored; // OK on a control reaches the control (= tapping it)
+    }
     if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) && hasVolumeKeys &&
         AppSettings.instance.display.volumeKeys) {
       if (e is KeyDownEvent) _turn(k == LogicalKeyboardKey.audioVolumeDown ? 1 : -1);
       return KeyEventResult.handled;
     }
-    if (_controls && (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack)) {
-      setState(() => _controls = false);
+    // Shift+Space goes back, whatever Space is set to do (as in the comic reader)
+    if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
+      _turn(-1);
       return KeyEventResult.handled;
     }
     switch (ReaderKeys.instance.actionFor(k)) {
@@ -425,7 +502,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       case ReaderAction.previous:
         _turn(-1);
       case ReaderAction.controls:
-        if (e is KeyDownEvent) setState(() => _controls = !_controls);
+        if (e is KeyDownEvent) _showControls();
       case ReaderAction.close:
         if (e is KeyDownEvent) Navigator.of(context).maybePop();
       case ReaderAction.zoomIn || ReaderAction.zoomOut || null:
@@ -495,7 +572,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final b = _book!;
     final toc = b.info.toc;
     TocEntry? picked;
-    setState(() => _controls = false);
     // the comic reader's panel look (user, 2026-10-06): a side sheet on a wide screen, a bottom sheet on a narrow one
     await showReaderPanelFrame(context, title: 'Contents', children: (c, _) => [
           if (toc.isEmpty) const Padding(padding: EdgeInsets.all(14), child: Text('This book has no table of contents')),
@@ -528,30 +604,40 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   /// The Aa panel: the EPUB settings while reading; the page changes behind it as they're set.
   Future<void> _settingsPanel() async {
-    setState(() => _controls = false);
-    // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live
-    await showReaderPanelFrame(context, title: 'Text and page',
-        children: (c, s) => epubSettingRows(c, s.epub, s.setEpub));
+    // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live;
+    // the controls stay up behind it, as with comics. This device's reading settings below the book's, as in the
+    // comic reader's panel (user, 2026-10-06: the panels as the comics')
+    await showReaderPanelFrame(context, title: 'Text and page', children: (c, s) => [
+          ...epubSettingRows(c, s.epub, s.setEpub),
+          SettingsGroup(title: 'This device', children: [
+            ...brightnessRows(s, compact: true),
+            ...nightRows(s),
+            if (canRotate) rotationRow(s),
+            screenOnRow(s),
+          ]),
+        ]);
   }
 
   // ---- what's shown
 
   /// The chapter's name from the contents (the last entry for its file), else "Chapter N of M".
-  String get _chapterName {
+  /// The chapter's name from the contents (the last entry for its file), else "Chapter N of M".
+  String _chapterNameOf(int chapter) {
     final b = _book!;
-    final path = b.info.spine[_chapter];
+    final path = b.info.spine[chapter];
     final named = b.info.toc.where((t) => t.path == path && t.title.isNotEmpty);
-    return named.isEmpty ? 'Chapter ${_chapter + 1} of ${b.chapterCount}' : named.first.title;
+    return named.isEmpty ? 'Chapter ${chapter + 1} of ${b.chapterCount}' : named.first.title;
   }
 
-  /// The position line, as Settings > Books > Position shows says (user: all three styles).
-  String get _positionLabel {
+  /// The position line, as Settings > Books > Position shows says (user: all three styles) - for the page shown, or
+  /// the one picked on the slider.
+  String _labelAt(int chapter, int page) {
     final b = _book!;
-    final pct = (b.progression(b.positionOf(_chapter, _page)) * 100).round();
-    final at = b.bookPage(_chapter, _page);
+    final pct = (b.progression(b.positionOf(chapter, page)) * 100).round();
+    final at = b.bookPage(chapter, page);
     final total = b.totalPages;
-    final n = b.pageCount(_chapter);
-    final inChapter = '$_chapterName · page ${_page + 1}${n == null ? '' : ' of $n'}';
+    final n = b.pageCount(chapter);
+    final inChapter = '${_chapterNameOf(chapter)} · page ${page + 1}${n == null ? '' : ' of $n'}';
     return switch (AppSettings.instance.epub.position) {
       EpubPositionStyle.pageAndPercent =>
         at != null && total != null ? 'Page ${at + 1} of $total · $pct%' : inChapter,
@@ -621,10 +707,34 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         ])),
       );
 
+  /// Next book. From the end card the book is marked read; before it, as Settings > Reader says for comics ("Next
+  /// book before the last page": ask, mark read, or keep it in progress). The next book opens in its own reader.
   Future<void> _nextBook() async {
     final id = widget.book['id'] as String;
+    var markRead = _end || AppSettings.instance.display.midBook == MidBook.markRead;
+    if (!_end && AppSettings.instance.display.midBook == MidBook.ask) {
+      final pct = (_book!.progression(_book!.positionOf(_chapter, _page)) * 100).round();
+      final answer = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Mark "$_title" as read?'),
+          content: Text("You're $pct% of the way through."),
+          actions: [
+            TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep in progress')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Mark read')),
+          ],
+        ),
+      );
+      if (answer == null || !mounted) return; // dismissed: stay
+      markRead = answer;
+    }
     try {
-      await widget.api.markRead(id);
+      if (markRead) {
+        _moved = false; // read: closing doesn't save a place over it
+        await widget.api.markRead(id);
+      } else {
+        _saveNow();
+      }
       final next = await widget.api.nextBook(id);
       if (!mounted) return;
       if (next == null) {
@@ -632,10 +742,46 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             .showSnackBar(const SnackBar(content: Text('That was the last book in the series')));
         return;
       }
-      await Navigator.of(context).pushReplacement(MaterialPageRoute(
-          builder: (_) => EpubReaderScreen(api: widget.api, book: next)));
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => readerFor(widget.api, next)));
     } catch (e, st) {
       if (mounted) showErrorSnack(context, couldnt('open the next book', e, thing: 'book'), e, st);
+    }
+  }
+
+  /// Previous book (nothing marked; this one's place kept), in its own reader.
+  Future<void> _prevBook() async {
+    _saveNow();
+    try {
+      final prev = await widget.api.previousBook(widget.book['id'] as String);
+      if (!mounted) return;
+      if (prev == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('This is the first book of the series')));
+        return;
+      }
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => readerFor(widget.api, prev)));
+    } catch (e, st) {
+      if (mounted) showErrorSnack(context, couldnt('find the previous book', e, thing: 'book'), e, st);
+    }
+  }
+
+  bool get _completed => _bookNow['readProgress']?['completed'] == true || _markedRead;
+
+  /// The top bar's Mark read / Mark unread (as the comic reader's).
+  Future<void> _toggleRead() async {
+    final id = widget.book['id'] as String;
+    final read = _completed;
+    try {
+      read ? await widget.api.markUnread(id) : await widget.api.markRead(id);
+      _saveTimer?.cancel();
+      _moved = false; // the mark stands: not undone by a save on closing
+      _markedRead = !read;
+      final fresh = await widget.api.book(id).catchError((Object _) => null);
+      if (mounted) setState(() => _bookNow = fresh ?? _bookNow);
+    } catch (e, st) {
+      if (mounted) {
+        showErrorSnack(context, couldnt('mark "$_title" as ${read ? 'unread' : 'read'}', e, thing: 'book'), e, st);
+      }
     }
   }
 
@@ -652,76 +798,320 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (b == null) {
       return Scaffold(backgroundColor: theme.background, body: const Center(child: CircularProgressIndicator()));
     }
-    return Focus(
-      focusNode: _focus,
-      autofocus: true,
-      onKeyEvent: _onKey,
-      child: Scaffold(
-        backgroundColor: theme.background,
-        body: LayoutBuilder(builder: (context, box) {
-          final size = box.biggest;
-          _layout(size);
-          if (b.pagesNow(_chapter) == null) {
-            if (b.errorOf(_chapter) != null) return _chapterError(b, _chapter, theme);
-            unawaited(_show(_chapter, 0, fraction: _startFraction));
-            return const Center(child: CircularProgressIndicator());
-          }
-          final pages = b.pagesNow(_chapter)!;
-          final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
-          return Stack(children: [
-            PageView.builder(
-              key: ValueKey(_bookWide),
-              controller: _pc,
-              itemCount: _itemCount,
-              onPageChanged: _onPageChanged,
-              itemBuilder: (_, i) => _pageAt(i, size),
-            ),
-            Positioned.fill(child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTapUp: (d) => _tap(d, size, shown),
-            )),
-            if (_controls) ..._controlsOver(b, theme),
-          ]);
-        }),
+    final display = AppSettings.instance.display;
+    return PopScope(
+      // Back (tablet or remote) closes the controls first, then the book - as in the comic reader
+      canPop: !_controls,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _hideControls();
+      },
+      child: Focus(
+        focusNode: _focus,
+        autofocus: true,
+        onKeyEvent: _onKey,
+        child: Scaffold(
+          backgroundColor: theme.background,
+          body: LayoutBuilder(builder: (context, box) {
+            final size = box.biggest;
+            _layout(size);
+            if (b.pagesNow(_chapter) == null) {
+              if (b.errorOf(_chapter) != null) return _chapterError(b, _chapter, theme);
+              unawaited(_show(_chapter, 0, fraction: _startFraction));
+              return const Center(child: CircularProgressIndicator());
+            }
+            final pages = b.pagesNow(_chapter)!;
+            final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
+            return Stack(children: [
+              PageView.builder(
+                key: ValueKey(_bookWide),
+                controller: _pc,
+                itemCount: _itemCount,
+                onPageChanged: _onPageChanged,
+                itemBuilder: (_, i) => _pageAt(i, size),
+              ),
+              Positioned.fill(child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapUp: (d) => _tap(d, size, shown),
+                onSecondaryTap: () => _controls ? _hideControls() : _showControls(), // right-click, as with comics
+              )),
+              // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
+              if (!_controls && display.clock == ShowWhen.always)
+                Positioned(
+                  top: 8,
+                  right: 10,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(10)),
+                      child: const ReaderClock(fontSize: 12),
+                    ),
+                  ),
+                ),
+              // Progress bar (Settings > Reader, as for comics): a thin line along the bottom while the controls are
+              // hidden - through the book
+              if (!_controls && display.progressBar && !_end)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 3,
+                  child: IgnorePointer(
+                    child: LinearProgressIndicator(
+                      key: const ValueKey('reading-progress'),
+                      value: b.progression(b.positionOf(_chapter, _page)),
+                      minHeight: 3,
+                      backgroundColor: theme.text.withValues(alpha: 0.12),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+              if (_controls) ..._controlsOver(b),
+            ]);
+          }),
+        ),
       ),
     );
   }
 
-  List<Widget> _controlsOver(EpubBook b, EpubTheme theme) {
-    const bar = Color(0xE6161618);
+  // ---- the controls: the comic reader's bars (user, 2026-10-06: "it still looks disjointed from the comics")
+
+  int? _scrub; // the page picked on the slider (a finger on it, or the remote scrubbing) - shown as it moves
+  bool _scrubbing = false; // the remote is scrubbing (OK on the slider)
+  int? _sliderPointer;
+  static const _sliderInset = 20.0;
+
+  /// The slider's pages: through the book once it's counted, else through the chapter.
+  (int at, int last) get _sliderRange {
+    final b = _book!;
     final total = b.totalPages;
     final at = b.bookPage(_chapter, _page);
-    final chapterPages = b.pageCount(_chapter) ?? 1;
-    final (value, max) = total != null && at != null
-        ? (at.toDouble(), math.max(1, total - 1).toDouble())
-        : (_page.toDouble(), math.max(1, chapterPages - 1).toDouble());
-    return [
-      Positioned(left: 0, right: 0, top: 0, child: Material(color: bar, child: SafeArea(bottom: false, child: Row(children: [
-        IconButton(icon: const Icon(Icons.arrow_back), tooltip: 'Close', onPressed: () => Navigator.of(context).maybePop()),
-        Expanded(child: Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16))),
-        IconButton(icon: const Icon(Icons.toc), tooltip: 'Contents', onPressed: _contents),
-        IconButton(icon: const Icon(Icons.text_fields), tooltip: 'Text and page settings', onPressed: _settingsPanel),
-      ])))),
-      Positioned(left: 0, right: 0, bottom: 0, child: Material(color: bar, child: SafeArea(top: false, child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Slider(
-            value: value.clamp(0, max),
-            max: max,
-            inactiveColor: Colors.white24,
-            onChanged: (v) => setState(() {}),
-            onChangeEnd: (v) {
-              if (total != null) {
-                final (c, p) = b.chapterPage(v.round());
-                _jump(c, b.positionOf(c, p).position);
-              } else {
-                _jump(_chapter, b.positionOf(_chapter, v.round()).position);
-              }
-            },
+    if (total != null && at != null) return (at, math.max(0, total - 1));
+    return (_page, math.max(0, (b.pageCount(_chapter) ?? 1) - 1));
+  }
+
+  /// Slider page [i] as (chapter, page).
+  (int, int) _sliderPage(int i) => _book!.totalPages != null ? _book!.chapterPage(i) : (_chapter, i);
+
+  void _sliderJump(int i) {
+    final (at, _) = _sliderRange;
+    if (i == at) return;
+    final (c, p) = _sliderPage(i);
+    unawaited(_jump(c, _book!.positionOf(c, p).position));
+  }
+
+  int _sliderAt(double x, double width, int last) =>
+      (((x - _sliderInset) / (width - 2 * _sliderInset)).clamp(0.0, 1.0) * last).round();
+
+  /// The slider under the remote: OK starts scrubbing, Left / Right then move a page, OK goes there.
+  KeyEventResult _onSliderKey(FocusNode node, KeyEvent e) {
+    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    final k = e.logicalKey;
+    final (at, last) = _sliderRange;
+    if (_isOk(k)) {
+      if (e is! KeyDownEvent) return KeyEventResult.handled;
+      if (_scrubbing) {
+        final target = _scrub ?? at;
+        setState(() {
+          _scrubbing = false;
+          _scrub = null;
+        });
+        _sliderJump(target);
+      } else {
+        setState(() {
+          _scrubbing = true;
+          _scrub = at;
+        });
+      }
+      return KeyEventResult.handled;
+    }
+    final fwd = k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.pageDown;
+    final back = k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.pageUp;
+    if (_scrubbing && (fwd || back)) {
+      setState(() => _scrub = ((_scrub ?? at) + (fwd ? 1 : -1)).clamp(0, last));
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored; // not scrubbing: arrows go on to the next control
+  }
+
+  Widget _slider() {
+    final node = _ctl[_Ctl.slider]!;
+    final accent = Theme.of(context).colorScheme.primary;
+    final (at, last) = _sliderRange;
+    final shown = _scrub ?? at;
+    return Focus(
+      focusNode: node,
+      onKeyEvent: _onSliderKey,
+      onFocusChange: (_) => setState(() {
+        if (!node.hasFocus) {
+          _scrubbing = false;
+          _scrub = null;
+        }
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: node.hasFocus ? accent.withValues(alpha: _scrubbing ? 0.5 : 0.3) : Colors.transparent,
+          border: Border.all(color: node.hasFocus ? accent : Colors.transparent, width: 3),
+        ),
+        child: SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 4,
+            inactiveTrackColor: Colors.white24,
+            showValueIndicator: ShowValueIndicator.never, // the counter says where
+            padding: const EdgeInsets.symmetric(horizontal: _sliderInset, vertical: 12),
           ),
-          Text(_positionLabel, style: const TextStyle(fontSize: 13, color: Color(0xFFBDBDBD))),
+          // touch followed here, not by the Slider's own drag (the comic reader's: a cancelled drag jumped with the
+          // finger still down); the page shown follows the finger, the page changes when it lifts
+          child: LayoutBuilder(builder: (context, box) => Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: (e) {
+                  if (_sliderPointer != null) return;
+                  _sliderPointer = e.pointer;
+                  setState(() => _scrub = _sliderAt(e.localPosition.dx, box.maxWidth, last));
+                },
+                onPointerMove: (e) {
+                  if (e.pointer != _sliderPointer) return;
+                  final p = _sliderAt(e.localPosition.dx, box.maxWidth, last);
+                  if (p != _scrub) setState(() => _scrub = p);
+                },
+                onPointerUp: (e) {
+                  if (e.pointer != _sliderPointer) return;
+                  _sliderPointer = null;
+                  _sliderJump(_sliderAt(e.localPosition.dx, box.maxWidth, last));
+                  setState(() => _scrub = null);
+                },
+                onPointerCancel: (e) {
+                  if (e.pointer != _sliderPointer) return;
+                  _sliderPointer = null;
+                  setState(() => _scrub = null);
+                },
+                child: IgnorePointer(
+                  child: Slider(
+                    min: 0,
+                    max: math.max(1, last).toDouble(),
+                    divisions: math.max(1, last),
+                    value: shown.clamp(0, math.max(1, last)).toDouble(),
+                    onChanged: (_) {}, // the enabled look; touch and keys are handled above
+                  ),
+                ),
+              )),
+        ),
+      ),
+    );
+  }
+
+  /// Icon-only control, white, its label the tooltip (the comic reader's).
+  Widget _iconCtl(_Ctl c, IconData icon, String label, VoidCallback onPressed, {double size = 26}) =>
+      IconButton(focusNode: _ctl[c], tooltip: label, icon: Icon(icon, color: Colors.white, size: size),
+          onPressed: onPressed);
+
+  List<Widget> _controlsOver(EpubBook b) {
+    const bar = Color(0xE6101012); // the comic reader's bars
+    final accent = Theme.of(context).colorScheme.primary;
+    final showClock = AppSettings.instance.display.clock != ShowWhen.off;
+    final clockInBar = MediaQuery.sizeOf(context).width >= 700;
+    final (at, _) = _sliderRange;
+    final (sc, sp) = _sliderPage(_scrub ?? at);
+    final label = _scrub == null ? _labelAt(_chapter, _page) : _labelAt(sc, sp);
+    final series = _bookNow['seriesTitle'] as String?;
+    final number = _bookNow['metadata']?['number'];
+    final completed = _completed;
+    return [
+      Positioned(
+        left: 0, right: 0, top: 0,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Material(
+            color: bar,
+            child: Theme(
+              data: readerControlsTheme(context),
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 12, 8, 12),
+                  child: Row(children: [
+                    FilledButton.tonalIcon(
+                      focusNode: _ctl[_Ctl.close],
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                      ),
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.arrow_back, size: 24),
+                      label: const Text('Close'),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        if (series != null && series.isNotEmpty)
+                          Text('$series${number == null ? '' : ' #$number'}', maxLines: 1,
+                              overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 17)),
+                        Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: series != null && series.isNotEmpty
+                                ? const TextStyle(color: Colors.white60, fontSize: 13)
+                                : const TextStyle(color: Colors.white, fontSize: 17)),
+                      ]),
+                    ),
+                    if (showClock && clockInBar)
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
+                    if (isDesktop)
+                      _iconCtl(_Ctl.fullscreen, fullscreen.value ? Icons.fullscreen_exit : Icons.fullscreen,
+                          fullscreen.value ? 'Leave full screen (F11)' : 'Full screen (F11)', toggleFullscreen),
+                    _iconCtl(_Ctl.read, completed ? Icons.check_circle : Icons.check_circle_outline,
+                        completed ? 'Mark unread' : 'Mark read', _toggleRead),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+          // narrow screens: no room on the top bar - the clock just under it, at the right
+          if (showClock && !clockInBar)
+            Align(
+              alignment: Alignment.centerRight,
+              child: IgnorePointer(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(0, 8, 10, 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: bar, borderRadius: BorderRadius.circular(10)),
+                  child: const ReaderClock(fontSize: 12),
+                ),
+              ),
+            ),
         ]),
-      )))),
+      ),
+      Positioned(
+        left: 0, right: 0, bottom: 0,
+        child: Material(
+          color: bar,
+          child: Theme(
+            data: readerControlsTheme(context),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                child: Row(children: [
+                  IconButton(focusNode: _ctl[_Ctl.prevBook], tooltip: 'Previous book', onPressed: _prevBook,
+                      icon: const Icon(Icons.skip_previous, size: 28)),
+                  const SizedBox(width: 4),
+                  // where: as Settings > Books > Position shows says - the page picked while the slider moves
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 92, maxWidth: 210),
+                    child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: _scrub != null ? accent : Colors.white, fontSize: 14,
+                            fontFeatures: const [FontFeature.tabularFigures()])),
+                  ),
+                  Expanded(child: _slider()),
+                  _iconCtl(_Ctl.contents, Icons.toc, 'Contents', _contents),
+                  _iconCtl(_Ctl.settings, Icons.text_fields, 'Text and page settings', _settingsPanel),
+                  IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
+                      icon: const Icon(Icons.skip_next, size: 28)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ),
     ];
   }
 }

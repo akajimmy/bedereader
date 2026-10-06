@@ -9,6 +9,18 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **EPUB: the reader's controls are the comic reader's**: the same top bar (Close, the series and title, the clock,
+  full screen on the PC, Mark read) and bottom bar (previous book, where you are, the slider, Contents, Text and page,
+  next book). The remote walks them as with comics - arrows move between the controls, OK presses, OK on the slider
+  then arrows scrub - and Back closes the controls before the book. The position shown follows the slider while
+  you drag it. The Text and page panel has the comic panel's This device settings (brightness, night mode,
+  rotation, keep the screen on), and the progress line along the bottom and the clock (Settings > Reader) show
+  in books too.
+- **EPUB: footnote markers are in the app's accent colour** (set in Settings), not a fixed blue.
+- **EPUB: Next and Previous book** open the book in its own reader (a comic after an EPUB in the series opened in
+  the EPUB reader); Next book mid-book asks, marks read or keeps it in progress as Settings > Reader says.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
@@ -19,7 +31,6 @@ Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 - **EPUB: drop caps drawn as pictures sit beside the text**, as the book lays them out (Homeland, Sea of Swords, the
   Hitchhiker's books): a small picture floated at a paragraph's start is drawn at its own size with the first lines
   flowing beside it, instead of on a line of its own above the paragraph.
-
 - **EPUB: footnote markers stand out**: a link that is a note marker (`*`, `[**]`, `†`, a number) is drawn raised,
   bold and blue, a lone `*` or `†` larger - before, Discworld's asterisks were plain small stars in the text colour and
   easy to miss. Tap one for its note, as before.
