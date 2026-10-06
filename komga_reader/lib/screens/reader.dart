@@ -1643,8 +1643,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!mounted || !_stripScroll.hasClients) return;
       final i = at ?? _index.clamp(0, _last);
       final p = _stripScroll.position;
-      final tile = _tileWidth(p.viewportDimension + 16) + _stripGap; // the list sits inside 8 px of padding each side
-      final target = (i * tile - (p.viewportDimension - tile) / 2).clamp(0.0, p.maxScrollExtent);
+      // the padding is inside the scroll view: the tiles are as wide as the strip's own width makes them (adding it
+      // again made each 2 px too wide on a phone, ~200 px off by page 100 - code review 2026-10-05, #10), the first
+      // starting 8 px in; the tile itself centred, not with the gap after it
+      final tile = _tileWidth(p.viewportDimension) + _stripGap;
+      final target = (8 + i * tile - (p.viewportDimension - tile + _stripGap) / 2).clamp(0.0, p.maxScrollExtent);
       jump ? _stripScroll.jumpTo(target) : _stripScroll.animateTo(target,
           duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
     });
