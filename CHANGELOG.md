@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUB: the app crashing while reading** (on the tablet and the PC, since EPUBs came in): working out where each
+  line of text ends, the reader asked Flutter's engine which letter sits at a point on the line. On some lines that
+  trips a check inside the engine, and its release version stops the app outright (the tablet's "SIGTRAP", the PC's
+  "illegal instruction" - both while a chapter was being laid out). Line ends now come from the engine's own record
+  of its lines; pages come out the same.
+
 **Changed**
 - **EPUB: the numbers over the slider say what they are**: "Book · Pg. 112/342 · 33%" at the left, "Ch. 7 · Pg. 4/12"
   at the right (the chapter numbered as the book's files run, so front matter counts).
