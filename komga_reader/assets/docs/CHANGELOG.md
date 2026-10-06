@@ -12,6 +12,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 - **EPUB: the slider jumped after a seek** (build 70): letting go, it went back to the page left for a moment, then
   to the new one. It now stays on the page picked while the reader goes there.
+- **EPUB: right-aligned and centred text lined up on its own longest line**, not the page: Homeland's list of the
+  author's other books came out as ragged groups from the left. They now line up on the text column.
 
 ## 1.2.0 - in development
 
