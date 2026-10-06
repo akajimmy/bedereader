@@ -514,6 +514,27 @@ void main() {
     expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
   });
 
+  testWidgets('Enhance switched on while reading: the page stays on screen until its enhanced picture is ready (it '
+      'vanished and came back - user, build 73)', (tester) async {
+    addTearDown(() {
+      Enhancer.holdRuns = null;
+      AppSettings.instance.setDefault(const ReaderPrefs());
+    });
+    await openLoaded(tester);
+    expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget);
+    final hold = Completer<void>();
+    Enhancer.holdRuns = hold.future; // the enhanced picture takes its time
+    AppSettings.instance.setDefault(const ReaderPrefs(sharpen: true));
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget, reason: 'still there');
+    expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
+    hold.complete();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+  });
+
   testWidgets('zoom keys: + zooms in a step at a time, - back out to fit; in fit width they do nothing', (tester) async {
     await openLoaded(tester);
     double scale() => zoomOf(tester).getMaxScaleOnAxis();

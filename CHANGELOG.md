@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Android: the app jumped back to Home by itself** when a remote or keyboard connected or disconnected (a
+  Bluetooth remote waking up, the tablet waking from sleep): Android restarted the app's window for the change. The
+  app now takes the change in its stride and stays where you were.
+- **Switching Enhance on while reading made the page vanish** until the enhanced picture was ready. The page stays
+  on screen meanwhile (a page appearing still waits for it, so there's no flash of the unprocessed page).
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).

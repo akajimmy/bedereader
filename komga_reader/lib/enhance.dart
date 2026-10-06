@@ -23,6 +23,10 @@ class Enhancer {
   @visibleForTesting
   static Object? failWith;
 
+  /// Tests: every Enhance run waits for this (a slow GPU).
+  @visibleForTesting
+  static Future<void>? holdRuns;
+
   static Future<_Programs?> _load() => _programs ??= () async {
         try {
           final r = await Future.wait([
@@ -42,6 +46,7 @@ class Enhancer {
   /// [src] processed to [width] x [height] physical pixels, or null if the shaders can't run here (then draw plain).
   static Future<ui.Image?> run(ui.Image src, int width, int height) async {
     if (failWith != null) throw failWith!;
+    if (holdRuns != null) await holdRuns;
     final p = await _load();
     if (p == null || width <= 0 || height <= 0) return null;
     final watch = Stopwatch()..start();
