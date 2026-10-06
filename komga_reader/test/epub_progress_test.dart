@@ -126,7 +126,7 @@ void main() {
   Future<String> label(WidgetTester tester) async {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    final t = tester.widgetList<Text>(find.textContaining(RegExp(r'^(Page|Chapter) '))).single.data!;
+    final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     return t;
@@ -136,8 +136,8 @@ void main() {
       (tester) async {
     final api = await open(tester, saved: _saved('${_base}OEBPS/c2.xhtml', 0.5));
     final l = await label(tester);
-    final page = int.parse(RegExp(r'Page (\d+)').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'of (\d+)').firstMatch(l)!.group(1)!);
+    final page = int.parse(RegExp(r'^(\d+) /').firstMatch(l)!.group(1)!);
+    final total = int.parse(RegExp(r'/ (\d+)').firstMatch(l)!.group(1)!);
     expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
     await run(tester, const Duration(seconds: 3));
     await tester.pumpWidget(const SizedBox()); // closing the book
@@ -174,8 +174,8 @@ void main() {
     }
     await run(tester, const Duration(seconds: 2));
     final l = await label(tester);
-    final page = int.parse(RegExp(r'Page (\d+)').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'of (\d+)').firstMatch(l)!.group(1)!);
+    final page = int.parse(RegExp(r'^(\d+) /').firstMatch(l)!.group(1)!);
+    final total = int.parse(RegExp(r'/ (\d+)').firstMatch(l)!.group(1)!);
     expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
   });
 

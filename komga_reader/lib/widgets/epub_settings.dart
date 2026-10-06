@@ -67,15 +67,16 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         value: e.turn,
         onChanged: (v) => set(e.copyWith(turn: v)),
       ),
-      SegmentRow<EpubPositionStyle>(
-        title: 'Position shows',
+      SegmentRow<EpubCorner>(
+        title: 'Page corner',
+        subtitle: 'Pages left in the chapter and how far through the book',
         choices: const [
-          Choice(EpubPositionStyle.pageAndPercent, 'Page + %'),
-          Choice(EpubPositionStyle.chapterPage, 'Chapter'),
-          Choice(EpubPositionStyle.percent, '%'),
+          Choice(EpubCorner.always, 'Always'),
+          Choice(EpubCorner.afterTurn, 'After a turn'),
+          Choice(EpubCorner.off, 'Off'),
         ],
-        value: e.position,
-        onChanged: (v) => set(e.copyWith(position: v)),
+        value: e.corner,
+        onChanged: (v) => set(e.copyWith(corner: v)),
       ),
     ]),
   ];

@@ -24,7 +24,7 @@ void main() {
       'formatting, slide; a size out of range gets the default', () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, bookFormatting: true, turn: EpubTurn.none,
-        position: EpubPositionStyle.chapterPage);
+        corner: EpubCorner.afterTurn);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     final d = EpubPrefs.fromJson(const {});
     expect((d.font, d.colours, d.bookFormatting, d.turn, d.size), (EpubFont.literata, EpubColours.dark, false,
@@ -91,10 +91,10 @@ void main() {
     Future<int> total() async {
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
-      final t = tester.widgetList<Text>(find.textContaining(RegExp(r'^Page '))).single.data!;
+      final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
-      return int.parse(RegExp(r'of (\d+)').firstMatch(t)!.group(1)!);
+      return int.parse(RegExp(r'/ (\d+)').firstMatch(t)!.group(1)!);
     }
     await settle();
     final before = await total();

@@ -14,6 +14,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   in the library: most at 85%, some Discworld books at 110-120%) no longer overrides the size you picked: its main
   text shows at your size, and its headings, notes and other sizes stay in proportion to it. A size the book sets on
   a few parts only (a prelude, a letter) is kept.
+- **EPUB: where you are, redone** (replaces the "Position shows" setting). With the controls up, the chapter's name
+  sits over the slider, the book's page and % at its left ("112 / 342 · 33%") and the page in the chapter at its
+  right ("4 / 12") - all following the slider while you drag it. While reading, a quiet note in the page's corner
+  says how many pages are left in the chapter and how far through the book you are ("8 left in chapter · 33%").
+  Settings > Books > Page corner: Always (the default), After a turn (for a moment), or Off.
 
 **Fixed**
 - **EPUB: the slider jumped after a seek** (build 70): letting go, it went back to the page left for a moment, then
