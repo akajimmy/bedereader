@@ -38,4 +38,16 @@ void main() {
     expect(kept.length, EpubTrace.keep);
     expect(kept.last, endsWith('page ${EpubTrace.keep + 49}'), reason: 'the newest lines are the ones kept');
   });
+
+  test('frame times: a line per second with frames - how many, build and draw times, how many missed 16.7 ms', () {
+    final s = FrameStats();
+    final t0 = DateTime(2026, 10, 6, 12);
+    expect(s.add(4, 6, t0), isNull);
+    expect(s.add(30, 8, t0.add(const Duration(milliseconds: 500))), isNull);
+    final line = s.add(2, 20, t0.add(const Duration(seconds: 1)));
+    expect(line, 'frames 3: build avg 12.0 max 30.0 ms, draw avg 11.3 max 20.0 ms; over 16.7 ms: build 1, draw 1');
+    expect(s.flush(), isNull, reason: 'a new window, nothing in it yet');
+    s.add(1, 1, t0.add(const Duration(seconds: 5)));
+    expect(s.flush(), startsWith('frames 1:'), reason: 'closing: what is left');
+  });
 }

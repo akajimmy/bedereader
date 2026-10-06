@@ -117,12 +117,26 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     Downloads.instance.readerOpened();
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SchedulerBinding.instance.addTimingsCallback(_onFrames);
     _awake();
     _open();
   }
 
+  // frame times for the trace (how smooth turns are, measured on the device)
+  final _frameStats = FrameStats();
+  void _onFrames(List<ui.FrameTiming> timings) {
+    for (final t in timings) {
+      final line = _frameStats.add(t.buildDuration.inMicroseconds / 1000, t.rasterDuration.inMicroseconds / 1000,
+          DateTime.fromMicrosecondsSinceEpoch(t.timestampInMicroseconds(ui.FramePhase.rasterFinishWallTime)));
+      if (line != null) EpubTrace.instance.log(line);
+    }
+  }
+
   @override
   void dispose() {
+    SchedulerBinding.instance.removeTimingsCallback(_onFrames);
+    final last = _frameStats.flush();
+    if (last != null) EpubTrace.instance.log(last);
     EpubTrace.instance.log('closed');
     Connection.instance.readerClosed();
     AppSettings.instance.removeListener(_onSettings);

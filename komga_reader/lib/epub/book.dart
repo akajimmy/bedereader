@@ -164,9 +164,15 @@ class EpubBook extends ChangeNotifier {
 
   Future<List<EpubPage>> _lay(int i, int gen) async {
     final c = _chapters[i];
+    final clock = Stopwatch()..start();
+    final loaded = c.content == null;
     final content = c.content ??= await loader.load(info.spine[i]);
+    final readMs = clock.elapsedMilliseconds;
     c.length = content.length;
     if (gen != _generation) return const [];
+    // the layout runs in one go on the UI thread: as long as it takes, frames wait (timed for the trace: a page turn
+    // that stutters at a chapter's start shows here - user, 2026-10-06, "not smooth in the way that comics are")
+    final laying = Stopwatch()..start();
     final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null,
         baseSize: textSize, baseBold: textBold);
     final pages = p.run(content.blocks);
@@ -174,7 +180,8 @@ class EpubBook extends ChangeNotifier {
       p.dispose(); // never shown
       return const [];
     }
-    EpubTrace.instance.log('chapter $i laid out: ${pages.length} pages');
+    EpubTrace.instance.log('chapter $i laid out: ${pages.length} pages in ${laying.elapsedMilliseconds} ms'
+        '${loaded ? ' (read in $readMs ms)' : ''}');
     c
       ..paginator = p
       ..pages = pages
