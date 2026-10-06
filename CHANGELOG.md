@@ -9,9 +9,28 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUB: the slider jumped after a seek** (build 70): letting go, it went back to the page left for a moment, then
+  to the new one. It now stays on the page picked while the reader goes there.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 70 - 2026-10-06
+
+**Changed**
+- **EPUB: pictures at their own size, and full screen with a tap.** A picture is drawn at its native resolution, one
+  picture pixel to one screen pixel, centred - shrunk if it's bigger than the page, never enlarged (a small map was
+  blown up and blurred). Tap a picture in the middle of the screen to see it over the book, fitted to the screen;
+  pinch or the mouse wheel zooms, a tap, Back or Esc closes it. Only pictures 150 pixels or more both ways open
+  (illustrations, maps, covers) - not drop caps, ornaments or chapter-head banners. Taps at the sides still turn
+  the page.
+
+**Fixed**
+- **EPUB: stuck on a spinner after jumping far with the slider and back** (build 69): a chapter that had been laid
+  out again at once (after the window or text size changed) and then let go of handed back its old, freed pages when
+  it was come back to, instead of being laid out afresh - the reader waited for them for good.
 
 ### Build 69 - 2026-10-06
 
@@ -26,18 +45,6 @@ Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 - **EPUB: footnote markers are in the app's accent colour** (set in Settings), not a fixed blue.
 - **EPUB: Next and Previous book** open the book in its own reader (a comic after an EPUB in the series opened in
   the EPUB reader); Next book mid-book asks, marks read or keeps it in progress as Settings > Reader says.
-
-- **EPUB: pictures at their own size, and full screen with a tap.** A picture is drawn at its native resolution, one
-  picture pixel to one screen pixel, centred - shrunk if it's bigger than the page, never enlarged (a small map was
-  blown up and blurred). Tap a picture in the middle of the screen to see it over the book, fitted to the screen;
-  pinch or the mouse wheel zooms, a tap, Back or Esc closes it. Only pictures 150 pixels or more both ways open
-  (illustrations, maps, covers) - not drop caps, ornaments or chapter-head banners. Taps at the sides still turn
-  the page.
-
-**Fixed**
-- **EPUB: stuck on a spinner after jumping far with the slider and back** (build 69): a chapter that had been laid
-  out again at once (after the window or text size changed) and then let go of handed back its old, freed pages when
-  it was come back to, instead of being laid out afresh - the reader waited for them for good.
 
 ### Build 68 - 2026-10-06
 
