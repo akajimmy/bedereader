@@ -1326,6 +1326,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           data: snap.data!, prefs: _prefs, scroll: _scrollFor(i),
           startAtEnd: _startAtEnd == i,
           levels: _loader!.bookLevels,
+          levelsNow: () => _loader?.levelsNow,
           onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
           onWheel: _onWheel,
           onPanChanged: (pans) => _setSideways(i, pans),

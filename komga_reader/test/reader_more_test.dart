@@ -96,6 +96,14 @@ class ChainServer extends ReaderServer {
   }
 }
 
+/// [BookServer] whose page 1 loads and the rest never come (a slow connection, the book's levels samples among them).
+class FirstPageOnly extends BookServer {
+  FirstPageOnly({super.pageCount}) : super(loads: true);
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) =>
+      number == 1 ? super.pageBytes(bookId, number) : Completer<Uint8List>().future;
+}
+
 /// [ChainServer] where marking a book read fails (Komga refuses).
 class MarkFailsChain extends ChainServer {
   @override
@@ -486,6 +494,23 @@ void main() {
       await tester.pump();
     }
     expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget, reason: 'the page, plain');
+    expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
+  });
+
+  testWidgets("Enhance colours: a book's first page shows at once, before the pages its levels are measured from have "
+      'come (it waited for five whole pages - code review 2026-10-05, #39)', (tester) async {
+    AppSettings.instance.setDefault(const ReaderPrefs(autoLevels: true));
+    addTearDown(() => AppSettings.instance.setDefault(const ReaderPrefs()));
+    BookServer.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
+    final api = noNetwork(() => FirstPageOnly(pageCount: 10));
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget,
+        reason: 'the first page, while its sample pages are still on their way');
     expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
   });
 

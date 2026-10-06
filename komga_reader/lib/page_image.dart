@@ -69,6 +69,11 @@ class PageLoader {
 
   Future<Levels>? _bookLevels;
 
+  /// The book's levels if they're known already (measured, or remembered from before) - else null, and the page shows
+  /// with neutral levels meanwhile ([bookLevels] measures them).
+  Levels? get levelsNow => _levelsNow;
+  Levels? _levelsNow;
+
   /// Auto-levels for the whole book (user's choice: one consistent correction rather than per page), measured once
   /// from five pages spread through the book, skipping the cover - all five at once - and remembered on the device,
   /// so opening the book again has nothing to wait for.
@@ -78,7 +83,9 @@ class PageLoader {
         final saved = prefs.getString(key);
         if (saved != null) {
           final v = saved.split(',').map(double.tryParse).toList();
-          if (v.length == 6 && v.every((x) => x != null)) return Levels(v.sublist(0, 3).cast(), v.sublist(3).cast());
+          if (v.length == 6 && v.every((x) => x != null)) {
+            return _levelsNow = Levels(v.sublist(0, 3).cast(), v.sublist(3).cast());
+          }
         }
         final n = pageNumbers.length;
         final picks = <int>{for (final f in [0.2, 0.35, 0.5, 0.65, 0.8]) (n * f).floor().clamp(n > 2 ? 1 : 0, n - 1)};
@@ -89,7 +96,7 @@ class PageLoader {
         final got = measured.whereType<Levels>().toList();
         final levels = Levels.combine(got);
         if (got.length == picks.length) await prefs.setString(key, [...levels.lo, ...levels.hi].join(','));
-        return levels;
+        return _levelsNow = levels;
       }();
 }
 
@@ -185,7 +192,7 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 /// same controller to scroll with the remote before turning the page).
 class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
-      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.onZoomChanged, this.onWheel, this.onStepper,
+      this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.levelsNow, this.onZoomChanged, this.onWheel, this.onStepper,
       this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle,
       this.onZoomStep, this.current = true});
   final PageData data;
@@ -194,6 +201,7 @@ class PageCanvas extends StatefulWidget {
   final bool startAtEnd; // came back from the next page: show the bottom (or right) of this one
   final VoidCallback? onStartedAtEnd;
   final Future<Levels> Function()? levels; // the book's auto-levels (used when auto-levels is on)
+  final Levels? Function()? levelsNow; // those levels if already known (else the page doesn't wait for them)
   final ValueChanged<bool>? onZoomChanged; // pinch-zoomed in or back to fit
   final ValueChanged<double>? onWheel; // mouse wheel over the page (desktop); Ctrl+wheel still zooms
 
@@ -477,7 +485,22 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       }
       img = _cropped!;
     }
-    final levels = p.autoLevels && widget.levels != null ? await widget.levels!() : Levels.identity;
+    // the book's levels: known - used; not yet (a book's first page: they're measured from five pages, all
+    // downloaded first) - the page shows at once with neutral levels, and is done again once they're in (it waited
+    // for them - code review 2026-10-05, #39; user's choice: show plain, then adjust)
+    var levels = Levels.identity;
+    if (p.autoLevels && widget.levels != null) {
+      final known = widget.levelsNow?.call();
+      if (known != null) {
+        levels = known;
+      } else if (widget.levelsNow == null) {
+        levels = await widget.levels!();
+      } else {
+        unawaited(widget.levels!().then((_) {
+          if (mounted && run == _colourRun) _prepare();
+        }, onError: (Object _) {}));
+      }
+    }
     if (!mounted || run != _colourRun) return;
     setState(() => _levels = levels);
     ui.Image? coloured;
