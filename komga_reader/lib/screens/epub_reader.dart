@@ -10,6 +10,7 @@ import '../api.dart';
 import '../epub/book.dart';
 import '../epub/hyphenator.dart';
 import '../epub/layout.dart';
+import '../epub/progress.dart';
 import '../epub/source.dart';
 import '../epub/xhtml.dart';
 import '../errors.dart';
@@ -74,6 +75,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _awakeTimer?.cancel();
     if (_screenHeld) keepScreenOn(false);
+    _saveNow(); // closing: the place goes now, not after the settle time
     _book?.removeListener(_onBook);
     _book?.dispose();
     _pc.dispose();
@@ -104,11 +106,62 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       final source = widget.source ?? KomgaEpubSource(widget.api, widget.book['id'] as String);
       final info = await source.info();
       if (info.spine.isEmpty) throw StateError('This book has no chapters');
+      // where reading stopped (Komga's progression, shared with its web reader); a book not started: the start
+      if (_online) {
+        try {
+          final at = await _progress.load(widget.book);
+          final i = at == null ? -1 : info.spine.indexOf(at.path);
+          if (i >= 0) {
+            _chapter = i;
+            _startFraction = at!.progression;
+          }
+        } catch (_) {
+          // Komga can't say: the start
+        }
+      }
       if (!mounted) return;
       setState(() => _book = EpubBook(source, info, hy)..addListener(_onBook));
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
+  }
+
+  // ---- progress (Komga's progression; plan step 4)
+
+  late final EpubProgress _progress = EpubProgress(widget.api, widget.book['id'] as String);
+  bool get _online => widget.source == null && !Connection.instance.offline;
+  double? _startFraction; // the saved place in the opening chapter, 0..1
+  Timer? _saveTimer;
+  EpubPosition? _saved; // the last place saved (not saved again)
+  bool _markedRead = false;
+  bool _moved = false; // turned / jumped since opening: only then is a place saved (opening alone saves nothing)
+
+  /// A page turned: saved once it has been on screen for a moment (turning on quickly saves only the last).
+  void _settled() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
+  }
+
+  void _saveNow() {
+    _saveTimer?.cancel();
+    final b = _book;
+    if (b == null || !_online || _end || !_moved) return;
+    final at = b.positionOf(_chapter, _page);
+    if (at == _saved) return;
+    final length = b.lengthOf(_chapter);
+    if (length == 0) return;
+    _saved = at;
+    // a failed save is left: the next turn saves the newer place anyway (as with comics)
+    unawaited(_progress
+        .save(b.info.spine[_chapter], at.position / length, b.progression(at))
+        .catchError((Object _) {}));
+  }
+
+  /// The end card: the book is read.
+  void _reachedEnd() {
+    if (_markedRead || !_online) return;
+    _markedRead = true;
+    unawaited(widget.api.markRead(widget.book['id'] as String).catchError((Object _) {}));
   }
 
   // ---- layout
@@ -149,10 +202,19 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// Shows chapter [chapter] at [position] (laying it out first).
-  Future<void> _show(int chapter, int position) async {
+  /// The reader moved somewhere (contents, a link, the slider): shown, and saved once it settles.
+  Future<void> _jump(int chapter, int position) async {
+    _moved = true;
+    await _show(chapter, position);
+    _settled();
+  }
+
+  /// Shows chapter [chapter] at [position] - or at [fraction] of the way through it (a saved place).
+  Future<void> _show(int chapter, int position, {double? fraction}) async {
     final b = _book!;
     final pages = await b.pages(chapter);
     if (!mounted || pages == null) return;
+    if (fraction != null) position = (fraction * b.lengthOf(chapter)).round();
     final page = pageFor(pages, position);
     b.keepAround(chapter);
     setState(() {
@@ -192,6 +254,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (_bookWide) {
       if (i >= b.totalPages!) {
         setState(() => _end = true);
+        _reachedEnd();
         return;
       }
       final (c, p) = b.chapterPage(i);
@@ -209,6 +272,12 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         _end = i >= n;
         _page = math.min(i, math.max(0, n - 1));
       });
+    }
+    _moved = true;
+    if (_end) {
+      _reachedEnd();
+    } else {
+      _settled();
     }
   }
 
@@ -310,7 +379,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     final ch = b.chapterOf(path);
     if (ch == null) return;
-    await _show(ch, frag == null ? 0 : await b.positionOfFragment(ch, frag));
+    await _jump(ch, frag == null ? 0 : await b.positionOfFragment(ch, frag));
   }
 
   static String text0(XElement e) => e.children.map((n) => n is XText ? n.text : text0(n as XElement)).join();
@@ -378,7 +447,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (ch == null) return;
     final hash = picked.href.indexOf('#');
     setState(() => _controls = false);
-    await _show(ch, hash < 0 ? 0 : await b.positionOfFragment(ch, picked.href.substring(hash + 1)));
+    await _jump(ch, hash < 0 ? 0 : await b.positionOfFragment(ch, picked.href.substring(hash + 1)));
   }
 
   // ---- what's shown
@@ -471,7 +540,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           final size = box.biggest;
           _layout(size);
           if (b.pagesNow(_chapter) == null) {
-            unawaited(_show(_chapter, 0));
+            final f = _startFraction;
+            _startFraction = null;
+            unawaited(_show(_chapter, 0, fraction: f));
             return const Center(child: CircularProgressIndicator());
           }
           final pages = b.pagesNow(_chapter)!;
@@ -520,9 +591,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             onChangeEnd: (v) {
               if (total != null) {
                 final (c, p) = b.chapterPage(v.round());
-                _show(c, b.positionOf(c, p).position);
+                _jump(c, b.positionOf(c, p).position);
               } else {
-                _show(_chapter, b.positionOf(_chapter, v.round()).position);
+                _jump(_chapter, b.positionOf(_chapter, v.round()).position);
               }
             },
           ),

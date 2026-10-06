@@ -147,6 +147,9 @@ class EpubBook extends ChangeNotifier {
 
   int? pageCount(int chapter) => _chapters[chapter].starts?.length;
 
+  /// Chapter [chapter]'s length in characters (0 until it has been loaded).
+  int lengthOf(int chapter) => _chapters[chapter].length;
+
   /// The whole book's page count (null until counted).
   int? get totalPages => counted ? _chapters.fold<int>(0, (n, c) => n + c.starts!.length) : null;
 
