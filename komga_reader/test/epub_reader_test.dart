@@ -31,6 +31,17 @@ class MemorySource implements EpubSource {
   }
 }
 
+/// A [MemorySource] whose files take a moment to read (a chapter coming back takes a while, as on a device).
+class SlowSource extends MemorySource {
+  SlowSource(super.files, super.infoValue);
+  bool slow = false; // on once the book is open (its first loads run before the test's clock does)
+  @override
+  Future<Uint8List> resource(String path) async {
+    if (slow) await Future<void>.delayed(const Duration(milliseconds: 30));
+    return super.resource(path);
+  }
+}
+
 String para(String word, int n) => '<p>${List.filled(n, word).join(' ')}</p>';
 
 MemorySource twoChapters() => MemorySource({
@@ -178,9 +189,18 @@ void main() {
 
   testWidgets('the slider: the position shown follows the finger while dragging; the page changes when it lifts',
       (tester) async {
-    await open(tester, twoChapters());
+    // six chapters, each a moment to load: the far one, let go of after counting, takes a while to come back
+    final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+    final source = SlowSource({for (final c in spine) c: '<html><body>${List.filled(6, para('gamma', 40)).join()}'
+        '</body></html>'}, EpubInfo(spine: spine, toc: const []));
+    await open(tester, source);
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
+    for (var i = 0; i < 100 && find.textContaining(RegExp(r'^Page ')).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20))); // counted: "Page X of Y"
+      await tester.pump(const Duration(milliseconds: 50)); // (counting pauses between chapters on the test's clock)
+    }
+    source.slow = true;
     final slider = find.byType(Slider);
     final r = tester.getRect(slider);
     final g = await tester.startGesture(r.centerLeft + const Offset(24, 0));
@@ -191,6 +211,9 @@ void main() {
     final dragged = tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data!;
     expect(dragged, isNot(start), reason: 'the label moves with the finger');
     await g.up();
+    await tester.pump(); // the finger up: still on the page picked while the reader goes there - not back to where it
+    // was for a moment, then the new page (the slider jumped - user, build 70)
+    expect(tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data, dragged);
     await settle(tester);
     expect(tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data, dragged, reason: 'gone there');
   });

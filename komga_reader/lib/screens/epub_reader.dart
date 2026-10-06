@@ -923,11 +923,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   /// Slider page [i] as (chapter, page).
   (int, int) _sliderPage(int i) => _book!.totalPages != null ? _book!.chapterPage(i) : (_chapter, i);
 
+  /// The page picked on the slider while the reader goes there: the slider and the counter stay on it - they showed
+  /// the page left for a moment, then the new one, the slider jumping (user, build 70).
+  int? _seeking;
+
   void _sliderJump(int i) {
     final (at, _) = _sliderRange;
     if (i == at) return;
     final (c, p) = _sliderPage(i);
-    unawaited(_jump(c, _book!.positionOf(c, p).position));
+    setState(() => _seeking = i);
+    unawaited(_jump(c, _book!.positionOf(c, p).position).whenComplete(() {
+      if (mounted && _seeking == i) setState(() => _seeking = null);
+    }));
   }
 
   int _sliderAt(double x, double width, int last) =>
@@ -968,7 +975,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final node = _ctl[_Ctl.slider]!;
     final accent = Theme.of(context).colorScheme.primary;
     final (at, last) = _sliderRange;
-    final shown = _scrub ?? at;
+    final shown = _scrub ?? _seeking ?? at;
     return Focus(
       focusNode: node,
       onKeyEvent: _onSliderKey,
@@ -1043,8 +1050,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final showClock = AppSettings.instance.display.clock != ShowWhen.off;
     final clockInBar = MediaQuery.sizeOf(context).width >= 700;
     final (at, _) = _sliderRange;
-    final (sc, sp) = _sliderPage(_scrub ?? at);
-    final label = _scrub == null ? _labelAt(_chapter, _page) : _labelAt(sc, sp);
+    final picked = _scrub ?? _seeking;
+    final (sc, sp) = _sliderPage(picked ?? at);
+    final label = picked == null ? _labelAt(_chapter, _page) : _labelAt(sc, sp);
     final series = _bookNow['seriesTitle'] as String?;
     final number = _bookNow['metadata']?['number'];
     final completed = _completed;
