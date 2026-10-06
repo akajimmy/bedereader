@@ -27,6 +27,11 @@ Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 - **EPUB: Next and Previous book** open the book in its own reader (a comic after an EPUB in the series opened in
   the EPUB reader); Next book mid-book asks, marks read or keeps it in progress as Settings > Reader says.
 
+**Fixed**
+- **EPUB: stuck on a spinner after jumping far with the slider and back** (build 69): a chapter that had been laid
+  out again at once (after the window or text size changed) and then let go of handed back its old, freed pages when
+  it was come back to, instead of being laid out afresh - the reader waited for them for good.
+
 ### Build 68 - 2026-10-06
 
 **Changed**
