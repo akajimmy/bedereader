@@ -236,6 +236,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   double _croppedBy = 0;
   ui.Image? _coloured;
   bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
+  bool _cropFailed = false; // the crop pass failed: the page uncropped
   int _colourRun = 0;
   // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
   ui.Image? _enhanced;
@@ -432,6 +433,23 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Future<void> _prepare() async {
     final p = widget.prefs;
     final run = ++_colourRun;
+    _cropFailed = false;
+    try {
+      await _prepareNow(p, run);
+    } catch (e) {
+      // a pass failed (the GPU couldn't - a very tall page past its texture limit): the page shown plain, quietly,
+      // not a spinner for good (code review 2026-10-05, #8)
+      debugPrint('page colours / crop failed ($e): shown plain');
+      if (!mounted || run != _colourRun) return;
+      setState(() {
+        _colourFailed = p.autoLevels;
+        _cropFailed = p.crop > 0 && _cropped == null;
+        _dropEnhanced();
+      });
+    }
+  }
+
+  Future<void> _prepareNow(ReaderPrefs p, int run) async {
     if (p.crop > 0 || p.autoLevels) {
       await widget.idle?.call(); // off screen: the crop and colour passes wait until no page turn is playing
       if (!mounted || run != _colourRun) return;
@@ -480,7 +498,12 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       if (run != _enhanceRun || !mounted) return;
       await widget.idle?.call(); // off screen: not during a page turn
       if (run != _enhanceRun || !mounted) return;
-      final out = await Enhancer.run(img, physical.width.round(), physical.height.round());
+      ui.Image? out;
+      try {
+        out = await Enhancer.run(img, physical.width.round(), physical.height.round());
+      } catch (e) {
+        debugPrint('enhance failed ($e): shown plain'); // (#8: it used to stay on its spinner)
+      }
       if (out == null) {
         if (run == _enhanceRun && mounted) setState(() => _enhanceFailed = true); // can't run here: plain
         return;
@@ -508,7 +531,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       Widget waiting() => SizedBox(width: size.width, height: size.height,
           child: const Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))));
       if (widget.prefs.autoLevels && _coloured == null && !_colourFailed) return waiting();
-      if (cropping && _cropped == null) return waiting();
+      if (cropping && _cropped == null && !_cropFailed) return waiting();
       var source = base;
       if (enhance && !_enhanceFailed) {
         final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());

@@ -90,6 +90,9 @@ class Komga {
           req.body = jsonEncode(body);
         }
         final r = await _http.send(req);
+        // Komga's reply read to the end, even unused: left unread, the connection can't be used again and a reading
+        // session piled up sockets (code review 2026-10-05, #7)
+        await r.stream.drain<void>();
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
       });
 

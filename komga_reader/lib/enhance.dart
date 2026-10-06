@@ -19,6 +19,10 @@ class Enhancer {
 
   static Future<_Programs?>? _programs;
 
+  /// Tests: every pass fails with this (a GPU that can't, a page past its limits).
+  @visibleForTesting
+  static Object? failWith;
+
   static Future<_Programs?> _load() => _programs ??= () async {
         try {
           final r = await Future.wait([
@@ -37,6 +41,7 @@ class Enhancer {
 
   /// [src] processed to [width] x [height] physical pixels, or null if the shaders can't run here (then draw plain).
   static Future<ui.Image?> run(ui.Image src, int width, int height) async {
+    if (failWith != null) throw failWith!;
     final p = await _load();
     if (p == null || width <= 0 || height <= 0) return null;
     final watch = Stopwatch()..start();
@@ -81,6 +86,7 @@ class Enhancer {
   /// full strength (the user's pick in the image lab (a local tuning page)), at the page's own size. Null if the shaders can't run here.
   static const whiten = 1.0, ink = 1.0;
   static Future<ui.Image?> colours(ui.Image src, List<double> lo, List<double> hi) async {
+    if (failWith != null) throw failWith!;
     final p = await _load();
     if (p == null) return null;
     final w = src.width, h = src.height;
