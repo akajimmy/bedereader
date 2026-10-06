@@ -723,6 +723,13 @@ class Paginator {
         fontFeatures: [if (s.smallCaps) const FontFeature.enable('smcp')],
       );
 
+  /// A link's text that is a note marker: *, **, †, ‡, §, a number - in brackets or not.
+  @visibleForTesting
+  static final noteMarker = RegExp(r'^\s*[\[(]?(\*{1,3}|[†‡§]|[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]{1,3})[\])]?\s*$');
+
+  /// Note markers' colour: blue, mixed with the text colour so it suits a dark page and a light one.
+  Color get _linkColour => Color.lerp(theme.text, const Color(0xFF3D8BE0), 0.65)!;
+
   /// [prepared]: the runs already carry their soft hyphens (a slice).
   /// [base]: the chapter position of [runs]' first character (default: the block's start).
   _Laid _painter(TextBlock b, List<TextRun> runs, double width,
@@ -744,8 +751,21 @@ class Paginator {
         lead = false;
       }
       if (!prepared && hyphenator != null && theme.hyphenate) t = hyphenator!.apply(t);
-      spans.add(TextSpan(text: t, style: _style(r.style)));
       final link = r.style.link;
+      if (link != null && noteMarker.hasMatch(t)) {
+        // a note marker: raised, bold, in the link colour - a plain "*" in the text colour went unseen (user,
+        // 2026-10-06: "i didn't see any in hogfather or sourcery")
+        // Sizes from the text's, not the book's <sup> (superscript digits are small already - at a <sup>'s size
+        // they were specks); a lone * or † is a small glyph, drawn larger. The line no taller either way.
+        t = superscript(t);
+        final grow = RegExp(r'[0-9⁰¹²³⁴⁵⁶⁷⁸⁹\[]').hasMatch(t) ? 1.15 : 1.4;
+        final size = theme.fontSize * math.max(r.style.size, 0.9) * grow;
+        spans.add(TextSpan(text: t, style: _style(r.style).copyWith(color: _linkColour, fontWeight: FontWeight.w700,
+            fontVariations: [const FontVariation('wght', 700)], fontSize: size,
+            height: theme.lineHeight * theme.fontSize / size)));
+      } else {
+        spans.add(TextSpan(text: t, style: _style(r.style)));
+      }
       if (link != null && t.trim().isNotEmpty) {
         linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim()));
       }
