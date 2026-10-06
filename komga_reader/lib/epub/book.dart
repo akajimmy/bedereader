@@ -20,6 +20,7 @@ class _Chapter {
   List<int>? starts; // every page's start, once counted (kept)
   int length = 0; // characters
   Future<List<EpubPage>>? laying;
+  Object? error; // the last try failed (shown with Retry; the next try loads it afresh)
 }
 
 /// Where the reader is: a chapter and a position (characters) in it.
@@ -80,8 +81,27 @@ class EpubBook extends ChangeNotifier {
     final c = _chapters[i];
     if (c.pages != null) return c.pages;
     final gen = _generation;
-    final pages = await (c.laying ??= _lay(i, gen));
-    return gen == _generation ? pages : null;
+    try {
+      final pages = await (c.laying ??= _lay(i, gen));
+      return gen == _generation ? pages : null;
+    } catch (e) {
+      // a failed try isn't kept: the chapter stuck on a spinner for good when it was (user, build 65 on the PC,
+      // turning quickly) - the error is shown with Retry, and the next try loads it afresh
+      c
+        ..laying = null
+        ..error = e;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Why chapter [i] couldn't be shown the last time it was tried (null: it's fine, or not tried).
+  Object? errorOf(int i) => _chapters[i].error;
+
+  /// Forget chapter [i]'s failure (Retry): the next [pages] loads it afresh.
+  void retry(int i) {
+    _chapters[i].error = null;
+    notifyListeners();
   }
 
   /// Chapter [i]'s pages if they're laid out now (no waiting).
@@ -102,7 +122,8 @@ class EpubBook extends ChangeNotifier {
       ..paginator = p
       ..pages = pages
       ..starts = [for (final pg in pages) pg.start]
-      ..laying = null;
+      ..laying = null
+      ..error = null;
     notifyListeners();
     return pages;
   }
