@@ -94,7 +94,6 @@ class TextBlock extends Block {
   TextRun? drop; // a drop cap / floated chapter number, set beside the first lines
   bool dropBoxed = false;
   ImageBlock? floatImage; // a picture floated left, the first lines beside it
-  bool floatImageFirst = false; // it starts the paragraph: if small (a letter), a drop cap
 
   bool get isEmpty => runs.every((r) => r.text.trim().isEmpty);
 }
@@ -308,7 +307,6 @@ class ChapterReader {
           _pendingDropImage = img; // before its paragraph: the next one's
         } else {
           cur.floatImage ??= img;
-          cur.floatImageFirst = cur.runs.every((r) => r.text.trim().isEmpty); // starts the paragraph
         }
       }
       return;
@@ -358,9 +356,7 @@ class ChapterReader {
       _pendingDrop = null;
     }
     if (_pendingDropImage != null) {
-      para
-        ..floatImage ??= _pendingDropImage
-        ..floatImageFirst = true;
+      para.floatImage ??= _pendingDropImage;
       _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
@@ -856,15 +852,9 @@ class Paginator {
     if (carried) {
       boxW = _floatW;
       boxH = _floatBottom - _y - 8;
-    } else if (fimg != null && b.floatImageFirst && _letterSized(fimg)) {
-      // a drop cap drawn as a picture: as tall as the text drop caps (about three lines), beside them
-      final h = lineH * 2.6;
-      final w = fimg.width * h / fimg.height;
-      boxW = w + 6;
-      boxH = lineH * 3;
-      if (_y + boxH > _bottom && !_pageEmpty) _newPage();
-      floatPiece = _ImagePiece(fimg, Rect.fromLTWH(x, _y + (boxH - h) / 2 - 2, w, h));
     } else if (fimg != null) {
+      // a floated picture - a drop cap drawn as one included - at its own size, as the book has it, the text flowing
+      // beside it (user, 2026-10-06: "as they would in the proper formatting", not resized like the text drop caps)
       final s = math.min(1.0, math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
       boxW = fimg.width * s;
       boxH = fimg.height * s;
@@ -905,9 +895,6 @@ class Paginator {
     final soft = narrow.tp.plainText.substring(0, math.min(cut, narrow.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, rest, width, indent: false, prepared: true, base: b.start + cut - soft), x);
   }
-
-  /// A picture the size of a letter (the drop caps drawn as pictures are 15-60 px; a floated illustration is bigger).
-  static bool _letterSized(ui.Image img) => img.width <= 120 && img.height <= 120;
 
   /// A hanging indent (text-indent below 0: glossaries, references, footnotes): the first line starts further left,
   /// out into the paragraph's own left margin (never past the page's), the rest at the paragraph's margin. Flutter
