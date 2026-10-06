@@ -12,7 +12,7 @@ import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'library.dart';
-import 'reader.dart';
+import 'open_book.dart';
 
 /// Books of one series, in number order, filterable by read status.
 class SeriesScreen extends StatefulWidget {
@@ -123,7 +123,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
         paged: _paged,
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
             selection: _sel, showViewSeries: false, onOpen: () async {
-          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: widget.api, book: b,
+          await Navigator.of(context).push(MaterialPageRoute(builder: (_) => readerFor(widget.api, b,
               skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),

@@ -11,7 +11,7 @@ import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/error_text.dart';
 import 'library.dart';
-import 'reader.dart';
+import 'open_book.dart';
 import 'readlist.dart';
 import 'series.dart';
 
@@ -146,7 +146,7 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
             title: _title('Books', _books),
             itemCount: books.length,
             itemBuilder: (context, i) => bookTile(context, api, books[i], onChanged: refreshView,
-                onOpen: () => _push(ReaderScreen(api: api, book: books[i]))),
+                onOpen: () => _push(readerFor(api, books[i]))),
           ),
         if (lists.isNotEmpty)
           PosterRow(

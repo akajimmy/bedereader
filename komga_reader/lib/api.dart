@@ -277,6 +277,28 @@ class Komga {
         return r.bodyBytes;
       }, limit: pageTimeout, slowIsNotDown: true);
 
+  /// Where reading stopped in an EPUB (Readium's progression: a locator - chapter file, how far in it - with the
+  /// device and time); null if never read. Shared with Komga's own web reader.
+  Future<Map<String, dynamic>?> epubProgression(String bookId) => _net(() async {
+        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/progression'),
+            headers: {'X-API-Key': apiKey, 'Accept': 'application/vnd.readium.progression+json, application/json'});
+        if (r.statusCode == 404 || r.statusCode == 204 || r.bodyBytes.isEmpty) return null;
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'reading position');
+        return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
+      });
+
+  /// Saves where reading stopped in an EPUB; Komga turns it into the book's read progress (page = position).
+  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) =>
+      _send('PUT', '/api/v1/books/$bookId/progression', progression);
+
+  /// The book's positions (Readium): roughly one per screenful, numbered from 1; Komga's page count for an EPUB.
+  Future<List<dynamic>> epubPositions(String bookId) => _net(() async {
+        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/positions'),
+            headers: {'X-API-Key': apiKey, 'Accept': 'application/vnd.readium.position-list+json, application/json'});
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book positions');
+        return ((jsonDecode(utf8.decode(r.bodyBytes)) as Map)['positions'] as List?) ?? const [];
+      });
+
   // ---- raw page bytes (the reader decodes and adjusts them itself)
   Future<Uint8List> pageBytes(String bookId, int number) => _net(() async {
         final r = await _http.get(Uri.parse(pageUrl(bookId, number)), headers: imageHeaders);

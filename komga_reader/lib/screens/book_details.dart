@@ -7,7 +7,7 @@ import '../errors.dart';
 import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
-import 'reader.dart';
+import 'open_book.dart';
 import 'series.dart';
 
 /// One book's details: cover, title, series and number, publisher, release date, pages, read status, summary and
@@ -62,7 +62,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
   Future<void> _read() async {
     await Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ReaderScreen(api: api, book: _book, readListId: widget.readListId)));
+        builder: (_) => readerFor(api, _book, readListId: widget.readListId)));
     unawaited(_load()); // back from the reader: read state may have changed
   }
 

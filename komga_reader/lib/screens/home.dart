@@ -19,7 +19,7 @@ import '../widgets/poster_row.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/error_text.dart';
 import 'library.dart';
-import 'reader.dart';
+import 'open_book.dart';
 import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
@@ -202,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
                   title: title,
                   itemCount: list.length,
                   itemBuilder: (context, i) => bookTile(context, api, list[i], autofocus: autofocus && i == 0,
-                      onChanged: _load, onOpen: () => _push(ReaderScreen(api: api, book: list[i]))),
+                      onChanged: _load, onOpen: () => _push(readerFor(api, list[i]))),
                 ),
               ];
     switch (key) {

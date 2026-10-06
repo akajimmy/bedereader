@@ -32,6 +32,14 @@ class EpubTheme {
   /// (user, 2026-10-06: "a switch: book's look / mine").
   final bool bookFormatting;
   final bool hyphenate;
+
+  // equal themes lay out the same: a book isn't laid out again for an equal one
+  @override
+  bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
+      other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
+      other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate;
+  @override
+  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate);
 }
 
 // ---- blocks
@@ -447,6 +455,10 @@ class EpubPage {
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
 
+  /// Where each picture is drawn on the page (tests).
+  @visibleForTesting
+  List<Rect> get imageRects => [for (final p in pieces) if (p is _ImagePiece) p.rect];
+
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
   bool _started = false;
@@ -490,11 +502,39 @@ class Paginator {
 
   bool get _pageEmpty => pages.last.pieces.isEmpty;
 
+  // every painter made, so the pages can be let go of (a chapter far from the one being read)
+  final List<TextPainter> _made = [];
+  late final TextPainter _hyphen = TextPainter(
+      text: TextSpan(text: '-', style: _style(const InlineStyle())), textDirection: TextDirection.ltr)
+    ..layout();
+
+  /// Frees the laid-out text of [pages] (they mustn't be painted after this).
+  void dispose() {
+    for (final tp in _made) {
+      tp.dispose();
+    }
+    _made.clear();
+    _hyphen.dispose();
+  }
+
   // the current text block's alignment and indent, after the formatting switch
   TextAlign _align = TextAlign.left;
   double _indent = 0;
 
   List<EpubPage> run(List<Block> blocks) {
+    // a chapter that is only a picture (a cover, a map, a plate): the whole page, centred, enlarged to fit
+    if (blocks.length == 1 && blocks.single is ImageBlock) {
+      final b = blocks.single as ImageBlock;
+      final img = b.image;
+      if (img != null) {
+        final area = Rect.fromLTRB(theme.margins.left, theme.margins.top, size.width - theme.margins.right, _bottom);
+        final s = math.min(area.width / img.width, area.height / img.height);
+        final w = img.width * s, h = img.height * s;
+        pages.single._at(b.start);
+        pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w, height: h)));
+        return pages;
+      }
+    }
     Block? prev;
     for (final b in blocks) {
       if (b.breakBefore && !_pageEmpty) _newPage();
@@ -647,8 +687,8 @@ class Paginator {
       ]);
     }
     tp.layout(maxWidth: width);
-    final hyphen = TextPainter(text: TextSpan(text: '-', style: _style(const InlineStyle())),
-        textDirection: TextDirection.ltr)..layout();
+    _made.add(tp);
+    final hyphen = _hyphen;
     final laid = _Laid(tp, hyphen, base ?? b.start);
     for (final (s, e, href, text) in linkRanges) {
       // one tap area per line the link is on (justified lines give a box per word)
@@ -754,6 +794,7 @@ class Paginator {
         text: TextSpan(text: drop!.text, style: _style(drop.style).copyWith(fontSize: lineH * 2.6, height: 1)),
         textDirection: TextDirection.ltr,
       )..layout();
+      _made.add(dropTp);
       boxW = math.max(dropTp.width + (b.dropBoxed ? 18 : 6), lineH * 1.6);
       boxH = lineH * 3;
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
