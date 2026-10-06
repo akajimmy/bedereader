@@ -19,6 +19,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   failed one is tried again a minute later (as pins do).
 - **Turning pin sync off while a send was failing** still sent this device's list over the shared pins a minute later.
 - **Home loaded everything three times on each refresh** (and twice on opening): once now.
+- **"Read further on another device" about your own page**: after a page save failed (a network blip), or coming
+  back to the app while a save was on its way, the comic reader took its own earlier page for another device's and
+  asked. A page now counts as saved only once Komga has it.
+- **A save went through while that question was on screen**, putting this device's page over the other device's
+  before you'd answered. It now waits for your answer, and is dropped if you go to the other device's page.
 
 ## 1.2.0 - in development
 
