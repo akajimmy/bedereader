@@ -55,6 +55,9 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
   void initState() {
     super.initState();
     c.addListener(_onChange);
+    // Komga may have answered while this was opening (the change came before this listened): nothing left to ask.
+    // Missed, a Retry that then reached Komga changed nothing and spun for good (tablet, build 77)
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onChange());
   }
 
   @override
@@ -75,8 +78,12 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
 
   Future<void> _retry() async {
     setState(() { _retrying = true; _stillDown = false; });
-    final ok = await c.check(); // success clears askPending, which closes this
-    if (!mounted || ok) return;
+    final ok = await c.check();
+    if (!mounted) return;
+    if (ok) {
+      _close(); // Komga answered: closed here, not left to a change that may already have come
+      return;
+    }
     setState(() { _retrying = false; _stillDown = true; });
   }
 

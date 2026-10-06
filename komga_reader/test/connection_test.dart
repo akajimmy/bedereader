@@ -160,6 +160,38 @@ void main() {
     unawaited(conn.setForcedOffline(false));
   });
 
+  testWidgets("the prompt, when Komga answered before it was listening, closes - not a Retry that spins for good "
+      '(tablet, build 77: Komga answered another request while the prompt was opening; Retry then succeeded with no '
+      'change left to close it, and spun for 10+ minutes)', (tester) async {
+    server.up = false;
+    await tester.runAsync(() => conn.check());
+    expect(conn.askPending, isTrue);
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () => showUnreachablePrompt(context), child: const Text('open')))));
+    // Komga answers another request just as the prompt is opening: the question is gone before the prompt listens
+    server.up = true;
+    Komga.onReachability!(server, true);
+    expect(conn.askPending, isFalse);
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text("Can't reach Komga"), findsNothing, reason: 'nothing to ask any more: it closes itself');
+  });
+
+  testWidgets('the prompt: Retry that reaches Komga closes it', (tester) async {
+    server.up = false;
+    await tester.runAsync(() => conn.check());
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () => showUnreachablePrompt(context), child: const Text('open')))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    server.up = true;
+    await tester.tap(find.text('Retry'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pumpAndSettle();
+    expect(find.text("Can't reach Komga"), findsNothing);
+    expect(conn.askPending, isFalse);
+  });
+
   test('API key refused: its own prompt, and Komga answering never counts as "back" (it would refuse again)', () {
     Komga.onKeyRefused!(server); // what the server client does on HTTP 401
     Komga.onReachability!(server, true); // ...right before reporting that Komga answered
