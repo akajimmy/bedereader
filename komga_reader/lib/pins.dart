@@ -67,6 +67,10 @@ class Pins extends ChangeNotifier {
   Timer? _retry;
   bool _sending = false, _sendAgain = false; // one send at a time: the list as it is when it's this one's turn
 
+  /// A failed send will be tried again (tests).
+  @visibleForTesting
+  bool get retrying => _retry?.isActive ?? false;
+
   /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
   void _syncNote(String note, Object error) {
     if (note != syncError) ErrorLog.instance.record(note, error);
@@ -78,17 +82,28 @@ class Pins extends ChangeNotifier {
     _api = api;
     final p = await SharedPreferences.getInstance();
     sync = p.getBool(_syncKey) ?? true;
+    final before = _raw;
     if (!sync) { // this device's own pins: nothing to send or fetch
       items = _decode(p.getString(_deviceKey) ?? '[]');
       syncError = null;
-      notifyListeners();
+      _loaded = true;
+      if (_raw != before) notifyListeners();
       return;
     }
     final raw = p.getString(_local);
     if (raw != null) items = _decode(raw);
-    notifyListeners();
+    _loaded = true;
+    if (_raw != before) notifyListeners();
     if (!fetch) return;
-    if (p.getBool(_dirtyKey) ?? false) {
+    await _fetch(p);
+  }
+
+  /// Komga's list: this device's unsent change goes instead (it wins); a list asked for before a change here is
+  /// dropped. Never re-reads the device's copy (code review 2026-10-05, #1).
+  Future<void> _fetch(SharedPreferences p) async {
+    final api = _api;
+    if (api == null || !sync) return;
+    if (_pending || (p.getBool(_dirtyKey) ?? false)) {
       await _send(); // this device's changes haven't reached Komga: they win
       return;
     }
@@ -100,9 +115,12 @@ class Pins extends ChangeNotifier {
       // device's own list stays as it is)
       if (_changes != changes || !sync) return;
       if (remote is String) {
+        final before = _raw;
         items = _decode(remote);
-        await p.setString(_local, remote);
-        notifyListeners();
+        if (_raw != before) { // nothing new: nobody told (Home reloaded three times per reload - #34)
+          await p.setString(_local, _raw);
+          notifyListeners();
+        }
       }
       syncError = null;
     } catch (e) {
@@ -114,19 +132,22 @@ class Pins extends ChangeNotifier {
   /// restarting the app (user, 2026-10-05: one pinned on the tablet never reached a PC app left open). Changes made
   /// here and not sent yet go first, as at a start.
   /// Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() {
-    final api = _api;
-    return api == null ? Future.value() : _gate.run(() => load(api));
+  Future<void> refresh() async {
+    if (_api == null || !_loaded || !sync) return;
+    final p = await SharedPreferences.getInstance();
+    await _gate.run(() => _fetch(p));
   }
 
   final _gate = RefreshGate();
+  bool _loaded = false; // the device's copy read: until then there's nothing to send (#2 sent an empty list)
+  bool _pending = false; // a change here not on Komga yet - known at once, before the flag is saved (#1)
 
   int _changes = 0; // pins changed on this device: a list from Komga that was asked for before is out of date
 
   /// Switch connection (online / offline) without reloading; changes waiting to be sent go now.
   void useApi(Komga api) {
     _api = api;
-    if (!sync) return;
+    if (!sync || !_loaded) return; // not read yet: [load] sends what's unsent (start-up sent [] - #2)
     SharedPreferences.getInstance().then((p) { if (p.getBool(_dirtyKey) ?? false) _send(); });
   }
 
@@ -164,6 +185,8 @@ class Pins extends ChangeNotifier {
   Future<void> clearAccount() async {
     _retry?.cancel();
     _api = null;
+    _loaded = false;
+    _pending = false;
     items = [];
     syncError = null;
     notifyListeners();
@@ -189,6 +212,7 @@ class Pins extends ChangeNotifier {
   void _save(List<Pin> next) {
     items = next;
     _changes++;
+    if (sync) _pending = true;
     notifyListeners();
     if (!sync) { // this device's own list: kept here only
       SharedPreferences.getInstance().then((p) => p.setString(_deviceKey, _raw));
@@ -203,6 +227,7 @@ class Pins extends ChangeNotifier {
 
   /// The list to Komga. Not reachable: flagged (kept for the next start) and tried again in a minute.
   Future<void> _send() async {
+    if (!sync) return; // switched off (meanwhile too): the shared list isn't this device's to send (#6)
     if (_sending) {
       _sendAgain = true;
       return;
@@ -213,12 +238,16 @@ class Pins extends ChangeNotifier {
     try {
       final api = _api;
       if (api == null) throw StateError('no server');
-      await api.putClientSetting(komgaKey, _raw);
-      if (!_sendAgain) await p.setBool(_dirtyKey, false); // changed meanwhile: still to send
+      final raw = _raw;
+      await api.putClientSetting(komgaKey, raw);
+      if (!_sendAgain) {
+        _pending = false;
+        await p.setBool(_dirtyKey, false); // changed meanwhile: still to send
+      }
       syncError = null;
     } catch (e) {
       _syncNote('Pins saved on this device, not on Komga yet: ${explain(e).reason}.', e);
-      _retry = Timer(const Duration(minutes: 1), _send);
+      if (sync) _retry = Timer(const Duration(minutes: 1), _send); // (sync off meanwhile: no more tries - #6)
     } finally {
       _sending = false;
     }

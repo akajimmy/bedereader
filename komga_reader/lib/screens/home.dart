@@ -83,12 +83,16 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   void _onSections() {
     if (!mounted) return;
     setState(() {});
-    if (_optional.any((k) => _sections[k] && !_fetched.contains(k))) _load();
+    // (not before the first load: that one fetches every shown row - Home opened with two loads)
+    if (_started && _optional.any((k) => _sections[k] && !_fetched.contains(k))) _load();
   }
 
   static const _optional = ['ondeck', 'recentlyRead', 'recentBooks', 'recentSeries', 'releases'];
 
+  bool _started = false; // the first load has begun
+
   Future<void> _load() async {
+    _started = true;
     PinTile.invalidate(); // pin posters show the current first items
     // what's synced through Komga, again: changes made on another device arrive (user, 2026-10-05) - not while offline
     if (!Connection.instance.offline) {
