@@ -41,6 +41,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   find the next book"); Next book no longer asks Komga again for the book the end card already showed (with "hide
   read" that could be hundreds of requests); the page curl no longer uses the last book's page shapes for the first
   turn of the next; a page that was opened at its end (turning back) no longer opens at its end later.
+- **A page could be downloaded twice**: when a slow load of it failed after it had been asked for again, the newer
+  load was thrown away too.
+- **Download errors**: a full disk or a folder that can't be written, when queueing or removing a download, is now
+  said in a message (it went unreported). On Android, a page that fails to save to the gallery no longer leaves a
+  hidden half-saved picture behind for a week. Signing in again while a book was downloading no longer has two
+  copies of the downloads record writing at once.
 
 ## 1.2.0 - in development
 

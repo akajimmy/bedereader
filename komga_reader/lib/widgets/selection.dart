@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../errors.dart';
 import '../offline/downloads.dart';
 import '../screens/actions.dart';
+import 'error_text.dart';
 import 'fullscreen_exit.dart';
 
 /// Multi-select state for a book grid. While [active], tapping (or OK on) a book toggles it instead of opening it.
@@ -64,7 +66,14 @@ PreferredSizeWidget selectionAppBar(BuildContext context, Komga api, Selection s
               ? null
               : () async {
                   final books = sel.books; // in the order they were picked
-                  final added = await Downloads.instance.add(books);
+                  final int added;
+                  try {
+                    added = await Downloads.instance.add(books);
+                  } catch (e, st) {
+                    // (code review 2026-10-05, #30: a disk error went unhandled)
+                    if (context.mounted) showErrorSnack(context, couldnt('queue the books for download', e), e, st);
+                    return;
+                  }
                   final skipped = books.length - added;
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(added == 0

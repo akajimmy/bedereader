@@ -72,6 +72,17 @@ void main() {
     expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
+  test('signing in again to the same server keeps the one store for its folder: a second one, while a download from '
+      'before was still writing through the first, had two writing index.json (code review 2026-10-05, #27)',
+      () async {
+    final api = server();
+    await d.attach(api, root: dir);
+    final first = d.store;
+    d.detach();
+    await d.attach(api, root: dir);
+    expect(identical(d.store, first), isTrue);
+  });
+
   test('signing out mid-book stops that book at once: no more pages asked for with the old key (it carried on to the '
       'last page - code review 2026-10-05, #14)', () async {
     final api = server()..pageCount = 20;

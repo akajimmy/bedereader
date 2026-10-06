@@ -68,10 +68,19 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     return null;
   }
   if (choice == 'download' || choice == 'undownload') {
-    if (choice == 'download') {
-      await dl.add([b]);
-    } else {
-      await dl.remove(b['id'] as String);
+    try {
+      if (choice == 'download') {
+        await dl.add([b]);
+      } else {
+        await dl.remove(b['id'] as String);
+      }
+    } catch (e, st) {
+      // a disk full, a folder that can't be written (code review 2026-10-05, #30: unhandled)
+      if (context.mounted) {
+        showErrorSnack(context, couldnt(choice == 'download' ? 'queue "$title" for download'
+            : 'remove the download of "$title"', e, thing: 'book'), e, st);
+      }
+      return null;
     }
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
