@@ -10,10 +10,12 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
   void size(int by) => set(e.copyWith(size: EpubPrefs.sizes[(at + by).clamp(0, EpubPrefs.sizes.length - 1)]));
   return [
     SettingsGroup(title: 'Text', children: [
-      SettingRow(
-        title: 'Font',
-        stackWhenNarrow: true,
-        trailing: Wrap(spacing: 6, runSpacing: 6, alignment: WrapAlignment.end, children: [
+      // the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down
+      // to fit the side sheet until the names couldn't be read (user, 2026-10-06)
+      const SettingRow(title: 'Font'),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+        child: Wrap(spacing: 6, runSpacing: 6, children: [
           for (final f in EpubFont.values)
             ChoiceChip(
               label: Text(f.label, style: TextStyle(fontFamily: f.family, fontSize: 14)),
@@ -36,6 +38,12 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         choices: const [Choice(1.25, 'Tight'), Choice(1.45, 'Normal'), Choice(1.7, 'Loose')],
         value: EpubPrefs.spacings.contains(e.lineSpacing) ? e.lineSpacing : 1.45,
         onChanged: (v) => set(e.copyWith(lineSpacing: v)),
+      ),
+      SegmentRow<EpubParagraphGap>(
+        title: 'Paragraph spacing',
+        choices: [for (final g in EpubParagraphGap.values) Choice(g, g.label)],
+        value: e.paragraphGap,
+        onChanged: (v) => set(e.copyWith(paragraphGap: v)),
       ),
       SegmentRow<EpubMargins>(
         title: 'Margins',

@@ -249,6 +249,15 @@ void main() {
     expect(lay(small, 1), isNot(lay(plain, 1)), reason: 'without it, the small text lays out differently');
   });
 
+  test('Paragraph spacing: the space added between one paragraph and the next, in ems of the text', () {
+    final blocks = ChapterReader(StyleSheet()..add('p { margin: 0 }'), (h) => h)
+        .read(parseXhtml('<body><p>One.</p><p>Two.</p></body>'));
+    double second(double gap) =>
+        Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(blocks).single.textOrigins[1].dy;
+    expect(second(1) - second(0), closeTo(19, 0.01), reason: '1 em at 19 px');
+    expect(second(0.5) - second(0), closeTo(9.5, 0.01));
+  });
+
   test('a bordered passage gets a border; the same text without one has none', () {
     int pieces(String css) {
       final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)

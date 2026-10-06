@@ -23,6 +23,7 @@ class EpubTheme {
     this.hyphenate = true,
     this.accent = const Color(0xFF3D8BE0),
     this.pixelRatio = 1,
+    this.paragraphGap = 0,
   });
   final Color background, text;
 
@@ -32,6 +33,9 @@ class EpubTheme {
   /// Screen pixels per layout pixel: pictures are drawn at their own size, one picture pixel to one screen pixel
   /// (user, 2026-10-06: "images ... at their native resolution").
   final double pixelRatio;
+
+  /// Space added between one paragraph and the next, in ems of the reader's text (a setting).
+  final double paragraphGap;
   final String? fontFamily;
   final double fontSize, lineHeight;
   final EdgeInsets margins;
@@ -47,10 +51,10 @@ class EpubTheme {
   bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
       other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
       other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate &&
-      other.accent == accent && other.pixelRatio == pixelRatio;
+      other.accent == accent && other.pixelRatio == pixelRatio && other.paragraphGap == paragraphGap;
   @override
   int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate,
-      accent, pixelRatio);
+      accent, pixelRatio, paragraphGap);
 }
 
 // ---- blocks
@@ -713,7 +717,11 @@ class Paginator {
           mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
       }
-      final gap = math.max(_pendingGap, mt * _bookEm);
+      // the reader's own extra space between paragraphs (Paragraph spacing), on top of the book's
+      final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
+          ? theme.paragraphGap * theme.fontSize
+          : 0.0;
+      final gap = math.max(_pendingGap, mt * _bookEm) + extra;
       if (!_pageEmpty) _y += gap;
       final p0 = pages.length - 1, y0 = _y;
       switch (b) {

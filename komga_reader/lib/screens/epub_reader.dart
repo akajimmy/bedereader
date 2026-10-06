@@ -48,6 +48,11 @@ class EpubReaderScreen extends StatefulWidget {
   /// Where the book's files come from (default: Komga) - the downloaded file offline.
   final EpubSource? source;
 
+  /// The page's left / right margin at [width]: the setting's, or more on a wide screen, where lines stop at the
+  /// setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
+  static double sideMargin(EpubPrefs e, double width) =>
+      math.max(e.margins.side, (width - e.size * e.margins.lineEms) / 2);
+
   @override
   State<EpubReaderScreen> createState() => _EpubReaderScreenState();
 }
@@ -84,7 +89,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       EpubFont.deviceSerif => defaultTargetPlatform == TargetPlatform.windows ? 'Georgia' : 'serif',
       _ => null,
     };
-    final side = math.max(e.margins.side, (_size.width - e.size * 34) / 2);
+    final side = EpubReaderScreen.sideMargin(e, _size.width);
     return EpubTheme(
       background: e.colours.background,
       text: e.colours.text,
@@ -93,6 +98,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       lineHeight: e.lineSpacing,
       margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
       bookFormatting: e.bookFormatting,
+      paragraphGap: e.paragraphGap.ems,
       accent: Theme.of(context).colorScheme.primary,
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
     );

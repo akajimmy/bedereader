@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/screens/epub_reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/epub_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'epub_reader_test.dart' show MemorySource, twoChapters;
@@ -24,12 +25,37 @@ void main() {
       'formatting, slide; a size out of range gets the default', () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, bookFormatting: true, turn: EpubTurn.none,
-        corner: EpubCorner.afterTurn);
+        corner: EpubCorner.afterTurn, paragraphGap: EpubParagraphGap.large);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     final d = EpubPrefs.fromJson(const {});
     expect((d.font, d.colours, d.bookFormatting, d.turn, d.size), (EpubFont.literata, EpubColours.dark, false,
         EpubTurn.slide, 19.0));
     expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
+  });
+
+  test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "
+      "shortest) and the rest goes to the margins; on a narrow one it's the setting's own margin (user: the margin "
+      "setting didn't seem to do anything)", () {
+    double side(EpubMargins m, double w) => EpubReaderScreen.sideMargin(EpubPrefs(margins: m), w);
+    for (final w in [800.0, 1200.0, 2000.0]) {
+      expect(side(EpubMargins.narrow, w), lessThan(side(EpubMargins.normal, w)), reason: 'at $w');
+      expect(side(EpubMargins.normal, w), lessThan(side(EpubMargins.wide, w)), reason: 'at $w');
+    }
+    expect(side(EpubMargins.wide, 360), EpubMargins.wide.side, reason: 'a phone: the margin itself');
+  });
+
+  testWidgets("the font choices keep their size in the reader's side sheet (380 wide): they wrap under the label, "
+      'not shrunk to fit beside it (user: shrunk until they could not be read)', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(
+        width: 380,
+        child: Builder(builder: (c) => SingleChildScrollView(
+            child: Column(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))))));
+    await tester.pump();
+    for (final f in EpubFont.values) {
+      // on screen (getRect takes in any scaling round it; getSize wouldn't)
+      expect(tester.getRect(find.widgetWithText(ChoiceChip, f.label)).height, greaterThanOrEqualTo(30),
+          reason: '${f.label}: full size');
+    }
   });
 
   Future<void> wait(WidgetTester tester, Duration d) async {

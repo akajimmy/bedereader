@@ -15,6 +15,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   trips a check inside the engine, and its release version stops the app outright (the tablet's "SIGTRAP", the PC's
   "illegal instruction" - both while a chapter was being laid out). Line ends now come from the engine's own record
   of its lines; pages come out the same.
+- **EPUB: the Margins setting did nothing on the tablet or the PC**: lines stopped at a fixed length there and
+  the rest went to the margins, whatever the setting. The setting now sets that length - Narrow margins give longer
+  lines, Wide shorter - as well as the margin on a phone.
+- **EPUB: the font choices in the reader's Text and page panel were shrunk until they couldn't be read**: they now
+  sit under the Font label at full size, wrapping onto two lines.
+
+**Added**
+- **EPUB: Paragraph spacing** (Text and page, Settings > Books): None, Small or Large space between paragraphs, on
+  top of the book's own (or of none, with your own formatting).
 
 **Changed**
 - **EPUB: the numbers over the slider say what they are**: "Book · Pg. 112/342 · 33%" at the left, "Ch. 7 · Pg. 4/12"
