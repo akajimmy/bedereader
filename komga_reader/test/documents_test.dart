@@ -108,6 +108,13 @@ Text after.
     expect(textOf(appName).single, contains('Permission is hereby granted'));
     expect(textOf('AMD FidelityFX Super Resolution 1 (FSR 1)').single, contains('Advanced Micro Devices'));
     expect(textOf('Material Icons').single, contains('Creative Commons Attribution 4.0'));
+    // the EPUB reading fonts (OFL) and hyphenation patterns, with their own texts
+    for (final font in ['Literata', 'Lora', 'Atkinson Hyperlegible Next', 'EB Garamond']) {
+      expect(textOf(font).single, contains('SIL OPEN FONT LICENSE'), reason: font);
+    }
+    final hyph = textOf('Hyphenation patterns (hyph-utf8): English, French').single;
+    expect(hyph, contains('Gerard D.C. Kuiken'));
+    expect(hyph, contains('Daniel Flipo'));
   });
 
   testWidgets('Android: the AndroidX / Kotlin libraries with the Apache 2.0 terms; not on other platforms', (tester) async {

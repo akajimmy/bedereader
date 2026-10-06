@@ -23,6 +23,8 @@ This application was developed with the aid of AI coding tools, but was designed
 | [Dart](https://dart.dev) runtime and core libraries | 3.13.4 | BSD-3-Clause | The language the app is written in |
 | Material Icons font | with Flutter | CC BY 4.0 | The icons |
 | AMD FidelityFX Super Resolution 1 - EASU and RCAS, adapted | 1.0 | MIT | Enhance's upscaler and sharpener (notice below) |
+| Fonts: [Literata](https://github.com/googlefonts/literata), [Lora](https://github.com/cyrealtype/Lora-Cyrillic), [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/), [EB Garamond](https://github.com/georgd/EB-Garamond) (from [Google Fonts](https://github.com/google/fonts)) | as of 2026-10-06 | SIL Open Font Licence 1.1 | Reading fonts for EPUB books |
+| Hyphenation patterns from [hyph-utf8](https://github.com/hyphenation/tex-hyphen): US English (Gerard D.C. Kuiken), French (Daniel Flipo, Bernard Gaulle, Arthur Reutenauer) | 2005 / 2016 | permissive notice; MIT | Breaking words at line ends in EPUB books |
 | `http` | 1.6.0 | BSD-3-Clause | Talking to Komga |
 | `shared_preferences` and its Android / Apple / Linux / Windows / web parts | 2.5.5 | BSD-3-Clause | Settings kept on the device |
 | `path_provider` Linux / Windows parts, `xdg_directories` | 2.2.2 / 2.3.0, 1.1.0 | BSD-3-Clause | Where settings are stored (desktop) |
@@ -46,7 +48,8 @@ licence); both covered by Flutter's notices.
 
 Flutter gathers the full licence texts of the framework, engine and Dart packages into every build; they're shown
 in the app under About > *Licences of included open-source software*, together with the app's own licence, AMD's
-notice, the Material Icons attribution and (on Android) the Apache 2.0 terms for the libraries above.
+notice, the Material Icons attribution, the reading fonts' Open Font Licences, the hyphenation patterns' notices and
+(on Android) the Apache 2.0 terms for the libraries above.
 
 ## Used to build and develop it (not shipped)
 
