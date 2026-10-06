@@ -14,6 +14,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   Hitchhiker's books): a small picture floated at a paragraph's start is drawn at its own size with the first lines
   flowing beside it, instead of on a line of its own above the paragraph.
 
+**Fixed**
+- **EPUB: margins given in pixels were 16 times too big** - "30px" was read as 30 times the letter size - squeezing
+  text into a sliver at the side (Homeland's list of the author's other books) or opening wide gaps. Most books in
+  the library (258 of 339) set some margins this way.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
