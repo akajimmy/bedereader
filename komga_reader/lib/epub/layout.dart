@@ -74,6 +74,7 @@ String superscript(String s) => s.replaceAllMapped(RegExp('[0-9]'), (m) => 'â°Â
 
 sealed class Block {
   double marginTop = 0, marginBottom = 0;
+  double wrapTop = 0, wrapBottom = 0; // the part of those from wrappers round the block (kept by own formatting)
   bool breakBefore = false;
   int? box; // inside a bordered element: blocks with the same number share its border
 
@@ -144,7 +145,9 @@ class ChapterReader {
 
   TextBlock _para(TextAlign align, double indent) => _cur ??= (TextBlock()
     ..align = align
-    ..indent = indent);
+    ..indent = indent
+    ..left = _insetL
+    ..right = _insetR);
 
   void _flush() {
     final c = _cur;
@@ -317,10 +320,13 @@ class ChapterReader {
     final mr = cssLength(d['margin-right'], em: st.size, percentOf: 30) ?? (e.name == 'blockquote' ? 1.5 : 0);
     final brk = RegExp(r'always|page|left|right').hasMatch(d['page-break-before'] ?? d['break-before'] ?? '');
     final startAt = blocks.length;
-    final para = _para(al, ind)
-      ..left = ml
-      ..right = mr
-      ..paragraph = e.name == 'p';
+    // margins nest, as in a browser: an element's left / right margins carry down to everything inside it, added to
+    // its parents' (an epigraph or a quotation wrapped round its paragraphs kept none of its indent - user, 2026-10-06,
+    // Mistborn's epigraph)
+    final outerL = _insetL, outerR = _insetR;
+    _insetL += ml;
+    _insetR += mr;
+    final para = _para(al, ind)..paragraph = e.name == 'p';
     // ::first-letter rules that float the letter: a drop cap
     final fl1 = sheet.declsFor(e, pseudo: 'first-letter');
     final dropLetter = fl1['float'] == 'left' || (fl1['font-size'] != null && fl1['font-size'] != '1em');
@@ -339,6 +345,8 @@ class ChapterReader {
       }
     }
     _flush();
+    _insetL = outerL;
+    _insetR = outerR;
     // a bordered element (a letter, a notice, a sidebar): its blocks share the border
     final bordered = d.entries.any((x) => x.key.startsWith('border') && !RegExp(r'\bnone\b|^0').hasMatch(x.value));
     if (bordered && blocks.length > startAt) {
@@ -347,14 +355,22 @@ class ChapterReader {
         blocks[i].box ??= id;
       }
     }
-    // margins: on the first and last block this element produced (in em of the theme size)
+    // margins: on the first and last block this element produced (in em of the theme size). A wrapper's (anything
+    // but a paragraph) are kept apart too: the reader's own formatting drops the gaps between paragraphs, not the
+    // space a wrapper asks for round itself
     if (blocks.length > startAt) {
       blocks[startAt]
         ..marginTop = math.max(blocks[startAt].marginTop, mt)
         ..breakBefore = blocks[startAt].breakBefore || brk;
       blocks.last.marginBottom = math.max(blocks.last.marginBottom, mb);
+      if (e.name != 'p') {
+        blocks[startAt].wrapTop = math.max(blocks[startAt].wrapTop, mt);
+        blocks.last.wrapBottom = math.max(blocks.last.wrapBottom, mb);
+      }
     }
   }
+
+  double _insetL = 0, _insetR = 0; // the left / right margins of the elements we're inside (em), added up
 
   static String _textOf(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
@@ -547,8 +563,8 @@ class Paginator {
           // the reader's own: justified, indented after another paragraph, no gaps between paragraphs
           _align = TextAlign.justify;
           _indent = prev is TextBlock && prev.paragraph && !b.breakBefore ? 1.5 : 0;
-          mt = 0;
-          mb = 0;
+          mt = b.wrapTop; // no gap between paragraphs - but a wrapper's space (an epigraph's, a quotation's) stays
+          mb = b.wrapBottom;
         }
       }
       final gap = math.max(_pendingGap, mt * theme.fontSize);
