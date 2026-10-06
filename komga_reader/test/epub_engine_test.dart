@@ -98,6 +98,57 @@ void main() {
     }
   });
 
+  test('links on a page: where each sits, where it goes (in the book, fragment kept), its text - footnote markers '
+      'like Discworld\'s', () {
+    final blocks = ChapterReader(StyleSheet(), (h) => 'OEBPS/$h').read(parseXhtml(
+        '<body><p>The Watch<a class="footnote-link" href="Footnotes.html#fn-1">*</a> arrived. '
+        'See <a href="#ch2">chapter two</a>.</p></body>'));
+    final pages = Paginator(const EpubTheme(), const Size(400, 600), hy.forLang('en')).run(blocks);
+    final links = pages.single.links;
+    // (a link across a line break: one tap area on each line)
+    expect({for (final l in links) (l.href, l.text)}, {('OEBPS/Footnotes.html#fn-1', '*'), ('OEBPS/#ch2', 'chapter two')});
+    expect(links.where((l) => l.text == '*').length, 1);
+    for (final l in links) {
+      expect(l.rect.width, greaterThan(0));
+      expect(const Rect.fromLTWH(0, 0, 400, 600).contains(l.rect.center), isTrue, reason: '${l.text} is on the page');
+    }
+    expect(links[0].rect.right, lessThan(links[1].rect.left), reason: 'the marker comes before the later link');
+  });
+
+  test('superscripts: digits become superscript characters (footnote numbers); other text stays itself', () {
+    expect(superscript('12'), '¹²');
+    final b = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>x<sup>23</sup> 1<sup>st</sup></p></body>'))
+        .single as TextBlock;
+    expect(b.runs.map((r) => r.text).join(), 'x²³ 1st');
+    expect(b.runs.firstWhere((r) => r.text == 'st').style.size, lessThan(1), reason: 'letters: smaller');
+    expect(b.runs.firstWhere((r) => r.text == '²³').style.size, 1, reason: 'superscript digits: no smaller still');
+  });
+
+  test("tables: rows and cells (thead / tbody looked through), a cell's paragraphs become lines; laid out as a grid", () {
+    final r = ChapterReader(StyleSheet(), (h) => h)..read(parseXhtml('<body><p>Kings:</p><table border="1"><tbody>'
+        '<tr><td>1-37</td><td>Aegon I</td><td><p>Aegon the Conqueror,</p><p>the Dragon</p></td></tr>'
+        '<tr><th>37-42</th><td>Aenys I</td></tr></tbody></table><p>After.</p></body>'));
+    final t = r.blocks.whereType<TableBlock>().single;
+    expect(t.rows.length, 2);
+    expect(t.rows[0].length, 3);
+    expect(t.rows[0][2].map((x) => x.text).join(), 'Aegon the Conqueror,\nthe Dragon');
+    expect(t.rows[1][0].first.style.bold, isTrue, reason: 'a header cell is bold');
+    expect(t.bordered, isTrue);
+    expect(r.blocks.last.start, greaterThan(t.start), reason: 'positions count on past the table');
+    final pages = Paginator(const EpubTheme(), const Size(500, 700), hy.forLang('en')).run(r.blocks);
+    expect(pages.length, 1);
+  });
+
+  test('a bordered passage gets a border; the same text without one has none', () {
+    int pieces(String css) {
+      final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)
+          .read(parseXhtml('<body><div class="box"><p>A notice.</p><p>Signed.</p></div></body>'));
+      return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.pieces.length;
+    }
+    expect(pieces('.box { border: 1px solid black }'), pieces('.box { }') + 1);
+    expect(pieces('.box { border: none }'), pieces('.box { }'));
+  });
+
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';

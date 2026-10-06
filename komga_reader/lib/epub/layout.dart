@@ -43,17 +43,31 @@ class TextRun {
 }
 
 class InlineStyle {
-  const InlineStyle({this.size = 1, this.italic = false, this.bold = false, this.smallCaps = false, this.sup = false});
+  const InlineStyle({this.size = 1, this.italic = false, this.bold = false, this.smallCaps = false, this.sup = false,
+      this.link});
   final double size; // x the theme's font size
   final bool italic, bold, smallCaps, sup;
-  InlineStyle copy({double? size, bool? italic, bool? bold, bool? smallCaps, bool? sup}) => InlineStyle(
+  final String? link; // inside <a href>: where it goes (a path in the book, #fragment kept)
+  InlineStyle copy({double? size, bool? italic, bool? bold, bool? smallCaps, bool? sup, String? link}) => InlineStyle(
       size: size ?? this.size, italic: italic ?? this.italic, bold: bold ?? this.bold,
-      smallCaps: smallCaps ?? this.smallCaps, sup: sup ?? this.sup);
+      smallCaps: smallCaps ?? this.smallCaps, sup: sup ?? this.sup, link: link ?? this.link);
 }
+
+/// A link on a page (footnote markers among them): where it is, where it goes, its text.
+class EpubLink {
+  EpubLink(this.rect, this.href, this.text);
+  final Rect rect;
+  final String href;
+  final String text;
+}
+
+/// Superscript digits as their own characters (Flutter can't raise a baseline): footnote numbers, "1st".
+String superscript(String s) => s.replaceAllMapped(RegExp('[0-9]'), (m) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[int.parse(m[0]!)]);
 
 sealed class Block {
   double marginTop = 0, marginBottom = 0;
   bool breakBefore = false;
+  int? box; // inside a bordered element: blocks with the same number share its border
 
   /// Where the block starts in the chapter's text (characters, as written - no soft hyphens): a reading position.
   int start = 0;
@@ -78,6 +92,14 @@ class ImageBlock extends Block {
   ImageBlock(this.src);
   final String src; // path inside the book, resolved
   ui.Image? image;
+}
+
+/// A table: rows of cells, each cell its text runs (paragraphs inside a cell become lines).
+class TableBlock extends Block {
+  final List<List<List<TextRun>>> rows = [];
+  bool bordered = false;
+
+  int get length => rows.fold(0, (n, r) => n + r.fold(0, (m, c) => m + c.fold(0, (k, t) => k + t.text.length)));
 }
 
 const _blockTags = {
@@ -125,17 +147,59 @@ class ChapterReader {
 
   void _add(Block b) {
     b.start = length;
-    length += b is TextBlock ? b.length : 1;
+    length += switch (b) { TextBlock() => b.length, TableBlock() => b.length, ImageBlock() => 1 };
     blocks.add(b);
+  }
+
+  int _boxes = 0;
+
+  /// A table's rows and cells (thead / tbody / tfoot looked through); a cell's paragraphs become lines.
+  TableBlock _table(XElement t, InlineStyle st) {
+    final tb = TableBlock()
+      ..bordered = (t.attr('border') ?? '0') != '0' || t.classes.any((c) => c.contains('border')) ||
+          sheet.declsFor(t).keys.any((k) => k.startsWith('border'));
+    void rows(XElement e) {
+      for (final c in e.elements) {
+        if (c.name == 'tr') {
+          tb.rows.add([
+            for (final cell in c.elements.where((x) => x.name == 'td' || x.name == 'th'))
+              _cellRuns(cell, cell.name == 'th' ? st.copy(bold: true) : st),
+          ]);
+        } else if (const {'thead', 'tbody', 'tfoot'}.contains(c.name)) {
+          rows(c);
+        }
+      }
+    }
+    rows(t);
+    tb.rows.removeWhere((r) => r.isEmpty);
+    return tb;
+  }
+
+  List<TextRun> _cellRuns(XElement cell, InlineStyle st) {
+    final sub = ChapterReader(sheet, resolve);
+    sub._walk(cell, st, TextAlign.start, 0);
+    sub._flush();
+    final out = <TextRun>[];
+    for (final b in sub.blocks.whereType<TextBlock>()) {
+      if (out.isNotEmpty) out.add(TextRun('\n', st));
+      out.addAll(b.runs);
+    }
+    return out;
   }
 
   void _walk(XElement e, InlineStyle inh, TextAlign align, double indent) {
     for (final n in e.children) {
       switch (n) {
         case XText(:final text):
-          final t = text.replaceAll(RegExp(r'[\s ]+'), ' ');
+          var t = text.replaceAll(RegExp(r'[\s ]+'), ' ');
           if (t.trim().isEmpty && _cur == null) break; // whitespace between blocks
-          _para(align, indent).runs.add(TextRun(t, inh));
+          var style = inh;
+          if (inh.sup) {
+            // digits as superscript characters; anything else (the "st" of 1st) just smaller
+            t = superscript(t);
+            if (RegExp('[^⁰¹²³⁴⁵⁶⁷⁸⁹*†‡§ ]').hasMatch(t)) style = inh.copy(size: inh.size * 0.7);
+          }
+          _para(align, indent).runs.add(TextRun(t, style));
         case XElement():
           _element(n, inh, align, indent);
       }
@@ -169,8 +233,14 @@ class ChapterReader {
     }
     if (fw == 'normal' || (int.tryParse(fw ?? '') ?? 1000) < 600) st = st.copy(bold: false);
     if ((d['font-variant'] ?? '').contains('small-caps')) st = st.copy(smallCaps: true);
-    if (e.name == 'sup' || d['vertical-align'] == 'super') st = st.copy(sup: true, size: st.size * 0.7);
+    if (e.name == 'sup' || d['vertical-align'] == 'super') st = st.copy(sup: true);
     if (e.name == 'sub' || d['vertical-align'] == 'sub') st = st.copy(size: st.size * 0.7);
+    final href = e.name == 'a' ? e.attr('href') : null;
+    if (href != null && href.isNotEmpty) {
+      final hash = href.indexOf('#');
+      final path = hash < 0 ? href : href.substring(0, hash);
+      st = st.copy(link: href.contains('://') ? href : '${resolve(path)}${hash < 0 ? '' : href.substring(hash)}');
+    }
 
     var al = align;
     switch (d['text-align']) {
@@ -200,6 +270,12 @@ class ChapterReader {
     }
     if (e.name == 'br') {
       _para(al, ind).runs.add(TextRun('\n', st));
+      return;
+    }
+    if (e.name == 'table') {
+      _flush();
+      final t = _table(e, st);
+      if (t.rows.isNotEmpty) _add(t..marginTop = 0.5..marginBottom = 0.5);
       return;
     }
 
@@ -255,6 +331,14 @@ class ChapterReader {
       }
     }
     _flush();
+    // a bordered element (a letter, a notice, a sidebar): its blocks share the border
+    final bordered = d.entries.any((x) => x.key.startsWith('border') && !RegExp(r'\bnone\b|^0').hasMatch(x.value));
+    if (bordered && blocks.length > startAt) {
+      final id = ++_boxes;
+      for (var i = startAt; i < blocks.length; i++) {
+        blocks[i].box ??= id;
+      }
+    }
     // margins: on the first and last block this element produced (in em of the theme size)
     if (blocks.length > startAt) {
       blocks[startAt]
@@ -283,6 +367,7 @@ class _Laid {
   final TextPainter hyphen;
   final List<Offset> marks = []; // painter coordinates: the hyphen's top-left
   final int base; // the chapter position of the painter's first character
+  final List<(Rect, String, String)> links = []; // painter coordinates, where to, the link's text
 
   /// The chapter position of the line at painter height [y] (soft hyphens and the indent placeholder don't count).
   int positionAt(double y) {
@@ -333,6 +418,18 @@ class _DropPiece extends Piece {
   }
 }
 
+/// A border: a bordered passage's (on each page it reaches), or a table cell's.
+class _RectPiece extends Piece {
+  _RectPiece(this.rect, this.colour);
+  final Rect rect;
+  final Color colour;
+  @override
+  void paint(Canvas c) => c.drawRect(rect, Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..color = colour.withValues(alpha: 0.5));
+}
+
 class _ImagePiece extends Piece {
   _ImagePiece(this.image, this.rect);
   final ui.Image image;
@@ -344,6 +441,7 @@ class _ImagePiece extends Piece {
 
 class EpubPage {
   final List<Piece> pieces = [];
+  final List<EpubLink> links = []; // page coordinates (footnote markers among them)
 
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
@@ -411,17 +509,86 @@ class Paginator {
       }
       final gap = math.max(_pendingGap, mt * theme.fontSize);
       if (!_pageEmpty) _y += gap;
+      final p0 = pages.length - 1, y0 = _y;
       switch (b) {
         case TextBlock():
           _text(b);
         case ImageBlock():
           _image(b);
+        case TableBlock():
+          _tableBlock(b);
       }
+      final box = b.box;
+      if (box != null) _boxSpan(box, p0, y0);
       _pendingGap = mb * theme.fontSize;
       prev = b;
     }
+    // bordered passages: one border per page they reach, round their blocks there
+    _boxTops.forEach((key, top) {
+      final (page, _) = key;
+      final r = Rect.fromLTRB(theme.margins.left - 10, top - 8, size.width - theme.margins.right + 10,
+          _boxBottoms[key]! + 8);
+      if (page < pages.length) pages[page].pieces.add(_RectPiece(r, theme.text));
+    });
     if (_pageEmpty && pages.length > 1) pages.removeLast();
     return pages;
+  }
+
+  final Map<(int, int), double> _boxTops = {}, _boxBottoms = {}; // (page, box) -> y range
+
+  /// A block of [box] laid out from page [p0] at [y0] to the current page and _y.
+  void _boxSpan(int box, int p0, double y0) {
+    final p1 = pages.length - 1;
+    for (var p = p0; p <= p1; p++) {
+      final top = p == p0 ? y0 : theme.margins.top;
+      final bottom = p == p1 ? _y : _bottom;
+      final key = (p, box);
+      _boxTops[key] = math.min(_boxTops[key] ?? double.infinity, top);
+      _boxBottoms[key] = math.max(_boxBottoms[key] ?? 0, bottom);
+    }
+  }
+
+  /// A table: columns as wide as their longest line, shrunk in proportion when they don't fit; a row is kept whole
+  /// on a page (unless taller than one).
+  void _tableBlock(TableBlock t) {
+    if (_y < _floatBottom) _y = _floatBottom;
+    _align = TextAlign.left;
+    _indent = 0;
+    const gap = 14.0;
+    final cols = t.rows.fold(0, (n, r) => math.max(n, r.length));
+    final widths = List<double>.filled(cols, 0);
+    for (final row in t.rows) {
+      for (var c = 0; c < row.length; c++) {
+        final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity).tp;
+        widths[c] = math.max(widths[c], tp.maxIntrinsicWidth.ceilToDouble());
+      }
+    }
+    final avail = _width - gap * (cols - 1);
+    final total = widths.fold(0.0, (a, b) => a + b);
+    if (total > avail && total > 0) {
+      for (var c = 0; c < cols; c++) {
+        widths[c] = widths[c] * avail / total;
+      }
+    }
+    var pos = t.start;
+    for (final row in t.rows) {
+      final laid = [
+        for (var c = 0; c < row.length; c++)
+          _painter(TextBlock()..runs.addAll(row[c]), row[c], math.max(1.0, widths[c]), base: pos),
+      ];
+      final h = laid.fold(0.0, (m, l) => math.max(m, l.tp.height));
+      if (_y + h > _bottom && !_pageEmpty) _newPage();
+      var x = theme.margins.left;
+      for (var c = 0; c < laid.length; c++) {
+        _place(laid[c], Offset(x, _y), 0, laid[c].tp.height);
+        if (t.bordered) {
+          pages.last.pieces.add(_RectPiece(Rect.fromLTWH(x - gap / 2, _y - 3, widths[c] + gap, h + 6), theme.text));
+        }
+        x += widths[c] + gap;
+      }
+      _y += h + (t.bordered ? 6 : 2);
+      pos += row.fold(0, (n, cell) => n + cell.fold(0, (m, r) => m + r.text.length));
+    }
   }
 
   TextStyle _style(InlineStyle s) => TextStyle(
@@ -447,6 +614,8 @@ class Paginator {
           baseline: TextBaseline.alphabetic));
     }
     var lead = true;
+    var at = ind ? 1 : 0; // painter offset (the indent's placeholder is one character)
+    final linkRanges = <(int, int, String, String)>[];
     for (final r in runs) {
       var t = r.text;
       if (lead) {
@@ -456,6 +625,11 @@ class Paginator {
       }
       if (!prepared && hyphenator != null && theme.hyphenate) t = hyphenator!.apply(t);
       spans.add(TextSpan(text: t, style: _style(r.style)));
+      final link = r.style.link;
+      if (link != null && t.trim().isNotEmpty) {
+        linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim()));
+      }
+      at += t.length;
     }
     final tp = TextPainter(
       text: TextSpan(children: spans, style: _style(const InlineStyle())),
@@ -472,6 +646,18 @@ class Paginator {
     final hyphen = TextPainter(text: TextSpan(text: '-', style: _style(const InlineStyle())),
         textDirection: TextDirection.ltr)..layout();
     final laid = _Laid(tp, hyphen, base ?? b.start);
+    for (final (s, e, href, text) in linkRanges) {
+      // one tap area per line the link is on (justified lines give a box per word)
+      final lines = <double, Rect>{};
+      for (final box in tp.getBoxesForSelection(TextSelection(baseOffset: s, extentOffset: e))) {
+        final r = box.toRect();
+        final key = r.top.roundToDouble();
+        lines[key] = lines[key]?.expandToInclude(r) ?? r;
+      }
+      for (final r in lines.values) {
+        laid.links.add((r, href, text));
+      }
+    }
     // lines that end where a word was broken (at a soft hyphen): a hyphen after them
     final plain = tp.plainText;
     final hyAscent = hyphen.computeDistanceToActualBaseline(TextBaseline.alphabetic);
@@ -483,6 +669,17 @@ class Paginator {
       }
     }
     return laid;
+  }
+
+  /// The painter's y range [from]..[to] on the current page at [at] - with the page's position and links.
+  void _place(_Laid laid, Offset at, double from, double to) {
+    final page = pages.last;
+    page._at(laid.positionAt(from));
+    page.pieces.add(_TextPiece(laid, at, from, to));
+    for (final (rect, href, text) in laid.links) {
+      final cy = rect.center.dy;
+      if (cy >= from && cy < to) page.links.add(EpubLink(rect.shift(Offset(at.dx, at.dy - from)), href, text));
+    }
   }
 
   /// Puts lines [from]..end of [laid] on the pages, at x [x]; moves _y.
@@ -511,8 +708,7 @@ class Paginator {
           continue;
         }
       }
-      pages.last._at(laid.positionAt(top));
-      pages.last.pieces.add(_TextPiece(laid, Offset(x, _y), top, end));
+      _place(laid, Offset(x, _y), top, end);
       _y += end - top;
       top = end;
       i = n;
@@ -567,7 +763,7 @@ class Paginator {
       _floatBottom = _y + boxH + 8;
       _floatW = boxW;
     }
-    pages.last.pieces.add(_TextPiece(narrow, Offset(x + boxW + 14, _y), 0, h));
+    _place(narrow, Offset(x + boxW + 14, _y), 0, h);
     _y += h;
     if (k >= nLines.length) return; // all of it beside the float: the next paragraph may wrap too
     if (_y < _floatBottom) _y = _floatBottom; // lines left but none fit beside it here: below it
