@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 67 - 2026-10-06
+
 **Changed**
 - **EPUB: spacing the book asks for is respected.** Margins now nest as in a browser: a wrapper's indent (a quotation,
   an epigraph, a letter...) carries down to the paragraphs inside it, and the space it asks for above and below
@@ -23,10 +29,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   side are kept instead of one, so a page still on screen is never drawn from text or pictures already freed - the
   most likely cause. The EPUB reader also keeps a short trace of what it did (`%LOCALAPPDATA%\KomgaReader\epub-trace.log`
   on Windows) so that, should it crash again, the last lines say what led up to it.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 66 - 2026-10-06
 
