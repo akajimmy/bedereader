@@ -9,6 +9,24 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- **EPUB books** (Android and Windows): novels and other EPUBs open in their own reader, laid out by the app - not a
+  browser inside it. Justified text with hyphenation (English and French, by the book's language), the book's
+  pictures and covers, drop caps and pictures with the text wrapped round them, simple tables, bordered passages,
+  hanging indents; footnotes open over the page when you tap their mark. Pages slide (or turn instantly); taps,
+  swipes, the remote and the volume keys turn them as in the comic reader. **Contents** jump to a chapter; the
+  slider and "page X of Y" cover the whole book once it has been counted (a few seconds after opening).
+- **Where you stopped** is kept on Komga as its own EPUB reading position - the same one Komga's web reader uses - so
+  either picks up where the other left off; Komga's read progress (and the posters' progress bars) follow it. A book
+  reaching its end is marked read, with the next book in the series offered.
+- **Text and page settings** (the reader's **Aa**, or Settings > Books (EPUB)), synced to every device: font
+  (Literata - the default -, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's serif / sans), size, line
+  spacing, margins, theme (dark, sepia, light), page turn, what the position line shows, and **Book's formatting**:
+  off (the default), every book is justified with indented paragraphs; on, each publisher's own alignment and
+  spacing. On a wide window, lines stay a comfortable length.
+- **Downloaded EPUBs read offline**: a download keeps the book's file; reading done offline is sent to Komga later.
+- The web version says EPUBs aren't supported there.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
