@@ -441,8 +441,12 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   bool _ownJump = false;
 
+  // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
+  // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
+  // that comics are"); this one peaks near 100 px.
   Duration get _turnTime =>
-      AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 220);
+      AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 320);
+  static const _turnCurve = Curves.easeInOut;
 
   Future<void> _turn(int by) async {
     _lastTurn = DateTime.now();
@@ -467,7 +471,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
     } else {
-      await _pc.animateToPage(target, duration: _turnTime, curve: Curves.easeOut);
+      await _pc.animateToPage(target, duration: _turnTime, curve: _turnCurve);
     }
   }
 
@@ -781,7 +785,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final pages = b.pagesNow(c);
     if (pages == null) {
       if (b.errorOf(c) != null) return _chapterError(b, c, theme);
-      unawaited(b.pages(c).then<void>((_) {}, onError: (Object _) {})); // a failure shows here, with Retry
+      // the page on screen: laid out now (a failure shows here, with Retry); a neighbour built ahead (implicit
+      // scrolling): after the usual pause, so its layout doesn't land in the next turn
+      final onScreen = !_pc.hasClients || _pc.page == null || _pc.page!.round() == i;
+      if (onScreen) {
+        unawaited(b.pages(c).then<void>((_) {}, onError: (Object _) {}));
+      } else {
+        _prefetch(c);
+      }
       return ColoredBox(color: theme.background, child: const Center(child: CircularProgressIndicator()));
     }
     return CustomPaint(size: size, painter: _PagePainter(pages[p.clamp(0, pages.length - 1)], theme.background));
@@ -1056,6 +1067,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 controller: _pc,
                 itemCount: _itemCount,
                 onPageChanged: _onPageChanged,
+                // the pages either side built ahead, as the comic reader's are: a tap's turn no longer builds the
+                // incoming page in its first frame (most tap turns missed one refresh there - measured on the
+                // tablet, build 76; swipes and comics didn't)
+                allowImplicitScrolling: true,
                 // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
                 // of both pages again each frame
                 itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),

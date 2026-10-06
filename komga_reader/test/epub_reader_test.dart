@@ -135,6 +135,14 @@ void main() {
     expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
+  testWidgets("the pages either side are built ahead, as the comic reader's are: a tap's turn doesn't build the "
+      'incoming page in its first frame (tap turns missed a refresh there - tablet, build 76)', (tester) async {
+    await open(tester, twoChapters());
+    expect(tester.widget<PageView>(find.byType(PageView)).allowImplicitScrolling, isTrue);
+    expect(find.byType(CustomPaint, skipOffstage: false).evaluate().length, greaterThan(1),
+        reason: 'the next page exists before any turn');
+  });
+
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
       'card after the last page', (tester) async {
     await open(tester, twoChapters());
