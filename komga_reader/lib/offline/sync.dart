@@ -111,7 +111,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
             conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
                 keptHere: keepHere));
           }
-          await store.save();
+          await store.saveProgress();
         } on KomgaUnreachable {
           rethrow; // gone offline: stop, everything left stays queued
         } catch (_) {
@@ -142,8 +142,12 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     final finishedElsewhere = <String>[];
     // each series on its own: one deleted on Komga stopped the refresh of every series after it (code review,
     // 2026-09-30); now its downloads are marked "no longer on Komga" and the rest carry on
+    var booksChanged = false;
     for (final entry in bySeries.entries) {
       final Map<String, dynamic> r;
+      // progress saved here after this moment is newer than Komga's answer (#11: a page read online while the
+      // refresh was on its way was put back to the page before, and the next sync said Komga had changed too)
+      final asked = DateTime.now();
       try {
         r = await api.seriesBooks(entry.key);
       } on KomgaUnreachable {
@@ -153,7 +157,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
           for (final id in entry.value) {
             if (store.books[id]?['gone'] != true) {
               store.books[id]?['gone'] = true;
-              changed = true;
+              changed = booksChanged = true;
             }
           }
         }
@@ -167,10 +171,10 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       final complete = r['last'] != false;
       for (final id in entry.value) {
         if (listed.contains(id)) {
-          if (store.books[id]?.remove('gone') != null) changed = true; // there after all
+          if (store.books[id]?.remove('gone') != null) changed = booksChanged = true; // there after all
         } else if (complete && store.books[id] != null && store.books[id]!['gone'] != true) {
           store.books[id]!['gone'] = true;
-          changed = true;
+          changed = booksChanged = true;
         }
       }
       for (final b in (r['content'] as List?) ?? const []) {
@@ -179,6 +183,9 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         final rp = b['readProgress'] as Map?;
         final cur = store.progress[id];
         if (cur != null && _same(_norm(cur), OfflineStore.norm(rp))) continue;
+        final at = DateTime.tryParse(cur?['at'] as String? ?? '');
+        // saved here since Komga was asked (or that same moment - the clock can't tell them apart): that's the newer
+        if (at != null && !at.isBefore(asked)) continue;
         store.setServerProgress(id, rp);
         changed = true;
         // read on another device (it wasn't read here before): Delete once read
@@ -186,7 +193,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     if (changed) {
-      await store.save();
+      await (booksChanged ? store.save() : store.saveProgress()); // progress alone: the small file
       Downloads.instance.notifyListeners(); // tiles showing downloaded books
     }
     finishedElsewhere.forEach(Downloads.instance.bookFinished);
@@ -206,7 +213,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       store.setServerProgress(id, w.unread ? null : {'page': w.page ?? pages, 'completed': w.completed});
       changed = true;
     }
-    if (changed) unawaited(store.save().catchError((Object _) {}));
+    if (changed) unawaited(store.saveProgress().catchError((Object _) {}));
     if (w.completed && !w.unread) ids.forEach(Downloads.instance.bookFinished); // Delete once read
   }
 
