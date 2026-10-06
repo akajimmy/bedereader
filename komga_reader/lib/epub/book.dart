@@ -101,7 +101,12 @@ class EpubBook extends ChangeNotifier {
     if (c.pages != null) return c.pages;
     final gen = _generation;
     try {
-      final pages = await (c.laying ??= _lay(i, gen));
+      final laying = c.laying ??= _lay(i, gen);
+      final pages = await laying;
+      // the try is over: forgotten here, not inside _lay - laid out at once (its text already loaded, after a new
+      // layout) _lay finished before ??= stored its future, which then stayed: the chapter, let go of later, was
+      // "laid out" from it again - freed pages, the reader on a spinner for good (user, build 69)
+      if (identical(c.laying, laying)) c.laying = null;
       return gen == _generation ? pages : null;
     } catch (e) {
       // a failed try isn't kept: the chapter stuck on a spinner for good when it was (user, build 65 on the PC,
@@ -143,7 +148,6 @@ class EpubBook extends ChangeNotifier {
       ..paginator = p
       ..pages = pages
       ..starts = [for (final pg in pages) pg.start]
-      ..laying = null
       ..error = null;
     notifyListeners();
     return pages;
@@ -160,7 +164,8 @@ class EpubBook extends ChangeNotifier {
       c
         ..paginator = null
         ..pages = null
-        ..content = null;
+        ..content = null
+        ..laying = null; // (a finished try: never the way back to these pages)
       gone.add(i);
     }
     if (gone.isNotEmpty) EpubTrace.instance.log('around chapter $current: let go of $gone');
