@@ -58,6 +58,14 @@ class EndKomga extends TestKomga {
 final onePixelPng = Uint8List.fromList(base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
 
+/// A [MemorySource] where one file ([hangs]) never comes: the book is never wholly counted.
+class HangingSource extends MemorySource {
+  HangingSource(super.files, super.infoValue, {required this.hangs});
+  final String hangs;
+  @override
+  Future<Uint8List> resource(String path) => path == hangs ? Completer<Uint8List>().future : super.resource(path);
+}
+
 String para(String word, int n) => '<p>${List.filled(n, word).join(' ')}</p>';
 
 MemorySource twoChapters() => MemorySource({
@@ -344,6 +352,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(EpubReaderScreen), findsNothing, reason: 'closed');
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('the slider runs through the whole book even before every chapter is counted (user: it ran through '
+      "the chapter, so it couldn't go far): 60% of the way along lands in the fourth of six chapters", (tester) async {
+    final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+    await open(tester, HangingSource({for (final c in spine) c: '<html><body>${List.filled(4, para('delta', 40)).join()}'
+        '</body></html>'}, EpubInfo(spine: spine, toc: const []), hangs: 'c5.xhtml'));
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-book-position'))).data, startsWith('Book · '),
+        reason: 'not counted: the last chapter never comes');
+    final r = tester.getRect(find.byType(Slider));
+    final g = await tester.startGesture(r.centerLeft + const Offset(24, 0));
+    await tester.pump();
+    await g.moveTo(Offset(r.left + 20 + 0.6 * (r.width - 40), r.center.dy));
+    await tester.pump();
+    await g.up();
+    await settle(tester);
+    if (find.byKey(const ValueKey('epub-chapter-position')).evaluate().isEmpty) {
+      await tester.tapAt(const Offset(400, 600));
+      await tester.pump();
+    }
+    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, startsWith('Ch. 4 '));
   });
 
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {

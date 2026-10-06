@@ -1079,17 +1079,24 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   int? _sliderPointer;
   static const _sliderInset = 20.0;
 
-  /// The slider's pages: through the book once it's counted, else through the chapter.
+  /// The slider always runs through the whole book (user, 2026-10-06: it ran through the chapter until the book
+  /// was counted, so it couldn't go far): by page once the book is counted, by thousandths of the book till then.
+  static const _steps = 1000;
+  bool get _byPage => _book!.totalPages != null && _book!.bookPage(_chapter, _page) != null;
+
   (int at, int last) get _sliderRange {
     final b = _book!;
-    final total = b.totalPages;
-    final at = b.bookPage(_chapter, _page);
-    if (total != null && at != null) return (at, math.max(0, total - 1));
-    return (_page, math.max(0, (b.pageCount(_chapter) ?? 1) - 1));
+    if (_byPage) return (b.bookPage(_chapter, _page)!, math.max(0, b.totalPages! - 1));
+    return ((b.progression(b.positionOf(_chapter, _page)) * _steps).round(), _steps);
   }
 
-  /// Slider page [i] as (chapter, page).
-  (int, int) _sliderPage(int i) => _book!.totalPages != null ? _book!.chapterPage(i) : (_chapter, i);
+  /// Slider place [i] as (chapter, page) - by thousandths: the page of the chapter it falls in, as far as it's known.
+  (int, int) _sliderPage(int i) {
+    final b = _book!;
+    if (_byPage) return b.chapterPage(i);
+    final (c, within) = b.chapterAtFraction(i / _steps);
+    return (c, b.pageAt(c, (within * b.lengthOf(c)).round()));
+  }
 
   /// The page picked on the slider while the reader goes there: the slider and the counter stay on it - they showed
   /// the page left for a moment, then the new one, the slider jumping (user, build 70).
@@ -1098,9 +1105,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   void _sliderJump(int i) {
     final (at, _) = _sliderRange;
     if (i == at) return;
-    final (c, p) = _sliderPage(i);
     setState(() => _seeking = i);
-    unawaited(_jump(c, _book!.positionOf(c, p).position).whenComplete(() {
+    final Future<void> going;
+    if (_byPage) {
+      final (c, p) = _sliderPage(i);
+      going = _jump(c, _book!.positionOf(c, p).position);
+    } else {
+      // a chapter not counted yet: gone to by how far through it, laid out on the way
+      final (c, within) = _book!.chapterAtFraction(i / _steps);
+      _moved = true;
+      going = _show(c, 0, fraction: within).then((_) => _settled());
+    }
+    unawaited(going.whenComplete(() {
       if (mounted && _seeking == i) setState(() => _seeking = null);
     }));
   }
@@ -1133,7 +1149,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final fwd = k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.pageDown;
     final back = k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.pageUp;
     if (_scrubbing && (fwd || back)) {
-      setState(() => _scrub = ((_scrub ?? at) + (fwd ? 1 : -1)).clamp(0, last));
+      final step = _byPage ? 1 : _steps ~/ 100; // by thousandths: a press is 1% of the book
+      setState(() => _scrub = ((_scrub ?? at) + (fwd ? step : -step)).clamp(0, last));
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored; // not scrubbing: arrows go on to the next control
