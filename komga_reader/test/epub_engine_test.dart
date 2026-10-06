@@ -162,6 +162,28 @@ void main() {
     expect(r.center.dy, closeTo(300, 0.01));
   });
 
+  test("a drop cap drawn as a picture (Homeland: <span float:left><img/></span> starting the paragraph, or just before "
+      "it) is drawn at its own size, the paragraph's first lines beside it", () async {
+    final sheet = StyleSheet()..add('.dropcaps { float: left; }');
+    final words = List.filled(80, 'word').join(' ');
+    for (final html in [
+      '<body><p><span class="dropcaps"><img src="T.jpg"/></span>he $words</p></body>',
+      '<body><div class="dropcaps"><img src="T.jpg"/></div><p>he $words</p></body>',
+    ]) {
+      final blocks = ChapterReader(sheet, (h) => h).read(parseXhtml(html));
+      final para = blocks.whereType<TextBlock>().single;
+      expect(para.floatImage, isNotNull, reason: html);
+      expect(blocks.whereType<ImageBlock>(), isEmpty, reason: 'not a picture on its own line');
+      para.floatImage!.image = await _image(19, 35);
+      final page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).first;
+      final r = page.imageRects.single;
+      expect(r.size, const Size(19, 35)); // its own size - not enlarged to a text drop cap's
+      expect(r.left, 36);
+      expect(page.textOrigins.first.dx, greaterThan(r.right), reason: 'the first lines beside it');
+      expect(page.textOrigins.last.dx, 36, reason: 'then the full width under it');
+    }
+  });
+
   test('a bordered passage gets a border; the same text without one has none', () {
     int pieces(String css) {
       final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)

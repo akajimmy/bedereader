@@ -3,10 +3,8 @@
 // chapter to BEDEREADER_EPUB_PROGRESS. To find a chapter that crashes the engine (Mistborn on the PC, builds 66-67,
 // crashed while the reader counted its chapters). Skipped unless the file is given.
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/chapter.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
