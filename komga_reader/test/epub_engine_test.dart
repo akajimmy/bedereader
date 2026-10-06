@@ -151,6 +151,22 @@ void main() {
     expect(pieces('.box { border: none }'), pieces('.box { }'));
   });
 
+  test('hanging indents (text-indent below 0, as in glossaries - Ender\'s Game): the first line starts further left '
+      'than the rest; a negative margin keeps text on the page', () {
+    final blocks = ChapterReader(StyleSheet()..add('p.g { margin-left: 2em; text-indent: -2em } div.c { margin-left: -6px }'),
+        (h) => h).read(parseXhtml('<body><p class="g">Battle School: the orbiting school where the children are '
+        'trained.</p><div class="c"><p>Off the edge?</p></div></body>'));
+    // (the test font's letters are as wide as they're tall: ~15 to a line here)
+    final pages = Paginator(const EpubTheme(), const Size(400, 900), hy.forLang('en')).run(blocks);
+    expect(pages.length, 1, reason: [for (final p in pages) p.textOrigins].toString());
+    final o = pages.single.textOrigins;
+    expect(o.length, 3, reason: 'the first line, the rest of the paragraph, the other paragraph');
+    expect(o[0].dx, 36, reason: 'first line: out at the page margin');
+    expect(o[1].dx, 36 + 2 * 19, reason: 'the rest: at the paragraph margin (2em at 19 px)');
+    expect(o[1].dy, greaterThan(o[0].dy));
+    expect(o[2].dx, 36, reason: 'a negative margin stops at the page margin');
+  });
+
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';

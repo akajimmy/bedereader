@@ -443,6 +443,10 @@ class EpubPage {
   final List<Piece> pieces = [];
   final List<EpubLink> links = []; // page coordinates (footnote markers among them)
 
+  /// Where each run of text lines starts on the page (tests: indents, wrapping).
+  @visibleForTesting
+  List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
+
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
   bool _started = false;
@@ -717,12 +721,18 @@ class Paginator {
   }
 
   void _text(TextBlock b) {
-    final x = theme.margins.left + b.left * theme.fontSize;
-    final width = _width - (b.left + b.right) * theme.fontSize;
+    // margins inside the page (a negative one - "margin-left: -6px" - doesn't push text off it), and a line's room
+    final left = math.max(0.0, b.left), right = math.max(0.0, b.right);
+    final x = theme.margins.left + left * theme.fontSize;
+    final width = math.max(theme.fontSize * 4, _width - (left + right) * theme.fontSize);
     final drop = b.drop;
     final fimg = b.floatImage?.image;
     final carried = drop == null && fimg == null && _floatBottom > _y + 4; // an earlier float still alongside
     if (drop == null && fimg == null && !carried) {
+      if (_indent < 0) {
+        _hanging(b, x, width);
+        return;
+      }
       _lines(_painter(b, b.runs, width), x);
       return;
     }
@@ -772,6 +782,30 @@ class Paginator {
     final rest = _sliceRuns(b.runs, cut);
     final soft = narrow.tp.plainText.substring(0, math.min(cut, narrow.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, rest, width, indent: false, prepared: true, base: b.start + cut - soft), x);
+  }
+
+  /// A hanging indent (text-indent below 0: glossaries, references, footnotes): the first line starts further left,
+  /// out into the paragraph's own left margin (never past the page's), the rest at the paragraph's margin. Flutter
+  /// can't indent lines after the first, so the first line is laid out on its own and the rest from where it ends.
+  void _hanging(TextBlock b, double x, double width) {
+    final hang = math.min(-_indent * theme.fontSize, x - theme.margins.left);
+    final indent = _indent;
+    _indent = 0;
+    final first = _painter(b, b.runs, width + hang, indent: false);
+    final lines = first.tp.computeLineMetrics();
+    if (lines.length <= 1 || hang <= 0) {
+      _lines(hang <= 0 ? _painter(b, b.runs, width) : first, x - hang);
+      _indent = indent;
+      return;
+    }
+    final h = lines.first.height;
+    if (_y + h > _bottom + 0.5 && !_pageEmpty) _newPage();
+    _place(first, Offset(x - hang, _y), 0, h);
+    _y += h;
+    final cut = first.tp.getLineBoundary(first.tp.getPositionForOffset(Offset(1, h / 2))).end;
+    final soft = first.tp.plainText.substring(0, math.min(cut, first.tp.plainText.length)).split('­').length - 1;
+    _lines(_painter(b, _sliceRuns(b.runs, cut), width, indent: false, prepared: true, base: b.start + cut - soft), x);
+    _indent = indent;
   }
 
   /// The runs from plain-text offset [start] on (offsets count the hyphenated text the painter saw).
