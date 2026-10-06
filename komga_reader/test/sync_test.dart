@@ -26,6 +26,7 @@ class ProgressServer extends LibraryServer {
   void Function(String id)? onBook; // called as each book is asked for (tests use it to drop Komga at an exact point)
   int bookCalls = 0, seriesCalls = 0;
   bool morePages = false; // the series' list says it has more pages ('last': false)
+  void Function()? onSeriesAnswered;
 
   void _reach() {
     Komga.onReachability?.call(this, !down);
@@ -67,7 +68,9 @@ class ProgressServer extends LibraryServer {
     _reach();
     if (goneSeries.contains(seriesId)) throw KomgaError(404, '/api/v1/series/$seriesId/books');
     final ids = [for (final id in seriesId == 'S2' ? ['B3'] : ['B1', 'B2']) if (!missing.contains(id)) id];
-    return {'content': [for (final id in ids) {'id': id, 'readProgress': rp[id]}], if (morePages) 'last': false};
+    final answer = {'content': [for (final id in ids) {'id': id, 'readProgress': rp[id]}], if (morePages) 'last': false};
+    onSeriesAnswered?.call(); // (tests: something happens here while the answer is on its way)
+    return answer;
   }
 }
 
@@ -201,6 +204,18 @@ void main() {
     expect(d.store!.readProgressOf('B1'), isNull);
     expect(d.store!.readProgressOf('B2'), isNull);
     expect(sync.pending, 0); // none of that needs sending
+  });
+
+  test('a page read online while the refresh is on its way stays: the refresh had asked Komga before, and put the '
+      'page before back (code review 2026-10-05, #11)', () async {
+    server.rp['B2'] = {'page': 2, 'completed': false};
+    server.onSeriesAnswered = () {
+      server.onSeriesAnswered = null;
+      server.rp['B2'] = {'page': 3, 'completed': false};
+      Komga.onProgressWritten!(server, const ProgressWrite(bookId: 'B2', page: 3)); // read online here, meanwhile
+    };
+    await sync.run();
+    expect(d.store!.readProgressOf('B2')!['page'], 3, reason: "this device's newer page, not Komga's earlier answer");
   });
 
   test("Komga gone mid-sync: it stops at once - the rest stays queued, nothing asked again on its own - and it's all "

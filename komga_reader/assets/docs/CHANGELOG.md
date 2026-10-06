@@ -32,6 +32,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   picked is now in the middle.
 - **Signing out didn't stop the book being downloaded**: it carried on to its last page with the old account. It now
   stops at once and waits in the queue.
+- **Reading a downloaded book rewrote the whole downloads record on every page** (a few MB with hundreds of
+  downloads). Reading progress now has its own small file (`progress.json` beside `index.json`), so a page turn
+  writes only that. Moved over by itself on the first start, the old `index.json` kept as `index.v1.json`.
+- **A page read while the background refresh was running could be put back to the page before**, and the next sync
+  then reported a clash that wasn't one.
 
 ## 1.2.0 - in development
 
