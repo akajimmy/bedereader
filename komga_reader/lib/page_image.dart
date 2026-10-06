@@ -280,6 +280,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   ui.Image? _enhanced;
   Size? _enhancedFor;
   bool _enhanceFailed = false;
+  bool _drawn = false; // this page has been on screen: switching Enhance on keeps it there meanwhile
   int _enhanceRun = 0; // a newer request (page / size / switch changed) makes older results stale
   late final TransformationController _zoom = widget.zoom ?? TransformationController();
   bool _zoomedIn = false;
@@ -457,6 +458,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       _prepare();
     }
     if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
+    if (old.data != widget.data) _drawn = false;
     // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
     // ... and a change of fit: going round the fits again left a wide page at the left edge (tablet, 2026-09-30)
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd) ||
@@ -591,11 +593,15 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
         if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
           _enhance(physical, base);
           // until the first picture is ready: wait; after a resize (rotation): the old one, stretched, meanwhile
-          if (_enhanced == null) return waiting();
-          source = _enhanced!;
+          // until the first picture is ready: a page appearing waits (no flash of the unprocessed page - user,
+          // 2026-09-29); a page already on screen (Enhance switched on while reading) stays as it is meanwhile - it
+          // vanished and came back (user, build 73)
+          if (_enhanced == null && !_drawn) return waiting();
+          if (_enhanced != null) source = _enhanced!;
         }
       }
       // medium: at rest the enhanced picture is drawn 1:1 (so unchanged); pinch-zoomed it's smoothly magnified
+      _drawn = true;
       final raw = RawImage(image: source, width: size.width, height: size.height, fit: BoxFit.fill,
           filterQuality: FilterQuality.medium);
       return tone.isIdentity ? raw : ColorFiltered(colorFilter: ColorFilter.matrix(tone.matrix), child: raw);
