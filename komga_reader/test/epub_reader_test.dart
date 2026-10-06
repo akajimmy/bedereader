@@ -117,6 +117,24 @@ void main() {
     expect(find.text('The end'), findsOneWidget);
   });
 
+  testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
+      'Done on a wide screen', (tester) async {
+    await open(tester, twoChapters());
+    for (final (tooltip, title) in [('Text and page settings', 'Text and page'), ('Contents', 'Contents')]) {
+      await tester.tapAt(const Offset(400, 600));
+      await tester.pump();
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pumpAndSettle();
+      expect(find.text(title), findsWidgets);
+      expect(find.text('Done'), findsOneWidget, reason: '$title: the comic panels\' Done');
+      final sheet = tester.getSize(find.byWidgetPredicate(
+          (w) => w is Material && w.color == const Color(0xF2141416))); // the comic panels' sheet colour
+      expect(sheet.width, 380, reason: "$title: the comic panels' side sheet");
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
     await open(tester, MemorySource({
       'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',

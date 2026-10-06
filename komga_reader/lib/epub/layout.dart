@@ -74,6 +74,8 @@ String superscript(String s) => s.replaceAllMapped(RegExp('[0-9]'), (m) => 'â°Â
 
 sealed class Block {
   double marginTop = 0, marginBottom = 0;
+  double wrapTop = 0, wrapBottom = 0; // the part of those from wrappers round the block (kept by own formatting)
+  double paraTop = 0, paraBottom = 0; // a paragraph's own (own formatting keeps them only if they're out of the usual)
   bool breakBefore = false;
   int? box; // inside a bordered element: blocks with the same number share its border
 
@@ -144,7 +146,9 @@ class ChapterReader {
 
   TextBlock _para(TextAlign align, double indent) => _cur ??= (TextBlock()
     ..align = align
-    ..indent = indent);
+    ..indent = indent
+    ..left = _insetL
+    ..right = _insetR);
 
   void _flush() {
     final c = _cur;
@@ -317,10 +321,13 @@ class ChapterReader {
     final mr = cssLength(d['margin-right'], em: st.size, percentOf: 30) ?? (e.name == 'blockquote' ? 1.5 : 0);
     final brk = RegExp(r'always|page|left|right').hasMatch(d['page-break-before'] ?? d['break-before'] ?? '');
     final startAt = blocks.length;
-    final para = _para(al, ind)
-      ..left = ml
-      ..right = mr
-      ..paragraph = e.name == 'p';
+    // margins nest, as in a browser: an element's left / right margins carry down to everything inside it, added to
+    // its parents' (an epigraph or a quotation wrapped round its paragraphs kept none of its indent - user, 2026-10-06,
+    // Mistborn's epigraph)
+    final outerL = _insetL, outerR = _insetR;
+    _insetL += ml;
+    _insetR += mr;
+    final para = _para(al, ind)..paragraph = e.name == 'p';
     // ::first-letter rules that float the letter: a drop cap
     final fl1 = sheet.declsFor(e, pseudo: 'first-letter');
     final dropLetter = fl1['float'] == 'left' || (fl1['font-size'] != null && fl1['font-size'] != '1em');
@@ -339,6 +346,8 @@ class ChapterReader {
       }
     }
     _flush();
+    _insetL = outerL;
+    _insetR = outerR;
     // a bordered element (a letter, a notice, a sidebar): its blocks share the border
     final bordered = d.entries.any((x) => x.key.startsWith('border') && !RegExp(r'\bnone\b|^0').hasMatch(x.value));
     if (bordered && blocks.length > startAt) {
@@ -347,14 +356,25 @@ class ChapterReader {
         blocks[i].box ??= id;
       }
     }
-    // margins: on the first and last block this element produced (in em of the theme size)
+    // margins: on the first and last block this element produced (in em of the theme size). A wrapper's (anything
+    // but a paragraph) are kept apart too: the reader's own formatting drops the gaps between paragraphs, not the
+    // space a wrapper asks for round itself
     if (blocks.length > startAt) {
       blocks[startAt]
         ..marginTop = math.max(blocks[startAt].marginTop, mt)
         ..breakBefore = blocks[startAt].breakBefore || brk;
       blocks.last.marginBottom = math.max(blocks.last.marginBottom, mb);
+      if (e.name != 'p') {
+        blocks[startAt].wrapTop = math.max(blocks[startAt].wrapTop, mt);
+        blocks.last.wrapBottom = math.max(blocks.last.wrapBottom, mb);
+      } else {
+        blocks[startAt].paraTop = mt; // the paragraph's own (compared with the chapter's usual)
+        blocks.last.paraBottom = mb;
+      }
     }
   }
+
+  double _insetL = 0, _insetR = 0; // the left / right margins of the elements we're inside (em), added up
 
   static String _textOf(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
@@ -521,7 +541,25 @@ class Paginator {
   TextAlign _align = TextAlign.left;
   double _indent = 0;
 
+  // the chapter's usual paragraph spacing (the most common), which the reader's own formatting takes out
+  double _usualTop = 0, _usualBottom = 0;
+
+  void _findUsual(List<Block> blocks) {
+    final count = <(double, double), int>{};
+    for (final b in blocks) {
+      if (b is TextBlock && b.paragraph) {
+        final k = ((b.paraTop * 100).roundToDouble() / 100, (b.paraBottom * 100).roundToDouble() / 100);
+        count[k] = (count[k] ?? 0) + 1;
+      }
+    }
+    if (count.isEmpty) return;
+    final usual = count.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+    _usualTop = usual.$1;
+    _usualBottom = usual.$2;
+  }
+
   List<EpubPage> run(List<Block> blocks) {
+    _findUsual(blocks);
     // a chapter that is only a picture (a cover, a map, a plate): the whole page, centred, enlarged to fit
     if (blocks.length == 1 && blocks.single is ImageBlock) {
       final b = blocks.single as ImageBlock;
@@ -544,11 +582,19 @@ class Paginator {
         _indent = b.indent;
         final plain = b.paragraph && const {TextAlign.start, TextAlign.left, TextAlign.justify}.contains(b.align);
         if (!theme.bookFormatting && plain) {
-          // the reader's own: justified, indented after another paragraph, no gaps between paragraphs
+          // the reader's own: justified, indented after another paragraph, no gaps between paragraphs. Only the
+          // book's ordinary gap goes: spacing the book asks for specifically - round a wrapper, or on a paragraph
+          // that differs from the chapter's usual one (a scene break, the first paragraph after one) - is kept (user,
+          // 2026-10-06: "specific spacing requirements defined in the book are respected")
+          // each side on its own: one that differs from the usual is the book's own wish, kept; the usual one goes
+          final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
           _align = TextAlign.justify;
-          _indent = prev is TextBlock && prev.paragraph && !b.breakBefore ? 1.5 : 0;
-          mt = 0;
-          mb = 0;
+          _indent = prev is TextBlock && prev.paragraph && !b.breakBefore && !(ownTop && b.paraTop > _usualTop) &&
+                  !(prev.paraBottom - _usualBottom > 0.01)
+              ? 1.5
+              : 0; // no indent after a space the book asked for (a scene break), as in print
+          mt = ownTop ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
+          mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
       }
       final gap = math.max(_pendingGap, mt * theme.fontSize);

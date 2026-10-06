@@ -54,6 +54,13 @@ class _PageActionsRow extends StatelessWidget {
 Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
     _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side));
 
+/// Any reader panel in the comic reader's look (user, 2026-10-06: the EPUB reader's panels should look like these):
+/// a side sheet on a wide screen, a bottom sheet on a narrow one, [title] and Done, then [children] (rebuilt as
+/// the settings change).
+Future<void> showReaderPanelFrame(BuildContext context, {required String title,
+        required List<Widget> Function(BuildContext context, AppSettings s) children}) =>
+    _show(context, (side) => _Panel(title: title, side: side, groups: (s) => children(context, s)));
+
 const _sheetColour = Color(0xF2141416);
 const _sideWidth = 380.0;
 

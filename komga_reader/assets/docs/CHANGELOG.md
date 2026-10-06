@@ -9,6 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **EPUB: spacing the book asks for is respected.** Margins now nest as in a browser: a wrapper's indent (a quotation,
+  an epigraph, a letter...) carries down to the paragraphs inside it, and the space it asks for above and below
+  stays. With your own formatting (Book's formatting off), only a chapter's usual gap between paragraphs goes; a
+  paragraph that asks for more (a scene break, the first one after it) keeps it, and starts without an indent.
+- **EPUB: the reader's panels look like the comic reader's**: Text and page (Aa) and Contents slide in from the side
+  on a wide screen, with their title and Done, and come up from the bottom on a narrow one.
+
 **Fixed**
 - **EPUB: a crash on the PC after turning back and forth** (build 66, inside Flutter's engine - not repeatable since):
   chapters far from the page you're on are now let go of a moment later rather than at once, and two chapters either

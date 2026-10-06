@@ -188,6 +188,57 @@ void main() {
     expect(o[2].dx, 36, reason: 'a negative margin stops at the page margin');
   });
 
+  test('margins nest: a quotation or a wrapper indents the paragraphs inside it, wrappers inside wrappers add up',
+      () {
+    TextBlock para(List<Block> bs, String text) =>
+        bs.whereType<TextBlock>().firstWhere((b) => b.runs.map((r) => r.text).join().contains(text));
+    final bs = ChapterReader(StyleSheet()..add('div.a { margin-left: 2em } div.b { margin-left: 1em; margin-right: 3em }'),
+        (h) => h).read(parseXhtml('<body><p>Body.</p><blockquote><p>Quoted.</p></blockquote>'
+        '<div class="a"><p>Outer.</p><div class="b"><p>Inner.</p></div></div><p>After.</p></body>'));
+    expect((para(bs, 'Body.').left, para(bs, 'Body.').right), (0.0, 0.0));
+    expect((para(bs, 'Quoted.').left, para(bs, 'Quoted.').right), (1.5, 1.5), reason: "a blockquote's indent");
+    expect(para(bs, 'Outer.').left, 2);
+    expect((para(bs, 'Inner.').left, para(bs, 'Inner.').right), (3.0, 3.0), reason: '2 + 1 on the left, 3 on the right');
+    expect((para(bs, 'After.').left, para(bs, 'After.').right), (0.0, 0.0), reason: 'outside again: none');
+  });
+
+  test("Mistborn's epigraph (a wrapper with a right margin and space after): its paragraphs inset on the right, and "
+      'the space after it kept with the reader\'s own formatting on (only the gaps between paragraphs go)', () {
+    const css = '.chapterEpigraph { display: block; margin-top: 0%; margin-bottom: 10%; margin-right: 5% } '
+        '.chapterTitle { text-align: center }';
+    final src = '<body><div class="chapterEpigraph"><p><i>Sometimes, I worry.</i></p><p><i>When they see me.</i></p>'
+        '</div><h2 class="chapterTitle">PROLOGUE</h2><p>Ash fell from the sky.</p></body>';
+    final bs = ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src));
+    final epi = bs.whereType<TextBlock>().take(2).toList();
+    expect(epi.map((b) => b.right), [1.5, 1.5], reason: '5% of the page, as about 30 em wide');
+    expect(epi.last.wrapBottom, 3, reason: '10%: the space after the epigraph');
+    double headingY(bool bookFormatting) {
+      final page = Paginator(EpubTheme(bookFormatting: bookFormatting), const Size(600, 900), null).run(
+          ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
+      return page.textOrigins[2].dy; // the third run of lines: PROLOGUE
+    }
+    final plainSrc = src.replaceAll(' class="chapterEpigraph"', '');
+    final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(plainSrc))).single;
+    // the gap before PROLOGUE: the larger of the epigraph's space after (3 em = 57 px) and the heading's own top margin
+    // (~22 px, there in both) - so 35 px more than with no wrapper
+    expect(headingY(false) - page.textOrigins[2].dy, closeTo(57 - 0.83 * 1.4 * 19, 1),
+        reason: "own formatting keeps the epigraph's space after, not just the heading's own");
+  });
+
+  test("own formatting takes out only the book's usual gap between paragraphs: a paragraph that asks for its own "
+      'spacing (a scene break) keeps it, and starts without an indent', () {
+    const css = 'p { margin: 1em 0 } p.break { margin-top: 3em }';
+    final src = '<body><p>One.</p><p>Two.</p><p>Three.</p><p class="break">After the break.</p><p>Five.</p></body>';
+    final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
+    final o = page.textOrigins;
+    final line = o[1].dy - o[0].dy; // ordinary paragraphs: one line apart, no gap
+    expect(o[2].dy - o[1].dy, closeTo(line, 0.5), reason: 'the usual 1em gap is gone');
+    expect(o[3].dy - o[2].dy, closeTo(line + 3 * 19, 0.5), reason: "the break's own 3em above stays");
+    expect(o[4].dy - o[3].dy, closeTo(line, 0.5), reason: "the break's usual 1em below goes like the others'");
+  });
+
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';
