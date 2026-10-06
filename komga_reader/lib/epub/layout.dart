@@ -438,9 +438,46 @@ class _Laid {
   final int base; // the chapter position of the painter's first character
   final List<(Rect, String, String)> links = []; // painter coordinates, where to, the link's text
 
+  /// The lines, in order: their measures, and the text each holds. The ranges come from the engine's line boundaries,
+  /// never from asking which character is at a point (getPositionForOffset): that trips a bounds check inside
+  /// Flutter's engine on some lines, and its release build stops the app dead - the crashes on the tablet (SIGTRAP)
+  /// and the PC ("illegal instruction"), always while laying a chapter out (user, builds 66-71).
+  late final List<LineMetrics> metrics = tp.computeLineMetrics();
+  late final List<TextRange> lines = _lineRanges();
+
+  List<TextRange> _lineRanges() {
+    final out = <TextRange>[];
+    final n = tp.plainText.length;
+    var start = 0;
+    while (out.length < metrics.length && start <= n) {
+      // at a wrapped line's end the boundary is the next line's; after a line break it's still the line before
+      final r = tp.getLineBoundary(TextPosition(offset: start));
+      if (out.isNotEmpty && r.start <= out.last.start) {
+        start++; // past the line break
+        continue;
+      }
+      out.add(r);
+      start = r.end > start ? r.end : start + 1;
+    }
+    while (out.length < metrics.length) {
+      out.add(TextRange(start: n, end: n));
+    }
+    return out;
+  }
+
+  /// The line at painter height [y] (the last if [y] is past them).
+  int lineAt(double y) {
+    var top = 0.0;
+    for (var i = 0; i < metrics.length; i++) {
+      top += metrics[i].height;
+      if (y < top) return i;
+    }
+    return metrics.length - 1;
+  }
+
   /// The chapter position of the line at painter height [y] (soft hyphens and the indent placeholder don't count).
   int positionAt(double y) {
-    final pos = tp.getPositionForOffset(Offset(0, y + 1)).offset;
+    final pos = metrics.isEmpty ? 0 : lines[lineAt(y + 1)].start;
     final plain = tp.plainText;
     var extra = 0;
     for (var i = 0; i < pos && i < plain.length; i++) {
@@ -856,9 +893,9 @@ class Paginator {
     // lines that end where a word was broken (at a soft hyphen): a hyphen after them
     final plain = tp.plainText;
     final hyAscent = hyphen.computeDistanceToActualBaseline(TextBaseline.alphabetic);
-    for (final lm in tp.computeLineMetrics()) {
-      final pos = tp.getPositionForOffset(Offset(lm.left + lm.width - 1, lm.baseline - lm.ascent / 2));
-      final end = tp.getLineBoundary(pos).end;
+    for (var i = 0; i < laid.metrics.length; i++) {
+      final lm = laid.metrics[i];
+      final end = laid.lines[i].end;
       if (end > 0 && end <= plain.length && plain.codeUnitAt(end - 1) == 0xAD) {
         laid.marks.add(Offset(lm.left + lm.width, lm.baseline - hyAscent));
       }
@@ -972,7 +1009,7 @@ class Paginator {
     if (k >= nLines.length) return; // all of it beside the float: the next paragraph may wrap too
     if (_y < _floatBottom) _y = _floatBottom; // lines left but none fit beside it here: below it
     // the rest at full width, from the first character after line k
-    final cut = narrow.tp.getLineBoundary(narrow.tp.getPositionForOffset(Offset(1, h - nLines[k - 1].height / 2))).end;
+    final cut = narrow.lines[k - 1].end;
     final rest = _sliceRuns(b.runs, cut);
     final soft = narrow.tp.plainText.substring(0, math.min(cut, narrow.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, rest, width, indent: false, prepared: true, base: b.start + cut - soft), x);
@@ -996,7 +1033,7 @@ class Paginator {
     if (_y + h > _bottom + 0.5 && !_pageEmpty) _newPage();
     _place(first, Offset(x - hang, _y), 0, h);
     _y += h;
-    final cut = first.tp.getLineBoundary(first.tp.getPositionForOffset(Offset(1, h / 2))).end;
+    final cut = first.lines.first.end;
     final soft = first.tp.plainText.substring(0, math.min(cut, first.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, _sliceRuns(b.runs, cut), width, indent: false, prepared: true, base: b.start + cut - soft), x);
     _indent = indent;
