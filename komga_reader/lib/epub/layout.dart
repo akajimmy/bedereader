@@ -455,6 +455,10 @@ class EpubPage {
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
 
+  /// Where each picture is drawn on the page (tests).
+  @visibleForTesting
+  List<Rect> get imageRects => [for (final p in pieces) if (p is _ImagePiece) p.rect];
+
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
   bool _started = false;
@@ -518,6 +522,19 @@ class Paginator {
   double _indent = 0;
 
   List<EpubPage> run(List<Block> blocks) {
+    // a chapter that is only a picture (a cover, a map, a plate): the whole page, centred, enlarged to fit
+    if (blocks.length == 1 && blocks.single is ImageBlock) {
+      final b = blocks.single as ImageBlock;
+      final img = b.image;
+      if (img != null) {
+        final area = Rect.fromLTRB(theme.margins.left, theme.margins.top, size.width - theme.margins.right, _bottom);
+        final s = math.min(area.width / img.width, area.height / img.height);
+        final w = img.width * s, h = img.height * s;
+        pages.single._at(b.start);
+        pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w, height: h)));
+        return pages;
+      }
+    }
     Block? prev;
     for (final b in blocks) {
       if (b.breakBefore && !_pageEmpty) _newPage();

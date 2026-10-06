@@ -515,6 +515,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           Slider(
             value: value.clamp(0, max),
             max: max,
+            inactiveColor: Colors.white24,
             onChanged: (v) => setState(() {}),
             onChangeEnd: (v) {
               if (total != null) {

@@ -1,5 +1,6 @@
 // The EPUB layout engine (lib/epub/): hyphenation, the XHTML reader, the CSS cascade, the paginator.
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +8,13 @@ import 'package:komga_reader/epub/css.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
 import 'package:komga_reader/epub/layout.dart';
 import 'package:komga_reader/epub/xhtml.dart';
+
+/// A blank picture [w] x [h].
+Future<ui.Image> _image(int w, int h) {
+  final rec = ui.PictureRecorder();
+  Canvas(rec).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint());
+  return rec.endRecording().toImage(w, h);
+}
 
 void main() {
   late Hyphenators hy;
@@ -139,6 +147,19 @@ void main() {
     expect(r.blocks.last.start, greaterThan(t.start), reason: 'positions count on past the table');
     final pages = Paginator(const EpubTheme(), const Size(500, 700), hy.forLang('en')).run(r.blocks);
     expect(pages.length, 1);
+  });
+
+  test('a chapter that is only a picture (a cover) fills the page, centred - enlarged if small', () async {
+    final img = await _image(100, 150);
+    final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><div><img src="c.jpg"/></div></body>'));
+    (blocks.single as ImageBlock).image = img;
+    final page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single;
+    // the text area is 36..364 x 40..560 (328 x 520): a 2:3 picture is as wide as it (328 x 492), centred in it
+    final r = page.imageRects.single;
+    expect(r.width, closeTo(328, 0.01));
+    expect(r.height, closeTo(492, 0.01));
+    expect(r.center.dx, closeTo(200, 0.01));
+    expect(r.center.dy, closeTo(300, 0.01));
   });
 
   test('a bordered passage gets a border; the same text without one has none', () {
