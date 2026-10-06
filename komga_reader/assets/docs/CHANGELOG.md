@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUB: a hyphen missing where a word was split at the end of a paragraph's first line** ("power / ful"), in books
+  with a text size of their own (since build 72): the hyphen was drawn at the wrong size, just above the line, and
+  left out.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
