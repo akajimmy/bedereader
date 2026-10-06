@@ -136,8 +136,8 @@ void main() {
       (tester) async {
     final api = await open(tester, saved: _saved('${_base}OEBPS/c2.xhtml', 0.5));
     final l = await label(tester);
-    final page = int.parse(RegExp(r'^(\d+) /').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'/ (\d+)').firstMatch(l)!.group(1)!);
+    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(l)!.group(1)!);
+    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(l)!.group(1)!);
     expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
     await run(tester, const Duration(seconds: 3));
     await tester.pumpWidget(const SizedBox()); // closing the book
@@ -174,8 +174,8 @@ void main() {
     }
     await run(tester, const Duration(seconds: 2));
     final l = await label(tester);
-    final page = int.parse(RegExp(r'^(\d+) /').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'/ (\d+)').firstMatch(l)!.group(1)!);
+    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(l)!.group(1)!);
+    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(l)!.group(1)!);
     expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
   });
 

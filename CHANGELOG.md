@@ -10,8 +10,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **Changed**
-- **EPUB: the page in the chapter reads "Ch. 4 / 12"** over the slider's right end, so it isn't mistaken for the
-  book's page.
+- **EPUB: the numbers over the slider say what they are**: "Book · Pg. 112/342 · 33%" at the left, "Ch. 7 · Pg. 4/12"
+  at the right (the chapter numbered as the book's files run, so front matter counts).
 
 ## 1.2.0 - in development
 

@@ -94,7 +94,7 @@ void main() {
       final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
-      return int.parse(RegExp(r'/ (\d+)').firstMatch(t)!.group(1)!);
+      return int.parse(RegExp(r'/(\d+) ·').firstMatch(t)!.group(1)!);
     }
     await settle();
     final before = await total();
