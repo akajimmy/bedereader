@@ -54,10 +54,22 @@ class EpubKomga extends TestKomga {
   Future<Map<String, dynamic>?> epubProgression(String bookId) async => saved;
 
   @override
-  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async => puts.add(progression);
+  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
+    puts.add(progression);
+    saved = progression; // Komga keeps it: what the next look sees
+  }
+
+  bool completed = false; // the book's read state on Komga
 
   @override
-  Future<void> markRead(String bookId) async => marked.add(bookId);
+  Future<Map<String, dynamic>?> book(String id) async =>
+      {'id': id, 'readProgress': completed ? {'completed': true} : null};
+
+  @override
+  Future<void> markRead(String bookId) async {
+    marked.add(bookId);
+    completed = true;
+  }
 
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async => null; // the series' last
@@ -201,6 +213,69 @@ void main() {
     }
     expect(api.marked, ['B1']);
     expect(find.text('The End'), findsOneWidget);
+  });
+
+  // ---- the book moved on on another device while open here (as comics: user, 2026-10-05 - the tablet, left open on
+  // a book, saved its old place over the PC's)
+
+  Map<String, dynamic> elsewhere(String ch, double p, double total) => {
+        'locator': {'href': '${_base}OEBPS/$ch.xhtml', 'type': 'application/xhtml+xml',
+          'locations': {'progression': p, 'totalProgression': total}},
+      };
+
+  Future<void> turnAndSettle(WidgetTester tester) async {
+    await tester.tapAt(const Offset(750, 600));
+    await run(tester, const Duration(seconds: 2));
+  }
+
+  testWidgets("this reader's own saves never ask; another device's place does: Go there goes, and saves nothing over "
+      'it', (tester) async {
+    final api = await open(tester);
+    await turnAndSettle(tester);
+    await turnAndSettle(tester);
+    expect(api.puts.length, 2, reason: 'two turns, two saves');
+    expect(find.text('Read on another device'), findsNothing, reason: "its own saves aren't another device's");
+    // the PC reads on into chapter two
+    api.saved = elsewhere('c2', 0.8, 0.9);
+    await turnAndSettle(tester);
+    expect(find.text('Read on another device'), findsOneWidget);
+    expect(find.text('On another device this book is at 90%.'), findsOneWidget);
+    await tester.tap(find.text('Go to 90%'));
+    await run(tester, const Duration(seconds: 3));
+    expect(api.puts.length, 2, reason: "the place it was going to save isn't saved over the other device's");
+    final l = await label(tester);
+    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(l)!.group(1)!);
+    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(l)!.group(1)!);
+    expect(page, greaterThan(total * 0.8), reason: 'at the other device\'s place: $l');
+    await tester.pumpWidget(const SizedBox()); // closing there: nothing saved, theirs stands
+    await run(tester, const Duration(milliseconds: 300));
+    expect(api.puts.length, 2);
+  });
+
+  testWidgets('Stay: this reader\'s place is saved, and the same change isn\'t asked about again', (tester) async {
+    final api = await open(tester);
+    api.saved = elsewhere('c2', 0.5, 0.75);
+    await turnAndSettle(tester);
+    expect(find.text('Read on another device'), findsOneWidget);
+    await tester.tap(find.textContaining('Stay at'));
+    await run(tester, const Duration(seconds: 2));
+    expect(api.puts.length, 1, reason: 'stayed: its place saved');
+    expect(((api.puts.single['locator'] as Map)['href'] as String), endsWith('c1.xhtml'));
+    await turnAndSettle(tester);
+    expect(find.text('Read on another device'), findsNothing);
+    expect(api.puts.length, 2);
+  });
+
+  testWidgets('finished on another device: asked; closing without an answer saves nothing over it', (tester) async {
+    final api = await open(tester);
+    api.completed = true; // marked read on the PC
+    await turnAndSettle(tester);
+    expect(find.text('Finished on another device'), findsOneWidget);
+    expect(find.text('Go to the end'), findsOneWidget);
+    expect(api.puts, isEmpty);
+    await tester.pumpWidget(const SizedBox()); // the book closed with the question up
+    await run(tester, const Duration(milliseconds: 300));
+    expect(api.puts, isEmpty, reason: 'closing never saves over another device\'s place');
   });
 }
 

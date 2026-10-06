@@ -118,6 +118,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     if (readerTiming) SchedulerBinding.instance.addTimingsCallback(_onFrames); // a measuring build only
+    // back in the app: has the book moved on on another device meanwhile?
+    if (_online) _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
     _awake();
     _open();
   }
@@ -152,7 +154,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       t.cancel();
     }
     if (_screenHeld) keepScreenOn(false);
-    _saveNow(); // closing: the place goes now, not after the settle time
+    _life?.dispose();
+    _saveNow(ask: false); // closing: the place goes now, not after the settle time (not over another device's)
     _book?.removeListener(_onBook);
     _book?.dispose();
     _pc.dispose();
@@ -203,6 +206,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         } catch (_) {
           // Komga can't say: the start
         }
+        try {
+          _known = await _progress.place(); // what another device's change is told from
+        } catch (_) {
+          // learnt at the first save instead
+        }
       }
       if (!mounted) return;
       // the book's own text size first (a book set smaller or larger all through shows at the reader's size)
@@ -245,7 +253,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
   }
 
-  void _saveNow() {
+  /// [ask]: false while closing (no question then): if another device has moved the book on meanwhile, nothing is
+  /// saved over it.
+  void _saveNow({bool ask = true}) {
     _saveTimer?.cancel();
     final b = _book;
     if (b == null || !_online || _end || !_moved) return;
@@ -254,17 +264,119 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final length = b.lengthOf(_chapter);
     if (length == 0) return;
     _saved = at;
-    // a failed save is left: the next turn saves the newer place anyway (as with comics)
-    unawaited(_progress
-        .save(b.info.spine[_chapter], at.position / length, b.progression(at))
-        .catchError((Object _) {}));
+    final path = b.info.spine[_chapter], progression = at.position / length, total = b.progression(at);
+    // one at a time, in order; one queued before the reader went to another device's place is dropped (as comics)
+    final went = _wentElsewhere;
+    _saves = _saves.then((_) => went == _wentElsewhere ? _save(path, progression, total, ask: ask) : null);
+  }
+
+  // ---- the book moved on on another device while it was open here (as the comic reader does with pages - user,
+  // 2026-10-05: read on the PC, then the tablet, left open on that book, saved its old page over it). Before a save,
+  // and on coming back to the app, the reader asks Komga where the book is; if that isn't what this reader last
+  // loaded, saved or accepted, another device moved it, and it asks: Stay here / Go there.
+
+  EpubKomgaPlace? _known; // Komga's place as this reader last loaded, saved or accepted (null: not known yet)
+  Future<void> _saves = Future.value();
+  Future<bool>? _question; // the question on screen: a second asker waits for its answer
+  int _wentElsewhere = 0; // times the reader went to another device's place (saves queued before: dropped)
+  AppLifecycleListener? _life;
+
+  /// Komga's place if another device moved the book on; null if not, or if Komga can't say (the save goes ahead).
+  Future<EpubKomgaPlace?> _movedElsewhere() async {
+    if (!_online || Connection.instance.offline) return null;
+    try {
+      final now = await _progress.place();
+      final known = _known;
+      if (known == null) {
+        _known = now; // nothing to compare with yet: from now on
+        return null;
+      }
+      return now.sameAs(known) ? null : now;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _save(String path, double progression, double total, {required bool ask}) async {
+    final moved = await _movedElsewhere();
+    if (moved != null) {
+      if (!ask || !mounted) return; // closing: theirs stands
+      if (!await _askAboutElsewhere(moved)) return; // gone to theirs: nothing of this one's to save
+    }
+    // a failed save is left: the next turn saves the newer place anyway (as with comics). Komga's place afterwards is
+    // this reader's own - read back, as Komga may change the book's read state with it
+    try {
+      await _progress.save(path, progression, total);
+      _known = await _progress.place();
+    } catch (_) {}
+  }
+
+  /// Back in the app with the book open: has it moved on elsewhere meanwhile? In line with the saves.
+  Future<void> _checkElsewhere() {
+    _saves = _saves.then((_) async {
+      if (!mounted || _book == null || _question != null) return;
+      final moved = await _movedElsewhere();
+      if (moved != null && mounted) await _askAboutElsewhere(moved);
+    });
+    return _saves;
+  }
+
+  /// The question. True: stay here (this reader's place is saved next); false: went to the other device's. Asked
+  /// once at a time: a second asker waits for the answer.
+  Future<bool> _askAboutElsewhere(EpubKomgaPlace moved) =>
+      _question ??= _ask(moved).whenComplete(() => _question = null);
+
+  Future<bool> _ask(EpubKomgaPlace moved) async {
+    final b = _book!;
+    final here = (b.progression(b.positionOf(_chapter, _page)) * 100).round();
+    final chapter = moved.path == null ? null : b.chapterOf(moved.path!);
+    final there = moved.total == null ? null : (moved.total! * 100).round();
+    final (title, text, go) = moved.finished
+        ? ('Finished on another device', 'This book was read to the end on another device.', 'Go to the end')
+        : moved.path == null || chapter == null
+            ? ('Started over on another device', 'This book was marked unread on another device.', 'Go to the start')
+            : ('Read on another device',
+                there == null ? 'This book was read further on another device.' : 'On another device this book is at $there%.',
+                there == null ? 'Go there' : 'Go to $there%');
+    final stay = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(title),
+        content: Text(text),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true), child: Text('Stay at $here%')),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(go)),
+        ],
+      ),
+    );
+    _known = moved; // answered: asked again only if it moves again
+    if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's place goes next
+    _saveTimer?.cancel();
+    _wentElsewhere++;
+    _moved = false; // the other device's place stands: going there isn't a turn of this reader's
+    _saved = null;
+    if (moved.finished) {
+      await _show(b.chapterCount - 1, 1 << 30); // the last page; a turn on is the end card
+    } else if (chapter == null) {
+      await _show(0, 0);
+    } else {
+      await _show(chapter, 0, fraction: moved.progression);
+    }
+    return false;
   }
 
   /// The end card: the book is read.
   void _reachedEnd() {
     if (_markedRead || !_online) return;
     _markedRead = true;
-    unawaited(widget.api.markRead(widget.book['id'] as String).catchError((Object _) {}));
+    final id = widget.book['id'] as String;
+    // in line with the saves; Komga's place read back after (its read state is this reader's doing)
+    _saves = _saves.then((_) async {
+      try {
+        await widget.api.markRead(id);
+        _known = await _progress.place();
+      } catch (_) {}
+    });
   }
 
   // ---- layout
@@ -985,6 +1097,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       if (markRead) {
         _moved = false; // read: closing doesn't save a place over it
         await widget.api.markRead(id);
+        _known = null; // this reader's doing: not another device's (learnt afresh at the next look)
       } else {
         _saveNow();
       }
@@ -1026,6 +1139,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final read = _completed;
     try {
       read ? await widget.api.markUnread(id) : await widget.api.markRead(id);
+      _known = null; // this reader's doing: not another device's (learnt afresh at the next look)
       _saveTimer?.cancel();
       _moved = false; // the mark stands: not undone by a save on closing
       _markedRead = !read;
