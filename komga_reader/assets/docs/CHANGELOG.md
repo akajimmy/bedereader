@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 72 - 2026-10-06
+
 **Fixed**
 - **EPUB: the app crashing while reading** (on the tablet and the PC, since EPUBs came in): working out where each
   line of text ends, the reader asked Flutter's engine which letter sits at a point on the line. On some lines that
@@ -39,10 +45,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   (at its own size) and title, with Next book and Close. The remote works on it: it starts on Next book, Up / Down
   move between the two, OK presses, Right goes on to the next book (or closes after the series' last), Left goes
   back to the last page.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 71 - 2026-10-06
 
