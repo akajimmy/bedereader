@@ -1,0 +1,111 @@
+// The EPUB settings (EpubPrefs): saved form, synced through Komga's client settings with the reading defaults, the
+// reader and Settings > Books using them.
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/screens/epub_reader.dart';
+import 'package:komga_reader/settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'epub_reader_test.dart' show MemorySource, twoChapters;
+import 'support/client_settings.dart';
+import 'support/no_network.dart';
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AppSettings.instance.setDisplay(const DisplayPrefs());
+  });
+  tearDown(() => AppSettings.instance.clearAccount());
+
+  test('saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, my own '
+      'formatting, slide; a size out of range gets the default', () {
+    const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
+        colours: EpubColours.sepia, bookFormatting: true, turn: EpubTurn.none,
+        position: EpubPositionStyle.chapterPage);
+    expect(EpubPrefs.fromJson(changed.toJson()), changed);
+    final d = EpubPrefs.fromJson(const {});
+    expect((d.font, d.colours, d.bookFormatting, d.turn, d.size), (EpubFont.literata, EpubColours.dark, false,
+        EpubTurn.slide, 19.0));
+    expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
+  });
+
+  Future<void> wait(WidgetTester tester, Duration d) async {
+    for (var t = Duration.zero; t < d; t += const Duration(milliseconds: 250)) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pump(const Duration(milliseconds: 250));
+    }
+  }
+
+  testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
+      (tester) async {
+    final api = noNetwork(() => SettingsServer({
+      AppSettings.komgaKey: jsonEncode({'v': 1, 'default': const ReaderPrefs().toJson(), 'series': {},
+          'epub': const EpubPrefs(size: 24).toJson()}),
+    }));
+    await tester.runAsync(() => AppSettings.instance.load(api));
+    expect(AppSettings.instance.epub.size, 24, reason: "Komga's copy");
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(font: EpubFont.lora));
+    await wait(tester, const Duration(seconds: 3));
+    final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
+    expect(EpubPrefs.fromJson(Map<String, dynamic>.from(sent['epub'] as Map)).font, EpubFont.lora);
+    expect(sent['default'], isNotNull, reason: 'the reading defaults stay');
+  });
+
+  testWidgets("a change made while Komga can't be reached stays (Komga's older copy doesn't replace it) and goes "
+      'once it can', (tester) async {
+    final api = noNetwork(() => SettingsServer({
+      AppSettings.komgaKey: jsonEncode({'v': 1, 'series': {}, 'epub': const EpubPrefs(size: 16).toJson()}),
+    }));
+    await tester.runAsync(() => AppSettings.instance.load(api));
+    api.down = true;
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(colours: EpubColours.sepia));
+    await wait(tester, const Duration(seconds: 3));
+    api.down = false;
+    // Home reloads: Komga's copy asked for again (on the test's clock, so the send it schedules runs here)
+    unawaited(AppSettings.instance.load(api));
+    await wait(tester, const Duration(milliseconds: 500));
+    expect(AppSettings.instance.epub.colours, EpubColours.sepia, reason: "this device's unsent change stays");
+    await wait(tester, const Duration(seconds: 3));
+    final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
+    expect((sent['epub'] as Map)['colours'], 'sepia', reason: 'puts ${api.puts} gets ${api.gets} '
+        'error ${AppSettings.instance.syncError}');
+  });
+
+  testWidgets('the reader follows the settings: a bigger size lays the book out again (more pages), the theme '
+      'colours the page', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final MemorySource source = twoChapters();
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source)));
+    Future<void> settle() async {
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+    }
+    Future<int> total() async {
+      await tester.tapAt(const Offset(400, 600));
+      await tester.pump();
+      final t = tester.widgetList<Text>(find.textContaining(RegExp(r'^Page '))).single.data!;
+      await tester.tapAt(const Offset(400, 600));
+      await tester.pump();
+      return int.parse(RegExp(r'of (\d+)').firstMatch(t)!.group(1)!);
+    }
+    await settle();
+    final before = await total();
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(size: 28, colours: EpubColours.light));
+    await settle();
+    expect(await total(), greaterThan(before));
+    expect(tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor, EpubColours.light.background);
+    await tester.pumpWidget(const SizedBox()); // closed: the background counting stops
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+  });
+}

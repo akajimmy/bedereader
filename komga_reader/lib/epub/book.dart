@@ -223,6 +223,7 @@ class EpubBook extends ChangeNotifier {
 
   @override
   void dispose() {
+    _generation++; // the background counting stops (it checks between chapters)
     for (final c in _chapters) {
       c.paginator?.dispose();
       c.content?.dispose();

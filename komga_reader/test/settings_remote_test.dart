@@ -31,6 +31,7 @@ class TwoLibraries extends StatusServer {
 String label(SettingsPage p) => switch (p) {
       SettingsPage.server => 'Server',
       SettingsPage.defaults => 'Reading defaults',
+      SettingsPage.books => 'Books (EPUB)',
       SettingsPage.reader => 'Reader',
       SettingsPage.keys => 'Remote and keys',
       SettingsPage.display => 'Display',
