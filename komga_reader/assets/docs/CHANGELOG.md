@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 71 - 2026-10-06
+
 **Changed**
 - **EPUB: your text size is the book's text size.** A book that sets its whole text smaller or larger (70 of the 339
   in the library: most at 85%, some Discworld books at 110-120%) no longer overrides the size you picked: its main
@@ -25,10 +31,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   to the new one. It now stays on the page picked while the reader goes there.
 - **EPUB: right-aligned and centred text lined up on its own longest line**, not the page: Homeland's list of the
   author's other books came out as ragged groups from the left. They now line up on the text column.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 70 - 2026-10-06
 
