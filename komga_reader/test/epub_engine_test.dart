@@ -258,6 +258,29 @@ void main() {
     expect(second(0.5) - second(0), closeTo(9.5, 0.01));
   });
 
+  test("Exile's page (user, build 73): a text-indent in pt is a small indent, not a third of the line; a border with "
+      'width 0 draws nothing; a book bold all through shows in normal weight, its headings still bold', () {
+    List<Block> read(String css, String html) => ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html));
+    final words = List.filled(30, 'word').join(' ');
+    // 8pt: 10.67 px - about two thirds of the book's em (it came out as 10.67 em)
+    final indented = read('p { text-indent: 8pt }', '<body><p>$words</p></body>').single as TextBlock;
+    expect(indented.indent, closeTo(10.67 / 16, 0.01));
+
+    expect(showsBorder({'border-style': 'solid', 'border-width': '0', 'border-color': 'rgb(0, 0, 0)'}), isFalse);
+    expect(showsBorder({'border-color': 'black'}), isFalse, reason: 'no style: no border');
+    expect(showsBorder({'border-style': 'solid'}), isTrue, reason: 'no width given: medium');
+    expect(showsBorder({'border': '1px solid black'}), isTrue);
+    expect(showsBorder({'border': 'none'}), isFalse);
+    expect(showsBorder({'border-top': '2px dotted grey'}), isTrue, reason: 'a side of its own');
+    final boxed = read('.bs { border-style: solid; border-width: 0 }', '<body><div class="bs"><p>$words</p></div></body>');
+    expect((boxed.single as TextBlock).box, isNull, reason: 'no box round it');
+
+    final allBold = read('.bs2 { font-weight: bold } h1 { font-size: 1.5em }',
+        '<body><h1>Chapter</h1><div class="bs2"><p>$words</p><p>$words</p></div></body>');
+    expect(bookTextBold([allBold]), isTrue);
+    expect(bookTextBold([read('', '<body><p>$words <b>and bold</b></p></body>')]), isFalse);
+  });
+
   test('a bordered passage gets a border; the same text without one has none', () {
     int pieces(String css) {
       final blocks = ChapterReader(StyleSheet()..add(css), (h) => h)

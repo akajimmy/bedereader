@@ -15,6 +15,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   app now takes the change in its stride and stays where you were.
 - **Switching Enhance on while reading made the page vanish** until the enhanced picture was ready. The page stays
   on screen meanwhile (a page appearing still waits for it, so there's no flash of the unprocessed page).
+- **EPUB: some books came out boxed, bold and oddly indented** (Exile, for one): a border the book sets to width 0
+  was drawn as a box round the text; a first-line indent given in points was taken as about 16 times too big (the
+  first line started a third of the way across); and a book that sets all its text bold now shows at normal weight
+  (as with a book-wide text size: the book's overall setting doesn't override yours; headings keep their bold).
 
 ## 1.2.0 - in development
 

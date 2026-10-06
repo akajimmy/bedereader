@@ -76,6 +76,9 @@ class EpubBook extends ChangeNotifier {
   /// reader's size, the book's other sizes in proportion.
   double textSize = 1;
 
+  /// Whether the book's text is bold all through ([bookTextBold]), found with [textSize].
+  bool textBold = false;
+
   /// Finds [textSize] from up to [samples] chapters spread through the book (the front and back matter left out where
   /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped.
   Future<void> measureTextSize({int samples = 5}) async {
@@ -95,6 +98,7 @@ class EpubBook extends ChangeNotifier {
       }
     }
     textSize = bookTextSize(sampled);
+    textBold = bookTextBold(sampled);
     EpubTrace.instance.log('book text size $textSize (from chapters $picks)');
   }
 
@@ -164,7 +168,7 @@ class EpubBook extends ChangeNotifier {
     c.length = content.length;
     if (gen != _generation) return const [];
     final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null,
-        baseSize: textSize);
+        baseSize: textSize, baseBold: textBold);
     final pages = p.run(content.blocks);
     if (gen != _generation) {
       p.dispose(); // never shown
