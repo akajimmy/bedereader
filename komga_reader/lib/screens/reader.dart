@@ -38,6 +38,10 @@ import 'actions.dart';
 /// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
 /// goes straight to Komga (no local copy).
 class ReaderScreen extends StatefulWidget {
+  /// Times the reader has been built (debug builds only; tests).
+  @visibleForTesting
+  static int debugBuilds = 0;
+
   const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false});
   final Komga api;
   final dynamic book;
@@ -157,6 +161,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _awakeTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
+    _curlShader?.dispose();
+    _curlMoved.dispose();
     _idle?.complete(); // nothing left waiting
     Connection.instance.readerClosed();
     AppSettings.instance.readerClosed(); // the screen follows the system again
@@ -591,6 +597,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   late final AnimationController _curlAnim =
       AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
   _Curl? _curl;
+  // the curl moving (each animation tick, each drag move) repaints its own layer only - it rebuilt the whole reader
+  // ~23 times a turn, with a new shader each paint (code review 2026-10-05, #38)
+  final _curlMoved = ValueNotifier<int>(0);
+  ui.FragmentShader? _curlShader;
   Size _area = Size.zero;
   Offset? _dragStart;
   final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
@@ -686,7 +696,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void _onCurlTick() {
     final c = _curl;
     if (c == null) return;
-    setState(() => c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!);
+    c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!;
+    _curlMoved.value++;
   }
 
   /// A curl is playing out after the finger let go (turning, or springing back): taps and keys wait for it (user,
@@ -749,9 +760,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
     // a diagonal drag tilts the page by half its height change (PageCurl.pinned keeps the spine down)
     final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy) * 0.5;
-    setState(() {
-      c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
-    });
+    c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
+    _curlMoved.value++;
   }
 
   void _curlDragEnd(DragEndDetails d) {
@@ -1136,6 +1146,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
+    assert(() {
+      ReaderScreen.debugBuilds++;
+      return true;
+    }());
     return PopScope(
       // Back (tablet or remote) closes the controls first, then the book
       canPop: !_menu,
@@ -1218,8 +1232,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         child: Stack(fit: StackFit.expand, children: [
                           if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
                           if (!_curl!.pending)
-                            CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: _curl!.sheet,
-                                page: _curl!.page, grab: _curl!.grab, finger: _curl!.finger, mirror: _rtl)),
+                            CustomPaint(painter: _CurlLayer(_curl!, mirror: _rtl, moved: _curlMoved,
+                                shader: _curlShader ??= PageCurl.loaded!.fragmentShader())),
                         ]),
                       ),
                     ),
@@ -2083,6 +2097,29 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class _NoPages implements Exception {}
+
+/// What a test can see of the curl being drawn.
+@visibleForTesting
+abstract interface class CurlLayer {
+  bool get mirror;
+}
+
+/// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
+class _CurlLayer extends CustomPainter implements CurlLayer {
+  _CurlLayer(this.curl, {required this.mirror, required Listenable moved, required this.shader}) : super(repaint: moved);
+  final _Curl curl;
+  @override
+  final bool mirror;
+  final ui.FragmentShader shader;
+
+  @override
+  void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
+          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader)
+      .paint(canvas, size);
+
+  @override
+  bool shouldRepaint(_CurlLayer o) => !identical(o.curl, curl) || o.mirror != mirror;
+}
 
 /// A page turn in progress (3D page curl).
 class _Curl {

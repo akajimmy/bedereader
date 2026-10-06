@@ -774,9 +774,9 @@ void main() {
         await g.moveTo(Offset(size.width * 0.1 + i * size.width * 0.04, y));
         await tester.pump(const Duration(milliseconds: 50));
       }
-      final painter = find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter);
+      final painter = find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CurlLayer);
       expect(painter, findsOneWidget, reason: 'the page follows the finger');
-      expect((tester.widget<CustomPaint>(painter).painter! as PageCurlPainter).mirror, isTrue);
+      expect((tester.widget<CustomPaint>(painter).painter! as CurlLayer).mirror, isTrue);
       await g.up();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
@@ -784,6 +784,34 @@ void main() {
       expect(page(tester), 1.0, reason: 'turned forward');
       await tester.pump(const Duration(seconds: 2));
       expect(api.saves, [2]);
+    });
+
+    testWidgets('a page curl follows the finger without rebuilding the whole reader each move (code review 2026-10-05, '
+        '#38: ~23 rebuilds a turn, one per drag move)', (tester) async {
+      final s = AppSettings.instance;
+      s.setDisplay(s.display.copyWith(pageTurn: PageTurn.curl));
+      addTearDown(() => s.setDisplay(s.display.copyWith(pageTurn: PageTurn.swipe)));
+      final api = noNetwork(() => BookServer());
+      await open(tester, api);
+      await tester.pump();
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height / 2;
+      // (this book reads right to left: a drag to the right turns forward)
+      final g = await tester.startGesture(Offset(size.width * 0.1, y));
+      await g.moveTo(Offset(size.width * 0.13, y)); // the drag is taken up...
+      await tester.pump();
+      await g.moveTo(Offset(size.width * 0.15, y)); // ...and the curl starts
+      await tester.pump();
+      expect(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CurlLayer), findsOneWidget);
+      final before = ReaderScreen.debugBuilds;
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(Offset(size.width * (0.15 + i * 0.03), y));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(ReaderScreen.debugBuilds - before, lessThan(5), reason: '20 moves: the curl layer repaints, the reader stays');
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(seconds: 2));
     });
 
     testWidgets('fit height, a spread wider than the screen: dragging on past its edge towards the start of the book '
