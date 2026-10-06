@@ -262,7 +262,7 @@ void main() {
     await tester.pump();
     expect(find.byKey(const ValueKey('epub-corner')), findsNothing, reason: 'not under the controls');
     expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-title'))).data, 'One');
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, matches(RegExp(r'^1 / \d+$')));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, matches(RegExp(r'^Ch\. 1 / \d+$')));
     expect(tester.widget<Text>(find.byKey(const ValueKey('epub-book-position'))).data,
         matches(RegExp(r'^1 / \d+ · \d+%$')));
     await tester.tapAt(const Offset(400, 600));
