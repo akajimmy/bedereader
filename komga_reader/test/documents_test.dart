@@ -84,7 +84,9 @@ Text after.
     final rebuild = ValueNotifier(0);
     await tester.pumpWidget(ValueListenableBuilder(valueListenable: rebuild, builder: (_, n, __) => MaterialApp(
         theme: ThemeData(visualDensity: n.isEven ? VisualDensity.standard : VisualDensity.compact),
-        home: DocumentScreen.whatsNew())));
+        // a new screen widget each time, as a rebuild hands down (a const one would be skipped)
+        // ignore: prefer_const_constructors
+        home: DocumentScreen(title: "What's new", asset: 'assets/docs/CHANGELOG.md'))));
     await tester.pumpAndSettle();
     final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
     scroll.jumpTo(1500);
