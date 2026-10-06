@@ -37,6 +37,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   writes only that. Moved over by itself on the first start, the old `index.json` kept as `index.v1.json`.
 - **A page read while the background refresh was running could be put back to the page before**, and the next sync
   then reported a clash that wasn't one.
+- **Comic reader, small things:** a failed "mark as read" on the way to the next book now says so (it said "Couldn't
+  find the next book"); Next book no longer asks Komga again for the book the end card already showed (with "hide
+  read" that could be hundreds of requests); the page curl no longer uses the last book's page shapes for the first
+  turn of the next; a page that was opened at its end (turning back) no longer opens at its end later.
 
 ## 1.2.0 - in development
 
