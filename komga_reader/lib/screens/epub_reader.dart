@@ -127,7 +127,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   void _onFrames(List<ui.FrameTiming> timings) {
     for (final t in timings) {
       final line = _frameStats.add(t.buildDuration.inMicroseconds / 1000, t.rasterDuration.inMicroseconds / 1000,
-          DateTime.fromMicrosecondsSinceEpoch(t.timestampInMicroseconds(ui.FramePhase.rasterFinishWallTime)));
+          DateTime.fromMicrosecondsSinceEpoch(t.timestampInMicroseconds(ui.FramePhase.rasterFinishWallTime)),
+          vsyncUs: t.timestampInMicroseconds(ui.FramePhase.vsyncStart));
       if (line != null) EpubTrace.instance.log(line);
     }
   }
@@ -401,6 +402,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   void _onPageChanged(int i) {
+    // timed: it runs mid-turn, where tap turns missed a refresh (tablet, build 77) - logged when it takes 2 ms or more
+    final clock = Stopwatch()..start();
+    _pageChanged(i);
+    final ms = clock.elapsedMicroseconds / 1000;
+    if (ms >= 2) EpubTrace.instance.log('page change took ${ms.toStringAsFixed(1)} ms');
+  }
+
+  void _pageChanged(int i) {
     final b = _book!;
     if (!_ownJump) _lastTurn = DateTime.now(); // (swipes too)
     EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');

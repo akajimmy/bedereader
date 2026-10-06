@@ -17,6 +17,7 @@ class EpubTrace {
   static const keep = 1000; // lines (frame timings add one a second while pages move)
 
   File? _file;
+  IOSink? _sink; // appends on Dart's I/O thread: the UI thread never waits on the storage (see [log])
   bool _tried = false;
   final List<String> _pending = []; // before the file is known
 
@@ -35,6 +36,7 @@ class EpubTrace {
         if (lines.length > keep) await f.writeAsString('${lines.sublist(lines.length - keep).join('\n')}\n');
       }
       _file = f;
+      _sink = f.openWrite(mode: FileMode.append);
       for (final l in _pending) {
         _write(l);
       }
@@ -44,8 +46,11 @@ class EpubTrace {
     }
   }
 
-  /// One line, written now (flushed, so it's there even if the app is killed the next moment). Also to the system log
-  /// (Android's logcat, as "epub: ..."), which can be read over adb without the app's own files.
+  /// One line, handed to the file at once and written by Dart's I/O thread moments later - not on the UI thread, where
+  /// a slow write to the storage could hold up a frame (tablet, build 77: one missed refresh in the middle of each
+  /// tap's turn, as the page changed and its line was written; no frame itself was slow). A crash can lose the last
+  /// few milliseconds of lines. Also to the system log (Android's logcat, as "epub: ..."), which can be read over adb
+  /// without the app's own files.
   void log(String what) {
     final line = '${DateTime.now().toIso8601String()} $what';
     if (!kIsWeb && toConsole) debugPrint('epub: $what');
@@ -58,8 +63,7 @@ class EpubTrace {
 
   void _write(String line) {
     try {
-      // not flushed to the disk each line (a few times a page turn): written, it outlives the app crashing
-      _file!.writeAsStringSync('$line\n', mode: FileMode.append);
+      _sink!.writeln(line);
     } catch (_) {
       // a full disk, a locked file: the reader carries on
     }
@@ -68,8 +72,24 @@ class EpubTrace {
   /// Whether lines go to the system log too (off in tests: they'd fill the test output).
   static bool toConsole = kIsWeb || !Platform.environment.containsKey('FLUTTER_TEST');
 
+  /// Everything logged so far is in the file (tests).
+  Future<void> flush() async {
+    try {
+      await _sink?.flush();
+    } catch (_) {
+      // as with a write
+    }
+  }
+
   @visibleForTesting
-  void reset() {
+  Future<void> reset() async {
+    final s = _sink;
+    _sink = null;
+    try {
+      await s?.close();
+    } catch (_) {
+      // nothing to close
+    }
     _file = null;
     _tried = false;
     _pending.clear();
@@ -87,12 +107,25 @@ class FrameStats {
 
   final List<double> _build = [], _raster = [];
   DateTime? _since;
+  int _missed = 0; // refreshes with no new frame while frames were coming (a late start, not a slow frame)
+  int? _lastVsync; // the previous frame's start (µs)
 
   /// Adds one frame's build and raster times (ms) seen at [now]; returns the summary line when a window is over.
-  String? add(double buildMs, double rasterMs, DateTime now) {
+  /// [vsyncUs]: when the frame started (µs): a gap of 2-5 refreshes since the frame before, while pages move, is a
+  /// frame that started late - missed refreshes no frame time shows (tablet, build 77: one a tap turn, every frame
+  /// itself fast). Longer gaps are pages at rest.
+  String? add(double buildMs, double rasterMs, DateTime now, {int? vsyncUs}) {
     _since ??= now;
     _build.add(buildMs);
     _raster.add(rasterMs);
+    final last = _lastVsync;
+    if (vsyncUs != null) {
+      if (last != null) {
+        final refreshes = ((vsyncUs - last) / 1000 / budgetMs).round();
+        if (refreshes >= 2 && refreshes <= 5) _missed += refreshes - 1;
+      }
+      _lastVsync = vsyncUs;
+    }
     return now.difference(_since!) >= window ? flush() : null;
   }
 
@@ -106,9 +139,10 @@ class FrameStats {
     }
     final slowBuild = _build.where((v) => v > budgetMs).length, slowRaster = _raster.where((v) => v > budgetMs).length;
     final line = 'frames ${_build.length}: build ${part(_build)}, draw ${part(_raster)}; over 16.7 ms: build '
-        '$slowBuild, draw $slowRaster';
+        '$slowBuild, draw $slowRaster; missed refreshes $_missed';
     _build.clear();
     _raster.clear();
+    _missed = 0;
     _since = null;
     return line;
   }
