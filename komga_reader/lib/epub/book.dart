@@ -200,7 +200,9 @@ class EpubBook extends ChangeNotifier {
 
   /// Counts every chapter's pages (in the background after the book opens): lays each out and lets it go again
   /// unless it's near [current]. Stops if the layout changes; [progress] after each chapter.
-  Future<void> countAll({required int Function() current}) async {
+  /// [busy]: the reader is in the middle of turning pages - counting waits (laying a chapter out holds the screen
+  /// up for a moment, and turns stuttered while a big book was being counted - user, 2026-10-06).
+  Future<void> countAll({required int Function() current, bool Function()? busy}) async {
     final gen = _generation;
     for (var i = 0; i < _chapters.length; i++) {
       if (gen != _generation) return;
@@ -214,8 +216,21 @@ class EpubBook extends ChangeNotifier {
       if (gen != _generation) return;
       final cur = current();
       if ((i - cur).abs() > around) keepAround(cur);
-      await Future<void>.delayed(Duration.zero); // let the reader breathe between chapters
+      // a breath between chapters, and none at all while pages are being turned
+      await _rest(const Duration(milliseconds: 16));
+      for (var waits = 0; busy != null && busy() && waits < 50; waits++) {
+        await _rest(const Duration(milliseconds: 100));
+        if (gen != _generation) return;
+      }
     }
+  }
+
+  // counting's pause: cancelled when the book closes (the counting then just stops where it was)
+  Timer? _pause;
+  Future<void> _rest(Duration d) {
+    final done = Completer<void>();
+    _pause = Timer(d, done.complete);
+    return done.future;
   }
 
   /// Every chapter counted: the whole book's page numbers are known.
@@ -322,6 +337,7 @@ class EpubBook extends ChangeNotifier {
   @override
   void dispose() {
     _generation++; // the background counting stops (it checks between chapters)
+    _pause?.cancel();
     for (final c in _chapters) {
       c.paginator?.dispose();
       c.content?.dispose();

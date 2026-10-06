@@ -23,6 +23,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: the slider only went through the current chapter** until the whole book had been counted (a big book
   takes a while), so it couldn't take you far. It now always runs through the whole book - by percentage until the
   book is counted, by page after.
+- **EPUB: page turns lagged.** Work in the background held the screen up mid-turn: counting the book's pages (a big
+  book takes a minute or more) now pauses between chapters and waits while you're turning; the next chapter is got
+  ready once a turn has finished sliding, not during it; and each page is drawn once and slid as a picture, not
+  drawn again every frame of the slide.
 
 **Added**
 - **EPUB: Paragraph spacing** (Text and page, Settings > Books): None, Small or Large space between paragraphs, on

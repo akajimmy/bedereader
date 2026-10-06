@@ -1,4 +1,5 @@
 // The book's chapter cache (lib/epub/book.dart): chapters laid out, let go of, laid out again.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -30,6 +31,30 @@ void main() {
       final again = await book.pages(0);
       expect(book.pagesNow(0), isNotNull, reason: 'laid out afresh, not the freed pages handed back');
       expect(identical(again, book.pagesNow(0)), isTrue);
+      book.dispose();
+    });
+  });
+
+  testWidgets('counting the book waits while pages are being turned, and carries on after (turns stuttered while a '
+      'big book was being counted - user, build 71)', (tester) async {
+    await tester.runAsync(() async {
+      final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
+      final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+      final info = EpubInfo(spine: spine, toc: const []);
+      final book = EpubBook(MemorySource({for (final c in spine) c: '<html><body>${para('word', 200)}</body></html>'},
+          info), info, hy);
+      book.setLayout(const EpubTheme(), const Size(400, 600));
+      var turning = true;
+      unawaited(book.countAll(current: () => 0, busy: () => turning));
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      expect(book.counted, isFalse, reason: 'still turning: counting waits after the first chapter');
+      expect(book.pageCount(0), isNotNull);
+      expect(book.pageCount(2), isNull);
+      turning = false;
+      for (var i = 0; i < 100 && !book.counted; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+      expect(book.counted, isTrue, reason: 'turning stopped: counted');
       book.dispose();
     });
   });
