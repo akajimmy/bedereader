@@ -208,13 +208,20 @@ void main() {
       final para = blocks.whereType<TextBlock>().single;
       expect(para.floatImage, isNotNull, reason: html);
       expect(blocks.whereType<ImageBlock>(), isEmpty, reason: 'not a picture on its own line');
-      para.floatImage!.image = await _image(19, 35);
-      final page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).first;
-      final r = page.imageRects.single;
-      expect(r.size, const Size(19, 35)); // its own size - not enlarged to a text drop cap's
+      para.floatImage!.image = await _image(30, 60);
+      var page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).first;
+      var r = page.imageRects.single;
+      expect(r.size, const Size(30, 60)); // its own size - not enlarged to a text drop cap's
       expect(r.left, 36);
       expect(page.textOrigins.first.dx, greaterThan(r.right), reason: 'the first lines beside it');
       expect(page.textOrigins.last.dx, 36, reason: 'then the full width under it');
+      // smaller than two lines of text (Homeland's are 17 x 36; lines here 19 x 1.45): raised to two lines, in shape
+      // (user, 2026-10-06 survey: "native with a floor based on text")
+      para.floatImage!.image = await _image(17, 36);
+      page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).first;
+      r = page.imageRects.single;
+      expect(r.height, closeTo(2 * 19 * 1.45 - 8, 0.01));
+      expect(r.width / r.height, closeTo(17 / 36, 0.001));
     }
   });
 
@@ -376,5 +383,84 @@ void main() {
     final book = paginate(src);
     final mine = paginate(src, theme: const EpubTheme(bookFormatting: false));
     expect(mine.length, lessThan(book.length), reason: 'no gap between paragraphs');
+  });
+
+  // ---- the 2026-10-06 survey of 46 books on the tablet's page
+
+  test("a div holding only text is a paragraph (Codex Alera's and Dune's every paragraph is a div.tx): Paragraph "
+      "spacing reaches it, and its size counts as the book's; a div with blocks inside, or set larger, isn't", () {
+    List<Block> read(String css, String html) => ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html));
+    final dune = read('.tx { font-size: small; text-indent: 1em }',
+        '<body><div class="tx">One line.</div><div class="tx">Two lines.</div></body>');
+    expect(dune.cast<TextBlock>().every((b) => b.paragraph), isTrue);
+    expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: shown at the reader's size");
+    double second(double gap) =>
+        Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(dune).single.textOrigins[1].dy;
+    expect(second(1) - second(0), closeTo(19, 0.01), reason: 'Paragraph spacing: 1 em more');
+    final others = read('.big { font-size: x-large }',
+        '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div>Before <p>a block</p></div></body>');
+    expect(others.cast<TextBlock>().where((b) => b.paragraph).map((b) => b.runs.map((r) => r.text).join()),
+        ['Inside.', 'a block'], reason: 'only the <p>s: the large title and the wrappers are not paragraphs');
+  });
+
+  test("a book's Windows dashes and quotes read as control characters (The Forever War's \"Sir\\u0097we\") are shown "
+      'as what they stood for', () {
+    final b = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml('<body><p>Sir\u0097we \u0093go\u0094 \u0085 it\u0092s</p></body>'))
+        .single as TextBlock;
+    expect(b.runs.map((r) => r.text).join(), 'Sir—we “go” … it’s');
+    expect(fixC1('plain — text'), 'plain — text');
+  });
+
+  test('headings are not hyphenated ("DEMOS-THENES" - Ender\'s Game), the text under them is; bold divs count as '
+      "headings (the Belgariad's chapter titles)", () {
+    const word = 'Demosthenes extraordinary recriminations';
+    int marks(String html, {String css = ''}) => Paginator(const EpubTheme(), const Size(260, 900), hy.forLang('en'))
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html)))
+        .fold(0, (n, p) => n + p.hyphenMarks);
+    expect(marks('<body><p>$word $word</p></body>'), greaterThan(0), reason: 'running text: hyphenated');
+    expect(marks('<body><h2>$word</h2></body>'), 0);
+    expect(marks('<body><div class="bs2"><span>$word</span><p/></div></body>', css: '.bs2 { font-weight: bold }'), 0);
+  });
+
+  test('a heading gets half a line of space under it when the book leaves none (New Sun, Xanth, the Belgariad)', () {
+    const css = 'h1 { margin: 0; font-size: 1em } p { margin: 0 }';
+    List<Offset> lay(String html) => Paginator(const EpubTheme(), const Size(400, 600), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html)))
+        .single
+        .textOrigins;
+    final heading = lay('<body><h1>Chapter 1: Xanth.</h1><p>A small lizard.</p></body>');
+    final plain = lay('<body><p>Chapter 1: Xanth.</p><p>A small lizard.</p></body>');
+    expect((heading[1].dy - heading[0].dy) - (plain[1].dy - plain[0].dy), closeTo(0.5 * 19 * 1.45, 0.01));
+    // a heading that asks for more space keeps its own
+    final spaced = Paginator(const EpubTheme(), const Size(400, 600), null)
+        .run(ChapterReader(StyleSheet()..add('$css h1 { margin-bottom: 3em }'), (h) => h)
+            .read(parseXhtml('<body><h1>Chapter 1: Xanth.</h1><p>A small lizard.</p></body>')))
+        .single
+        .textOrigins;
+    expect(spaced[1].dy - spaced[0].dy, closeTo(heading[1].dy - heading[0].dy - 0.5 * 19 * 1.45 + 3 * 19, 0.01));
+  });
+
+  test("a note marker is a link in running text: a heading that is all link (Ender's chapter number, linking back to "
+      'the contents) is plain text', () {
+    List<EpubLink> links(String html) => Paginator(const EpubTheme(), const Size(400, 600), null)
+        .run(ChapterReader(StyleSheet(), (h) => h).read(parseXhtml(html)))
+        .single
+        .links;
+    expect(links('<body><h2><a href="contents.html#r10">8</a></h2></body>').single.text, '8');
+    expect(links('<body><p>The Watch<a href="notes.html#n8">8</a> arrived.</p></body>').single.text, '⁸',
+        reason: 'in running text: a marker, raised');
+  });
+
+  test("a table's columns are never narrower than their longest word (the Three-Body Problem's list of characters "
+      'broke "Wenxu/e"); the room left is shared in proportion', () {
+    final long = List.filled(60, 'word').join(' ');
+    final r = ChapterReader(StyleSheet(), (h) => h)
+      ..read(parseXhtml('<body><table><tr><td>Ye Wenxue</td><td>$long</td></tr></table></body>'));
+    final page = Paginator(const EpubTheme(), const Size(400, 900), null).run(r.blocks).single;
+    // the test font: 19 px a letter - "Wenxue" is 114; the cells 14 apart
+    final firstWidth = page.textOrigins[1].dx - page.textOrigins[0].dx - 14;
+    expect(firstWidth, greaterThanOrEqualTo(114));
+    expect(page.textOrigins[1].dx + 4 * 19, lessThanOrEqualTo(364 + 0.5), reason: 'the second still fits its words');
   });
 }

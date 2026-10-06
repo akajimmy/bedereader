@@ -191,6 +191,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       // the book's own text size first (a book set smaller or larger all through shows at the reader's size)
       final book = EpubBook(source, info, hy);
       await book.measureTextSize();
+      // the chapters' shares of the book till they're counted (Komga's positions; kept with a downloaded book too)
+      try {
+        book.estimateFrom([
+          for (final p in await _progress.positions()) EpubProgress.pathOf((p as Map)['href'] as String),
+        ]);
+      } catch (_) {
+        // none: equal shares till counted
+      }
       if (!mounted) {
         book.dispose();
         return;

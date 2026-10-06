@@ -100,7 +100,9 @@ sealed class Block {
 
 class TextBlock extends Block {
   final List<TextRun> runs = [];
-  bool paragraph = false; // a <p>: the reader's own formatting restyles these (not headings, quotes, centred lines)
+  bool paragraph = false; // a <p> (or a div of text): the reader's own formatting restyles these (not headings,
+  // quotes, centred lines)
+  bool heading = false; // an <h1>-<h6> (see Paginator.isHeading for headings written otherwise)
 
   int get length => runs.fold(0, (n, r) => n + r.text.length);
   TextAlign align = TextAlign.start;
@@ -219,7 +221,7 @@ class ChapterReader {
     for (final n in e.children) {
       switch (n) {
         case XText(:final text):
-          var t = text.replaceAll(RegExp(r'[\s ]+'), ' ');
+          var t = fixC1(text).replaceAll(RegExp(r'[\s ]+'), ' ');
           if (t.trim().isEmpty && _cur == null) break; // whitespace between blocks
           var style = inh;
           if (inh.sup) {
@@ -363,7 +365,9 @@ class ChapterReader {
     final outerL = _insetL, outerR = _insetR;
     _insetL += ml;
     _insetR += mr;
-    final para = _para(al, ind)..paragraph = e.name == 'p';
+    final para = _para(al, ind)
+      ..paragraph = e.name == 'p'
+      ..heading = _headSizes.containsKey(e.name);
     // ::first-letter rules that float the letter: a drop cap
     final fl1 = sheet.declsFor(e, pseudo: 'first-letter');
     final dropLetter = fl1['float'] == 'left' || (fl1['font-size'] != null && fl1['font-size'] != '1em');
@@ -377,6 +381,13 @@ class ChapterReader {
       _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
+    // a <div> holding only running text is a paragraph too - some books write every one so (Codex Alera's and Dune's
+    // div.tx): the reader's paragraph spacing and formatting missed them all (user, 2026-10-06 survey). Not one with
+    // blocks inside, nor one set larger than round it (a title).
+    if (e.name == 'div' && blocks.length == startAt && identical(_cur, para) && st.size <= inh.size + 0.001) {
+      para.paragraph = true;
+    }
+    final isPara = para.paragraph;
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
       final first = para.runs.first;
       final t = first.text.trimLeft();
@@ -404,7 +415,7 @@ class ChapterReader {
         ..marginTop = math.max(blocks[startAt].marginTop, mt)
         ..breakBefore = blocks[startAt].breakBefore || brk;
       blocks.last.marginBottom = math.max(blocks.last.marginBottom, mb);
-      if (e.name != 'p') {
+      if (!isPara) {
         blocks[startAt].wrapTop = math.max(blocks[startAt].wrapTop, mt);
         blocks.last.wrapBottom = math.max(blocks.last.wrapBottom, mb);
       } else {
@@ -426,6 +437,20 @@ class ChapterReader {
   static String _textOf(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
 }
+
+/// Text from a book converted badly - Windows-1252 read as Latin-1 - has control characters (U+0080-U+009F, never
+/// meant to be shown) where its dashes, quotes and ellipses were: shown as the characters they stood for (The
+/// Forever War's 369 em dashes were boxes: "Sir□we").
+String fixC1(String t) {
+  if (!t.codeUnits.any((c) => c >= 0x80 && c <= 0x9F)) return t;
+  return String.fromCharCodes(t.codeUnits.map((c) => c >= 0x80 && c <= 0x9F ? _cp1252[c - 0x80] : c));
+}
+
+// Windows-1252's 0x80-0x9F (the five it leaves unassigned stay as they are)
+const _cp1252 = [
+  0x20AC, 0x81, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x8D, 0x017D, 0x8F,
+  0x90, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x9D, 0x017E, 0x0178,
+];
 
 // ---- pages
 
@@ -690,6 +715,15 @@ class Paginator {
 
   bool _bold(InlineStyle s) => s.bold && !(baseBold && (s.size - baseSize).abs() < 0.01);
 
+  /// A heading: an <h1>-<h6>, or a short block that isn't a paragraph, all of it larger than the text or bold (the
+  /// Belgariad's chapter titles are bold divs). Not hyphenated, and some space under it.
+  bool isHeading(TextBlock b) {
+    if (b.heading) return true;
+    if (b.paragraph || b.length > 120) return false;
+    final shown = b.runs.where((r) => r.text.trim().isNotEmpty);
+    return shown.isNotEmpty && shown.every((r) => r.style.size >= baseSize * 1.15 || _bold(r.style));
+  }
+
   /// The book's em: its margins, indents and spacing are in its own text size's ems - in proportion to it, as its
   /// text is.
   double get _bookEm => theme.fontSize / baseSize;
@@ -797,7 +831,12 @@ class Paginator {
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
-      final gap = math.max(_pendingGap, mt * _bookEm) + extra;
+      var gap = math.max(_pendingGap, mt * _bookEm) + extra;
+      // text under a heading: half a line at least, when the book leaves none (New Sun's, Xanth's, the Belgariad's
+      // chapter titles sat on their first line - user, 2026-10-06 survey: "gap after headings")
+      if (b is TextBlock && prev is TextBlock && isHeading(prev) && !isHeading(b) && !b.breakBefore) {
+        gap = math.max(gap, 0.5 * theme.fontSize * theme.lineHeight);
+      }
       if (!_pageEmpty) _y += gap;
       final p0 = pages.length - 1, y0 = _y;
       switch (b) {
@@ -847,17 +886,28 @@ class Paginator {
     const gap = 14.0;
     final cols = t.rows.fold(0, (n, r) => math.max(n, r.length));
     final widths = List<double>.filled(cols, 0);
+    final least = List<double>.filled(cols, 0); // each column's longest word (or hyphenated part)
     for (final row in t.rows) {
       for (var c = 0; c < row.length; c++) {
         final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity).tp;
         widths[c] = math.max(widths[c], tp.maxIntrinsicWidth.ceilToDouble());
+        least[c] = math.max(least[c], tp.minIntrinsicWidth.ceilToDouble());
       }
     }
     final avail = _width - gap * (cols - 1);
     final total = widths.fold(0.0, (a, b) => a + b);
     if (total > avail && total > 0) {
+      // too wide: each column keeps its longest word, the room left shared in proportion to what each would like
+      // beyond that, as a browser does (shrunk in plain proportion, the Three-Body Problem's list of characters broke
+      // a name mid-word: "Wenxu/e")
+      final floor = least.fold(0.0, (a, b) => a + b);
+      final want = total - floor;
       for (var c = 0; c < cols; c++) {
-        widths[c] = widths[c] * avail / total;
+        widths[c] = floor >= avail
+            ? least[c] * avail / floor // not even the words fit: those in proportion
+            : want <= 0
+                ? least[c]
+                : least[c] + (widths[c] - least[c]) * (avail - floor) / want;
       }
     }
     var pos = t.start;
@@ -916,6 +966,11 @@ class Paginator {
     var lead = true;
     var at = ind ? 1 : 0; // painter offset (the indent's placeholder is one character)
     final linkRanges = <(int, int, String, String)>[];
+    // headings aren't hyphenated ("DEMOS-THENES" - Ender's Game)
+    final hyphens = !prepared && hyphenator != null && theme.hyphenate && !isHeading(b);
+    // a note marker is a link in running text: a block that is all link (Ender's chapter number "8", a link back to
+    // the contents) isn't one
+    final running = runs.any((r) => r.style.link == null && r.text.trim().isNotEmpty);
     for (final r in runs) {
       var t = r.text;
       if (lead) {
@@ -923,9 +978,9 @@ class Paginator {
         if (t.isEmpty) continue;
         lead = false;
       }
-      if (!prepared && hyphenator != null && theme.hyphenate) t = hyphenator!.apply(t);
+      if (hyphens) t = hyphenator!.apply(t);
       final link = r.style.link;
-      if (link != null && noteMarker.hasMatch(t)) {
+      if (link != null && running && noteMarker.hasMatch(t)) {
         // a note marker: raised, bold, in the link colour - a plain "*" in the text colour went unseen (user,
         // 2026-10-06: "i didn't see any in hogfather or sourcery")
         // Sizes from the text's, not the book's <sup> (superscript digits are small already - at a <sup>'s size
@@ -1058,7 +1113,11 @@ class Paginator {
     } else if (fimg != null) {
       // a floated picture - a drop cap drawn as one included - at its own size, as the book has it, the text flowing
       // beside it (user, 2026-10-06: "as they would in the proper formatting", not resized like the text drop caps)
-      final s = math.min(1.0, math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
+      // ... but never shorter than two lines of text: Homeland's picture "T"s (17 x 36 pixels) were a speck beside one
+      // line (user, 2026-10-06 survey: "native with a floor based on text")
+      final floor = (2 * lineH - 8) / fimg.height;
+      final s = math.min(math.max(1.0, floor),
+          math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
       boxW = fimg.width * s;
       boxH = fimg.height * s;
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
@@ -1094,7 +1153,7 @@ class Paginator {
     if (_y < _floatBottom) _y = _floatBottom; // lines left but none fit beside it here: below it
     // the rest at full width, from the first character after line k
     final cut = narrow.lines[k - 1].end;
-    final rest = _sliceRuns(b.runs, cut);
+    final rest = _sliceRuns(b, cut);
     final soft = narrow.tp.plainText.substring(0, math.min(cut, narrow.tp.plainText.length)).split('­').length - 1;
     _lines(_painter(b, rest, width, indent: false, prepared: true, base: b.start + cut - soft), x);
   }
@@ -1119,23 +1178,24 @@ class Paginator {
     _y += h;
     final cut = first.lines.first.end;
     final soft = first.tp.plainText.substring(0, math.min(cut, first.tp.plainText.length)).split('­').length - 1;
-    _lines(_painter(b, _sliceRuns(b.runs, cut), width, indent: false, prepared: true, base: b.start + cut - soft), x);
+    _lines(_painter(b, _sliceRuns(b, cut), width, indent: false, prepared: true, base: b.start + cut - soft), x);
     _indent = indent;
   }
 
   /// The runs from plain-text offset [start] on (offsets count the hyphenated text the painter saw).
-  List<TextRun> _sliceRuns(List<TextRun> runs, int start) {
+  List<TextRun> _sliceRuns(TextBlock b, int start) {
     final out = <TextRun>[];
     var pos = 0;
     var lead = true;
-    for (final r in runs) {
+    final hyphens = hyphenator != null && theme.hyphenate && !isHeading(b); // as [_painter] had it
+    for (final r in b.runs) {
       var t = r.text;
       if (lead) {
         t = t.trimLeft();
         if (t.isEmpty) continue;
         lead = false;
       }
-      if (hyphenator != null && theme.hyphenate) t = hyphenator!.apply(t);
+      if (hyphens) t = hyphenator!.apply(t);
       final end = pos + t.length;
       if (end > start) out.add(TextRun(t.substring(math.max(0, start - pos)), r.style));
       pos = end;
