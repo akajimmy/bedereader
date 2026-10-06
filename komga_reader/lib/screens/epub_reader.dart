@@ -669,7 +669,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// Where chapter [chapter]'s page [page] is (option F, user 2026-10-06): the book's page and % ("112 / 342 · 33%";
-  /// just the % until the book is counted), the chapter's name, and the page in the chapter ("4 / 12").
+  /// just the % until the book is counted), the chapter's name, and the page in the chapter ("Ch. 4 / 12").
   (String book, String title, String inChapter) _positionOf(int chapter, int page) {
     final b = _book!;
     final pct = (b.progression(b.positionOf(chapter, page)) * 100).round();
@@ -679,7 +679,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     return (
       at != null && total != null ? '${at + 1} / $total · $pct%' : '$pct%',
       _chapterNameOf(chapter),
-      n == null ? 'page ${page + 1}' : '${page + 1} / $n',
+      n == null ? 'Ch. page ${page + 1}' : 'Ch. ${page + 1} / $n', // (user: "Ch." ahead of it)
     );
   }
 
