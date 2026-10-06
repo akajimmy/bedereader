@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -91,6 +92,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
       bookFormatting: e.bookFormatting,
       accent: Theme.of(context).colorScheme.primary,
+      pixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
   }
 
@@ -411,6 +413,16 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       }
     }
     final x = d.localPosition.dx / size.width;
+    // a big picture tapped in the middle of the screen: full screen over the book (the sides still turn the page -
+    // a picture can fill the page)
+    if (!_controls && x >= 1 / 3 && x <= 2 / 3) {
+      for (final (rect, image) in page?.pictures ?? const <(Rect, ui.Image)>[]) {
+        if (rect.contains(d.localPosition)) {
+          unawaited(_showPicture(image));
+          return;
+        }
+      }
+    }
     if (_controls) {
       _hideControls();
     } else if (x < 1 / 3) {
@@ -534,6 +546,24 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final ch = b.chapterOf(path);
     if (ch == null) return;
     await _jump(ch, frag == null ? 0 : await b.positionOfFragment(ch, frag));
+  }
+
+  /// A picture full screen over the book, fitted to the screen (user, 2026-10-06: "a lightbox style view"): pinch
+  /// or wheel to zoom, a tap, Back or Esc closes it. Drawn from its own handle on the picture, so the chapter being
+  /// let go of meanwhile can't free it from under the view.
+  Future<void> _showPicture(ui.Image image) async {
+    // the view owns this handle and lets it go when it's gone - after its fade-out, not when the dialog's future
+    // completes (the picture is still drawn while it fades)
+    final own = image.clone();
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Close',
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      transitionDuration: const Duration(milliseconds: 150),
+      pageBuilder: (c, _, __) => _PictureView(image: own),
+      transitionBuilder: (c, a, _, child) => FadeTransition(opacity: a, child: child),
+    );
   }
 
   static String text0(XElement e) => e.children.map((n) => n is XText ? n.text : text0(n as XElement)).join();
@@ -1114,6 +1144,51 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       ),
     ];
   }
+}
+
+/// The picture full screen: fitted to the screen (enlarged if small), pinch or wheel to zoom; a tap, Back, Esc or OK
+/// closes it.
+class _PictureView extends StatefulWidget {
+  const _PictureView({required this.image});
+  final ui.Image image; // its own handle: let go of with the view
+
+  @override
+  State<_PictureView> createState() => _PictureViewState();
+}
+
+class _PictureViewState extends State<_PictureView> {
+  @override
+  void dispose() {
+    widget.image.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(
+        autofocus: true,
+        onKeyEvent: (_, e) {
+          if (e is! KeyDownEvent) return KeyEventResult.ignored;
+          final k = e.logicalKey;
+          if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select ||
+              k == LogicalKeyboardKey.numpadEnter) {
+            Navigator.of(context).pop();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(),
+          child: SafeArea(
+            child: InteractiveViewer(
+              maxScale: 6,
+              child: SizedBox.expand(
+                child: RawImage(image: widget.image, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _PagePainter extends CustomPainter {

@@ -27,6 +27,13 @@ Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 - **EPUB: Next and Previous book** open the book in its own reader (a comic after an EPUB in the series opened in
   the EPUB reader); Next book mid-book asks, marks read or keeps it in progress as Settings > Reader says.
 
+- **EPUB: pictures at their own size, and full screen with a tap.** A picture is drawn at its native resolution, one
+  picture pixel to one screen pixel, centred - shrunk if it's bigger than the page, never enlarged (a small map was
+  blown up and blurred). Tap a picture in the middle of the screen to see it over the book, fitted to the screen;
+  pinch or the mouse wheel zooms, a tap, Back or Esc closes it. Only pictures 150 pixels or more both ways open
+  (illustrations, maps, covers) - not drop caps, ornaments or chapter-head banners. Taps at the sides still turn
+  the page.
+
 **Fixed**
 - **EPUB: stuck on a spinner after jumping far with the slider and back** (build 69): a chapter that had been laid
   out again at once (after the window or text size changed) and then let go of handed back its old, freed pages when

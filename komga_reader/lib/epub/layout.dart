@@ -22,11 +22,16 @@ class EpubTheme {
     this.bookFormatting = true,
     this.hyphenate = true,
     this.accent = const Color(0xFF3D8BE0),
+    this.pixelRatio = 1,
   });
   final Color background, text;
 
   /// Note markers' colour: the app's accent colour (user, 2026-10-06: they follow the app's colouring).
   final Color accent;
+
+  /// Screen pixels per layout pixel: pictures are drawn at their own size, one picture pixel to one screen pixel
+  /// (user, 2026-10-06: "images ... at their native resolution").
+  final double pixelRatio;
   final String? fontFamily;
   final double fontSize, lineHeight;
   final EdgeInsets margins;
@@ -42,10 +47,10 @@ class EpubTheme {
   bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
       other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
       other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate &&
-      other.accent == accent;
+      other.accent == accent && other.pixelRatio == pixelRatio;
   @override
   int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate,
-      accent);
+      accent, pixelRatio);
 }
 
 // ---- blocks
@@ -495,9 +500,10 @@ class _RectPiece extends Piece {
 }
 
 class _ImagePiece extends Piece {
-  _ImagePiece(this.image, this.rect);
+  _ImagePiece(this.image, this.rect, {this.zoomable = false});
   final ui.Image image;
   final Rect rect;
+  final bool zoomable; // big enough to open full screen with a tap (not a drop cap or an ornament)
   @override
   void paint(Canvas c) => c.drawImageRect(image,
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()), rect, Paint()..filterQuality = FilterQuality.medium);
@@ -514,6 +520,9 @@ class EpubPage {
   /// Where each picture is drawn on the page (tests).
   @visibleForTesting
   List<Rect> get imageRects => [for (final p in pieces) if (p is _ImagePiece) p.rect];
+
+  /// The pictures on the page big enough to open full screen with a tap: where each is drawn, and the picture.
+  List<(Rect, ui.Image)> get pictures => [for (final p in pieces) if (p is _ImagePiece && p.zoomable) (p.rect, p.image)];
 
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
@@ -596,16 +605,18 @@ class Paginator {
 
   List<EpubPage> run(List<Block> blocks) {
     _findUsual(blocks);
-    // a chapter that is only a picture (a cover, a map, a plate): the whole page, centred, enlarged to fit
+    // a chapter that is only a picture (a cover, a map, a plate): centred on the page, at its own size (shrunk to fit,
+    // never enlarged - user, 2026-10-06: native resolution; a tap shows it full screen)
     if (blocks.length == 1 && blocks.single is ImageBlock) {
       final b = blocks.single as ImageBlock;
       final img = b.image;
       if (img != null) {
         final area = Rect.fromLTRB(theme.margins.left, theme.margins.top, size.width - theme.margins.right, _bottom);
-        final s = math.min(area.width / img.width, area.height / img.height);
-        final w = img.width * s, h = img.height * s;
+        final w0 = img.width / theme.pixelRatio, h0 = img.height / theme.pixelRatio;
+        final s = math.min(1.0, math.min(area.width / w0, area.height / h0));
         pages.single._at(b.start);
-        pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w, height: h)));
+        pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w0 * s, height: h0 * s),
+            zoomable: zoomable(img)));
         return pages;
       }
     }
@@ -976,6 +987,11 @@ class Paginator {
     return out;
   }
 
+  /// A picture that opens full screen with a tap: 150 picture pixels or more both ways - an illustration, a map, a
+  /// cover; not a drop cap, an ornament or a chapter-head banner (Homeland's are 321 x 96) (user, 2026-10-06: "only
+  /// ... over a certain size").
+  static bool zoomable(ui.Image img) => math.min(img.width, img.height) >= 150;
+
   void _image(ImageBlock b) {
     final img = b.image;
     if (img == null) return;
@@ -986,10 +1002,13 @@ class Paginator {
       _newPage();
       maxH = _bottom - _y;
     }
-    final scale = math.min(1.0, math.min(maxW / img.width, maxH / img.height));
-    final w = img.width * scale, h = img.height * scale;
+    // at its own size, one picture pixel to one screen pixel (shrunk to fit, never enlarged), centred
+    final w0 = img.width / theme.pixelRatio, h0 = img.height / theme.pixelRatio;
+    final scale = math.min(1.0, math.min(maxW / w0, maxH / h0));
+    final w = w0 * scale, h = h0 * scale;
     pages.last._at(b.start);
-    pages.last.pieces.add(_ImagePiece(img, Rect.fromLTWH(theme.margins.left + (maxW - w) / 2, _y, w, h)));
+    pages.last.pieces.add(_ImagePiece(img, Rect.fromLTWH(theme.margins.left + (maxW - w) / 2, _y, w, h),
+        zoomable: zoomable(img)));
     _y += h;
   }
 }
