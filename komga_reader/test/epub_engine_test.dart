@@ -166,17 +166,34 @@ void main() {
     expect(pages.length, 1);
   });
 
-  test('a chapter that is only a picture (a cover) fills the page, centred - enlarged if small', () async {
-    final img = await _image(100, 150);
-    final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><div><img src="c.jpg"/></div></body>'));
-    (blocks.single as ImageBlock).image = img;
-    final page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single;
-    // the text area is 36..364 x 40..560 (328 x 520): a 2:3 picture is as wide as it (328 x 492), centred in it
-    final r = page.imageRects.single;
-    expect(r.width, closeTo(328, 0.01));
-    expect(r.height, closeTo(492, 0.01));
-    expect(r.center.dx, closeTo(200, 0.01));
-    expect(r.center.dy, closeTo(300, 0.01));
+  test('pictures at their own size, one picture pixel to one screen pixel (user, 2026-10-06): a chapter that is only '
+      'a picture centred, never enlarged; one in the text centred on its line; too big for the page: shrunk to fit; '
+      'only big ones open full screen', () async {
+    final img = await _image(300, 500);
+    final small = await _image(321, 96); // a chapter-head banner
+    List<Block> read(String html) => ChapterReader(StyleSheet(), (h) => h).read(parseXhtml(html));
+    // on a screen with 2 screen pixels to a layout pixel: 300 x 500 takes 150 x 250
+    const theme = EpubTheme(pixelRatio: 2);
+    final cover = read('<body><div><img src="c.jpg"/></div></body>');
+    (cover.single as ImageBlock).image = img;
+    var page = Paginator(theme, const Size(400, 600), null).run(cover).single;
+    expect(page.imageRects.single.size, const Size(150, 250));
+    expect(page.imageRects.single.center, const Offset(200, 300), reason: 'centred in the text area (36..364 x 40..560)');
+    expect(page.pictures, hasLength(1), reason: 'big enough to open full screen');
+    final inText = read('<body><p>Before.</p><p><img src="m.jpg"/></p><p><img src="b.jpg"/></p></body>');
+    final pics = inText.whereType<ImageBlock>().toList();
+    pics[0].image = img;
+    pics[1].image = small;
+    page = Paginator(theme, const Size(400, 900), null).run(inText).first;
+    expect(page.imageRects[0].size, const Size(150, 250));
+    expect(page.imageRects[0].center.dx, 200);
+    expect(page.pictures.map((p) => p.$1), [page.imageRects[0]], reason: 'the banner (96 tall) does not open');
+    // too big for the page (600 x 1000 on a 1:1 screen, the text area 328 x 520): shrunk to fit
+    final big = await _image(600, 1000);
+    (cover.single as ImageBlock).image = big;
+    page = Paginator(const EpubTheme(), const Size(400, 600), null).run(cover).single;
+    expect(page.imageRects.single.height, closeTo(520, 0.01));
+    expect(page.imageRects.single.width, closeTo(312, 0.01));
   });
 
   test("a drop cap drawn as a picture (Homeland: <span float:left><img/></span> starting the paragraph, or just before "

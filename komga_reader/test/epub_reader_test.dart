@@ -1,5 +1,6 @@
 // The EPUB reader screen (lib/screens/epub_reader.dart) over a small book held in memory.
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,13 +15,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/no_network.dart';
 
 class MemorySource implements EpubSource {
-  MemorySource(this.files, this.infoValue);
+  MemorySource(this.files, this.infoValue, {this.binary = const {}});
   final Map<String, String> files;
+  final Map<String, Uint8List> binary; // pictures
   final EpubInfo infoValue;
   @override
   Future<EpubInfo> info() async => infoValue;
   @override
   Future<Uint8List> resource(String path) async {
+    final pic = binary[path];
+    if (pic != null) return pic;
     final f = files[path];
     if (f == null) throw StateError('no $path');
     return Uint8List.fromList(utf8.encode(f));
@@ -189,6 +193,37 @@ void main() {
     await g.up();
     await settle(tester);
     expect(tester.widget<Text>(find.textContaining(RegExp(r'^Page '))).data, dragged, reason: 'gone there');
+  });
+
+  testWidgets('a big picture tapped in the middle opens full screen over the book; a tap closes it; a small one '
+      "(a banner) doesn't open, the middle shows the controls", (tester) async {
+    Future<Uint8List> png(int w, int h) async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..color = const Color(0xFF808080));
+      final img = await rec.endRecording().toImage(w, h);
+      return (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    }
+    final (map, banner) = (await tester.runAsync(() async => (await png(300, 500), await png(321, 96))))!;
+    await open(tester, MemorySource({
+      'c1.xhtml': '<html><body><p><img src="map.png"/></p></body></html>',
+      'c2.xhtml': '<html><body><p><img src="banner.png"/></p>${para('word', 30)}</body></html>',
+    }, const EpubInfo(spine: ['c1.xhtml', 'c2.xhtml'], toc: []), binary: {'map.png': map, 'banner.png': banner}));
+    // the map: a chapter of its own, at its own size, centred (300 x 500 at 250..550 x 350..850 on the 800 x 1200,
+    // 1:1 screen) - a tap on it in the middle opens it
+    await tester.tapAt(const Offset(400, 600));
+    await settle(tester);
+    expect(find.byType(RawImage), findsOneWidget, reason: 'the picture full screen');
+    await tester.tapAt(const Offset(400, 600));
+    await settle(tester);
+    expect(find.byType(RawImage), findsNothing, reason: 'a tap closed it');
+    expect(find.text('Close'), findsNothing, reason: 'and the controls stayed hidden');
+    // the next chapter: a banner (96 tall) at the top - not opened; the middle shows the controls as usual
+    await tester.tapAt(const Offset(750, 600));
+    await settle(tester);
+    await tester.tapAt(const Offset(400, 80));
+    await settle(tester);
+    expect(find.byType(RawImage), findsNothing, reason: 'a banner does not open');
+    expect(find.text('Close'), findsOneWidget, reason: 'the controls instead');
   });
 
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
