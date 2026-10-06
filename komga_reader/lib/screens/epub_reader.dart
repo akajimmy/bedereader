@@ -171,6 +171,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   void _layout(Size size) {
     final b = _book!;
     if (b.size == size && b.theme == _theme) return;
+    // still opening (the saved place not shown yet): the saved place again, not what's on screen - the system bars
+    // hiding right after opening change the size before it's shown (found on the tablet)
+    final opening = _startFraction;
+    if (opening != null) {
+      b.setLayout(_theme, size);
+      _bookWide = false;
+      _counting = false;
+      if (b.size != Size.zero) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _show(_chapter, 0, fraction: opening));
+      }
+      return;
+    }
     final keep = _book!.size == Size.zero ? null : b.positionOf(_chapter, _page);
     b.setLayout(_theme, size);
     _bookWide = false;
@@ -222,6 +234,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       _chapter = chapter;
       _page = page;
       _end = false;
+      if (fraction != null && fraction == _startFraction) _startFraction = null; // opened at the saved place
     });
     final target = _bookWide ? b.bookPage(chapter, page)! : page;
     if (_pc.hasClients) {
@@ -541,9 +554,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           final size = box.biggest;
           _layout(size);
           if (b.pagesNow(_chapter) == null) {
-            final f = _startFraction;
-            _startFraction = null;
-            unawaited(_show(_chapter, 0, fraction: f));
+            unawaited(_show(_chapter, 0, fraction: _startFraction));
             return const Center(child: CircularProgressIndicator());
           }
           final pages = b.pagesNow(_chapter)!;
