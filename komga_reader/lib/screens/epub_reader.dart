@@ -175,8 +175,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     b.setLayout(_theme, size);
     _bookWide = false;
     _counting = false;
-    // the same text stays in view: back to its chapter, its page found once laid out again
-    WidgetsBinding.instance.addPostFrameCallback((_) => _show(keep?.chapter ?? _chapter, keep?.position ?? 0));
+    // the same text stays in view: back to its chapter, its page found once laid out again (the first layout: the
+    // opening shows the saved place itself - a "start of the chapter" here overrode it, found on the tablet)
+    if (keep != null) WidgetsBinding.instance.addPostFrameCallback((_) => _show(keep.chapter, keep.position));
   }
 
   void _onBook() {
