@@ -19,6 +19,7 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../offline/offline_komga.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -26,6 +27,7 @@ import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
 import '../widgets/focus_style.dart';
+import '../widgets/native_poster.dart';
 import '../widgets/reader_clock.dart';
 import '../widgets/setting_rows.dart';
 import 'open_book.dart';
@@ -132,6 +134,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     for (final n in _ctl.values) {
       n.dispose();
     }
+    _endNext.dispose();
+    _endClose.dispose();
     fullscreen.removeListener(_onSettings);
     super.dispose();
   }
@@ -354,6 +358,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       if (i >= b.totalPages!) {
         setState(() => _end = true);
         _reachedEnd();
+        _endReached();
         return;
       }
       final (c, p) = b.chapterPage(i);
@@ -377,6 +382,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _moved = true;
     if (_end) {
       _reachedEnd();
+      _endReached();
     } else {
       _settled();
     }
@@ -507,6 +513,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       }
       return KeyEventResult.ignored; // OK on a control reaches the control (= tapping it)
     }
+    if (_end) return _onEndKey(e);
     if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) && hasVolumeKeys &&
         AppSettings.instance.display.volumeKeys) {
       if (e is KeyDownEvent) _turn(k == LogicalKeyboardKey.audioVolumeDown ? 1 : -1);
@@ -751,22 +758,131 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     );
   }
 
-  Widget _endCard(EpubTheme theme) => ColoredBox(
-        color: theme.background,
-        child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('The end', style: TextStyle(color: theme.text, fontSize: 28)),
-          const SizedBox(height: 8),
-          Text(_title, style: TextStyle(color: theme.text.withValues(alpha: 0.7))),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: _nextBook,
-            icon: const Icon(Icons.skip_next),
-            label: const Text('Next book'),
+  // ---- the end card: the next book's poster and title (the comic reader's, user 2026-10-06), Next book and Close -
+  // both reachable with the remote
+
+  final _endNext = FocusNode(debugLabel: 'epub-end-next');
+  final _endClose = FocusNode(debugLabel: 'epub-end-close');
+  Future<Map<String, dynamic>?>? _upNextFuture;
+
+  /// What comes after this book (looked up once).
+  Future<Map<String, dynamic>?> get _upNext => _upNextFuture ??= widget.api.nextBook(widget.book['id'] as String);
+
+  /// The end card is reached: the remote on Next book (on Close when there's none).
+  void _endReached() {
+    _upNext.then((next) {
+      if (mounted && _end) (next == null ? _endClose : _endNext).requestFocus();
+    }, onError: (Object _) {
+      if (mounted && _end) _endClose.requestFocus();
+    });
+  }
+
+  /// Keys on the end card: Right (next page) goes on to the next book - a fresh press, a held key's repeats don't -
+  /// or closes when there's none; Up / Down move between Next book and Close; OK presses the one the remote is on;
+  /// Left (previous page) goes back to the last page.
+  KeyEventResult _onEndKey(KeyEvent e) {
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
+      final to = k == LogicalKeyboardKey.arrowUp ? _endNext : _endClose;
+      if (to.context != null) to.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (_isOk(k)) {
+      if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _nextOrClose();
+      return KeyEventResult.handled;
+    }
+    switch (ReaderKeys.instance.actionFor(k)) {
+      case ReaderAction.next:
+        if (e is KeyDownEvent) _nextOrClose();
+        return KeyEventResult.handled;
+      case ReaderAction.previous:
+        _focus.requestFocus();
+        _turn(-1);
+        return KeyEventResult.handled;
+      case ReaderAction.close:
+        if (e is KeyDownEvent) Navigator.of(context).maybePop();
+        return KeyEventResult.handled;
+      default:
+        return KeyEventResult.ignored;
+    }
+  }
+
+  /// Next book - or, when there's none, close.
+  Future<void> _nextOrClose() async {
+    Map<String, dynamic>? next;
+    try {
+      next = await _upNext;
+    } catch (_) {
+      next = const {}; // couldn't look it up: Next book tries again (and says why if it can't)
+    }
+    if (!mounted) return;
+    next == null ? await Navigator.of(context).maybePop() : await _nextBook();
+  }
+
+  Widget _endCard(EpubTheme theme) {
+    final ink = theme.text;
+    final dim = TextStyle(color: ink.withValues(alpha: 0.55));
+    return ColoredBox(
+      color: theme.background,
+      child: Center(child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Theme(
+          data: readerControlsTheme(context),
+          child: FutureBuilder<Map<String, dynamic>?>(
+            future: _upNext,
+            builder: (context, snap) {
+              final next = snap.data;
+              final waiting = snap.connectionState != ConnectionState.done;
+              final offline = snap.error is NotAvailableOffline;
+              final number = next?['metadata']?['number'] ?? next?['number'];
+              final nextTitle = (next?['metadata']?['title'] ?? next?['name']) as String?;
+              final heading = next == null ? '' : '${next['seriesTitle'] ?? ''} #$number'.trim();
+              final canGoOn = !waiting && (next != null || (snap.hasError && !offline));
+              return Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('The End', style: TextStyle(color: ink, fontSize: 28)),
+                const SizedBox(height: 6),
+                Text(_title, textAlign: TextAlign.center, style: TextStyle(color: ink.withValues(alpha: 0.7))),
+                const SizedBox(height: 28),
+                if (waiting)
+                  const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))
+                else if (next != null) ...[
+                  Text('Up next in the series', style: dim),
+                  const SizedBox(height: 12),
+                  Builder(builder: (context) {
+                    final h = (MediaQuery.sizeOf(context).height * 0.38).clamp(160.0, 480.0);
+                    return NativePoster(widget.api.thumbImage(widget.api.bookThumb(next['id'] as String)),
+                        max: Size(h * 0.8, h));
+                  }),
+                  const SizedBox(height: 14),
+                  Text(heading, textAlign: TextAlign.center, style: TextStyle(color: ink, fontSize: 18)),
+                  if (nextTitle != null && nextTitle != heading && !nextTitle.endsWith('#$number'))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(nextTitle, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: ink.withValues(alpha: 0.7))),
+                    ),
+                ] else if (offline)
+                  Text("The next book in the series isn't downloaded", textAlign: TextAlign.center, style: dim)
+                else if (!snap.hasError)
+                  Text('That was the last book in the series', style: dim),
+                const SizedBox(height: 22),
+                if (canGoOn)
+                  FilledButton.icon(
+                    focusNode: _endNext,
+                    onPressed: _nextBook,
+                    icon: const Icon(Icons.skip_next),
+                    label: const Text('Next book'),
+                  ),
+                const SizedBox(height: 8),
+                TextButton(focusNode: _endClose, onPressed: () => Navigator.of(context).maybePop(),
+                    child: const Text('Close')),
+              ]);
+            },
           ),
-          const SizedBox(height: 8),
-          TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
-        ])),
-      );
+        ),
+      )),
+    );
+  }
 
   /// Next book. From the end card the book is marked read; before it, as Settings > Reader says for comics ("Next
   /// book before the last page": ask, mark read, or keep it in progress). The next book opens in its own reader.
