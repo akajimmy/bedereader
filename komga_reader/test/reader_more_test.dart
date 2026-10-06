@@ -96,6 +96,12 @@ class ChainServer extends ReaderServer {
   }
 }
 
+/// [ChainServer] where marking a book read fails (Komga refuses).
+class MarkFailsChain extends ChainServer {
+  @override
+  Future<void> markRead(String bookId) async => throw KomgaError(500, '/api/v1/books/$bookId/read-progress');
+}
+
 void main() {
   setUpAll(preloadShaders);
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -635,6 +641,41 @@ void main() {
     expect(api.marked, ['B1']);
     expect(page(tester), 0.0, reason: "B2's first page");
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  group('Next book (code review 2026-10-05)', () {
+    Future<void> toEndCard(WidgetTester tester, ReaderServer api) async {
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      for (var i = 0; i < 3; i++) {
+        await keyAndSettle(tester, LogicalKeyboardKey.arrowRight);
+      }
+      expect(find.text('End of book'), findsOneWidget);
+    }
+
+    testWidgets('the next book is looked up once: the end card found it, going on uses that (#46 - it asked again; '
+        'with skip-read, up to 500 requests)', (tester) async {
+      final api = noNetwork(() => ChainServer());
+      await toEndCard(tester, api);
+      await key(tester, LogicalKeyboardKey.arrowRight); // on to B2
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(api.opened.last, 'B2');
+      expect(api.nextCalls, 1);
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets("marking the book read fails on the way to the next: it says that, not \"couldn't find the next "
+        'book" (#16); the book stays open', (tester) async {
+      final api = noNetwork(() => MarkFailsChain());
+      await toEndCard(tester, api);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.textContaining('mark "Test #1" as read'), findsOneWidget);
+      expect(find.textContaining('find the next book'), findsNothing);
+      expect(api.opened, ['B1'], reason: 'still on this book');
+      await tester.pump(const Duration(seconds: 5));
+    });
   });
 
   // ---- 9
