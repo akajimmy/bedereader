@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 69 - 2026-10-06
+
 **Changed**
 - **EPUB: the reader's controls are the comic reader's**: the same top bar (Close, the series and title, the clock,
   full screen on the PC, Mark read) and bottom bar (previous book, where you are, the slider, Contents, Text and page,
@@ -20,10 +26,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: footnote markers are in the app's accent colour** (set in Settings), not a fixed blue.
 - **EPUB: Next and Previous book** open the book in its own reader (a comic after an EPUB in the series opened in
   the EPUB reader); Next book mid-book asks, marks read or keeps it in progress as Settings > Reader says.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 68 - 2026-10-06
 
