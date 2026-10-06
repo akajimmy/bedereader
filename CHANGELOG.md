@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 65 - 2026-10-06
+
 **Added**
 - **EPUB books** (Android and Windows): novels and other EPUBs open in their own reader, laid out by the app - not a
   browser inside it. Justified text with hyphenation (English and French, by the book's language), the book's
@@ -26,10 +32,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   spacing. On a wide window, lines stay a comfortable length.
 - **Downloaded EPUBs read offline**: a download keeps the book's file; reading done offline is sent to Komga later.
 - The web version says EPUBs aren't supported there.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 64 - 2026-10-06
 
