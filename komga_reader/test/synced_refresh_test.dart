@@ -1,6 +1,7 @@
 // Synced lists and settings refreshed from Komga while the app runs (code review 2026-10-05: #1, #2, #3, #6, #12,
 // #34). Each test failed on the code before the fix.
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,14 +112,15 @@ void main() {
     final s = AppSettings.instance;
     final api = noNetwork(SettingsServer.new);
     await s.load(api);
-    api.holdGet = Completer<void>();
-    final refreshing = s.refresh();
-    await settle();
-    s.setEpub(s.epub.copyWith(size: 24)); // changed here while Komga's copy is being fetched
-    api.holdGet!.complete();
-    api.holdGet = null;
-    await refreshing;
-    expect(s.epub.size, 24);
+    // Komga's copy: the default size
+    api.written[AppSettings.komgaKey] = jsonEncode({'v': 1, 'default': const ReaderPrefs().toJson(),
+        'epub': const EpubPrefs().toJson(), 'series': {}});
+    api.holdPut = Completer<void>(); // the change's own send waits
+    s.setEpub(s.epub.copyWith(size: 24)); // changed here...
+    await s.refresh(); // ...and Home refreshes at once (it used to re-read the device copy, not saved yet)
+    expect(s.epub.size, 24, reason: "this device's change, not Komga's older copy");
+    api.holdPut!.complete();
+    api.holdPut = null;
     s.clearAccount();
   });
 
