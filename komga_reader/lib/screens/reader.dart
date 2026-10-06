@@ -1924,6 +1924,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int? _thumbWanted; // the page to fetch next, when a slot is free
   Uint8List? _thumbShown; // the last picture shown, kept up while the next comes in
   static const _thumbsAtOnce = 2, _thumbsKept = 64; // (64: a wide screen's page strip shows ~35)
+  // and no more than this much: offline the pictures are the pages themselves, 2-5 MB each - 64 of them held
+  // 130-320 MB (code review 2026-10-05, #40; user's cap: ~128 MB). Ones let go of are read again from the downloaded
+  // file when wanted
+  static const _thumbsBytesKept = 128 * 1024 * 1024;
 
   /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
   /// [queued]: for the page strip - many wanted at once, the ones asked for most recently (on screen now) first,
@@ -1974,9 +1978,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!mounted || _book['id'] != bookId) return; // another book since
       _thumbsLoading.remove(i);
       record();
-      while (_thumbs.length > _thumbsKept) {
-        _thumbs.remove(_thumbs.keys.first);
-      }
+      trimPictures(_thumbs, count: _thumbsKept, bytes: _thumbsBytesKept);
       if (_scrub != null || (_menu && _stripShown)) setState(() {});
       _nextThumb();
     }
@@ -2140,5 +2142,16 @@ class _Curl {
   void dispose() {
     sheet.dispose();
     if (under != null && !identical(under, sheet)) under!.dispose();
+  }
+}
+
+/// Lets go of the least recently used pictures in [pictures] (most recent last) until there are at most [count] of
+/// them and they come to at most [bytes] - the most recent one always kept.
+@visibleForTesting
+void trimPictures(Map<int, Uint8List?> pictures, {required int count, required int bytes}) {
+  var total = pictures.values.fold<int>(0, (n, b) => n + (b?.length ?? 0));
+  while (pictures.length > 1 && (pictures.length > count || total > bytes)) {
+    final first = pictures.keys.first;
+    total -= pictures.remove(first)?.length ?? 0;
   }
 }
