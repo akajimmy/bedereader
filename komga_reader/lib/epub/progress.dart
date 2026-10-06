@@ -41,6 +41,24 @@ Future<Map<String, String>> epubDevice() async {
 
 const _deviceKey = 'device.id';
 
+/// Where Komga has a book now: its saved place ([path] null: none - not started, or marked unread) and whether it's
+/// marked read. What the reader compares, before a save and on coming back to the app, with what it last loaded,
+/// saved or accepted: different = another device moved the book on (as the comic reader does with pages).
+@immutable
+class EpubKomgaPlace {
+  const EpubKomgaPlace(this.path, this.progression, this.total, {required this.finished});
+  final String? path;
+  final double progression; // in the chapter, 0..1
+  final double? total; // in the book, 0..1 (as the device that saved it worked it out)
+  final bool finished;
+
+  bool sameAs(EpubKomgaPlace o) =>
+      o.path == path && o.finished == finished && (o.progression - progression).abs() < 0.001;
+
+  @override
+  String toString() => 'EpubKomgaPlace($path, $progression, $total, finished: $finished)';
+}
+
 class EpubProgress {
   EpubProgress(this.api, this.bookId);
   final Komga api;
@@ -73,6 +91,18 @@ class EpubProgress {
     final p = all[math.min(page, all.length) - 1] as Map;
     return EpubLocation(pathOf(p['href'] as String),
         ((p['locations'] as Map?)?['progression'] as num?)?.toDouble() ?? 0);
+  }
+
+  /// Where Komga has the book now (its saved progression, and the book's read state). Throws if Komga can't say.
+  Future<EpubKomgaPlace> place() async {
+    final saved = await api.epubProgression(bookId);
+    final book = await api.book(bookId);
+    final finished = book?['readProgress']?['completed'] == true;
+    final loc = saved?['locator'] as Map?;
+    if (loc == null || loc['href'] is! String) return EpubKomgaPlace(null, 0, null, finished: finished);
+    final at = loc['locations'] as Map?;
+    return EpubKomgaPlace(pathOf(loc['href'] as String), ((at?['progression'] as num?)?.toDouble() ?? 0).clamp(0.0, 1.0),
+        (at?['totalProgression'] as num?)?.toDouble(), finished: finished);
   }
 
   /// Saves [path] at [progression] (in the chapter) and [total] (in the book): matched to Komga's position at or

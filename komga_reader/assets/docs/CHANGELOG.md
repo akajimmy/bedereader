@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- **EPUB: "Read on another device"** - as with comics, when a book was read further (or finished, or marked unread)
+  on another device while it was open here, the reader asks before saving: stay where you are, or go to that place.
+  Coming back to the app checks too, and closing the book never saves over another device's place.
+
 **Changed**
 - **EPUB: the page-turn measuring is off in everyday builds** (frame times and the rest, added in builds 76-78 to
   find what made turns less smooth than in comics). It's compiled in only for a measuring build; the reader's
