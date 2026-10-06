@@ -16,7 +16,7 @@ import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'book_details.dart' show posterDate;
-import 'reader.dart';
+import 'open_book.dart';
 import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
@@ -294,7 +294,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
             onOpen: () => _push(SeriesScreen(api: api, series: it)));
       case BrowseMode.books:
         return bookTile(context, api, it, autofocus: first, onChanged: _refresh, selection: _sel,
-            onOpen: () => _push(ReaderScreen(api: api, book: it, skipRead: _filter == ReadFilter.hideRead)));
+            onOpen: () => _push(readerFor(api, it, skipRead: _filter == ReadFilter.hideRead)));
       case BrowseMode.collections:
         return PosterTile(
           api: api, autofocus: first, imageUrl: api.collectionThumb(it['id']), title: it['name'] as String,

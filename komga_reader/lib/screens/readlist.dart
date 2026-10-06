@@ -12,7 +12,7 @@ import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
 import 'actions.dart';
 import 'library.dart';
-import 'reader.dart';
+import 'open_book.dart';
 import 'series.dart';
 
 /// A read list (event / era) in its own order, e.g. "only the unread books of Civil War".
@@ -90,7 +90,7 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0,
             readListId: rlId, onChanged: _paged.refresh, selection: _sel, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => ReaderScreen(api: widget.api, book: b, readListId: rlId,
+              builder: (_) => readerFor(widget.api, b, readListId: rlId,
                   skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),

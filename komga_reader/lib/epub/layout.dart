@@ -32,6 +32,14 @@ class EpubTheme {
   /// (user, 2026-10-06: "a switch: book's look / mine").
   final bool bookFormatting;
   final bool hyphenate;
+
+  // equal themes lay out the same: a book isn't laid out again for an equal one
+  @override
+  bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
+      other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
+      other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate;
+  @override
+  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate);
 }
 
 // ---- blocks
@@ -490,6 +498,21 @@ class Paginator {
 
   bool get _pageEmpty => pages.last.pieces.isEmpty;
 
+  // every painter made, so the pages can be let go of (a chapter far from the one being read)
+  final List<TextPainter> _made = [];
+  late final TextPainter _hyphen = TextPainter(
+      text: TextSpan(text: '-', style: _style(const InlineStyle())), textDirection: TextDirection.ltr)
+    ..layout();
+
+  /// Frees the laid-out text of [pages] (they mustn't be painted after this).
+  void dispose() {
+    for (final tp in _made) {
+      tp.dispose();
+    }
+    _made.clear();
+    _hyphen.dispose();
+  }
+
   // the current text block's alignment and indent, after the formatting switch
   TextAlign _align = TextAlign.left;
   double _indent = 0;
@@ -647,8 +670,8 @@ class Paginator {
       ]);
     }
     tp.layout(maxWidth: width);
-    final hyphen = TextPainter(text: TextSpan(text: '-', style: _style(const InlineStyle())),
-        textDirection: TextDirection.ltr)..layout();
+    _made.add(tp);
+    final hyphen = _hyphen;
     final laid = _Laid(tp, hyphen, base ?? b.start);
     for (final (s, e, href, text) in linkRanges) {
       // one tap area per line the link is on (justified lines give a box per word)
@@ -754,6 +777,7 @@ class Paginator {
         text: TextSpan(text: drop!.text, style: _style(drop.style).copyWith(fontSize: lineH * 2.6, height: 1)),
         textDirection: TextDirection.ltr,
       )..layout();
+      _made.add(dropTp);
       boxW = math.max(dropTp.width + (b.dropBoxed ? 18 : 6), lineH * 1.6);
       boxH = lineH * 3;
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
