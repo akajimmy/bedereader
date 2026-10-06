@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **EPUB: your text size is the book's text size.** A book that sets its whole text smaller or larger (70 of the 339
+  in the library: most at 85%, some Discworld books at 110-120%) no longer overrides the size you picked: its main
+  text shows at your size, and its headings, notes and other sizes stay in proportion to it. A size the book sets on
+  a few parts only (a prelude, a letter) is kept.
+
 **Fixed**
 - **EPUB: the slider jumped after a seek** (build 70): letting go, it went back to the page left for a moment, then
   to the new one. It now stays on the page picked while the reader goes there.
