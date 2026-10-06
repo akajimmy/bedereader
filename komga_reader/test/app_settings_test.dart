@@ -284,6 +284,9 @@ void main() {
     expect(s.display.posterSize, PosterSize.large);
     await tap(find.text('Title only'));
     expect(s.display.posterTitleOnly, isTrue);
+    expect(s.display.posterDate, isTrue, reason: 'release dates on by default');
+    await tap(find.widgetWithText(SwitchListTile, 'Release date'));
+    expect(s.display.posterDate, isFalse);
   });
 
   testWidgets("Reset this device's settings: asks first; every one of this device's settings goes back, synced ones "

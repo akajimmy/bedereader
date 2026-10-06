@@ -196,8 +196,11 @@ class DisplayPrefs {
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false});
+      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
+      this.posterDate = true});
   final bool night;
+  /// book posters: the release date under the title ("13 Mar 2024") - user, 2026-10-06; default on
+  final bool posterDate;
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
   /// button (user, 2026-10-02)
   final bool pageStrip;
@@ -257,9 +260,10 @@ class DisplayPrefs {
           bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pagePreviews, bool? pageStrip}) =>
+          bool? pagePreviews, bool? pageStrip, bool? posterDate}) =>
       DisplayPrefs(
           pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
+          posterDate: posterDate ?? this.posterDate,
           nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
           nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
           rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
@@ -275,7 +279,7 @@ class DisplayPrefs {
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip};
+      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip, 'posterDate': posterDate};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -293,6 +297,7 @@ class DisplayPrefs {
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
         posterTitleOnly: j['posterTitleOnly'] == true,
+        posterDate: j['posterDate'] != false,
         rotation: pick(Rotation.values, j['rotation'], Rotation.auto),
         clock: pick(ShowWhen.values, j['clock'], ShowWhen.withControls),
         progressBar: j['progressBar'] == true,

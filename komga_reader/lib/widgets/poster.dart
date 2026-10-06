@@ -45,7 +45,7 @@ SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExt
 class PosterTile extends StatelessWidget {
   const PosterTile({super.key, required this.api, required this.imageUrl, required this.title,
       this.subtitle, this.read = false, this.progress, required this.onOpen, this.onMenu, this.autofocus = false,
-      this.image, this.selected, this.badge});
+      this.image, this.selected, this.badge, this.caption});
 
   final Komga api;
   final String imageUrl;
@@ -59,11 +59,15 @@ class PosterTile extends StatelessWidget {
   final VoidCallback? onMenu;
   final bool autofocus;
   final Widget? badge; // bottom-right corner (what of it is downloaded)
+  /// A last small line (book posters: the release date). Not null = the line is there, even empty (a book with no
+  /// date), so every poster in a grid keeps the same cover size.
+  final String? caption;
 
-  /// Two title lines (13 px, line height 1.2) + one subtitle line (11 px, 1.3), following the tablet's text size.
-  static double textBlockHeight(BuildContext context) {
+  /// Two title lines (13 px, line height 1.2) + one subtitle line (11 px, 1.3), and one more small line with a
+  /// [caption], following the tablet's text size.
+  static double textBlockHeight(BuildContext context, {bool caption = false}) {
     final t = MediaQuery.textScalerOf(context);
-    return t.scale(13) * 1.2 * 2 + t.scale(11) * 1.3 + 2;
+    return t.scale(13) * 1.2 * 2 + t.scale(11) * 1.3 * (caption ? 2 : 1) + 2;
   }
 
   @override
@@ -113,12 +117,15 @@ class PosterTile extends StatelessWidget {
             // Fixed-height text block (always room for a 2-line title + the subtitle), so a long title never takes
             // height from the cover: every cover in a grid or row stays the same size.
             SizedBox(
-              height: textBlockHeight(context),
+              height: textBlockHeight(context, caption: caption != null),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.2)),
                 if (subtitle != null)
                   Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF9A9A9A))),
+                if (caption != null && caption!.isNotEmpty)
+                  Text(caption!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF7A7A7A))),
               ]),
             ),
           ])),
