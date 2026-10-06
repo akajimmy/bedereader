@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -205,7 +206,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     if (!mounted) return;
     _applyRotation();
     if (_settings.display.screenOn != _screenOnFor) _awake(); // Keep the screen on changed
+    // rebuilt only for what it shows: brightness and night warmth are drawn over the whole app, not by the reader
+    // (a brightness slider drag rebuilt the reader many times a second - code review 2026-10-05, #44)
+    final shown = _shownSettings();
+    if (shown == _lastShownSettings) return;
+    _lastShownSettings = shown;
     setState(() {});
+  }
+
+  String? _lastShownSettings;
+  String _shownSettings() {
+    final d = _settings.display.toJson()
+      ..remove('brightness')
+      ..remove('warmth');
+    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson()});
   }
 
   // ---- Keep the screen on (Settings > Reader): always while a book is open, for N minutes after the last page turn
