@@ -510,10 +510,15 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         expand: false,
         initialChildSize: 0.55,
         maxChildSize: 0.9,
-        builder: (c, scroll) => ListenableBuilder(
-          listenable: AppSettings.instance,
-          builder: (c, _) => SettingsColumn(child: ListView(controller: scroll, children: epubSettingRows(
-              c, AppSettings.instance.epub, AppSettings.instance.setEpub))),
+        builder: (c, scroll) => Material(
+          // a solid sheet: the page stays visible above it, not through it (the tablet, 2026-10-06)
+          color: Theme.of(c).colorScheme.surface,
+          child: ListenableBuilder(
+            listenable: AppSettings.instance,
+            builder: (c, _) => SettingsColumn(child: ListView(controller: scroll, padding:
+                const EdgeInsets.fromLTRB(12, 8, 12, 24), children: epubSettingRows(
+                    c, AppSettings.instance.epub, AppSettings.instance.setEpub))),
+          ),
         ),
       ),
     );
