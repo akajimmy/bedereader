@@ -110,7 +110,9 @@ void main() {
     expect(links.where((l) => l.text == '*').length, 1);
     for (final l in links) {
       expect(l.rect.width, greaterThan(0));
-      expect(const Rect.fromLTWH(0, 0, 400, 600).contains(l.rect.center), isTrue, reason: '${l.text} is on the page');
+      // in page coordinates: inside the text area (the theme's margins: 36 at the sides, 40 top and bottom)
+      expect(const Rect.fromLTRB(36, 40, 364, 560).contains(l.rect.center), isTrue,
+          reason: '${l.text} at ${l.rect}: inside the text area');
     }
     expect(links[0].rect.right, lessThan(links[1].rect.left), reason: 'the marker comes before the later link');
   });
