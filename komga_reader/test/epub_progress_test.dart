@@ -136,7 +136,10 @@ void main() {
     final total = int.parse(RegExp(r'of (\d+)').firstMatch(l)!.group(1)!);
     expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
     await run(tester, const Duration(seconds: 3));
-    expect(api.puts, isEmpty, reason: 'nothing turned: nothing saved');
+    await tester.pumpWidget(const SizedBox()); // closing the book
+    await run(tester, const Duration(milliseconds: 300));
+    expect(api.puts, isEmpty, reason: 'nothing turned: nothing saved, not even on closing (another device\'s place '
+        'stays)');
   });
 
   testWidgets('a turn is saved once the page has been on screen 1.5 s (quick turns: only the last); the end card '
