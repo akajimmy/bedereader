@@ -10,6 +10,12 @@ import 'package:flutter/foundation.dart';
 
 import '../screen.dart';
 
+/// The reader's timing instruments - frame times ([FrameStats]), the page-change timer, the trace mirrored to the
+/// system log for adb - compiled in only for a measuring build (`tools\build.ps1 -Timing`). Off in everyday builds:
+/// they served the 2026-10-06 page-turn measurements, and ask Flutter for every frame's timings for no purpose
+/// otherwise (user: no performance hit for something that's not serving a purpose).
+const readerTiming = bool.fromEnvironment('BEDEREADER_TIMING');
+
 class EpubTrace {
   EpubTrace._();
   static final EpubTrace instance = EpubTrace._();
@@ -69,8 +75,9 @@ class EpubTrace {
     }
   }
 
-  /// Whether lines go to the system log too (off in tests: they'd fill the test output).
-  static bool toConsole = kIsWeb || !Platform.environment.containsKey('FLUTTER_TEST');
+  /// Whether lines go to the system log too: a measuring build only ([readerTiming]), never in tests (they'd fill the
+  /// test output).
+  static bool toConsole = readerTiming && (kIsWeb || !Platform.environment.containsKey('FLUTTER_TEST'));
 
   /// Everything logged so far is in the file (tests).
   Future<void> flush() async {

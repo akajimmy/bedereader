@@ -117,7 +117,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     Downloads.instance.readerOpened();
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SchedulerBinding.instance.addTimingsCallback(_onFrames);
+    if (readerTiming) SchedulerBinding.instance.addTimingsCallback(_onFrames); // a measuring build only
     _awake();
     _open();
   }
@@ -135,9 +135,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   @override
   void dispose() {
-    SchedulerBinding.instance.removeTimingsCallback(_onFrames);
-    final last = _frameStats.flush();
-    if (last != null) EpubTrace.instance.log(last);
+    if (readerTiming) {
+      SchedulerBinding.instance.removeTimingsCallback(_onFrames);
+      final last = _frameStats.flush();
+      if (last != null) EpubTrace.instance.log(last);
+    }
     EpubTrace.instance.log('closed');
     Connection.instance.readerClosed();
     AppSettings.instance.removeListener(_onSettings);
@@ -402,7 +404,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   void _onPageChanged(int i) {
-    // timed: it runs mid-turn, where tap turns missed a refresh (tablet, build 77) - logged when it takes 2 ms or more
+    if (!readerTiming) return _pageChanged(i);
+    // timed (a measuring build): it runs mid-turn, where tap turns missed a refresh (tablet, build 77) - logged when
+    // it takes 2 ms or more
     final clock = Stopwatch()..start();
     _pageChanged(i);
     final ms = clock.elapsedMicroseconds / 1000;
