@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screens/reader.dart';
@@ -38,8 +39,13 @@ class BookServer extends ReaderServer {
   Future<Uint8List> pageBytes(String bookId, int number) => loads ? Future.value(png) : Completer<Uint8List>().future;
   @override
   Future<Uint8List> pageThumbBytes(String bookId, int number) => Completer<Uint8List>().future;
+  bool failSaves = false; // Komga refuses saves (a network blip)
+  Completer<void>? holdSave; // a save on its way, until completed
+
   @override
   Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    if (failSaves) throw KomgaUnreachable(baseUrl);
+    await holdSave?.future;
     await super.setProgress(bookId, page, completed: completed);
     progress = {'page': page, 'completed': completed};
   }
@@ -395,6 +401,55 @@ void main() {
       expect(find.text('Read further on another device'), findsNothing);
       expect(page(tester), 1.0, reason: 'stayed on page 2');
       await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets("a save that failed (a network blip), then a turn: no question - Komga still had this reader's "
+        'earlier page, which used to be taken for another device (code review 2026-10-05, #4)', (tester) async {
+      final api = await reading(tester);
+      api.failSaves = true;
+      await turnAndWait(tester); // page 3: refused
+      expect(api.progress, {'page': 2, 'completed': false});
+      api.failSaves = false;
+      await turnAndWait(tester); // page 4
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(api.progress, {'page': 4, 'completed': false});
+    });
+
+    testWidgets('coming back to the app while a save is on its way: no question (#4)', (tester) async {
+      final api = await reading(tester);
+      api.holdSave = Completer<void>();
+      await turnAndWait(tester); // page 3's save: on its way
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused,
+        AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await tester.pump();
+      api.holdSave!.complete();
+      api.holdSave = null;
+      await frames(tester);
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(api.progress, {'page': 3, 'completed': false});
+    });
+
+    testWidgets('a save coming due while the question is on screen waits for the answer: Go to page drops it (it '
+        "used to save over the other device's page with the question still up - #5)", (tester) async {
+      final api = await reading(tester);
+      await keyAndSettle(tester, LogicalKeyboardKey.arrowRight); // page 3 here, its save due in a moment
+      api.progress = {'page': 6, 'completed': false}; // the PC
+      for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused,
+        AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(s);
+      }
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Read further on another device'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 3)); // page 3's save comes due, the question still up
+      await tester.pump();
+      expect(api.progress, {'page': 6, 'completed': false}, reason: 'nothing saved under the question');
+      await tester.tap(find.text('Go to page 6'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+      expect(api.progress, {'page': 6, 'completed': false}, reason: "the other device's stands");
     });
 
     testWidgets('closing the book after it moved elsewhere: nothing saved over it, and no question', (tester) async {

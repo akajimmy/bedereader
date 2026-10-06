@@ -374,7 +374,10 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     // save hadn't happened yet - the 1.5 s settle timer is cancelled by the turn onto the card)
     final page = math.min(_index, _last);
     final id = _book['id'] as String;
-    _saves = _saves.then((_) => _save(id, page + 1, page >= _last, ask: ask)); // one at a time, in order
+    // one at a time, in order; one queued before the reader went to another device's page is dropped (it waited for
+    // the question's answer, then saved this reader's page over theirs - #5)
+    final wentElsewhere = _wentElsewhere;
+    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, page + 1, page >= _last, ask: ask) : null);
   }
 
   // ---- progress moved on another device while this book was open (user, 2026-10-05: read on the PC, then the
@@ -387,7 +390,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   // finished)
   final Map<String, (int?, bool)> _known = {};
   Future<void> _saves = Future.value();
-  bool _asking = false;
+  Future<bool>? _question; // the question on screen: a second asker waits for its answer
+  int _wentElsewhere = 0; // times the reader went with another device's progress (saves queued before: dropped)
   AppLifecycleListener? _life;
 
   static (int?, bool) _progressOf(dynamic book) {
@@ -414,57 +418,67 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       if (!ask || !mounted || _book['id'] != id) return; // closing, or another book by now: theirs stands
       if (!await _askAboutElsewhere(moved)) return; // gone with theirs: nothing of this one's to save
     }
-    _known[id] = (page, completed);
-    await api.setProgress(id, page, completed: completed).catchError((_) {});
+    // known as this reader's page once Komga has it: noted before, a save that failed (a network blip) left Komga on
+    // the earlier page, and the next save asked about this reader's own page as if another device had moved it
+    // (code review 2026-10-05, #4). A failed save stays silent: the next one carries the newer page.
+    try {
+      await api.setProgress(id, page, completed: completed);
+      _known[id] = (page, completed);
+    } catch (_) {}
   }
 
   /// Back in the app with the book open: has it moved on elsewhere meanwhile?
-  Future<void> _checkElsewhere() async {
-    if (_loading || _pages.isEmpty || _asking) return;
-    final moved = await _movedElsewhere(_book['id'] as String);
-    if (moved != null && mounted) await _askAboutElsewhere(moved);
+  /// In line with the saves: a save on its way when the app came back was taken for another device's (#4).
+  Future<void> _checkElsewhere() {
+    _saves = _saves.then((_) async {
+      if (!mounted || _loading || _pages.isEmpty || _question != null) return;
+      final moved = await _movedElsewhere(_book['id'] as String);
+      if (moved != null && mounted) await _askAboutElsewhere(moved);
+    });
+    return _saves;
   }
 
   /// The question. True: stay here (this reader's progress is saved next); false: went with the other device's.
-  Future<bool> _askAboutElsewhere((int?, bool) moved) async {
-    if (_asking) return true;
-    _asking = true;
-    try {
-      final (page, finished) = moved;
-      final here = math.min(_index, _last) + 1;
-      final goTo = finished ? null : (page ?? 1).clamp(1, _pages.length);
-      final stay = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: Text(finished ? 'Finished on another device' : 'Read further on another device'),
-          content: Text(finished
-              ? 'This book was read to the end on another device.'
-              : page == null
-                  ? 'This book was marked unread on another device.'
-                  : 'On another device this book is on page $page.'),
-          actions: [
-            TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true),
-                child: Text(finished ? 'Stay here' : 'Stay on page $here')),
-            TextButton(onPressed: () => Navigator.pop(c, false),
-                child: Text(finished ? 'Mark as read' : 'Go to page $goTo')),
-          ],
-        ),
-      );
-      _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
-      if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
-      _saveTimer?.cancel();
-      setState(() => _book = {..._book, 'readProgress': finished
-          ? {'page': _pages.length, 'completed': true}
-          : page == null ? null : {'page': page, 'completed': false}});
-      _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
-      _finishCurlNow();
-      final target = finished ? _pages.length : goTo! - 1; // finished: the end card, with the next book
-      _openedAt = target;
-      _pc?.jumpToPage(target);
-      return false;
-    } finally {
-      _asking = false;
-    }
+  /// Asked once at a time: a second asker (a save coming due while it's on screen) waits for the answer - Stay: it
+  /// saves; the other device's: it doesn't (it used to be told "stay" at once and save over the other device's page
+  /// with the question still up - code review 2026-10-05, #5).
+  Future<bool> _askAboutElsewhere((int?, bool) moved) =>
+      _question ??= _ask(moved).whenComplete(() => _question = null);
+
+  Future<bool> _ask((int?, bool) moved) async {
+    final (page, finished) = moved;
+    final here = math.min(_index, _last) + 1;
+    final goTo = finished ? null : (page ?? 1).clamp(1, _pages.length);
+    final stay = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(finished ? 'Finished on another device' : 'Read further on another device'),
+        content: Text(finished
+            ? 'This book was read to the end on another device.'
+            : page == null
+                ? 'This book was marked unread on another device.'
+                : 'On another device this book is on page $page.'),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true),
+              child: Text(finished ? 'Stay here' : 'Stay on page $here')),
+          TextButton(onPressed: () => Navigator.pop(c, false),
+              child: Text(finished ? 'Mark as read' : 'Go to page $goTo')),
+        ],
+      ),
+    );
+    _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
+    if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
+    _saveTimer?.cancel();
+    setState(() => _book = {..._book, 'readProgress': finished
+        ? {'page': _pages.length, 'completed': true}
+        : page == null ? null : {'page': page, 'completed': false}});
+    _wentElsewhere++;
+    _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
+    _finishCurlNow();
+    final target = finished ? _pages.length : goTo! - 1; // finished: the end card, with the next book
+    _openedAt = target;
+    _pc?.jumpToPage(target);
+    return false;
   }
 
   // ---- navigation (the page after the last is the "end of book" card)
