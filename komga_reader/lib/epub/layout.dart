@@ -334,10 +334,10 @@ class ChapterReader {
       'h1' => 0.67, 'h2' => 0.83, 'h3' => 1.0, 'h4' => 1.33, 'h5' => 1.67, 'h6' => 2.33,
       _ => 0.0,
     };
-    final mt = cssLength(d['margin-top'], em: st.size, percentOf: 30) ?? uaGap * st.size;
-    final mb = cssLength(d['margin-bottom'], em: st.size, percentOf: 30) ?? uaGap * st.size;
-    final ml = cssLength(d['margin-left'], em: st.size, percentOf: 30) ?? (e.name == 'blockquote' ? 1.5 : 0);
-    final mr = cssLength(d['margin-right'], em: st.size, percentOf: 30) ?? (e.name == 'blockquote' ? 1.5 : 0);
+    final mt = _em(d['margin-top'], st) ?? uaGap * st.size;
+    final mb = _em(d['margin-bottom'], st) ?? uaGap * st.size;
+    final ml = _em(d['margin-left'], st) ?? (e.name == 'blockquote' ? 1.5 : 0);
+    final mr = _em(d['margin-right'], st) ?? (e.name == 'blockquote' ? 1.5 : 0);
     final brk = RegExp(r'always|page|left|right').hasMatch(d['page-break-before'] ?? d['break-before'] ?? '');
     final startAt = blocks.length;
     // margins nest, as in a browser: an element's left / right margins carry down to everything inside it, added to
@@ -398,6 +398,13 @@ class ChapterReader {
   }
 
   double _insetL = 0, _insetR = 0; // the left / right margins of the elements we're inside (em), added up
+
+  /// A margin in the reader's em (16 px of the book's): px and pt scaled down - "30px" is about 2 em, not 30 (Homeland's
+  /// "also by" page was squeezed into a sliver - user, 2026-10-06); % of a text column taken as 30 em wide.
+  static double? _em(String? v, InlineStyle st) {
+    final px = cssLength(v, em: st.size * 16, percentOf: 30 * 16);
+    return px == null ? null : px / 16;
+  }
 
   static String _textOf(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();

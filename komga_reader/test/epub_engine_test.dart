@@ -210,6 +210,18 @@ void main() {
     expect(o[2].dx, 36, reason: 'a negative margin stops at the page margin');
   });
 
+  test("margins in px are px (16 to the book's em), not em: Homeland's \"also by\" page (30px either side, 45px more "
+      'on the right) keeps a full-width column', () {
+    final blocks = ChapterReader(
+        StyleSheet()..add('div.o { margin-left: 32px; margin-right: 32px } p.r { text-align: right; margin-right: 48px }'),
+        (h) => h).read(parseXhtml('<body><div class="o"><p>Homeland</p><p class="r">The Crystal Shard</p></div></body>'));
+    final t = blocks.whereType<TextBlock>().toList();
+    expect(t[0].left, 2, reason: '32px = 2 em');
+    expect(t[1].right, 2 + 3, reason: "the wrapper's 32px and its own 48px");
+    final o = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.textOrigins;
+    expect(o[0].dx, 36 + 2 * 19, reason: '2 em at 19 px');
+  });
+
   test('margins nest: a quotation or a wrapper indents the paragraphs inside it, wrappers inside wrappers add up',
       () {
     TextBlock para(List<Block> bs, String text) =>
