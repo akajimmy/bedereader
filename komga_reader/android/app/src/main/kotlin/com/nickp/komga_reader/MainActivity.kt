@@ -144,10 +144,17 @@ class MainActivity : FlutterActivity() {
                                 put(MediaStore.Images.Media.IS_PENDING, 1)
                             }
                             val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)!!
-                            contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
-                            values.clear()
-                            values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                            contentResolver.update(uri, values, null, null)
+                            try {
+                                contentResolver.openOutputStream(uri)!!.use { it.write(bytes) }
+                                values.clear()
+                                values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                                contentResolver.update(uri, values, null, null)
+                            } catch (e: Exception) {
+                                // the half-made entry this call just added goes (it lingered hidden ~7 days - code
+                                // review 2026-10-05, #21); the error is reported below
+                                contentResolver.delete(uri, null, null)
+                                throw e
+                            }
                             result.success("Pictures/BeDeReader/$name")
                         } else {
                             val dir = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "BeDeReader")

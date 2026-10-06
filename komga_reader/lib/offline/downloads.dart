@@ -178,8 +178,13 @@ class Downloads extends ChangeNotifier {
     _serverTimer?.cancel();
     waitingForServer = false;
     final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
-    store = OfflineStore(await serverFolder(base, api.baseUrl));
-    await store!.load();
+    final folder = await serverFolder(base, api.baseUrl);
+    // the same folder (signed in again to the same server): the same store - a second one for it, while a download
+    // from before was still writing through the first, had two writing index.json (code review 2026-10-05, #27)
+    if (store?.root.path != folder.path) {
+      store = OfflineStore(folder);
+      await store!.load();
+    }
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);

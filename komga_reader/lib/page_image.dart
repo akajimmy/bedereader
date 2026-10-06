@@ -31,22 +31,32 @@ class PageLoader {
   /// A page already here (the one showing, its neighbours): the slider's preview uses it rather than asking Komga.
   Uint8List? loadedBytes(int i) => _loaded[i];
 
-  Future<PageData> get(int i) => _cache.putIfAbsent(i, () async {
+  Future<PageData> get(int i) {
+    final have = _cache[i];
+    if (have != null) return have;
+    late final Future<PageData> load;
+    load = () async {
+      try {
+        final bytes = await api.pageBytes(bookId, pageNumbers[i]);
+        final ui.FrameInfo frame;
         try {
-          final bytes = await api.pageBytes(bookId, pageNumbers[i]);
-          final ui.FrameInfo frame;
-          try {
-            frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
-          } catch (e) {
-            throw PageUnreadable(e); // arrived, but can't be decoded: damaged, or a format this device can't read
-          }
-          if (_cache.containsKey(i)) _loaded[i] = bytes; // not if it was forgotten meanwhile
-          return PageData(frame.image, bytes);
-        } catch (_) {
-          _cache.remove(i)?.ignore(); // let a later visit retry (this failed attempt is reported by the rethrow)
-          rethrow;
+          frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
+        } catch (e) {
+          throw PageUnreadable(e); // arrived, but can't be decoded: damaged, or a format this device can't read
         }
-      });
+        if (identical(_cache[i], load)) _loaded[i] = bytes; // not if it was forgotten (or asked for again) meanwhile
+        return PageData(frame.image, bytes);
+      } catch (_) {
+        // let a later visit retry (this failed attempt is reported by the rethrow) - this attempt only: a newer one
+        // for the same page, asked for after this one was forgotten, stays (it was removed, and the page downloaded
+        // again - code review 2026-10-05, #18)
+        if (identical(_cache[i], load)) _cache.remove(i)?.ignore();
+        rethrow;
+      }
+    }();
+    _cache[i] = load;
+    return load;
+  }
 
   /// Called on every page change: preload ahead, forget pages far away (the GC frees them).
   void around(int i) {
