@@ -95,9 +95,29 @@ class PageLoader {
         ]); // a page that won't load just doesn't vote
         final got = measured.whereType<Levels>().toList();
         final levels = Levels.combine(got);
-        if (got.length == picks.length) await prefs.setString(key, [...levels.lo, ...levels.hi].join(','));
+        if (got.length == picks.length) {
+          await prefs.setString(key, [...levels.lo, ...levels.hi].join(','));
+          await _rememberLevelsOf(prefs, bookId);
+        }
         return _levelsNow = levels;
       }();
+}
+
+/// The books whose levels are remembered, most recent last: past [levelsKept], the oldest ones' go - one was kept for
+/// every book ever opened with Enhance colours, for good (code review 2026-10-05, #49).
+const levelsKept = 300;
+
+Future<void> _rememberLevelsOf(SharedPreferences prefs, String bookId) async {
+  // (first time: the books remembered before this list was kept - their order unknown)
+  final books = prefs.getStringList('levels.books') ??
+      [for (final k in prefs.getKeys()) if (k.startsWith('levels.') && k != 'levels.books') k.substring(7)];
+  books
+    ..remove(bookId)
+    ..add(bookId);
+  while (books.length > levelsKept) {
+    await prefs.remove('levels.${books.removeAt(0)}');
+  }
+  await prefs.setStringList('levels.books', books);
 }
 
 /// Per-channel black and white points (0..1). Stretching lo..hi to 0..1 fixes yellowed paper and grey blacks.

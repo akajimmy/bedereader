@@ -48,6 +48,19 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   hidden half-saved picture behind for a week. Signing in again while a book was downloading no longer has two
   copies of the downloads record writing at once.
 
+**Changed**
+- **Smoother page curl**: the curl now redraws just itself as it moves, instead of the whole reader (about 23 times
+  a turn, plus every finger movement).
+- **Enhance colours doesn't hold up a book's first page**: it shows at once, then adjusts a moment later when the
+  book's colour levels have been measured (from five pages of the book). Opening the book again, no wait at all.
+- **The page strip uses less memory for downloaded books**: at most about 128 MB of pages kept (it could reach
+  130-320 MB); pages scrolled away are read again from the download when needed.
+- **Dragging the brightness slider no longer rebuilds the reader and every poster grid** behind it, many times a
+  second.
+- **What's new / Read me** load once when opened, not again on every settings change. And the colour levels
+  remembered for books opened with Enhance colours are kept for the 300 most recent books, not every book ever
+  opened.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).

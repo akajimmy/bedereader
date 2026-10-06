@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'epub_reader_test.dart' show onePixelPng;
 import 'support/no_network.dart';
@@ -20,7 +21,29 @@ class HeldPages extends TestKomga {
   }
 }
 
+/// A Komga whose every page is a small picture, at once.
+class AllPages extends TestKomga {
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) async => onePixelPng;
+}
+
 void main() {
+  testWidgets("Enhance colours' remembered levels: the most recent $levelsKept books kept, older ones go - one was "
+      'kept for every book ever opened with it (code review 2026-10-05, #49); those from before the list count too',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      for (var i = 0; i < levelsKept; i++) 'levels.old$i': '0,0,0,1,1,1', // remembered before the list was kept
+    });
+    await tester.runAsync(() async {
+      await PageLoader(noNetwork(AllPages.new), 'NEW', List.generate(10, (i) => i + 1)).bookLevels();
+      final p = await SharedPreferences.getInstance();
+      final kept = p.getKeys().where((k) => k.startsWith('levels.') && k != 'levels.books').toList();
+      expect(kept, hasLength(levelsKept));
+      expect(p.getString('levels.NEW'), isNotNull, reason: 'the book just measured is kept');
+      expect(p.getStringList('levels.books')!.last, 'NEW');
+    });
+  });
+
   testWidgets('a slow failing load of a page leaves the newer load of it in place', (tester) async {
     await tester.runAsync(() async {
       final api = noNetwork(HeldPages.new);
