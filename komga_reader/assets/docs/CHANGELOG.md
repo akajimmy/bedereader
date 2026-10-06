@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 74 - 2026-10-06
+
 **Fixed**
 - **Android: the app jumped back to Home by itself** when a remote or keyboard connected or disconnected (a
   Bluetooth remote waking up, the tablet waking from sleep): Android restarted the app's window for the change. The
@@ -19,10 +25,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   was drawn as a box round the text; a first-line indent given in points was taken as about 16 times too big (the
   first line started a third of the way across); and a book that sets all its text bold now shows at normal weight
   (as with a book-wide text size: the book's overall setting doesn't override yours; headings keep their bold).
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 73 - 2026-10-06
 
