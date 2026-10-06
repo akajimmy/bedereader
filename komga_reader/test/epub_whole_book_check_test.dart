@@ -36,7 +36,7 @@ void main() {
         final p = Paginator(const EpubTheme(fontFamily: 'Literata', bookFormatting: false), const Size(646, 1000),
             hy.forLang(c.lang));
         final pages = p.run(c.blocks);
-        note('$i ok ${pages.length} pages');
+        note('$i ok ${pages.length} pages, starts ${pages.map((p) => p.start).join(',')}');
         p.dispose();
         c.dispose();
       }
