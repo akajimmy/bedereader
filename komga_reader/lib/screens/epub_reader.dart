@@ -131,6 +131,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _awakeTimer?.cancel();
     _cornerTimer?.cancel();
+    for (final t in _prefetchTimers) {
+      t.cancel();
+    }
     if (_screenHeld) keepScreenOn(false);
     _saveNow(); // closing: the place goes now, not after the settle time
     _book?.removeListener(_onBook);
@@ -289,7 +292,23 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   /// Shows chapter [chapter] at [position] (laying it out first).
   /// Chapter [i] laid out ahead (a neighbour, ready to turn into); a failure is the chapter's, shown when it's reached.
-  void _prefetch(int i) => unawaited(_book!.pages(i).then<void>((_) {}, onError: (Object _) {}));
+  /// Laid out a moment later, once the turn that called for it has finished sliding: laying a chapter out holds the
+  /// screen up, and doing it mid-slide made the turn stutter (user, 2026-10-06).
+  void _prefetch(int i) {
+    final b = _book!;
+    if (b.pagesNow(i) != null) return;
+    _prefetchTimers.add(Timer(const Duration(milliseconds: 350), () {
+      if (!mounted || _book != b) return;
+      unawaited(b.pages(i).then<void>((_) {}, onError: (Object _) {}));
+    }));
+    _prefetchTimers.removeWhere((t) => !t.isActive);
+  }
+
+  final _prefetchTimers = <Timer>[];
+
+  /// When the reader last turned a page: background counting waits while pages are being turned.
+  DateTime _lastTurn = DateTime.fromMillisecondsSinceEpoch(0);
+  bool get _turning => DateTime.now().difference(_lastTurn) < const Duration(milliseconds: 1200);
 
   /// The reader moved somewhere (contents, a link, the slider): shown, and saved once it settles.
   Future<void> _jump(int chapter, int position) async {
@@ -340,7 +359,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     if (!_counting) {
       _counting = true;
-      unawaited(b.countAll(current: () => _chapter));
+      unawaited(b.countAll(current: () => _chapter, busy: () => _turning));
     }
     // the neighbours ready for turning into
     if (chapter + 1 < b.chapterCount) _prefetch(chapter + 1);
@@ -358,6 +377,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   void _onPageChanged(int i) {
     final b = _book!;
+    if (!_ownJump) _lastTurn = DateTime.now(); // (swipes too)
     EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');
     _awake();
     if (_bookWide) {
@@ -400,6 +420,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 220);
 
   Future<void> _turn(int by) async {
+    _lastTurn = DateTime.now();
     final b = _book;
     EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
     if (b == null || !_pc.hasClients) return;
@@ -1010,7 +1031,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 controller: _pc,
                 itemCount: _itemCount,
                 onPageChanged: _onPageChanged,
-                itemBuilder: (_, i) => _pageAt(i, size),
+                // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
+                // of both pages again each frame
+                itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),
               ),
               Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,

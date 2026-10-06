@@ -56,7 +56,8 @@ class EpubTrace {
 
   void _write(String line) {
     try {
-      _file!.writeAsStringSync('$line\n', mode: FileMode.append, flush: true);
+      // not flushed to the disk each line (a few times a page turn): written, it outlives the app crashing
+      _file!.writeAsStringSync('$line\n', mode: FileMode.append);
     } catch (_) {
       // a full disk, a locked file: the reader carries on
     }
