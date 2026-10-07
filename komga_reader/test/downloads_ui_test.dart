@@ -73,15 +73,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('3 pages · 0.0 MB · in progress'), findsOneWidget); // (the fake Komga has B1 started)
 
-    // the menu itself, not d.remove() (test audit, 2026-09-30)
-    await tester.tap(find.byTooltip('Remove'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Remove download'));
+    // the button itself, not d.remove() (test audit, 2026-09-30)
+    await tester.tap(find.byTooltip('Remove download'));
     // (the store forgets it before the save and the screen update finish: wait for the screen)
     await until(tester, () => find.text('Manage · 0').evaluate().isNotEmpty, 'the screen to show it gone');
     expect(d.isDownloaded('B1'), isFalse);
     expect(await tester.runAsync(() => Directory(d.store!.file('B1').path).exists()), isFalse, reason: 'files gone');
-    expect(find.byTooltip('Remove'), findsNothing);
+    expect(find.byTooltip('Remove download'), findsNothing);
     await quiet(tester);
   });
 
@@ -321,26 +319,26 @@ void main() {
 
     await tester.tap(find.byTooltip('Done selecting'));
     await tester.pump();
-    await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga'), matching: find.byTooltip('Remove')));
+    // a series' trash button: the whole series, after asking
+    await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga'), matching: find.byTooltip('Remove series')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text("Remove the series' 2 downloads"));
-    await tester.pumpAndSettle();
+    expect(find.text('Remove Saga?'), findsOneWidget);
+    expect(find.textContaining('2 downloads · 4.0 MB freed'), findsOneWidget);
     await tester.tap(find.text('Remove'));
     await until(tester, () => find.text('Manage · 1').evaluate().isNotEmpty, 'Saga gone');
     expect(titles(), ['Flash']);
   });
 
-  testWidgets("Manage: a row's menu removes the whole series", (tester) async {
+  testWidgets('Manage: each book has one trash button, not a menu (user, 2026-10-07) - it removes that book at once',
+      (tester) async {
     await library(tester);
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    await tester.tap(find.byTooltip('Remove').at(1)); // Saga #1's
-    await tester.pumpAndSettle();
-    await tester.tap(find.text("Remove the series' 2 downloads"));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('2 downloads · 4.0 MB freed'), findsOneWidget);
-    await tester.tap(find.text('Remove'));
-    await until(tester, () => find.text('Manage · 1').evaluate().isNotEmpty, 'Saga gone');
-    expect(titles(), ['Flash #1']);
+    expect(find.byIcon(Icons.more_vert), findsNothing);
+    expect(find.byTooltip('Remove download'), findsNWidgets(3));
+    await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga #1'),
+        matching: find.byTooltip('Remove download')));
+    await until(tester, () => find.text('Manage · 2').evaluate().isNotEmpty, 'Saga #1 gone');
+    expect(titles(), ['Flash #1', 'Saga #2']);
   });
 }
 
