@@ -564,6 +564,43 @@ void main() {
       .widget<AnimatedOpacity>(find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)).first)
       .opacity;
 
+  testWidgets('position over the slider (user, 2026-10-07, mockup "A"): the title on its own line on top, the page '
+      'and % on the left; a spot tapped hides it - its place stays, tapped to show it again - kept on this device; '
+      'picking a page shows it, in the accent colour', (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(hiddenSpots: const [], pagePreviews: true)));
+    s.setDisplay(s.display.copyWith(pagePreviews: false)); // no page pictures to ask for while picking
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.enter); // the controls
+    expect(find.text('Test #1 - T'), findsOneWidget);
+    expect(find.text('Pg. 1/3 · 33%'), findsOneWidget);
+    final title = tester.getRect(find.text('Test #1 - T')), page = tester.getRect(find.text('Pg. 1/3 · 33%'));
+    final slider = tester.getRect(find.byType(Slider));
+    expect(title.bottom, lessThanOrEqualTo(page.top), reason: 'the title on the line above');
+    expect(page.bottom, lessThanOrEqualTo(slider.top + 1), reason: 'the page just over the slider');
+    expect(page.left - slider.left, lessThan(40), reason: "over the slider's start");
+
+    await tester.tap(find.byKey(const ValueKey('pos-left')));
+    await tester.pump();
+    expect(find.text('Pg. 1/3 · 33%'), findsNothing);
+    expect(find.text('page hidden - tap to show'), findsOneWidget);
+    expect(s.display.hiddenSpots, ['left'], reason: 'kept');
+    expect(find.byTooltip('Next book'), findsOneWidget, reason: 'the controls stay up');
+    await tester.tap(find.byKey(const ValueKey('pos-left')));
+    await tester.pump();
+    expect(find.text('Pg. 1/3 · 33%'), findsOneWidget);
+    expect(s.display.hiddenSpots, isEmpty);
+
+    await key(tester, LogicalKeyboardKey.arrowDown); // the bottom bar: Previous book
+    await key(tester, LogicalKeyboardKey.arrowRight); // the slider
+    await key(tester, LogicalKeyboardKey.enter); // scrubbing
+    await key(tester, LogicalKeyboardKey.arrowRight); // page 2 picked
+    await tester.pump();
+    final picked = tester.widget<Text>(find.text('Pg. 2/3 · 67%'));
+    expect(picked.style!.color, Theme.of(tester.element(find.byType(Slider))).colorScheme.primary);
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('page corner, one setting with EPUBs (user, 2026-10-07): After a turn shows "2 / 3" for a moment, '
       "bottom right, then it fades; Always keeps it there; Off, it isn't there", (tester) async {
     final s = AppSettings.instance;

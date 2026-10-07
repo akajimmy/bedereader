@@ -19,6 +19,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   after a turn" switch and EPUBs' own "Page corner", and it's now a setting of this device (in Settings > Reader,
   the comic Reader panel and the EPUB Aa panel alike). Comics' "12 / 36" moves to the bottom-right corner, where
   EPUBs' note is, and can now stay there all the time. Each device starts from what it had for EPUBs.
+- **Comics: where you are, over the slider on two lines** - the book's title ("Saga #1 - Chapter One") on top, and
+  the page and how far through ("Pg. 12/36 · 33%") on the left just above the slider, which gets the room the
+  "12 / 36" beside it had. **Tap either one to hide it**; its place stays, dimmed, to tap it back. That's
+  remembered on this device. (EPUBs get the same row when their reader moves over.)
 
 ## 1.3.0
 

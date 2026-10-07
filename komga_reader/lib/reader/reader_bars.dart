@@ -90,19 +90,31 @@ class ReaderTopBar extends StatelessWidget {
   }
 }
 
-/// The bottom bar: previous book, [middle] (the reader's position and slider - give it an Expanded), [buttons], next
-/// book; [above] (the comic reader's page strip) just over it.
+/// The bottom bar: previous book, [middle] (the slider - give it an Expanded), [buttons], next book; [position] (the
+/// position text, lib/reader/position_row.dart) over them in the bar; [above] (the comic reader's page strip) just
+/// over the bar.
 class ReaderBottomBar extends StatelessWidget {
   const ReaderBottomBar({super.key, required this.prevNode, required this.onPrev, required this.nextNode,
-      required this.onNext, required this.middle, required this.buttons, this.above});
+      required this.onNext, required this.middle, required this.buttons, this.above, this.position});
   final FocusNode prevNode, nextNode;
   final VoidCallback onPrev, onNext;
   final List<Widget> middle;
   final List<Widget> buttons;
   final Widget? above;
+  final Widget? position;
 
   @override
   Widget build(BuildContext context) {
+    final controls = Row(children: [
+      IconButton(focusNode: prevNode, tooltip: 'Previous book', onPressed: onPrev,
+          icon: const Icon(Icons.skip_previous, size: 28)),
+      const SizedBox(width: 4),
+      ...middle,
+      ...buttons,
+      IconButton(focusNode: nextNode, tooltip: 'Next book', onPressed: onNext,
+          icon: const Icon(Icons.skip_next, size: 28)),
+    ]);
+    final pos = position;
     final bar = Material(
       color: readerBarColour,
       child: Theme(
@@ -111,15 +123,10 @@ class ReaderBottomBar extends StatelessWidget {
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-            child: Row(children: [
-              IconButton(focusNode: prevNode, tooltip: 'Previous book', onPressed: onPrev,
-                  icon: const Icon(Icons.skip_previous, size: 28)),
-              const SizedBox(width: 4),
-              ...middle,
-              ...buttons,
-              IconButton(focusNode: nextNode, tooltip: 'Next book', onPressed: onNext,
-                  icon: const Icon(Icons.skip_next, size: 28)),
-            ]),
+            child: pos == null
+                ? controls
+                : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [pos, controls]),
           ),
         ),
       ),

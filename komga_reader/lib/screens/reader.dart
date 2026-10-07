@@ -11,6 +11,7 @@ import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../reader/comic_renderer.dart';
 import '../reader/end_card.dart';
+import '../reader/position_row.dart';
 import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
 import '../reader/reader_slider.dart';
@@ -67,9 +68,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   bool _menu = false; // controls shown
   final _scrubber = SliderScrub(); // the page picked on the slider, not jumped to yet (lib/reader/reader_slider.dart)
   int? get _scrub => _scrubber.value;
-  set _scrub(int? v) => _scrubber.value = v;
-  bool get _scrubbing => _scrubber.remote; // the remote is driving the slider
-  set _scrubbing(bool v) => _scrubber.remote = v;
   // Where the reader was before the slider took them elsewhere - marked on the slider while scrubbing, and a drag near
   // it snaps to it, so after a look at another page they can get back (user, 2026-10-02). Kept over slider jumps
   // only: an ordinary page turn means reading on from here, so it's forgotten (else reading on from a page looked at
@@ -563,7 +561,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   // ---- controls
   void _showControls() {
-    setState(() { _menu = true; _scrubbing = false; _scrub = null; });
+    setState(() { _menu = true; _scrubber.reset(); });
     _keys.requestFocus(); // nothing selected (not the end card's buttons)
     _comic.controlsShown(); // the strip on the page being read now
   }
@@ -573,7 +571,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     // still reaches the slider's listener (Flutter sends a pointer's events where it went down) and jumped to the page
     // picked (user, 2026-10-02)
     _scrubber.release();
-    setState(() { _menu = false; _scrub = null; _scrubbing = false; });
+    setState(() { _menu = false; _scrubber.reset(); });
     _keys.requestFocus();
     if (_onEnd) _endReached();
   }
@@ -921,13 +919,13 @@ class _ReaderScreenState extends State<ReaderScreen>
         nextNode: _ctl[_Ctl.nextBook]!,
         onNext: _nextBook,
         above: _comic.stripShown ? _comic.strip(context) : null,
+        // the title on top, the page and how far through on the left (the right spot is free - mockup "A, comic")
+        position: ReaderPositionRow(
+          centre: SpotText(_bookTitle, 'title'),
+          left: SpotText('Pg. ${shown + 1}/${_pages.length} · ${((shown + 1) / _pages.length * 100).round()}%', 'page'),
+          picking: _scrub != null,
+        ),
         middle: [
-          SizedBox(
-            width: 92,
-            child: Text('${shown + 1} / ${_pages.length}',
-                style: TextStyle(color: _scrubbing ? Theme.of(context).colorScheme.primary : Colors.white,
-                    fontSize: 15, fontFeatures: const [FontFeature.tabularFigures()])),
-          ),
           Expanded(
             child: _pages.length < 2
                 ? const SizedBox.shrink()
@@ -957,6 +955,13 @@ class _ReaderScreenState extends State<ReaderScreen>
         label: 'Page ${shown + 1}',
         preview: (shown, x) => _comic.preview(context, shown, x),
       );
+
+  /// "Saga #1 - Chapter One": the series and number, and the book's own title when it says more.
+  String get _bookTitle {
+    final heading = _titleOf(_book);
+    final title = '${_book['metadata']?['title'] ?? ''}';
+    return title.isEmpty || title == heading || heading.endsWith(title) ? heading : '$heading - $title';
+  }
 
   /// Off to the page picked on the slider (or the strip) - remembering where the reader was, to come back to.
   void _sliderJump(int target) {
