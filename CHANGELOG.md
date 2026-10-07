@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Zoom in from the remote or the keyboard goes to where reading starts**: from the whole page, the first step lands
+  on the page's top-left corner (top-right in a right-to-left book), and further steps stay on it - it used to zoom
+  into the middle of the page. Panned somewhere, a step keeps what's at that corner of the screen. Quick presses
+  each zoom a full step. Pinch and double-tap still zoom where your finger is.
+
 **Fixed**
 - **EPUB: holding down an arrow key (or any page-turn key) turned no pages** - the page crept and never turned,
   each of the key's repeats starting the slide over. A held key now turns a page each time the slide ends.

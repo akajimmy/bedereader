@@ -138,5 +138,61 @@ void main() {
       expect(at(zoom), const Offset(-600, -20)); // centred across (the page at 200..1000), the tapped row stays
     });
   });
+
+  group('Zoom in from the remote or keys: to where reading starts (user, 2026-10-06/07)', () {
+    /// A square page on a 400 x 600 screen: fitted, it's 400 x 400 from y 100 (bars above and below).
+    Future<(TransformationController, void Function(bool))> square(WidgetTester tester, {bool rtl = false}) async {
+      setView(tester, const Size(400, 600));
+      final zoom = TransformationController();
+      void Function(bool)? zoomStep;
+      final img = await testImage(tester, 600, 600);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: PageCanvas(
+        data: PageData(img, Uint8List(0)),
+        prefs: const ReaderPrefs(),
+        scroll: ScrollController(),
+        zoom: zoom,
+        onStepper: (_) {},
+        onZoomStep: (s) => zoomStep = s,
+        rtl: rtl,
+      ))));
+      await tester.pump();
+      return (zoom, zoomStep!);
+    }
+
+    double scale(TransformationController z) => z.value.getMaxScaleOnAxis();
+
+    testWidgets("from the whole page: the page's top-left corner at the screen's; again (pressed quickly): further in, "
+        'still on the corner', (tester) async {
+      final (zoom, zoomIn) = await square(tester);
+      zoomIn(true);
+      await tester.pumpAndSettle();
+      expect(scale(zoom), closeTo(1.5, 0.01));
+      expect(at(zoom), const Offset(0, -150), reason: 'the page top (100 x 1.5) at the screen top, its left edge at 0');
+
+      zoomIn(true);
+      await tester.pump(const Duration(milliseconds: 50)); // the third press while the second is still moving
+      zoomIn(true);
+      await tester.pumpAndSettle();
+      expect(scale(zoom), closeTo(1.5 * 1.5 * 1.5, 0.01), reason: 'each press a full step, however quick');
+      expect(at(zoom), Offset(0, -(100 * 1.5 * 1.5 * 1.5).roundToDouble()), reason: 'still the top-left corner');
+    });
+
+    testWidgets('a right-to-left book: the top-right corner', (tester) async {
+      final (zoom, zoomIn) = await square(tester, rtl: true);
+      zoomIn(true);
+      await tester.pumpAndSettle();
+      expect(at(zoom), const Offset(400 - 400 * 1.5, -150), reason: "the page's right edge at the screen's");
+    });
+
+    testWidgets('panned somewhere: a further step keeps what is at the reading corner where it is', (tester) async {
+      final (zoom, zoomIn) = await square(tester);
+      zoom.value = Matrix4.identity()
+        ..translateByDouble(-200, -300, 0, 1)
+        ..scaleByDouble(2, 2, 1, 1); // the screen's corner shows page point (100, 150)
+      zoomIn(true);
+      await tester.pumpAndSettle();
+      expect(at(zoom), const Offset(-300, -450), reason: 'page point (100, 150) x3 still at the corner');
+    });
+  });
 }
 

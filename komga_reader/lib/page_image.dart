@@ -378,10 +378,13 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   }
 
   void _animateTo(Matrix4 target) {
+    _heading = target;
     _move = Matrix4Tween(begin: _zoom.value.clone(), end: target)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOut));
     _anim.forward(from: 0);
   }
+
+  Matrix4? _heading; // where the last move goes (a zoom step pressed while one moves starts from there)
 
   static const doubleTapScale = 2.0;
 
@@ -408,12 +411,15 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   /// when zoomed stays centred.
   static double _keep(double t, double min, double max) => min >= max ? (min + max) / 2 : t.clamp(min, max);
 
-  /// Zoom one step in or out (Remote and keys: Zoom in / Zoom out), x1.5 a step between fit and 4x, the middle of
-  /// the screen staying on the same spot of the page. Fit screen only.
+  /// Zoom one step in or out (Remote and keys: Zoom in / Zoom out), x1.5 a step between fit and 4x, anchored at the
+  /// screen's reading corner - top-left, top-right for a right-to-left book: from the whole page it lands on the
+  /// page's corner, where reading starts, and further steps stay there; panned elsewhere, what is at that corner stays
+  /// (user, 2026-10-06/07 - it kept the middle of the screen). A step pressed while one is moving starts from where
+  /// that one goes, so quick presses each zoom a full step. Fit screen only.
   void _zoomStep(bool zoomIn) {
     final vp = _viewport, pic = _picture;
     if (vp == null || pic == null) return;
-    final m = _zoom.value;
+    final m = (_anim.isAnimating ? _heading : null) ?? _zoom.value;
     final k = m.getMaxScaleOnAxis();
     final target = (zoomIn ? k * 1.5 : k / 1.5).clamp(1.0, 4.0);
     if ((target - k).abs() < 1e-3) return;
@@ -422,8 +428,10 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       return;
     }
     final t = m.getTranslation();
-    final cx = vp.width / 2, cy = vp.height / 2;
-    final sx = (cx - t.x) / k, sy = (cy - t.y) / k; // the point of the page now in the middle of the screen
+    final cx = widget.rtl ? vp.width : 0.0, cy = 0.0; // the reading corner of the screen
+    // the point of the page at that corner - on the page itself (from the whole page, the corner is in the bars
+    // round it: the page's own corner)
+    final sx = ((cx - t.x) / k).clamp(pic.left, pic.right), sy = ((cy - t.y) / k).clamp(pic.top, pic.bottom);
     final tx = _keep(cx - target * sx, vp.width - target * pic.right, -target * pic.left);
     final ty = _keep(cy - target * sy, vp.height - target * pic.bottom, -target * pic.top);
     _animateTo(Matrix4.identity()
