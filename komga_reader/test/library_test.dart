@@ -3,7 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/library.dart';
+import 'package:komga_reader/widgets/pin_tile.dart';
+import 'package:komga_reader/widgets/poster.dart';
+import 'package:komga_reader/widgets/readlist_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/browse_server.dart';
@@ -11,7 +15,10 @@ import 'support/helpers.dart';
 import 'support/no_network.dart';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    ListContents.invalidate(); // (lookups from the test before belong to its clock)
+  });
 
   Future<BrowseServer> open(WidgetTester tester, {BrowseServer? server}) async {
     final api = server ?? noNetwork(BrowseServer.new);
@@ -21,6 +28,13 @@ void main() {
     await tester.pump();
     await tester.pump();
     return api;
+  }
+
+  /// A few frames: the listing, then the read-list / collection lookups behind the tiles, answer in turn.
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 6; i++) {
+      await tester.pump();
+    }
   }
 
   Future<void> mode(WidgetTester tester, String label) async {
@@ -46,7 +60,8 @@ void main() {
     await mode(tester, 'Collections');
     expect(api.requests.last, 'collections p0');
     expect(find.text('Marvel cosmic'), findsOneWidget);
-    expect(find.byTooltip('Hide read'), findsNothing, reason: 'no read filter for collections');
+    expect(find.byTooltip('Showing all (hide read)'), findsOneWidget,
+        reason: 'the read filter on every library screen (user, 2026-10-07)');
 
     await mode(tester, 'Read lists');
     expect(api.requests.last, 'readLists p0');
@@ -60,14 +75,14 @@ void main() {
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Books')).selected, isTrue);
   });
 
-  testWidgets('Hide read asks Komga for unread and in-progress only, and the grid and its count narrow to them; '
-      'again shows everything', (tester) async {
+  testWidgets('the eye: Hide read asks Komga for unread and in-progress only, Hide unread for read only, the grid and '
+      'its count follow; a third tap shows everything', (tester) async {
     final api = await open(tester);
     await mode(tester, 'Books');
     expect(find.text('Saga #1'), findsOneWidget);
     expect(find.text('3'), findsOneWidget); // the count beside the filter
 
-    await tester.tap(find.byTooltip('Hide read'));
+    await tester.tap(find.byTooltip('Showing all (hide read)'));
     await tester.pump();
     await tester.pump();
     expect(api.requests.last, 'books p0 UNREAD+IN_PROGRESS');
@@ -77,11 +92,64 @@ void main() {
     expect(find.text('2'), findsOneWidget);
     expect(find.byTooltip('Clear filters'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Read hidden (show read)'));
+    await tester.tap(find.byTooltip('Read hidden (hide unread)'));
+    await tester.pump();
+    await tester.pump();
+    expect(api.requests.last, 'books p0 READ', reason: 'finished only: in progress counts as unread');
+    expect(find.text('Saga #1'), findsOneWidget);
+    expect(find.text('Saga #2'), findsNothing);
+    expect(find.text('Saga #3'), findsNothing);
+
+    await tester.tap(find.byTooltip('Unread hidden (show all)'));
     await tester.pump();
     await tester.pump();
     expect(api.requests.last, 'books p0 all');
-    expect(find.text('Saga #1'), findsOneWidget);
+    expect(find.text('Saga #2'), findsOneWidget);
+  });
+
+  testWidgets('the eye on Read lists: the lists with nothing matching go, and the posters are made from the books the '
+      'filter shows - read or not on All (user, 2026-10-07)', (tester) async {
+    await open(tester);
+    await mode(tester, 'Read lists');
+    await settle(tester);
+    bool mosaic(String list) => find
+        .descendant(of: find.ancestor(of: find.text(list), matching: find.byType(PosterTile)), matching: find.byType(PosterMosaic))
+        .evaluate()
+        .isNotEmpty;
+    // All: every list; Done (finished) has a poster of its books too - it used to fall back to Komga's
+    expect(find.text('Done'), findsOneWidget);
+    expect(find.text('Fresh'), findsOneWidget);
+    expect(mosaic('Done'), isTrue, reason: 'its first books, read or not');
+    expect(find.descendant(of: find.ancestor(of: find.text('Done'), matching: find.byType(PosterTile)),
+        matching: find.text('1 books · read')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Showing all (hide read)'));
+    await settle(tester);
+    expect(find.text('Done'), findsNothing, reason: 'nothing unread in it');
+    expect(find.text('Fresh'), findsOneWidget);
+    expect(find.text('1 of 1 unread'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Read hidden (hide unread)'));
+    await settle(tester);
+    expect(find.text('Fresh'), findsNothing, reason: 'nothing read in it');
+    expect(find.text('Done'), findsOneWidget);
+    expect(mosaic('Done'), isTrue, reason: 'its read books');
+  });
+
+  testWidgets('the eye on Collections: hidden when nothing in them matches; a poster of matching series otherwise',
+      (tester) async {
+    await open(tester);
+    await mode(tester, 'Collections');
+    expect(find.text('Marvel cosmic'), findsOneWidget);
+    await tester.tap(find.byTooltip('Showing all (hide read)'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Marvel cosmic'), findsOneWidget, reason: 'its series are unread');
+    expect(find.textContaining('series unread'), findsOneWidget);
+    await tester.tap(find.byTooltip('Read hidden (hide unread)'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Marvel cosmic'), findsNothing, reason: 'none of its series read');
   });
 
   testWidgets('a big library: the first page only, then the next one once the grid is scrolled near its end',
@@ -205,5 +273,15 @@ void main() {
     expect(find.text('Saga #2'), findsOneWidget);
     expect(find.text('Saga #3'), findsOneWidget);
     await tester.pump(const Duration(seconds: 7)); // the message
+  });
+
+  test("a pin of a library's read lists with Hide unread: its poster and count are the lists with something read",
+      () async {
+    final api = noNetwork(BrowseServer.new);
+    const pin = Pin(name: 'Events · Read lists · read', kind: 'library', id: 'L1', title: 'Events',
+        filter: 'hideUnread', mode: 'readLists');
+    final r = await pinView(api, pin);
+    expect([for (final l in r['content'] as List) l['name']], ['Done']);
+    expect(r['totalElements'], 1);
   });
 }

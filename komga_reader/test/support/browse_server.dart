@@ -1,6 +1,5 @@
 import 'package:komga_reader/api.dart';
 
-import 'helpers.dart';
 import 'no_network.dart';
 
 /// A library (L1 "Events") to browse: [seriesCount] series (S1, S2, ... titled "Series 1", ...), three books - B1
@@ -39,6 +38,7 @@ class BrowseServer extends TestKomga {
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
     requests.add('series p$page ${_filter(readStatus)}');
+    if (readStatus != null && !readStatus.contains('UNREAD')) return _page([], page, size); // (all of them unread)
     return _page([
       for (var i = 1; i <= seriesCount; i++)
         {'id': 'S$i', 'name': 'Series $i', 'libraryId': 'L1', 'metadata': {'title': 'Series $i'}, 'booksCount': 1, 'booksUnreadCount': 1,
@@ -50,8 +50,14 @@ class BrowseServer extends TestKomga {
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
     requests.add('books p$page ${_filter(readStatus)}');
-    bool unread(Map<String, dynamic> b) => b['readProgress']?['completed'] != true;
-    return _page([for (final b in shelf) if (readStatus == null || unread(b)) b], page, size);
+    return _page([for (final b in shelf) if (_wanted(b, readStatus)) b], page, size);
+  }
+
+  /// Komga's read status of a book, against a read_status filter.
+  static bool _wanted(Map<String, dynamic> b, List<String>? readStatus) {
+    final rp = b['readProgress'] as Map?;
+    final status = rp == null ? 'UNREAD' : rp['completed'] == true ? 'READ' : 'IN_PROGRESS';
+    return readStatus == null || readStatus.contains(status);
   }
 
   @override
@@ -63,13 +69,21 @@ class BrowseServer extends TestKomga {
   @override
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async {
     requests.add('readLists p$page');
-    return _page([{'id': 'RL1', 'name': 'Infinity', 'bookIds': ['B1']}], page, size);
+    return _page([
+      {'id': 'RL1', 'name': 'Infinity', 'bookIds': ['B1']},
+      {'id': 'RL2', 'name': 'Done', 'bookIds': ['B1']}, // all read
+      {'id': 'RL3', 'name': 'Fresh', 'bookIds': ['B2']}, // nothing read
+    ], page, size);
   }
 
+  /// Read lists' books, filtered as Komga does (RL1: none, as before - the breadcrumb tests open it).
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0,
-          int size = 1000}) async =>
-      onePage([]); // the read list poster's books
+      int size = 1000}) async {
+    final ids = switch (readListId) { 'RL2' => ['B1'], 'RL3' => ['B2'], _ => <String>[] };
+    final books = [for (final b in shelf) if (ids.contains(b['id']) && _wanted(b, readStatus)) b];
+    return {..._page(books, page, size)};
+  }
 
   @override
   Future<void> deleteBookFile(String bookId) async {

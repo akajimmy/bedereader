@@ -286,7 +286,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api, pin: uu,
         readList: const {'id': 'RL1', 'name': 'Ultimate Universe', 'bookIds': []})));
     await tester.pump();
-    expect(find.byTooltip('Read hidden (show read)'), findsOneWidget); // hide-read is on, from the pin
+    expect(find.byTooltip('Read hidden (hide unread)'), findsOneWidget); // hide-read is on, from the pin
     expect(find.byIcon(Icons.push_pin), findsOneWidget); // filled pin = this view is pinned
     expect(find.text('Nothing unread in this list'), findsOneWidget);
   });

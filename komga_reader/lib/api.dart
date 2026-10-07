@@ -392,17 +392,29 @@ class KomgaUnreachable implements Exception {
   String toString() => 'no answer from $baseUrl';
 }
 
-/// The one read filter (user's call): show everything, or hide what's read. In-progress counts as unread, so
-/// "hide read" asks Komga for UNREAD + IN_PROGRESS (for series: not every book finished).
-enum ReadFilter { all, hideRead }
+/// The read filter: everything, hide what's read, or hide what isn't (user, 2026-10-07: three-way, on every library
+/// screen). In-progress counts as unread, so each item falls on one side: "hide read" asks Komga for UNREAD +
+/// IN_PROGRESS (for series: not every book finished), "hide unread" for READ (finished; a series: all of it).
+enum ReadFilter { all, hideRead, hideUnread }
 
 extension ReadFilterApi on ReadFilter {
   List<String>? get api => switch (this) {
         ReadFilter.all => null,
         ReadFilter.hideRead => const ['UNREAD', 'IN_PROGRESS'],
+        ReadFilter.hideUnread => const ['READ'],
+      };
+
+  /// What the view shows, for names and counts ("unread", "read"); null for everything.
+  String? get shows => switch (this) {
+        ReadFilter.all => null,
+        ReadFilter.hideRead => 'unread',
+        ReadFilter.hideUnread => 'read',
       };
 
   /// Saved names, including the four-way filter of builds 5-7 (unread / in progress became "hide read").
-  static ReadFilter fromName(Object? name) =>
-      const {'hideRead', 'unread', 'inProgress'}.contains(name) ? ReadFilter.hideRead : ReadFilter.all;
+  static ReadFilter fromName(Object? name) => name == 'hideUnread'
+      ? ReadFilter.hideUnread
+      : const {'hideRead', 'unread', 'inProgress'}.contains(name)
+          ? ReadFilter.hideRead
+          : ReadFilter.all;
 }
