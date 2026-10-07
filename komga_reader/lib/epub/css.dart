@@ -12,21 +12,35 @@ class CssRule {
 }
 
 class CssCompound {
-  CssCompound(this.tag, this.classes, this.id, this.pseudo);
+  CssCompound(this.tag, this.classes, this.id, this.pseudo, [this.states = const []]);
   final String? tag;
   final List<String> classes;
   final String? id;
-  final String? pseudo; // first-letter, first-line, first-child ... (only first-letter is used)
+  final String? pseudo; // a pseudo-element: first-letter, first-line, before ... (only first-letter is used)
+  // pseudo-classes: :first-child, :last-child, :first-of-type are checked; any other (:hover, :nth-child...) never
+  // matches. They were taken for pseudo-elements, so a "p:first-child" rule never applied (EPUB review E11)
+  final List<String> states;
+
+  static const pseudoElements = {'first-letter', 'first-line', 'before', 'after', 'marker', 'selection'};
 
   bool matches(XElement e) =>
       (tag == null || tag == '*' || tag == e.name) &&
       (id == null || e.id == id) &&
       classes.every(e.classes.contains) &&
-      (pseudo == null || pseudo == 'first-letter' || (pseudo == 'first-child' && _firstChild(e)));
+      states.every((s) => _state(s, e));
 
-  static bool _firstChild(XElement e) => e.parent?.elements.isNotEmpty == true && e.parent!.elements.first == e;
+  static bool _state(String s, XElement e) {
+    final siblings = e.parent?.elements.toList() ?? [e];
+    return switch (s) {
+      'first-child' => siblings.first == e,
+      'last-child' => siblings.last == e,
+      'first-of-type' => siblings.firstWhere((x) => x.name == e.name) == e,
+      _ => false,
+    };
+  }
 
-  int get specificity => (id != null ? 100 : 0) + classes.length * 10 + (tag != null && tag != '*' ? 1 : 0);
+  int get specificity =>
+      (id != null ? 100 : 0) + (classes.length + states.length) * 10 + (tag != null && tag != '*' ? 1 : 0);
 }
 
 class CssSelector {
@@ -62,8 +76,10 @@ class CssSelector {
           id = x[2];
         }
       }
-      final ps = (m[3] ?? '').replaceAll('::', ':').split(':').where((p) => p.isNotEmpty).toList();
-      parts.add(CssCompound(m[1]?.toLowerCase(), classes, id, ps.isEmpty ? null : ps.last.toLowerCase()));
+      final ps = (m[3] ?? '').replaceAll('::', ':').split(':').where((p) => p.isNotEmpty).map((p) => p.toLowerCase());
+      parts.add(CssCompound(m[1]?.toLowerCase(), classes, id,
+          ps.where(CssCompound.pseudoElements.contains).lastOrNull,
+          ps.where((p) => !CssCompound.pseudoElements.contains(p)).toList()));
     }
     return parts.isEmpty ? null : CssSelector(parts);
   }

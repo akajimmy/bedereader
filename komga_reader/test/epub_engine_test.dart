@@ -476,7 +476,7 @@ void main() {
     final long = List.filled(60, 'word').join(' ');
     final r = ChapterReader(StyleSheet(), (h) => h)
       ..read(parseXhtml('<body><table><tr><td>Ye Wenxue</td><td>$long</td></tr></table></body>'));
-    final page = Paginator(const EpubTheme(), const Size(400, 900), null).run(r.blocks).single;
+    final page = Paginator(const EpubTheme(), const Size(400, 2000), null).run(r.blocks).single;
     // the test font: 19 px a letter - "Wenxue" is 114; the cells 14 apart
     final firstWidth = page.textOrigins[1].dx - page.textOrigins[0].dx - 14;
     expect(firstWidth, greaterThanOrEqualTo(114));
@@ -484,7 +484,7 @@ void main() {
     // cells aren't hyphenated, as in a browser ("Yang Wein-ing" in a narrow column)
     final names = ChapterReader(StyleSheet(), (h) => h)
       ..read(parseXhtml('<body><table><tr><td>Yang Weining</td><td>$long recrimination</td></tr></table></body>'));
-    expect(Paginator(const EpubTheme(), const Size(400, 900), hy.forLang('en')).run(names.blocks).single.hyphenMarks, 0);
+    expect(Paginator(const EpubTheme(), const Size(400, 2000), hy.forLang('en')).run(names.blocks).single.hyphenMarks, 0);
   });
 
   // ---- small black-and-white pictures on a light ground in the page's colours (The Dispossessed's chapter number,
@@ -608,6 +608,70 @@ void main() {
     expect(all, hasLength(3), reason: 'the floated picture no paragraph took is kept with the chapter (E3)');
     ch.dispose();
     expect(all.every((i) => i.debugDisposed), isTrue, reason: 'every picture freed');
+  });
+
+  List<EpubPage> layOut(String body, {String css = '', Size size = const Size(400, 600)}) =>
+      Paginator(const EpubTheme(), size, null)
+          .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml('<body>$body</body>')));
+
+  test('E6: a table row taller than a page goes on over the next pages (what didn\'t fit was lost below the page)', () {
+    final words = List.filled(400, 'word').join(' ');
+    final pages = layOut('<table><tr><td>Name</td><td>$words</td></tr><tr><td>After</td><td>row</td></tr></table>');
+    expect(pages.length, greaterThan(1));
+    const theme = EpubTheme();
+    for (final p in pages) {
+      expect(p.textOrigins, isNotEmpty, reason: 'part of the row on every page');
+    }
+    // nothing placed below a page's text area: each piece starts on its page
+    for (final p in pages) {
+      for (final o in p.textOrigins) {
+        expect(o.dy, lessThan(600 - theme.margins.bottom));
+      }
+    }
+  });
+
+  test("E8: the text after an inline picture is still its paragraph (it lost the paragraph's formatting)", () {
+    final blocks = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml('<body><p>Before the picture <img src="a.png"/> and after it.</p></body>'));
+    expect(blocks, hasLength(3));
+    expect((blocks[0] as TextBlock).paragraph, isTrue);
+    expect(blocks[1], isA<ImageBlock>());
+    final after = blocks[2] as TextBlock;
+    expect(after.paragraph, isTrue);
+    expect(after.indent, 0, reason: 'not a new paragraph');
+  });
+
+  test('E9: a big left margin (deep nesting) still leaves the line on the page', () {
+    const theme = EpubTheme();
+    final pages = layOut('<div style="margin-left: 40em"><p>Some text that wraps.</p></div>');
+    final x = pages.single.textOrigins.single.dx;
+    expect(x + theme.fontSize * 4, lessThanOrEqualTo(400 - theme.margins.right + 0.5));
+  });
+
+  test('E11: :first-child rules apply (the first paragraph without an indent); other pseudo-classes never do', () {
+    final sheet = StyleSheet()
+      ..add('p { text-indent: 1em } p:first-child { text-indent: 0 } p:hover { color: red } div p:last-child { x: y }');
+    final body = parseXhtml('<body><div><p>a</p><p>b</p><p>c</p></div></body>').find('body')!;
+    final ps = body.elements.single.elements.toList();
+    expect(sheet.declsFor(ps[0])['text-indent'], '0');
+    expect(sheet.declsFor(ps[1])['text-indent'], '1em');
+    expect(sheet.declsFor(ps[1]).containsKey('color'), isFalse);
+    expect(sheet.declsFor(ps[2])['x'], 'y');
+    expect(sheet.declsFor(ps[1]).containsKey('x'), isFalse);
+  });
+
+  test('E12: a negative margin-top never draws text over the block before', () {
+    final o = layOut('<p>One.</p><p style="margin-top: -3em">Two.</p>').single.textOrigins;
+    final lineH = const EpubTheme().fontSize * const EpubTheme().lineHeight;
+    expect(o[1].dy - o[0].dy, greaterThanOrEqualTo(lineH - 0.5));
+  });
+
+  test('E13: a table of very many columns stays on the page (its columns ran off it)', () {
+    final row = List.filled(60, '<td>x</td>').join();
+    final pages = layOut('<table><tr>$row</tr></table>');
+    for (final o in pages.single.textOrigins) {
+      expect(o.dx, lessThan(400), reason: 'every column starts on the page');
+    }
   });
 
   test('E15: ::first-letter takes the opening quote with the letter, not the quote alone', () {

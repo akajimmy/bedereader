@@ -12,12 +12,13 @@ import 'source.dart';
 import 'xhtml.dart';
 
 class LoadedChapter {
-  LoadedChapter(this.path, this.blocks, this.lang, this.length, [this.images = const []]);
+  LoadedChapter(this.path, this.blocks, this.lang, this.length, [this.images = const [], this.ids = const {}]);
   final String path;
   final List<Block> blocks;
   final String? lang;
   final int length; // characters: the chapter's positions run 0..length
   final List<ImageBlock> images; // every picture decoded for it - used by a block or not
+  final Map<String, int> ids; // element id -> chapter position (link targets)
 
   /// Frees the decoded pictures (the chapter is no longer kept) - all of them: a picture no block kept (a float in
   /// an empty wrapper, a second float in a paragraph) was never freed (EPUB review E3).
@@ -81,7 +82,7 @@ class ChapterLoader {
         codec?.dispose(); // (also when a frame couldn't be had)
       }
     }));
-    return LoadedChapter(path, blocks, reader.lang, reader.length, reader.images);
+    return LoadedChapter(path, blocks, reader.lang, reader.length, reader.images, reader.ids);
   }
 }
 

@@ -3,7 +3,6 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/scheduler.dart';
@@ -366,11 +365,9 @@ class EpubBook extends ChangeNotifier {
   }
 
   /// The chapter position of the element with id [fragment] in chapter [i] (0 if not found) - for links into a
-  /// chapter. Approximate: the start of the block holding it.
-  Future<int> positionOfFragment(int i, String fragment) async {
-    final bytes = await source.resource(info.spine[i]);
-    return fragmentPosition(bytes, fragment);
-  }
+  /// chapter: where the chapter's reader met it (EPUB review E16), from the chapter's one load (it is about to be
+  /// shown anyway).
+  Future<int> positionOfFragment(int i, String fragment) async => (await _content(i)).ids[fragment] ?? 0;
 
   /// A file of the book (pictures for the footnote pop-up, the footnote's own chapter).
   Future<Uint8List> resource(String path) => source.resource(path);
@@ -419,13 +416,3 @@ class EpubBook extends ChangeNotifier {
   }
 }
 
-/// The text position of the element with [id] in a chapter's XHTML: the characters of text before it.
-int fragmentPosition(Uint8List xhtml, String id) {
-  final s = utf8.decode(xhtml, allowMalformed: true);
-  final at = RegExp('\\sid\\s*=\\s*["\']${RegExp.escape(id)}["\']').firstMatch(s)?.start;
-  if (at == null) return 0;
-  final body = s.indexOf(RegExp('<body', caseSensitive: false));
-  final before = s.substring(body < 0 ? 0 : body, at);
-  final text = before.replaceAll(RegExp(r'<[^>]*>'), '').replaceAll(RegExp(r'&[^;]+;'), 'x');
-  return text.replaceAll(RegExp(r'\s+'), ' ').trim().length;
-}

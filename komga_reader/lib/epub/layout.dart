@@ -155,6 +155,11 @@ class ChapterReader {
   /// The chapter's length in characters (block [Block.start]s count up to it).
   int length = 0;
 
+  /// Each element id's chapter position, as this reader counts them - links and footnotes land on it. (Counted from
+  /// the XHTML's text instead, they drifted about a character per block: whitespace the reader drops - EPUB review
+  /// E16.)
+  final Map<String, int> ids = {};
+
   List<Block> read(XElement root) {
     final html = root.find('html');
     final body = root.find('body') ?? root;
@@ -227,6 +232,9 @@ class ChapterReader {
     final sub = ChapterReader(sheet, resolve);
     sub._walk(cell, st, TextAlign.start, 0);
     sub._flush();
+    for (final id in sub.ids.keys) {
+      ids.putIfAbsent(id, () => length); // (the table's start)
+    }
     final out = <TextRun>[];
     for (final b in sub.blocks.whereType<TextBlock>()) {
       if (out.isNotEmpty) out.add(TextRun('\n', st));
@@ -255,6 +263,8 @@ class ChapterReader {
   }
 
   void _element(XElement e, InlineStyle inh, TextAlign align, double indent) {
+    final id = e.id;
+    if (id != null) ids.putIfAbsent(id, () => length + (_cur?.length ?? 0));
     final d = sheet.declsFor(e);
     if (d['display'] == 'none' || const {'head', 'script', 'style', 'title'}.contains(e.name)) return;
     var st = inh;
@@ -314,8 +324,19 @@ class ChapterReader {
         _para(al, ind).floatImage ??= img;
         return;
       }
+      final before = _cur;
       _flush();
       _add(img);
+      if (before != null) {
+        // the paragraph's text after the picture is still that paragraph (or heading): it lost its spacing and the
+        // reader's formatting (EPUB review E8). No indent: it isn't a new paragraph.
+        _cur = TextBlock()
+          ..align = before.align
+          ..left = before.left
+          ..right = before.right
+          ..paragraph = before.paragraph
+          ..heading = before.heading;
+      }
       return;
     }
     if (e.name == 'br') {
@@ -547,15 +568,26 @@ class _Laid {
 
   /// The chapter position of the line at painter height [y] (soft hyphens and the indent placeholder don't count).
   int positionAt(double y) {
-    final pos = metrics.isEmpty ? 0 : lines[lineAt(y + 1)].start;
-    final plain = tp.plainText;
-    var extra = 0;
-    for (var i = 0; i < pos && i < plain.length; i++) {
-      final c = plain.codeUnitAt(i);
-      if (c == 0xAD || c == 0xFFFC) extra++;
-    }
-    return base + pos - extra;
+    if (metrics.isEmpty) return base;
+    final i = lineAt(y + 1);
+    return base + lines[i].start - _uncounted[i];
   }
+
+  /// Per line: the soft hyphens and placeholders before its start - counted once (each page of a long paragraph
+  /// counted from its beginning again - EPUB review E7).
+  late final List<int> _uncounted = () {
+    final plain = tp.plainText;
+    final out = <int>[];
+    var n = 0, at = 0;
+    for (final r in lines) {
+      for (; at < r.start && at < plain.length; at++) {
+        final c = plain.codeUnitAt(at);
+        if (c == 0xAD || c == 0xFFFC) n++;
+      }
+      out.add(n);
+    }
+    return out;
+  }();
 }
 
 class _TextPiece extends Piece {
@@ -902,7 +934,9 @@ class Paginator {
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
-      var gap = math.max(_pendingGap, mt * _bookEm) + extra;
+      // never below nothing: negative margins (a book pulling a line up to tuck it under a heading) drew the text over
+      // the block before (EPUB review E12)
+      var gap = math.max(0.0, math.max(_pendingGap, mt * _bookEm)) + extra;
       // text under a heading: half a line at least, when the book leaves none (New Sun's, Xanth's, the Belgariad's
       // chapter titles sat on their first line - user, 2026-10-06 survey: "gap after headings")
       if (b is TextBlock && prev is TextBlock && isHeading(prev) && !isHeading(b) && !b.breakBefore) {
@@ -954,8 +988,10 @@ class Paginator {
     if (_y < _floatBottom) _y = _floatBottom;
     _align = TextAlign.left;
     _indent = 0;
-    const gap = 14.0;
     final cols = t.rows.fold(0, (n, r) => math.max(n, r.length));
+    // the gaps between columns never more than a quarter of the line: a table of very many columns ran off the page,
+    // its columns on top of each other (EPUB review E13)
+    final gap = cols > 1 ? math.min(14.0, _width * 0.25 / (cols - 1)) : 14.0;
     final widths = List<double>.filled(cols, 0);
     // each column's longest word. Cells aren't hyphenated (as in a browser): names in a narrow column came out
     // "Yang Wein-ing"
@@ -965,6 +1001,9 @@ class Paginator {
         final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity, hyphenate: false).tp;
         widths[c] = math.max(widths[c], tp.maxIntrinsicWidth.ceilToDouble());
         least[c] = math.max(least[c], tp.minIntrinsicWidth.ceilToDouble());
+        // only measured: freed now, not kept with the chapter's pages (E13)
+        _made.remove(tp);
+        tp.dispose();
       }
     }
     final avail = _width - gap * (cols - 1);
@@ -991,15 +1030,51 @@ class Paginator {
       ];
       final h = laid.fold(0.0, (m, l) => math.max(m, l.tp.height));
       if (_y + h > _bottom && !_pageEmpty) _newPage();
-      var x = theme.margins.left;
-      for (var c = 0; c < laid.length; c++) {
-        _place(laid[c], Offset(x, _y), 0, laid[c].tp.height);
-        if (t.bordered) {
-          pages.last.pieces.add(_RectPiece(Rect.fromLTWH(x - gap / 2, _y - 3, widths[c] + gap, h + 6), theme.text));
+      // a row taller than a page goes on over the next ones, each cell cut between its lines - what didn't fit was
+      // drawn past the page's bottom and lost (EPUB review E6)
+      final done = List<double>.filled(laid.length, 0); // how far down each cell has been placed
+      while (true) {
+        final room = _bottom - _y;
+        var used = 0.0;
+        var x = theme.margins.left;
+        final slices = <(double, double)>[];
+        for (var c = 0; c < laid.length; c++) {
+          final from = done[c];
+          var to = from, edge = 0.0;
+          for (final lm in laid[c].metrics) {
+            edge += lm.height;
+            if (edge <= from + 0.5) continue;
+            if (edge - from <= room + 0.5 || (to == from && _pageEmpty)) {
+              to = edge; // (a line taller than a page goes on an empty one anyway)
+            } else {
+              break;
+            }
+          }
+          if (to >= edge - 0.5 || to >= laid[c].tp.height - 0.5) to = laid[c].tp.height; // all its lines: done
+          slices.add((from, to));
+          used = math.max(used, to - from);
         }
-        x += widths[c] + gap;
+        for (var c = 0; c < laid.length; c++) {
+          final (from, to) = slices[c];
+          if (to > from) _place(laid[c], Offset(x, _y), from, to);
+          done[c] = to;
+          x += widths[c] + gap;
+        }
+        final more = [for (var c = 0; c < laid.length; c++) done[c] < laid[c].tp.height - 0.5].contains(true);
+        if (t.bordered) {
+          x = theme.margins.left;
+          for (var c = 0; c < laid.length; c++) {
+            pages.last.pieces
+                .add(_RectPiece(Rect.fromLTWH(x - gap / 2, _y - 3, widths[c] + gap, used + 6), theme.text));
+            x += widths[c] + gap;
+          }
+        }
+        if (!more) {
+          _y += used + (t.bordered ? 6 : 2);
+          break;
+        }
+        _newPage();
       }
-      _y += h + (t.bordered ? 6 : 2);
       pos += row.fold(0, (n, cell) => n + cell.fold(0, (m, r) => m + r.text.length));
     }
   }
@@ -1162,9 +1237,13 @@ class Paginator {
 
   void _text(TextBlock b) {
     // margins inside the page (a negative one - "margin-left: -6px" - doesn't push text off it), and a line's room
-    final left = math.max(0.0, b.left), right = math.max(0.0, b.right);
-    final x = theme.margins.left + left * _bookEm;
-    final width = math.max(theme.fontSize * 4, _width - (left + right) * _bookEm);
+    // ... and never so far in that the line runs off the right edge: deep nesting or a big margin-left pushed the
+    // text past it (EPUB review E9) - at least four ems of line always on the page
+    final least = math.min(theme.fontSize * 4, _width);
+    final left = math.min(math.max(0.0, b.left) * _bookEm, _width - least);
+    final right = math.max(0.0, b.right) * _bookEm;
+    final x = theme.margins.left + left;
+    final width = math.max(least, _width - left - right);
     final drop = b.drop;
     final fimg = b.floatImage?.image;
     final carried = drop == null && fimg == null && _floatBottom > _y + 4; // an earlier float still alongside
