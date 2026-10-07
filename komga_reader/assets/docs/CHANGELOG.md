@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUBs opened from a read list went on to the next book in their series**, not the read list's: the end card,
+  Next book and Previous book all ignored the read list (Hitchhiker's Guide from a "Top 100" list offered its
+  sequel instead of the list's next book). They follow the read list now, and the next book opens still in it. Opened
+  with read books hidden, they also skip books already read, as comics do.
+
 ## 1.3.0
 
 ### Build 88 - 2026-10-07

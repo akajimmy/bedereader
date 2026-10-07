@@ -55,6 +55,28 @@ class EndKomga extends TestKomga {
   ImageProvider thumbImage(String ref) => MemoryImage(onePixelPng);
 }
 
+/// A book in a series and in a read list RL1: next in the series is [series], next in the read list [inList]; what
+/// was asked is kept.
+class ReadListKomga extends TestKomga {
+  static const inSeries = {'id': 'S2', 'seriesTitle': 'Hitchhiker', 'metadata': {'number': '2', 'title': 'Restaurant'}};
+  static const inList = {'id': 'E1', 'seriesTitle': 'Ender', 'metadata': {'number': '1', 'title': "Ender's Game"}};
+  final listNextAsked = <String?>[], listPrevAsked = <String?>[];
+  @override
+  Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
+    listNextAsked.add(readListId);
+    return readListId == 'RL1' ? inList : inSeries;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async {
+    listPrevAsked.add(readListId);
+    return null;
+  }
+
+  @override
+  ImageProvider thumbImage(String ref) => MemoryImage(onePixelPng);
+}
+
 /// A 1 x 1 PNG.
 final onePixelPng = Uint8List.fromList(base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
@@ -557,6 +579,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(EpubReaderScreen), findsNothing, reason: 'closed');
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets("opened from a read list, the next and previous books are the read list's (user, 2026-10-07: "
+      "Hitchhiker's Guide from the NPR Top 100 list went on to its series' book 2, not Ender's Game); opened from "
+      "its series, the series'", (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const hitchhiker = {'id': 'H1', 'name': 'Hitchhiker', 'media': {'mediaProfile': 'EPUB'}};
+    // readerFor - every place that opens a book, the next book's reader included - hands the read list and skip read
+    // on (they were dropped for EPUBs)
+    final handed = readerFor(noNetwork(ReadListKomga.new), hitchhiker, readListId: 'RL1', skipRead: true);
+    expect(handed, isA<EpubReaderScreen>());
+    expect(((handed as EpubReaderScreen).readListId, handed.skipRead), ('RL1', true));
+
+    for (final list in ['RL1', null]) {
+      final api = noNetwork(ReadListKomga.new);
+      await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+            api: api, book: hitchhiker, readListId: list, saveProgress: false,
+            source: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
+                const EpubInfo(spine: ['c1.xhtml'], toc: []))))),
+        child: const Text('open'),
+      ))));
+      await tester.tap(find.text('open'));
+      for (var i = 0; i < 60 && find.byType(PageView).evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // the only page -> the end card
+      await settle(tester);
+      expect(find.text(list == null ? 'Up next in the series' : 'Up next in this read list'), findsOneWidget);
+      expect(find.text(list == null ? 'Hitchhiker #2' : 'Ender #1'), findsOneWidget);
+      expect(api.listNextAsked, [list]);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft); // back to the page
+      await settle(tester);
+      await tester.tapAt(const Offset(400, 600)); // the controls
+      await tester.pump();
+      await tester.tap(find.byTooltip('Previous book'));
+      await settle(tester);
+      expect(api.listPrevAsked, [list]);
+      expect(find.text(list == null ? 'This is the first book of the series' : 'This is the first book of the read list'),
+          findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   testWidgets('the slider runs through the whole book even before every chapter is counted (user: it ran through '
