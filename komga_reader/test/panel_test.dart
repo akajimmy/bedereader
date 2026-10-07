@@ -38,6 +38,7 @@ void main() {
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
     expect(find.text('Page corner'), findsOneWidget); // mid-book toggles, here too
+    expect(find.text("The page you're on, \"12 / 36\""), findsOneWidget, reason: 'one wording for both kinds');
     expect(find.text('Double-tap to zoom'), findsOneWidget);
     expect(find.text('Keep the screen on'), findsOneWidget);
     expect(tester.takeException(), isNull);

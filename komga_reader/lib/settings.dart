@@ -223,8 +223,8 @@ class DisplayPrefs {
   final Rotation rotation; // reader: follow the device, or hold portrait / landscape (Android)
   final ShowWhen clock; // reader: the time and battery - top right, or on the top bar with the controls up
   final bool progressBar; // reader: a thin line along the bottom while the controls are hidden (their slider shows it)
-  /// reader: the note in the page's bottom-right corner - comics "12 / 36", EPUBs pages left in the chapter and the
-  /// book's % - always there, for a moment after each turn, or not at all. One setting for both kinds (the one Reader,
+  /// reader: the note in the page's bottom-right corner - the page of the book's pages, "12 / 36", for both kinds -
+  /// always there, for a moment after each turn, or not at all. One setting for both kinds (the one Reader,
   /// user 2026-10-07): it replaced the comics' "page number after a turn" and the EPUBs' "page corner".
   final PageNote pageNote;
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
