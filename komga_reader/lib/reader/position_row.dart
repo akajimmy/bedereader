@@ -18,22 +18,24 @@ class SpotText {
 /// shows it again; that's kept on this device, for both kinds of book ([DisplayPrefs.hiddenSpots]). [picking]: a place
 /// is being picked on the slider - the text is in the accent colour.
 class ReaderPositionRow extends StatelessWidget {
-  const ReaderPositionRow({super.key, this.left, this.centre, this.right, this.picking = false});
+  const ReaderPositionRow({super.key, required this.kind, this.left, this.centre, this.right, this.picking = false});
+  final BookKind kind; // which kind's spots are hidden (each kind its own - user, 2026-10-07)
   final SpotText? left, centre, right;
   final bool picking;
 
   @override
   Widget build(BuildContext context) {
     final s = AppSettings.instance;
-    final hidden = s.display.hiddenSpots;
+    final kp = s.display.kind(kind);
+    final hidden = kp.hiddenSpots;
     final colour = picking ? Theme.of(context).colorScheme.primary : Colors.white;
     Widget spot(PositionSpot at, SpotText t, TextAlign align, double size) {
       final off = hidden.contains(at.name);
       return GestureDetector(
         key: ValueKey('pos-${at.name}'),
         behavior: HitTestBehavior.opaque,
-        onTap: () => s.setDisplay(s.display.copyWith(
-            hiddenSpots: off ? (List.of(hidden)..remove(at.name)) : [...hidden, at.name])),
+        onTap: () => s.setDisplay(s.display.withKind(kind,
+            kp.copyWith(hiddenSpots: off ? (List.of(hidden)..remove(at.name)) : [...hidden, at.name]))),
         // hidden: nothing drawn (user, 2026-10-07: no "hidden - tap to show" box, gone) - its place stays, an
         // invisible line as tall as its text, so a tap there brings it back and the slider doesn't move
         child: off

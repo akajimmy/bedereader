@@ -50,6 +50,9 @@ class EpubRenderer extends Renderer {
     if (readerTiming) SchedulerBinding.instance.addTimingsCallback(_onFrames); // a measuring build only
   }
 
+  @override
+  BookKind get kind => BookKind.ebooks;
+
   /// Where the first book's files come from (tests: from memory); others: Komga, or the downloaded file offline.
   final EpubSource? source;
 
@@ -132,7 +135,14 @@ class EpubRenderer extends Renderer {
       fontSize: e.size,
       lineHeight: e.lineSpacing,
       margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
-      bookFormatting: e.bookFormatting,
+      // the book's alignment and paragraphs, or the reader's (user, 2026-10-07: three settings, from one)
+      ownAlign: switch (e.align) {
+        EpubAlign.book => null,
+        EpubAlign.justified => TextAlign.justify,
+        EpubAlign.left => TextAlign.left,
+      },
+      ownParagraphs: e.paragraphs == EpubParagraphs.mine,
+      hyphenate: e.hyphenate,
       paragraphGap: e.paragraphGap.ems,
       accent: Theme.of(context).colorScheme.primary,
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
@@ -311,7 +321,7 @@ class EpubRenderer extends Renderer {
       '${b.size.width.toStringAsFixed(1)}x${b.size.height.toStringAsFixed(1)}@${t.pixelRatio}',
       '${t.fontFamily}/${t.fontSize}/${t.lineHeight}/${t.paragraphGap}',
       '${m.left}/${m.top}/${m.right}/${m.bottom}',
-      '${t.bookFormatting}/${t.hyphenate}/${b.textSize}/${b.textBold}',
+      '${t.ownAlign}/${t.ownParagraphs}/${t.hyphenate}/${b.textSize}/${b.textBold}',
     ].join('|');
   }
 
@@ -653,7 +663,7 @@ class EpubRenderer extends Renderer {
           SettingsGroup(title: 'This device', children: [
             ...brightnessRows(s, compact: true),
             ...nightRows(s),
-            if (canRotate) rotationRow(s),
+            if (canRotate) rotationRow(s, BookKind.ebooks),
             screenOnRow(s),
           ]),
         ]);

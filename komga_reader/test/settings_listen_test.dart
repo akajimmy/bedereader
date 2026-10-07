@@ -45,7 +45,7 @@ void main() {
       await tester.pump();
     }
     expect(ReaderScreen.debugBuilds, first, reason: 'brightness is drawn over the whole app, not by the reader');
-    s.setDisplay(s.display.copyWith(pageNote: s.display.pageNote == PageNote.off ? PageNote.always : PageNote.off));
+    s.setDisplay(s.display.copyWith(pageNote: s.display.comics.pageNote == PageNote.off ? PageNote.always : PageNote.off));
     await tester.pump();
     expect(ReaderScreen.debugBuilds, greaterThan(first));
     await tester.pump(const Duration(seconds: 2));

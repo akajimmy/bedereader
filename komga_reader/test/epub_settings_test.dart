@@ -25,13 +25,18 @@ void main() {
   test('saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, my own '
       'formatting, slide; a size out of range gets the default', () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
-        colours: EpubColours.sepia, bookFormatting: true, turn: EpubTurn.none,
-        paragraphGap: EpubParagraphGap.large);
+        colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.large);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     final d = EpubPrefs.fromJson(const {});
-    expect((d.font, d.colours, d.bookFormatting, d.turn, d.size), (EpubFont.literata, EpubColours.dark, false,
-        EpubTurn.slide, 19.0));
+    expect((d.font, d.colours, d.align, d.paragraphs, d.hyphenate, d.turn, d.size), (EpubFont.literata,
+        EpubColours.dark, EpubAlign.justified, EpubParagraphs.mine, true, EpubTurn.slide, 19.0));
     expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
+    // saved before "Book's formatting" was split (user, 2026-10-07): on = the book's alignment and paragraphs
+    final was = EpubPrefs.fromJson(const {'bookFormatting': true});
+    expect((was.align, was.paragraphs, was.hyphenate), (EpubAlign.book, EpubParagraphs.book, true));
+    final wasOff = EpubPrefs.fromJson(const {'bookFormatting': false});
+    expect((wasOff.align, wasOff.paragraphs), (EpubAlign.justified, EpubParagraphs.mine));
   });
 
   test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "
@@ -69,10 +74,24 @@ void main() {
   testWidgets("the Aa panel's Page corner says what the corner shows now - the book's page, as comics' (it still "
       'described the pages left in the chapter - user, 2026-10-07)', (tester) async {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
-        ListView(children: epubSettingRows(c, const EpubPrefs(), (_) {}))))));
+        SingleChildScrollView(child: Column(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))));
     await tester.pump();
     expect(find.text("The page you're on, \"12 / 36\""), findsOneWidget);
     expect(find.textContaining('left in the chapter'), findsNothing);
+  });
+
+  testWidgets("the text size is this device's (user, 2026-10-07): Komga's copy of the EPUB set brings the rest, not "
+      'the size', (tester) async {
+    final api = noNetwork(() => SettingsServer({
+      AppSettings.komgaKey: jsonEncode({'v': 1, 'series': {},
+          'epub': const EpubPrefs(size: 28, font: EpubFont.lora).toJson()}),
+    }));
+    SharedPreferences.setMockInitialValues({
+      'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': const EpubPrefs(size: 16).toJson()}),
+    });
+    await tester.runAsync(() => AppSettings.instance.load(api));
+    expect(AppSettings.instance.epub.font, EpubFont.lora, reason: "Komga's copy of the rest");
+    expect(AppSettings.instance.epub.size, 16, reason: "this device's size, not Komga's 28");
   });
 
   testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
@@ -82,7 +101,8 @@ void main() {
           'epub': const EpubPrefs(size: 24).toJson()}),
     }));
     await tester.runAsync(() => AppSettings.instance.load(api));
-    expect(AppSettings.instance.epub.size, 24, reason: "Komga's copy");
+    expect(AppSettings.instance.epub.font, isNot(EpubFont.lora), reason: 'not set yet');
+    expect(AppSettings.instance.epub.size, 19, reason: "the size is this device's, not Komga's 24");
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(font: EpubFont.lora));
     await wait(tester, const Duration(seconds: 3));
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
@@ -93,13 +113,15 @@ void main() {
   testWidgets("one page corner for both kinds (user, 2026-10-07): a device saved before takes the EPUBs' choice; "
       "with no EPUB choice, the comics' switch (off stays off); saved since, it's kept as it is", (tester) async {
     final api = noNetwork(() => SettingsServer({}));
-    Future<PageNote> loaded(Map<String, dynamic> display, {String? corner}) async {
+    Future<PageNote> loaded(Map<String, dynamic> display, {String? corner, bool same = true}) async {
       SharedPreferences.setMockInitialValues({
         'displayPrefs': jsonEncode(display),
         if (corner != null) 'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': {'corner': corner}}),
       });
       await tester.runAsync(() => AppSettings.instance.load(api, fetch: false));
-      return AppSettings.instance.display.pageNote;
+      final d = AppSettings.instance.display;
+      if (same) expect(d.comics.pageNote, d.ebooks.pageNote, reason: 'taken over for both kinds');
+      return d.ebooks.pageNote;
     }
 
     expect(await loaded({'pageNumber': true}, corner: 'off'), PageNote.off, reason: "the EPUBs' choice");
@@ -109,6 +131,11 @@ void main() {
     expect(await loaded({'pageNote': 'afterTurn'}, corner: 'off'), PageNote.afterTurn, reason: 'saved since: kept');
     final p = await tester.runAsync(SharedPreferences.getInstance);
     expect(jsonDecode(p!.getString('displayPrefs')!)['pageNote'], 'afterTurn', reason: 'saved in its new place');
+    // saved since the kinds were set apart (no page note of its own, each kind's instead): not taken over again on
+    // every start (it would have put the EPUBs' old corner over both kinds' own)
+    expect(await loaded({'comics': {'pageNote': 'always'}, 'ebooks': {'pageNote': 'afterTurn'}}, corner: 'off', same: false),
+        PageNote.afterTurn, reason: "the eBooks' own, kept");
+    expect(AppSettings.instance.display.comics.pageNote, PageNote.always, reason: "the comics' own, kept");
   });
 
   testWidgets("a change made while Komga can't be reached stays (Komga's older copy doesn't replace it) and goes "

@@ -60,13 +60,24 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
                 onTap: () => set(e.copyWith(colours: c))),
         ]),
       ),
+      // "Book's formatting" in three (user, 2026-10-07)
+      SegmentRow<EpubAlign>(
+        title: 'Alignment',
+        choices: [for (final a in EpubAlign.values) Choice(a, a.label)],
+        value: e.align,
+        onChanged: (v) => set(e.copyWith(align: v)),
+      ),
+      SegmentRow<EpubParagraphs>(
+        title: 'Paragraphs',
+        subtitle: 'Indents and the gaps between them',
+        choices: [for (final p in EpubParagraphs.values) Choice(p, p.label)],
+        value: e.paragraphs,
+        onChanged: (v) => set(e.copyWith(paragraphs: v)),
+      ),
       SwitchRow(
-        title: "Book's formatting",
-        subtitle: e.bookFormatting
-            ? "The publisher's alignment, indents and spacing"
-            : 'Off: every book justified; no gaps between paragraphs the book indents',
-        value: e.bookFormatting,
-        onChanged: (v) => set(e.copyWith(bookFormatting: v)),
+        title: 'Hyphenation',
+        value: e.hyphenate,
+        onChanged: (v) => set(e.copyWith(hyphenate: v)),
       ),
     ]),
     SettingsGroup(title: 'Pages', children: [
@@ -77,7 +88,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         onChanged: (v) => set(e.copyWith(turn: v)),
       ),
       // one setting with comics' page number (this device's, not the EPUB set's)
-      pageNoteRow(AppSettings.instance),
+      pageNoteRow(AppSettings.instance, BookKind.ebooks),
     ]),
   ];
 }

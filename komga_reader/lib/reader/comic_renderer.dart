@@ -49,6 +49,9 @@ class ComicRenderer extends Renderer {
   AppSettings get _settings => AppSettings.instance;
   bool _disposed = false;
 
+  @override
+  BookKind get kind => BookKind.comics;
+
   void _changed() {
     if (!_disposed) notifyListeners();
   }

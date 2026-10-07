@@ -134,6 +134,7 @@ class ReaderKeys extends ChangeNotifier {
     LogicalKeyboardKey.arrowDown: '↓', LogicalKeyboardKey.pageDown: 'PgDn', LogicalKeyboardKey.pageUp: 'PgUp',
     LogicalKeyboardKey.space: 'Space', LogicalKeyboardKey.enter: 'Enter', LogicalKeyboardKey.escape: 'Esc',
     LogicalKeyboardKey.select: 'Select', LogicalKeyboardKey.numpadEnter: 'Num Enter',
+    LogicalKeyboardKey.audioVolumeDown: 'Volume down', LogicalKeyboardKey.audioVolumeUp: 'Volume up',
     LogicalKeyboardKey.mediaTrackNext: 'Next track', LogicalKeyboardKey.mediaTrackPrevious: 'Previous track',
     LogicalKeyboardKey.mediaPlayPause: 'Play/Pause', LogicalKeyboardKey.numpadAdd: 'Num +',
     LogicalKeyboardKey.numpadSubtract: 'Num -',

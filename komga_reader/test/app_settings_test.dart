@@ -127,9 +127,13 @@ void main() {
     await tester.tap(find.byTooltip('Larger'));
     await tester.pump();
     expect(s.epub.size, 20);
-    await tester.tap(find.widgetWithText(SwitchListTile, "Book's formatting"));
+    // "Book's formatting" in three (user, 2026-10-07): the alignment on its own
+    await tester.tap(find.descendant(of: find.byType(SegmentedButton<EpubAlign>), matching: find.text('Left')));
     await tester.pump();
-    expect(s.epub.bookFormatting, isTrue);
+    expect((s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Hyphenation'));
+    await tester.pump();
+    expect(s.epub.hyphenate, isFalse);
     await tester.tap(find.text('Loose'));
     await tester.pump();
     expect(s.epub.lineSpacing, 1.7);
@@ -302,11 +306,13 @@ void main() {
     await tap(find.widgetWithText(ListTile, 'Library & Home'));
     await tap(find.text('Large'));
     expect(s.display.posterSize, PosterSize.large);
-    await tap(find.text('Title only'));
-    expect(s.display.posterTitleOnly, isTrue);
-    expect(s.display.posterDate, isTrue, reason: 'release dates on by default');
-    await tap(find.widgetWithText(SwitchListTile, 'Release date'));
+    // the three caption lines, each on or off (user, 2026-10-07)
+    expect((s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (true, true, true));
+    await tap(find.widgetWithText(FilterChip, 'Series #'));
+    expect(s.display.posterSeries, isFalse);
+    await tap(find.widgetWithText(FilterChip, 'Release date'));
     expect(s.display.posterDate, isFalse);
+    expect(s.display.posterTitle, isTrue);
   });
 
   testWidgets("Reset this device's settings: asks first; every one of this device's settings goes back, synced ones "

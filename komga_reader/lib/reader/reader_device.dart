@@ -22,6 +22,12 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
   /// it shows.
   void onReaderSettings();
 
+  /// The kind of book open (its rotation is that kind's).
+  BookKind get readerKind;
+
+  /// Another kind of book is open now (a comic after an EPUB): its rotation.
+  void kindChanged() => _applyRotation();
+
   /// Desktop full screen switched (the reader's button shows it).
   void onFullscreenChanged() {
     if (mounted) setState(() {});
@@ -65,7 +71,7 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
   Rotation? _rotation;
 
   void _applyRotation() {
-    final r = _settings.display.rotation;
+    final r = _settings.display.kind(readerKind).rotation;
     if (r == _rotation) return;
     _rotation = r;
     OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);

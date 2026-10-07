@@ -359,13 +359,18 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final number = b['metadata']?['number'] ?? b['number'];
   final title = (b['metadata']?['title'] ?? b['name']) as String;
   final display = AppSettings.instance.display;
-  final titleOnly = display.posterTitleOnly; // Settings > Library & Home > Poster text
+  // Settings > Library & Home: any of the three lines, always in this order (user, 2026-10-07) - the first is the
+  // tile's title, the next its subtitle, the third its caption ('' keeps a book's date line when it has none)
+  final lines = [
+    if (display.posterSeries) '${b['seriesTitle'] ?? ''} #$number',
+    if (display.posterTitle) title,
+    if (display.posterDate) posterDate(b['metadata']?['releaseDate'] as String?) ?? '',
+  ];
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.bookThumb(b['id']),
-    title: titleOnly ? title : '${b['seriesTitle'] ?? ''} #$number',
-    subtitle: titleOnly ? null : title,
-    // the release date (Settings > Library & Home > Posters); '' keeps the line for a book without one
-    caption: display.posterDate ? posterDate(b['metadata']?['releaseDate'] as String?) ?? '' : null,
+    title: lines.isEmpty ? '' : lines[0],
+    subtitle: lines.length > 1 ? lines[1] : null,
+    caption: lines.length > 2 ? lines[2] : null,
     read: completed,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,

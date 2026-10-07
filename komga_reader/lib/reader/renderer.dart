@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../api.dart';
+import '../settings.dart' show BookKind;
 import 'position_row.dart';
 
 /// What a renderer - the pages of one kind of book (comic pages, an EPUB) - may ask of the Reader it's in (the one
@@ -82,6 +83,9 @@ abstract class Renderer extends ChangeNotifier {
 
   final ReaderHost host;
   Komga get api => host.api;
+
+  /// The kind of book this renderer reads: its reading settings are that kind's (KindPrefs).
+  BookKind get kind;
 
   // ---- opening a book
 

@@ -21,15 +21,16 @@ Widget barIcon({required FocusNode node, required IconData icon, required String
 /// [buttons]. On a narrow screen the clock sits just under the bar instead.
 class ReaderTopBar extends StatelessWidget {
   const ReaderTopBar({super.key, required this.closeNode, required this.heading, required this.title,
-      required this.buttons});
+      required this.buttons, this.clock = ShowWhen.withControls});
   final FocusNode closeNode;
+  final ShowWhen clock; // the open kind's Clock and battery
   final String? heading;
   final String title;
   final List<Widget> buttons;
 
   @override
   Widget build(BuildContext context) {
-    final showClock = AppSettings.instance.display.clock != ShowWhen.off; // with the controls: With the controls / Always
+    final showClock = clock != ShowWhen.off; // with the controls: With the controls / Always
     final clockInBar = MediaQuery.sizeOf(context).width >= 700; // a phone's top bar has no room for it
     final head = heading;
     return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

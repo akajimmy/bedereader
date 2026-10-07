@@ -430,6 +430,25 @@ void main() {
     expect(o[4].dy - o[3].dy, closeTo(line, 0.5), reason: "the break's usual 1em below goes like the others'");
   });
 
+  test("alignment and paragraphs set apart (user, 2026-10-07: \"Book's formatting\" in three): the reader's own "
+      "alignment keeps the book's paragraph gaps; the reader's paragraphs take them out whatever the alignment", () {
+    const css = 'p { margin: 1em 0; text-indent: 1.5em }';
+    List<Offset> lay(EpubTheme theme) => Paginator(theme, const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h)
+            .read(parseXhtml('<body><p>One.</p><p>Two.</p><p>Three.</p></body>')))
+        .single
+        .textOrigins;
+    double gap(List<Offset> o) => o[2].dy - o[1].dy;
+    final book = gap(lay(const EpubTheme())); // the book's alignment and paragraphs
+    final leftOnly = gap(lay(const EpubTheme(ownAlign: TextAlign.left)));
+    final mineOnly = gap(lay(const EpubTheme(ownParagraphs: true)));
+    expect(leftOnly, closeTo(book, 0.5), reason: "the alignment alone leaves the book's gaps");
+    expect(mineOnly, lessThan(book - 10), reason: "the reader's paragraphs take the usual gap out");
+    expect(const EpubTheme(ownAlign: TextAlign.left).bookFormatting, isFalse);
+    expect(const EpubTheme(bookFormatting: false).ownAlign, TextAlign.justify, reason: 'the old switch: both');
+    expect(const EpubTheme(bookFormatting: false).ownParagraphs, isTrue);
+  });
+
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';

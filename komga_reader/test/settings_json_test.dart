@@ -46,22 +46,29 @@ void main() {
   test("this device's settings (DisplayPrefs) survive the saved form; older saves get the defaults; a value that isn't "
       'a choice gets the default', () {
     // every setting away from its default at once: (name, read it, the value set, its default)
-    const changed = DisplayPrefs(pageTurn: PageTurn.curl, rotation: Rotation.landscape, clock: ShowWhen.always,
-        progressBar: true, doubleTapZoom: false, volumeKeys: false, midBook: MidBook.keep,
-        screenOn: 20, posterSize: PosterSize.small, posterTitleOnly: true,
+    const changed = DisplayPrefs(pageTurn: PageTurn.curl,
+        comics: KindPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true,
+            pageNote: PageNote.off, hiddenSpots: ['left']),
+        ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn),
+        doubleTapZoom: false, midBook: MidBook.keep,
+        screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
         pagePreviews: false, pageStrip: true, posterDate: false);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
-      ('rotation', (d) => d.rotation, Rotation.landscape, Rotation.auto),
-      ('clock', (d) => d.clock, ShowWhen.always, ShowWhen.withControls),
-      ('progressBar', (d) => d.progressBar, true, false),
+      // each kind its own (user, 2026-10-07)
+      ('comics rotation', (d) => d.comics.rotation, Rotation.landscape, Rotation.auto),
+      ('comics clock', (d) => d.comics.clock, ShowWhen.always, ShowWhen.withControls),
+      ('comics progressBar', (d) => d.comics.progressBar, true, false),
+      ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(), 'left', ''),
+      ('ebooks rotation', (d) => d.ebooks.rotation, Rotation.portrait, Rotation.auto),
+      ('ebooks clock', (d) => d.ebooks.clock, ShowWhen.off, ShowWhen.withControls),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
-      ('volumeKeys', (d) => d.volumeKeys, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 20, 0),
       ('posterSize', (d) => d.posterSize, PosterSize.small, PosterSize.medium),
-      ('posterTitleOnly', (d) => d.posterTitleOnly, true, false),
+      ('posterSeries', (d) => d.posterSeries, false, true),
+      ('posterTitle', (d) => d.posterTitle, false, true),
       ('nightSchedule', (d) => d.nightSchedule, true, false),
       ('nightFrom', (d) => d.nightFrom, 1320, 21 * 60),
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
@@ -87,5 +94,21 @@ void main() {
     // not a choice: the default
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0);
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
+  });
+
+  test('saved before the kinds were set apart (build 91 and older): the one shared value goes to both kinds; '
+      '"Title only" posters keep the title without the series line', () {
+    final old = DisplayPrefs.fromJson({'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
+        'pageNote': 'off', 'hiddenSpots': ['centre'], 'posterTitleOnly': true, 'posterDate': false});
+    for (final k in [old.comics, old.ebooks]) {
+      expect((k.rotation, k.clock, k.progressBar, k.pageNote, k.hiddenSpots.join()),
+          (Rotation.landscape, ShowWhen.always, true, PageNote.off, 'centre'));
+    }
+    expect((old.posterSeries, old.posterTitle, old.posterDate), (false, true, false));
+    expect(DisplayPrefs.fromJson({'posterTitleOnly': false}).posterSeries, isTrue);
+    // and set apart since: one kind changed, the other not
+    final apart = DisplayPrefs.fromJson(old.withKind(BookKind.ebooks, old.ebooks.copyWith(pageNote: PageNote.always))
+        .toJson());
+    expect((apart.comics.pageNote, apart.ebooks.pageNote), (PageNote.off, PageNote.always));
   });
 }
