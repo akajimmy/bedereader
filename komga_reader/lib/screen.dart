@@ -83,7 +83,7 @@ Future<void> keepScreenOn(bool on) async {
   }
 }
 
-/// The readers' rotation lock (Settings > Reader > Rotation, and the readers' panels - user, 2026-10-07): Portrait
+/// The readers' rotation lock (Settings > Comics > Rotation, and the readers' panels - user, 2026-10-07): Portrait
 /// or Landscape held exactly one way up, the tablet turning doesn't move it. The way up is the screen's when the
 /// lock starts (opening a book with it on, or choosing it), so it starts the way the tablet is held; choosing it
 /// again turns it over (180°) - to read upside down on purpose. The way up isn't stored: only Auto / Portrait /

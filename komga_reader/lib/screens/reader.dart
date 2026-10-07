@@ -471,7 +471,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   /// Next book. On the last page or the end card the current book is marked read; before that, it depends on "Next
-  /// book before the last page" (Settings > Reader): ask, mark read, or keep it in progress.
+  /// book before the last page" (Settings > Comics): ask, mark read, or keep it in progress.
   Future<void> _nextBook() async {
     if (_busy) return; // already on the way to another book
     _switching = true;

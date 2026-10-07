@@ -38,8 +38,8 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
 (String, String?) pageInfo(SettingsPage p) => switch (p) {
       SettingsPage.server => ('Server', 'Kept on this device'),
       SettingsPage.defaults => ('Reading defaults', 'Synced through Komga - every device'),
-      SettingsPage.books => ('Books (EPUB)', 'Synced through Komga - every device; also in the book reader (Aa)'),
-      SettingsPage.reader => ('Reader', 'Kept on this device'),
+      SettingsPage.books => ('eBooks', 'Synced through Komga - every device; also in the eBook reader (Aa)'),
+      SettingsPage.reader => ('Comics', 'Kept on this device'),
       SettingsPage.keys => ('Remote and keys', 'Kept on this device'),
       SettingsPage.display => ('Display', 'Kept on this device'),
       SettingsPage.library => ('Library & Home', 'Kept on this device, except On deck and pins (synced)'),
@@ -110,13 +110,13 @@ void main() {
     expect(find.text('Night mode'), findsOneWidget);
     // screen brightness is the reader's (user, 2026-10-05): under Reader, not Display
     expect(find.text('Screen brightness'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, 'Reader'));
+    await tester.tap(find.widgetWithText(ListTile, 'Comics'));
     await tester.pumpAndSettle();
     expect(find.text('Brightness while reading'), findsOneWidget);
     expect(find.text('Screen brightness'), findsWidgets);
   });
 
-  testWidgets("Books (EPUB): the font, size and the book's formatting set the EPUB settings (synced)", (tester) async {
+  testWidgets("eBooks: the font, size and the book's formatting set the EPUB settings (synced)", (tester) async {
     tall(tester);
     final s = AppSettings.instance;
     addTearDown(() => s.setEpub(const EpubPrefs()));
@@ -139,10 +139,10 @@ void main() {
     tall(tester, width: 420);
     await open(tester);
     expect(find.byType(ChoiceChip), findsNWidgets(8)); // no Downloads here (downloads not set up in tests)
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Reader'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Comics'));
     await tester.pumpAndSettle();
     expect(find.text('Turning pages'), findsOneWidget);
-    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Reader')).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Comics')).selected, isTrue);
     expect(tester.takeException(), isNull); // no overflow at phone width
   });
 

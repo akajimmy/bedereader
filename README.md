@@ -50,12 +50,12 @@ This app shows them and keeps everything in sync.
 - Read further (or finished) on another device while the book was open here? The reader asks before saving: stay
   where you are, or go to that page - it never saves over the other device's place without asking.
 
-**Books (EPUB)**
+**eBooks (EPUB)**
 - Novels and other EPUBs are laid out by the app itself, page by page: justified and hyphenated (English and French),
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
 - Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
-  spacing, paragraph spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > Books.
+  spacing, paragraph spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > eBooks.
   *Book's formatting* switches between the publisher's alignment and spacing and your own for every book. A book set
   smaller or larger all through shows at your text size; small black-and-white pictures (chapter numbers, drop caps)
   take the page's colours.

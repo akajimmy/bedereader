@@ -30,8 +30,8 @@ extension on SettingsPage {
   String get label => switch (this) {
         SettingsPage.server => 'Server',
         SettingsPage.defaults => 'Reading defaults',
-        SettingsPage.books => 'Books (EPUB)',
-        SettingsPage.reader => 'Reader',
+        SettingsPage.books => 'eBooks',
+        SettingsPage.reader => 'Comics',
         SettingsPage.display => 'Display',
         SettingsPage.keys => 'Remote and keys',
         SettingsPage.library => 'Library & Home',
@@ -43,7 +43,7 @@ extension on SettingsPage {
         SettingsPage.defaults => Icons.menu_book_outlined,
         SettingsPage.books => Icons.text_fields,
         SettingsPage.reader => Icons.chrome_reader_mode_outlined,
-        SettingsPage.display => Icons.palette_outlined, // (brightness moved to Reader: it's the reader's now)
+        SettingsPage.display => Icons.palette_outlined, // (brightness moved to Comics: it's the readers' now)
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
         SettingsPage.downloads => Icons.download_outlined,
@@ -53,7 +53,7 @@ extension on SettingsPage {
   /// Where the page's settings are kept, said once under its title.
   String? get scope => switch (this) {
         SettingsPage.defaults => 'Synced through Komga - every device',
-        SettingsPage.books => 'Synced through Komga - every device; also in the book reader (Aa)',
+        SettingsPage.books => 'Synced through Komga - every device; also in the eBook reader (Aa)',
         SettingsPage.library => 'Kept on this device, except On deck and pins (synced)',
         SettingsPage.about => null,
         _ => 'Kept on this device',

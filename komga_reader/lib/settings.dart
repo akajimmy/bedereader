@@ -615,7 +615,7 @@ class AppSettings extends ChangeNotifier {
 
   bool _loaded = false;
 
-  /// The EPUB settings (the reader's Aa panel, Settings > Books). Synced.
+  /// The EPUB settings (the reader's Aa panel, Settings > eBooks). Synced.
   void setEpub(EpubPrefs prefs) {
     if (prefs == epub) return;
     epub = prefs;

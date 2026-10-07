@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../screen.dart';
 
-/// The time and the battery for the reader (Settings > Reader > Clock and battery): the reader hides the system's
+/// The time and the battery for the reader (Settings > Comics > Clock and battery): the reader hides the system's
 /// status bar, so this is the only way to see them while reading. The time follows the device's 12/24-hour choice;
 /// the battery is left out where it can't be read (a PC without one).
 class ReaderClock extends StatefulWidget {
