@@ -9,13 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 85 - 2026-10-07
+
 **Changed**
 - **Downloads > Manage:** each book has a trash button again (it was a menu with one item), and a series' card has
   one for the whole series (it asks first). A series stands apart from its books: a shaded card with a series icon
   and its name in bold. The line above the storage bar starts with the number of books ("14 books · 1.0 GB used ·
   limit 10.0 GB").
-
-## 1.3.0
 
 ### Build 84 - 2026-10-07
 
