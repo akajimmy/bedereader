@@ -86,4 +86,28 @@ void main() {
       book.dispose();
     });
   });
+
+  testWidgets("R5: a chapter that failed while counting (counted as one page), laid out later with its real pages - "
+      "the book says its page numbers moved, so the reader can go back to the same page", (tester) async {
+    await tester.runAsync(() async {
+      final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
+      final spine = ['c0.xhtml', 'c1.xhtml', 'c2.xhtml'];
+      final info = EpubInfo(spine: spine, toc: const []);
+      final files = {for (final c in spine) c: '<html><body>${para('word', 200)}</body></html>'};
+      final missing = Map.of(files)..remove('c1.xhtml'); // c1 can't be read while counting
+      final source = MemorySource(missing, info);
+      final book = EpubBook(source, info, hy);
+      book.setLayout(const EpubTheme(), const Size(400, 600));
+      await book.countAll(current: () => 0);
+      expect(book.counted, isTrue);
+      expect(book.pageCount(1), 1, reason: 'counted as one page');
+      final before = book.countChanges;
+      source.files['c1.xhtml'] = files['c1.xhtml']!; // readable again
+      book.retry(1);
+      await book.pages(1);
+      expect(book.pageCount(1), greaterThan(1));
+      expect(book.countChanges, before + 1);
+      book.dispose();
+    });
+  });
 }

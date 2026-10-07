@@ -22,6 +22,7 @@ class _Chapter {
   List<int>? starts; // every page's start, once counted (kept)
   int length = 0; // characters
   Future<List<EpubPage>>? laying;
+  Future<LoadedChapter>? loading; // its text on the way (one load shared by everyone waiting for it)
   Object? error; // the last try failed (shown with Retry; the next try loads it afresh)
 }
 
@@ -90,7 +91,7 @@ class EpubBook extends ChangeNotifier {
     for (final i in picks) {
       try {
         final c = _chapters[i];
-        final content = c.content ??= await loader.load(info.spine[i]);
+        final content = await _content(i);
         c.length = content.length;
         sampled.add(content.blocks);
       } catch (_) {
@@ -166,7 +167,7 @@ class EpubBook extends ChangeNotifier {
     final c = _chapters[i];
     final clock = Stopwatch()..start();
     final loaded = c.content == null;
-    final content = c.content ??= await loader.load(info.spine[i]);
+    final content = await _content(i);
     final readMs = clock.elapsedMilliseconds;
     c.length = content.length;
     if (gen != _generation) return const [];
@@ -182,6 +183,9 @@ class EpubBook extends ChangeNotifier {
     }
     EpubTrace.instance.log('chapter $i laid out: ${pages.length} pages in ${laying.elapsedMilliseconds} ms'
         '${loaded ? ' (read in $readMs ms)' : ''}');
+    // counted before with another number of pages (it failed while counting, say): the book's page numbers after
+    // it move - the reader goes back to the same page (EPUB review R5)
+    if (c.starts != null && c.starts!.length != pages.length) countChanges++;
     c
       ..paginator = p
       ..pages = pages
@@ -221,8 +225,12 @@ class EpubBook extends ChangeNotifier {
       try {
         await pages(i);
       } catch (_) {
-        // a chapter that can't be read: counted as one page (it shows the error when reached)
-        _chapters[i].starts ??= [0];
+        // a chapter that can't be read: counted as one page (it shows the error when reached) - in this layout only
+        // (one from a layout before landed in the new one's count), and told (it could be the last one counted)
+        if (gen == _generation && _chapters[i].starts == null) {
+          _chapters[i].starts = [0];
+          notifyListeners();
+        }
       }
       if (gen != _generation) return;
       final cur = current();
@@ -369,13 +377,45 @@ class EpubBook extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _generation++; // the background counting stops (it checks between chapters)
     _pause?.cancel();
+    // two frames on, as when a chapter is let go of: the closing transition may still draw these pages (they were
+    // freed at once - EPUB review R10)
     for (final c in _chapters) {
-      c.paginator?.dispose();
-      c.content?.dispose();
+      _retire(c.paginator, c.content);
     }
     super.dispose();
+  }
+
+  bool _disposed = false;
+
+  /// Book-wide page numbers moved: a counted chapter was laid out again with another number of pages.
+  int countChanges = 0;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners(); // (a load failing after closing)
+  }
+
+  /// Chapter [i]'s text, loaded once: everyone asking while it's on its way waits for the same load (two layouts at
+  /// once each loaded it, and the one stored last left the other's pictures never freed - EPUB review R9). A load
+  /// that lands after the book closed is freed, not kept.
+  Future<LoadedChapter> _content(int i) {
+    final c = _chapters[i];
+    final have = c.content;
+    if (have != null) return Future.value(have);
+    return c.loading ??= loader.load(info.spine[i]).then((loaded) {
+      c.loading = null;
+      if (_disposed) {
+        loaded.dispose();
+        throw StateError('the book was closed');
+      }
+      return c.content = loaded;
+    }, onError: (Object e) {
+      c.loading = null;
+      throw e;
+    });
   }
 }
 

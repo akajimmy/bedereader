@@ -203,6 +203,120 @@ void main() {
     expect(find.text('The End'), findsOneWidget);
   });
 
+  // ---- moving through the book (EPUB review 2026-10-06, R1-R3)
+
+  /// [n] chapters; [failing]: one whose file is missing (it fails every time it's loaded).
+  MemorySource chapters(int n, {String? failing}) => MemorySource({
+        for (var i = 1; i <= n; i++)
+          if ('c$i.xhtml' != failing)
+            'c$i.xhtml': '<html><body><h1>Chapter $i</h1>${List.filled(40, para('word$i', 40)).join()}</body></html>',
+      }, EpubInfo(spine: [for (var i = 1; i <= n; i++) 'c$i.xhtml'],
+          toc: [for (var i = 1; i <= n; i++) TocEntry('Chapter $i', 'c$i.xhtml', 0)], title: 'Book'));
+
+  Future<String> inChapter(WidgetTester tester) async {
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-chapter-position'))).single.data!;
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    return t;
+  }
+
+  Future<void> contentsTo(WidgetTester tester, String entry) async {
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Contents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(entry));
+    await tester.pump();
+  }
+
+  testWidgets("R1: jumped far, then straight back into a chapter that isn't laid out yet - its LAST page, not its "
+      'first', (tester) async {
+    await open(tester, chapters(7));
+    await contentsTo(tester, 'Chapter 6');
+    await tester.pump(const Duration(milliseconds: 50)); // straight back - before chapter 5 is laid out ahead
+    await tester.tapAt(const Offset(50, 600));
+    await settle(tester);
+    final at = await inChapter(tester); // "Ch. 5 · Pg. X/Y"
+    final m = RegExp(r'Pg\. (\d+)/(\d+)').firstMatch(at)!;
+    expect(at, startsWith('Ch. 5'));
+    expect(m.group(1), m.group(2), reason: 'the last page of chapter 5: $at');
+  });
+
+  testWidgets('R2: a chapter that keeps failing leaves the controls and turns working - past it to the next chapter',
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: noNetwork(() => EndKomga(null)),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        source: chapters(3, failing: 'c2.xhtml'), saveProgress: false)));
+    for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    // into chapter 2 (it fails), with the controls
+    await contentsTo(tester, 'Chapter 2');
+    await settle(tester);
+    expect(find.text('Retry'), findsOneWidget);
+    await tester.tapAt(const Offset(400, 600)); // the controls still come up
+    await tester.pump();
+    expect(find.byTooltip('Contents'), findsOneWidget);
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    await tester.tapAt(const Offset(750, 600)); // and a turn goes on to chapter 3
+    await settle(tester);
+    expect(find.text('Retry'), findsNothing);
+    expect(await inChapter(tester), startsWith('Ch. 3'));
+  });
+
+  testWidgets('R12: the window shrunk to nothing (minimised) and back - the same page, not the chapter start',
+      (tester) async {
+    await open(tester, chapters(3));
+    for (var i = 0; i < 4; i++) {
+      await tester.tapAt(const Offset(750, 600));
+      await settle(tester);
+    }
+    final before = await label(tester);
+    tester.view.physicalSize = Size.zero;
+    await tester.pump();
+    await settle(tester);
+    tester.view.physicalSize = const Size(800, 1200);
+    await tester.pump();
+    await settle(tester);
+    // (the place, not the wording: counting may finish meanwhile - "16%" becomes "Pg. 5/27 · 16%")
+    String pct(String l) => RegExp(r'(\d+)%').firstMatch(l)!.group(1)!;
+    expect(pct(await label(tester)), pct(before));
+  });
+
+  testWidgets("R3: chapter by chapter (not counted yet), a swipe past the chapter's last page goes on to the next",
+      (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // one chapter never comes: the book is never wholly counted - it stays chapter by chapter
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: noNetwork(() => EndKomga(null)),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        source: HangingSource(chapters(7).files, chapters(7).infoValue, hangs: 'c7.xhtml'), saveProgress: false)));
+    for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await settle(tester);
+    // to chapter 1's last page by taps, then swipe on
+    for (var i = 0; i < 40; i++) {
+      final at = await inChapter(tester);
+      final m = RegExp(r'Pg\. (\d+)/(\d+)').firstMatch(at)!;
+      if (m.group(1) == m.group(2)) break;
+      await tester.tapAt(const Offset(750, 600));
+      await settle(tester);
+    }
+    await tester.fling(find.byType(PageView), const Offset(-500, 0), 2000);
+    await settle(tester);
+    expect(await inChapter(tester), startsWith('Ch. 2'));
+  });
+
   testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
       'Done on a wide screen', (tester) async {
     await open(tester, twoChapters());
