@@ -556,6 +556,12 @@ class _Laid {
     return out;
   }
 
+  /// Line [i] ends where a word was broken (at a soft hyphen) - a hyphen is drawn after it.
+  bool brokenAt(int i) {
+    final end = lines[i].end, plain = tp.plainText;
+    return end > 0 && end <= plain.length && plain.codeUnitAt(end - 1) == 0xAD;
+  }
+
   /// The line at painter height [y] (the last if [y] is past them).
   int lineAt(double y) {
     var top = 0.0;
@@ -680,6 +686,14 @@ class EpubPage {
   /// Where each run of text lines starts on the page (tests: indents, wrapping).
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
+
+  /// The page ends in a word broken by a hyphen, its paragraph going on over the page (tests).
+  @visibleForTesting
+  bool get endsInBrokenWord {
+    final last = pieces.whereType<_TextPiece>().lastOrNull;
+    if (last == null || last.to >= last.laid.tp.height - 0.5) return false; // (the paragraph ends here)
+    return last.laid.brokenAt(last.laid.lineAt(last.to - 1));
+  }
 
   /// Where each text piece ends, down the page (tests).
   @visibleForTesting
@@ -1217,6 +1231,20 @@ class Paginator {
           n++;
         } else {
           _newPage();
+          continue;
+        }
+      }
+      // a word isn't split across a page turn, as in print ("ea-" / "gle" - user, build 82, Small Gods): the page's
+      // last line, ending in a broken word, goes over to the next page with the rest - the page a line (or a few) short. Not
+      // the only line an empty page holds (it would never be placed).
+      if (n < lines.length && laid.brokenAt(n - 1)) {
+        // (back over every such line: the one before can end in a broken word too)
+        while (n - 1 > i && laid.brokenAt(n - 1)) {
+          n--;
+          end -= lines[n].height;
+        }
+        if (laid.brokenAt(n - 1) && !_pageEmpty) {
+          _newPage(); // its only line here: the paragraph starts on the next page
           continue;
         }
       }
