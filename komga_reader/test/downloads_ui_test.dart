@@ -193,6 +193,8 @@ void main() {
     await library(tester);
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     expect(find.text('Manage · 3'), findsOneWidget);
+    expect(find.textContaining(RegExp(r'^3 books · .+ used · ')), findsOneWidget,
+        reason: 'the count first, then the space (user, 2026-10-07)');
     expect(titles(), ['Flash #1', 'Saga #1', 'Saga #2'], reason: 'by name: series, then number');
     expect(find.text('3 pages · 3.0 MB · read'), findsOneWidget);
     expect(find.text('3 pages · 1.0 MB · in progress'), findsOneWidget);
@@ -270,6 +272,12 @@ void main() {
     await tester.tap(find.text('Saga'));
     await tester.pump();
     expect(titles(), ['Flash', 'Saga', 'Saga #1', 'Saga #2']);
+    // a series looks unlike a book (user, 2026-10-07): a shaded card with the series icon; its books plain rows
+    ListTile tile(String title) => tester.widget<ListTile>(find.widgetWithText(ListTile, title));
+    expect(tile('Saga').tileColor, isNotNull);
+    expect(find.descendant(of: find.widgetWithText(ListTile, 'Saga'),
+        matching: find.byIcon(Icons.collections_bookmark_outlined)), findsOneWidget);
+    expect(tile('Saga #1').tileColor, isNull);
 
     await tester.tap(find.text('Sort: Name'));
     await tester.pumpAndSettle();

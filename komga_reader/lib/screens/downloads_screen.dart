@@ -287,8 +287,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
     final header = Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('${DownloadsScreen.size(d.usedBytes)} used · ${cap == null ? 'no limit' : 'limit ${DownloadsScreen.size(cap)}'}'
-            ' · ${all.length} book${all.length == 1 ? '' : 's'}',
+        Text('${all.length} book${all.length == 1 ? '' : 's'} · ${DownloadsScreen.size(d.usedBytes)} used · '
+            '${cap == null ? 'no limit' : 'limit ${DownloadsScreen.size(cap)}'}',
             style: const TextStyle(color: _grey)),
         if (cap != null) ...[
           const SizedBox(height: 6),
@@ -390,14 +390,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
     void toggleOpen() => setState(() => open ? _expanded.remove(id) : _expanded.add(id));
     void toggleGroup() => setState(() =>
         picked == g.length ? _selected.removeAll(g.map((i) => i.id)) : _selected.addAll(g.map((i) => i.id)));
-    return ListTile(
+    // a series stands apart from its books (user, 2026-10-07): a shaded card with a series icon and its name in bold;
+    // the books under it are plain, indented rows
+    return Padding(
       key: ValueKey('series-$id'),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+      child: ListTile(
+      tileColor: Colors.white.withValues(alpha: 0.07),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      contentPadding: const EdgeInsets.only(left: 8, right: 4),
       leading: _selecting
           ? Checkbox(tristate: true, value: picked == 0 ? false : picked == g.length ? true : null,
               onChanged: (_) => toggleGroup())
-          : chevron,
-      title: Text(first.series, style: const TextStyle(fontWeight: FontWeight.w500)),
+          : Icon(Icons.collections_bookmark_outlined, color: Theme.of(context).colorScheme.primary),
+      title: Text(first.series, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
       subtitle: Text([
         '${g.length} book${g.length == 1 ? '' : 's'}',
         DownloadsScreen.size(_bytes(g)),
@@ -410,19 +416,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                 _selecting = true;
                 _selected.addAll(g.map((i) => i.id));
               }),
-      trailing: _selecting
-          ? chevron
-          : PopupMenuButton<String>(
-              tooltip: 'Remove',
-              icon: const Icon(Icons.more_vert),
-              onSelected: (_) => _confirmRemove('Remove ${first.series}?', [
-                for (final i in all) if (i.seriesId == id) i,
-              ]),
-              itemBuilder: (_) {
-                final n = all.where((i) => i.seriesId == id).length;
-                return [PopupMenuItem(value: 'series', child: Text(n == 1 ? 'Remove download' : 'Remove the series\' $n downloads'))];
-              },
-            ),
+      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (!_selecting)
+          PopupMenuButton<String>(
+            tooltip: 'Remove',
+            icon: const Icon(Icons.more_vert),
+            onSelected: (_) => _confirmRemove('Remove ${first.series}?', [
+              for (final i in all) if (i.seriesId == id) i,
+            ]),
+            itemBuilder: (_) {
+              final n = all.where((i) => i.seriesId == id).length;
+              return [
+                PopupMenuItem(value: 'series', child: Text(n == 1 ? 'Remove download' : 'Remove the series\' $n downloads')),
+              ];
+            },
+          ),
+        Padding(padding: const EdgeInsets.only(right: 8), child: chevron),
+      ]),
+      ),
     );
   }
 
