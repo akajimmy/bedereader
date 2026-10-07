@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/progress.dart';
-import 'package:komga_reader/screens/epub_reader.dart';
+import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -112,7 +112,7 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
-    EpubReaderScreen.forgetClosingSaves(); // (a test that closed with a question up leaves its save waiting)
+    ReaderScreen.forgetClosingSaves(); // (a test that closed with a question up leaves its save waiting)
   });
 
   test("where to open: the saved progression (Komga's full-URL href made a path in the book)", () async {
@@ -162,7 +162,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final api = noNetwork(() => EpubKomga(saved: saved));
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api,
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api,
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
     await run(tester, const Duration(seconds: 2));
     expect(find.byType(PageView), findsOneWidget);
@@ -201,10 +201,10 @@ void main() {
     addTearDown(tester.view.reset);
     final api = noNetwork(() => EpubKomga(saved: _saved('${_base}OEBPS/c2.xhtml', 0.5),
         slow: const Duration(milliseconds: 300)));
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api,
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api,
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
     // the book opens and is laid out once; its chapter is still on its way when the bars go
-    final laidOut = find.descendant(of: find.byType(EpubReaderScreen), matching: find.byType(LayoutBuilder));
+    final laidOut = find.descendant(of: find.byType(ReaderScreen), matching: find.byType(LayoutBuilder));
     for (var i = 0; i < 40 && laidOut.evaluate().isEmpty; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
       await tester.pump();
@@ -363,7 +363,7 @@ void main() {
     await run(tester, const Duration(milliseconds: 300));
     await tester.pumpWidget(const SizedBox()); // closing: its save is held on the way
     await tester.pump();
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(key: UniqueKey(), api: api,
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(key: UniqueKey(), api: api,
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
     await run(tester, const Duration(milliseconds: 300));
     api.gate!.complete(); // the closing save lands

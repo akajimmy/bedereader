@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/screens/epub_reader.dart';
+import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'epub_reader_test.dart' show twoChapters;
+import 'support/epub_books.dart' show twoChapters;
 import 'support/no_network.dart';
 
 void main() {
@@ -33,9 +33,9 @@ void main() {
         debugShowCheckedModeBanner: false,
         theme: ThemeData(brightness: Brightness.dark, useMaterial3: true, fontFamily: 'Roboto',
             colorScheme: const ColorScheme.dark(primary: Color(0xFF26A69A))),
-        home: EpubReaderScreen(api: plainKomga(), book: const {'id': 'B1', 'name': 'Book', 'seriesTitle': 'A Series',
+        home: ReaderScreen(api: plainKomga(), book: const {'id': 'B1', 'name': 'Book', 'seriesTitle': 'A Series',
             'metadata': {'title': 'The Book', 'number': '3'}, 'media': {'mediaProfile': 'EPUB'}},
-            source: twoChapters(), saveProgress: false))));
+            epubSource: twoChapters(), saveProgress: false))));
     for (var i = 0; i < 60; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();

@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'epub_reader_test.dart' show onePixelPng;
+import 'support/epub_books.dart' show onePixelPng;
 import 'support/no_network.dart';
 
 /// A Komga whose page loads wait to be finished by the test, one completer per request, in order.

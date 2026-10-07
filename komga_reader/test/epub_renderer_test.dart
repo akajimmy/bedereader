@@ -1,6 +1,5 @@
-// The EPUB reader screen (lib/screens/epub_reader.dart) over a small book held in memory.
+// The EPUB renderer in the one Reader (lib/reader/epub_renderer.dart) over a small book held in memory.
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -10,42 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/source.dart';
-import 'package:komga_reader/screens/epub_reader.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/epub_books.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
-
-class MemorySource implements EpubSource {
-  MemorySource(this.files, this.infoValue, {this.binary = const {}});
-  final Map<String, String> files;
-  final Map<String, Uint8List> binary; // pictures
-  final EpubInfo infoValue;
-  @override
-  Future<EpubInfo> info() async => infoValue;
-  @override
-  Future<Uint8List> resource(String path) async {
-    final pic = binary[path];
-    if (pic != null) return pic;
-    final f = files[path];
-    if (f == null) throw StateError('no $path');
-    return Uint8List.fromList(utf8.encode(f));
-  }
-}
-
-/// A [MemorySource] whose files take a moment to read (a chapter coming back takes a while, as on a device).
-class SlowSource extends MemorySource {
-  SlowSource(super.files, super.infoValue);
-  bool slow = false; // on once the book is open (its first loads run before the test's clock does)
-  @override
-  Future<Uint8List> resource(String path) async {
-    if (slow) await Future<void>.delayed(const Duration(milliseconds: 30));
-    return super.resource(path);
-  }
-}
 
 /// A Komga that knows the book after this one ([next]; null: the series' last) and serves a 1-pixel poster.
 class EndKomga extends TestKomga {
@@ -79,30 +50,6 @@ class ReadListKomga extends TestKomga {
   ImageProvider thumbImage(String ref) => MemoryImage(onePixelPng);
 }
 
-/// A 1 x 1 PNG.
-final onePixelPng = Uint8List.fromList(base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='));
-
-/// A [MemorySource] where one file ([hangs]) never comes: the book is never wholly counted.
-class HangingSource extends MemorySource {
-  HangingSource(super.files, super.infoValue, {required this.hangs});
-  final String hangs;
-  @override
-  Future<Uint8List> resource(String path) => path == hangs ? Completer<Uint8List>().future : super.resource(path);
-}
-
-String para(String word, int n) => '<p>${List.filled(n, word).join(' ')}</p>';
-
-MemorySource twoChapters() => MemorySource({
-      'c1.xhtml': '<html><body><h1>One</h1>${List.filled(12, para('alpha', 40)).join()}'
-          '<p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',
-      'c2.xhtml': '<html><body><h1 id="two">Two</h1>${List.filled(12, para('beta', 40)).join()}</body></html>',
-      'notes.xhtml': '<html><body><p id="n1"><a href="c1.xhtml">*</a>The note itself.</p></body></html>',
-    }, const EpubInfo(spine: ['c1.xhtml', 'c2.xhtml'], toc: [
-      TocEntry('One', 'c1.xhtml', 0),
-      TocEntry('Two', 'c2.xhtml#two', 0),
-    ], title: 'Book'));
-
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -113,8 +60,8 @@ void main() {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api ?? noNetwork(() => EndKomga(null)),
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source, saveProgress: false)));
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api ?? noNetwork(() => EndKomga(null)),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source, saveProgress: false)));
     // loading, laying out and counting run on real futures: until the pages show and the book is counted
     for (var i = 0; i < 200; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
@@ -275,9 +222,9 @@ void main() {
     tester.view.physicalSize = const Size(800, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: noNetwork(() => EndKomga(null)),
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(() => EndKomga(null)),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-        source: chapters(3, failing: 'c2.xhtml'), saveProgress: false)));
+        epubSource: chapters(3, failing: 'c2.xhtml'), saveProgress: false)));
     for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
@@ -456,7 +403,7 @@ void main() {
     await nav.maybePop();
     await tester.pumpAndSettle();
     expect(find.text('Close'), findsNothing);
-    expect(find.byType(EpubReaderScreen), findsOneWidget);
+    expect(find.byType(ReaderScreen), findsOneWidget);
   });
 
   testWidgets('the slider: the position shown follows the finger while dragging; the page changes when it lifts',
@@ -564,11 +511,11 @@ void main() {
     addTearDown(tester.view.reset);
     final nav = GlobalKey<NavigatorState>();
     await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Text('home')));
-    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => ReaderScreen(
         api: noNetwork(() => EndKomga(const {'id': 'B2', 'seriesTitle': 'Homeland', 'metadata': {'number': '2',
             'title': 'Exile'}})),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-        source: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
+        epubSource: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
             const EpubInfo(spine: ['c1.xhtml'], toc: [])),
         saveProgress: false))));
     for (var i = 0; i < 60 && find.byType(PageView).evaluate().isEmpty; i++) {
@@ -598,7 +545,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter); // OK on Close
     await settle(tester);
     await tester.pumpAndSettle();
-    expect(find.byType(EpubReaderScreen), findsNothing, reason: 'closed');
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'closed');
     expect(find.text('home'), findsOneWidget);
   });
 
@@ -610,9 +557,9 @@ void main() {
     addTearDown(tester.view.reset);
     final api = noNetwork(ReaderServer.new)
       ..next = {'id': 'B2', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'Comic'}};
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api,
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api,
         book: const {'id': 'H1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-        source: chapters(3), saveProgress: false)));
+        epubSource: chapters(3), saveProgress: false)));
     for (var i = 0; i < 60 && find.byType(PageView).evaluate().isEmpty; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
@@ -662,9 +609,9 @@ void main() {
     for (final list in ['RL1', null]) {
       final api = noNetwork(ReadListKomga.new);
       await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ReaderScreen(
             api: api, book: hitchhiker, readListId: list, saveProgress: false,
-            source: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
+            epubSource: MemorySource({'c1.xhtml': '<html><body><p>A short book.</p></body></html>'},
                 const EpubInfo(spine: ['c1.xhtml'], toc: []))))),
         child: const Text('open'),
       ))));
@@ -702,9 +649,9 @@ void main() {
     final nav = GlobalKey<NavigatorState>();
     await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Text('home')));
     // the last chapter never comes: the book is never counted
-    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => ReaderScreen(
         api: noNetwork(() => EndKomga(null)), book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-        source: HangingSource({for (final c in spine) c: '<html><body>${para('delta', 40)}</body></html>'},
+        epubSource: HangingSource({for (final c in spine) c: '<html><body>${para('delta', 40)}</body></html>'},
             EpubInfo(spine: spine, toc: const []), hangs: 'c5.xhtml'),
         saveProgress: false))));
     await settle(tester);
