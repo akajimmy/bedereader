@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -141,6 +142,22 @@ void main() {
     expect(tester.widget<PageView>(find.byType(PageView)).allowImplicitScrolling, isTrue);
     expect(find.byType(CustomPaint, skipOffstage: false).evaluate().length, greaterThan(1),
         reason: 'the next page exists before any turn');
+  });
+
+  testWidgets('the mouse wheel turns pages, as with comics (it did nothing in the Windows app - build 79)',
+      (tester) async {
+    await open(tester, twoChapters());
+    expect(await label(tester), startsWith('Book · Pg. 1/'));
+    Future<void> wheel(double dy) async {
+      final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+      await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
+      await settle(tester);
+    }
+    await wheel(120); // one notch down
+    expect(await label(tester), startsWith('Book · Pg. 2/'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300))); // a turn at most every 250 ms
+    await wheel(-120); // and up
+    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
