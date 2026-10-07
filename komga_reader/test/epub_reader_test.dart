@@ -144,6 +144,28 @@ void main() {
         reason: 'the next page exists before any turn');
   });
 
+  testWidgets("resizing the window there and back lands on the same page - each new size used to start from the page "
+      'on screen, earlier than the place, and walked back (Windows, build 79: two resizes and back, a page back)',
+      (tester) async {
+    final words = [for (var i = 0; i < 400; i++) ['a', 'bb', 'ccc', 'dddd', 'eeeee'][i % 5]].join(' ');
+    await open(tester, MemorySource({
+      'c1.xhtml': '<html><body>${List.filled(6, '<p>$words</p>').join()}</body></html>',
+    }, const EpubInfo(spine: ['c1.xhtml'], toc: [], title: 'Book')));
+    for (var i = 0; i < 5; i++) {
+      await tester.tapAt(const Offset(750, 600));
+      await settle(tester);
+    }
+    final before = await label(tester);
+    for (final s in const [Size(560, 1200), Size(1000, 700), Size(700, 1000), Size(800, 1200)]) {
+      tester.view.physicalSize = s;
+      await tester.pump();
+      await settle(tester);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await settle(tester);
+    }
+    expect(await label(tester), before, reason: 'back at the first size: the same page');
+  });
+
   testWidgets('the mouse wheel turns pages, as with comics (it did nothing in the Windows app - build 79)',
       (tester) async {
     await open(tester, twoChapters());
