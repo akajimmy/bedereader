@@ -564,26 +564,33 @@ void main() {
       .widget<AnimatedOpacity>(find.ancestor(of: find.text(text), matching: find.byType(AnimatedOpacity)).first)
       .opacity;
 
-  testWidgets('page number: "2 / 3" shows for a moment after a turn, then fades', (tester) async {
+  testWidgets('page corner, one setting with EPUBs (user, 2026-10-07): After a turn shows "2 / 3" for a moment, '
+      "bottom right, then it fades; Always keeps it there; Off, it isn't there", (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(pageNote: PageNote.always)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.afterTurn));
     await openReader(tester);
+    expect(flashOpacity(tester, '1 / 3'), 0.0, reason: 'After a turn: not before one');
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 300));
     expect(flashOpacity(tester, '2 / 3'), 1.0);
     final at = tester.getRect(find.text('2 / 3')), screen = tester.getRect(find.byType(ReaderScreen));
-    expect(at.left - screen.left, lessThan(60)); // bottom left (user, 2026-09-30)
+    expect(screen.right - at.right, lessThan(60), reason: "bottom right, the EPUBs' corner");
     expect(screen.bottom - at.bottom, lessThan(60));
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 0.0);
-  });
 
-  testWidgets('page number: switched off, it stays hidden', (tester) async {
-    final s = AppSettings.instance;
-    s.setDisplay(s.display.copyWith(pageNumber: false));
-    addTearDown(() => s.setDisplay(s.display.copyWith(pageNumber: true)));
-    await openReader(tester);
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.always));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'Always: there with no turn');
+    await tester.pump(const Duration(seconds: 2));
+    expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'and stays');
+
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.off));
+    await tester.pump();
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(flashOpacity(tester, '2 / 3'), 0.0);
+    expect(find.text('3 / 3'), findsNothing, reason: 'Off');
     await tester.pump(const Duration(seconds: 2));
   });
 
