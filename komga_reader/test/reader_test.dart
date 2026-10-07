@@ -1887,12 +1887,21 @@ void main() {
       (tester) async {
     final (requests, _) = recordOrientation(tester, () => 'portrait');
     final s = AppSettings.instance;
+    // the buttons' size with nothing locked (no mark), to compare: the mark mustn't resize them (user, 2026-10-07)
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
+        listenable: s, builder: (context, _) => rotationRow(s)))));
+    final unmarked = tester.getSize(find.byType(SegmentedButton<Rotation>));
     s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await OrientationLock.instance.hold(portrait: true, landscape: false); // as a book does
     addTearDown(OrientationLock.instance.release);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
         listenable: s, builder: (context, _) => rotationRow(s)))));
     expect(requests.last, ['DeviceOrientation.portraitUp']);
+    // the lock in force shows it's a switch: the circling arrows beside it (user, 2026-10-07); Auto and the other not
+    Finder segment(String label) => find.ancestor(of: find.text(label), matching: find.byType(TextButton));
+    expect(find.descendant(of: segment('Portrait'), matching: find.byIcon(Icons.sync)), findsOneWidget);
+    expect(find.byIcon(Icons.sync), findsOneWidget);
+    expect(tester.getSize(find.byType(SegmentedButton<Rotation>)), unmarked, reason: 'the same size, mark or not');
     await tester.tap(find.text('Portrait'));
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'turned over');

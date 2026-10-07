@@ -19,7 +19,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Rotation lock: choose upside down** (Android). Portrait and Landscape now hold exactly one way up - the way
   you're holding the tablet when the lock starts (opening a book, or choosing it) - and turning the tablet doesn't
   move them. Tap Portrait or Landscape again while reading to turn the page upside down, to read that way on purpose;
-  tap again to turn it back. Only Auto / Portrait / Landscape is remembered, not the way up. The lock now holds in
+  tap again to turn it back - the lock in force shows circling arrows beside its name, as a switch. Only Auto /
+  Portrait / Landscape is remembered, not the way up. The lock now holds in
   EPUBs too (it was in their panel but did nothing).
 - **EPUB: holding down an arrow key (or any page-turn key) turned no pages** - the page crept and never turned,
   each of the key's repeats starting the slide over. A held key now turns a page each time the slide ends.
