@@ -32,14 +32,16 @@ class RowNav extends StatefulWidget {
   const RowNav({super.key, required this.child});
   final Widget child;
 
-  static const _label = 'settings-row';
+  /// The row [n] is in (its innermost), or null - from the rows' own list, never a debug label (see [_rows]).
+  static FocusNode? rowOf(FocusNode n) => _RowNavState._rowOf(n);
 
   @override
   State<RowNav> createState() => _RowNavState();
 }
 
 class _RowNavState extends State<RowNav> {
-  final _node = FocusNode(debugLabel: RowNav._label, canRequestFocus: false, skipTraversal: true);
+  // (no debugLabel: Flutter keeps those in debug builds only, so nothing may tell rows apart by one)
+  final _node = FocusNode(canRequestFocus: false, skipTraversal: true);
 
   /// Every row's focus node, as rows are told apart. Not by the node's debugLabel: Flutter keeps that in debug builds
   /// only - in the release app every label was empty, no row was ever found, and Up / Down fell back to Flutter's
