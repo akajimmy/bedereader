@@ -944,14 +944,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     );
   }
 
-  /// The page corner (option H): pages left in the chapter and the book's %.
+  /// The page corner: the book's page of its pages, "112 / 342", as comics' "12 / 36" (user, 2026-10-07: book progress
+  /// only, the same for both kinds); just the % until the book is counted.
   String get _cornerText {
     final b = _book!;
-    final pct = (b.progression(b.positionOf(_chapter, _page)) * 100).round();
-    final n = b.pageCount(_chapter);
-    if (n == null) return '$pct%';
-    final left = n - _page - 1;
-    return '${left <= 0 ? 'End of chapter' : '$left left in chapter'} · $pct%';
+    final at = b.bookPage(_chapter, _page), total = b.totalPages;
+    if (at != null && total != null) return '${at + 1} / $total';
+    return '${(b.progression(b.positionOf(_chapter, _page)) * 100).round()}%';
   }
 
   // the corner note "After a turn": shown for a moment after each turn
