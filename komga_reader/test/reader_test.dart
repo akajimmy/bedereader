@@ -583,7 +583,14 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('pos-left')));
     await tester.pump();
     expect(find.text('Pg. 1/3 · 33%'), findsNothing);
-    expect(find.text('page hidden - tap to show'), findsOneWidget);
+    // gone - no "hidden" box (user, 2026-10-07) - but its place stays, so a tap there brings it back
+    final hiddenSpot = find.byKey(const ValueKey('pos-left-hidden'));
+    expect(hiddenSpot, findsOneWidget);
+    expect(find.descendant(of: find.byKey(const ValueKey('pos-left')), matching: find.byType(Text)), findsNothing,
+        reason: 'nothing written where it was');
+    expect(find.descendant(of: find.byKey(const ValueKey('pos-left')), matching: find.byType(DecoratedBox)),
+        findsNothing, reason: 'no box drawn either');
+    expect(tester.getSize(hiddenSpot).height, greaterThan(10), reason: 'its line keeps its height');
     expect(s.display.hiddenSpots, ['left'], reason: 'kept');
     expect(find.byTooltip('Next book'), findsOneWidget, reason: 'the controls stay up');
     await tester.tap(find.byKey(const ValueKey('pos-left')));

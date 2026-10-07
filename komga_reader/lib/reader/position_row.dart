@@ -5,7 +5,8 @@ import '../settings.dart';
 /// The three spots of the position text over the slider (the one Reader, user 2026-10-07, decision 5 - mockup "A").
 enum PositionSpot { left, centre, right }
 
-/// What a renderer puts in a spot: [text], and [name] for the place left when it's hidden ("title hidden").
+/// What a renderer puts in a spot: [text], and [name] for what it is (a hidden spot is "Show the title" to a screen
+/// reader).
 class SpotText {
   const SpotText(this.text, this.name);
   final String text, name;
@@ -13,9 +14,9 @@ class SpotText {
 
 /// The reader's position, on two lines over the slider: [centre] on its own line on top (the title: the longest),
 /// [left] and [right] sharing the line just above the slider's ends. A spot the renderer leaves null isn't there
-/// (comics fill two). Each spot is tapped to hide it, and its place - dimmed - tapped to show it again; that's kept
-/// on this device, for both kinds of book ([DisplayPrefs.hiddenSpots]). [picking]: a place is being picked on the
-/// slider - the text is in the accent colour.
+/// (comics fill two). Each spot is tapped to hide it - then nothing is drawn there, but its place stays and a tap on it
+/// shows it again; that's kept on this device, for both kinds of book ([DisplayPrefs.hiddenSpots]). [picking]: a place
+/// is being picked on the slider - the text is in the accent colour.
 class ReaderPositionRow extends StatelessWidget {
   const ReaderPositionRow({super.key, this.left, this.centre, this.right, this.picking = false});
   final SpotText? left, centre, right;
@@ -33,13 +34,11 @@ class ReaderPositionRow extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: () => s.setDisplay(s.display.copyWith(
             hiddenSpots: off ? (List.of(hidden)..remove(at.name)) : [...hidden, at.name])),
+        // hidden: nothing drawn (user, 2026-10-07: no "hidden - tap to show" box, gone) - its place stays, an
+        // invisible line as tall as its text, so a tap there brings it back and the slider doesn't move
         child: off
-            ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(4)),
-                child: Text('${t.name} hidden - tap to show', maxLines: 1, overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
-              )
+            ? Semantics(button: true, label: 'Show the ${t.name}',
+                child: SizedBox(key: ValueKey('pos-${at.name}-hidden'), width: double.infinity, height: size * 1.4))
             : Text(t.text, key: ValueKey('pos-${at.name}-text'), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: align,
                 style: TextStyle(color: colour, fontSize: size, fontFeatures: const [FontFeature.tabularFigures()])),
       );
