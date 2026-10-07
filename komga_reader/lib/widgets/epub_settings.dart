@@ -64,7 +64,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         title: "Book's formatting",
         subtitle: e.bookFormatting
             ? "The publisher's alignment, indents and spacing"
-            : 'Off: every book justified, paragraphs indented, no gaps',
+            : 'Off: every book justified; no gaps between paragraphs the book indents',
         value: e.bookFormatting,
         onChanged: (v) => set(e.copyWith(bookFormatting: v)),
       ),
