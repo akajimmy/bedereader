@@ -26,6 +26,24 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   down to Next page and Volume up to Previous page in Settings > Remote and keys. Until then they change the volume.
 - **Book posters: Series #, Title and Release date are three separate choices**, shown in that order - any of them,
   or none.
+- **Settings are reorganised.** Under *Reading*: Reading (brightness, keeping the screen on, Next book - for both
+  kinds of book), Comics, eBooks, Remote and keys. Under *App*: Server and sync, Library & Home, Downloads, Look.
+  Under *Help*: About. Settings now opens on Reading.
+  - Comics holds what used to be Reading defaults and the Comics page; eBooks holds everything for EPUBs, including
+    their page corner, clock, progress bar and rotation.
+  - Groups that are the same on every device are marked with a cloud and "synced". Server and sync says what Komga
+    keeps in step, and has the Sync pins switch (it was in Library & Home).
+  - Each page has its own "Back to the defaults" button, which asks first.
+  - Night mode is one choice, Off / On / Scheduled, on Look.
+  - The position text and the page strip can be set in Settings too (the position text for comics and eBooks
+    separately).
+  - Comics' Background and eBooks' Theme are both called **Page colours**; the comic page turn "Wipe" is now
+    **Slide**, as for eBooks.
+- **The reader's panels hold only what you'd change while reading.** *Comic settings* (was Reader): this page, this
+  series' fit, direction and page colours, then position text, brightness, rotation and keeping the screen on.
+  *eBook settings* (was Text and page): size, font, spacing and margins, alignment, paragraphs, hyphenation, then page
+  colours, position text, brightness, rotation and keeping the screen on. Night mode is the top bar's moon; the rest
+  is in Settings.
 
 ## 1.3.0
 
