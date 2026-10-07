@@ -291,8 +291,10 @@ class Komga {
       });
 
   /// Saves where reading stopped in an EPUB; Komga turns it into the book's read progress (page = position).
-  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) =>
-      _send('PUT', '/api/v1/books/$bookId/progression', progression);
+  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
+    await _send('PUT', '/api/v1/books/$bookId/progression', progression);
+    onProgressWritten?.call(this, ProgressWrite(bookId: bookId, place: progression)); // a downloaded copy follows
+  }
 
   /// The book's own file (an EPUB, for reading offline).
   Future<Uint8List> bookFileBytes(String bookId) => _net(() async {
@@ -374,10 +376,11 @@ class KomgaCertificate implements Exception {
 
 /// A reading-progress change just written to Komga: one book, or every book of a series.
 class ProgressWrite {
-  const ProgressWrite({this.bookId, this.seriesId, this.page, this.completed = false, this.unread = false});
+  const ProgressWrite({this.bookId, this.seriesId, this.page, this.completed = false, this.unread = false, this.place});
   final String? bookId, seriesId;
   final int? page; // null with completed: the last page
   final bool completed, unread;
+  final Map<String, dynamic>? place; // an EPUB's exact place (its progression), saved as it is
 }
 
 /// No answer from the server (away from home, Komga or the PC off, wrong address).

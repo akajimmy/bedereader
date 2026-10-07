@@ -49,6 +49,24 @@ class ProgressServer extends LibraryServer {
     rp[bookId] = {'page': page, 'completed': completed};
   }
 
+  // EPUBs: the exact place (Readium progression); Komga makes the read progress page from it - how far through the
+  // book times its page count (10 here), as the real one does
+  final places = <String, Map<String, dynamic>>{};
+
+  @override
+  Future<Map<String, dynamic>?> epubProgression(String bookId) async {
+    _reach();
+    return places[bookId];
+  }
+
+  @override
+  Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
+    final total = ((progression['locator'] as Map)['locations'] as Map)['totalProgression'] as num;
+    writes.add('$bookId place $total');
+    places[bookId] = progression;
+    rp[bookId] = {'page': (total * 10).round().clamp(1, 10), 'completed': false};
+  }
+
   @override
   Future<void> markRead(String bookId) async {
     writes.add('$bookId read');
@@ -305,5 +323,54 @@ void main() {
       ..morePages = true;
     await sync.run();
     expect(d.store!.books['B2']!['gone'], isNull);
+  });
+
+  // ---- an EPUB's place: Komga's page for it is how far through the book times its page count, not a position
+  // number (Windows, build 79: a book left at 31% opened offline at 12%)
+
+  Map<String, dynamic> place(String ch, double total, int position) => {
+        'device': {'id': 'x', 'name': 'BeDeReader (Android)'},
+        'modified': '2026-10-06T12:00:00Z',
+        'locator': {'href': 'OEBPS/$ch.xhtml', 'type': 'application/xhtml+xml',
+          'locations': {'progression': 0.5, 'position': position, 'totalProgression': total}},
+      };
+
+  Future<void> epubB1() async {
+    await d.store!.put('B1', {
+      ...entry('B1'),
+      'book': {'id': 'B1', 'seriesId': 'S1', 'readProgress': server.rp['B1'], 'media': {'mediaProfile': 'EPUB', 'pagesCount': 10}},
+      'pages': [],
+      'positions': [for (var i = 0; i < 40; i++) {'href': 'OEBPS/c1.xhtml', 'locations': {'position': i + 1}}],
+    });
+  }
+
+  test('an EPUB read offline: its read progress page is Komga\'s (60% of a 10-page count: 6, not position 24), and '
+      'its exact place goes to Komga as it is', () async {
+    await epubB1();
+    final off = offlineApi();
+    await off.setEpubProgression('B1', place('c1', 0.6, 24));
+    expect(d.store!.readProgressOf('B1')!['page'], 6);
+    await sync.run();
+    expect(server.writes, ['B1 place 0.6'], reason: 'the place itself, not "page 24" (Komga: 24 of 10 - finished)');
+    expect(server.rp['B1']!['page'], 6);
+    await off.markRead('B1');
+    expect(d.store!.readProgressOf('B1')!['page'], 10, reason: "read to the end: Komga's page count, not 40 positions");
+  });
+
+  test("an EPUB read online on this device, or on another one: the downloaded copy's place follows", () async {
+    await epubB1();
+    // read online here: the client tells the downloads what it saved
+    Komga.onProgressWritten!(server, ProgressWrite(bookId: 'B1', place: place('c1', 0.3, 12)));
+    expect((d.store!.books['B1']!['epubProgression'] as Map)['locator'], place('c1', 0.3, 12)['locator']);
+    expect(d.store!.readProgressOf('B1')!['page'], 3);
+    // read on another device: the next refresh brings its place
+    server.places['B1'] = place('c1', 0.8, 32);
+    server.rp['B1'] = {'page': 8, 'completed': false};
+    // (later: a refresh asked in the same clock tick as a save here takes the save for the newer - as designed)
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await sync.run();
+    expect(d.store!.readProgressOf('B1')!['page'], 8, reason: 'the refresh brought Komga\'s page');
+    expect(((d.store!.books['B1']!['epubProgression'] as Map)['locator'] as Map)['locations'],
+        containsPair('totalProgression', 0.8));
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart' show FileImage, ImageProvider;
 
 import '../api.dart';
 import '../hidden_libraries.dart';
+import '../epub/progress.dart' show komgaEpubPage;
 import 'downloads.dart';
 import 'store.dart';
 
@@ -293,22 +294,30 @@ class OfflineKomga extends Komga {
   Future<Map<String, dynamic>?> epubProgression(String bookId) async =>
       (store.books[bookId]?['epubProgression'] as Map?)?.cast<String, dynamic>();
 
-  /// Kept on the device: the exact place (for reopening here) and its position as the read progress (sent to Komga
-  /// later, like a comic's page).
+  /// Kept on the device: the exact place (for reopening here; sent to Komga as it is when back online), and the read
+  /// progress page Komga makes of it - how far through the book times Komga's page count, not the position number
+  /// (taken for one, page 233 of a 305-page count would have shown the book three quarters read).
   @override
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
     final entry = store.books[bookId];
     if (entry == null) throw NotAvailableOffline('This book');
     entry['epubProgression'] = progression;
     await store.put(bookId, entry);
-    final position = ((progression['locator'] as Map?)?['locations'] as Map?)?['position'] as num?;
-    if (position != null) await store.setProgress(bookId, page: position.toInt(), completed: false);
+    final at = (progression['locator'] as Map?)?['locations'] as Map?;
+    final page = komgaEpubPage((at?['totalProgression'] as num?)?.toDouble(), _pagesCount(entry)) ??
+        (at?['position'] as num?)?.toInt();
+    if (page != null) await store.setProgress(bookId, page: page, completed: false);
   }
+
+  static int? _pagesCount(Map entry) => ((entry['book'] as Map?)?['media'] as Map?)?['pagesCount'] as int?;
 
   @override
   Future<void> markRead(String bookId) async {
-    final positions = (store.books[bookId]?['positions'] as List?)?.length; // an EPUB: its positions are its pages
-    final pages = positions ?? (store.books[bookId]?['pages'] as List?)?.length;
+    final entry = store.books[bookId];
+    // an EPUB: Komga's page count for it (not its positions); a comic: its pages
+    final pages = entry?['positions'] != null
+        ? (_pagesCount(entry!) ?? (entry['positions'] as List).length)
+        : (entry?['pages'] as List?)?.length;
     await store.setProgress(bookId, page: pages, completed: true);
     Downloads.instance.bookFinished(bookId);
   }

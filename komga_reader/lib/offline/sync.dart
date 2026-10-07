@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../api.dart';
+import '../epub/progress.dart' show komgaEpubPage;
 import 'connection.dart';
 import 'downloads.dart';
 import 'store.dart';
@@ -100,13 +101,15 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
           final here = _norm(local);
           final base = local['base'] as Map?;
           final komgaChanged = base != null && !_same(server, base) && !_same(server, here);
+          final place = store.books[id]?['epubProgression'] as Map?; // an EPUB's exact place, read here
           if (!komgaChanged) {
-            if (!_same(server, here)) await _send(api, id, here, book);
+            // (an EPUB's place goes even on the same page: Komga's pages are coarser than its places)
+            if (!_same(server, here) || place != null) await _send(api, id, here, book, place: place);
             sent++;
             store.setServerProgress(id, _asReadProgress(here, book));
           } else {
             final keepHere = _rank(here) >= _rank(server);
-            if (keepHere) await _send(api, id, here, book);
+            if (keepHere) await _send(api, id, here, book, place: place);
             store.setServerProgress(id, keepHere ? _asReadProgress(here, book) : book['readProgress'] as Map?);
             conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
                 keptHere: keepHere));
@@ -188,6 +191,22 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         if (at != null && !at.isBefore(asked)) continue;
         store.setServerProgress(id, rp);
         changed = true;
+        // an EPUB: its exact place too, for opening at offline (else the copy opened where it was when downloaded)
+        if (store.books[id]?['positions'] != null) {
+          try {
+            final place = await api.epubProgression(id);
+            if (place == null) {
+              store.books[id]!.remove('epubProgression');
+            } else {
+              store.books[id]!['epubProgression'] = place;
+            }
+            booksChanged = true;
+          } on KomgaUnreachable {
+            rethrow;
+          } catch (_) {
+            // the page alone: near enough
+          }
+        }
         // read on another device (it wasn't read here before): Delete once read
         if (cur != null && rp?['completed'] == true) finishedElsewhere.add(id);
       }
@@ -209,19 +228,36 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     var changed = false;
     for (final id in ids) {
       if (!store.books.containsKey(id)) continue;
+      final place = w.place;
+      if (place != null) {
+        // an EPUB's place, read online: the copy opens there offline too, its page as Komga makes it
+        final entry = store.books[id]!;
+        entry['epubProgression'] = place;
+        final total = ((place['locator'] as Map?)?['locations'] as Map?)?['totalProgression'] as num?;
+        final page = komgaEpubPage(total?.toDouble(), ((entry['book'] as Map?)?['media'] as Map?)?['pagesCount'] as int?);
+        if (page != null) store.setServerProgress(id, {'page': page, 'completed': false});
+        changed = true;
+        continue;
+      }
       final pages = (store.books[id]?['pages'] as List?)?.length ?? 0;
       store.setServerProgress(id, w.unread ? null : {'page': w.page ?? pages, 'completed': w.completed});
       changed = true;
     }
-    if (changed) unawaited(store.saveProgress().catchError((Object _) {}));
+    // (an EPUB's place is in the book's own record: the whole store, not the progress file alone)
+    if (changed) unawaited((w.place != null ? store.save() : store.saveProgress()).catchError((Object _) {}));
     if (w.completed && !w.unread) ids.forEach(Downloads.instance.bookFinished); // Delete once read
   }
 
-  static Future<void> _send(Komga api, String id, Map<String, dynamic> p, Map book) async {
+  /// [place]: an EPUB's exact place read here (its stored progression): sent as it is - Komga works its read progress
+  /// out from it, and the book reopens there on every device; sent as a page, only the page moved, and Komga's place
+  /// stayed where it was.
+  static Future<void> _send(Komga api, String id, Map<String, dynamic> p, Map book, {Map? place}) async {
     if (p['none'] == true) {
       await api.markUnread(id);
     } else if (p['completed'] == true) {
       await api.markRead(id);
+    } else if (place != null) {
+      await api.setEpubProgression(id, place.cast<String, dynamic>());
     } else {
       await api.setProgress(id, (p['page'] as int).clamp(1, 1 << 20));
     }
