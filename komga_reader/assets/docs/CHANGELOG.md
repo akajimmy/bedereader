@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUB: a downloaded book opened at an older place** (left at 31%, it came up at 12% offline), and a page read
+  offline could have moved Komga's place for it the wrong way. Downloaded EPUBs now keep the exact place - kept
+  current while you read online or elsewhere - and send the place itself back to Komga when you're online again.
+
 ## 1.2.0 - in development
 
 Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
