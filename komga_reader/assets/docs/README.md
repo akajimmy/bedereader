@@ -45,17 +45,23 @@ This app shows them and keeps everything in sync.
   keeps the screen's own brightness, so it never opens too dark to use), a black, grey or white
   background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
 - At the end of a book: the next one in the series or read list, with its poster.
+- Read further (or finished) on another device while the book was open here? The reader asks before saving: stay
+  where you are, or go to that page - it never saves over the other device's place without asking.
 
 **Books (EPUB)**
 - Novels and other EPUBs are laid out by the app itself, page by page: justified and hyphenated (English and French),
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
 - Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
-  spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > Books. *Book's formatting*
-  switches between the publisher's alignment and spacing and your own for every book.
-- Contents, a slider and "page X of Y" over the whole book, and the place you stopped kept on Komga in the same form
-  its own web reader uses - pick up in either.
-- Downloaded EPUBs read offline too.
+  spacing, paragraph spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > Books.
+  *Book's formatting* switches between the publisher's alignment and spacing and your own for every book. A book set
+  smaller or larger all through shows at your text size; small black-and-white pictures (chapter numbers, drop caps)
+  take the page's colours.
+- Contents, a slider and "page X of Y" over the whole book, a page-corner note (pages left in the chapter, how far
+  through the book), and the place you stopped kept on Komga in the same form its own web reader uses - pick up in
+  either.
+- Pictures at their own resolution; tap a large one to see it full screen.
+- Downloaded EPUBs read offline too, opening at the place you stopped.
 
 **Offline**
 - Download single books, or a series or read list's unread (or all) books, with a storage limit; optionally deleted
@@ -170,6 +176,10 @@ flutter analyze            # static checks
 flutter test               # the test suite
 flutter run -d windows     # run on this PC with hot reload
 ```
+
+Checks over a real EPUB library, skipped unless pointed at one: `epub_library_check_test.dart` (every book opens and
+lays out; `BEDEREADER_EPUB_DIR`) and `epub_sample_pages_check_test.dart` (sample pages of each book as pictures, laid
+out as on a tablet; `BEDEREADER_EPUB_LIST` and `BEDEREADER_EPUB_OUT`).
 
 ### Building
 

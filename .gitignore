@@ -22,6 +22,8 @@ testpages/
 
 # private working notes and backlog (kept out of the public repository)
 NOTES.md
+# project instructions for Claude Code sessions (local, like the notes)
+CLAUDE.md
 
 # local development leftovers - kept on this PC, not published (2026-09-29):
 # the image-tuning page and its helpers (the Enhance work is done), one-off preview entry points,
