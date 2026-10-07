@@ -30,7 +30,7 @@ class EpubTrace {
   /// Opens (or starts) the trace file; lines written before land in it too. [dir]: the folder (tests; else the app's
   /// own storage folder).
   Future<void> open({String? dir}) async {
-    if (_tried || kIsWeb) return;
+    if (_tried) return;
     _tried = true;
     try {
       dir ??= await appStorageDir();
@@ -59,7 +59,7 @@ class EpubTrace {
   /// without the app's own files.
   void log(String what) {
     final line = '${DateTime.now().toIso8601String()} $what';
-    if (!kIsWeb && toConsole) debugPrint('epub: $what');
+    if (toConsole) debugPrint('epub: $what');
     if (_file == null) {
       if (_pending.length < 50) _pending.add(line);
       return;
@@ -77,7 +77,7 @@ class EpubTrace {
 
   /// Whether lines go to the system log too: a measuring build only ([readerTiming]), never in tests (they'd fill the
   /// test output).
-  static bool toConsole = readerTiming && (kIsWeb || !Platform.environment.containsKey('FLUTTER_TEST'));
+  static bool toConsole = readerTiming && !Platform.environment.containsKey('FLUTTER_TEST');
 
   /// Everything logged so far is in the file (tests).
   Future<void> flush() async {

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,9 +33,6 @@ import 'widgets/poster.dart' show HoldOkGuard;
 void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
-  // web: right-click is the app's (a poster's menu, as on the PC) - the browser's own menu opened over it (user,
-  // 2026-10-03)
-  if (kIsWeb) unawaited(BrowserContextMenu.disableContextMenu());
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
   // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
   // trace to go on - user, build 65); they're still reported as before
@@ -271,12 +267,12 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(_startDownloads(api));
   }
 
-  /// Downloads (1.1): not on web, which has no storage for them. Offline mode needs them, so it loads after.
+  /// Downloads (1.1). Offline mode needs them, so it loads after.
   Future<void> _startDownloads(Komga api) async {
     // the queue starts once the connection has applied offline mode (a forced-offline start contacts nothing)
-    if (!kIsWeb) await Downloads.instance.attach(api, start: false);
+    await Downloads.instance.attach(api, start: false);
     await Connection.instance.load(api);
-    if (!kIsWeb) ProgressSync.instance.start(); // offline reading -> Komga
+    ProgressSync.instance.start(); // offline reading -> Komga
   }
 
   Future<void> _signOut() async {

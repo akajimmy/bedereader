@@ -50,7 +50,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _poll;
   bool _observing = false;
 
-  /// Offline mode needs somewhere to have downloaded to (not on web).
+  /// Offline mode needs somewhere to have downloaded to (the downloads, once attached).
   bool get available => Downloads.instance.ready;
   bool get offline => (forcedOffline || autoOffline) && available;
 

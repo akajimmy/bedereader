@@ -58,7 +58,7 @@ void registerLicences() {
     ]) {
       yield LicenseEntryWithLineBreaks([name], await rootBundle.loadString(file));
     }
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    if (defaultTargetPlatform == TargetPlatform.android) {
       final apache = await rootBundle.loadString('assets/licences/apache-2.0.txt');
       yield LicenseEntryWithLineBreaks(androidLibraries, '$androidLibrariesNotice\n\n$apache');
     }

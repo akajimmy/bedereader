@@ -6,7 +6,7 @@ import '../offline/downloads.dart';
 /// Small mark in a poster's bottom-right corner saying what of it is on this device:
 /// - a book: downloaded (tick), in the queue (a ring filling with its pages; paused shows a pause sign), or failed;
 /// - a series or read list: how many of its books are downloaded (tick alone when all of them are).
-/// Hidden in offline mode, where everything shown is downloaded anyway, and where downloads aren't possible (web).
+/// Hidden in offline mode, where everything shown is downloaded anyway.
 class DownloadBadge extends StatelessWidget {
   const DownloadBadge.book(String this.bookId, {super.key}) : seriesId = null, readListId = null, total = 0;
   const DownloadBadge.series(String this.seriesId, {super.key, required this.total}) : bookId = null, readListId = null;
