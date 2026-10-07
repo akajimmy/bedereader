@@ -63,6 +63,10 @@ ThemeData buildTheme([Accent choice = Accent.blue]) {
     textButtonTheme: TextButtonThemeData(style: strongFocusStyle(accent)),
     filledButtonTheme: FilledButtonThemeData(style: strongFocusStyle(accent)),
     outlinedButtonTheme: OutlinedButtonThemeData(style: strongFocusStyle(accent)),
+    // a bar's unfilled part in grey: left to Material, it is the scheme's secondary container - the accent here, the
+    // same as the filled part - so a bar looked full whatever it showed (Downloads' storage bar at 10% - user,
+    // build 83)
+    progressIndicatorTheme: const ProgressIndicatorThemeData(linearTrackColor: Color(0xFF34343A)),
     splashFactory: NoSplash.splashFactory,
     textTheme: base.textTheme.apply(bodyColor: const Color(0xFFE6E6E6), displayColor: const Color(0xFFE6E6E6)),
   );
