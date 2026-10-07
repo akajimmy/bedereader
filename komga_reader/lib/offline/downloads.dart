@@ -545,12 +545,10 @@ class Downloads extends ChangeNotifier {
       final epub = book['media']?['mediaProfile'] == 'EPUB';
       final pages = epub ? const <dynamic>[] : await api.pages(job.bookId);
       final positions = epub ? await api.epubPositions(job.bookId) : null;
+      // an EPUB's exact place on Komga, to open at offline - unless progress read here hasn't been sent yet (its own
+      // place, in the progress record, stays)
       final unsent = s.progress[job.bookId]?['synced'] == false;
-      final placeHere = !epub
-          ? null
-          : unsent && s.books[job.bookId]?['epubProgression'] != null
-              ? s.books[job.bookId]!['epubProgression']
-              : await api.epubProgression(job.bookId);
+      final komgaPlace = epub && !unsent ? await api.epubProgression(job.bookId) : null;
       job.pagesTotal = epub ? 1 : pages.length;
 
       // room? (Komga reports page sizes; the book's file size as a fallback)
@@ -601,12 +599,14 @@ class Downloads extends ChangeNotifier {
         if (nextKnown) 'nextId': nextId,
         if (epub) 'epubFile': 'book.epub',
         if (epub) 'positions': positions,
-        // the exact place, to open at offline (the read progress page alone is only as near as Komga's page count:
-        // opened from it, a book left at 31% came up at 12% - Windows, build 79). A place read here offline and not
-        // sent yet is kept over Komga's.
-        if (epub && placeHere != null) 'epubProgression': placeHere,
       };
       await s.put(job.bookId, entry);
+      // the exact place with Komga's page (the page alone is only as near as Komga's page count: opened from it, a
+      // book left at 31% came up at 12% - Windows, build 79)
+      if (epub && !unsent) {
+        s.setServerProgress(job.bookId, book['readProgress'] as Map?, place: komgaPlace, keepPlace: false);
+        await s.saveProgress();
+      }
 
       // posters (series / list / collection posters are shared between books: fetched once)
       Future<void> poster(String url, String relative, {bool refresh = false}) async {
