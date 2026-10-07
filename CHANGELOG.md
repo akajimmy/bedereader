@@ -12,6 +12,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 - **EPUB: holding down an arrow key (or any page-turn key) turned no pages** - the page crept and never turned,
   each of the key's repeats starting the slide over. A held key now turns a page each time the slide ends.
+- **EPUB: a word split across a page turn** ("ea-" at the bottom of one page, "gle" at the top of the next). As in
+  print, a page no longer ends on a hyphenated word: that line goes over to the next page, leaving this one a line
+  short.
 
 ## 1.3.0
 
