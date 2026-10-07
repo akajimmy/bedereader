@@ -278,7 +278,9 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
           ),
         ),
       ),
-      body: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _body()),
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _body())),
     )));
   }
 

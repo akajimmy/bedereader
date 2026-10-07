@@ -85,7 +85,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings'), actions: const [FullscreenExit()]),
-      body: LayoutBuilder(builder: (context, box) {
+      // the pages end above Android's navigation bar (the app is drawn edge to edge, under it): the lists set their
+      // own padding, so they leave it no room, and the row the remote moved to was scrolled to an edge behind the bar
+      // (user, 2026-10-07: Comics > Keep the screen on)
+      body: SafeArea(top: false, child: LayoutBuilder(builder: (context, box) {
         final page = _pageBody(context);
         if (box.maxWidth >= 760) {
           return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -124,7 +127,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           const SizedBox(height: 18),
           ...page,
         ]);
-      }),
+      })),
     );
   }
 

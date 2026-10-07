@@ -124,7 +124,9 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
                 ),
               ),
       ),
-      body: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: ListView(padding: const EdgeInsets.only(bottom: 24), children: [
         if (_searching) const LinearProgressIndicator(minHeight: 2),
         if (_error != null)
           Padding(padding: const EdgeInsets.all(16), child: ErrorText(explain(_error!).message, _error!)),
@@ -168,7 +170,7 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
                   collectionId: cols[i]['id'] as String)),
             ),
           ),
-      ]),
+      ])),
     );
   }
 }

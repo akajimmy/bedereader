@@ -64,6 +64,36 @@ void main() {
     expect(name(focus()), '←', reason: "Previous page's first control");
   });
 
+  testWidgets("with Android's navigation bar over the bottom of the screen (user, 2026-10-07: Comics > Keep the screen "
+      'on, focused, sat behind it), every row reached with Down is above the bar', (tester) async {
+    setView(tester, const Size(1280, 720));
+    tester.view.padding = const FakeViewPadding(bottom: 72); // the bar, as edge-to-edge Android reports it
+    tester.view.viewPadding = const FakeViewPadding(bottom: 72);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetViewPadding);
+    everyRowShown();
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
+        initialPage: SettingsPage.reader)));
+    await tester.pumpAndSettle();
+    asInRelease();
+    final barTop = 720.0 - 72 / tester.view.devicePixelRatio;
+    Focus.of(tester.element(find.descendant(of: find.byType(SegmentedButton<PageTurn>), matching: find.byType(Text))
+        .first)).requestFocus(); // the page's first row
+    await tester.pumpAndSettle();
+    final passed = <String>[];
+    for (var i = 0; i < 30; i++) {
+      final before = focus();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
+      await tester.pumpAndSettle();
+      if (focus() == before) break; // the last row
+      final box = focus().context!.findRenderObject()! as RenderBox;
+      final bottom = box.localToGlobal(Offset(0, box.size.height)).dy;
+      passed.add(name(focus()));
+      expect(bottom, lessThanOrEqualTo(barTop + 0.5), reason: '${name(focus())} ends at $bottom, under the bar at $barTop');
+    }
+    expect(passed, isNotEmpty);
+  });
+
   testWidgets('the EPUB Text group (user, 2026-10-07: Down skipped from Font to Line spacing, and from Margins to '
       "Book's formatting): every row in turn", (tester) async {
     setView(tester, const Size(1280, 720));

@@ -49,7 +49,9 @@ class _DocumentScreenState extends State<DocumentScreen> {
   Widget build(BuildContext context) {
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll the text
       appBar: AppBar(title: Text(widget.title), actions: const [FullscreenExit()]),
-      body: FutureBuilder<String>(
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: FutureBuilder<String>(
         future: _text,
         builder: (context, snap) {
           if (snap.hasError) {
@@ -63,7 +65,7 @@ class _DocumentScreenState extends State<DocumentScreen> {
             ),
           );
         },
-      ),
+      )),
     ));
   }
 }

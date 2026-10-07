@@ -300,7 +300,9 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
           const FullscreenExit(),
         ],
       ),
-      body: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _loading
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: DrawerEdge(key: _edge, scaffoldKey: _scaffold, child: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _load,
@@ -314,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
                 for (final k in _sections.order)
                   if (_sections[k]) ..._sectionWidgets(k),
               ]),
-            )),
+            ))),
     ));
   }
 }

@@ -174,10 +174,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                 Tab(text: 'Manage · ${all.length}'),
               ]),
             ),
-            body: !d.ready
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+            body: SafeArea(top: false, child: !d.ready
                 ? const Center(
                     child: Text('Downloads aren\'t available on this device', style: TextStyle(color: _grey)))
-                : TabBarView(controller: _tabs, children: [_queueTab(), _manageTab(all)]),
+                : TabBarView(controller: _tabs, children: [_queueTab(), _manageTab(all)])),
           ),
         );
       },
