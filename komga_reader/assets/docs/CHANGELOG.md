@@ -15,6 +15,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   books no longer on Komga, and remove in bulk - **Select** (or long-press a book) to tick several, with how many
   and how much space before you confirm; a book's menu removes it or its whole series; **Remove all read** clears
   everything you've finished. The screen opens on Queue while something is downloading, on Manage otherwise.
+- Build tools: a build now closes the Desktop copy of the app if it's open, then updates it (it used to skip the
+  update and say so).
 
 ## 1.2.0
 

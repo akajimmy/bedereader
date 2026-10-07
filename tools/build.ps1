@@ -15,7 +15,7 @@
     6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
        if the tablet isn't reachable the build still counts and it says so.
     7. Unzips the Windows build over Desktop\BeDeReader, the copy used on this PC (tools\update-desktop.ps1),
-       unless -NoInstall; if the app is open from there it's left as it is, and it says so.
+       unless -NoInstall; if the app is open from there it's closed first (forcefully - user, 2026-10-07).
 
     Each step prints a timestamped line; the tools' full output goes to dist\build.log
     (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
@@ -310,8 +310,8 @@ if ($Platforms -contains 'android' -and -not $NoInstall) {
 if ($Platforms -contains 'windows' -and -not $NoInstall) {
     $winZip = $artifacts | Where-Object { $_ -like '*-windows.zip' } | Select-Object -First 1
     try {
-        & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # exit 2 = the app is open there: it says so
-        if ($LASTEXITCODE -eq 2) { $notDone += 'Desktop copy: the app is open there' }
+        & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # (the app open there: closed first; exit 2 = it wouldn't close)
+        if ($LASTEXITCODE -eq 2) { $notDone += "Desktop copy: the app open there wouldn't close" }
     } catch {
         Say "Desktop copy updated: NO - $($_.Exception.Message)"
         $notDone += "Desktop copy: $($_.Exception.Message)"

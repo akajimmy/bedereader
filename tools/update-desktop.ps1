@@ -6,8 +6,8 @@
     next to installing on the tablet. The build is unpacked into a new folder and swapped in; the copy it replaces
     stays beside it as BeDeReader.previous (the one before that goes). The settings and downloads aren't in these
     folders (they live in %APPDATA% and %LOCALAPPDATA%).
-    If the app is open from that folder its files are locked: nothing is changed, it says so and exits with code 2 -
-    close the app and run this again.
+    If the app is open from that folder it is closed first (forcefully - the user's call, 2026-10-07), and checked
+    gone; if it can't be closed, nothing is changed, it says so and exits with code 2.
 .PARAMETER Zip
     The Windows zip to unpack. Default: the newest *-windows.zip in dist\.
 .PARAMETER Dest
@@ -31,13 +31,26 @@ if (-not $Zip) {
     if (-not $Zip) { throw 'No Windows build found in dist\ - run tools\build.ps1 first.' }
 }
 
-# open from that folder: its files are locked - leave everything as it is
-$open = Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.Path -and $_.Path.StartsWith($Dest.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+# open from that folder: closed first - its files are locked while it runs (user, 2026-10-07: "forcefully close the
+# app if it's open ... I've told you to build it, and I'm expecting that. Plus, my progress is saved anyway"). Then
+# checked gone, by looking again; one that won't close leaves everything as it is.
+function OpenFromDest {
+    @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $_.Path -and $_.Path.StartsWith($Dest.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+    })
 }
-if ($open) {
-    Say "Desktop copy not updated: $($open[0].ProcessName) is open from $Dest - close it, then run tools\update-desktop.cmd"
-    exit 2
+$open = OpenFromDest
+if ($open.Count) {
+    Say "closing $(($open | ForEach-Object { "$($_.ProcessName) (pid $($_.Id))" }) -join ', ') - open from $Dest"
+    $open | Stop-Process -Force -ErrorAction SilentlyContinue
+    $deadline = (Get-Date).AddSeconds(10)
+    while ((OpenFromDest).Count -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200 }
+    $still = OpenFromDest
+    if ($still.Count) {
+        Say "Desktop copy not updated: $($still[0].ProcessName) (pid $($still[0].Id)) is still running from $Dest after being closed"
+        exit 2
+    }
+    Say 'closed'
 }
 
 # Unpacked into a new folder first, then swapped in (test audit, 2026-09-30): unpacking over the copy left files
