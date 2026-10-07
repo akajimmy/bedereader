@@ -18,7 +18,7 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    d.reset(); // e.g. "finished this session" from the test before (test audit, 2026-09-30)
+    d.reset(); // e.g. the pause or the timers from the test before (test audit, 2026-09-30)
     dir = await Directory.systemTemp.createTemp('komga_downloads_ui');
   });
   tearDown(() async {
@@ -64,11 +64,14 @@ void main() {
 
     await tester.runAsync(() async {
       d.resumeAll();
-      await waitUntil(() => d.isDownloaded('B1'), timeout: const Duration(seconds: 1), reason: 'B1 downloaded');
+      // (downloaded, then out of the queue a moment later - wait for both)
+      await waitUntil(() => d.isDownloaded('B1') && d.queue.isEmpty, timeout: const Duration(seconds: 1),
+          reason: 'B1 downloaded and out of the queue');
     });
     await tester.pump();
     expect(find.text('Manage · 1'), findsOneWidget);
-    expect(find.text('Silver Surfer #1'), findsOneWidget, reason: 'finished this session, on the Queue tab');
+    expect(find.text('Silver Surfer #1'), findsNothing, reason: 'no "finished this session" list on Queue (user, 2026-10-07)');
+    expect(find.textContaining('Nothing downloading'), findsOneWidget);
     await tester.tap(find.text('Manage · 1'));
     await tester.pumpAndSettle();
     expect(find.text('3 pages · 0.0 MB · in progress'), findsOneWidget); // (the fake Komga has B1 started)
@@ -276,6 +279,17 @@ void main() {
     expect(find.descendant(of: find.widgetWithText(ListTile, 'Saga'),
         matching: find.byIcon(Icons.collections_bookmark_outlined)), findsOneWidget);
     expect(tile('Saga #1').tileColor, isNull);
+    // the arrow at the left; right of the name, the trash button alone (user, 2026-10-07)
+    final card = find.widgetWithText(ListTile, 'Saga');
+    final nameLeft = tester.getTopLeft(find.descendant(of: card, matching: find.text('Saga'))).dx;
+    final nameRight = tester.getTopRight(find.descendant(of: card, matching: find.text('Saga'))).dx;
+    expect(tester.getCenter(find.descendant(of: card, matching: find.byIcon(Icons.expand_more))).dx,
+        lessThan(nameLeft));
+    final rightOfName = [
+      for (final e in find.descendant(of: card, matching: find.byType(Icon)).evaluate())
+        if ((e.renderObject! as RenderBox).localToGlobal(Offset.zero).dx > nameRight) (e.widget as Icon).icon,
+    ];
+    expect(rightOfName, [Icons.delete_outline]);
 
     await tester.tap(find.text('Sort: Name'));
     await tester.pumpAndSettle();

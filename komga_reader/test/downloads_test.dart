@@ -65,7 +65,6 @@ void main() {
     expect(((await offline.readListBooks('RL1'))['content'] as List).single['id'], 'B1');
     expect(((await offline.collections())['content'] as List).single['name'], 'Marvel cosmic');
     expect(offline.store.readProgressOf('B1')!['page'], 2); // the server's progress came along
-    expect(d.recentlyDone.first, 'Silver Surfer #1');
     // what comes next is recorded, so offline can say "the next book isn't downloaded" instead of skipping ahead
     expect(d.store!.books['B1']!['nextId'], 'B2');
     expect(((d.store!.books['B1']!['readLists'] as List).single as Map)['count'], 2);

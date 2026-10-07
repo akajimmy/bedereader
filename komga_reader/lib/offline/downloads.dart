@@ -51,7 +51,6 @@ class Downloads extends ChangeNotifier {
   Komga? _api;
   OfflineStore? store;
   final List<DownloadJob> queue = [];
-  final List<String> recentlyDone = []; // this session, newest first (titles)
 
   /// Pause all: kept across restarts until Resume (code review, 2026-09-30: a restart ran the queue again and left
   /// the paused book stuck).
@@ -312,7 +311,7 @@ class Downloads extends ChangeNotifier {
   Set<String> get waitingForReaderToClose => Set.unmodifiable(_finished);
 
   /// Tests: forget what one test leaves behind in this singleton - open readers, books waiting to be deleted or asked
-  /// about, this session's finished list, the timers (test audit, 2026-09-30). [attach] reloads the rest.
+  /// about, the timers (test audit, 2026-09-30). [attach] reloads the rest.
   @visibleForTesting
   void reset() {
     _serverTimer?.cancel();
@@ -323,7 +322,6 @@ class Downloads extends ChangeNotifier {
     _finished.clear();
     askPending.clear();
     keptRead.clear();
-    recentlyDone.clear();
     paused = false;
     waitingForServer = false;
     waitingForWifi = false;
@@ -699,8 +697,6 @@ class Downloads extends ChangeNotifier {
           ..['state'] = 'done';
         await s.put(job.bookId, entry);
         queue.remove(job);
-        recentlyDone.insert(0, job.title);
-        if (recentlyDone.length > 20) recentlyDone.removeLast();
       }
     } catch (e, st) {
       if (gone()) {
