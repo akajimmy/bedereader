@@ -673,8 +673,48 @@ void main() {
     await openReader(tester);
     await toEndCard(tester);
     expect(find.text('End of the series'), findsOneWidget);
-    expect(find.text('→ : close the book'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Next book'), findsNothing, reason: 'none to go to');
+    final close = find.widgetWithText(TextButton, 'Close');
+    expect(close, findsOneWidget);
+    expect(tester.widget<TextButton>(close).focusNode!.hasFocus, isTrue, reason: 'the remote is on Close');
     await tester.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('end card: Next book and Close (user, 2026-10-07) - the remote lands on Next book, Down to Close and Up '
+      'back; OK on Next book opens it, a tap on Close closes the book', (tester) async {
+    final chain = noNetwork(VisitKomga.new); // B1 -> B2 -> B3
+    api = chain;
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => ReaderScreen(api: chain, book: chain.theBook))),
+      child: const Text('open'),
+    ))));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await toEndCard(tester);
+    FocusNode nodeOf(Finder f) => tester.widget<ButtonStyleButton>(f).focusNode!;
+    final next = find.widgetWithText(FilledButton, 'Next book'), close = find.widgetWithText(TextButton, 'Close');
+    expect(nodeOf(next).hasFocus, isTrue, reason: 'the remote lands on Next book');
+    await key(tester, LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(nodeOf(close).hasFocus, isTrue);
+    await key(tester, LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(nodeOf(next).hasFocus, isTrue);
+    await key(tester, LogicalKeyboardKey.enter); // OK on Next book
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(chain.opened.last, 'B2');
+    expect(chain.marked, ['B1'], reason: 'the book left from the end card is read');
+    expect(find.byType(PageView), findsOneWidget);
+    expect(find.text('End of book'), findsNothing, reason: "B2's first page");
+
+    await toEndCard(tester); // B2's end card: Close, tapped
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'closed');
+    await tester.pump(const Duration(seconds: 5));
   });
 
   for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
@@ -1394,7 +1434,9 @@ void main() {
           await tester.pump(const Duration(milliseconds: 400));
         }
         expect(page(tester), 3.0);
-        await key(tester, LogicalKeyboardKey.enter);
+        // the controls by a tap in the middle (OK on the end card presses its Next book)
+        await tester.tapAt(Offset(tester.view.physicalSize.width / tester.view.devicePixelRatio / 2, 30));
+        await tester.pump(const Duration(milliseconds: 400));
         await tester.tap(find.byTooltip('Reader settings'));
         await tester.pumpAndSettle();
         expect(find.text('This page'), findsNothing);

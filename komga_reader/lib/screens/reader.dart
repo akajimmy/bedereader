@@ -10,6 +10,7 @@ import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../reader/comic_renderer.dart';
+import '../reader/end_card.dart';
 import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
 import '../reader/reader_slider.dart';
@@ -18,7 +19,6 @@ import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/error_text.dart';
-import '../widgets/native_poster.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
 
@@ -152,6 +152,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       ..dispose();
     _keys.dispose();
     _sliderInner.dispose();
+    _endNext.dispose();
+    _endClose.dispose();
     for (final n in _ctl.values) {
       n.dispose();
     }
@@ -260,6 +262,11 @@ class _ReaderScreenState extends State<ReaderScreen>
       if (!jump || i == _returnTo) _returnTo = null; // read on from here, or back where it was
     });
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
+    if (i > _last && !_menu) {
+      _endReached();
+    } else if (_endNext.hasFocus || _endClose.hasFocus) {
+      _keys.requestFocus(); // off the end card
+    }
     // a curl moves the page view underneath as it starts: that counts once the curl completes (turned) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
     if (!curling) _pageTurned(i);
@@ -557,6 +564,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   // ---- controls
   void _showControls() {
     setState(() { _menu = true; _scrubbing = false; _scrub = null; });
+    _keys.requestFocus(); // nothing selected (not the end card's buttons)
     _comic.controlsShown(); // the strip on the page being read now
   }
 
@@ -567,6 +575,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     _scrubber.release();
     setState(() { _menu = false; _scrub = null; _scrubbing = false; });
     _keys.requestFocus();
+    if (_onEnd) _endReached();
   }
 
   /// The two bars, left to right, as the remote walks them: the Reader's own controls with the renderer's in them.
@@ -626,6 +635,19 @@ class _ReaderScreenState extends State<ReaderScreen>
       if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
         _comic.back();
         return KeyEventResult.handled;
+      }
+      // on the end card: Up / Down move between Next book and Close, OK presses the one the remote is on (the EPUB
+      // reader's; forward - a fresh press - opens the next book, back goes back to the last page, as below)
+      if (_onEnd) {
+        if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
+          final to = k == LogicalKeyboardKey.arrowUp ? _endNext : _endClose;
+          if (to.context != null) to.requestFocus();
+          return KeyEventResult.handled;
+        }
+        if (isOkKey(k)) {
+          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _comic.forward();
+          return KeyEventResult.handled;
+        }
       }
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
       switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
@@ -819,73 +841,27 @@ class _ReaderScreenState extends State<ReaderScreen>
         (false, false) => 'End of the series',
       };
 
-  /// After the last page: what's next - its poster and title - or that this was the last one.
-  Widget _endCard() {
-    final where = widget.readListId != null ? 'this read list' : 'the series';
-    final arrow = _rtl ? '←' : '→';
-    final ink = _comic.ink;
-    final dim = TextStyle(color: ink(0.38));
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _upNext(),
-      builder: (context, snap) {
-        final next = snap.data;
-        final List<Widget> body;
-        if (snap.connectionState != ConnectionState.done) {
-          body = [const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))];
-        } else if (snap.error is NotAvailableOffline) {
-          body = [ // offline, and the book that comes next isn't downloaded: no jumping ahead to one that is
-            Text("The next book in $where isn't downloaded", textAlign: TextAlign.center,
-                style: TextStyle(color: ink(0.7), fontSize: 16)),
-            const SizedBox(height: 12),
-            Text('$arrow : close the book', style: dim),
-          ];
-        } else if (snap.hasError) {
-          body = [Text('$arrow : next book in $where', style: dim)]; // couldn't look it up: the turn still tries
-        } else if (next == null) {
-          body = [
-            Text(_endText, style: TextStyle(color: ink(0.7), fontSize: 16)),
-            const SizedBox(height: 12),
-            Text('$arrow : close the book', style: dim),
-          ];
-        } else {
-          final number = next['metadata']?['number'] ?? next['number'];
-          final title = (next['metadata']?['title'] ?? next['name']) as String?;
-          final heading = '${next['seriesTitle'] ?? ''} #$number'.trim();
-          body = [
-            Text(widget.skipRead ? 'Next unread in $where' : 'Up next in $where', style: dim),
-            const SizedBox(height: 12),
-            LayoutBuilder(builder: (context, c) {
-              final h = (MediaQuery.sizeOf(context).height * 0.42).clamp(160.0, 520.0);
-              // the book's poster as Komga has it (a poster picked in Komga included), at its own size - so its size
-              // follows the server's thumbnail size - and no bigger than the plate (user, 2026-10-03; the cover page
-              // used before showed the middle of a spread when page 1 was one)
-              return NativePoster(api.thumbImage(api.bookThumb(next['id'] as String)), max: Size(h * 0.8, h));
-            }),
-            const SizedBox(height: 14),
-            Text(heading, textAlign: TextAlign.center, style: TextStyle(color: ink(1), fontSize: 18)),
-            if (title != null && title != heading && !title.endsWith('#$number'))
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: ink(0.7))),
-              ),
-            const SizedBox(height: 14),
-            Text('$arrow : open it', style: dim),
-          ];
-        }
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('End of book', style: TextStyle(color: ink(0.7), fontSize: 18)),
-              const SizedBox(height: 16),
-              ...body,
-            ]),
-          ),
-        );
-      },
-    );
-  }
+  /// After the last page: what's next, with Next book and Close (lib/reader/end_card.dart).
+  Widget _endCard() => ReaderEndCard(
+        api: api,
+        next: _upNext(),
+        ink: _comic.ink,
+        where: widget.readListId != null ? 'this read list' : 'the series',
+        lastText: _endText,
+        skipRead: widget.skipRead,
+        nextNode: _endNext,
+        closeNode: _endClose,
+        onNext: _nextBook,
+        onClose: () => Navigator.of(context).maybePop(),
+      );
+
+  final _endNext = FocusNode(debugLabel: 'end-next');
+  final _endClose = FocusNode(debugLabel: 'end-close');
+  bool get _onEnd => _comic.opened && _index > _last;
+
+  /// The end card is reached (or the controls went down over it): the remote on Next book, on Close when there's none.
+  void _endReached() =>
+      ReaderEndCard.focusOn(_upNext(), _endNext, _endClose, () => mounted && _onEnd && !_menu && !_busy);
 
   /// Top bar (close, title, the renderer's own, night, read toggle, delete) and bottom bar (previous book, page
   /// counter, slider, the renderer's own, next book) - the shared bars (lib/reader/reader_bars.dart). A tap anywhere

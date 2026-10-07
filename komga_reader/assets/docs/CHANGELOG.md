@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Comics: the end-of-book card has Next book and Close buttons**, as EPUBs' does. The remote lands on Next book
+  (on Close when there's no next book); Up and Down move between them and OK presses the one it's on. A tap on the
+  far side or the forward key still opens the next book, and a key held down still stops at the card. (OK on the
+  card used to bring up the controls; a tap in the middle of the screen still does.) This is the first piece of the
+  comic and EPUB readers becoming one reader.
+
 ## 1.3.0
 
 ### Build 87 - 2026-10-07
