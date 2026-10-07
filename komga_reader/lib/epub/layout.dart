@@ -92,6 +92,7 @@ sealed class Block {
   double wrapTop = 0, wrapBottom = 0; // the part of those from wrappers round the block (kept by own formatting)
   double paraTop = 0, paraBottom = 0; // a paragraph's own (own formatting keeps them only if they're out of the usual)
   bool breakBefore = false;
+  double breakGap = 0; // a scene break before it that made no block of its own (<hr/>, a blank paragraph), in em
   int? box; // inside a bordered element: blocks with the same number share its border
 
   /// Where the block starts in the chapter's text (characters, as written - no soft hyphens): a reading position.
@@ -172,11 +173,27 @@ class ChapterReader {
   void _flush() {
     final c = _cur;
     _cur = null;
-    if (c == null || c.isEmpty) return;
+    if (c == null) return;
+    if (c.isEmpty) {
+      // nothing to show beside a float or drop it holds (a wrapper holding only the picture): on to the next
+      // paragraph - it was lost (EPUB review E3)
+      _pendingDropImage ??= c.floatImage;
+      if (_pendingDrop == null && c.drop != null) {
+        _pendingDrop = c.drop;
+        _pendingDropBoxed = c.dropBoxed;
+      }
+      return;
+    }
     _add(c);
   }
 
+  double _pendingBreak = 0; // a scene break waiting for the next block (E4)
+
   void _add(Block b) {
+    if (_pendingBreak > 0) {
+      b.breakGap = _pendingBreak;
+      _pendingBreak = 0;
+    }
     b.start = length;
     length += switch (b) { TextBlock() => b.length, TableBlock() => b.length, ImageBlock() => 1 };
     blocks.add(b);
@@ -335,9 +352,19 @@ class ChapterReader {
     if ((fl == 'left' || fl == 'right') && e.find('img') == null) {
       final t = _textOf(e).trim();
       if (t.isNotEmpty && t.length <= 3) {
+        final cur = _cur;
+        final boxed = showsBorder(d) || d.containsKey('background-color');
+        if (cur != null && cur.isEmpty && cur.drop == null) {
+          // first thing in its paragraph (<p><span class="drop">T</span>he...): this paragraph's - flushing the
+          // empty paragraph sent the letter to the next one (EPUB review E1)
+          cur
+            ..drop = TextRun(t, st.copy(bold: st.bold))
+            ..dropBoxed = boxed;
+          return;
+        }
         _flush();
         _pendingDrop = TextRun(t, st.copy(bold: st.bold));
-        _pendingDropBoxed = showsBorder(d) || d.containsKey('background-color');
+        _pendingDropBoxed = boxed;
         return;
       }
     }
@@ -393,9 +420,12 @@ class ChapterReader {
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
       final first = para.runs.first;
       final t = first.text.trimLeft();
-      if (t.isNotEmpty) {
-        para.drop = TextRun(t[0], first.style);
-        para.runs[0] = TextRun(t.substring(1), first.style);
+      // leading punctuation and the letter, as CSS's ::first-letter takes them (it was the opening quote mark alone;
+      // a character outside the BMP was split in two - EPUB review E15)
+      final m = RegExp(r'^[\p{Ps}\p{Pi}\p{Po}]*.', unicode: true).firstMatch(t);
+      if (m != null) {
+        para.drop = TextRun(m[0]!, first.style);
+        para.runs[0] = TextRun(t.substring(m.end), first.style);
       }
     }
     _flush();
@@ -424,6 +454,13 @@ class ChapterReader {
         blocks[startAt].paraTop = mt; // the paragraph's own (compared with the chapter's usual)
         blocks.last.paraBottom = mb;
       }
+    } else if (e.name == 'hr' || (e.name == 'p' && e.find('img') == null && e.find('image') == null) ||
+        (e.name == 'div' && mt + mb > 0 && e.find('img') == null)) {
+      // a scene break that shows no text of its own (<hr/>, <p>&nbsp;</p>, an empty spaced div): its space goes before
+      // the next block, which starts without an indent - it vanished, margins and all, and two scenes ran together
+      // (EPUB review E4). At least a line's worth for a rule or a blank paragraph.
+      final gap = e.name == 'div' ? mt + mb : math.max(1.0, mt + mb);
+      _pendingBreak = math.max(_pendingBreak, gap);
     }
   }
 
@@ -612,6 +649,11 @@ class EpubPage {
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
 
+  /// Where each text piece's text starts within it - its first-line indent, for a plain paragraph (tests).
+  @visibleForTesting
+  List<double> get textIndents =>
+      [for (final p in pieces) if (p is _TextPiece) p.laid.tp.inlinePlaceholderBoxes?.firstOrNull?.right ?? 0];
+
   /// How many line-end hyphens the page's text has (tests) - [hyphensShown] of them should be drawn.
   @visibleForTesting
   int get hyphenMarks => {for (final p in pieces) if (p is _TextPiece) p.laid}
@@ -791,15 +833,22 @@ class Paginator {
 
   // the chapter's usual paragraph spacing (the most common), which the reader's own formatting takes out
   double _usualTop = 0, _usualBottom = 0;
+  bool _breaksAreSpacing = false; // blank-paragraph "breaks" before most paragraphs: spacing, not breaks (E4)
 
   void _findUsual(List<Block> blocks) {
     final count = <(double, double), int>{};
+    var paragraphs = 0, afterBreaks = 0;
     for (final b in blocks) {
       if (b is TextBlock && b.paragraph) {
         final k = ((b.paraTop * 100).roundToDouble() / 100, (b.paraBottom * 100).roundToDouble() / 100);
         count[k] = (count[k] ?? 0) + 1;
+        paragraphs++;
+        if (b.breakGap > 0) afterBreaks++;
       }
     }
+    // blank paragraphs between most paragraphs are a badly converted book's spacing, not scene breaks: the reader's
+    // own formatting takes them out like any usual gap (E4)
+    _breaksAreSpacing = paragraphs > 4 && afterBreaks > paragraphs * 0.3;
     if (count.isEmpty) return;
     final usual = count.entries.reduce((a, b) => b.value > a.value ? b : a).key;
     _usualTop = usual.$1;
@@ -840,12 +889,14 @@ class Paginator {
           final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
           _align = TextAlign.justify;
           _indent = prev is TextBlock && prev.paragraph && !b.breakBefore && !(ownTop && b.paraTop > _usualTop) &&
-                  !(prev.paraBottom - _usualBottom > 0.01)
+                  !(prev.paraBottom - _usualBottom > 0.01) && (b.breakGap == 0 || _breaksAreSpacing)
               ? 1.5 * baseSize // (the reader's own 1.5 em, not the book's)
               : 0; // no indent after a space the book asked for (a scene break), as in print
           mt = ownTop ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
           mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
+        // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
+        if (b.breakGap > 0 && !(_breaksAreSpacing && !theme.bookFormatting)) mt = math.max(mt, b.breakGap);
       }
       // the reader's own extra space between paragraphs (Paragraph spacing), on top of the book's
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
@@ -1162,6 +1213,19 @@ class Paginator {
     while (k < nLines.length && h < boxH + 4 - 1 && _y + h + nLines[k].height <= _bottom + 0.5) {
       h += nLines[k].height;
       k++;
+    }
+    if (k == 0 && nLines.isNotEmpty) {
+      // not even one line beside the float here (one carried from the paragraph before, near the page's bottom):
+      // the paragraph below it, full width - line -1 was read and the chapter failed to lay out (EPUB review E2)
+      if (floatPiece != null) {
+        pages.last.pieces.add(floatPiece);
+        _floatBottom = _y + boxH + 8;
+        _floatW = boxW;
+      }
+      if (_y < _floatBottom) _y = _floatBottom;
+      _floatBottom = -1;
+      _lines(_painter(b, b.runs, width), x);
+      return;
     }
     pages.last._at(b.start);
     if (floatPiece != null) {

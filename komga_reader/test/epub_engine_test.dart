@@ -1,20 +1,35 @@
 // The EPUB layout engine (lib/epub/): hyphenation, the XHTML reader, the CSS cascade, the paginator.
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/epub/chapter.dart' show inkOnLight;
+import 'package:komga_reader/epub/chapter.dart';
 import 'package:komga_reader/epub/css.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
 import 'package:komga_reader/epub/layout.dart';
+import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/epub/xhtml.dart';
+
+import 'epub_reader_test.dart' show MemorySource, onePixelPng;
 
 /// A blank picture [w] x [h].
 Future<ui.Image> _image(int w, int h) {
   final rec = ui.PictureRecorder();
   Canvas(rec).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint());
   return rec.endRecording().toImage(w, h);
+}
+
+/// A [MemorySource] that counts how often each file is read.
+class _CountingSource extends MemorySource {
+  _CountingSource(super.files, super.infoValue, {super.binary});
+  final fetched = <String, int>{};
+  @override
+  Future<Uint8List> resource(String path) {
+    fetched[path] = (fetched[path] ?? 0) + 1;
+    return super.resource(path);
+  }
 }
 
 void main() {
@@ -517,5 +532,87 @@ void main() {
     expect(near(at(r.topLeft + const Offset(2, 2)), theme.background), isTrue,
         reason: 'its white ground is the page\'s background: ${at(r.topLeft + const Offset(2, 2))}');
     expect(near(at(r.center), theme.text), isTrue, reason: 'its black ink is the text\'s colour: ${at(r.center)}');
+  });
+
+  // ---- the EPUB code review, 2026-10-06 (E)
+
+  test('E5: a rule after @charset / @namespace applies (it was skipped - every Calibre book starts with @namespace)',
+      () {
+    final sheet = StyleSheet()..add('@charset "UTF-8"; @namespace h "http://www.w3.org/1999/xhtml"; '
+        '.body { text-indent: 2em } p { margin: 0 }');
+    final body = parseXhtml('<body class="body"><p>x</p></body>').find('body')!;
+    expect(sheet.declsFor(body)['text-indent'], '2em');
+  });
+
+  test("E1: a drop cap written as text inside its paragraph stays that paragraph's (it moved to the next one)", () {
+    final blocks = ChapterReader(StyleSheet()..add('.drop { float: left }'), (h) => h)
+        .read(parseXhtml('<body><p><span class="drop">T</span>he story begins.</p><p>Next.</p></body>'));
+    final first = blocks[0] as TextBlock, second = blocks[1] as TextBlock;
+    expect(first.drop?.text, 'T');
+    expect(first.runs.map((r) => r.text).join(), 'he story begins.');
+    expect(first.paragraph, isTrue);
+    expect(second.drop, isNull);
+  });
+
+  test('E2: no room for even one line beside a float carried from the paragraph before - laid out below it, not a '
+      'crash', () async {
+    final blocks = ChapterReader(StyleSheet()..add('p { margin: 0 }'), (h) => h).read(parseXhtml(
+        '<body><p><img src="a.png" style="float:left"/>x</p><p>${List.filled(30, 'word').join(' ')}</p></body>'));
+    (blocks.first as TextBlock).floatImage!.image = await _image(30, 80);
+    // the text area 54 px tall: one line (27.55) beside the float, then less than a line left beside it
+    final pages = Paginator(const EpubTheme(), const Size(400, 134), null).run(blocks);
+    expect(pages.length, greaterThan(1), reason: 'the second paragraph went on, below the float / on the next page');
+  });
+
+  test('E3: a floated picture in an otherwise empty wrapper goes beside the next paragraph (it was lost)', () {
+    final blocks = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml('<body><div><img src="a.png" style="float:left"/></div><p>The text.</p></body>'));
+    expect((blocks.single as TextBlock).floatImage?.src, 'a.png');
+  });
+
+  test('E4: a scene break written as <hr/> keeps a gap, and the paragraph after it starts without an indent (with '
+      "the reader's own formatting)", () {
+    EpubPage page(String body) => Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$body</body>')))
+        .single;
+    List<Offset> lay(String body) => page(body).textOrigins;
+    const plainSrc = '<p>One.</p><p>Two.</p><p>Three.</p>', brokenSrc = '<p>One.</p><p>Two.</p><hr/><p>Three.</p>';
+    final plain = lay(plainSrc), broken = lay(brokenSrc);
+    expect(broken[2].dy - broken[1].dy, greaterThan(plain[2].dy - plain[1].dy + 10), reason: 'a gap at the break');
+    expect(page(plainSrc).textIndents[2], greaterThan(10), reason: 'an ordinary paragraph is indented');
+    expect(page(brokenSrc).textIndents[2], lessThan(1), reason: 'no indent after the break');
+    // blank paragraphs between EVERY paragraph are a converted book's spacing, not breaks: own formatting evens them
+    final spaced = lay(List.generate(8, (i) => '<p>P$i.</p><p>&nbsp;</p>').join());
+    expect(spaced[2].dy - spaced[1].dy, closeTo(spaced[1].dy - spaced[0].dy, 0.5));
+  });
+
+  test('E10: named entities French books use; a numeric one past Unicode is left as written, not a failed chapter',
+      () {
+    expect(decodeEntities('&laquo;Oui&raquo;, dit-il, &agrave; l&rsquo;&eacute;cole'), '«Oui», dit-il, à l’école');
+    expect(decodeEntities('a &#xFFFFFFFF; b &#99999999999999999999; c'), 'a &#xFFFFFFFF; b &#99999999999999999999; c');
+  });
+
+  test('E14: a picture used many times in a chapter (a scene-break ornament) is fetched and decoded once; each use '
+      'gets its own handle, and freeing the chapter frees them all', () async {
+    final source = _CountingSource({
+      'c.xhtml': '<html><body><p>One.</p><p><img src="orn.png"/></p><p>Two.</p><p><img src="orn.png"/></p>'
+          '<p>Three.</p><div><img src="lost.png" style="float:left"/></div></body></html>'
+    }, const EpubInfo(spine: ['c.xhtml'], toc: []), binary: {'orn.png': onePixelPng, 'lost.png': onePixelPng});
+    final ch = await ChapterLoader(source).load('c.xhtml');
+    expect(source.fetched['orn.png'], 1);
+    final pics = ch.blocks.whereType<ImageBlock>().toList();
+    expect(pics, hasLength(2));
+    expect(pics[0].image, isNotNull);
+    expect(identical(pics[0].image, pics[1].image), isFalse, reason: 'each its own handle');
+    final all = [...ch.images.map((i) => i.image!)];
+    expect(all, hasLength(3), reason: 'the floated picture no paragraph took is kept with the chapter (E3)');
+    ch.dispose();
+    expect(all.every((i) => i.debugDisposed), isTrue, reason: 'every picture freed');
+  });
+
+  test('E15: ::first-letter takes the opening quote with the letter, not the quote alone', () {
+    final blocks = ChapterReader(StyleSheet()..add('p::first-letter { float: left }'), (h) => h)
+        .read(parseXhtml('<body><p>“It was a dark night.</p></body>'));
+    expect((blocks.single as TextBlock).drop?.text, '“I');
   });
 }

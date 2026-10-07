@@ -109,13 +109,31 @@ const _named = {
   'amp': '&', 'lt': '<', 'gt': '>', 'quot': '"', 'apos': "'", 'nbsp': ' ', 'mdash': '—', 'ndash': '–',
   'hellip': '…', 'lsquo': '‘', 'rsquo': '’', 'ldquo': '“', 'rdquo': '”', 'shy': '­',
   'copy': '©', 'eacute': 'é', 'thinsp': ' ', 'emsp': ' ', 'ensp': ' ',
+  // the rest of Latin-1 and the typographic ones EPUB2 books write by name (French books: &laquo; &egrave;... showed
+  // as text - EPUB review E10)
+  'laquo': '«', 'raquo': '»', 'lsaquo': '‹', 'rsaquo': '›', 'sbquo': '‚', 'bdquo': '„', 'iexcl': '¡',
+  'iquest': '¿', 'cent': '¢', 'pound': '£', 'euro': '€', 'yen': '¥', 'sect': '§', 'para': '¶', 'middot': '·',
+  'bull': '•', 'deg': '°', 'plusmn': '±', 'times': '×', 'divide': '÷', 'frac12': '½', 'frac14': '¼', 'frac34': '¾',
+  'sup1': '¹', 'sup2': '²', 'sup3': '³', 'reg': '®', 'trade': '™', 'dagger': '†', 'Dagger': '‡', 'prime': '′',
+  'Prime': '″', 'ordf': 'ª', 'ordm': 'º', 'not': '¬', 'macr': '¯', 'acute': '´', 'cedil': '¸', 'uml': '¨',
+  'micro': 'µ', 'brvbar': '¦', 'curren': '¤',
+  'agrave': 'à', 'aacute': 'á', 'acirc': 'â', 'atilde': 'ã', 'auml': 'ä', 'aring': 'å', 'aelig': 'æ', 'ccedil': 'ç',
+  'egrave': 'è', 'ecirc': 'ê', 'euml': 'ë', 'igrave': 'ì', 'iacute': 'í', 'icirc': 'î', 'iuml': 'ï', 'eth': 'ð',
+  'ntilde': 'ñ', 'ograve': 'ò', 'oacute': 'ó', 'ocirc': 'ô', 'otilde': 'õ', 'ouml': 'ö', 'oslash': 'ø', 'ugrave': 'ù',
+  'uacute': 'ú', 'ucirc': 'û', 'uuml': 'ü', 'yacute': 'ý', 'thorn': 'þ', 'yuml': 'ÿ', 'szlig': 'ß', 'oelig': 'œ',
+  'Agrave': 'À', 'Aacute': 'Á', 'Acirc': 'Â', 'Atilde': 'Ã', 'Auml': 'Ä', 'Aring': 'Å', 'AElig': 'Æ', 'Ccedil': 'Ç',
+  'Egrave': 'È', 'Eacute': 'É', 'Ecirc': 'Ê', 'Euml': 'Ë', 'Igrave': 'Ì', 'Iacute': 'Í', 'Icirc': 'Î', 'Iuml': 'Ï',
+  'ETH': 'Ð', 'Ntilde': 'Ñ', 'Ograve': 'Ò', 'Oacute': 'Ó', 'Ocirc': 'Ô', 'Otilde': 'Õ', 'Ouml': 'Ö', 'Oslash': 'Ø',
+  'Ugrave': 'Ù', 'Uacute': 'Ú', 'Ucirc': 'Û', 'Uuml': 'Ü', 'Yacute': 'Ý', 'THORN': 'Þ', 'OElig': 'Œ', 'Yuml': 'Ÿ',
 };
 
 String decodeEntities(String s) => s.contains('&')
     ? s.replaceAllMapped(_entity, (m) {
         final e = m[1]!;
-        if (e.startsWith('#x')) return String.fromCharCode(int.parse(e.substring(2), radix: 16));
-        if (e.startsWith('#')) return String.fromCharCode(int.parse(e.substring(1)));
+        // a number past Unicode (or too long to read) stays as written - it threw, and the chapter didn't load (E10)
+        final code = e.startsWith('#x') ? int.tryParse(e.substring(2), radix: 16)
+            : e.startsWith('#') ? int.tryParse(e.substring(1)) : null;
+        if (e.startsWith('#')) return code != null && code >= 0 && code <= 0x10FFFF ? String.fromCharCode(code) : m[0]!;
         return _named[e] ?? m[0]!;
       })
     : s;

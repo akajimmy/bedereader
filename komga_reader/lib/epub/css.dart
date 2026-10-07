@@ -80,7 +80,13 @@ class StyleSheet {
     while (i < src.length) {
       final open = src.indexOf('{', i);
       if (open < 0) break;
-      final head = src.substring(i, open).trim();
+      var head = src.substring(i, open).trim();
+      // statement at-rules ending in ';' before it (@charset "UTF-8"; @import ...; @namespace h "...";) aren't
+      // part of its selector - the whole first rule was skipped as an at-rule, and Calibre's stylesheets all start
+      // with @namespace (EPUB review 2026-10-06, E5)
+      while (head.startsWith('@') && head.contains(';')) {
+        head = head.substring(head.indexOf(';') + 1).trim();
+      }
       final close = _matching(src, open);
       final body = src.substring(open + 1, close < 0 ? src.length : close);
       i = close < 0 ? src.length : close + 1;
