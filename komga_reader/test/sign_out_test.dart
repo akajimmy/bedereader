@@ -56,6 +56,8 @@ void main() {
     await frames();
     await tester.tap(find.text('Settings'));
     await frames();
+    await tester.tap(find.text('Server and sync')); // (Settings opens on Reading)
+    await frames();
     await tester.ensureVisible(find.text('Sign out / change server'));
     await tester.tap(find.text('Sign out / change server'));
     await frames();
