@@ -1,5 +1,5 @@
 name: komga_reader
-description: A minimalist Komga reading client (Android first; iOS, Windows and web later).
+description: A minimalist Komga reading client for Android and Windows.
 publish_to: "none"
 version: 1.2.0+80
 

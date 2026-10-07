@@ -7,7 +7,6 @@ One set of geometry drives every output:
   res/drawable/ic_launcher_foreground.xml        Android adaptive-icon foreground as a vector (crisp at any size)
   res/values/ic_launcher_background.xml          adaptive-icon background colour
   res/mipmap-*/ic_launcher.png                   pre-Android-8 launcher icons
-  web/icons/*.png, web/favicon.png               web build icons
   assets/icon.png                                the icon inside the app (Info screen)
   windows/runner/resources/app_icon.ico          Windows app icon
   tools/icon_preview.png                         how launchers show it
@@ -120,14 +119,6 @@ def main():
                       f'    <color name="ic_launcher_background">#FF{BACKGROUND[1:]}</color>\n</resources>\n',
                       encoding='utf-8')
     written += [fg, adaptive, colour]
-
-    web = APP / 'web'
-    for size in (192, 512):
-        raster(size, 0.78, corner_frac=0.2).save(web / 'icons' / f'Icon-{size}.png')
-        raster(size, 0.6).save(web / 'icons' / f'Icon-maskable-{size}.png')
-        written += [web / 'icons' / f'Icon-{size}.png', web / 'icons' / f'Icon-maskable-{size}.png']
-    raster(32, 0.84, corner_frac=0.18).save(web / 'favicon.png')
-    written.append(web / 'favicon.png')
 
     # Windows app icon (taskbar, title bar, Explorer): one .ico holding the sizes Windows asks for
     ico = APP / 'windows' / 'runner' / 'resources' / 'app_icon.ico'

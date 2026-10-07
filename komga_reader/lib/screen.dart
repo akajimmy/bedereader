@@ -9,17 +9,16 @@ const _channel = MethodChannel('komga_reader/screen');
 
 /// Windows / macOS / Linux app (mouse, keyboard, resizable window) rather than a phone or tablet.
 bool get isDesktop =>
-    !kIsWeb &&
-    (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux);
+    defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.macOS ||
+    defaultTargetPlatform == TargetPlatform.linux;
 
 /// Only Android lets the app set the screen's backlight; elsewhere the brightness slider just dims.
-bool get hasBacklightControl => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+bool get hasBacklightControl => defaultTargetPlatform == TargetPlatform.android;
 
 /// Volume keys can turn pages: on Android the app sees them first, and a key it uses doesn't change the volume. On a
 /// PC the system changes the volume whatever the app does, so they're left alone there.
-bool get hasVolumeKeys => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+bool get hasVolumeKeys => defaultTargetPlatform == TargetPlatform.android;
 
 /// Desktop full screen: one state for the whole app, not just the open book - closing a book (Esc included) stays
 /// full screen, the next book opens in it, and it's remembered across restarts (user, 2026-09-29). F11 anywhere,
@@ -50,10 +49,9 @@ Future<bool> setFullscreen(bool on) async {
 }
 
 /// Only a phone or tablet turns; a PC window doesn't, so the reader's rotation lock is Android only.
-bool get canRotate => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+bool get canRotate => defaultTargetPlatform == TargetPlatform.android;
 
-/// The battery for the reader's clock: (level 0..100, charging), or null where there's none to read (a desktop PC,
-/// the web).
+/// The battery for the reader's clock: (level 0..100, charging), or null where there's none to read (a desktop PC).
 Future<(int, bool)?> batteryState() async {
   try {
     final m = await _channel.invokeMethod<Map<Object?, Object?>>('battery');
@@ -64,10 +62,10 @@ Future<(int, bool)?> batteryState() async {
   }
 }
 
-/// Whether the device is on Wi-Fi (or a cable) rather than mobile data - Downloads' "Wi-Fi only". A PC, the web, or
-/// a check that fails count as Wi-Fi: better a download than a queue stuck for no reason.
+/// Whether the device is on Wi-Fi (or a cable) rather than mobile data - Downloads' "Wi-Fi only". A PC, or a check
+/// that fails, count as Wi-Fi: better a download than a queue stuck for no reason.
 Future<bool> onWifi() async {
-  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return true;
+  if (defaultTargetPlatform != TargetPlatform.android) return true;
   try {
     final n = await _channel.invokeMethod<String>('network');
     return n == null || n == 'wifi';
@@ -76,7 +74,7 @@ Future<bool> onWifi() async {
   }
 }
 
-/// Stops the tablet from dimming and sleeping while a book is open (Android; a no-op on web/Windows).
+/// Stops the tablet from dimming and sleeping while a book is open (Android; a no-op on Windows).
 Future<void> keepScreenOn(bool on) async {
   try {
     await _channel.invokeMethod('keepOn', on);
@@ -94,7 +92,7 @@ Future<double?> getScreenBrightness() async {
   }
 }
 
-/// Installed app version, e.g. "0.1.0 (build 17)". Null where unknown (web/desktop).
+/// Installed app version, e.g. "0.1.0 (build 17)". Null where unknown.
 Future<String?> getAppVersion() async {
   try {
     final v = await _channel.invokeMapMethod<String, Object?>('appVersion');
@@ -114,8 +112,8 @@ Future<bool> openUrl(String url) async {
   }
 }
 
-/// The app's private folder for downloads (Android app storage; Windows %LOCALAPPDATA%\KomgaReader). Null where
-/// there is none (web).
+/// The app's private folder for downloads (Android app storage; Windows %LOCALAPPDATA%\KomgaReader). Null if the
+/// platform side can't say.
 Future<String?> appStorageDir() async {
   try {
     return await _channel.invokeMethod<String>('storageDir');
@@ -126,10 +124,9 @@ Future<String?> appStorageDir() async {
 
 // ---- Save page / Copy page (the reader, user 2026-10-02): the page's own image file, as Komga sends it ----------
 
-/// Save and Copy are there to be had: Android and Windows (not the web, which has neither a Pictures folder nor an
-/// image clipboard the app can reach).
+/// Save and Copy are there to be had: Android and Windows.
 bool get canSaveCopyPictures =>
-    !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows);
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows;
 
 /// What a picture file is, from its first bytes: (file extension, MIME type). Unknown: a JPEG, as Komga's pages
 /// mostly are.

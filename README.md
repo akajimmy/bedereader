@@ -5,8 +5,8 @@
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
 
-For an Android tablet or phone, a Windows PC, or a web browser. Browse your libraries with proper posters, read with
-touch, keyboard, mouse or a remote page-turner, take books with you offline, and make old scans look their best.
+For an Android tablet or phone, or a Windows PC. Browse your libraries with proper posters, read with touch,
+keyboard, mouse or a remote page-turner, take books with you offline, and make old scans look their best.
 
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
@@ -46,7 +46,7 @@ This app shows them and keeps everything in sync.
   background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
 - At the end of a book: the next one in the series or read list, with its poster.
 
-**Books (EPUB)** - Android and Windows
+**Books (EPUB)**
 - Novels and other EPUBs are laid out by the app itself, page by page: justified and hyphenated (English and French),
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
@@ -75,8 +75,6 @@ This app shows them and keeps everything in sync.
 2. Install the app:
    - **Android**: install `BeDeReader-<version>-android.apk` (allow installs from this source when asked).
    - **Windows**: unzip `BeDeReader-<version>-windows.zip` anywhere and run `BeDeReader.exe`.
-   - **Web**: serve the contents of `BeDeReader-<version>-web.zip`; Komga has to allow requests from that address
-     (CORS).
 3. Enter your Komga address (for example `http://192.168.1.10:25600`) and the API key.
 
 ## Where your settings live
@@ -94,7 +92,6 @@ Settings (side menu) has everything in one place, each section labelled with whe
 ## Privacy
 
 - The app talks only to **your own Komga server**. No analytics, no tracking, no accounts, no ads.
-- The one exception is the **web version**, which loads a font from Google's servers when it starts.
 - Your server address and API key are stored **on the device, unencrypted** (the app's private storage on Android;
   your Windows profile on a PC). Encrypted storage is planned. Anyone with that API key can use your Komga account:
   you can revoke it any time in Komga (your account > API keys).
@@ -187,11 +184,12 @@ Checks the working tree is committed (before and after `flutter pub get`), runs 
 and the tests (stopping on any failure), raises the build number,
 files the changelog's *Unreleased* entries under the new build, bundles the README, changelog and third-party notices
 into the app,
-builds Android, Windows and web into `dist\<version>\` with checksums and a BUILD-INFO.txt, then commits and tags
+builds Android and Windows into `dist\<version>\` with checksums and a BUILD-INFO.txt, then commits and tags
 `build-<n>`. If a build fails, the version, changelog and bundled documents are put back. A `-Bump` build must be
 signed with the release key, and its `build-<n>` tag must not exist yet.
 
-Options: `-Platforms android` (or `windows`, `web`) builds a subset; `-SkipTests` skips the tests; `-NoInstall`
+Options: `-Platforms android` (or `windows`) builds one of them; `-Timing` compiles in the EPUB reader's
+timing instruments (a measuring build); `-SkipTests` skips the tests; `-NoInstall`
 skips the tablet and the Desktop copy; `-AllowDirty` allows uncommitted changes. The last two are for throwaway
 builds: `-Bump` refuses both. Progress is in `dist\build.log`.
 
@@ -219,7 +217,6 @@ password manager (the encrypted copy only works for this Windows account on this
 Outputs in `dist\<version>\`:
 - `BeDeReader-<ver>-android.apk` - install on the tablet (sideload)
 - `BeDeReader-<ver>-windows.zip` - portable: unzip anywhere, run `BeDeReader.exe`
-- `BeDeReader-<ver>-web.zip` - static site; needs Komga to allow cross-origin requests (CORS) from where it's served
 
 ### Renaming the app
 
@@ -231,7 +228,7 @@ spelling is displayed, typed, searched and used in file names.
 - **Change** (the name people see): `komga_reader\lib\app_identity.dart` (`appName` - every screen);
   `android\app\src\main\AndroidManifest.xml` (`android:label`); `windows\runner\main.cpp` (window title);
   `windows\runner\Runner.rc` (`FileDescription`, `InternalName`, `OriginalFilename`); `windows\CMakeLists.txt`
-  (`BINARY_NAME`, the .exe); `web\index.html` and `web\manifest.json`; `tools\build.ps1` (`$product`, the file names
+  (`BINARY_NAME`, the .exe); `tools\build.ps1` (`$product`, the file names
   in `dist\`); this README, the changelog's intro, `THIRD_PARTY_NOTICES.md`, `lib\licences.dart` (the AI disclosure).
 - **Never change** (internal): the Android application ID and Kotlin package `com.nickp.komga_reader`; the Dart
   package `komga_reader`; `Runner.rc`'s `CompanyName` and `ProductName` (they name the Windows settings folder

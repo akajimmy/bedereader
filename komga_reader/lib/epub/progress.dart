@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
 
-String get platformName => kIsWeb ? 'web' : switch (defaultTargetPlatform) {
+String get platformName => switch (defaultTargetPlatform) {
       TargetPlatform.android => 'Android',
       TargetPlatform.windows => 'Windows',
       TargetPlatform.iOS => 'iOS',

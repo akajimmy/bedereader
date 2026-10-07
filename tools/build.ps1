@@ -10,7 +10,6 @@
     3. Builds the requested platforms:
          android  -> BeDeReader-<ver>-android.apk
          windows  -> BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
-         web      -> BeDeReader-<ver>-web.zip
     4. Writes SHA256SUMS.txt and BUILD-INFO.txt next to them.
     5. With -Bump, commits the version change and tags it build-<n>.
     6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
@@ -24,13 +23,13 @@
 .EXAMPLE
     .\tools\build.ps1 -Bump
     .\tools\build.ps1 -Platforms android
-    .\tools\build.ps1 -Platforms windows,web -SkipTests
+    .\tools\build.ps1 -Platforms windows -SkipTests
     .\tools\build.ps1 -Bump -Timing     (a measuring build: the EPUB reader's frame timings in its trace and logcat)
 #>
 param(
     [switch]$Bump,
-    [ValidateSet('android', 'windows', 'web')]
-    [string[]]$Platforms = @('android', 'windows', 'web'),
+    [ValidateSet('android', 'windows')]
+    [string[]]$Platforms = @('android', 'windows'),
     [switch]$SkipTests,
     [switch]$AllowDirty,
     [switch]$NoInstall,     # don't install on the tablet or update the Desktop copy afterwards
@@ -244,13 +243,6 @@ if ($Platforms -contains 'windows') {
     $zip = Join-Path $out "$product-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip
-    $artifacts += $zip
-}
-if ($Platforms -contains 'web') {
-    Run 'Web app' "flutter build web --release$defines"
-    $zip = Join-Path $out "$product-$version-web.zip"
-    if (Test-Path $zip) { Remove-Item $zip }
-    Compress-Archive -Path (Join-Path $app 'build\web\*') -DestinationPath $zip
     $artifacts += $zip
 }
 

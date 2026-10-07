@@ -13,7 +13,6 @@ This application was developed with the aid of AI coding tools, but was designed
 | What | Licence | Role |
 |---|---|---|
 | [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app. BeDeReader is not affiliated with the Komga project. |
-| Roboto font (web version only) | Google Fonts licence (Apache-2.0 / OFL-1.1) | Loaded from Google's font servers by the web version for its text. |
 
 ## Inside the app
 
@@ -26,16 +25,13 @@ This application was developed with the aid of AI coding tools, but was designed
 | Fonts: [Literata](https://github.com/googlefonts/literata), [Lora](https://github.com/cyrealtype/Lora-Cyrillic), [Atkinson Hyperlegible Next](https://www.brailleinstitute.org/freefont/), [EB Garamond](https://github.com/georgd/EB-Garamond) (from [Google Fonts](https://github.com/google/fonts)) | as of 2026-10-06 | SIL Open Font Licence 1.1 | Reading fonts for EPUB books |
 | Hyphenation patterns from [hyph-utf8](https://github.com/hyphenation/tex-hyphen): US English (Gerard D.C. Kuiken), French (Daniel Flipo, Bernard Gaulle, Arthur Reutenauer) | 2005 / 2016 | permissive notice; MIT | Breaking words at line ends in EPUB books |
 | `http` | 1.6.0 | BSD-3-Clause | Talking to Komga |
-| `shared_preferences` and its Android / Apple / Linux / Windows / web parts | 2.5.5 | BSD-3-Clause | Settings kept on the device |
+| `shared_preferences` and its Android / Apple / Linux / Windows parts | 2.5.5 | BSD-3-Clause | Settings kept on the device |
 | `path_provider` Linux / Windows parts, `xdg_directories` | 2.2.2 / 2.3.0, 1.1.0 | BSD-3-Clause | Where settings are stored (desktop) |
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
-| `async`, `characters`, `collection`, `ffi`, `file`, `http_parser`, `meta`, `path`, `platform`, `plugin_platform_interface`, `source_span`, `string_scanner`, `term_glyph`, `typed_data`, `vector_math`, `web` | various | BSD-3-Clause | Supporting libraries used by the above |
+| `async`, `characters`, `collection`, `ffi`, `file`, `http_parser`, `meta`, `path`, `platform`, `plugin_platform_interface`, `source_span`, `string_scanner`, `term_glyph`, `typed_data`, `vector_math` | various | BSD-3-Clause | Supporting libraries used by the above |
 
 **Windows version** - also `flutter_windows.dll` (the Flutter engine) and ICU Unicode data (`icudtl.dat`, Unicode
 licence); both covered by Flutter's notices.
-
-**Web version** - also CanvasKit / Skwasm (the Skia graphics engine compiled for the browser; BSD-3-Clause), in the
-`canvaskit` folder.
 
 **Android version** - also these native libraries, brought in by Flutter's Android layer and the settings package
 (Apache-2.0; the licence terms are on the app's licences page on Android):
