@@ -119,6 +119,7 @@ class ImageBlock extends Block {
   ImageBlock(this.src);
   final String src; // path inside the book, resolved
   ui.Image? image;
+  bool inkOnLight = false; // a small black-and-white picture on a light ground: drawn in the page's colours
 }
 
 /// A table: rows of cells, each cell its text runs (paragraphs inside a cell become lines).
@@ -576,13 +577,31 @@ class _RectPiece extends Piece {
 }
 
 class _ImagePiece extends Piece {
-  _ImagePiece(this.image, this.rect, {this.zoomable = false});
+  _ImagePiece(this.image, this.rect, {this.zoomable = false, this.filter});
   final ui.Image image;
   final Rect rect;
   final bool zoomable; // big enough to open full screen with a tap (not a drop cap or an ornament)
+  final ColorFilter? filter; // drawn in the page's colours ([pageColours])
   @override
-  void paint(Canvas c) => c.drawImageRect(image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()), rect, Paint()..filterQuality = FilterQuality.medium);
+  void paint(Canvas c) => c.drawImageRect(image, Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      rect, Paint()
+        ..filterQuality = FilterQuality.medium
+        ..colorFilter = filter);
+}
+
+/// A black-and-white picture in the page's colours: its light ground becomes the page's background, its ink the
+/// text's colour, shades in between (how light each pixel is decides the mix).
+ColorFilter pageColours(Color background, Color text) {
+  List<double> row(double bg, double ink) {
+    final span = (bg - ink) * 255; // 0..1 components to the matrix's 0..255
+    return [span * 0.2126 / 255, span * 0.7152 / 255, span * 0.0722 / 255, 0, ink * 255];
+  }
+  return ColorFilter.matrix([
+    ...row(background.r, text.r),
+    ...row(background.g, text.g),
+    ...row(background.b, text.b),
+    0, 0, 0, 1, 0,
+  ]);
 }
 
 class EpubPage {
@@ -800,7 +819,7 @@ class Paginator {
         final s = math.min(1.0, math.min(area.width / w0, area.height / h0));
         pages.single._at(b.start);
         pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w0 * s, height: h0 * s),
-            zoomable: zoomable(img)));
+            zoomable: zoomable(img), filter: _filterFor(b)));
         return pages;
       }
     }
@@ -1124,7 +1143,7 @@ class Paginator {
       boxW = fimg.width * s;
       boxH = fimg.height * s;
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
-      floatPiece = _ImagePiece(fimg, Rect.fromLTWH(x, _y + 4, boxW, boxH));
+      floatPiece = _ImagePiece(fimg, Rect.fromLTWH(x, _y + 4, boxW, boxH), filter: _filterFor(b.floatImage!));
     } else {
       final dropTp = TextPainter(
         text: TextSpan(text: drop!.text, style: _style(drop.style).copyWith(fontSize: lineH * 2.6, height: 1)),
@@ -1211,6 +1230,11 @@ class Paginator {
   /// ... over a certain size").
   static bool zoomable(ui.Image img) => math.min(img.width, img.height) >= 150;
 
+  /// A small black-and-white picture on a light ground ([ImageBlock.inkOnLight]) in the page's own colours: its white
+  /// box no longer glares on a dark page (user, 2026-10-06: "drop clashing backgrounds"). Others as they are.
+  late final ColorFilter _pageColours = pageColours(theme.background, theme.text);
+  ColorFilter? _filterFor(ImageBlock b) => b.inkOnLight ? _pageColours : null;
+
   void _image(ImageBlock b) {
     final img = b.image;
     if (img == null) return;
@@ -1227,7 +1251,7 @@ class Paginator {
     final w = w0 * scale, h = h0 * scale;
     pages.last._at(b.start);
     pages.last.pieces.add(_ImagePiece(img, Rect.fromLTWH(theme.margins.left + (maxW - w) / 2, _y, w, h),
-        zoomable: zoomable(img)));
+        zoomable: zoomable(img), filter: _filterFor(b)));
     _y += h;
   }
 }
