@@ -347,6 +347,34 @@ void main() {
     expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
+  testWidgets('the rotation lock holds in EPUBs too (it was offered in the panel but never applied), turning over with '
+      'the tablet, and ends with the book', (tester) async {
+    final flutter = <Object?>[], android = <Object?>[];
+    final m = tester.binding.defaultBinaryMessenger;
+    m.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setPreferredOrientations') flutter.add(call.arguments);
+      return null;
+    });
+    m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
+      if (call.method == 'orientation') android.add(call.arguments);
+      return null;
+    });
+    final s = AppSettings.instance;
+    addTearDown(() {
+      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
+      m.setMockMethodCallHandler(SystemChannels.platform, null);
+      m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+    });
+    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape));
+    await open(tester, twoChapters());
+    expect(android, ['sensorLandscape']);
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait)); // changed in the panel
+    await tester.pump();
+    expect(android.last, 'sensorPortrait');
+    await tester.pumpWidget(const SizedBox());
+    expect(flutter.last, isEmpty, reason: 'closed: the app follows the device again');
+  });
+
   testWidgets('a held Right key keeps turning pages, one each time the slide ends (user, build 82, Windows: it crept '
       'and never turned - each repeat restarted the slide)', (tester) async {
     await open(tester, chapters(1));

@@ -1818,25 +1818,52 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets('rotation: a lock holds while the book is open, and ends with it', (tester) async {
-    final calls = <Object?>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'SystemChrome.setPreferredOrientations') calls.add(call.arguments);
+  /// Records the orientation requests: Flutter's (SystemChrome) and the app's own Android one (the screen channel).
+  (List<Object?>, List<Object?>) recordOrientation(WidgetTester tester) {
+    final flutter = <Object?>[], android = <Object?>[];
+    final m = tester.binding.defaultBinaryMessenger;
+    m.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setPreferredOrientations') flutter.add(call.arguments);
+      return null;
+    });
+    m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
+      if (call.method == 'orientation') android.add(call.arguments);
       return null;
     });
     final s = AppSettings.instance;
     addTearDown(() {
       s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null);
+      m.setMockMethodCallHandler(SystemChannels.platform, null);
+      m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
+    return (flutter, android);
+  }
+
+  testWidgets('rotation (Android): a lock holds while the book is open - still turning over with the tablet (the sensor '
+      'orientations: Flutter\'s "user" ones lost the 180° flip - user, 2026-10-05) - and ends with it', (tester) async {
+    final (flutter, android) = recordOrientation(tester);
+    final s = AppSettings.instance;
     s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await openReader(tester);
-    expect(calls.last, ['DeviceOrientation.portraitUp', 'DeviceOrientation.portraitDown']);
+    expect(android.last, 'sensorPortrait');
     s.setDisplay(s.display.copyWith(rotation: Rotation.landscape)); // changed mid-book (the Reader panel)
     await tester.pump();
-    expect(calls.last, ['DeviceOrientation.landscapeLeft', 'DeviceOrientation.landscapeRight']);
+    expect(android.last, 'sensorLandscape');
     await tester.pumpWidget(const SizedBox());
-    expect(calls.last, isEmpty); // closed: the app follows the device again
+    expect(flutter.last, isEmpty); // closed: the app follows the device again
+  });
+
+  testWidgets("rotation (Windows and the rest): Flutter's own request, both ways up", (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final (flutter, android) = recordOrientation(tester);
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    await openReader(tester);
+    expect(flutter.last, ['DeviceOrientation.portraitUp', 'DeviceOrientation.portraitDown']);
+    expect(android, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = null;
   });
 }
 
