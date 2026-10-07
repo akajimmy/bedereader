@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 79 - 2026-10-06
+
 **Added**
 - **EPUB: "Read on another device"** - as with comics, when a book was read further (or finished, or marked unread)
   on another device while it was open here, the reader asks before saving: stay where you are, or go to that place.
@@ -18,10 +24,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: the page-turn measuring is off in everyday builds** (frame times and the rest, added in builds 76-78 to
   find what made turns less smooth than in comics). It's compiled in only for a measuring build; the reader's
   trace of what it did, kept for crashes, stays.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 78 - 2026-10-06
 
