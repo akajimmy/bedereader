@@ -72,10 +72,10 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
                 mode: BrowseMode.readLists)),
         actions: [
           Center(child: CountBadge(paged: _paged)),
-          HideReadButton(value: _filter, onChanged: _setFilter),
+          ReadFilterButton(value: _filter, onChanged: _setFilter),
           const PosterSizeButton(),
           PinButton(current: Pin(
-            name: [widget.readList['name'] as String, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
+            name: [widget.readList['name'] as String, if (_filter.shows != null) _filter.shows!].join(' · '),
             kind: 'readlist', id: rlId, title: widget.readList['name'] as String, filter: _filter.name,
           )),
           SelectButton(selection: _sel),
@@ -86,7 +86,7 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
       ),
       body: menuEdge(PagedPosterGrid(
         paged: _paged,
-        empty: _filter == ReadFilter.hideRead ? 'Nothing unread in this list' : 'Nothing here',
+        empty: _filter.shows == null ? 'Nothing here' : 'Nothing ${_filter.shows} in this list',
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0,
             readListId: rlId, onChanged: _paged.refresh, selection: _sel, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(

@@ -174,7 +174,7 @@ void main() {
     await openPin('My saga');
     final s = tester.widget<SeriesScreen>(find.byType(SeriesScreen));
     expect((s.series['id'], jsonEncode(s.pin)), ('S1', jsonEncode(series)));
-    expect(find.byTooltip('Read hidden (show read)'), findsOneWidget, reason: "the pin's filter");
+    expect(find.byTooltip('Read hidden (hide unread)'), findsOneWidget, reason: "the pin's filter");
     await tester.pageBack();
     await tester.pumpAndSettle();
 
@@ -194,7 +194,7 @@ void main() {
     final l = tester.widget<LibraryScreen>(find.byType(LibraryScreen));
     expect((l.libraryId, jsonEncode(l.pin)), ('L1', jsonEncode(library)));
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Books')).selected, isTrue, reason: 'its mode');
-    expect(find.byTooltip('Read hidden (show read)'), findsOneWidget, reason: 'its filter');
+    expect(find.byTooltip('Read hidden (hide unread)'), findsOneWidget, reason: 'its filter');
   });
 
   testWidgets("a pin to something deleted from the server: nothing opens; it says so, and offers to unpin it (Komga's "

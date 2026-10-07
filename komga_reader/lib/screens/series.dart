@@ -95,7 +95,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
         ),
         actions: [
           Center(child: CountBadge(paged: _paged)),
-          HideReadButton(value: _filter, onChanged: _setFilter),
+          ReadFilterButton(value: _filter, onChanged: _setFilter),
           // issue order toggle: oldest first <-> newest first
           IconButton(
             tooltip: _newestFirst ? 'Newest first (switch to oldest first)' : 'Oldest first (switch to newest first)',
@@ -107,7 +107,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
           ),
           const PosterSizeButton(),
           PinButton(current: Pin(
-            name: [(s['metadata']?['title'] ?? s['name']) as String, if (_filter == ReadFilter.hideRead) 'unread',
+            name: [(s['metadata']?['title'] ?? s['name']) as String, if (_filter.shows != null) _filter.shows!,
                 if (_newestFirst) 'newest first'].join(' · '),
             kind: 'series', id: s['id'] as String, title: (s['metadata']?['title'] ?? s['name']) as String,
             filter: _filter.name,
@@ -181,10 +181,10 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
                   mode: BrowseMode.collections)),
           actions: [
             Center(child: CountBadge(paged: _paged)),
-            HideReadButton(value: _filter, onChanged: _setFilter),
+            ReadFilterButton(value: _filter, onChanged: _setFilter),
             const PosterSizeButton(),
             PinButton(current: Pin(
-              name: [widget.title, if (_filter == ReadFilter.hideRead) 'unread'].join(' · '),
+              name: [widget.title, if (_filter.shows != null) _filter.shows!].join(' · '),
               kind: 'collection', id: widget.collectionId, title: widget.title, filter: _filter.name,
             )),
             const FullscreenExit(),
@@ -216,24 +216,33 @@ class ClearFiltersButton extends StatelessWidget {
       IconButton(tooltip: 'Clear filters', icon: const Icon(Icons.filter_alt_off), onPressed: onPressed);
 }
 
-/// One-tap toggle in the app bar: "Hide read" (then highlighted as "Showing unread") / back to everything.
+/// The eye in the app bar, three-way (user, 2026-10-07): each tap goes All -> Hide read -> Hide unread -> All.
 /// In-progress books count as unread.
-class HideReadButton extends StatelessWidget {
-  const HideReadButton({super.key, required this.value, required this.onChanged});
+class ReadFilterButton extends StatelessWidget {
+  const ReadFilterButton({super.key, required this.value, required this.onChanged});
   final ReadFilter value;
   final ValueChanged<ReadFilter> onChanged;
   @override
   Widget build(BuildContext context) {
-    // icon only (user's call): crossed-out eye + accent tint while read items are hidden; the name is the tooltip
-    final hiding = value == ReadFilter.hideRead;
+    // icon only (user's call): accent-tinted while something is hidden - a crossed-out eye for read hidden, a tick for
+    // only read; the state and the next one are the tooltip
+    final on = value != ReadFilter.all;
     final accent = Theme.of(context).colorScheme.primary;
     return IconButton(
-      tooltip: hiding ? 'Read hidden (show read)' : 'Hide read',
-      isSelected: hiding,
-      color: hiding ? accent : null,
-      style: hiding ? IconButton.styleFrom(backgroundColor: accent.withValues(alpha: 0.16)) : null,
-      icon: Icon(hiding ? Icons.visibility_off : Icons.visibility),
-      onPressed: () => onChanged(hiding ? ReadFilter.all : ReadFilter.hideRead),
+      tooltip: switch (value) {
+        ReadFilter.all => 'Showing all (hide read)',
+        ReadFilter.hideRead => 'Read hidden (hide unread)',
+        ReadFilter.hideUnread => 'Unread hidden (show all)',
+      },
+      isSelected: on,
+      color: on ? accent : null,
+      style: on ? IconButton.styleFrom(backgroundColor: accent.withValues(alpha: 0.16)) : null,
+      icon: Icon(switch (value) {
+        ReadFilter.all => Icons.visibility,
+        ReadFilter.hideRead => Icons.visibility_off,
+        ReadFilter.hideUnread => Icons.task_alt,
+      }),
+      onPressed: () => onChanged(ReadFilter.values[(value.index + 1) % ReadFilter.values.length]),
     );
   }
 }

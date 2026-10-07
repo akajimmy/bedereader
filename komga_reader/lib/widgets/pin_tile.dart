@@ -28,6 +28,11 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
       return s == null
           ? api.books(libraryId: p.id, readStatus: status, size: size)
           : api.books(libraryId: p.id, readStatus: status, sort: s, size: size);
+    case 'collections' || 'readLists' when p.readFilter != ReadFilter.all:
+      // the lists with something matching, as the library screen shows them (Komga can't filter lists itself)
+      final r = await ListContents.matching(api, readLists: p.mode == 'readLists', libraryId: p.id,
+          filter: p.readFilter);
+      return {...r, 'content': (r['content'] as List).take(size).toList()};
     case 'collections':
       return api.collections(libraryId: p.id, size: size);
     case 'readLists':

@@ -12,6 +12,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 - **Downloads > Manage:** a series card's open / close arrow is at its left, away from the trash button.
 - **Downloads > Queue:** no "Finished this session" list - what's downloaded is in Manage.
+- **The eye is three-way, on every library screen**: each tap goes Show all → Hide read → Hide unread (only what
+  you've finished; in progress counts as unread, as before). It's now in the Read lists and Collections views too:
+  lists with nothing to show under the filter are left out, and their posters are made from what the filter shows -
+  a read list's first four books (read or not on Show all - a finished list used to show Komga's poster; unread or
+  read under the filter), a collection's first four matching series ("3 of 8 series unread"). Pins keep the filter.
 
 ## 1.3.0
 

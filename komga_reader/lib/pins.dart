@@ -19,7 +19,7 @@ class Pin {
   final String kind; // library | series | readlist | collection
   final String? id; // null = all libraries
   final String title; // the screen's own title (library / series / list name)
-  final String filter; // ReadFilter name: all | hideRead
+  final String filter; // ReadFilter name: all | hideRead | hideUnread
   final String? mode; // libraries: series | books | collections | readLists
   final String? sort; // libraries: sort key
 

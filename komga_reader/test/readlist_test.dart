@@ -86,11 +86,11 @@ void main() {
     // the count read from the badge itself, not any "5" on screen (test audit, 2026-09-30)
     Finder badge(String n) => find.descendant(of: find.byType(CountBadge), matching: find.text(n));
     expect(badge('5'), findsOneWidget); // all 5 books
-    await tester.tap(find.byTooltip('Hide read'));
+    await tester.tap(find.byTooltip('Showing all (hide read)'));
     await tester.pump();
     await tester.pump();
     expect(badge('3'), findsOneWidget); // 2 unread + 1 in progress
-    expect(tester.getTopLeft(badge('3')).dx < tester.getTopLeft(find.byTooltip('Read hidden (show read)')).dx, isTrue);
+    expect(tester.getTopLeft(badge('3')).dx < tester.getTopLeft(find.byTooltip('Read hidden (hide unread)')).dx, isTrue);
   });
 
   // test audit, 2026-09-30: every fake answered in one page, so paging was never exercised

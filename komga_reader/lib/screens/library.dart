@@ -150,6 +150,10 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
             sort: _sortParam, page: page, size: size),
         BrowseMode.books => api.books(libraryId: _libraryId, readStatus: _filter.api,
             sort: _sortParam, page: page, size: size),
+        BrowseMode.collections || BrowseMode.readLists when _filter != ReadFilter.all => page > 0
+            ? Future.value(const {'content': [], 'last': true}) // (all of them came as the first page)
+            : ListContents.matching(api, readLists: _mode == BrowseMode.readLists, libraryId: _libraryId,
+                filter: _filter),
         BrowseMode.collections => api.collections(libraryId: _libraryId, page: page, size: size),
         BrowseMode.readLists => api.readLists(libraryId: _libraryId, page: page, size: size),
       };
@@ -188,7 +192,8 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
 
   @override
   Widget build(BuildContext context) {
-    final filterable = _mode == BrowseMode.series || _mode == BrowseMode.books;
+    // the eye in every view (user, 2026-10-07); sorting for series and books only (Komga sorts no lists)
+    final sortable = _mode == BrowseMode.series || _mode == BrowseMode.books;
     return SideMenuFrame(api: api, onSignOut: widget.onSignOut, page: (context, docked) =>
         selectionScope(_sel, (context) => Scaffold(
       key: _scaffold,
@@ -210,9 +215,8 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
         ),
         actions: [
           Center(child: CountBadge(paged: _paged)),
-          if (filterable)
-            HideReadButton(value: _filter, onChanged: (f) { _filter = f; _load(); }),
-          if (filterable)
+          ReadFilterButton(value: _filter, onChanged: (f) { _filter = f; _load(); }),
+          if (sortable)
             // Sort: pick a field (it starts in its natural direction), then flip the direction below the divider.
             PopupMenuButton<String>(
               tooltip: 'Sort: ${_sortLabel(_sortKey)}, ${_dirLabel(_sortKey, _desc)}',
@@ -239,13 +243,13 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
                       child: Text(_dirLabel(_sortKey, d))),
               ],
             ),
-          if (filterable && _filtered) ClearFiltersButton(onPressed: _clearFilters),
+          if (_filtered) ClearFiltersButton(onPressed: _clearFilters),
           if (_mode == BrowseMode.books) SelectButton(selection: _sel),
           const PosterSizeButton(),
           PinButton(current: Pin(
-            name: [_libraryName, _modeLabel(_mode), if (filterable && _filter == ReadFilter.hideRead) 'unread'].join(' · '),
+            name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!].join(' · '),
             kind: 'library', id: _libraryId, title: _libraryName,
-            filter: filterable ? _filter.name : 'all', mode: _mode.name, sort: filterable ? '$_sortKey:${_desc ? 'desc' : 'asc'}' : null,
+            filter: _filter.name, mode: _mode.name, sort: sortable ? '$_sortKey:${_desc ? 'desc' : 'asc'}' : null,
           )),
           IconButton(tooltip: 'Search', icon: const Icon(Icons.search),
               onPressed: () => _push(SearchScreen(api: api, libraryId: _libraryId,
@@ -296,13 +300,11 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
         return bookTile(context, api, it, autofocus: first, onChanged: _refresh, selection: _sel,
             onOpen: () => _push(readerFor(api, it, skipRead: _filter == ReadFilter.hideRead)));
       case BrowseMode.collections:
-        return PosterTile(
-          api: api, autofocus: first, imageUrl: api.collectionThumb(it['id']), title: it['name'] as String,
-          subtitle: '${(it['seriesIds'] as List?)?.length ?? 0} series',
+        return CollectionTile(api: api, collection: it, autofocus: first, filter: _filter,
           onOpen: () => _push(SeriesListScreen(api: api, title: it['name'] as String, collectionId: it['id'] as String)),
         );
       case BrowseMode.readLists:
-        return ReadListTile(api: api, readList: it, autofocus: first,
+        return ReadListTile(api: api, readList: it, autofocus: first, filter: _filter,
             onOpen: () => _push(ReadListScreen(api: api, readList: it)),
             onMenu: () => showReadListActions(context, api, it, onChanged: _refresh));
     }
