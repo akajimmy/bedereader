@@ -1,6 +1,9 @@
 /// EPUB reading progress through Komga's Readium progression (user, 2026-10-05: "Komga's EPUB position"): the
 /// same place Komga's own web reader keeps, so either picks up where the other stopped. Komga turns a saved
-/// progression into the book's read progress (its page = the position number), which is what the posters show.
+/// progression into the book's read progress, which is what the posters show - its page is NOT the position number
+/// but how far through the book times Komga's own page count for it (the book's media.pagesCount): The Dispossessed
+/// saved at position 233 of 748 (31%) had page 95 of 305 (checked in Komga's database, 2026-10-06; taking the page
+/// for a position opened it at 12% offline - [komgaEpubPage], [EpubProgress.load]).
 library;
 
 import 'dart:math' as math;
@@ -41,6 +44,13 @@ Future<Map<String, String>> epubDevice() async {
 
 const _deviceKey = 'device.id';
 
+/// Komga's read-progress page for a place [total] (0..1) through an EPUB it counts [pagesCount] pages in - what it
+/// makes of a saved progression itself (page 95 of 305 for 31%), from 1. Null without a page count.
+int? komgaEpubPage(double? total, int? pagesCount) {
+  if (total == null || pagesCount == null || pagesCount < 1) return null;
+  return (total * pagesCount).round().clamp(1, pagesCount);
+}
+
 /// Where Komga has a book now: its saved place ([path] null: none - not started, or marked unread) and whether it's
 /// marked read. What the reader compares, before a save and on coming back to the app, with what it last loaded,
 /// saved or accepted: different = another device moved the book on (as the comic reader does with pages).
@@ -76,7 +86,8 @@ class EpubProgress {
   }
 
   /// Where to open: the saved progression, else the read progress's page (a book read up to a page elsewhere, by a
-  /// reader that doesn't save progressions) through the positions; null for a book not started.
+  /// reader that doesn't save progressions): that far through the book ([komgaEpubPage]'s other way), at the position
+  /// there; null for a book not started.
   Future<EpubLocation?> load(Map<String, dynamic> book) async {
     final saved = await api.epubProgression(bookId);
     final loc = saved?['locator'] as Map?;
@@ -88,9 +99,26 @@ class EpubProgress {
     if (page == null || page < 1) return null;
     final all = await positions();
     if (all.isEmpty) return null;
-    final p = all[math.min(page, all.length) - 1] as Map;
+    final count = (book['media']?['pagesCount'] as num?)?.toInt();
+    final Map p;
+    if (count != null && count > 0) {
+      // the position whose place in the book is nearest the page's
+      final want = (page / count).clamp(0.0, 1.0);
+      p = all.cast<Map>().reduce((a, b) => (_total(b, all) - want).abs() < (_total(a, all) - want).abs() ? b : a);
+    } else {
+      p = all[math.min(page, all.length) - 1] as Map; // no page count to go by: the page as a position
+    }
     return EpubLocation(pathOf(p['href'] as String),
         ((p['locations'] as Map?)?['progression'] as num?)?.toDouble() ?? 0);
+  }
+
+  /// How far through the book position [p] is: its totalProgression, else its number among [all].
+  static double _total(Map p, List<dynamic> all) {
+    final at = p['locations'] as Map?;
+    final t = (at?['totalProgression'] as num?)?.toDouble();
+    if (t != null) return t;
+    final n = (at?['position'] as num?)?.toInt() ?? 1;
+    return (n - 1) / math.max(1, all.length);
   }
 
   /// Where Komga has the book now (its saved progression, and the book's read state). Throws if Komga can't say.

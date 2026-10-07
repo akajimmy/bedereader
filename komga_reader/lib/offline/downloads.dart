@@ -545,6 +545,12 @@ class Downloads extends ChangeNotifier {
       final epub = book['media']?['mediaProfile'] == 'EPUB';
       final pages = epub ? const <dynamic>[] : await api.pages(job.bookId);
       final positions = epub ? await api.epubPositions(job.bookId) : null;
+      final unsent = s.progress[job.bookId]?['synced'] == false;
+      final placeHere = !epub
+          ? null
+          : unsent && s.books[job.bookId]?['epubProgression'] != null
+              ? s.books[job.bookId]!['epubProgression']
+              : await api.epubProgression(job.bookId);
       job.pagesTotal = epub ? 1 : pages.length;
 
       // room? (Komga reports page sizes; the book's file size as a fallback)
@@ -595,6 +601,10 @@ class Downloads extends ChangeNotifier {
         if (nextKnown) 'nextId': nextId,
         if (epub) 'epubFile': 'book.epub',
         if (epub) 'positions': positions,
+        // the exact place, to open at offline (the read progress page alone is only as near as Komga's page count:
+        // opened from it, a book left at 31% came up at 12% - Windows, build 79). A place read here offline and not
+        // sent yet is kept over Komga's.
+        if (epub && placeHere != null) 'epubProgression': placeHere,
       };
       await s.put(job.bookId, entry);
 
