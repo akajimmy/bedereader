@@ -49,6 +49,10 @@ class EpubReaderScreen extends StatefulWidget {
   /// Where the book's files come from (default: Komga) - the downloaded file offline.
   final EpubSource? source;
 
+  /// Forgets the closing saves still on their way (tests: each starts with none).
+  @visibleForTesting
+  static void forgetClosingSaves() => _EpubReaderScreenState._closingSaves.clear();
+
   /// The page's left / right margin at [width]: the setting's, or more on a wide screen, where lines stop at the
   /// setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
   static double sideMargin(EpubPrefs e, double width) =>
@@ -157,6 +161,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (_screenHeld) keepScreenOn(false);
     _life?.dispose();
     _saveNow(ask: false); // closing: the place goes now, not after the settle time (not over another device's)
+    // the book opened again before this lands waits for it - else it loaded the place before, and this save then
+    // looked like another device's (EPUB review R8)
+    final id = widget.book['id'] as String, closing = _saves;
+    _closingSaves[id] = closing;
+    closing.whenComplete(() {
+      if (identical(_closingSaves[id], closing)) _closingSaves.remove(id);
+    });
     _book?.removeListener(_onBook);
     _book?.dispose();
     _pc.dispose();
@@ -198,6 +209,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       // where reading stopped (Komga's progression, shared with its web reader); a book not started: the start
       if (_online) {
         try {
+          await _closingSaves[widget.book['id']]?.timeout(const Duration(seconds: 20), onTimeout: () {});
           final at = await _progress.load(widget.book);
           final i = at == null ? -1 : info.spine.indexOf(at.path);
           if (i >= 0) {
@@ -268,13 +280,16 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final path = b.info.spine[_chapter], progression = at.position / length, total = b.progression(at);
     // one at a time, in order; one queued before the reader went to another device's place is dropped (as comics)
     final went = _wentElsewhere;
-    _saves = _saves.then((_) => went == _wentElsewhere ? _save(path, progression, total, ask: ask) : null);
+    _saves = _saves.then((_) => went == _wentElsewhere ? _save(path, progression, total, at, ask: ask) : null);
   }
 
   // ---- the book moved on on another device while it was open here (as the comic reader does with pages - user,
   // 2026-10-05: read on the PC, then the tablet, left open on that book, saved its old page over it). Before a save,
   // and on coming back to the app, the reader asks Komga where the book is; if that isn't what this reader last
   // loaded, saved or accepted, another device moved it, and it asks: Stay here / Go there.
+
+  /// Each book's save from its last closing, while it's on its way (the book opened again waits for it).
+  static final Map<String, Future<void>> _closingSaves = {};
 
   EpubKomgaPlace? _known; // Komga's place as this reader last loaded, saved or accepted (null: not known yet)
   Future<void> _saves = Future.value();
@@ -298,18 +313,47 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
   }
 
-  Future<void> _save(String path, double progression, double total, {required bool ask}) async {
+  Future<void> _save(String path, double progression, double total, EpubPosition at, {required bool ask}) async {
     final moved = await _movedElsewhere();
     if (moved != null) {
       if (!ask || !mounted) return; // closing: theirs stands
       if (!await _askAboutElsewhere(moved)) return; // gone to theirs: nothing of this one's to save
     }
-    // a failed save is left: the next turn saves the newer place anyway (as with comics). Komga's place afterwards is
-    // this reader's own - read back, as Komga may change the book's read state with it
+    // a failed save isn't counted as saved: the next turn - or closing - saves it again (it was marked saved before
+    // it went, so closing skipped it - EPUB review R7)
     try {
       await _progress.save(path, progression, total);
+    } catch (_) {
+      if (_saved == at) _saved = null;
+      return;
+    }
+    // Komga's place now is this reader's own: noted as saved, then read back (Komga may change the read state with
+    // it) - a failed read-back left the place before, and the next save asked about this reader's own (R6)
+    _known = EpubKomgaPlace(path, progression, total, finished: false);
+    try {
       _known = await _progress.place();
     } catch (_) {}
+  }
+
+  /// Mark read / unread, in line with the saves: a save still waiting is dropped and one under way finishes first,
+  /// so the mark is the last word; the state Komga has afterwards is this reader's doing, not another device's.
+  /// (Done outside the queue, a pending save could land after the mark - the book back in progress - or ask about
+  /// this reader's own mark: EPUB review R4.)
+  Future<void> _markBook({required bool read}) {
+    _saveTimer?.cancel();
+    _moved = false; // the mark stands: not undone by a save on closing
+    _wentElsewhere++; // saves queued before it don't run after it
+    final id = widget.book['id'] as String;
+    final done = _saves.then((_) async {
+      read ? await widget.api.markRead(id) : await widget.api.markUnread(id);
+      try {
+        _known = await _progress.place();
+      } catch (_) {
+        _known = null; // learnt afresh at the next look
+      }
+    });
+    _saves = done.catchError((Object _) {});
+    return done;
   }
 
   /// Back in the app with the book open: has it moved on elsewhere meanwhile? In line with the saves.
@@ -1125,9 +1169,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     try {
       if (markRead) {
-        _moved = false; // read: closing doesn't save a place over it
-        await widget.api.markRead(id);
-        _known = null; // this reader's doing: not another device's (learnt afresh at the next look)
+        await _markBook(read: true); // read: closing doesn't save a place over it
       } else {
         _saveNow();
       }
@@ -1168,10 +1210,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final id = widget.book['id'] as String;
     final read = _completed;
     try {
-      read ? await widget.api.markUnread(id) : await widget.api.markRead(id);
-      _known = null; // this reader's doing: not another device's (learnt afresh at the next look)
-      _saveTimer?.cancel();
-      _moved = false; // the mark stands: not undone by a save on closing
+      await _markBook(read: !read);
       _markedRead = !read;
       final fresh = await widget.api.book(id).catchError((Object _) => null);
       if (mounted) setState(() => _bookNow = fresh ?? _bookNow);

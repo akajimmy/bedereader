@@ -1,4 +1,5 @@
 // EPUB progress through Komga's Readium progression (lib/epub/progress.dart) and the reader's use of it.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -51,12 +52,33 @@ class EpubKomga extends TestKomga {
       ];
 
   @override
-  Future<Map<String, dynamic>?> epubProgression(String bookId) async => saved;
+  Future<Map<String, dynamic>?> epubProgression(String bookId) async {
+    if (failReadBack) {
+      failReadBack = false;
+      throw KomgaUnreachable(baseUrl);
+    }
+    return saved;
+  }
+
+  final log = <String>[]; // what reached Komga, in order: 'put', 'read', 'unread'
+  Completer<void>? gate; // set: a save waits here (on its way) until it's completed
+  bool failNextPut = false, failReadBack = false; // one-off failures
+  bool failReadBackAfterPut = false; // the next read of the place, after a save, fails
 
   @override
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
+    if (gate != null) await gate!.future;
+    if (failNextPut) {
+      failNextPut = false;
+      throw KomgaUnreachable(baseUrl);
+    }
     puts.add(progression);
+    log.add('put');
     saved = progression; // Komga keeps it: what the next look sees
+    if (failReadBackAfterPut) {
+      failReadBackAfterPut = false;
+      failReadBack = true;
+    }
   }
 
   bool completed = false; // the book's read state on Komga
@@ -68,7 +90,15 @@ class EpubKomga extends TestKomga {
   @override
   Future<void> markRead(String bookId) async {
     marked.add(bookId);
+    log.add('read');
     completed = true;
+  }
+
+  @override
+  Future<void> markUnread(String bookId) async {
+    log.add('unread');
+    completed = false;
+    saved = null;
   }
 
   @override
@@ -82,6 +112,7 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    EpubReaderScreen.forgetClosingSaves(); // (a test that closed with a question up leaves its save waiting)
   });
 
   test("where to open: the saved progression (Komga's full-URL href made a path in the book)", () async {
@@ -276,6 +307,69 @@ void main() {
     await tester.pumpWidget(const SizedBox()); // the book closed with the question up
     await run(tester, const Duration(milliseconds: 300));
     expect(api.puts, isEmpty, reason: 'closing never saves over another device\'s place');
+  });
+
+  // ---- the reader's own saves and marks in one queue (EPUB review 2026-10-06, R4, R6-R8)
+
+  Future<void> markReadFromControls(WidgetTester tester) async {
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pump();
+    await tester.tap(find.byTooltip('Mark read'));
+    await tester.pump();
+  }
+
+  testWidgets('R4: Mark read while a save is on its way waits for it - the mark is the last word, and no "another '
+      'device" question about it', (tester) async {
+    final api = await open(tester);
+    api.gate = Completer<void>();
+    await turnAndSettle(tester); // the save goes - and is held on its way
+    await markReadFromControls(tester);
+    api.gate!.complete();
+    await run(tester, const Duration(seconds: 2));
+    expect(api.log, ['put', 'read'], reason: 'the save lands first, then the mark');
+    await turnAndSettle(tester);
+    expect(find.text('Finished on another device'), findsNothing);
+  });
+
+  testWidgets('R7: a save that failed is sent again on closing (it counted as saved, so closing skipped it)',
+      (tester) async {
+    final api = await open(tester);
+    api.failNextPut = true;
+    await turnAndSettle(tester);
+    expect(api.puts, isEmpty, reason: 'that save failed');
+    await tester.pumpWidget(const SizedBox()); // closing
+    await run(tester, const Duration(milliseconds: 500));
+    expect(api.puts.length, 1, reason: 'closing saved the place');
+  });
+
+  testWidgets("R6: a save that went through, then couldn't be read back - the next save doesn't ask about this "
+      "reader's own place", (tester) async {
+    final api = await open(tester);
+    api.failReadBackAfterPut = true;
+    await turnAndSettle(tester);
+    expect(api.puts.length, 1);
+    await turnAndSettle(tester);
+    expect(find.text('Read on another device'), findsNothing);
+    expect(api.puts.length, 2);
+  });
+
+  testWidgets('R8: closed and opened again before the closing save landed - the reopened book waits for it, and '
+      "doesn't take it for another device's", (tester) async {
+    final api = await open(tester);
+    await turnAndSettle(tester);
+    await turnAndSettle(tester); // saved once; this one's settle is cut short by closing
+    api.gate = Completer<void>();
+    await tester.tapAt(const Offset(750, 600));
+    await run(tester, const Duration(milliseconds: 300));
+    await tester.pumpWidget(const SizedBox()); // closing: its save is held on the way
+    await tester.pump();
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(key: UniqueKey(), api: api,
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
+    await run(tester, const Duration(milliseconds: 300));
+    api.gate!.complete(); // the closing save lands
+    await run(tester, const Duration(seconds: 2));
+    await turnAndSettle(tester);
+    expect(find.text('Read on another device'), findsNothing);
   });
 }
 
