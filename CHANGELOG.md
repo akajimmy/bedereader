@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **The Page corner setting's description was out of date**: it still said EPUBs show the pages left in the chapter.
+  It now reads "The page you're on, "12 / 36"" - what both comics and EPUBs show.
+
 ## 1.3.0
 
 ### Build 91 - 2026-10-07
