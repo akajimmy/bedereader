@@ -122,7 +122,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final r = AppSettings.instance.display.rotation;
     if (r == _rotation) return;
     _rotation = r;
-    holdOrientation(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape); // (both ways up of it)
+    OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
   }
 
   @override
@@ -166,7 +166,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     AppSettings.instance.readerClosed();
     Downloads.instance.readerClosed();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (_rotation != Rotation.auto) SystemChrome.setPreferredOrientations(const []); // a lock ends with the book
+    if (_rotation != Rotation.auto) OrientationLock.instance.release(); // a lock ends with the book
     _awakeTimer?.cancel();
     _cornerTimer?.cancel();
     for (final t in _prefetchTimers) {

@@ -175,7 +175,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _settings.removeListener(_onSettings);
     fullscreen.removeListener(_onFullscreen);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (_rotation != Rotation.auto) SystemChrome.setPreferredOrientations(const []); // a lock ends with the book
+    if (_rotation != Rotation.auto) OrientationLock.instance.release(); // a lock ends with the book
     if (_screenHeld) keepScreenOn(false);
     _pc?.dispose();
     _disposeScrolls();
@@ -195,7 +195,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final r = _settings.display.rotation;
     if (r == _rotation) return;
     _rotation = r;
-    holdOrientation(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape); // (both ways up of it)
+    OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
   }
 
   void _onSettings() {

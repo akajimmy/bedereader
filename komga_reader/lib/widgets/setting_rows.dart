@@ -288,13 +288,14 @@ class Choice<T> {
 /// A choice between a few options, as compact segmented buttons in the row.
 class SegmentRow<T> extends StatelessWidget {
   const SegmentRow({super.key, required this.title, this.subtitle, required this.choices, required this.value,
-      required this.onChanged, this.enabled = true});
+      required this.onChanged, this.enabled = true, this.onReselect});
   final bool enabled; // off: greyed out, showing the value (a series following the defaults)
   final String title;
   final String? subtitle;
   final List<Choice<T>> choices;
   final T value;
   final ValueChanged<T> onChanged;
+  final ValueChanged<T>? onReselect; // the choice in force tapped again (Rotation: turns the lock over)
 
   /// How wide the buttons come out: every segment is as wide as the widest (its text, or an icon), plus padding
   /// and borders.
@@ -364,7 +365,9 @@ class SegmentRow<T> extends StatelessWidget {
               ),
           ],
           selected: {value},
-          onSelectionChanged: enabled ? (v) => onChanged(v.first) : null,
+          // a tap on the selected one empties the selection: that's the re-tap (it stays selected)
+          emptySelectionAllowed: onReselect != null,
+          onSelectionChanged: enabled ? (v) => v.isEmpty ? onReselect?.call(value) : onChanged(v.first) : null,
         );
   }
 }

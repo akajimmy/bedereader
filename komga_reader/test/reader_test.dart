@@ -13,6 +13,7 @@ import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/display_panel.dart';
 import 'package:komga_reader/widgets/night.dart';
 import 'package:komga_reader/widgets/reader_clock.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1818,17 +1819,19 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  /// Records the orientation requests: Flutter's (SystemChrome) and the app's own Android one (the screen channel).
-  (List<Object?>, List<Object?>) recordOrientation(WidgetTester tester) {
-    final flutter = <Object?>[], android = <Object?>[];
+  /// Records the orientation requests (SystemChrome's); the tablet's way up now, as the screen channel tells it, is
+  /// [wayUp] - and how often it was asked.
+  (List<Object?>, List<int>) recordOrientation(WidgetTester tester, String Function() wayUp) {
+    final requests = <Object?>[], asked = [0];
     final m = tester.binding.defaultBinaryMessenger;
     m.setMockMethodCallHandler(SystemChannels.platform, (call) async {
-      if (call.method == 'SystemChrome.setPreferredOrientations') flutter.add(call.arguments);
+      if (call.method == 'SystemChrome.setPreferredOrientations') requests.add(call.arguments);
       return null;
     });
     m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), (call) async {
-      if (call.method == 'orientation') android.add(call.arguments);
-      return null;
+      if (call.method != 'currentWayUp') return null;
+      asked[0]++;
+      return wayUp();
     });
     final s = AppSettings.instance;
     addTearDown(() {
@@ -1836,34 +1839,65 @@ void main() {
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
-    return (flutter, android);
+    return (requests, asked);
   }
 
-  testWidgets('rotation (Android): a lock holds while the book is open - still turning over with the tablet (the sensor '
-      'orientations: Flutter\'s "user" ones lost the 180° flip - user, 2026-10-05) - and ends with it', (tester) async {
-    final (flutter, android) = recordOrientation(tester);
+  testWidgets("rotation: a lock holds exactly one way up - the way the tablet is held when it starts - chosen again "
+      "it turns over (to read upside down on purpose, user 2026-10-07); the tablet turning doesn't move it; it ends "
+      'with the book', (tester) async {
+    var wayUp = 'reversePortrait'; // the tablet held upside down as the book opens
+    final (requests, _) = recordOrientation(tester, () => wayUp);
     final s = AppSettings.instance;
     s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await openReader(tester);
-    expect(android.last, 'sensorPortrait');
+    await tester.pump();
+    expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'held as it was held: upside down');
+
+    await OrientationLock.instance.flip(); // Portrait tapped again
+    expect(requests.last, ['DeviceOrientation.portraitUp']);
+
+    wayUp = 'landscape';
     s.setDisplay(s.display.copyWith(rotation: Rotation.landscape)); // changed mid-book (the Reader panel)
     await tester.pump();
-    expect(android.last, 'sensorLandscape');
+    await tester.pump();
+    expect(requests.last, ['DeviceOrientation.landscapeLeft']);
+    await OrientationLock.instance.flip();
+    expect(requests.last, ['DeviceOrientation.landscapeRight']);
+
     await tester.pumpWidget(const SizedBox());
-    expect(flutter.last, isEmpty); // closed: the app follows the device again
+    expect(requests.last, isEmpty, reason: 'closed: the app follows the device again');
+    expect(OrientationLock.instance.held, isFalse);
   });
 
-  testWidgets("rotation (Windows and the rest): Flutter's own request, both ways up", (tester) async {
+  testWidgets("rotation (Windows and the rest): one way up, the usual one; the way up isn't asked", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final (flutter, android) = recordOrientation(tester);
+    final (requests, asked) = recordOrientation(tester, () => 'reversePortrait');
     final s = AppSettings.instance;
     s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await openReader(tester);
-    expect(flutter.last, ['DeviceOrientation.portraitUp', 'DeviceOrientation.portraitDown']);
-    expect(android, isEmpty);
+    await tester.pump();
+    expect(requests.last, ['DeviceOrientation.portraitUp']);
+    expect(asked.single, 0);
     await tester.pumpWidget(const SizedBox());
     debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets("the Rotation setting: tapping the lock in force again turns it over (a lock held), Auto again doesn't",
+      (tester) async {
+    final (requests, _) = recordOrientation(tester, () => 'portrait');
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    await OrientationLock.instance.hold(portrait: true, landscape: false); // as a book does
+    addTearDown(OrientationLock.instance.release);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
+        listenable: s, builder: (context, _) => rotationRow(s)))));
+    expect(requests.last, ['DeviceOrientation.portraitUp']);
+    await tester.tap(find.text('Portrait'));
+    await tester.pump();
+    expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'turned over');
+    expect(s.display.rotation, Rotation.portrait, reason: 'still the Portrait lock');
+    expect(find.textContaining('tap Portrait again'), findsOneWidget);
   });
 }
 
