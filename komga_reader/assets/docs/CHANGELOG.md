@@ -15,6 +15,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   sequel instead of the list's next book). They follow the read list now, and the next book opens still in it. Opened
   with read books hidden, they also skip books already read, as comics do.
 
+**Changed**
+- **EPUBs' page corner shows the book's page, "112 / 342"**, the same as comics' "12 / 36" - it showed the pages
+  left in the chapter and the %. Until the whole book has been counted (a moment after opening a long one) it shows
+  the %.
+
 ## 1.3.0
 
 ### Build 88 - 2026-10-07
