@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 90 - 2026-10-07
+
 **Changed**
 - **Comics and EPUBs now open in the same reader** (the second step of making them one). For EPUBs that brings:
   - **Next book and Previous book work as for comics**: Previous goes back through the books read in this visit,
@@ -25,8 +29,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUBs with "Book's formatting" off no longer indent every paragraph.** A paragraph's first line is
   indented only where the book itself indents it, and by the book's own amount. A book that marks its paragraphs
   with a space between them instead keeps that space (taking out both made the paragraphs run together).
-
-## 1.3.0
 
 ### Build 89 - 2026-10-07
 
