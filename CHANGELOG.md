@@ -9,6 +9,20 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Comics and EPUBs now open in the same reader** (the second step of making them one). For EPUBs that brings:
+  - **Next book and Previous book work as for comics**: Previous goes back through the books read in this visit,
+    and Next retraces them; past those, the book before or after in the read list or series.
+  - **A comic and an EPUB go on to each other in place** - in a read list that mixes them, Next book opens the other
+    kind straight away, in the same reader.
+  - **Night mode and Delete book** in the top bar.
+  - **The way back on the slider**: after a jump (the slider, Contents or a link) a mark shows where you were, and
+    a drag near it snaps back to it.
+  - **The same end card, position text and page corner as comics**: the end card says "End of book"; over the
+    slider the chapter's name is on top and the book's and chapter's pages below, each tapped to hide or show it;
+    the "112 / 342" corner is the comics' grey pill, bottom right.
+  - **Retry** when a book can't be opened.
+
 ## 1.3.0
 
 ### Build 89 - 2026-10-07
