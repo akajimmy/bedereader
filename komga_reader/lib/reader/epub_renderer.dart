@@ -25,7 +25,6 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
-import '../widgets/setting_rows.dart';
 import 'position_row.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
@@ -653,20 +652,12 @@ class EpubRenderer extends Renderer {
     if (!_disposed && _book == b) _goTo(ch, at);
   }
 
-  /// The Aa panel: the EPUB settings while reading; the page changes behind it as they're set.
+  /// The Aa panel, "eBook settings": what's changed while reading ([epubPanelRows]); the page changes behind it as
+  /// they're set.
   Future<void> _settingsPanel() async {
     // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live;
-    // the controls stay up behind it, as with comics. This device's reading settings below the book's, as in the
-    // comic reader's panel (user, 2026-10-06: the panels as the comics')
-    await showReaderPanelFrame(host.context, title: 'Text and page', children: (c, s) => [
-          ...epubSettingRows(c, s.epub, s.setEpub),
-          SettingsGroup(title: 'This device', children: [
-            ...brightnessRows(s, compact: true),
-            ...nightRows(s),
-            if (canRotate) rotationRow(s, BookKind.ebooks),
-            screenOnRow(s),
-          ]),
-        ]);
+    // the controls stay up behind it, as with comics (user, 2026-10-06: the panels as the comics')
+    await showReaderPanelFrame(host.context, title: 'eBook settings', children: epubPanelRows);
   }
 
   // ---- the bars
@@ -679,7 +670,7 @@ class EpubRenderer extends Renderer {
         BarButton(_contentsNode,
             barIcon(node: _contentsNode, icon: Icons.toc, label: 'Contents', onPressed: _contents)),
         BarButton(_settingsNode, barIcon(node: _settingsNode, icon: Icons.text_fields,
-            label: 'Text and page settings', onPressed: _settingsPanel)),
+            label: 'eBook settings', onPressed: _settingsPanel)),
       ];
 
   // ---- what's said

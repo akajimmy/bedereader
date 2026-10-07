@@ -73,12 +73,12 @@ void main() {
     addTearDown(tester.view.resetViewPadding);
     everyRowShown();
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
-        initialPage: SettingsPage.reader)));
+        initialPage: SettingsPage.comics)));
     await tester.pumpAndSettle();
     asInRelease();
     final barTop = 720.0 - 72 / tester.view.devicePixelRatio;
     Focus.of(tester.element(find.descendant(of: find.byType(SegmentedButton<PageTurn>), matching: find.byType(Text))
-        .first)).requestFocus(); // the page's first row
+        .first)).requestFocus(); // a row near the top
     await tester.pumpAndSettle();
     final passed = <String>[];
     for (var i = 0; i < 30; i++) {
@@ -109,7 +109,8 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
       await tester.pumpAndSettle();
     }
-    expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', 'Dark', "Book's"]); // (Alignment's first, 2026-10-07)
+    // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment and Paragraphs open on Book's)
+    expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', "Book's", "Book's"]);
   });
 
   testWidgets("rows whose controls changed while the page was open (keys loaded or edited): Up / Down still go to the "

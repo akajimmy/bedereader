@@ -33,6 +33,8 @@ class PinnedHome extends HomeServer with ClientSettingsStore {
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       onePage([]);
+  @override
+  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'}; // Settings > Server and sync's status
 }
 
 void main() {
@@ -227,7 +229,7 @@ void main() {
       expect((await SharedPreferences.getInstance()).getString('pins.device'), isNull);
     });
 
-    testWidgets('Settings > Library & Home: the switch; back on with pins only this device has asks first, naming '
+    testWidgets('Settings > Server and sync (moved from Library & Home, 2026-10-07): the switch; back on with pins only this device has asks first, naming '
         'them - Cancel keeps it off', (tester) async {
       setView(tester, const Size(1280, 1600));
       final api = noNetwork(PinnedHome.new)..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
@@ -238,7 +240,7 @@ void main() {
       Pins.instance.add(xb);
       await tester.runAsync(pumpEventQueue);
       await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api, onSignOut: () {},
-          initialPage: SettingsPage.library)));
+          initialPage: SettingsPage.server)));
       await tester.pump();
       final row = find.widgetWithText(SwitchRow, 'Sync pins across devices');
       await tester.ensureVisible(row);

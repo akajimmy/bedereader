@@ -802,7 +802,7 @@ class ComicRenderer extends Renderer {
         if (seriesId != null)
           BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
               onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?))),
-        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune, label: 'Reader settings',
+        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune, label: 'Comic settings',
             onPressed: () => showReaderPanel(context,
                 seriesId: seriesId, seriesTitle: _book['seriesTitle'] as String?,
                 komgaDirection: _komgaDirection, bookFit: _bookFit,

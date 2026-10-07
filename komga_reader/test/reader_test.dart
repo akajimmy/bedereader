@@ -1414,7 +1414,7 @@ void main() {
       Future<void> openPanel(WidgetTester tester) async {
         await openLoaded(tester, pages: 3);
         await key(tester, LogicalKeyboardKey.enter); // controls
-        await tester.tap(find.byTooltip('Reader settings'));
+        await tester.tap(find.byTooltip('Comic settings'));
         await tester.pumpAndSettle();
       }
 
@@ -1509,7 +1509,7 @@ void main() {
         // the controls by a tap in the middle (OK on the end card presses its Next book)
         await tester.tapAt(Offset(tester.view.physicalSize.width / tester.view.devicePixelRatio / 2, 30));
         await tester.pump(const Duration(milliseconds: 400));
-        await tester.tap(find.byTooltip('Reader settings'));
+        await tester.tap(find.byTooltip('Comic settings'));
         await tester.pumpAndSettle();
         expect(find.text('This page'), findsNothing);
         expect(find.widgetWithText(OutlinedButton, 'Save page'), findsNothing);

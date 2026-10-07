@@ -99,13 +99,13 @@ class ReaderPrefs {
 }
 
 /// How a page change looks - not how it's triggered: tap, swipe and the arrows turn pages in all of them. Listed in
-/// the order shown (None, Wipe, Curl); the names are what's saved, so they stay as they were.
+/// the order shown (None, Slide, Curl); the names are what's saved, so they stay as they were.
 enum PageTurn { flip, swipe, curl }
 
 extension PageTurnLabel on PageTurn {
   String get label => switch (this) {
         PageTurn.flip => 'None',
-        PageTurn.swipe => 'Wipe',
+        PageTurn.swipe => 'Slide', // as eBooks' (user, 2026-10-07: it was "Wipe")
         PageTurn.curl => 'Curl',
       };
 }
