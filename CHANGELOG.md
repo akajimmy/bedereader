@@ -9,6 +9,17 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **With a remote, Up and Down in Settings and the readers' side panels skipped rows** - from a long row they jumped
+  past a shorter one under it (Remote and keys: "Show the controls" to "Zoom in"; the EPUB panel: Font to Line
+  spacing, Margins to Book's formatting). The fix for this in build 52 only ever worked in the test setup, never in
+  the installed app. Up and Down now go to the next row's first control, every time.
+
+**Changed**
+- **Settings: "Reader" is now "Comics", and "Books (EPUB)" is "eBooks"** - the two pages for the two kinds of book.
+- **EPUBs: the chapter's page over the slider reads "Ch. · Pg. 3/12"**, with no chapter number. The number was the
+  book's own file count, so it could say "Ch. 4" under a chapter named "Chapter One".
+
 ## 1.3.0
 
 ### Build 90 - 2026-10-07
@@ -26,9 +37,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
     slider the chapter's name is on top and the book's and chapter's pages below, each tapped to hide or show it;
     the "112 / 342" corner is the comics' grey pill, bottom right.
   - **Retry** when a book can't be opened.
-- **Settings: "Reader" is now "Comics", and "Books (EPUB)" is "eBooks"** - the two pages for the two kinds of book.
-- **EPUBs: the chapter's page over the slider reads "Ch. · Pg. 3/12"**, with no chapter number. The number was the
-  book's own file count, so it could say "Ch. 4" under a chapter named "Chapter One".
 - **EPUBs with "Book's formatting" off no longer indent every paragraph.** A paragraph's first line is
   indented only where the book itself indents it, and by the book's own amount. A book that marks its paragraphs
   with a space between them instead keeps that space (taking out both made the paragraphs run together).
