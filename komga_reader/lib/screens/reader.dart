@@ -1,31 +1,28 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
-import '../page_curl.dart';
-import '../page_image.dart';
+import '../reader/comic_renderer.dart';
 import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
 import '../reader/reader_slider.dart';
+import '../reader/renderer.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
-import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import '../widgets/native_poster.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
+
+export '../reader/comic_renderer.dart' show CurlLayer, trimPictures;
 
 /// Page reader: full screen on the chosen background (black, dark grey or white), follows the tablet's rotation
 /// (tilt for spreads).
@@ -39,6 +36,10 @@ import 'actions.dart';
 /// Touch: tap the left/right third to go back/forward, the middle for the controls; any tap off the controls hides
 /// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
 /// goes straight to Komga (no local copy).
+///
+/// The one Reader (user, 2026-10-07; reports\plan-reader-renderer-2026-10-07.md): the controls, the keys and taps,
+/// the book's progress and the moving between books are here; the pages themselves are the comic renderer's
+/// (lib/reader/comic_renderer.dart).
 class ReaderScreen extends StatefulWidget {
   /// Times the reader has been built (debug builds only; tests).
   @visibleForTesting
@@ -56,14 +57,13 @@ class ReaderScreen extends StatefulWidget {
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
 
-enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, pages, image, reader, nextBook, strip }
+enum _Ctl { close, night, fullscreen, read, delete, prevBook, slider, nextBook }
 
-class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderStateMixin, ReaderDevice<ReaderScreen> {
+class _ReaderScreenState extends State<ReaderScreen>
+    with TickerProviderStateMixin, ReaderDevice<ReaderScreen>
+    implements ReaderHost {
   late dynamic _book = widget.book;
-  List<dynamic> _pages = [];
-  PageLoader? _loader;
-  PageController? _pc;
-  int _index = 0;
+  late final ComicRenderer _comic = ComicRenderer(this)..addListener(_onRenderer);
   bool _menu = false; // controls shown
   final _scrubber = SliderScrub(); // the page picked on the slider, not jumped to yet (lib/reader/reader_slider.dart)
   int? get _scrub => _scrubber.value;
@@ -77,63 +77,55 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   int? _returnTo;
   int? _jumpingTo; // the page a slider jump is going to: its page change isn't a page turn
   int get _scrubOrigin => _returnTo ?? _index.clamp(0, _last);
-  int? _startAtEnd; // page to show from its bottom/right end (came back from the next page)
   bool _loading = true;
   bool _turned = false; // progress is only saved once a page has been turned in this visit
   int _openedAt = 0;
-  bool _zoomed = false; // pinch-zoomed in: page swiping is paused so a drag pans the page
-  final Set<int> _sideways = {}; // pages (fit height, wider than the screen) that a drag moves sideways
-  /// A page says whether a drag moves it sideways. It also says "no longer" from its dispose - while the framework is
-  /// unmounting it at the end of a frame, when setState isn't allowed - so the rebuild then waits for the frame to end
-  /// (missing-tests audit, 2026-09-30: debug builds asserted "widget tree was locked" two turns past a wide page).
-  void _setSideways(int i, bool pans) {
-    if (!(pans ? _sideways.add(i) : _sideways.remove(i))) return;
-    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
-      WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() {}); });
-    } else {
-      setState(() {});
-    }
-  }
-  double _wheelAcc = 0; // mouse wheel travel towards the next page turn
-  DateTime _lastWheelTurn = DateTime(0);
-  int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
   Timer? _saveTimer;
   Timer? _flashTimer;
   bool _flash = false; // the page number shows for a moment after a turn (setting: Show the page number after a turn)
-  final Map<int, ScrollController> _scrolls = {};
-  final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
-  final Map<int, void Function(Offset global)> _zoomers = {}; // double-tap zoom, per page (page_image.dart)
-  final Map<int, void Function(bool zoomIn)> _zoomSteps = {}; // zoom keys, per page (page_image.dart)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
   final FocusNode _sliderInner = FocusNode(canRequestFocus: false, skipTraversal: true); // the wrapper takes focus
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
 
+  @override
   Komga get api => widget.api;
-  int get _last => _pages.length - 1;
+  int get _index => _comic.index;
+  List<dynamic> get _pages => _comic.pages;
+  int get _last => _comic.last;
+  bool get _rtl => _comic.rtl;
   AppSettings get _settings => AppSettings.instance;
   String? get _seriesId => _book['seriesId'] as String?;
-  // the series' settings as they apply - with the fit for this book only (the top bar's fit button while the series
-  // follows the default layout) on top
-  ReaderPrefs get _prefs {
-    final p = _settings.prefsFor(_seriesId);
-    final f = _bookFit;
-    return f == null || p.ownLayout ? p : p.copyWith(fit: f);
+
+  // ---- what the renderer asks of the Reader (lib/reader/renderer.dart)
+
+  @override
+  TickerProvider get vsync => this;
+  @override
+  bool get controlsUp => _menu;
+  @override
+  bool get busy => _busy;
+  @override
+  int? get scrub => _scrub;
+  @override
+  int? get wayBack => _returnTo;
+  @override
+  void changed() => _onRenderer();
+  @override
+  void tap(double x) => _tap(x);
+  @override
+  void toggleControls() => _menu ? _hideControls() : _showControls();
+  @override
+  void turned(int place) => _pageTurned(place);
+  @override
+  void nextBook() => _nextBook();
+  @override
+  void jumpTo(int place) => _sliderJump(place);
+  @override
+  Widget endCard() => _endCard();
+
+  void _onRenderer() {
+    if (mounted) setState(() {});
   }
-
-  FitMode? _bookFit; // this book only, for now: not saved; a book opening goes back to the default (user, 2026-09-30)
-  Color get _bg => _prefs.background.colour; // the series' own, or the reading defaults'
-  Color _ink(double alpha) => _prefs.background.ink.withValues(alpha: alpha); // text on it
-
-  /// The series' reading direction in Komga (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON), fetched on open.
-  String? _komgaDirection;
-  String? _directionSeries; // which series _komgaDirection belongs to
-
-  /// Right to left: forced per series, or (on Auto) because Komga says so. Vertical/webtoon read as left to right.
-  bool get _rtl => switch (_prefs.direction) {
-        ReadingDirection.rtl => true,
-        ReadingDirection.ltr => false,
-        ReadingDirection.auto => _komgaDirection == 'RIGHT_TO_LEFT',
-      };
 
   @override
   void initState() {
@@ -141,10 +133,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     openDevice(); // the screen kept on, the rotation lock, the system bars, full screen (lib/reader/reader_device.dart)
     // back in the app (unlocked, switched back to): read further elsewhere meanwhile?
     _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
-    PageCurl.program().ignore(); // load the curl shader ahead of the first turn
-    _curlAnim
-      ..addListener(_onCurlTick)
-      ..addStatusListener((s) { if (s == AnimationStatus.completed) _endCurl(); });
     _visited.add(Map<String, dynamic>.from(_book as Map)); // the visit starts here
     _open(_book);
   }
@@ -153,23 +141,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   void dispose() {
     _saveTimer?.cancel();
     _flashTimer?.cancel();
-    _tapTimer?.cancel();
-    _curlAnim.dispose();
-    _curl?.dispose();
-    _curlShader?.dispose();
-    _curlMoved.dispose();
-    _idle?.complete(); // nothing left waiting
     closeDevice();
     _life?.dispose();
     // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
     deviceClosed();
-    _pc?.dispose();
-    _disposeScrolls();
+    _comic
+      ..removeListener(_onRenderer)
+      ..dispose();
     _keys.dispose();
     _sliderInner.dispose();
-    _stripScroll.dispose();
     for (final n in _ctl.values) {
       n.dispose();
     }
@@ -194,18 +176,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson()});
   }
 
-  void _disposeScrolls() {
-    for (final c in _scrolls.values) {
-      c.dispose();
-    }
-    _scrolls.clear();
-  }
-
-  ScrollController _scrollFor(int i) => _scrolls.putIfAbsent(i, ScrollController.new);
-
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
 
-  static String _titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();
+  static String _titleOf(dynamic b) => ComicRenderer.titleOf(b);
 
   int _openRun = 0; // each _open's number: an older one still loading doesn't take over
 
@@ -217,55 +190,25 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     setState(() { _loading = true; _menu = false; _openError = null; });
     try {
       final fresh = await api.book(book['id']) ?? book; // current progress from the server
-      final pages = await api.pages(book['id']);
-      if (pages.isEmpty) throw _NoPages();
-      final seriesId = fresh['seriesId'] as String?;
-      String? direction = _komgaDirection;
-      if (seriesId != null && seriesId != _directionSeries) {
-        try {
-          direction = (await api.oneSeries(seriesId))?['metadata']?['readingDirection'] as String?;
-        } catch (_) {
-          direction = null; // unknown: left to right
-        }
-      }
+      final prepared = await _comic.prepare(fresh as Map);
       if (!mounted || run != _openRun) return; // closed, or another book asked for since
-      _komgaDirection = direction;
-      _directionSeries = seriesId;
-      final rp = fresh['readProgress'];
-      final start = rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pages.length - 1);
-      // the last book's page view is still up (under the cover): its controllers go once the new one has replaced it
-      final oldPc = _pc, oldScrolls = List.of(_scrolls.values);
-      _scrolls.clear();
-      _clearThumbs();
-      final loader = PageLoader(api, fresh['id'] as String,
-          [for (var i = 0; i < pages.length; i++) (pages[i]['number'] ?? i + 1) as int]);
-      loader.around(start);
-      // the last book's page shapes (the curl drew the new book's first turn in them - #17) and a page left to
-      // open at its end (a later page with that number opened scrolled to its end - #22) go with it
-      _pageRects.clear();
-      _startAtEnd = null;
+      final start = ComicRenderer.startOf(fresh, prepared.pages.length);
+      _comic.show(fresh, prepared, start);
       setState(() {
-        _book = fresh; _pages = pages; _index = start; _loader = loader; _returnTo = null;
-        _openedAt = start; _turned = false; _zoomed = false; _bookFit = null;
+        _book = fresh; _returnTo = null;
+        _openedAt = start; _turned = false;
         _known[fresh['id'] as String] = _progressOf(fresh); // as Komga has it now: a change elsewhere is from here on
-        _pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
         _loading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        oldPc?.dispose();
-        for (final c in oldScrolls) {
-          c.dispose();
-        }
       });
       onOpened?.call();
       _keys.requestFocus();
     } catch (e, st) {
       if (!mounted || run != _openRun) return;
-      final empty = e is _NoPages;
+      final empty = e is NoPages;
       final message = empty
           ? '"${_titleOf(book)}" has no pages (Komga may need to analyse it again).'
           : couldnt('open "${_titleOf(book)}"', e, thing: 'book');
-      if (_pc == null) {
+      if (!_comic.opened) {
         // nothing to show: say so on the screen (a book with no pages: Close, or on to the next book)
         setState(() { _loading = false; _openError = (message, e, st); });
       } else {
@@ -306,21 +249,20 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   bool get _busy => _loading || _switching;
 
   // ---- progress: saved 1.5 s after the page settles, and on leaving
-  void _onPage(int i) {
+
+  /// The page view moved to [i] (from the renderer).
+  @override
+  void pageChanged(int i, {required bool curling}) {
     awake();
     final jump = i == _jumpingTo;
     _jumpingTo = null;
-    if (_startAtEnd != null && _startAtEnd != i) _startAtEnd = null; // (#22) only the page turned back to
     setState(() {
-      _index = i;
-      _zoomed = false;
       if (!jump || i == _returnTo) _returnTo = null; // read on from here, or back where it was
     });
-    if (i <= _last) _loader?.around(i);
     if (i >= _last - 1) _upNext().ignore(); // look up what's next before the end card shows (errors: shown there)
-    // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
+    // a curl moves the page view underneath as it starts: that counts once the curl completes (turned) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
-    if (_curl == null) _pageTurned(i);
+    if (!curling) _pageTurned(i);
   }
 
   /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
@@ -447,300 +389,27 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     setState(() => _book = {..._book, 'readProgress': finished
         ? {'page': _pages.length, 'completed': true}
         : page == null ? null : {'page': page, 'completed': false}});
+    _comic.bookChanged(_book as Map);
     _wentElsewhere++;
     _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
-    _finishCurlNow();
     final target = finished ? _pages.length : goTo! - 1; // finished: the end card, with the next book
     _openedAt = target;
-    _pc?.jumpToPage(target);
+    _comic.jumpTo(target);
     return false;
   }
 
-  // ---- navigation (the page after the last is the "end of book" card)
-  static const _turn = Duration(milliseconds: 180);
-
-  /// Forward: in fit width/height scroll on through the page first, then turn.
-  void _forward() {
-    if (_pc == null || _busy || _curlSettling) return;
-    if (_index >= _pages.length) { _nextBook(); return; }
-    if (_zoomed && (_steppers[_index]?.call(true) ?? false)) return; // zoomed in: pan along the page first
-    final c = _scrolls[_index];
-    if (_prefs.fit != FitMode.screen && c != null && c.hasClients) {
-      final p = c.position;
-      if (p.pixels < p.maxScrollExtent - 1) {
-        c.animateTo((p.pixels + p.viewportDimension * 0.85).clamp(0, p.maxScrollExtent), duration: _turn, curve: Curves.easeOut);
-        return;
-      }
-    }
-    _turnPage(next: true);
-  }
-
-  /// Back: scroll back through the page first; the previous page then opens at its end.
-  void _back() {
-    if (_pc == null || _busy || _curlSettling) return;
-    if (_zoomed && (_steppers[_index]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
-    final c = _scrolls[_index];
-    if (_prefs.fit != FitMode.screen && c != null && c.hasClients && c.position.pixels > 1) {
-      final p = c.position;
-      c.animateTo((p.pixels - p.viewportDimension * 0.85).clamp(0, p.maxScrollExtent), duration: _turn, curve: Curves.easeOut);
-      return;
-    }
-    if (_index == 0) return;
-    if (_prefs.fit != FitMode.screen) {
-      _scrolls.remove(_index - 1)?.dispose(); // fresh controller so the page lays out again from its end
-      _startAtEnd = _index - 1;
-    }
-    _turnPage(next: false);
-  }
-
-  /// One page on or back, in the chosen animation: Wipe (slide), Instant flip, or 3D page curl.
-  void _turnPage({required bool next}) {
-    if (_busy || _curlSettling) return;
-    final target = next ? _index + 1 : _index - 1;
-    if (target < 0 || target > _pages.length) return;
-    if (_curlMode) {
-      final page = _pageRect(next ? _index : target);
-      final grab = Offset(page.width, page.height * 0.72);
-      final start = next ? grab : Offset(PageCurl.gone(page.width), grab.dy);
-      if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
-        _animateCurl(complete: true);
-        return;
-      }
-      _pc!.jumpToPage(target); // couldn't snapshot the page: turn instantly
-    } else if (_settings.display.pageTurn == PageTurn.flip) {
-      _pc!.jumpToPage(target);
-    } else {
-      _pc!.animateToPage(target, duration: _turn, curve: Curves.easeOut);
-    }
-  }
-
-  // ---- taps: the side you read towards goes forward, the other back, the middle shows the controls ----------------
-  // With Double-tap to zoom on (fit screen, a page showing), a tap waits [_doubleTapWait] to see whether a second
-  // one follows near it: a double tap zooms in on that spot (again: back out), and no single tap happens.
-  static const _doubleTapWait = Duration(milliseconds: 250);
-  static const _doubleTapSlop = 60.0; // how far apart the two taps may be
-  Timer? _tapTimer;
-  Offset? _firstTap; // waiting for a possible second tap
-
-  void _onTapUp(TapUpDetails d, double width) {
-    final zoomer = _settings.display.doubleTapZoom && _prefs.fit == FitMode.screen ? _zoomers[_index] : null;
-    final waiting = _firstTap;
-    final pending = waiting != null && (_tapTimer?.isActive ?? false);
-    _tapTimer?.cancel();
-    _firstTap = null;
-    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) _tap(waiting.dx / width); // not a pair
-    if (zoomer == null) {
-      _tap(d.localPosition.dx / width);
-    } else if (pending && (d.localPosition - waiting).distance <= _doubleTapSlop) {
-      zoomer(d.globalPosition);
-    } else {
-      _firstTap = d.localPosition;
-      _tapTimer = Timer(_doubleTapWait, () {
-        _firstTap = null;
-        if (mounted && !_menu) _tap(d.localPosition.dx / width);
-      });
-    }
-  }
+  // ---- taps: the side you read towards goes forward, the other back, the middle shows the controls (a double tap
+  // to zoom is the renderer's)
 
   /// A single tap at [x] (0..1 across the screen). Tap zones follow the reading direction.
   void _tap(double x) {
     if (x < 0.33) {
-      _rtl ? _forward() : _back();
+      _rtl ? _comic.forward() : _comic.back();
     } else if (x > 0.67) {
-      _rtl ? _back() : _forward();
+      _rtl ? _comic.back() : _comic.forward();
     } else {
       _showControls();
     }
-  }
-
-  // ---- 3D page curl (Page turn animation; lib/page_curl.dart) ----------------------------------------------------
-  // A turn jumps the page view to the target page at once and draws the turning page over it from a snapshot:
-  // forward, this page curls away over the next; back, the previous page uncurls over this one (a snapshot of this
-  // page covers the view until then). Letting go before halfway springs back and jumps back.
-  final _pagesKey = GlobalKey(); // repaint boundary around the page view: the snapshots
-  late final AnimationController _curlAnim =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
-  _Curl? _curl;
-  // the curl moving (each animation tick, each drag move) repaints its own layer only - it rebuilt the whole reader
-  // ~23 times a turn, with a new shader each paint (code review 2026-10-05, #38)
-  final _curlMoved = ValueNotifier<int>(0);
-  ui.FragmentShader? _curlShader;
-  Size _area = Size.zero;
-  Offset? _dragStart;
-  final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
-
-  // ---- page processing waits out page turns (PageCanvas.idle) ----------------------------------------------------
-  bool _swiping = false; // the page view is sliding (a wipe, or a drag in Swipe mode)
-  Completer<void>? _idle;
-  bool get _turning => _swiping || _curl != null;
-
-  /// Completes once no turn is playing - when pages off screen may do their GPU processing.
-  Future<void> _whenIdle() => _turning ? (_idle ??= Completer<void>()).future : Future<void>.value();
-
-  void _maybeIdle() {
-    if (_turning) return;
-    final c = _idle;
-    _idle = null;
-    c?.complete();
-  }
-
-  bool _onPagesScroll(ScrollNotification n) {
-    if (n.depth != 0) return false; // a page's own scrolling (fit width/height), not the page view
-    if (n is ScrollStartNotification) _swiping = true;
-    if (n is ScrollEndNotification) {
-      _swiping = false;
-      _maybeIdle();
-    }
-    return false;
-  }
-
-  /// The page's image on screen - only it curls, not the bars around it. Unknown (the end card, still loading):
-  /// the whole area.
-  Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
-
-  bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
-
-  /// A horizontal drag curls the page - unless it's moving the page itself (zoomed, pinching, a sideways page).
-  bool get _curlDrag => _curlMode && !_zoomed && _fingers <= 1 && !_sideways.contains(_index) && _pc != null && !_menu;
-
-  /// Positions in reading-direction space (x from the right edge in a right-to-left book).
-  Offset _reading(Offset p) => _rtl ? Offset(_area.width - p.dx, p.dy) : p;
-
-  /// A screen position in [page]'s own coordinates, in reading direction (origin top-left; top-right for a
-  /// right-to-left book) - how the curl's geometry is worked out.
-  Offset _pagePoint(Offset screen, Rect page) =>
-      Offset(_rtl ? page.right - screen.dx : screen.dx - page.left, screen.dy - page.top);
-
-  ui.Image? _snapshot() {
-    final b = _pagesKey.currentContext?.findRenderObject();
-    if (b is! RenderRepaintBoundary || !b.hasSize) return null;
-    try {
-      return b.toImageSync(pixelRatio: MediaQuery.devicePixelRatioOf(context));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool _startCurl({required bool next, required Rect page, required Offset grab, required Offset finger}) {
-    final target = next ? _index + 1 : _index - 1;
-    if (target < 0 || target > _pages.length || _pc == null || _area.isEmpty) return false;
-    _finishCurlNow();
-    final now = _snapshot();
-    if (now == null) return false;
-    final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _index,
-        under: next ? null : now, pending: !next);
-    _curl = c;
-    _pc!.jumpToPage(target);
-    setState(() {});
-    if (!next) {
-      // the previous page is now in the view (under the cover): snapshot it to uncurl
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_curl != c || !c.pending) return;
-        final prev = _snapshot();
-        if (prev == null) { _endCurl(cancel: true); return; }
-        setState(() { c.sheet = prev; c.pending = false; });
-      });
-    }
-    return true;
-  }
-
-  void _animateCurl({required bool complete}) {
-    final c = _curl;
-    if (c == null) return;
-    final w = c.page.width;
-    c
-      ..completing = complete
-      ..animFrom = c.finger
-      ..animTo = c.forward == complete
-          ? Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
-          : c.grab; // flat on the page
-    _curlAnim.forward(from: 0);
-  }
-
-  void _onCurlTick() {
-    final c = _curl;
-    if (c == null) return;
-    c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!;
-    _curlMoved.value++;
-  }
-
-  /// A curl is playing out after the finger let go (turning, or springing back): taps and keys wait for it (user,
-  /// 2026-09-30) - one during a spring-back skipped a page, from the last page it even opened the next book.
-  bool get _curlSettling => _curl != null && _curlAnim.isAnimating;
-
-  /// The turn is over: let go before halfway -> back to where it started, and nothing counted; else the turn counts.
-  void _endCurl({bool cancel = false}) {
-    final c = _curl;
-    if (c == null) return;
-    final back = cancel || !c.completing;
-    if (back) _pc?.jumpToPage(c.from); // while _curl is still set: not counted as a turn (_onPage)
-    _curl = null;
-    if (!back) _pageTurned(_index);
-    _maybeIdle();
-    setState(() {});
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
-  }
-
-  /// Another turn while one is playing: finish that one at once.
-  void _finishCurlNow() {
-    if (_curl == null) return;
-    _curlAnim.stop();
-    _endCurl();
-  }
-
-  Offset? _dragStartScreen;
-
-  void _curlDragStart(DragStartDetails d) {
-    _finishCurlNow(); // a quick second swipe: the turn still playing ends at once instead of eating this one
-    _dragStart = _reading(d.localPosition);
-    _dragStartScreen = d.localPosition;
-  }
-
-  /// A drag can start anywhere on the screen: the distance from where it starts to the edge it moves towards is
-  /// the whole turn (so from the middle, half the screen turns the page fully) - the page doesn't have to be taken
-  /// by its edge.
-  void _curlDragUpdate(DragUpdateDetails d) {
-    final s = _dragStart, s0 = _dragStartScreen;
-    if (s == null || s0 == null) return;
-    final p = _reading(d.localPosition);
-    if (_curl == null) {
-      final dx = p.dx - s.dx;
-      if (dx.abs() < 4) return;
-      final next = dx < 0;
-      final page = _pageRect(next ? _index : _index - 1);
-      final at = _pagePoint(s0, page);
-      final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
-      if (!_startCurl(next: next, page: page, grab: grab,
-          finger: next ? grab : Offset(PageCurl.gone(page.width), grab.dy))) {
-        _dragStart = null;
-        return;
-      }
-    }
-    final c = _curl!;
-    if (_curlAnim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
-    final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
-    final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
-    final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
-    // a diagonal drag tilts the page by half its height change (PageCurl.pinned keeps the spine down)
-    final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy) * 0.5;
-    c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
-    _curlMoved.value++;
-  }
-
-  void _curlDragEnd(DragEndDetails d) {
-    final c = _curl;
-    _dragStart = null;
-    if (c == null || _curlAnim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
-    var vx = d.velocity.pixelsPerSecond.dx;
-    if (_rtl) vx = -vx;
-    final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
-    // a flick (diagonal ones carry less sideways speed) or a slow drag about a third of the way
-    final complete = c.forward
-        ? vx < -250 || (vx < 250 && turned > 0.3)
-        : vx > 250 || (vx > -250 && turned < 0.7);
-    _animateCurl(complete: complete);
   }
 
   /// Next book. On the last page or the end card the current book is marked read; before that, it depends on "Next
@@ -851,45 +520,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   }
 
   /// Delete the open book's file on the server (confirmed first, Cancel focused), then close the reader.
-  // ---- Save page / Copy page (the Reader panel; user, 2026-10-02): the page's own image as Komga sends it - not
-  // the picture on screen (no crop, levels or Enhance) - from what's loaded already, else asked for
-
-  /// The page being read: (its picture file, a name for it). Null on the end card.
-  Future<(Uint8List, String)?> _pageFile() async {
-    final i = _index;
-    if (i > _last || _loader == null) return null;
-    final bytes = _loader!.loadedBytes(i) ?? await api.pageBytes(_book['id'] as String, _loader!.pageNumbers[i]);
-    return (bytes, '${_titleOf(_book)} - page ${i + 1}');
-  }
-
-  Future<void> _savePage() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final f = await _pageFile();
-      if (f == null) return;
-      final where = await savePicture(f.$1, f.$2);
-      messenger // a message for each save, the last one shown at once (not queued behind the one before)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('Page saved: $where')));
-    } catch (e, st) {
-      if (mounted) showErrorSnack(context, couldnt('save the page', e), e, st);
-    }
-  }
-
-  Future<void> _copyPage() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final f = await _pageFile();
-      if (f == null) return;
-      await copyPicture(f.$1, f.$2);
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Page copied')));
-    } catch (e, st) {
-      if (mounted) showErrorSnack(context, couldnt('copy the page', e), e, st);
-    }
-  }
-
   Future<void> _deleteBook() async {
     final title = '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}';
     final ok = await confirmDelete(context, 'Delete "$title"?',
@@ -918,13 +548,16 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final fresh = await api.book(id).catchError((_) => null);
     if (fresh != null) _known[id as String] = _progressOf(fresh); // this reader's own mark: not another device's
     // only if that book is still the one open (a quick Next book meanwhile: the answer is for the book left behind)
-    if (mounted && fresh != null && _book['id'] == id && !_busy) setState(() => _book = fresh);
+    if (mounted && fresh != null && _book['id'] == id && !_busy) {
+      setState(() => _book = fresh);
+      _comic.bookChanged(fresh);
+    }
   }
 
   // ---- controls
   void _showControls() {
     setState(() { _menu = true; _scrubbing = false; _scrub = null; });
-    if (_stripShown) _stripCentre(_index.clamp(0, _last), jump: true); // on the page being read now
+    _comic.controlsShown(); // the strip on the page being read now
   }
 
   void _hideControls() {
@@ -936,37 +569,38 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _keys.requestFocus();
   }
 
-  /// The two bars, left to right, as the remote walks them.
-  List<_Ctl> get _topBar => [_Ctl.close, _Ctl.fit, _Ctl.night, if (isDesktop) _Ctl.fullscreen, _Ctl.read, _Ctl.delete];
-  List<_Ctl> get _bottomBar => [
-        _Ctl.prevBook,
-        if (_pages.length > 1) ...[_Ctl.slider, _Ctl.pages],
-        if (_seriesId != null) _Ctl.image,
-        _Ctl.reader, _Ctl.nextBook,
+  /// The two bars, left to right, as the remote walks them: the Reader's own controls with the renderer's in them.
+  List<FocusNode> get _topBar => [
+        _ctl[_Ctl.close]!,
+        for (final b in _comic.topButtons()) b.node,
+        _ctl[_Ctl.night]!,
+        if (isDesktop) _ctl[_Ctl.fullscreen]!,
+        _ctl[_Ctl.read]!,
+        _ctl[_Ctl.delete]!,
       ];
-  bool get _stripShown => _stripOpen && _pages.length > 1;
+  List<FocusNode> _bottomBar(BuildContext context) => [
+        _ctl[_Ctl.prevBook]!,
+        if (_pages.length > 1) _ctl[_Ctl.slider]!,
+        for (final b in _comic.bottomButtons(context)) b.node,
+        _ctl[_Ctl.nextBook]!,
+      ];
 
-  /// Remote in the controls (user's layout): Left/Right move along a bar and stop at its ends; Up/Down switch between
-  /// the top and bottom bar (keeping the position as near as possible). Up from the top bar or Down from the bottom
-  /// bar leaves the bars ("nothing selected", where OK hides the controls). From nothing selected: Up or Left/Right
-  /// -> top bar, Down -> bottom bar.
-  /// With the page strip open it's a row of its own, just above the bottom bar: Up from the bottom bar goes into it,
-  /// Down from it to the bottom bar, Up from it to the top bar (Left / Right in it are the strip's own, _onStripKey).
+  /// Remote in the controls (user's layout, lib/reader/reader_bars.dart): along a bar, between the bars; with the page
+  /// strip open it's a row of its own just above the bottom bar (Left / Right in it are the strip's own).
   void _move({int dx = 0, int dy = 0}) {
-    final bottom = _bottomBar;
     final to = walkControls(
-      top: [for (final c in _topBar) _ctl[c]!],
-      bottom: [for (final c in bottom) _ctl[c]!],
+      top: _topBar,
+      bottom: _bottomBar(context),
       dx: dx,
       dy: dy,
-      row: _stripShown ? _ctl[_Ctl.strip] : null,
-      rowBelow: _ctl[bottom[bottom.indexOf(_Ctl.pages).clamp(0, bottom.length - 1)]],
+      row: _comic.stripShown ? _comic.stripNode : null,
+      rowBelow: _pages.length > 1 ? _comic.pagesNode : _ctl[_Ctl.prevBook],
     );
     switch (to) {
       case WalkToNode(:final node):
         node.requestFocus();
       case WalkToRow():
-        _stripFocus(); // into the strip, on the page shown
+        _comic.stripFocus(); // into the strip, on the page shown
         return;
       case WalkOff():
         _keys.requestFocus();
@@ -976,30 +610,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
   // remote); with the controls hidden, keys go through ReaderKeys.
-  /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
-  /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
-  void _onWheel(double dy) {
-    if (_menu || _pc == null) return;
-    final c = _scrolls[_index];
-    if (_prefs.fit != FitMode.screen && c != null && c.hasClients) {
-      final p = c.position;
-      final target = (p.pixels + dy).clamp(0.0, p.maxScrollExtent);
-      if ((target - p.pixels).abs() > 0.5) {
-        c.jumpTo(target);
-        _wheelAcc = 0;
-        return;
-      }
-    }
-    _wheelAcc += dy;
-    if (_wheelAcc.abs() < 40) return;
-    final forward = _wheelAcc > 0;
-    _wheelAcc = 0;
-    final now = DateTime.now();
-    if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
-    _lastWheelTurn = now;
-    forward ? _forward() : _back();
-  }
-
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     awake();
@@ -1009,26 +619,29 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       // reach the system, so the volume stays put; a held key turns one page (its repeats are swallowed).
       if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) &&
           hasVolumeKeys && _settings.display.volumeKeys) {
-        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _forward() : _back();
+        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _comic.forward() : _comic.back();
         return KeyEventResult.handled;
       }
       // Shift+Space goes back, whatever Space is set to do
-      if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) { _back(); return KeyEventResult.handled; }
+      if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
+        _comic.back();
+        return KeyEventResult.handled;
+      }
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
       switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
-          if (e is KeyDownEvent || _index < _pages.length) _forward();
+          if (e is KeyDownEvent || _index < _pages.length) _comic.forward();
         case ReaderAction.previous:
-          _back();
+          _comic.back();
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
           if (e is KeyDownEvent) Navigator.of(context).maybePop();
         case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
-          if (_prefs.fit == FitMode.screen) _zoomSteps[_index]?.call(true);
+          _comic.zoomStep(true);
         case ReaderAction.zoomOut:
-          if (_prefs.fit == FitMode.screen) _zoomSteps[_index]?.call(false);
+          _comic.zoomStep(false);
         case null:
           return KeyEventResult.ignored;
       }
@@ -1037,119 +650,41 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     return controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
   }
 
-  void _setFingers(int n) {
-    final pinch = n > 1;
-    final wasPinch = _fingers > 1;
-    _fingers = n < 0 ? 0 : n;
-    if (pinch != wasPinch) setState(() {});
-  }
-
-  /// The top bar's fit button: the series' own fit when it overrides the default layout (saved, synced); otherwise
-  /// this book only, for now (the Reader panel's toggle turns the override on). A book with no series: the default.
-  void _setFit(FitMode f) {
-    final id = _seriesId;
-    if (id == null) {
-      _settings.setDefault(_settings.defaults.copyWith(fit: f));
-    } else if (_settings.ownsLayout(id)) {
-      _settings.setSeriesLayout(id, _prefs.copyWith(fit: f));
-    } else {
-      setState(() => _bookFit = f);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     assert(() {
       ReaderScreen.debugBuilds++;
       return true;
     }());
+    final bg = _comic.background;
     return PopScope(
       // Back (tablet or remote) closes the controls first, then the book
       canPop: !_menu,
       onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
       child: Scaffold(
-        backgroundColor: _bg,
+        backgroundColor: bg,
         body: Focus(
           focusNode: _keys,
           autofocus: true,
           onKeyEvent: _onKey,
-          child: _openError != null && _pc == null
+          child: _openError != null && !_comic.opened
               ? Center(child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
-                      style: TextStyle(color: _ink(0.7)),
+                      style: TextStyle(color: _comic.ink(0.7)),
                       action: Row(mainAxisSize: MainAxisSize.min, children: [
                         // a book with no pages: retrying won't help - on to the next book instead
-                        if (_openError!.$2 is _NoPages)
+                        if (_openError!.$2 is NoPages)
                           TextButton(autofocus: true, onPressed: () => _skipPast(_book), child: const Text('Next book'))
                         else
                           TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
                         TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
                       ])),
                 ))
-              : _pc == null
+              : !_comic.opened
               ? const Center(child: CircularProgressIndicator())
               : Stack(children: [
-                  LayoutBuilder(builder: (context, box) {
-                    _area = Size(box.maxWidth, box.maxHeight);
-                    return Listener(
-                      // wheel over the end card or a loading page (over a page, the page itself takes it)
-                      onPointerSignal: (e) {
-                        if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
-                          GestureBinding.instance.pointerSignalResolver
-                              .register(e, (ev) => _onWheel((ev as PointerScrollEvent).scrollDelta.dy));
-                        }
-                      },
-                      onPointerDown: (_) {
-                        awake();
-                        _setFingers(_fingers + 1);
-                      },
-                      onPointerUp: (_) => _setFingers(_fingers - 1),
-                      onPointerCancel: (_) => _setFingers(_fingers - 1),
-                      child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onSecondaryTap: () => _menu ? _hideControls() : _showControls(), // right-click
-                      // 3D page curl: a horizontal drag curls the page (the page view doesn't scroll in that mode)
-                      onHorizontalDragStart: _curlDrag ? _curlDragStart : null,
-                      onHorizontalDragUpdate: _curlDrag ? _curlDragUpdate : null,
-                      onHorizontalDragEnd: _curlDrag ? _curlDragEnd : null,
-                      onTapUp: (d) => _onTapUp(d, box.maxWidth),
-                      child: RepaintBoundary(
-                        key: _pagesKey,
-                        child: NotificationListener<ScrollNotification>(
-                        onNotification: _onPagesScroll,
-                        child: PageView.builder(
-                        // a fresh page view for each book: kept, it hands the new controller the last book's place
-                        // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
-                        key: ValueKey(_book['id']),
-                        controller: _pc,
-                        // keep the neighbours built, so they're processed before they're turned to (in every mode:
-                        // a wipe used to build - and process - the next page while it slid in)
-                        allowImplicitScrolling: true,
-                        reverse: _rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
-                        // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
-                        physics: _zoomed || _fingers > 1 || _sideways.contains(_index) || _curlMode
-                            ? const NeverScrollableScrollPhysics()
-                            : null,
-                        itemCount: _pages.length + 1,
-                        onPageChanged: _onPage,
-                        itemBuilder: (context, i) => i == _pages.length ? _endCard() : _page(i),
-                      ),
-                      ),
-                      ),
-                    ));
-                  }),
-                  if (_curl != null)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Stack(fit: StackFit.expand, children: [
-                          if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
-                          if (!_curl!.pending)
-                            CustomPaint(painter: _CurlLayer(_curl!, mirror: _rtl, moved: _curlMoved,
-                                shader: _curlShader ??= PageCurl.loaded!.fragmentShader())),
-                        ]),
-                      ),
-                    ),
+                  ..._comic.buildPages(context),
                   // "12 / 36" for a moment after a turn, bottom left (user, 2026-09-30) - not over the controls (they
                   // have the count) or the end card
                   Positioned(
@@ -1197,7 +732,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                             key: const ValueKey('reading-progress'),
                             value: (_index + 1) / _pages.length,
                             minHeight: 3,
-                            backgroundColor: _ink(0.12),
+                            backgroundColor: _comic.ink(0.12),
                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                           ),
                         ),
@@ -1207,53 +742,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                   // another book loading: this one's pages stay underneath (it's still the current book until the new
                   // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
                   if (_loading)
-                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: _bg,
+                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
                         child: const Center(child: CircularProgressIndicator())))),
                 ]),
         ),
       ),
-    );
-  }
-
-  Widget _page(int i) {
-    return FutureBuilder<PageData>(
-      future: _loader!.get(i),
-      builder: (context, snap) {
-        if (snap.hasError) {
-          // the reason on the page itself (user's mock-ups, 2026-09-29): "This page didn't load: can't reach Komga."
-          final e = snap.error!;
-          final ex = explain(e, thing: 'page');
-          final message = ex.kind == ErrorKind.unreadablePage ? ex.message : "This page didn't load: ${ex.reason}.";
-          return Center(child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.broken_image, color: _ink(0.24), size: 48),
-              const SizedBox(height: 10),
-              ErrorText(message, e, stack: snap.stackTrace, centre: true, style: TextStyle(color: _ink(0.7)),
-                  action: TextButton(onPressed: () => setState(() {}), child: const Text('Retry'))),
-            ]),
-          ));
-        }
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-        return PageCanvas(
-          data: snap.data!, prefs: _prefs, scroll: _scrollFor(i),
-          startAtEnd: _startAtEnd == i,
-          levels: _loader!.bookLevels,
-          levelsNow: () => _loader?.levelsNow,
-          onZoomChanged: (z) { if (z != _zoomed) setState(() => _zoomed = z); },
-          onWheel: _onWheel,
-          onPanChanged: (pans) => _setSideways(i, pans),
-          onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
-          onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
-          idle: i == _index ? null : _whenIdle, // neighbours: processed between turns, not during one
-          current: i == _index, // moved off, a zoomed page goes back to fit
-          onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
-          onZoomToggle: (zoom) => zoom == null ? _zoomers.remove(i) : _zoomers[i] = zoom,
-          onZoomStep: (step) => step == null ? _zoomSteps.remove(i) : _zoomSteps[i] = step,
-          rtl: _rtl,
-          onStartedAtEnd: () => _startAtEnd = null,
-        );
-      },
     );
   }
 
@@ -1330,7 +823,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   Widget _endCard() {
     final where = widget.readListId != null ? 'this read list' : 'the series';
     final arrow = _rtl ? '←' : '→';
-    final dim = TextStyle(color: _ink(0.38));
+    final ink = _comic.ink;
+    final dim = TextStyle(color: ink(0.38));
     return FutureBuilder<Map<String, dynamic>?>(
       future: _upNext(),
       builder: (context, snap) {
@@ -1341,7 +835,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         } else if (snap.error is NotAvailableOffline) {
           body = [ // offline, and the book that comes next isn't downloaded: no jumping ahead to one that is
             Text("The next book in $where isn't downloaded", textAlign: TextAlign.center,
-                style: TextStyle(color: _ink(0.7), fontSize: 16)),
+                style: TextStyle(color: ink(0.7), fontSize: 16)),
             const SizedBox(height: 12),
             Text('$arrow : close the book', style: dim),
           ];
@@ -1349,7 +843,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           body = [Text('$arrow : next book in $where', style: dim)]; // couldn't look it up: the turn still tries
         } else if (next == null) {
           body = [
-            Text(_endText, style: TextStyle(color: _ink(0.7), fontSize: 16)),
+            Text(_endText, style: TextStyle(color: ink(0.7), fontSize: 16)),
             const SizedBox(height: 12),
             Text('$arrow : close the book', style: dim),
           ];
@@ -1368,12 +862,12 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
               return NativePoster(api.thumbImage(api.bookThumb(next['id'] as String)), max: Size(h * 0.8, h));
             }),
             const SizedBox(height: 14),
-            Text(heading, textAlign: TextAlign.center, style: TextStyle(color: _ink(1), fontSize: 18)),
+            Text(heading, textAlign: TextAlign.center, style: TextStyle(color: ink(1), fontSize: 18)),
             if (title != null && title != heading && !title.endsWith('#$number'))
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(title, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: _ink(0.7))),
+                    style: TextStyle(color: ink(0.7))),
               ),
             const SizedBox(height: 14),
             Text('$arrow : open it', style: dim),
@@ -1383,7 +877,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
           child: Padding(
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('End of book', style: TextStyle(color: _ink(0.7), fontSize: 18)),
+              Text('End of book', style: TextStyle(color: ink(0.7), fontSize: 18)),
               const SizedBox(height: 16),
               ...body,
             ]),
@@ -1393,9 +887,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     );
   }
 
-  /// Top bar (close, title, fit, night, read toggle, delete) and bottom bar (previous book, page counter, slider, pages,
-  /// image and reader settings, next book) - the shared bars (lib/reader/reader_bars.dart) with the comic reader's
-  /// buttons. A tap anywhere that isn't a control hides them.
+  /// Top bar (close, title, the renderer's own, night, read toggle, delete) and bottom bar (previous book, page
+  /// counter, slider, the renderer's own, next book) - the shared bars (lib/reader/reader_bars.dart). A tap anywhere
+  /// that isn't a control hides them.
   List<Widget> _controls() {
     // read: marked so, or the last page reached in this visit (saved as read at once, _pageTurned). Not merely being
     // on the last page: after Mark unread there, the tick has to show unread (code review, 2026-09-30)
@@ -1409,13 +903,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         heading: '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}',
         title: '${_book['metadata']?['title'] ?? ''}',
         buttons: [
-          // one press = next fit mode (screen -> width -> height -> original size), label shows which
-          IconButton(
-            focusNode: _ctl[_Ctl.fit],
-            tooltip: _prefs.fit == FitMode.original ? 'Original size' : 'Fit ${_prefs.fit.label.toLowerCase()}',
-            onPressed: () => _setFit(FitMode.values[(_prefs.fit.index + 1) % FitMode.values.length]),
-            icon: fitIcon(_prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
-          ),
+          for (final b in _comic.topButtons()) b.child,
           IconButton(
             focusNode: _ctl[_Ctl.night],
             tooltip: night ? 'Night mode off' : 'Night mode on',
@@ -1453,7 +941,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         onPrev: _prevBook,
         nextNode: _ctl[_Ctl.nextBook]!,
         onNext: _nextBook,
-        above: _stripShown ? _filmStrip(readerBarColour) : null,
+        above: _comic.stripShown ? _comic.strip(context) : null,
         middle: [
           SizedBox(
             width: 92,
@@ -1468,184 +956,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                 : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
           ),
         ],
-        buttons: [
-          if (_pages.length > 1)
-            barIcon(node: _ctl[_Ctl.pages]!, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
-                label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip),
-          if (_seriesId != null)
-            barIcon(node: _ctl[_Ctl.image]!, icon: Icons.settings_brightness, label: 'Image settings',
-                onPressed: () => showImagePanel(context,
-                    seriesId: _seriesId!, seriesTitle: _book['seriesTitle'] as String?)),
-          barIcon(node: _ctl[_Ctl.reader]!, icon: Icons.tune,
-              label: 'Reader settings',
-              onPressed: () => showReaderPanel(context,
-                  seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
-                  komgaDirection: _komgaDirection, bookFit: _bookFit,
-                  page: canSaveCopyPictures && _index <= _last
-                      ? PageActions(save: _savePage, copy: _copyPage) : null)),
-        ],
-      ),
-    );
-  }
-
-  // ---- the page strip (user, 2026-10-02): a film strip of the book's pages above the bottom bar, opened by the
-  // Pages button. A page tapped (or OK on it) is gone to; the strip and the controls stay up. Right to left, page 1
-  // is at the right.
-  // open or closed is kept on the device: open, it's there every time the controls come up, book after book, until
-  // closed with the button (user, 2026-10-02)
-  bool get _stripOpen => _settings.display.pageStrip;
-  int? _stripAt; // the page the remote is on in the strip
-  final _stripScroll = ScrollController();
-  static const _stripGap = 6.0, _stripMaxHeight = 100.0, _stripAtLeast = 8, _stripAspect = 2 / 3;
-
-  /// A thumbnail's width for a strip [width] wide: at most ~100 px tall, smaller so at least 8 always fit across.
-  double _tileWidth(double width) =>
-      math.min(_stripMaxHeight * _stripAspect, (width - 16 - (_stripAtLeast - 1) * _stripGap) / _stripAtLeast);
-
-  void _toggleStrip() {
-    final open = !_stripOpen;
-    _settings.setDisplay(_settings.display.copyWith(pageStrip: open));
-    if (open) _stripCentre(_index.clamp(0, _last), jump: true);
-  }
-
-  /// Scrolls the strip so page [i] is in the middle (or as near as its ends allow); null: the page being read, as it
-  /// is once this frame is drawn.
-  void _stripCentre(int? at, {bool jump = false}) =>
-      WidgetsBinding.instance.addPostFrameCallback((_) => _stripCentreNow(at, jump: jump));
-
-  void _stripCentreNow(int? at, {bool jump = false}) {
-    if (!mounted || !_stripScroll.hasClients) return;
-    final i = at ?? _index.clamp(0, _last);
-    final p = _stripScroll.position;
-    // the padding is inside the scroll view: the tiles are as wide as the strip's own width makes them (adding it
-    // again made each 2 px too wide on a phone, ~200 px off by page 100 - code review 2026-10-05, #10), the first
-    // starting 8 px in; the tile itself centred, not with the gap after it
-    final tile = _tileWidth(p.viewportDimension) + _stripGap;
-    final target = (8 + i * tile - (p.viewportDimension - tile + _stripGap) / 2).clamp(0.0, p.maxScrollExtent);
-    jump ? _stripScroll.jumpTo(target) : _stripScroll.animateTo(target,
-        duration: const Duration(milliseconds: 180), curve: Curves.easeOut);
-  }
-
-  void _stripFocus() {
-    _stripAt = _index.clamp(0, _last);
-    _ctl[_Ctl.strip]!.requestFocus();
-    _stripCentre(_stripAt!);
-    setState(() {});
-  }
-
-  void _stripGo(int i) {
-    _stripAt = i;
-    _sliderJump(i); // as the slider: the way back is kept
-    setState(() {});
-  }
-
-  /// The remote in the strip: Left / Right along it (on screen: right to left, Right is back a page), OK goes there.
-  /// Up / Down are the controls' own (_move).
-  KeyEventResult _onStripKey(FocusNode _, KeyEvent e) {
-    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final k = e.logicalKey;
-    final at = _stripAt ?? _index.clamp(0, _last);
-    if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowRight) {
-      final step = (k == LogicalKeyboardKey.arrowRight) != _rtl ? 1 : -1;
-      setState(() => _stripAt = (at + step).clamp(0, _last));
-      _stripCentre(_stripAt!);
-      return KeyEventResult.handled;
-    }
-    if (isOkKey(k)) {
-      if (e is KeyDownEvent) _stripGo(at);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  int? _stripFollowed; // the slider's page the strip last followed (null: not scrubbing)
-
-  void _followScrub() {
-    if (!mounted) return;
-    final follow = _scrub;
-    if (follow == _stripFollowed) return;
-    final wasScrubbing = _stripFollowed != null;
-    _stripFollowed = follow;
-    if (follow != null) {
-      _stripCentreNow(follow, jump: true); // (already after the frame)
-    } else if (wasScrubbing) {
-      _stripCentreNow(null, jump: true);
-    }
-  }
-
-  Widget _filmStrip(Color bar) {
-    // scrubbing the slider (finger, mouse or remote): the strip follows the page picked; when the scrub ends (gone
-    // there, or cancelled), back to the page being read (user, 2026-10-03)
-    // (looked at after the frame: changing state and scrolling from inside build was the wrong place - #55)
-    if (_scrub != _stripFollowed) WidgetsBinding.instance.addPostFrameCallback((_) => _followScrub());
-    final accent = Theme.of(context).colorScheme.primary;
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final node = _ctl[_Ctl.strip]!;
-    return Focus(
-      focusNode: node,
-      onKeyEvent: _onStripKey,
-      onFocusChange: (_) => setState(() {}),
-      child: Material(
-        key: const ValueKey('page-strip'),
-        color: bar,
-        child: LayoutBuilder(builder: (context, box) {
-          final w = _tileWidth(box.maxWidth), h = w / _stripAspect;
-          return SizedBox(
-            height: h + 16 + 10, // room for the way-back mark under a tile
-            child: ListView.builder(
-              controller: _stripScroll,
-              scrollDirection: Axis.horizontal,
-              reverse: _rtl,
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
-              itemExtent: w + _stripGap,
-              itemCount: _last + 1,
-              itemBuilder: (context, i) {
-                final current = i == _index;
-                // white: where the remote is in the strip, or the page being picked on the slider
-                final remote = (node.hasFocus && i == (_stripAt ?? _index)) || i == _scrub;
-                return Padding(
-                  padding: const EdgeInsetsDirectional.only(end: _stripGap),
-                  child: Column(children: [
-                    GestureDetector(
-                      key: ValueKey('strip-$i'),
-                      onTap: () => _stripGo(i),
-                      child: Container(
-                        width: w, height: h,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1C1D22),
-                          border: Border.all(
-                              color: remote ? Colors.white : current ? accent : Colors.white12,
-                              width: remote || current ? 3 : 1),
-                        ),
-                        child: Stack(fit: StackFit.expand, children: [
-                          Builder(builder: (context) {
-                            final bytes = _thumbFor(i, queued: true);
-                            if (bytes == null) return const SizedBox.shrink();
-                            return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
-                                cacheHeight: (h * dpr).round(),
-                                errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24));
-                          }),
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              color: const Color(0xB0000000),
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              child: Text('${i + 1}', style: const TextStyle(color: Colors.white, fontSize: 11)),
-                            ),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    // the page to go back to (as on the slider)
-                    if (i == _returnTo)
-                      Container(key: const ValueKey('strip-way-back'), margin: const EdgeInsets.only(top: 4),
-                          width: w * 0.6, height: 3, color: accent),
-                  ]),
-                );
-              },
-            ),
-          );
-        }),
+        buttons: [for (final b in _comic.bottomButtons(context)) b.child],
       ),
     );
   }
@@ -1661,238 +972,19 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
         upDownStep: true,
         wayBack: _scrubOrigin,
         markWayBack: _scrub != null || _returnTo != null, // while scrubbing, and whenever there's a page to go back to
-        onScrubStart: () => _thumbShown = null, // not the last scrub's page
+        onScrubStart: _comic.scrubStarted, // not the last scrub's picture
         onJump: _sliderJump,
         changed: () => setState(() {}),
         label: 'Page ${shown + 1}',
-        preview: _preview,
+        preview: (shown, x) => _comic.preview(context, shown, x),
       );
 
-  static const _previewSize = Size(120, 196);
-
-  /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
-  /// of it and its number, over the thumb.
-  Widget _preview(int shown, double x) {
-    if (!_settings.display.pagePreviews) {
-      // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
-      const w = 96.0;
-      return Positioned(
-        left: x - w / 2,
-        top: -48,
-        width: w,
-        child: IgnorePointer(
-          child: Container(
-            key: const ValueKey('page-label'),
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white24)),
-            child: Text('Page ${shown + 1}', textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 13)),
-          ),
-        ),
-      );
-    }
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    return Positioned(
-      left: x - _previewSize.width / 2,
-      top: -_previewSize.height - 18,
-      width: _previewSize.width,
-      height: _previewSize.height,
-      child: IgnorePointer(
-        child: Container(
-          key: const ValueKey('page-preview'),
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white24)),
-          child: Column(children: [
-            Expanded(
-              // while this page's picture comes in, the last one stays - faded, under a spinner, so it isn't taken for
-              // this page (it read as the wrong page, 2026-09-30); nothing yet: just the spinner
-              child: Builder(builder: (context) {
-                final own = _thumbFor(shown);
-                if (own == null && _thumbs.containsKey(shown)) { // Komga has no picture of this page
-                  return const Icon(Icons.image_not_supported, color: Colors.white24);
-                }
-                final bytes = own ?? _thumbShown;
-                const spinner = Center(
-                    child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
-                return Stack(fit: StackFit.expand, children: [
-                  if (bytes != null)
-                    Opacity(
-                      opacity: own == null ? 0.25 : 1,
-                      child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true,
-                          // offline, or a page already loaded, it's the whole page: decoded small
-                          cacheWidth: (_previewSize.width * dpr).round(),
-                          errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, color: Colors.white24)),
-                    ),
-                  if (own == null) const KeyedSubtree(key: ValueKey('preview-loading'), child: spinner),
-                ]);
-              }),
-            ),
-            const SizedBox(height: 4),
-            Text('Page ${shown + 1}', style: const TextStyle(color: Colors.white, fontSize: 13)),
-          ]),
-        ),
-      ),
-    );
-  }
-
-  // Page previews: Komga's small picture of a page (offline: the page itself). Scrubbing back and forth used to ask
-  // for every page passed, all at once, so the one wanted waited behind dozens and the preview seemed to freeze
-  // (user, 2026-09-30): now at most two at a time, and only ever the page the thumb is on now.
-  final Map<int, Uint8List?> _thumbs = {}; // page index -> its picture (null: none to be had); most recent last
-  final Set<int> _thumbsLoading = {};
-  int? _thumbWanted; // the page to fetch next, when a slot is free
-  Uint8List? _thumbShown; // the last picture shown, kept up while the next comes in
-  static const _thumbsAtOnce = 2, _thumbsKept = 64; // (64: a wide screen's page strip shows ~35)
-  // and no more than this much: offline the pictures are the pages themselves, 2-5 MB each - 64 of them held
-  // 130-320 MB (code review 2026-10-05, #40; user's cap: ~128 MB). Ones let go of are read again from the downloaded
-  // file when wanted
-  static const _thumbsBytesKept = 128 * 1024 * 1024;
-
-  /// This page's picture if it's in; else asks for it (fetched when a slot is free) and returns null.
-  /// [queued]: for the page strip - many wanted at once, the ones asked for most recently (on screen now) first,
-  /// after the slider's own page; it doesn't touch the slider preview's last picture.
-  Uint8List? _thumbFor(int i, {bool queued = false}) {
-    final page = _loader?.loadedBytes(i); // the page itself is already here (this one, its neighbours)
-    if (page != null) return queued ? page : _thumbShown = page;
-    if (_thumbs.containsKey(i)) {
-      final b = _thumbs.remove(i);
-      _thumbs[i] = b; // most recently used last
-      if (b != null && !queued) _thumbShown = b;
-      return b;
-    }
-    final failed = _thumbsFailed[i];
-    if (failed != null && DateTime.now().difference(failed) < _thumbRetry) return null;
-    if (!_thumbsLoading.contains(i)) {
-      if (queued) {
-        _thumbQueue..remove(i)..add(i);
-        while (_thumbQueue.length > _stripQueued) {
-          _thumbQueue.removeAt(0); // scrolled past long ago
-        }
-      } else {
-        _thumbWanted = i;
-      }
-      Future.microtask(_nextThumb); // not during the build
-    }
-    return null;
-  }
-
-  final List<int> _thumbQueue = []; // the strip's pages wanted, most recent last
-  static const _stripQueued = 40;
-
-  void _nextThumb() {
-    if (!mounted || _thumbsLoading.length >= _thumbsAtOnce) return;
-    final int i;
-    if (_thumbWanted != null) {
-      i = _thumbWanted!;
-      _thumbWanted = null;
-    } else if (_thumbQueue.isNotEmpty) {
-      i = _thumbQueue.removeLast();
-    } else {
-      return;
-    }
-    if (_thumbs.containsKey(i) || _thumbsLoading.contains(i) || i > _last) { _nextThumb(); return; }
-    final bookId = _book['id'] as String;
-    _thumbsLoading.add(i);
-    void done(void Function() record) {
-      if (!mounted || _book['id'] != bookId) return; // another book since
-      _thumbsLoading.remove(i);
-      record();
-      trimPictures(_thumbs, count: _thumbsKept, bytes: _thumbsBytesKept);
-      if (_scrub != null || (_menu && _stripShown)) setState(() {});
-      _nextThumb();
-    }
-    api.pageThumbBytes(bookId, _loader!.pageNumbers[i]).then(
-      (b) => done(() => _thumbs[i] = b),
-      onError: (Object e) => done(() {
-        if (e is KomgaUnreachable) {
-          _thumbsFailed[i] = DateTime.now(); // too slow, or no answer: try again a little later, not never
-        } else {
-          _thumbs[i] = null; // Komga answered: there's no picture to be had
-        }
-      }),
-    );
-    _nextThumb(); // the other slot, if the strip wants more
-  }
-
-  final Map<int, DateTime> _thumbsFailed = {}; // page index -> when its picture last didn't come in time
-  static const _thumbRetry = Duration(seconds: 10);
-
-  void _clearThumbs() {
-    _thumbs.clear();
-    _thumbsFailed.clear();
-    _thumbsLoading.clear();
-    _thumbWanted = null;
-    _thumbQueue.clear();
-    _thumbShown = null;
-  }
-
-  /// Off to the page picked on the slider - remembering where the reader was, to come back to.
+  /// Off to the page picked on the slider (or the strip) - remembering where the reader was, to come back to.
   void _sliderJump(int target) {
     if (target == _index) return;
-    _finishCurlNow();
+    _comic.finishCurlNow();
     if (_index <= _last) _returnTo ??= _index;
     _jumpingTo = target;
-    _pc?.jumpToPage(target);
-  }
-
-}
-
-/// Komga lists the book with no pages (a damaged file, or not analysed yet).
-class _NoPages implements Exception {}
-
-/// What a test can see of the curl being drawn.
-@visibleForTesting
-abstract interface class CurlLayer {
-  bool get mirror;
-}
-
-/// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
-class _CurlLayer extends CustomPainter implements CurlLayer {
-  _CurlLayer(this.curl, {required this.mirror, required Listenable moved, required this.shader}) : super(repaint: moved);
-  final _Curl curl;
-  @override
-  final bool mirror;
-  final ui.FragmentShader shader;
-
-  @override
-  void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
-          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader)
-      .paint(canvas, size);
-
-  @override
-  bool shouldRepaint(_CurlLayer o) => !identical(o.curl, curl) || o.mirror != mirror;
-}
-
-/// A page turn in progress (3D page curl).
-class _Curl {
-  _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.pending = false});
-  ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
-  final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
-  final bool forward;
-  final Rect page; // the curling page's image on screen - only it curls, not the bars around it
-  final Offset grab; // where the page was taken hold of (its right edge, page coordinates in reading direction)
-  Offset finger; // where that point is now
-  final int from; // the page before the turn, to go back to if it's let go
-  bool pending; // going back: the previous page's snapshot isn't taken yet
-  bool completing = true;
-  Offset animFrom = Offset.zero, animTo = Offset.zero;
-
-  void dispose() {
-    sheet.dispose();
-    if (under != null && !identical(under, sheet)) under!.dispose();
-  }
-}
-
-/// Lets go of the least recently used pictures in [pictures] (most recent last) until there are at most [count] of
-/// them and they come to at most [bytes] - the most recent one always kept.
-@visibleForTesting
-void trimPictures(Map<int, Uint8List?> pictures, {required int count, required int bytes}) {
-  var total = pictures.values.fold<int>(0, (n, b) => n + (b?.length ?? 0));
-  while (pictures.length > 1 && (pictures.length > count || total > bytes)) {
-    final first = pictures.keys.first;
-    total -= pictures.remove(first)?.length ?? 0;
+    _comic.jumpTo(target);
   }
 }
