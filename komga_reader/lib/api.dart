@@ -290,7 +290,8 @@ class Komga {
         return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
       });
 
-  /// Saves where reading stopped in an EPUB; Komga turns it into the book's read progress (page = position).
+  /// Saves where reading stopped in an EPUB; Komga turns it into the book's read progress (page = how far through the
+  /// book x its page count for it - see epub/progress.dart komgaEpubPage).
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
     await _send('PUT', '/api/v1/books/$bookId/progression', progression);
     onProgressWritten?.call(this, ProgressWrite(bookId: bookId, place: progression)); // a downloaded copy follows

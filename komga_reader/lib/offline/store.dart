@@ -22,8 +22,12 @@ class OfflineStore {
   /// pages [{number, file, mediaType}], bytes, state ('done' | 'partial')}.
   final Map<String, Map<String, dynamic>> books = {};
 
-  /// bookId -> {page, completed, at (ISO time), synced}: reading progress made on this device. Starts as the
+  /// bookId -> {page, completed, at (ISO time), synced, place?}: reading progress made on this device. Starts as the
   /// server's progress when the book was downloaded; unsynced changes are sent to Komga later (phase 5).
+  /// `place`: an EPUB's exact place (Komga's Readium progression) - kept here with its page, not in the book's
+  /// entry, so the page and the place move together through syncing, conflicts, mark unread and removing the
+  /// download (a place kept apart went stale and could be sent over a further one - EPUB review 2026-10-06, S1-S4),
+  /// and saving one writes only the small progress file (S7).
   final Map<String, Map<String, dynamic>> progress = {};
 
   File get _index => File('${root.path}${Platform.pathSeparator}index.json');
@@ -140,24 +144,38 @@ class OfflineStore {
 
   /// Progress that is now the same on Komga and here (downloaded, synced, read online): also the new baseline for
   /// spotting later changes on Komga. Not saved - callers save once after a batch.
-  void setServerProgress(String bookId, Map? rp) {
+  /// [place]: an EPUB's exact place as Komga has it with that page; left out, the place kept before stays - unless
+  /// the book is unread now ([rp] null), which has no place.
+  void setServerProgress(String bookId, Map? rp, {Map? place, bool keepPlace = true}) {
     final n = norm(rp);
+    final before = progress[bookId];
+    final kept = place ?? (keepPlace && before != null ? before['place'] : null);
     progress[bookId] = {
       'page': n['page'], 'completed': n['completed'], 'at': DateTime.now().toIso8601String(), 'synced': true,
       if (rp == null) 'none': true,
+      if (rp != null && kept != null) 'place': kept,
       'base': n,
     };
   }
 
+  /// An EPUB's exact place on this device (null: none - not started, marked unread, or never known).
+  Map<String, dynamic>? placeOf(String bookId) => (progress[bookId]?['place'] as Map?)?.cast<String, dynamic>();
+
   /// Reading progress made offline (queued for Komga). Keeps the baseline: what Komga had when the two last agreed.
-  Future<void> setProgress(String bookId, {int? page, required bool completed, bool clear = false}) async {
+  /// [place]: an EPUB's exact place read here (sent to Komga as it is); left out, the one before stays - except on
+  /// [clear] (marked unread: no place, it opened mid-book - S2).
+  Future<void> setProgress(String bookId, {int? page, required bool completed, bool clear = false, Map? place}) async {
     final prev = progress[bookId];
+    final kept = clear ? null : (place ?? prev?['place']);
     progress[bookId] = {
       'page': clear ? 0 : (page ?? prev?['page'] ?? 0),
       'completed': completed,
       'at': DateTime.now().toIso8601String(),
       'synced': false,
       if (clear) 'none': true,
+      if (kept != null) 'place': kept,
+      if (place != null) 'placeHere': true, // read here: goes to Komga with the page
+      if (place == null && prev?['placeHere'] == true && !clear) 'placeHere': true,
       if (prev?['base'] != null) 'base': prev!['base'],
     };
     await saveProgress();

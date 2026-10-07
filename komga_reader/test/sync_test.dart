@@ -361,7 +361,7 @@ void main() {
     await epubB1();
     // read online here: the client tells the downloads what it saved
     Komga.onProgressWritten!(server, ProgressWrite(bookId: 'B1', place: place('c1', 0.3, 12)));
-    expect((d.store!.books['B1']!['epubProgression'] as Map)['locator'], place('c1', 0.3, 12)['locator']);
+    expect(d.store!.placeOf('B1')!['locator'], place('c1', 0.3, 12)['locator']);
     expect(d.store!.readProgressOf('B1')!['page'], 3);
     // read on another device: the next refresh brings its place
     server.places['B1'] = place('c1', 0.8, 32);
@@ -370,7 +370,57 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 30));
     await sync.run();
     expect(d.store!.readProgressOf('B1')!['page'], 8, reason: 'the refresh brought Komga\'s page');
-    expect(((d.store!.books['B1']!['epubProgression'] as Map)['locator'] as Map)['locations'],
+    expect((d.store!.placeOf('B1')!['locator'] as Map)['locations'],
         containsPair('totalProgression', 0.8));
+  });
+
+  // ---- the exact place kept with its page (EPUB review 2026-10-06, S1-S9)
+
+  double? totalOf(Map<String, dynamic>? p) =>
+      (((p?['locator'] as Map?)?['locations'] as Map?)?['totalProgression'] as num?)?.toDouble();
+
+  test('S1: read here to 30% while another device read to 70% - Komga wins, and its PLACE comes with its page (the 30% '
+      'place stayed, opened offline, and could later be sent back over the 70%)', () async {
+    await epubB1();
+    final off = offlineApi();
+    await off.setEpubProgression('B1', place('c1', 0.3, 12));
+    server.rp['B1'] = {'page': 7, 'completed': false}; // the other device
+    server.places['B1'] = place('c1', 0.7, 28);
+    await sync.run();
+    expect(server.writes, isEmpty, reason: 'Komga is further: nothing sent');
+    expect(totalOf(await off.epubProgression('B1')), 0.7, reason: "offline it now opens at Komga's place");
+  });
+
+  test('S2: marked unread here, it has no place left (it reopened mid-book)', () async {
+    await epubB1();
+    final off = offlineApi();
+    await off.setEpubProgression('B1', place('c1', 0.5, 20));
+    await off.markUnread('B1');
+    expect(await off.epubProgression('B1'), isNull);
+  });
+
+  test('S4: the download removed with a place read here not sent yet - the place itself still goes to Komga, not '
+      'just the page', () async {
+    await epubB1();
+    final off = offlineApi();
+    await off.setEpubProgression('B1', place('c1', 0.6, 24));
+    await d.remove('B1');
+    await sync.run();
+    expect(server.writes, ['B1 place 0.6']);
+  });
+
+  test("S7: a place saved offline writes only the small progress file, not the downloads' whole index", () async {
+    await epubB1();
+    final index = File('${dir.path}${Platform.pathSeparator}index.json');
+    final before = await index.readAsString();
+    await offlineApi().setEpubProgression('B1', place('c1', 0.6, 24));
+    await d.store!.saveProgress(); // (waits for the writes queued so far)
+    expect(await index.readAsString(), before);
+  });
+
+  test("S9: an EPUB marked read online: its read progress here is Komga's page count, not page 0", () async {
+    await epubB1();
+    Komga.onProgressWritten!(server, const ProgressWrite(bookId: 'B1', completed: true));
+    expect(d.store!.readProgressOf('B1')!['page'], 10);
   });
 }

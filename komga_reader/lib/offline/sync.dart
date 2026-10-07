@@ -101,7 +101,9 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
           final here = _norm(local);
           final base = local['base'] as Map?;
           final komgaChanged = base != null && !_same(server, base) && !_same(server, here);
-          final place = store.books[id]?['epubProgression'] as Map?; // an EPUB's exact place, read here
+          // an EPUB's exact place read here (kept with its page in the progress record - it survives removing the
+          // download, S4); a place that came from Komga isn't sent back
+          final place = local['placeHere'] == true ? store.placeOf(id) : null;
           if (!komgaChanged) {
             // (an EPUB's place goes even on the same page: Komga's pages are coarser than its places)
             if (!_same(server, here) || place != null) await _send(api, id, here, book, place: place);
@@ -109,8 +111,15 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
             store.setServerProgress(id, _asReadProgress(here, book));
           } else {
             final keepHere = _rank(here) >= _rank(server);
-            if (keepHere) await _send(api, id, here, book, place: place);
-            store.setServerProgress(id, keepHere ? _asReadProgress(here, book) : book['readProgress'] as Map?);
+            if (keepHere) {
+              await _send(api, id, here, book, place: place);
+              store.setServerProgress(id, _asReadProgress(here, book));
+            } else {
+              // Komga's is further: its place too - the one read here stayed and, opened at offline and read on a
+              // little, went back over Komga's (EPUB review 2026-10-06, S1)
+              store.setServerProgress(id, book['readProgress'] as Map?,
+                  place: await _komgaPlace(api, id, store), keepPlace: false);
+            }
             conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
                 keptHere: keepHere));
           }
@@ -185,28 +194,23 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         if (!entry.value.contains(id) || store.progress[id]?['synced'] == false) continue;
         final rp = b['readProgress'] as Map?;
         final cur = store.progress[id];
-        if (cur != null && _same(_norm(cur), OfflineStore.norm(rp))) continue;
+        final epub = store.books[id]?['positions'] != null;
+        final samePage = cur != null && _same(_norm(cur), OfflineStore.norm(rp));
+        if (samePage && !epub) continue;
         final at = DateTime.tryParse(cur?['at'] as String? ?? '');
         // saved here since Komga was asked (or that same moment - the clock can't tell them apart): that's the newer
         if (at != null && !at.isBefore(asked)) continue;
-        store.setServerProgress(id, rp);
-        changed = true;
-        // an EPUB: its exact place too, for opening at offline (else the copy opened where it was when downloaded)
-        if (store.books[id]?['positions'] != null) {
-          try {
-            final place = await api.epubProgression(id);
-            if (place == null) {
-              store.books[id]!.remove('epubProgression');
-            } else {
-              store.books[id]!['epubProgression'] = place;
-            }
-            booksChanged = true;
-          } on KomgaUnreachable {
-            rethrow;
-          } catch (_) {
-            // the page alone: near enough
-          }
+        if (epub) {
+          // an EPUB: its exact place too, looked at even on the same page (Komga's pages are coarser than its
+          // places - a place moved within one was never brought over: EPUB review S1)
+          final place = await _komgaPlace(api, id, store);
+          if (!identical(store.progress[id], cur)) continue; // saved here meanwhile: that's the newer (S8)
+          if (samePage && _samePlace(place, store.placeOf(id))) continue;
+          store.setServerProgress(id, rp, place: place, keepPlace: false);
+        } else {
+          store.setServerProgress(id, rp);
         }
+        changed = true;
         // read on another device (it wasn't read here before): Delete once read
         if (cur != null && rp?['completed'] == true) finishedElsewhere.add(id);
       }
@@ -228,23 +232,23 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     var changed = false;
     for (final id in ids) {
       if (!store.books.containsKey(id)) continue;
+      final entry = store.books[id]!;
+      final pagesCount = ((entry['book'] as Map?)?['media'] as Map?)?['pagesCount'] as int?;
       final place = w.place;
       if (place != null) {
         // an EPUB's place, read online: the copy opens there offline too, its page as Komga makes it
-        final entry = store.books[id]!;
-        entry['epubProgression'] = place;
         final total = ((place['locator'] as Map?)?['locations'] as Map?)?['totalProgression'] as num?;
-        final page = komgaEpubPage(total?.toDouble(), ((entry['book'] as Map?)?['media'] as Map?)?['pagesCount'] as int?);
-        if (page != null) store.setServerProgress(id, {'page': page, 'completed': false});
+        final page = komgaEpubPage(total?.toDouble(), pagesCount) ?? store.progress[id]?['page'] as int? ?? 0;
+        store.setServerProgress(id, {'page': page, 'completed': false}, place: place);
         changed = true;
         continue;
       }
-      final pages = (store.books[id]?['pages'] as List?)?.length ?? 0;
+      // (an EPUB has no page list: Komga's page count for it - page 0 "read" before, S9)
+      final pages = entry['positions'] != null ? (pagesCount ?? 0) : (entry['pages'] as List?)?.length ?? 0;
       store.setServerProgress(id, w.unread ? null : {'page': w.page ?? pages, 'completed': w.completed});
       changed = true;
     }
-    // (an EPUB's place is in the book's own record: the whole store, not the progress file alone)
-    if (changed) unawaited((w.place != null ? store.save() : store.saveProgress()).catchError((Object _) {}));
+    if (changed) unawaited(store.saveProgress().catchError((Object _) {}));
     if (w.completed && !w.unread) ids.forEach(Downloads.instance.bookFinished); // Delete once read
   }
 
@@ -261,6 +265,23 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await api.setProgress(id, (p['page'] as int).clamp(1, 1 << 20));
     }
+  }
+
+  /// Komga's exact place for an EPUB (null: none, or Komga couldn't say - the page alone is near enough).
+  static Future<Map?> _komgaPlace(Komga api, String id, OfflineStore store) async {
+    try {
+      return await api.epubProgression(id);
+    } on KomgaUnreachable {
+      rethrow;
+    } catch (_) {
+      return store.placeOf(id);
+    }
+  }
+
+  static bool _samePlace(Map? a, Map? b) {
+    Map? at(Map? p) => (p?['locator'] as Map?)?['locations'] as Map?;
+    return (a?['locator'] as Map?)?['href'] == (b?['locator'] as Map?)?['href'] &&
+        at(a)?['progression'] == at(b)?['progression'];
   }
 
   static Map<String, dynamic>? _asReadProgress(Map<String, dynamic> p, Map book) {

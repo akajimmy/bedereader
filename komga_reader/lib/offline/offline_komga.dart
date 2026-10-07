@@ -291,22 +291,20 @@ class OfflineKomga extends Komga {
 
   /// The place saved on this device while offline (null: the read progress's page through the positions).
   @override
-  Future<Map<String, dynamic>?> epubProgression(String bookId) async =>
-      (store.books[bookId]?['epubProgression'] as Map?)?.cast<String, dynamic>();
+  Future<Map<String, dynamic>?> epubProgression(String bookId) async => store.placeOf(bookId);
 
   /// Kept on the device: the exact place (for reopening here; sent to Komga as it is when back online), and the read
   /// progress page Komga makes of it - how far through the book times Komga's page count, not the position number
   /// (taken for one, page 233 of a 305-page count would have shown the book three quarters read).
+  /// Both in the progress record, written to the small progress file only (it rewrote the whole index each time -
+  /// EPUB review S7); always queued, even when no page can be worked out (the place itself goes to Komga - S10).
   @override
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
     final entry = store.books[bookId];
     if (entry == null) throw NotAvailableOffline('This book');
-    entry['epubProgression'] = progression;
-    await store.put(bookId, entry);
     final at = (progression['locator'] as Map?)?['locations'] as Map?;
-    final page = komgaEpubPage((at?['totalProgression'] as num?)?.toDouble(), _pagesCount(entry)) ??
-        (at?['position'] as num?)?.toInt();
-    if (page != null) await store.setProgress(bookId, page: page, completed: false);
+    final page = komgaEpubPage((at?['totalProgression'] as num?)?.toDouble(), _pagesCount(entry));
+    await store.setProgress(bookId, page: page, completed: false, place: progression);
   }
 
   static int? _pagesCount(Map entry) => ((entry['book'] as Map?)?['media'] as Map?)?['pagesCount'] as int?;
