@@ -12,10 +12,10 @@ import 'package:flutter/services.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
-import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
 import '../page_image.dart';
+import '../reader/reader_device.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -57,7 +57,7 @@ class ReaderScreen extends StatefulWidget {
 
 enum _Ctl { close, fit, night, fullscreen, read, delete, prevBook, slider, pages, image, reader, nextBook, strip }
 
-class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderStateMixin {
+class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderStateMixin, ReaderDevice<ReaderScreen> {
   late dynamic _book = widget.book;
   List<dynamic> _pages = [];
   PageLoader? _loader;
@@ -135,17 +135,9 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    Connection.instance.readerOpened(); // an automatic switch back online waits for the book to close
-    Downloads.instance.readerOpened(); // Delete once read waits for it too
-    AppSettings.instance.readerOpened(); // the screen brightness setting is the reader's
+    openDevice(); // the screen kept on, the rotation lock, the system bars, full screen (lib/reader/reader_device.dart)
     // back in the app (unlocked, switched back to): read further elsewhere meanwhile?
     _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
-    // Rotation as set (the app otherwise follows the sensor, via the manifest), hide the system bars, keep the screen on.
-    _applyRotation();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    _awake();
-    _settings.addListener(_onSettings);
-    fullscreen.addListener(_onFullscreen); // F11 is app-wide (main.dart): the button follows
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
     _curlAnim
       ..addListener(_onCurlTick)
@@ -159,24 +151,17 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     _tapTimer?.cancel();
-    _awakeTimer?.cancel();
     _curlAnim.dispose();
     _curl?.dispose();
     _curlShader?.dispose();
     _curlMoved.dispose();
     _idle?.complete(); // nothing left waiting
-    Connection.instance.readerClosed();
-    AppSettings.instance.readerClosed(); // the screen follows the system again
+    closeDevice();
     _life?.dispose();
     // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
-    Downloads.instance.readerClosed();
-    _settings.removeListener(_onSettings);
-    fullscreen.removeListener(_onFullscreen);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (_rotation != Rotation.auto) OrientationLock.instance.release(); // a lock ends with the book
-    if (_screenHeld) keepScreenOn(false);
+    deviceClosed();
     _pc?.dispose();
     _disposeScrolls();
     _keys.dispose();
@@ -188,20 +173,8 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  // ---- Rotation (Settings > Reader, and the Reader panel): follow the device, or hold portrait / landscape
-  Rotation? _rotation;
-
-  void _applyRotation() {
-    final r = _settings.display.rotation;
-    if (r == _rotation) return;
-    _rotation = r;
-    OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
-  }
-
-  void _onSettings() {
-    if (!mounted) return;
-    _applyRotation();
-    if (_settings.display.screenOn != _screenOnFor) _awake(); // Keep the screen on changed
+  @override
+  void onReaderSettings() {
     // rebuilt only for what it shows: brightness and night warmth are drawn over the whole app, not by the reader
     // (a brightness slider drag rebuilt the reader many times a second - code review 2026-10-05, #44)
     final shown = _shownSettings();
@@ -216,28 +189,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       ..remove('brightness')
       ..remove('warmth');
     return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson()});
-  }
-
-  // ---- Keep the screen on (Settings > Reader): always while a book is open, for N minutes after the last page turn
-  // or touch, or never (the system's own timeout)
-  Timer? _awakeTimer;
-  bool _screenHeld = false;
-  int? _screenOnFor;
-
-  void _awake() {
-    final minutes = _screenOnFor = _settings.display.screenOn;
-    _awakeTimer?.cancel();
-    final hold = minutes != 0;
-    if (hold != _screenHeld) {
-      _screenHeld = hold;
-      keepScreenOn(hold);
-    }
-    if (minutes > 0) {
-      _awakeTimer = Timer(Duration(minutes: minutes), () {
-        _screenHeld = false;
-        keepScreenOn(false); // the system's timeout takes over; the next turn or touch holds it again
-      });
-    }
   }
 
   void _disposeScrolls() {
@@ -353,7 +304,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   // ---- progress: saved 1.5 s after the page settles, and on leaving
   void _onPage(int i) {
-    _awake();
+    awake();
     final jump = i == _jumpingTo;
     _jumpingTo = null;
     if (_startAtEnd != null && _startAtEnd != i) _startAtEnd = null; // (#22) only the page turned back to
@@ -1039,7 +990,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
 
   Future<void> _toggleFullscreen() => toggleFullscreen(); // stays on after the book closes (user)
-  void _onFullscreen() { if (mounted) setState(() {}); }
 
   /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
   /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
@@ -1067,7 +1017,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
-    _awake();
+    awake();
     final k = e.logicalKey;
     if (!_menu) {
       // Volume keys (Android, a setting): down = forward, up = back, in any reading direction. Handled keys don't
@@ -1198,7 +1148,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
                         }
                       },
                       onPointerDown: (_) {
-                        _awake();
+                        awake();
                         _setFingers(_fingers + 1);
                       },
                       onPointerUp: (_) => _setFingers(_fingers - 1),

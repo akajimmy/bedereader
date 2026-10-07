@@ -19,8 +19,8 @@ import '../epub/trace.dart';
 import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
-import '../offline/downloads.dart';
 import '../offline/offline_komga.dart';
+import '../reader/reader_device.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -65,7 +65,7 @@ class EpubReaderScreen extends StatefulWidget {
 /// The controls the remote walks (the comic reader's model): the top bar, then the bottom bar.
 enum _Ctl { close, fullscreen, read, prevBook, slider, contents, settings, nextBook }
 
-class _EpubReaderScreenState extends State<EpubReaderScreen> {
+class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<EpubReaderScreen> {
   static Hyphenators? _hyphenators; // loaded once (the value, not the future: a future is tied to where it began)
 
   EpubBook? _book;
@@ -79,8 +79,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   final _focus = FocusNode();
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'epub-${c.name}')};
   late Map<String, dynamic> _bookNow = widget.book; // refreshed after Mark read / unread
-  Timer? _awakeTimer;
-  bool _screenHeld = false;
 
   String get _title => (widget.book['metadata']?['title'] ?? widget.book['name'] ?? '') as String;
 
@@ -109,36 +107,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     );
   }
 
-  void _onSettings() {
-    _applyRotation();
+  @override
+  void onReaderSettings() {
     if (mounted) setState(() {}); // a new look: laid out again on the next build (same place kept)
-  }
-
-  // the rotation lock (Settings > Reader, and the Text and page panel's This device part), as in the comic reader -
-  // it was offered here but never applied
-  Rotation? _rotation;
-
-  void _applyRotation() {
-    final r = AppSettings.instance.display.rotation;
-    if (r == _rotation) return;
-    _rotation = r;
-    OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
   }
 
   @override
   void initState() {
     super.initState();
-    Connection.instance.readerOpened();
-    AppSettings.instance.addListener(_onSettings);
-    fullscreen.addListener(_onSettings);
-    Downloads.instance.readerOpened();
-    AppSettings.instance.readerOpened();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    _applyRotation();
+    openDevice(); // the screen kept on, the rotation lock, the system bars, full screen (lib/reader/reader_device.dart)
     if (readerTiming) SchedulerBinding.instance.addTimingsCallback(_onFrames); // a measuring build only
     // back in the app: has the book moved on on another device meanwhile?
     if (_online) _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
-    _awake();
     _open();
   }
 
@@ -161,18 +141,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       if (last != null) EpubTrace.instance.log(last);
     }
     EpubTrace.instance.log('closed');
-    Connection.instance.readerClosed();
-    AppSettings.instance.removeListener(_onSettings);
-    AppSettings.instance.readerClosed();
-    Downloads.instance.readerClosed();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    if (_rotation != Rotation.auto) OrientationLock.instance.release(); // a lock ends with the book
-    _awakeTimer?.cancel();
+    closeDevice();
     _cornerTimer?.cancel();
     for (final t in _prefetchTimers) {
       t.cancel();
     }
-    if (_screenHeld) keepScreenOn(false);
     _life?.dispose();
     _saveNow(ask: false); // closing: the place goes now, not after the settle time (not over another device's)
     // the book opened again before this lands waits for it - else it loaded the place before, and this save then
@@ -182,6 +155,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     closing.whenComplete(() {
       if (identical(_closingSaves[id], closing)) _closingSaves.remove(id);
     });
+    deviceClosed(); // after the last save: a book finished here is marked read before Delete once read hears of it
     _book?.removeListener(_onBook);
     _book?.dispose();
     _pc.dispose();
@@ -191,25 +165,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     _endNext.dispose();
     _endClose.dispose();
-    fullscreen.removeListener(_onSettings);
     super.dispose();
-  }
-
-  /// Keep the screen on for the chosen minutes after the last turn (Settings > Reader, shared with comics).
-  void _awake() {
-    final minutes = AppSettings.instance.display.screenOn;
-    _awakeTimer?.cancel();
-    final hold = minutes != 0;
-    if (hold != _screenHeld) {
-      _screenHeld = hold;
-      keepScreenOn(hold);
-    }
-    if (minutes > 0) {
-      _awakeTimer = Timer(Duration(minutes: minutes), () {
-        _screenHeld = false;
-        keepScreenOn(false);
-      });
-    }
   }
 
   Future<void> _open() async {
@@ -613,7 +569,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (!_ownJump) _anchor = null; // a turn: the page shown is the place now
     if (!_ownJump) _lastTurn = DateTime.now(); // (swipes too)
     EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');
-    _awake();
+    awake();
     if (_bookWide) {
       if (i >= b.totalPages!) {
         setState(() => _end = true);
@@ -689,7 +645,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final b = _book;
     EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
     if (b == null) return;
-    _awake();
+    awake();
     if (!_bookWide) {
       final n = b.pagesNow(_chapter)?.length ?? 0;
       final next = _page + by;
