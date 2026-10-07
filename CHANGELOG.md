@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 89 - 2026-10-07
+
 **Fixed**
 - **EPUBs opened from a read list went on to the next book in their series**, not the read list's: the end card,
   Next book and Previous book all ignored the read list (Hitchhiker's Guide from a "Top 100" list offered its
@@ -29,8 +33,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   background). **The count is remembered on the device**, per book and per layout: opening the same book again at
   the same text settings and screen size is immediate. Changing the text size, font, spacing, margins or turning the
   screen lays the book out again behind the same spinner - instant for a layout already used.
-
-## 1.3.0
 
 ### Build 88 - 2026-10-07
 
