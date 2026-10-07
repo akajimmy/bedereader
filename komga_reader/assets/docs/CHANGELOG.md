@@ -9,9 +9,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-## 1.2.0 - in development
+## 1.2.0
 
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+**Released as build 82, tagged `v1.2.0`** (2026-10-07). Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 82 - 2026-10-06
 
