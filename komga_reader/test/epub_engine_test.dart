@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/epub/chapter.dart' show inkOnLight;
 import 'package:komga_reader/epub/css.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
 import 'package:komga_reader/epub/layout.dart';
@@ -469,5 +470,52 @@ void main() {
     final names = ChapterReader(StyleSheet(), (h) => h)
       ..read(parseXhtml('<body><table><tr><td>Yang Weining</td><td>$long recrimination</td></tr></table></body>'));
     expect(Paginator(const EpubTheme(), const Size(400, 900), hy.forLang('en')).run(names.blocks).single.hyphenMarks, 0);
+  });
+
+  // ---- small black-and-white pictures on a light ground in the page's colours (The Dispossessed's chapter number,
+  // a black "5" on a white box, glared on the dark page - Windows, build 79; user: "drop clashing backgrounds")
+
+  Future<ui.Image> drawn(int w, int h, Color ground, Color ink) {
+    final rec = ui.PictureRecorder();
+    Canvas(rec)
+      ..drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..color = ground)
+      ..drawRect(Rect.fromLTWH(w * 0.3, h * 0.3, w * 0.4, h * 0.4), Paint()..color = ink);
+    return rec.endRecording().toImage(w, h);
+  }
+
+  test('ink on a light ground: black on white is; a colour picture, or one on a dark ground, is not', () async {
+    expect(await inkOnLight(await drawn(40, 60, const Color(0xFFFFFFFF), const Color(0xFF000000))), isTrue);
+    expect(await inkOnLight(await drawn(40, 60, const Color(0xFFFFFFFF), const Color(0xFFD02020))), isFalse,
+        reason: 'red ink: a colour picture');
+    expect(await inkOnLight(await drawn(40, 60, const Color(0xFF101010), const Color(0xFFFFFFFF))), isFalse,
+        reason: 'a dark ground: it sits on a dark page already');
+  });
+
+  test("a chapter number printed on white is drawn in the page's colours: its ground the page's, its ink the text's",
+      () async {
+    final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml(
+        '<body><p><img src="ch5.jpg" style="float:left"/>SHEVEK ended his career as a tourist with relief.</p></body>'));
+    final img = (blocks.single as TextBlock).floatImage!;
+    img.image = await drawn(40, 60, const Color(0xFFFFFFFF), const Color(0xFF000000));
+    img.inkOnLight = await inkOnLight(img.image!);
+    const theme = EpubTheme(); // dark: background 1B1B1D, text E4E0D8
+    final page = Paginator(theme, const Size(400, 600), null).run(blocks).single;
+    final rec = ui.PictureRecorder();
+    final canvas = Canvas(rec)..drawColor(theme.background, BlendMode.src);
+    for (final p in page.pieces) {
+      p.paint(canvas);
+    }
+    final shot = await rec.endRecording().toImage(400, 600);
+    final px = (await shot.toByteData(format: ui.ImageByteFormat.rawRgba))!;
+    Color at(Offset o) {
+      final i = (o.dy.round() * 400 + o.dx.round()) * 4;
+      return Color.fromARGB(255, px.getUint8(i), px.getUint8(i + 1), px.getUint8(i + 2));
+    }
+    final r = page.imageRects.single;
+    bool near(Color a, Color b) =>
+        (a.r - b.r).abs() < 0.03 && (a.g - b.g).abs() < 0.03 && (a.b - b.b).abs() < 0.03;
+    expect(near(at(r.topLeft + const Offset(2, 2)), theme.background), isTrue,
+        reason: 'its white ground is the page\'s background: ${at(r.topLeft + const Offset(2, 2))}');
+    expect(near(at(r.center), theme.text), isTrue, reason: 'its black ink is the text\'s colour: ${at(r.center)}');
   });
 }
