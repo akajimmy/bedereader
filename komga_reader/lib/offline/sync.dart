@@ -118,7 +118,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
               // Komga's is further: its place too - the one read here stayed and, opened at offline and read on a
               // little, went back over Komga's (EPUB review 2026-10-06, S1)
               store.setServerProgress(id, book['readProgress'] as Map?,
-                  place: await _komgaPlace(api, id, store), keepPlace: false);
+                  place: (await _komgaPlace(api, id)).$1, keepPlace: false);
             }
             conflicts.add(ProgressConflict(title: _title(book), here: _describe(here), komga: _describe(server),
                 keptHere: keepHere));
@@ -202,10 +202,13 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         if (at != null && !at.isBefore(asked)) continue;
         if (epub) {
           // an EPUB: its exact place too, looked at even on the same page (Komga's pages are coarser than its
-          // places - a place moved within one was never brought over: EPUB review S1)
-          final place = await _komgaPlace(api, id, store);
+          // places - a place moved within one was never brought over: EPUB review S1) - but only if Komga changed
+          // the book's progress since (one request per downloaded EPUB on every refresh, otherwise)
+          if (samePage && rp?['lastModified'] != null && rp!['lastModified'] == cur['modified']) continue;
+          final (place, known) = await _komgaPlace(api, id);
           if (!identical(store.progress[id], cur)) continue; // saved here meanwhile: that's the newer (S8)
-          if (samePage && _samePlace(place, store.placeOf(id))) continue;
+          // (Komga couldn't say: on the same page the place here stays, and is asked for again next time)
+          if (samePage && (!known || _samePlace(place, store.placeOf(id)))) continue;
           store.setServerProgress(id, rp, place: place, keepPlace: false);
         } else {
           store.setServerProgress(id, rp);
@@ -267,14 +270,15 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Komga's exact place for an EPUB (null: none, or Komga couldn't say - the page alone is near enough).
-  static Future<Map?> _komgaPlace(Komga api, String id, OfflineStore store) async {
+  /// Komga's exact place for an EPUB (null: none), and whether Komga could say (if not: null, the page alone is near
+  /// enough - the place here would be the one Komga's replaces, S1).
+  static Future<(Map?, bool)> _komgaPlace(Komga api, String id) async {
     try {
-      return await api.epubProgression(id);
+      return (await api.epubProgression(id), true);
     } on KomgaUnreachable {
       rethrow;
     } catch (_) {
-      return store.placeOf(id);
+      return (null, false);
     }
   }
 

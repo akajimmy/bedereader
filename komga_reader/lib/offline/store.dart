@@ -154,6 +154,9 @@ class OfflineStore {
       'page': n['page'], 'completed': n['completed'], 'at': DateTime.now().toIso8601String(), 'synced': true,
       if (rp == null) 'none': true,
       if (rp != null && kept != null) 'place': kept,
+      // when Komga last changed it (an EPUB's place moves it too, within a page): unchanged, the refresh doesn't
+      // ask Komga for the place again
+      if (rp?['lastModified'] != null) 'modified': rp!['lastModified'],
       'base': n,
     };
   }
@@ -174,8 +177,8 @@ class OfflineStore {
       'synced': false,
       if (clear) 'none': true,
       if (kept != null) 'place': kept,
-      if (place != null) 'placeHere': true, // read here: goes to Komga with the page
-      if (place == null && prev?['placeHere'] == true && !clear) 'placeHere': true,
+      // read here: goes to Komga with the page
+      if (!clear && (place != null || prev?['placeHere'] == true)) 'placeHere': true,
       if (prev?['base'] != null) 'base': prev!['base'],
     };
     await saveProgress();

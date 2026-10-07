@@ -130,10 +130,9 @@ const _named = {
 String decodeEntities(String s) => s.contains('&')
     ? s.replaceAllMapped(_entity, (m) {
         final e = m[1]!;
+        if (!e.startsWith('#')) return _named[e] ?? m[0]!;
         // a number past Unicode (or too long to read) stays as written - it threw, and the chapter didn't load (E10)
-        final code = e.startsWith('#x') ? int.tryParse(e.substring(2), radix: 16)
-            : e.startsWith('#') ? int.tryParse(e.substring(1)) : null;
-        if (e.startsWith('#')) return code != null && code >= 0 && code <= 0x10FFFF ? String.fromCharCode(code) : m[0]!;
-        return _named[e] ?? m[0]!;
+        final code = e.startsWith('#x') ? int.tryParse(e.substring(2), radix: 16) : int.tryParse(e.substring(1));
+        return code != null && code >= 0 && code <= 0x10FFFF ? String.fromCharCode(code) : m[0]!;
       })
     : s;

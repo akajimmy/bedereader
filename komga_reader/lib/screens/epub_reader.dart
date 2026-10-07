@@ -478,11 +478,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       // same page (the page view kept its number, now another page - EPUB review R5)
       _countChanges = b.countChanges;
       final at = b.bookPage(_chapter, _page);
-      if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != at) {
-        _ownJump = true;
-        _pc.jumpToPage(at);
-        _ownJump = false;
-      }
+      if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != at) _jumpView(at);
     }
     if (!_bookWide && b.counted && !_end) {
       // every chapter counted: the page view goes over the whole book, on the same page
@@ -548,11 +544,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         // the whole book in one page view: to that chapter's page, where its error and Retry show (the page view
         // stayed on the page before - EPUB review R2)
         final at = _bookWide ? b.bookPage(chapter, 0) : null;
-        if (at != null && _pc.hasClients) {
-          _ownJump = true;
-          _pc.jumpToPage(at);
-          _ownJump = false;
-        }
+        if (at != null && _pc.hasClients) _jumpView(at);
       }
       return;
     }
@@ -568,10 +560,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     });
     final target = _bookWide ? b.bookPage(chapter, page)! : page;
     if (_pc.hasClients) {
-      // the reader's own move (opening, laid out again, a jump): not a turn - it saves nothing by itself
-      _ownJump = true;
-      _pc.jumpToPage(target);
-      _ownJump = false;
+      _jumpView(target);
     } else {
       final old = _pc;
       setState(() => _pc = PageController(initialPage: target));
@@ -646,6 +635,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   bool _ownJump = false;
+
+  /// The reader's own move of the page view (opening, laid out again, a jump): not a turn - it saves nothing by itself.
+  void _jumpView(int page) {
+    _ownJump = true;
+    _pc.jumpToPage(page);
+    _ownJump = false;
+  }
+
   int _countChanges = 0; // the book's countChanges this reader has gone along with
   bool _overscrolled = false; // this drag already turned past a chapter's end (R3)
 

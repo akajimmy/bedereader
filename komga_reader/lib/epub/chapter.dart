@@ -12,7 +12,7 @@ import 'source.dart';
 import 'xhtml.dart';
 
 class LoadedChapter {
-  LoadedChapter(this.path, this.blocks, this.lang, this.length, [this.images = const [], this.ids = const {}]);
+  LoadedChapter(this.path, this.blocks, this.lang, this.length, this.images, this.ids);
   final String path;
   final List<Block> blocks;
   final String? lang;
@@ -20,17 +20,11 @@ class LoadedChapter {
   final List<ImageBlock> images; // every picture decoded for it - used by a block or not
   final Map<String, int> ids; // element id -> chapter position (link targets)
 
-  /// Frees the decoded pictures (the chapter is no longer kept) - all of them: a picture no block kept (a float in
-  /// an empty wrapper, a second float in a paragraph) was never freed (EPUB review E3).
+  /// Frees the decoded pictures (the chapter is no longer kept) - all of them, from the reader's list: a picture no
+  /// block kept (a float in an empty wrapper, a second float in a paragraph) was never freed (EPUB review E3).
   void dispose() {
-    final done = <ImageBlock>{};
     for (final img in images) {
-      if (done.add(img)) img.image?.dispose();
-    }
-    for (final b in blocks) {
-      if (b is ImageBlock && done.add(b)) b.image?.dispose();
-      final f = b is TextBlock ? b.floatImage : null;
-      if (f != null && done.add(f)) f.image?.dispose();
+      img.image?.dispose();
     }
   }
 }
@@ -91,16 +85,13 @@ class ChapterLoader {
 /// Windows, build 79). Drawn in the page's own colours ([Paginator] - user, 2026-10-06: "drop clashing backgrounds").
 /// Colour pictures and dark-edged ones are left as they are.
 Future<bool> inkOnLight(ui.Image picture) async {
-  final w = picture.width, h = picture.height;
-  if (w == 0 || h == 0) return false;
   final data = await picture.toByteData(format: ui.ImageByteFormat.rawRgba);
   if (data == null) return false;
   final px = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-  // at most ~40,000 pixels looked at (a long thin strip was read whole - E14): every step-th row and column
-  final step = math.max(1, math.sqrt(w * h / 40000).ceil());
+  final w = picture.width, h = picture.height;
   var coloured = 0, all = 0, edge = 0, lightEdge = 0;
-  for (var y = 0; y < h; y += (y == 0 || y + step < h) ? step : math.max(1, h - 1 - y)) {
-    for (var x = 0; x < w; x += (x == 0 || x + step < w) ? step : math.max(1, w - 1 - x)) {
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
       final i = (y * w + x) * 4;
       final r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
       all++;
