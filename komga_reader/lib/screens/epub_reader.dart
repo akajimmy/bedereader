@@ -22,6 +22,7 @@ import '../offline/connection.dart';
 import '../offline/offline_komga.dart';
 import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
+import '../reader/reader_slider.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -712,15 +713,15 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   void _showControls() => setState(() {
         _controls = true;
         _scrub = null;
-        _scrubbing = false;
+        _scrubber.remote = false;
       });
 
   void _hideControls() {
-    _sliderPointer = null; // a finger still on the slider: its scrub is let go of (the comic reader's rule)
+    _scrubber.release(); // a finger still on the slider: its scrub is let go of
     setState(() {
       _controls = false;
       _scrub = null;
-      _scrubbing = false;
+      _scrubber.remote = false;
     });
     _focus.requestFocus();
   }
@@ -1362,10 +1363,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
 
   // ---- the controls: the comic reader's bars (user, 2026-10-06: "it still looks disjointed from the comics")
 
-  int? _scrub; // the page picked on the slider (a finger on it, or the remote scrubbing) - shown as it moves
-  bool _scrubbing = false; // the remote is scrubbing (OK on the slider)
-  int? _sliderPointer;
-  static const _sliderInset = 20.0;
+  final _scrubber = SliderScrub(); // the place picked on the slider, shown as it moves (lib/reader/reader_slider.dart)
+  int? get _scrub => _scrubber.value;
+  set _scrub(int? v) => _scrubber.value = v;
 
   /// The slider always runs through the whole book (user, 2026-10-06: it ran through the chapter until the book
   /// was counted, so it couldn't go far): by page once the book is counted, by thousandths of the book till then.
@@ -1409,106 +1409,17 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     }));
   }
 
-  int _sliderAt(double x, double width, int last) =>
-      (((x - _sliderInset) / (width - 2 * _sliderInset)).clamp(0.0, 1.0) * last).round();
-
-  /// The slider under the remote: OK starts scrubbing, Left / Right then move a page, OK goes there.
-  KeyEventResult _onSliderKey(FocusNode node, KeyEvent e) {
-    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final k = e.logicalKey;
-    final (at, last) = _sliderRange;
-    if (isOkKey(k)) {
-      if (e is! KeyDownEvent) return KeyEventResult.handled;
-      if (_scrubbing) {
-        final target = _scrub ?? at;
-        setState(() {
-          _scrubbing = false;
-          _scrub = null;
-        });
-        _sliderJump(target);
-      } else {
-        setState(() {
-          _scrubbing = true;
-          _scrub = at;
-        });
-      }
-      return KeyEventResult.handled;
-    }
-    final fwd = k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.pageDown;
-    final back = k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.pageUp;
-    if (_scrubbing && (fwd || back)) {
-      final step = _byPage ? 1 : _steps ~/ 100; // by thousandths: a press is 1% of the book
-      setState(() => _scrub = ((_scrub ?? at) + (fwd ? step : -step)).clamp(0, last));
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored; // not scrubbing: arrows go on to the next control
-  }
-
   Widget _slider() {
-    final node = _ctl[_Ctl.slider]!;
-    final accent = Theme.of(context).colorScheme.primary;
     final (at, last) = _sliderRange;
-    final shown = _scrub ?? _seeking ?? at;
-    return Focus(
-      focusNode: node,
-      onKeyEvent: _onSliderKey,
-      onFocusChange: (_) => setState(() {
-        if (!node.hasFocus) {
-          _scrubbing = false;
-          _scrub = null;
-        }
-      }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: node.hasFocus ? accent.withValues(alpha: _scrubbing ? 0.5 : 0.3) : Colors.transparent,
-          border: Border.all(color: node.hasFocus ? accent : Colors.transparent, width: 3),
-        ),
-        child: SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 4,
-            inactiveTrackColor: Colors.white24,
-            showValueIndicator: ShowValueIndicator.never, // the counter says where
-            padding: const EdgeInsets.symmetric(horizontal: _sliderInset, vertical: 12),
-          ),
-          // touch followed here, not by the Slider's own drag (the comic reader's: a cancelled drag jumped with the
-          // finger still down); the page shown follows the finger, the page changes when it lifts
-          child: LayoutBuilder(builder: (context, box) => Listener(
-                behavior: HitTestBehavior.opaque,
-                onPointerDown: (e) {
-                  if (_sliderPointer != null) return;
-                  _sliderPointer = e.pointer;
-                  setState(() => _scrub = _sliderAt(e.localPosition.dx, box.maxWidth, last));
-                },
-                onPointerMove: (e) {
-                  if (e.pointer != _sliderPointer) return;
-                  final p = _sliderAt(e.localPosition.dx, box.maxWidth, last);
-                  if (p != _scrub) setState(() => _scrub = p);
-                },
-                onPointerUp: (e) {
-                  if (e.pointer != _sliderPointer) return;
-                  _sliderPointer = null;
-                  _sliderJump(_sliderAt(e.localPosition.dx, box.maxWidth, last));
-                  setState(() => _scrub = null);
-                },
-                onPointerCancel: (e) {
-                  if (e.pointer != _sliderPointer) return;
-                  _sliderPointer = null;
-                  setState(() => _scrub = null);
-                },
-                child: IgnorePointer(
-                  child: Slider(
-                    min: 0,
-                    max: math.max(1, last).toDouble(),
-                    divisions: math.max(1, last),
-                    value: shown.clamp(0, math.max(1, last)).toDouble(),
-                    onChanged: (_) {}, // the enabled look; touch and keys are handled above
-                  ),
-                ),
-              )),
-        ),
-      ),
+    return ReaderSlider(
+      node: _ctl[_Ctl.slider]!,
+      scrub: _scrubber,
+      shown: _scrub ?? _seeking ?? at,
+      at: at,
+      last: last,
+      step: _byPage ? 1 : _steps ~/ 100, // by thousandths: a press is 1% of the book
+      onJump: _sliderJump,
+      changed: () => setState(() {}),
     );
   }
 

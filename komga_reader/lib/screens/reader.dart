@@ -17,6 +17,7 @@ import '../page_curl.dart';
 import '../page_image.dart';
 import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
+import '../reader/reader_slider.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -64,8 +65,11 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   PageController? _pc;
   int _index = 0;
   bool _menu = false; // controls shown
-  int? _scrub; // page picked on the slider but not jumped to yet
-  bool _scrubbing = false; // remote is driving the slider
+  final _scrubber = SliderScrub(); // the page picked on the slider, not jumped to yet (lib/reader/reader_slider.dart)
+  int? get _scrub => _scrubber.value;
+  set _scrub(int? v) => _scrubber.value = v;
+  bool get _scrubbing => _scrubber.remote; // the remote is driving the slider
+  set _scrubbing(bool v) => _scrubber.remote = v;
   // Where the reader was before the slider took them elsewhere - marked on the slider while scrubbing, and a drag near
   // it snaps to it, so after a look at another page they can get back (user, 2026-10-02). Kept over slider jumps
   // only: an ordinary page turn means reading on from here, so it's forgotten (else reading on from a page looked at
@@ -927,7 +931,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     // a finger still on the slider is let go of: hidden by Esc / Back mid-scrub, the scrub is cancelled - its lift
     // still reaches the slider's listener (Flutter sends a pointer's events where it went down) and jumped to the page
     // picked (user, 2026-10-02)
-    _sliderPointer = null;
+    _scrubber.release();
     setState(() { _menu = false; _scrub = null; _scrubbing = false; });
     _keys.requestFocus();
   }
@@ -972,15 +976,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
 
   // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
   // remote); with the controls hidden, keys go through ReaderKeys.
-  // Left/Right follow the reading direction (right to left: Left goes forward); Up/Down and Page Up/Down don't.
-  bool _isFwd(LogicalKeyboardKey k) =>
-      k == (_rtl ? LogicalKeyboardKey.arrowLeft : LogicalKeyboardKey.arrowRight) ||
-      k == LogicalKeyboardKey.arrowDown || k == LogicalKeyboardKey.pageDown;
-  bool _isBack(LogicalKeyboardKey k) =>
-      k == (_rtl ? LogicalKeyboardKey.arrowRight : LogicalKeyboardKey.arrowLeft) ||
-      k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
-
-
   /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
   /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
   void _onWheel(double dy) {
@@ -1040,29 +1035,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       return KeyEventResult.handled;
     }
     return controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
-  }
-
-  /// The slider under the remote: OK starts scrubbing, arrows then move the page, OK jumps there.
-  KeyEventResult _onSliderKey(FocusNode node, KeyEvent e) {
-    if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final k = e.logicalKey;
-    if (isOkKey(k)) {
-      if (e is! KeyDownEvent) return KeyEventResult.handled;
-      if (_scrubbing) {
-        final target = _scrub ?? _index;
-        setState(() { _scrubbing = false; _scrub = null; });
-        _sliderJump(target);
-      } else {
-        _thumbShown = null; // not the last scrub's page
-        setState(() { _scrubbing = true; _scrub = _index.clamp(0, _last); });
-      }
-      return KeyEventResult.handled;
-    }
-    if (_scrubbing && (_isFwd(k) || _isBack(k))) {
-      setState(() => _scrub = ((_scrub ?? _index) + (_isFwd(k) ? 1 : -1)).clamp(0, _last));
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored; // not scrubbing: arrows go on to the next control
   }
 
   void _setFingers(int n) {
@@ -1678,46 +1650,29 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     );
   }
 
-  Widget _slider(int shown) {
-    final node = _ctl[_Ctl.slider]!;
-    final accent = Theme.of(context).colorScheme.primary;
-    return Focus(
-      focusNode: node,
-      onKeyEvent: _onSliderKey,
-      onFocusChange: (_) => setState(() { if (!node.hasFocus) { _scrubbing = false; _scrub = null; } }),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: node.hasFocus ? accent.withValues(alpha: _scrubbing ? 0.5 : 0.3) : Colors.transparent,
-          border: Border.all(color: node.hasFocus ? accent : Colors.transparent, width: 3),
-        ),
-        child: SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackHeight: 4,
-            inactiveTrackColor: Colors.white24,
-            showValueIndicator: ShowValueIndicator.never, // the preview says which page
-            // a known inset, so the preview can sit over the thumb: the track runs edge to edge inside it
-            padding: const EdgeInsets.symmetric(horizontal: _sliderInset, vertical: 12),
-          ),
-          child: LayoutBuilder(builder: (context, box) => Stack(clipBehavior: Clip.none, children: [
-            _sliderItself(shown, box.maxWidth),
-            // over the track, under the preview: while scrubbing, and whenever there's a page to go back to
-            if (_scrub != null || _returnTo != null) _startMark(box.maxWidth),
-            if (_scrub != null) _preview(shown, box.maxWidth),
-          ])),
-        ),
-      ),
-    );
-  }
+  Widget _slider(int shown) => ReaderSlider(
+        node: _ctl[_Ctl.slider]!,
+        innerNode: _sliderInner,
+        scrub: _scrubber,
+        shown: shown,
+        at: _index.clamp(0, _last),
+        last: _last,
+        rtl: _rtl,
+        upDownStep: true,
+        wayBack: _scrubOrigin,
+        markWayBack: _scrub != null || _returnTo != null, // while scrubbing, and whenever there's a page to go back to
+        onScrubStart: () => _thumbShown = null, // not the last scrub's page
+        onJump: _sliderJump,
+        changed: () => setState(() {}),
+        label: 'Page ${shown + 1}',
+        preview: _preview,
+      );
 
-  static const _sliderInset = 20.0;
   static const _previewSize = Size(120, 196);
 
   /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
   /// of it and its number, over the thumb.
-  Widget _preview(int shown, double width) {
-    final x = _xOf(shown, width);
+  Widget _preview(int shown, double x) {
     if (!_settings.display.pagePreviews) {
       // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
       const w = 96.0;
@@ -1873,28 +1828,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _thumbShown = null;
   }
 
-  // Touch on the slider is followed here, not by the Slider's own drag: that could be cancelled mid-drag, which
-  // jumped to the page with the finger still down and left the preview stuck (user, 2026-09-30). Now the page
-  // changes only when the finger lifts.
-  int? _sliderPointer;
-
-  int _pageAt(double x, double width) {
-    final along = ((x - _sliderInset) / (width - 2 * _sliderInset)).clamp(0.0, 1.0);
-    return ((_rtl ? 1 - along : along) * _last).round();
-  }
-
-  /// Where page [i] sits on the slider (right to left: page 1 at the right end).
-  double _xOf(int i, double width) {
-    final along = _sliderInset + (_last == 0 ? 0 : i / _last) * (width - 2 * _sliderInset);
-    return _rtl ? width - along : along;
-  }
-
-  static const _snap = 14.0; // a finger this close to the start mark lands on it
-
-  /// The page under a finger dragging along the slider: the start mark's page when it's close to it.
-  int _dragPageAt(double x, double width) =>
-      (x - _xOf(_scrubOrigin, width)).abs() <= _snap ? _scrubOrigin : _pageAt(x, width);
-
   /// Off to the page picked on the slider - remembering where the reader was, to come back to.
   void _sliderJump(int target) {
     if (target == _index) return;
@@ -1904,64 +1837,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     _pc?.jumpToPage(target);
   }
 
-  /// A line across the slider at the page to go back to - shown while scrubbing (the page it started from) and, after
-  /// a jump, all the time until it's forgotten (user, 2026-10-02).
-  Widget _startMark(double width) {
-    final accent = Theme.of(context).colorScheme.primary;
-    return Positioned(
-      left: _xOf(_scrubOrigin, width) - 1.5,
-      top: 0,
-      bottom: 0,
-      width: 3,
-      child: IgnorePointer(
-        child: Center(
-          child: Container(
-            key: const ValueKey('scrub-start'),
-            height: 22,
-            decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(1.5),
-                boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 2)]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _sliderItself(int shown, double width) => Listener(
-        behavior: HitTestBehavior.opaque,
-        onPointerDown: (e) {
-          if (_sliderPointer != null) return; // one finger scrubs
-          _sliderPointer = e.pointer;
-          _thumbShown = null; // not the last scrub's page
-          setState(() => _scrub = _dragPageAt(e.localPosition.dx, width));
-        },
-        onPointerMove: (e) {
-          if (e.pointer != _sliderPointer) return;
-          final p = _dragPageAt(e.localPosition.dx, width);
-          if (p != _scrub) setState(() => _scrub = p);
-        },
-        onPointerUp: (e) {
-          if (e.pointer != _sliderPointer) return;
-          _sliderPointer = null;
-          _sliderJump(_dragPageAt(e.localPosition.dx, width));
-          setState(() => _scrub = null);
-        },
-        onPointerCancel: (e) {
-          if (e.pointer != _sliderPointer) return;
-          _sliderPointer = null;
-          setState(() => _scrub = null); // the system took the touch: stay where we were
-        },
-        child: IgnorePointer(
-          child: Slider(
-            focusNode: _sliderInner,
-            min: 0,
-            max: _last.toDouble(),
-            divisions: _last,
-            value: shown.toDouble(),
-            label: 'Page ${shown + 1}',
-            onChanged: (_) {}, // enabled look; touch and keys are handled above
-          ),
-        ),
-      );
 }
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
