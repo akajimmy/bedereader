@@ -285,7 +285,9 @@ void main() {
     tester.view.physicalSize = const Size(800, 1200);
     await tester.pump();
     await settle(tester);
-    expect(await label(tester), before);
+    // (the place, not the wording: counting may finish meanwhile - "16%" becomes "Pg. 5/27 · 16%")
+    String pct(String l) => RegExp(r'(\d+)%').firstMatch(l)!.group(1)!;
+    expect(pct(await label(tester)), pct(before));
   });
 
   testWidgets("R3: chapter by chapter (not counted yet), a swipe past the chapter's last page goes on to the next",

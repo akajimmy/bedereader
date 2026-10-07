@@ -18,6 +18,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: no false "Read on another device" questions about your own reading**, and no lost last page: Mark read /
   unread waits for a save on its way (it could put the book back in progress), a save that failed is sent again on
   closing, and a book closed and quickly opened again waits for the closing save.
+- **EPUB: moving through a book** - a chapter that can't be loaded shows its error as a page, with the controls and
+  page turns still working (it took over the screen, leaving only Retry and Close); turning back into a chapter goes
+  to its last page; before the whole book is counted, a swipe goes on into the next chapter as taps and keys do;
+  minimising the window no longer loses the place; a link whose target can't be found opens its chapter instead of
+  doing nothing.
 - Build tools: a failed release step now really puts the changelog back; a build that fails early puts the version
   number back; and if a new Desktop copy can't be swapped in, the old one stays in place instead of none at all.
 
