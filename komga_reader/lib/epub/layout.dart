@@ -681,6 +681,10 @@ class EpubPage {
   @visibleForTesting
   List<Offset> get textOrigins => [for (final p in pieces) if (p is _TextPiece) p.at];
 
+  /// Where each text piece ends, down the page (tests).
+  @visibleForTesting
+  List<double> get textBottoms => [for (final p in pieces) if (p is _TextPiece) p.at.dy + p.to - p.from];
+
   /// Where each text piece's text starts within it - its first-line indent, for a plain paragraph (tests).
   @visibleForTesting
   List<double> get textIndents =>

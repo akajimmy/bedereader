@@ -622,10 +622,10 @@ void main() {
     for (final p in pages) {
       expect(p.textOrigins, isNotEmpty, reason: 'part of the row on every page');
     }
-    // nothing placed below a page's text area: each piece starts on its page
+    // nothing drawn below a page's text area (a line taller than the page aside, none here)
     for (final p in pages) {
-      for (final o in p.textOrigins) {
-        expect(o.dy, lessThan(600 - theme.margins.bottom));
+      for (final bottom in p.textBottoms) {
+        expect(bottom, lessThanOrEqualTo(600 - theme.margins.bottom + 0.5));
       }
     }
   });
@@ -661,17 +661,19 @@ void main() {
   });
 
   test('E12: a negative margin-top never draws text over the block before', () {
-    final o = layOut('<p>One.</p><p style="margin-top: -3em">Two.</p>').single.textOrigins;
+    final o = layOut('<p style="margin-bottom: -2em">One.</p><p style="margin-top: -3em">Two.</p>').single.textOrigins;
     final lineH = const EpubTheme().fontSize * const EpubTheme().lineHeight;
     expect(o[1].dy - o[0].dy, greaterThanOrEqualTo(lineH - 0.5));
   });
 
-  test('E13: a table of very many columns stays on the page (its columns ran off it)', () {
-    final row = List.filled(60, '<td>x</td>').join();
-    final pages = layOut('<table><tr>$row</tr></table>');
-    for (final o in pages.single.textOrigins) {
-      expect(o.dx, lessThan(400), reason: 'every column starts on the page');
+  test('E13: a table of very many columns keeps them in order across the page (the gaps alone were wider than the '
+      'page: columns came out narrower than nothing, starting left of the one before)', () {
+    final row = '<td>Supercalifragilistic</td>${List.filled(29, '<td>x</td>').join()}';
+    final o = layOut('<table><tr>$row</tr></table>').single.textOrigins;
+    for (var c = 1; c < o.length; c++) {
+      expect(o[c].dx, greaterThan(o[c - 1].dx), reason: 'column $c starts after column ${c - 1}');
     }
+    expect(o.last.dx, lessThan(400));
   });
 
   test('E15: ::first-letter takes the opening quote with the letter, not the quote alone', () {
