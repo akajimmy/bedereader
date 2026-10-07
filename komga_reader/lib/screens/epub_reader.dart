@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../epub/book.dart';
+import '../epub/count_store.dart';
 import '../epub/hyphenator.dart';
 import '../epub/layout.dart';
 import '../epub/progress.dart';
@@ -82,7 +83,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   int _page = 0; // its page
   bool _end = false; // on the end card
   PageController _pc = PageController();
-  bool _bookWide = false; // the page view runs over the whole book (all counted) - else over [_chapter]
+  // the book is counted in this layout and the place shown: until then a spinner covers it, with the chapters
+  // counted (user, 2026-10-07: "a second or two on open ... avoids a bunch of oddness and complexity")
+  bool _ready = false;
   bool _controls = false;
   final _focus = FocusNode();
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'epub-${c.name}')};
@@ -207,17 +210,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       // the book's own text size first (a book set smaller or larger all through shows at the reader's size)
       final book = EpubBook(source, info, hy);
       await book.measureTextSize();
-      // the chapters' shares of the book till they're counted (Komga's positions; kept with a downloaded book too)
-      // (only where progress is kept, as the place above: else Komga isn't asked)
-      if (_online) {
-        try {
-          book.estimateFrom([
-            for (final p in await _progress.positions()) EpubProgress.pathOf((p as Map)['href'] as String),
-          ]);
-        } catch (_) {
-          // none: equal shares till counted
-        }
-      }
       if (!mounted) {
         book.dispose();
         return;
@@ -402,9 +394,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     });
   }
 
-  // ---- layout
-
-  bool _counting = false;
+  // ---- layout: every new size or setting is counted again (or its counts remembered) before the book shows
 
   void _layout(Size size) {
     final b = _book!;
@@ -413,32 +403,62 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     if (size.isEmpty) return;
     _size = size;
     if (b.size == size && b.theme == _theme) return;
-    // still opening (the saved place not shown yet): the saved place again, not what's on screen - the system bars
-    // hiding right after opening change the size before it's shown (found on the tablet)
-    final opening = _startFraction;
-    if (opening != null) {
-      b.setLayout(_theme, size);
-      _bookWide = false;
-      _counting = false;
-      if (b.size != Size.zero) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => _show(_chapter, 0, fraction: opening));
-      }
-      return;
-    }
     // the place being read: the anchor from the layout before, if nothing has moved since - not the start of the page
     // now on screen, which is earlier than the place, so each new size or setting walked back a little more
-    // (Windows, build 79: two resizes and back, a page back)
-    final keep = _book!.size == Size.zero ? null : (_anchor ?? b.positionOf(_chapter, _page));
-    _anchor = keep;
+    // (Windows, build 79: two resizes and back, a page back). Still opening (the saved place not shown yet): the
+    // saved place again ([_startFraction]) - the system bars hiding right after opening change the size before it's
+    // shown (found on the tablet). Laid out again before the last layout was counted: its anchor still stands.
+    if (_ready && _startFraction == null) _anchor ??= b.positionOf(_chapter, _page);
     b.setLayout(_theme, size);
-    _bookWide = false;
-    _counting = false;
-    // the same text stays in view: back to its chapter, its page found once laid out again (the first layout: the
-    // opening shows the saved place itself - a "start of the chapter" here overrode it, found on the tablet)
-    if (keep != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _show(keep.chapter, keep.position, relayout: true));
-    }
+    _ready = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _count());
   }
+
+  int _countRun = 0; // each layout's counting: an older one still going stops when it sees it's not the last
+
+  /// The layout's counts - remembered from before, else counted - then the place shown in it.
+  Future<void> _count() async {
+    final b = _book;
+    if (b == null || !mounted || b.size == Size.zero) return;
+    final run = ++_countRun;
+    final key = await _layoutKey(b);
+    final id = widget.book['id'] as String;
+    final kept = await EpubCountStore.instance.load(id, key).catchError((Object _) => null);
+    if (run != _countRun || !mounted || _book != b) return;
+    if (kept == null || !b.restoreCounts(kept)) {
+      await b.countAll(current: () => _chapter);
+      if (run != _countRun || !mounted || _book != b) return;
+      final counts = b.counts;
+      if (counts != null) unawaited(EpubCountStore.instance.save(id, key, counts));
+    }
+    if (!b.counted) return; // laid out again meanwhile: that layout's counting carries on
+    final keep = _anchor;
+    if (keep != null) {
+      await _show(keep.chapter, keep.position, relayout: true);
+    } else {
+      await _show(_chapter, 0, fraction: _startFraction ?? 0);
+      _startFraction = null;
+    }
+    if (run != _countRun || !mounted) return;
+    setState(() => _ready = true);
+  }
+
+  /// What a book's counts depend on: this app's build (its layout code), the book's file, the page size and the
+  /// look - not the colours.
+  Future<String> _layoutKey(EpubBook b) async {
+    final t = b.theme, m = t.margins;
+    final file = '${widget.book['fileLastModified'] ?? ''}/${widget.book['sizeBytes'] ?? ''}';
+    return [
+      _appVersion ??= await getAppVersion() ?? '',
+      file,
+      '${b.size.width.toStringAsFixed(1)}x${b.size.height.toStringAsFixed(1)}@${t.pixelRatio}',
+      '${t.fontFamily}/${t.fontSize}/${t.lineHeight}/${t.paragraphGap}',
+      '${m.left}/${m.top}/${m.right}/${m.bottom}',
+      '${t.bookFormatting}/${t.hyphenate}/${b.textSize}/${b.textBold}',
+    ].join('|');
+  }
+
+  static String? _appVersion; // the value, not the future: a future is tied to where it began (tests)
 
   /// The place being read through new layouts (window sizes, settings); let go of at any other move.
   EpubPosition? _anchor;
@@ -451,27 +471,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       WidgetsBinding.instance.addPostFrameCallback((_) => _onBook());
       return;
     }
-    if (_bookWide && b.countChanges != _countChanges && b.counted && !_end) {
+    if (_ready && b.countChanges != _countChanges && b.counted && !_end) {
       // a chapter's number of pages changed after counting: the book's page numbers after it moved - back to the
       // same page (the page view kept its number, now another page - EPUB review R5)
       _countChanges = b.countChanges;
       final at = b.bookPage(_chapter, _page);
       if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != at) _jumpView(at);
     }
-    if (!_bookWide && b.counted && !_end) {
-      // every chapter counted: the page view goes over the whole book, on the same page
-      final at = b.bookPage(_chapter, _page)!;
-      final old = _pc;
-      _countChanges = b.countChanges;
-      setState(() {
-        _bookWide = true;
-        _pc = PageController(initialPage: at);
-        _scrub = null; // the slider's units change (thousandths -> pages): a scrub under way is let go (R11)
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-    } else {
-      setState(() {});
-    }
+    setState(() {}); // the spinner's count, a chapter laid out
   }
 
   /// Shows chapter [chapter] at [position] (laying it out first).
@@ -489,10 +496,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   }
 
   final _prefetchTimers = <Timer>[];
-
-  /// When the reader last turned a page: background counting waits while pages are being turned.
-  DateTime _lastTurn = DateTime.fromMillisecondsSinceEpoch(0);
-  bool get _turning => DateTime.now().difference(_lastTurn) < const Duration(milliseconds: 1200);
 
   /// The reader moved somewhere (contents, a link, the slider): shown, and saved once it settles.
   Future<void> _jump(int chapter, int position) async {
@@ -519,9 +522,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
           _page = 0;
           _end = false;
         });
-        // the whole book in one page view: to that chapter's page, where its error and Retry show (the page view
-        // stayed on the page before - EPUB review R2)
-        final at = _bookWide ? b.bookPage(chapter, 0) : null;
+        // to that chapter's page, where its error and Retry show (the page view stayed on the page before - EPUB
+        // review R2)
+        final at = b.bookPage(chapter, 0);
         if (at != null && _pc.hasClients) _jumpView(at);
       }
       return;
@@ -536,17 +539,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       _end = false;
       if (fraction != null && fraction == _startFraction) _startFraction = null; // opened at the saved place
     });
-    final target = _bookWide ? b.bookPage(chapter, page)! : page;
+    final target = b.bookPage(chapter, page)!;
     if (_pc.hasClients) {
       _jumpView(target);
     } else {
       final old = _pc;
       setState(() => _pc = PageController(initialPage: target));
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-    }
-    if (!_counting) {
-      _counting = true;
-      unawaited(b.countAll(current: () => _chapter, busy: () => _turning));
     }
     // the neighbours ready for turning into
     if (chapter + 1 < b.chapterCount) _prefetch(chapter + 1);
@@ -555,12 +554,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
 
   // ---- turning
 
-  int get _itemCount {
-    final b = _book!;
-    if (_bookWide) return b.totalPages! + 1; // + the end card
-    final n = b.pagesNow(_chapter)?.length ?? 1;
-    return _chapter == b.chapterCount - 1 ? n + 1 : n;
-  }
+  int get _itemCount => _book!.totalPages! + 1; // + the end card
 
   void _onPageChanged(int i) {
     if (!readerTiming) return _pageChanged(i);
@@ -575,41 +569,27 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   void _pageChanged(int i) {
     final b = _book!;
     if (!_ownJump) _anchor = null; // a turn: the page shown is the place now
-    if (!_ownJump) _lastTurn = DateTime.now(); // (swipes too)
-    EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');
+    EpubTrace.instance.log('page $i${_ownJump ? ' by the reader' : ''}');
     awake();
-    if (_bookWide) {
-      if (i >= b.totalPages!) {
-        setState(() => _end = true);
-        _reachedEnd();
-        _endReached();
-        return;
-      }
-      final (c, p) = b.chapterPage(i);
-      if (c != _chapter) b.keepAround(c);
-      setState(() {
-        _chapter = c;
-        _page = p;
-        _end = false;
-      });
-      if (c + 1 < b.chapterCount) _prefetch(c + 1);
-      if (c > 0) _prefetch(c - 1);
-    } else {
-      final n = b.pagesNow(_chapter)?.length ?? 0;
-      setState(() {
-        _end = i >= n;
-        _page = math.min(i, math.max(0, n - 1));
-      });
+    if (i >= b.totalPages!) {
+      setState(() => _end = true);
+      _reachedEnd();
+      _endReached();
+      return;
     }
+    final (c, p) = b.chapterPage(i);
+    if (c != _chapter) b.keepAround(c);
+    setState(() {
+      _chapter = c;
+      _page = p;
+      _end = false;
+    });
+    if (c + 1 < b.chapterCount) _prefetch(c + 1);
+    if (c > 0) _prefetch(c - 1);
     _flashCorner();
     if (_ownJump) return; // the reader moved the page itself: not the reader's turn (a jump saves via _jump)
     _moved = true;
-    if (_end) {
-      _reachedEnd();
-      _endReached();
-    } else {
-      _settled();
-    }
+    _settled();
   }
 
   bool _ownJump = false;
@@ -622,7 +602,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   }
 
   int _countChanges = 0; // the book's countChanges this reader has gone along with
-  bool _overscrolled = false; // this drag already turned past a chapter's end (R3)
 
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
   // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
@@ -637,7 +616,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   DateTime _lastWheelTurn = DateTime(0);
 
   void _onWheel(double dy) {
-    if (_book == null) return;
+    if (_book == null || !_ready) return;
     _wheelAcc += dy;
     if (_wheelAcc.abs() < 40) return;
     final forward = _wheelAcc > 0;
@@ -649,24 +628,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   }
 
   Future<void> _turn(int by) async {
-    _lastTurn = DateTime.now();
-    final b = _book;
     EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
-    if (b == null) return;
+    if (_book == null || !_ready) return;
     awake();
-    if (!_bookWide) {
-      final n = b.pagesNow(_chapter)?.length ?? 0;
-      final next = _page + by;
-      if (by > 0 && next >= n && !(_chapter == b.chapterCount - 1)) {
-        await _jump(_chapter + 1, 0); // into the next chapter (by chapter until the book is counted) - a turn
-        return;
-      }
-      if (by < 0 && next < 0) {
-        if (_chapter > 0) await _jump(_chapter - 1, 1 << 30); // the previous chapter's last page
-        return;
-      }
-    }
-    // (a chapter that failed has no page view: turning leaves it through the chapter jumps above - EPUB review R2)
     if (!_pc.hasClients) return;
     final target = (_pc.page ?? 0).round() + by;
     if (target < 0 || target >= _itemCount) return;
@@ -753,6 +717,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    if (!_ready) {
+      // being counted: only closing (Back goes through the route)
+      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) Navigator.of(context).maybePop();
+      return KeyEventResult.ignored;
+    }
     if (_controls) return controlsKey(e, nothingSelected: _focus.hasPrimaryFocus, hide: _hideControls, move: _move);
     if (_end) return _onEndKey(e);
     if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) && hasVolumeKeys &&
@@ -929,29 +898,20 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   }
 
   /// Where chapter [chapter]'s page [page] is (option F, user 2026-10-06): the book's page and % ("Book · Pg. 112/342 ·
-  /// 33%"; just the % until the book is counted), the chapter's name, and the chapter's page ("Ch. 7 · Pg. 4/12";
-  /// the chapter counted as the book's files run, as everywhere in the reader).
+  /// 33%"), the chapter's name, and the chapter's page ("Ch. 7 · Pg. 4/12").
   (String book, String title, String inChapter) _positionOf(int chapter, int page) {
     final b = _book!;
     final pct = (b.progression(b.positionOf(chapter, page)) * 100).round();
-    final at = b.bookPage(chapter, page);
-    final total = b.totalPages;
-    final n = b.pageCount(chapter);
     return (
-      at != null && total != null ? 'Book · Pg. ${at + 1}/$total · $pct%' : 'Book · $pct%',
+      'Book · Pg. ${b.bookPage(chapter, page)! + 1}/${b.totalPages} · $pct%',
       _chapterNameOf(chapter),
-      'Ch. ${chapter + 1} · Pg. ${page + 1}${n == null ? '' : '/$n'}',
+      'Ch. ${chapter + 1} · Pg. ${page + 1}/${b.pageCount(chapter)}',
     );
   }
 
   /// The page corner: the book's page of its pages, "112 / 342", as comics' "12 / 36" (user, 2026-10-07: book progress
-  /// only, the same for both kinds); just the % until the book is counted.
-  String get _cornerText {
-    final b = _book!;
-    final at = b.bookPage(_chapter, _page), total = b.totalPages;
-    if (at != null && total != null) return '${at + 1} / $total';
-    return '${(b.progression(b.positionOf(_chapter, _page)) * 100).round()}%';
-  }
+  /// only, the same for both kinds).
+  String get _cornerText => '${_book!.bookPage(_chapter, _page)! + 1} / ${_book!.totalPages}';
 
   // the corner note "After a turn": shown for a moment after each turn
   bool _cornerFlash = false;
@@ -969,15 +929,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   Widget _pageAt(int i, Size size) {
     final b = _book!;
     final theme = _theme;
-    int c, p;
-    if (_bookWide) {
-      if (i >= b.totalPages!) return _endCard(theme);
-      (c, p) = b.chapterPage(i);
-    } else {
-      final n = b.pagesNow(_chapter)?.length ?? 0;
-      if (i >= n) return _endCard(theme);
-      (c, p) = (_chapter, i);
-    }
+    if (i >= b.totalPages!) return _endCard(theme);
+    final (c, p) = b.chapterPage(i);
     final pages = b.pagesNow(c);
     if (pages == null) {
       if (b.errorOf(c) != null) return _chapterError(b, c, theme);
@@ -1014,18 +967,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
         ]),
       ));
     return bare ? message : ColoredBox(color: theme.background, child: message);
-  }
-
-  /// Chapter by chapter (the book not counted yet), a swipe pulled past the chapter's last page - or before its
-  /// first - goes on to the next (previous) chapter, once per swipe: the page view only holds this chapter, and
-  /// the swipe did nothing (taps, keys and the wheel went on - EPUB review R3).
-  bool _onScroll(ScrollNotification n) {
-    if (n is ScrollStartNotification) _overscrolled = false;
-    if (n is OverscrollNotification && !_bookWide && !_overscrolled && n.dragDetails != null && n.overscroll != 0) {
-      _overscrolled = true;
-      unawaited(_turn(n.overscroll > 0 ? 1 : -1));
-    }
-    return false;
   }
 
   // ---- the end card: the next book's poster and title (the comic reader's, user 2026-10-06), Next book and Close -
@@ -1291,29 +1232,11 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
           body: LayoutBuilder(builder: (context, box) {
             final size = box.biggest;
             _layout(size);
-            final failed = b.pagesNow(_chapter) == null && b.errorOf(_chapter) != null;
-            // the whole book in one page view: a chapter not laid out yet waits as a page of it (the page view lays
-            // it out) - replacing the page view opened it at its first page, turning back into it (EPUB review R1)
-            if (b.pagesNow(_chapter) == null && !failed && !_bookWide) {
-              // laid out afresh (a new size or setting): to the place kept through it, as [_layout] does - not the
-              // chapter's start, which raced it (and let go of the place)
-              final anchor = _anchor;
-              unawaited(anchor != null && anchor.chapter == _chapter
-                  ? _show(anchor.chapter, anchor.position, relayout: true)
-                  : _show(_chapter, 0, fraction: _startFraction));
-              return const Center(child: CircularProgressIndicator());
-            }
+            if (!_ready) return _counting(b, theme);
             final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
             final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
-            // a chapter that failed (chapter by chapter): its error where the page goes - the controls, the taps and
-            // the turns stay (it took the whole screen: only Retry and Close - EPUB review R2)
-            final errorHere = failed && !_bookWide;
             return Stack(children: [
-              if (errorHere) Positioned.fill(child: ColoredBox(color: theme.background))
-              else NotificationListener<ScrollNotification>(
-                onNotification: _onScroll,
-                child: PageView.builder(
-                key: ValueKey(_bookWide),
+              PageView.builder(
                 controller: _pc,
                 itemCount: _itemCount,
                 onPageChanged: _onPageChanged,
@@ -1324,7 +1247,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
                 // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
                 // of both pages again each frame
                 itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),
-              )),
+              ),
               // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
               // by - Windows check, build 79)
               Positioned.fill(child: Listener(
@@ -1342,8 +1265,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
                 onTapUp: (d) => _tap(d, size, shown),
                 onSecondaryTap: () => _controls ? _hideControls() : _showControls(), // right-click, as with comics
               )),
-              // (above the taps: Retry takes its own; the rest of the screen still turns and shows the controls)
-              if (errorHere) Positioned.fill(child: _chapterError(b, _chapter, theme, bare: true)),
               // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
               if (!_controls && display.clock == ShowWhen.always)
                 Positioned(
@@ -1399,29 +1320,40 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     );
   }
 
+  /// The book being counted in this layout: a spinner, how far it has got, and Close (Back works too).
+  Widget _counting(EpubBook b, EpubTheme theme) {
+    final n = b.chapterCount, done = b.countedChapters;
+    final ink = theme.text;
+    return ColoredBox(
+      color: theme.background,
+      child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3)),
+        const SizedBox(height: 20),
+        Text('Laying out the book', style: TextStyle(color: ink.withValues(alpha: 0.8), fontSize: 16)),
+        const SizedBox(height: 6),
+        Text('Chapter ${math.min(done + 1, n)} of $n', key: const ValueKey('epub-counting'),
+            style: TextStyle(color: ink.withValues(alpha: 0.55), fontSize: 13,
+                fontFeatures: const [FontFeature.tabularFigures()])),
+        const SizedBox(height: 14),
+        SizedBox(width: 220, child: LinearProgressIndicator(value: n == 0 ? null : done / n, minHeight: 3,
+            backgroundColor: ink.withValues(alpha: 0.12))),
+        const SizedBox(height: 22),
+        TextButton(onPressed: () => Navigator.of(context).maybePop(),
+            child: Text('Close', style: TextStyle(color: ink.withValues(alpha: 0.8)))),
+      ])),
+    );
+  }
+
   // ---- the controls: the comic reader's bars (user, 2026-10-06: "it still looks disjointed from the comics")
 
   final _scrubber = SliderScrub(); // the place picked on the slider, shown as it moves (lib/reader/reader_slider.dart)
   int? get _scrub => _scrubber.value;
   set _scrub(int? v) => _scrubber.value = v;
 
-  /// The slider always runs through the whole book (user, 2026-10-06: it ran through the chapter until the book
-  /// was counted, so it couldn't go far): by page once the book is counted, by thousandths of the book till then.
-  static const _steps = 1000;
-  bool get _byPage => _book!.totalPages != null && _book!.bookPage(_chapter, _page) != null;
-
+  /// The slider runs through the whole book, by page.
   (int at, int last) get _sliderRange {
     final b = _book!;
-    if (_byPage) return (b.bookPage(_chapter, _page)!, math.max(0, b.totalPages! - 1));
-    return ((b.progression(b.positionOf(_chapter, _page)) * _steps).round(), _steps);
-  }
-
-  /// Slider place [i] as (chapter, page) - by thousandths: the page of the chapter it falls in, as far as it's known.
-  (int, int) _sliderPage(int i) {
-    final b = _book!;
-    if (_byPage) return b.chapterPage(i);
-    final (c, within) = b.chapterAtFraction(i / _steps);
-    return (c, b.pageAt(c, (within * b.lengthOf(c)).round()));
+    return (b.bookPage(_chapter, _page)!, math.max(0, b.totalPages! - 1));
   }
 
   /// The page picked on the slider while the reader goes there: the slider and the counter stay on it - they showed
@@ -1432,17 +1364,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     final (at, _) = _sliderRange;
     if (i == at) return;
     setState(() => _seeking = i);
-    final Future<void> going;
-    if (_byPage) {
-      final (c, p) = _sliderPage(i);
-      going = _jump(c, _book!.positionOf(c, p).position);
-    } else {
-      // a chapter not counted yet: gone to by how far through it, laid out on the way
-      final (c, within) = _book!.chapterAtFraction(i / _steps);
-      _moved = true;
-      going = _show(c, 0, fraction: within).then((_) => _settled());
-    }
-    unawaited(going.whenComplete(() {
+    final (c, p) = _book!.chapterPage(i);
+    unawaited(_jump(c, _book!.positionOf(c, p).position).whenComplete(() {
       if (mounted && _seeking == i) setState(() => _seeking = null);
     }));
   }
@@ -1455,7 +1378,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       shown: _scrub ?? _seeking ?? at,
       at: at,
       last: last,
-      step: _byPage ? 1 : _steps ~/ 100, // by thousandths: a press is 1% of the book
       onJump: _sliderJump,
       changed: () => setState(() {}),
     );
@@ -1465,7 +1387,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     final accent = Theme.of(context).colorScheme.primary;
     final (at, _) = _sliderRange;
     final picked = _scrub ?? _seeking;
-    final (sc, sp) = _sliderPage(picked ?? at);
+    final (sc, sp) = b.chapterPage(picked ?? at);
     final (bookAt, title, inChapter) = picked == null ? _positionOf(_chapter, _page) : _positionOf(sc, sp);
     final numbers = TextStyle(color: picked != null ? accent : Colors.white70, fontSize: 13,
         fontFeatures: const [FontFeature.tabularFigures()]);

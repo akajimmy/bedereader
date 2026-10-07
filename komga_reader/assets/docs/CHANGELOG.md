@@ -17,8 +17,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 - **EPUBs' page corner shows the book's page, "112 / 342"**, the same as comics' "12 / 36" - it showed the pages
-  left in the chapter and the %. Until the whole book has been counted (a moment after opening a long one) it shows
-  the %.
+  left in the chapter and the %.
+- **An EPUB shows once its pages are counted.** Opening one now shows "Laying out the book" with the chapter it's
+  on, and a Close button, until every page is counted - a few seconds for a typical novel the first time, longer for
+  a very long book. From then on the page numbers, the slider and the corner are exact from the first page (before,
+  the book opened at once but went by chapter, with only a % for the book, until it had been counted in the
+  background). **The count is remembered on the device**, per book and per layout: opening the same book again at
+  the same text settings and screen size is immediate. Changing the text size, font, spacing, margins or turning the
+  screen lays the book out again behind the same spinner - instant for a layout already used.
 
 ## 1.3.0
 
