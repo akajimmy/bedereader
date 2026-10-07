@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 84 - 2026-10-07
+
 **Added**
 - **Downloads > Manage: Group by series.** One group per series - its books, size and how many are read - closed
   until you tap it. Sorting by size puts the biggest series first; the filters apply inside the groups. In select
@@ -18,8 +22,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Progress bars looked full whatever they showed** - the storage bar in Downloads (10% used looked like 100%), a
   download's progress in the queue, and the bar under the search box: the unfilled part was drawn in the accent
   colour too. It's grey now.
-
-## 1.3.0
 
 ### Build 83 - 2026-10-07
 
