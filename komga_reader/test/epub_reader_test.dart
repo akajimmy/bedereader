@@ -404,6 +404,33 @@ void main() {
     expect(page, greaterThanOrEqualTo(3), reason: 'about a second of a held key: a few pages on');
   });
 
+  testWidgets('a held remote button that sends fresh presses turns a page each time the slide ends, and stops '
+      'after one more when let go; quick taps turn a page each - never creeping (user, 2026-10-07: each turn asked '
+      'for mid-slide started the slide over, and the page crept without turning)', (tester) async {
+    await open(tester, chapters(1));
+    int at() => (tester.widget<PageView>(find.byType(PageView)).controller!.page ?? 0).round();
+    // a remote held: a fresh press every 50 ms for about a second (not the keyboard's repeats)
+    for (var i = 0; i < 20; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    final held = at();
+    expect(held, greaterThanOrEqualTo(2), reason: 'about a second held: a page per slide (it crept on page 0-1)');
+    await settle(tester);
+    expect(at(), lessThanOrEqualTo(held + 1), reason: 'let go: at most one more');
+    final c = tester.widget<PageView>(find.byType(PageView)).controller!;
+    expect(c.page, c.page!.roundToDouble(), reason: 'it settles on a page');
+
+    // three quick taps on the right, 60 ms apart: three pages
+    final before = at();
+    for (var i = 0; i < 3; i++) {
+      await tester.tapAt(const Offset(750, 600));
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+    await settle(tester);
+    expect(at(), before + 3);
+  });
+
   testWidgets("with the controls up the remote walks them (the comic reader's model): Down to the bottom bar, Right "
       'along it, OK presses; Back closes the controls, not the book', (tester) async {
     await open(tester, twoChapters());

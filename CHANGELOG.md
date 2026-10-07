@@ -14,6 +14,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   Next book and Previous book all ignored the read list (Hitchhiker's Guide from a "Top 100" list offered its
   sequel instead of the list's next book). They follow the read list now, and the next book opens still in it. Opened
   with read books hidden, they also skip books already read, as comics do.
+- **EPUBs: holding a remote button, or tapping quickly, made the page creep without turning.** Each turn asked for
+  while a page was still sliding started the slide over from where it was. Now a turn asked for mid-slide waits and
+  goes the moment the slide ends: a held button turns a page each time, and stops after one more when let go. A tap
+  ends the slide at once and starts the next, so quick taps turn a page each.
 
 **Changed**
 - **EPUBs' page corner shows the book's page, "112 / 342"**, the same as comics' "12 / 36" - it showed the pages

@@ -596,6 +596,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
 
   /// The reader's own move of the page view (opening, laid out again, a jump): not a turn - it saves nothing by itself.
   void _jumpView(int page) {
+    _queued = 0; // a turn waiting on a slide is dropped: the reader went elsewhere
     _ownJump = true;
     _pc.jumpToPage(page);
     _ownJump = false;
@@ -627,24 +628,52 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     unawaited(_turn(forward ? 1 : -1));
   }
 
-  Future<void> _turn(int by) async {
-    EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
+  /// A page turn. One asked for while a slide is under way is never started over from the middle of it: that began
+  /// the slide again at its slowest part, so a held remote button or quick taps crept and never turned (user,
+  /// 2026-10-07). It waits, and is made the moment the slide ends - only the latest one, so a held button turns a
+  /// page per slide and letting go turns at most one more. [snap] (a tap - it can't be held): the slide under way
+  /// ends at once and the next starts, so each tap turns a page.
+  Future<void> _turn(int by, {bool snap = false}) async {
+    EpubTrace.instance.log('turn $by from chapter $_chapter page $_page${_sliding ? ' (waits for the slide)' : ''}');
     if (_book == null || !_ready) return;
     awake();
     if (!_pc.hasClients) return;
-    final target = (_pc.page ?? 0).round() + by;
+    if (_sliding) {
+      _queued = by;
+      if (snap) _pc.jumpToPage(_slideTarget); // the slide ends here: the turn waiting goes at once
+      return;
+    }
+    // a tap's finger stops the slide under way where it is (the page view holds for a drag) before the tap is
+    // known: a turn straight after a slide cut short goes on from where that slide was going - counted from the
+    // half-turned page, it landed on the same page again
+    final cut = _cutShort;
+    _cutShort = null;
+    final from = cut != null && DateTime.now().difference(cut.$2) < const Duration(milliseconds: 400)
+        ? cut.$1
+        : (_pc.page ?? 0).round();
+    final target = from + by;
     if (target < 0 || target >= _itemCount) return;
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
-    } else {
-      _sliding = true;
-      try {
-        await _pc.animateToPage(target, duration: _turnTime, curve: _turnCurve);
-      } finally {
-        _sliding = false;
-      }
+      return;
     }
+    _sliding = true;
+    _slideTarget = target;
+    try {
+      await _pc.animateToPage(target, duration: _turnTime, curve: _turnCurve);
+    } finally {
+      _sliding = false;
+    }
+    final landed = _pc.hasClients ? _pc.page : null;
+    if (landed != null && (landed - target).abs() > 0.01) _cutShort = (target, DateTime.now());
+    final next = _queued;
+    _queued = 0;
+    if (next != 0 && mounted && _pc.hasClients) await _turn(next);
   }
+
+  int _queued = 0; // a turn asked for during the slide: made when it ends (0: none)
+  int _slideTarget = 0; // the page the slide under way goes to
+  (int, DateTime)? _cutShort; // the last slide stopped short of its page (by a finger): that page, and when
 
   /// A turn's slide is under way: a held key's repeats wait for it to end (each one restarted the slide at its
   /// slowest part, so a held key crept and never turned a page - user, build 82, Windows).
@@ -672,9 +701,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     if (_controls) {
       _hideControls();
     } else if (x < 1 / 3) {
-      _turn(-1);
+      _turn(-1, snap: true);
     } else if (x > 2 / 3) {
-      _turn(1);
+      _turn(1, snap: true);
     } else {
       _showControls();
     }
