@@ -109,7 +109,9 @@ class DownloadsScreen extends StatelessWidget {
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.download_done),
                       title: Text('${(e.value['book'] as Map)['seriesTitle']} #${(e.value['book'] as Map)['metadata']?['number'] ?? ''}'),
-                      subtitle: Text('${(e.value['pages'] as List).length} pages · ${size((e.value['bytes'] as num).toInt())}'
+                      // an EPUB is its file, with no pages to count ("0 pages" - Windows check, build 79)
+                      subtitle: Text('${e.value['epubFile'] != null ? 'EPUB' : '${(e.value['pages'] as List).length} pages'}'
+                          ' · ${size((e.value['bytes'] as num).toInt())}'
                           '${e.value['gone'] == true ? ' · no longer on Komga' : ''}'),
                       trailing: IconButton(
                         tooltip: 'Remove download',

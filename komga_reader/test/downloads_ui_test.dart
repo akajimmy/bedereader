@@ -148,5 +148,19 @@ void main() {
     // downloads_test; waiting on it here would need the real clock and the test clock to hand over repeatedly)
     expect(d.queue.map((j) => j.bookId), ['B2', 'B1']);
   });
+
+  testWidgets('a downloaded EPUB is listed as an EPUB with its size - it has no pages to count ("0 pages" - Windows, '
+      'build 79)', (tester) async {
+    await tester.runAsync(() async {
+      await d.attach(noNetwork(LibraryServer.new), root: dir);
+      await d.store!.put('B1', {
+        'book': {'id': 'B1', 'seriesTitle': 'The Dispossessed', 'metadata': {'number': '1'}},
+        'pages': [], 'bytes': 1048576, 'state': 'done', 'epubFile': 'book.epub', 'positions': [],
+      });
+    });
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    expect(find.text('EPUB · 1.0 MB'), findsOneWidget);
+    expect(find.textContaining('0 pages'), findsNothing);
+  });
 }
 
