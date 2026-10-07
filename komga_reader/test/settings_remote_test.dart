@@ -7,6 +7,7 @@ import 'package:komga_reader/home_sections.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/screens/app_settings.dart';
+import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,13 +61,8 @@ void everyRowShown() {
   addTearDown(() => s.setDisplay(const DisplayPrefs()));
 }
 
-/// The rows' focus nodes are labelled so (RowNav, widgets/setting_rows.dart).
-FocusNode? rowOf(FocusNode n) {
-  for (final a in n.ancestors) {
-    if (a.debugLabel == 'settings-row') return a;
-  }
-  return null;
-}
+/// The row [n] is in (RowNav, widgets/setting_rows.dart - from its own list of rows, not a debug label).
+FocusNode? rowOf(FocusNode n) => RowNav.rowOf(n);
 
 FocusNode focus() => FocusManager.instance.primaryFocus!;
 
