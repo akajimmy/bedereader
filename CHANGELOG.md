@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 80 - 2026-10-06
+
 **Fixed**
 - **EPUB: a downloaded book opened at an older place** (left at 31%, it came up at 12% offline), and a page read
   offline could have moved Komga's place for it the wrong way. Downloaded EPUBs now keep the exact place - kept
@@ -19,10 +25,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Downloads: an EPUB shows as "EPUB · size"**, not "0 pages".
 - **EPUB: small black-and-white pictures on white** (chapter numbers, drop caps, ornaments) are drawn in the page's
   colours, instead of as a white box on a dark page.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 79 - 2026-10-06
 
