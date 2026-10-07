@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/source.dart';
-import 'package:komga_reader/screens/epub_reader.dart';
+import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,8 +63,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final source = FlakyBook();
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
-        book: const {'id': 'B', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source,
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+        book: const {'id': 'B', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source,
         saveProgress: false)));
     for (var i = 0; i < 40 && stuck(); i++) {
       await step(tester, 20);
@@ -103,9 +103,9 @@ void main() {
       tester.view.physicalSize = const Size(1600, 900); // a PC window
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
           book: const {'id': 'B', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-          source: SlowBook(12, const Duration(milliseconds: 15)), saveProgress: false)));
+          epubSource: SlowBook(12, const Duration(milliseconds: 15)), saveProgress: false)));
       for (var i = 0; i < 40 && stuck(); i++) {
         await step(tester, 20);
       }

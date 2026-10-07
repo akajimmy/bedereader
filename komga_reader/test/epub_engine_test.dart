@@ -12,7 +12,7 @@ import 'package:komga_reader/epub/layout.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/epub/xhtml.dart';
 
-import 'epub_reader_test.dart' show MemorySource, onePixelPng;
+import 'support/epub_books.dart' show MemorySource, onePixelPng;
 
 /// A blank picture [w] x [h].
 Future<ui.Image> _image(int w, int h) {

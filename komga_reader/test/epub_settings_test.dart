@@ -5,12 +5,13 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/screens/epub_reader.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
+import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/epub_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'epub_reader_test.dart' show MemorySource, twoChapters;
+import 'support/epub_books.dart' show MemorySource, twoChapters;
 import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
@@ -36,7 +37,7 @@ void main() {
   test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "
       "shortest) and the rest goes to the margins; on a narrow one it's the setting's own margin (user: the margin "
       "setting didn't seem to do anything)", () {
-    double side(EpubMargins m, double w) => EpubReaderScreen.sideMargin(EpubPrefs(margins: m), w);
+    double side(EpubMargins m, double w) => EpubRenderer.sideMargin(EpubPrefs(margins: m), w);
     for (final w in [800.0, 1200.0, 2000.0]) {
       expect(side(EpubMargins.narrow, w), lessThan(side(EpubMargins.normal, w)), reason: 'at $w');
       expect(side(EpubMargins.normal, w), lessThan(side(EpubMargins.wide, w)), reason: 'at $w');
@@ -127,8 +128,8 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final MemorySource source = twoChapters();
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: plainKomga(),
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, source: source, saveProgress: false)));
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source, saveProgress: false)));
     Future<void> settle() async {
       for (var i = 0; i < 40; i++) {
         await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));

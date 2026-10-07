@@ -11,7 +11,7 @@ import 'package:komga_reader/epub/layout.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/epub/xhtml.dart';
 
-import 'epub_reader_test.dart' show MemorySource, para;
+import 'support/epub_books.dart' show MemorySource, para;
 
 void main() {
   testWidgets("a chapter let go of and come back to is laid out afresh - after a new layout laid it out at once (its "
