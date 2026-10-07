@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 83 - 2026-10-07
+
 **Changed**
 - **Downloads in two tabs: Queue and Manage.** Queue is what's downloading (pause, retry, cancel, as before).
   Manage is what you've downloaded: sort by name or by size (largest first), show all, only read, only unread, or
