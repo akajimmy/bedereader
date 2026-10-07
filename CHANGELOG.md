@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.2.0 - in development
+
+Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
+
+### Build 82 - 2026-10-06
+
 **Fixed**
 - **Search: the progress bar stayed on** after clearing the box while a search was still running.
 - **EPUB, downloaded books: the place you stopped stays right** through syncing - when another device read further it
@@ -35,10 +41,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   ornament load faster and use less memory.
 - Build tools: a failed release step now really puts the changelog back; a build that fails early puts the version
   number back; and if a new Desktop copy can't be swapped in, the old one stays in place instead of none at all.
-
-## 1.2.0 - in development
-
-Not released yet. Release candidates: build 62 (`v1.2.0-rc.1`).
 
 ### Build 81 - 2026-10-06
 
