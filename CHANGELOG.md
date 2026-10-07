@@ -15,6 +15,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   far side or the forward key still opens the next book, and a key held down still stops at the card. (OK on the
   card used to bring up the controls; a tap in the middle of the screen still does.) This is the first piece of the
   comic and EPUB readers becoming one reader.
+- **One "Page corner" setting for comics and EPUBs**: Always / After a turn / Off. It replaces comics' "Page number
+  after a turn" switch and EPUBs' own "Page corner", and it's now a setting of this device (in Settings > Reader,
+  the comic Reader panel and the EPUB Aa panel alike). Comics' "12 / 36" moves to the bottom-right corner, where
+  EPUBs' note is, and can now stay there all the time. Each device starts from what it had for EPUBs.
 
 ## 1.3.0
 
