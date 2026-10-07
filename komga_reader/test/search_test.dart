@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -40,7 +41,33 @@ class FakeKomga extends TestKomga {
   Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async => page([]);
 }
 
+/// A search that only answers when told to (one still on its way when the box is cleared).
+class SlowKomga extends FakeKomga {
+  final pending = Completer<void>();
+  @override
+  Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async {
+    await pending.future;
+    return super.searchSeries(query, libraryId: libraryId, size: size);
+  }
+}
+
 void main() {
+  testWidgets('clearing the box while a search is on its way stops the progress bar (it stayed on above "Type to '
+      'search." - code review 2026-10-05, #13)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = noNetwork(SlowKomga.new);
+    await tester.pumpWidget(MaterialApp(home: SearchScreen(api: api)));
+    await tester.enterText(find.byType(TextField), 'surf');
+    await tester.pump(const Duration(milliseconds: 400)); // typing pause: the search starts
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    await tester.enterText(find.byType(TextField), '');
+    await tester.pump(const Duration(milliseconds: 400));
+    api.pending.complete(); // the old search answers - too late, it's ignored
+    await tester.pump();
+    expect(find.text('Type to search.'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
   testWidgets('results appear as you type, in rows with counts; nothing found says so', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.pumpWidget(MaterialApp(home: SearchScreen(api: noNetwork(FakeKomga.new))));

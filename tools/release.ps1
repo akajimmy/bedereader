@@ -118,7 +118,9 @@ try {
     Git "add $files" | Out-Null
     Git "commit -q -m `"$(if ($Final) { "Release $name (build $Build)" } else { "Release candidate $Rc of $name (build $Build)" })`"" | Out-Null
 } catch {
-    Git "checkout -- $files" | Out-Null # back as they were
+    # back as they were: from the last commit, index and working tree both - after `git add`, a plain
+    # `checkout -- <files>` restores the staged (new) content, so it put nothing back (code review 2026-10-05, #32)
+    Git "checkout HEAD -- $files" | Out-Null
     throw
 }
 $message = if ($Final) { "$name (build $Build) - release" } else { "$name release candidate $Rc (build $Build)" }
