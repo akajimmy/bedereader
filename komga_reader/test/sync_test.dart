@@ -285,9 +285,9 @@ void main() {
       await sync.run();
     });
     expect(d.store!.books['B1']!['gone'], isTrue);
-    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    expect(find.text('3 pages · 0.0 MB · no longer on Komga'), findsNWidgets(2));
-    expect(find.text('Downloaded · 2'), findsOneWidget, reason: 'still downloaded, still listed');
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen())); // (nothing queued: on Manage)
+    expect(find.textContaining('· no longer on Komga'), findsNWidgets(2));
+    expect(find.text('Manage · 2'), findsOneWidget, reason: 'still downloaded, still listed');
     expect(await tester.runAsync(() => OfflineKomga(d.store!).book('B1')), isNotNull, reason: 'still readable offline');
 
     await tester.runAsync(() async {
@@ -295,8 +295,8 @@ void main() {
       await sync.run();
     });
     await tester.pump();
-    expect(find.textContaining('no longer on Komga'), findsNothing);
-    expect(find.text('3 pages · 0.0 MB'), findsNWidgets(2));
+    expect(find.textContaining('no longer on Komga'), findsNothing, reason: 'the mark and its filter gone');
+    expect(find.textContaining('3 pages · 0.0 MB'), findsNWidgets(2));
   });
 
   test("a downloaded book deleted on Komga with its offline progress unsent: the progress is dropped, and the message "

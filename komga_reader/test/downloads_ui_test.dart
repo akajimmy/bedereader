@@ -56,7 +56,9 @@ void main() {
     expect(d.jobFor('B1'), isNotNull);
 
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    expect(find.text('Queue · 1 · paused'), findsOneWidget);
+    // something queued: it opens on the Queue tab
+    expect(find.text('Queue · 1'), findsOneWidget);
+    expect(find.text('1 in the queue · paused'), findsOneWidget);
     expect(find.text('Silver Surfer #1'), findsOneWidget);
     expect(find.text('Waiting'), findsOneWidget);
 
@@ -65,18 +67,21 @@ void main() {
       await waitUntil(() => d.isDownloaded('B1'), timeout: const Duration(seconds: 1), reason: 'B1 downloaded');
     });
     await tester.pump();
-    expect(find.text('Downloaded · 1'), findsOneWidget);
-    expect(find.text('3 pages · 0.0 MB'), findsOneWidget);
-    expect(find.text('Silver Surfer #1'), findsNWidgets(2)); // finished this session + downloaded
+    expect(find.text('Manage · 1'), findsOneWidget);
+    expect(find.text('Silver Surfer #1'), findsOneWidget, reason: 'finished this session, on the Queue tab');
+    await tester.tap(find.text('Manage · 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 pages · 0.0 MB · in progress'), findsOneWidget); // (the fake Komga has B1 started)
 
-    // the button itself, not d.remove() (test audit, 2026-09-30)
-    await tester.tap(find.byTooltip('Remove download'));
+    // the menu itself, not d.remove() (test audit, 2026-09-30)
+    await tester.tap(find.byTooltip('Remove'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove download'));
     // (the store forgets it before the save and the screen update finish: wait for the screen)
-    await until(tester, () => find.text('Downloaded · 0').evaluate().isNotEmpty, 'the screen to show it gone');
+    await until(tester, () => find.text('Manage · 0').evaluate().isNotEmpty, 'the screen to show it gone');
     expect(d.isDownloaded('B1'), isFalse);
     expect(await tester.runAsync(() => Directory(d.store!.file('B1').path).exists()), isFalse, reason: 'files gone');
-    expect(find.text('Downloaded · 0'), findsOneWidget);
-    expect(find.byTooltip('Remove download'), findsNothing);
+    expect(find.byTooltip('Remove'), findsNothing);
     await quiet(tester);
   });
 
@@ -103,7 +108,7 @@ void main() {
     await until(tester, () => d.isDownloaded('B2') && !d.busy, 'B2 downloaded after Retry');
     expect(d.isDownloaded('B2'), isTrue);
     expect(find.textContaining('Failed:'), findsNothing);
-    expect(find.text('Downloaded · 1'), findsOneWidget);
+    expect(find.text('Manage · 1'), findsOneWidget);
     await quiet(tester);
   });
 
@@ -127,7 +132,7 @@ void main() {
     await waitUntil(() => d.isDownloaded('B1') && d.isDownloaded('B2') && !d.busy, tester: tester,
         timeout: const Duration(seconds: 3), step: const Duration(milliseconds: 10), reason: 'both downloaded');
     expect(find.textContaining('Failed:'), findsNothing);
-    expect(find.text('Downloaded · 2'), findsOneWidget);
+    expect(find.text('Manage · 2'), findsOneWidget);
     await quiet(tester);
   });
 
@@ -161,6 +166,108 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     expect(find.text('EPUB · 1.0 MB'), findsOneWidget);
     expect(find.textContaining('0 pages'), findsNothing);
+  });
+
+  // ---- Manage (user, 2026-10-07: Queue and Manage tabs; a flat list, sortable, filtered, with select mode, a
+  // series' removal and Remove all read)
+
+  /// Downloaded: Saga #1 read (3 MB), Saga #2 in progress (1 MB), Flash #1 unread (2 MB).
+  Future<void> library(WidgetTester tester) => tester.runAsync(() async {
+        await d.attach(noNetwork(LibraryServer.new), root: dir);
+        Future<void> put(String id, String series, int n, int mb, Map<String, dynamic>? rp) => d.store!.put(id, {
+              'book': {'id': id, 'seriesId': 'S-$series', 'seriesTitle': series,
+                'metadata': {'number': '$n', 'numberSort': n}, 'readProgress': rp},
+              'pages': [{}, {}, {}], 'bytes': mb * 1048576, 'state': 'done',
+            });
+        await put('B1', 'Saga', 1, 3, {'page': 3, 'completed': true});
+        await put('B2', 'Saga', 2, 1, {'page': 1, 'completed': false});
+        await put('B3', 'Flash', 1, 2, null);
+      });
+
+  List<String> titles() => [
+        for (final t in find.byType(ListTile).evaluate().map((e) => (e.widget as ListTile).title))
+          if (t is Text) t.data!,
+      ];
+
+  testWidgets('Manage: nothing queued, it opens there; filters by read state; sorts by name or by size', (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    expect(find.text('Manage · 3'), findsOneWidget);
+    expect(titles(), ['Flash #1', 'Saga #1', 'Saga #2'], reason: 'by name: series, then number');
+    expect(find.text('3 pages · 3.0 MB · read'), findsOneWidget);
+    expect(find.text('3 pages · 1.0 MB · in progress'), findsOneWidget);
+
+    await tester.tap(find.text('Read'));
+    await tester.pump();
+    expect(titles(), ['Saga #1']);
+    await tester.tap(find.text('Unread'));
+    await tester.pump();
+    expect(titles(), ['Flash #1', 'Saga #2'], reason: 'in progress counts as unread, as Hide read has it');
+    await tester.tap(find.text('All'));
+    await tester.tap(find.text('Sort: Name'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Size, largest first'));
+    await tester.pumpAndSettle();
+    expect(titles(), ['Saga #1', 'Flash #1', 'Saga #2']);
+  });
+
+  testWidgets('Manage: Remove all read removes the read ones only, after saying how many and how much', (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.tap(find.text('Remove all read'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove all 1 read?'), findsOneWidget);
+    expect(find.textContaining('1 download · 3.0 MB freed'), findsOneWidget);
+    await tester.tap(find.text('Remove'));
+    await until(tester, () => find.text('Manage · 2').evaluate().isNotEmpty, 'the read one gone');
+    expect(d.isDownloaded('B1'), isFalse);
+    expect([d.isDownloaded('B2'), d.isDownloaded('B3')], [true, true]);
+    expect(find.text('Remove all read'), findsNothing, reason: 'nothing read left');
+  });
+
+  testWidgets("Manage: select mode - long-press starts it, taps tick, the bar says how many and how much; Back leaves "
+      'it; Remove takes the ticked ones', (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.longPress(find.text('Saga #2'));
+    await tester.pump();
+    await tester.tap(find.text('Flash #1'));
+    await tester.pump();
+    expect(find.text('2 selected · 3.0 MB'), findsOneWidget);
+
+    // Back: out of select mode, still on the screen
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.byType(Checkbox), findsNothing);
+
+    await tester.tap(find.text('Select'));
+    await tester.pump();
+    await tester.tap(find.text('Select all'));
+    await tester.pump();
+    expect(find.text('3 selected · 6.0 MB'), findsOneWidget);
+    await tester.tap(find.text('Saga #1')); // untick one
+    await tester.pump();
+    await tester.tap(find.widgetWithText(TextButton, 'Remove'));
+    await tester.pumpAndSettle();
+    expect(find.text('Remove the selected downloads?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, 'Remove').last);
+    await until(tester, () => find.text('Manage · 1').evaluate().isNotEmpty, 'the two gone');
+    expect([d.isDownloaded('B1'), d.isDownloaded('B2'), d.isDownloaded('B3')], [true, false, false]);
+    expect(find.byType(Checkbox), findsNothing, reason: 'select mode over');
+  });
+
+  testWidgets("Manage: a row's menu removes the whole series", (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.tap(find.byTooltip('Remove').at(1)); // Saga #1's
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Remove the series' 2 downloads"));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 downloads · 4.0 MB freed'), findsOneWidget);
+    await tester.tap(find.text('Remove'));
+    await until(tester, () => find.text('Manage · 1').evaluate().isNotEmpty, 'Saga gone');
+    expect(titles(), ['Flash #1']);
   });
 }
 
