@@ -15,13 +15,13 @@ import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../page_curl.dart';
 import '../page_image.dart';
+import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
-import '../widgets/focus_style.dart';
 import '../widgets/native_poster.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
@@ -90,7 +90,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       setState(() {});
     }
   }
-  bool get _fullscreen => fullscreen.value; // desktop, whole app: F11 / the full-screen button (lib/screen.dart)
   double _wheelAcc = 0; // mouse wheel travel towards the next page turn
   DateTime _lastWheelTurn = DateTime(0);
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
@@ -950,37 +949,29 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
   /// With the page strip open it's a row of its own, just above the bottom bar: Up from the bottom bar goes into it,
   /// Down from it to the bottom bar, Up from it to the top bar (Left / Right in it are the strip's own, _onStripKey).
   void _move({int dx = 0, int dy = 0}) {
-    final top = _topBar, bottom = _bottomBar;
-    final inTop = top.indexWhere((c) => _ctl[c]!.hasFocus);
-    final inBottom = bottom.indexWhere((c) => _ctl[c]!.hasFocus);
-    _Ctl? target;
-    if (_ctl[_Ctl.strip]!.hasFocus) {
-      if (dy == 0) return;
-      target = dy < 0 ? top.first : bottom[bottom.indexOf(_Ctl.pages).clamp(0, bottom.length - 1)];
-    } else if (inBottom >= 0 && dy < 0 && dx == 0 && _stripShown) {
-      _stripFocus(); // up from the bottom bar: into the strip, on the page shown
-      return;
-    } else if (inTop < 0 && inBottom < 0) {
-      target = dy > 0 ? bottom.first : top.first;
-    } else {
-      final bar = inTop >= 0 ? top : bottom, i = inTop >= 0 ? inTop : inBottom;
-      if (dx != 0) {
-        target = bar[(i + dx).clamp(0, bar.length - 1)];
-      } else if (inTop >= 0) {
-        if (dy > 0 && _stripShown) { _stripFocus(); return; } // down from the top bar: the strip comes first
-        target = dy > 0 ? bottom[i.clamp(0, bottom.length - 1)] : null;
-      } else {
-        target = dy < 0 ? top[i.clamp(0, top.length - 1)] : null;
-      }
+    final bottom = _bottomBar;
+    final to = walkControls(
+      top: [for (final c in _topBar) _ctl[c]!],
+      bottom: [for (final c in bottom) _ctl[c]!],
+      dx: dx,
+      dy: dy,
+      row: _stripShown ? _ctl[_Ctl.strip] : null,
+      rowBelow: _ctl[bottom[bottom.indexOf(_Ctl.pages).clamp(0, bottom.length - 1)]],
+    );
+    switch (to) {
+      case WalkToNode(:final node):
+        node.requestFocus();
+      case WalkToRow():
+        _stripFocus(); // into the strip, on the page shown
+        return;
+      case WalkOff():
+        _keys.requestFocus();
     }
-    target == null ? _keys.requestFocus() : _ctl[target]!.requestFocus();
     setState(() {});
   }
 
   // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
   // remote); with the controls hidden, keys go through ReaderKeys.
-  bool _isOk(LogicalKeyboardKey k) =>
-      k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter;
   // Left/Right follow the reading direction (right to left: Left goes forward); Up/Down and Page Up/Down don't.
   bool _isFwd(LogicalKeyboardKey k) =>
       k == (_rtl ? LogicalKeyboardKey.arrowLeft : LogicalKeyboardKey.arrowRight) ||
@@ -989,7 +980,6 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       k == (_rtl ? LogicalKeyboardKey.arrowRight : LogicalKeyboardKey.arrowLeft) ||
       k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.pageUp;
 
-  Future<void> _toggleFullscreen() => toggleFullscreen(); // stays on after the book closes (user)
 
   /// Mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise (or at
   /// the page's end) one notch turns one page - trackpad flicks are gathered up so they don't skip several pages.
@@ -1049,23 +1039,14 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       }
       return KeyEventResult.handled;
     }
-    if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) { _hideControls(); return KeyEventResult.handled; }
-    if (k == LogicalKeyboardKey.arrowRight) { _move(dx: 1); return KeyEventResult.handled; }
-    if (k == LogicalKeyboardKey.arrowLeft) { _move(dx: -1); return KeyEventResult.handled; }
-    if (k == LogicalKeyboardKey.arrowDown) { _move(dy: 1); return KeyEventResult.handled; }
-    if (k == LogicalKeyboardKey.arrowUp) { _move(dy: -1); return KeyEventResult.handled; }
-    if (_isOk(k) && _keys.hasPrimaryFocus) {
-      if (e is KeyDownEvent) _hideControls(); // nothing selected: OK hides, like a tap
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored; // OK on a control reaches the control (= tapping it)
+    return controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
   }
 
   /// The slider under the remote: OK starts scrubbing, arrows then move the page, OK jumps there.
   KeyEventResult _onSliderKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (_isOk(k)) {
+    if (isOkKey(k)) {
       if (e is! KeyDownEvent) return KeyEventResult.handled;
       if (_scrubbing) {
         final target = _scrub ?? _index;
@@ -1440,174 +1421,99 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     );
   }
 
-  /// Icon-only control (user: no labels except Close); the label is the tooltip. White icon.
-  Widget _iconCtl({required FocusNode node, required IconData icon, required String label, required VoidCallback onPressed,
-      double size = 26}) =>
-      IconButton(focusNode: node, tooltip: label, icon: Icon(icon, color: Colors.white, size: size), onPressed: onPressed);
-
-
-  /// Top bar (close, title, fit, night, read toggle, more) and bottom bar (page counter, slider, display, next book).
-  /// A tap anywhere that isn't a control hides them.
+  /// Top bar (close, title, fit, night, read toggle, delete) and bottom bar (previous book, page counter, slider, pages,
+  /// image and reader settings, next book) - the shared bars (lib/reader/reader_bars.dart) with the comic reader's
+  /// buttons. A tap anywhere that isn't a control hides them.
   List<Widget> _controls() {
     // read: marked so, or the last page reached in this visit (saved as read at once, _pageTurned). Not merely being
     // on the last page: after Mark unread there, the tick has to show unread (code review, 2026-09-30)
     final completed = _book['readProgress']?['completed'] == true || (_turned && _index >= _last);
     final shown = _scrub ?? _index.clamp(0, _last);
     final night = _settings.display.night;
-    const bar = Color(0xE6101012);
-    final showClock = _settings.display.clock != ShowWhen.off; // with the controls up: With the controls, or Always
-    final clockInBar = MediaQuery.sizeOf(context).width >= 700; // a phone's top bar has no room for it
-    return [
-      Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _hideControls)),
-      Positioned(
-        left: 0, right: 0, top: 0,
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Material(
-          color: bar,
-          child: Theme(
-          data: readerControlsTheme(context),
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 12, 8, 12),
-              child: Row(children: [
-                FilledButton.tonalIcon(
-                  focusNode: _ctl[_Ctl.close],
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                  ),
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.arrow_back, size: 24),
-                  label: const Text('Close'),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                    Text('${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}',
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 17)),
-                    Text('${_book['metadata']?['title'] ?? ''}',
-                        maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 13)),
-                  ]),
-                ),
-                // Clock and battery with the controls up, where the bar has room (else just under it, below)
-                if (showClock && clockInBar)
-                  const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
-                // one press = next fit mode (screen -> width -> height -> original size), label shows which
-                IconButton(
-                  focusNode: _ctl[_Ctl.fit],
-                  tooltip: _prefs.fit == FitMode.original ? 'Original size' : 'Fit ${_prefs.fit.label.toLowerCase()}',
-                  onPressed: () => _setFit(FitMode.values[(_prefs.fit.index + 1) % FitMode.values.length]),
-                  icon: fitIcon(_prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
-                ),
-                IconButton(
-                  focusNode: _ctl[_Ctl.night],
-                  tooltip: night ? 'Night mode off' : 'Night mode on',
-                  icon: Icon(night ? Icons.nightlight : Icons.nightlight_outlined,
-                      color: night ? const Color(0xFFFFB74D) : null),
-                  onPressed: () => _settings.setDisplay(_settings.display.copyWith(night: !night)),
-                ),
-                if (isDesktop)
-                  _iconCtl(
-                    node: _ctl[_Ctl.fullscreen]!,
-                    icon: _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                    label: _fullscreen ? 'Leave full screen (F11)' : 'Full screen (F11)',
-                    onPressed: _toggleFullscreen,
-                  ),
-                _iconCtl(
-                  node: _ctl[_Ctl.read]!,
-                  icon: completed ? Icons.check_circle : Icons.check_circle_outline,
-                  label: completed ? 'Mark unread' : 'Mark read',
-                  onPressed: () async {
-                    try {
-                      completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
-                      await _afterMark();
-                    } catch (e, st) {
-                      if (mounted) {
-                        showErrorSnack(context,
-                            couldnt('mark "${_titleOf(_book)}" as ${completed ? 'unread' : 'read'}', e, thing: 'book'), e, st);
-                      }
-                    }
-                  },
-                ),
-                IconButton(
-                  focusNode: _ctl[_Ctl.delete],
-                  tooltip: 'Delete book',
-                  icon: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
-                  onPressed: _deleteBook,
-                ),
-              ]),
-            ),
+    return readerBars(
+      onTapOutside: _hideControls,
+      top: ReaderTopBar(
+        closeNode: _ctl[_Ctl.close]!,
+        heading: '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}',
+        title: '${_book['metadata']?['title'] ?? ''}',
+        buttons: [
+          // one press = next fit mode (screen -> width -> height -> original size), label shows which
+          IconButton(
+            focusNode: _ctl[_Ctl.fit],
+            tooltip: _prefs.fit == FitMode.original ? 'Original size' : 'Fit ${_prefs.fit.label.toLowerCase()}',
+            onPressed: () => _setFit(FitMode.values[(_prefs.fit.index + 1) % FitMode.values.length]),
+            icon: fitIcon(_prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
           ),
+          IconButton(
+            focusNode: _ctl[_Ctl.night],
+            tooltip: night ? 'Night mode off' : 'Night mode on',
+            icon: Icon(night ? Icons.nightlight : Icons.nightlight_outlined,
+                color: night ? const Color(0xFFFFB74D) : null),
+            onPressed: () => _settings.setDisplay(_settings.display.copyWith(night: !night)),
           ),
-        ),
-        // narrow screens: no room on the top bar - the clock sits just under it, at the right
-        if (showClock && !clockInBar)
-          Align(
-            alignment: Alignment.centerRight,
-            child: IgnorePointer(
-              child: Container(
-                margin: const EdgeInsets.fromLTRB(0, 8, 10, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: bar, borderRadius: BorderRadius.circular(10)),
-                child: const ReaderClock(fontSize: 12),
-              ),
-            ),
+          if (isDesktop) fullscreenButton(_ctl[_Ctl.fullscreen]!),
+          barIcon(
+            node: _ctl[_Ctl.read]!,
+            icon: completed ? Icons.check_circle : Icons.check_circle_outline,
+            label: completed ? 'Mark unread' : 'Mark read',
+            onPressed: () async {
+              try {
+                completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
+                await _afterMark();
+              } catch (e, st) {
+                if (mounted) {
+                  showErrorSnack(context,
+                      couldnt('mark "${_titleOf(_book)}" as ${completed ? 'unread' : 'read'}', e, thing: 'book'), e, st);
+                }
+              }
+            },
           ),
-        ]),
+          IconButton(
+            focusNode: _ctl[_Ctl.delete],
+            tooltip: 'Delete book',
+            icon: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
+            onPressed: _deleteBook,
+          ),
+        ],
       ),
-      Positioned(
-        left: 0, right: 0, bottom: 0,
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (_stripShown) _filmStrip(bar),
-        Material(
-          color: bar,
-          child: Theme(
-          data: readerControlsTheme(context),
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-              child: Row(children: [
-                IconButton(focusNode: _ctl[_Ctl.prevBook], tooltip: 'Previous book', onPressed: _prevBook,
-                    icon: const Icon(Icons.skip_previous, size: 28)),
-                const SizedBox(width: 4),
-                SizedBox(
-                  width: 92,
-                  child: Text('${shown + 1} / ${_pages.length}',
-                      style: TextStyle(color: _scrubbing ? Theme.of(context).colorScheme.primary : Colors.white,
-                          fontSize: 15, fontFeatures: const [FontFeature.tabularFigures()])),
-                ),
-                Expanded(
-                  child: _pages.length < 2
-                      ? const SizedBox.shrink()
-                      // right to left: page 1 at the right end of the slider
-                      : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
-                ),
-                if (_pages.length > 1)
-                  _iconCtl(node: _ctl[_Ctl.pages]!, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
-                      label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip),
-                if (_seriesId != null)
-                  _iconCtl(node: _ctl[_Ctl.image]!, icon: Icons.settings_brightness, label: 'Image settings',
-                      onPressed: () => showImagePanel(context,
-                          seriesId: _seriesId!, seriesTitle: _book['seriesTitle'] as String?)),
-                _iconCtl(node: _ctl[_Ctl.reader]!, icon: Icons.tune,
-                    label: 'Reader settings',
-                    onPressed: () => showReaderPanel(context,
-                        seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
-                        komgaDirection: _komgaDirection, bookFit: _bookFit,
-                        page: canSaveCopyPictures && _index <= _last
-                            ? PageActions(save: _savePage, copy: _copyPage) : null)),
-                IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
-                    icon: const Icon(Icons.skip_next, size: 28)),
-              ]),
-            ),
+      bottom: ReaderBottomBar(
+        prevNode: _ctl[_Ctl.prevBook]!,
+        onPrev: _prevBook,
+        nextNode: _ctl[_Ctl.nextBook]!,
+        onNext: _nextBook,
+        above: _stripShown ? _filmStrip(readerBarColour) : null,
+        middle: [
+          SizedBox(
+            width: 92,
+            child: Text('${shown + 1} / ${_pages.length}',
+                style: TextStyle(color: _scrubbing ? Theme.of(context).colorScheme.primary : Colors.white,
+                    fontSize: 15, fontFeatures: const [FontFeature.tabularFigures()])),
           ),
+          Expanded(
+            child: _pages.length < 2
+                ? const SizedBox.shrink()
+                // right to left: page 1 at the right end of the slider
+                : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
           ),
-        ),
-        ]),
+        ],
+        buttons: [
+          if (_pages.length > 1)
+            barIcon(node: _ctl[_Ctl.pages]!, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
+                label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip),
+          if (_seriesId != null)
+            barIcon(node: _ctl[_Ctl.image]!, icon: Icons.settings_brightness, label: 'Image settings',
+                onPressed: () => showImagePanel(context,
+                    seriesId: _seriesId!, seriesTitle: _book['seriesTitle'] as String?)),
+          barIcon(node: _ctl[_Ctl.reader]!, icon: Icons.tune,
+              label: 'Reader settings',
+              onPressed: () => showReaderPanel(context,
+                  seriesId: _seriesId, seriesTitle: _book['seriesTitle'] as String?,
+                  komgaDirection: _komgaDirection, bookFit: _bookFit,
+                  page: canSaveCopyPictures && _index <= _last
+                      ? PageActions(save: _savePage, copy: _copyPage) : null)),
+        ],
       ),
-    ];
+    );
   }
 
   // ---- the page strip (user, 2026-10-02): a film strip of the book's pages above the bottom bar, opened by the
@@ -1673,7 +1579,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
       _stripCentre(_stripAt!);
       return KeyEventResult.handled;
     }
-    if (_isOk(k)) {
+    if (isOkKey(k)) {
       if (e is KeyDownEvent) _stripGo(at);
       return KeyEventResult.handled;
     }

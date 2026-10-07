@@ -20,6 +20,7 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart';
+import '../reader/reader_bars.dart';
 import '../reader/reader_device.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
@@ -731,47 +732,21 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   List<_Ctl> get _bottomBar => [_Ctl.prevBook, _Ctl.slider, _Ctl.contents, _Ctl.settings, _Ctl.nextBook];
 
   void _move({int dx = 0, int dy = 0}) {
-    final top = _topBar, bottom = _bottomBar;
-    final inTop = top.indexWhere((c) => _ctl[c]!.hasFocus);
-    final inBottom = bottom.indexWhere((c) => _ctl[c]!.hasFocus);
-    _Ctl? target;
-    if (inTop < 0 && inBottom < 0) {
-      target = dy > 0 ? bottom.first : top.first;
-    } else {
-      final bar = inTop >= 0 ? top : bottom, i = inTop >= 0 ? inTop : inBottom;
-      if (dx != 0) {
-        target = bar[(i + dx).clamp(0, bar.length - 1)];
-      } else if (inTop >= 0) {
-        target = dy > 0 ? bottom[i.clamp(0, bottom.length - 1)] : null;
-      } else {
-        target = dy < 0 ? top[i.clamp(0, top.length - 1)] : null;
-      }
+    final to = walkControls(
+        top: [for (final c in _topBar) _ctl[c]!], bottom: [for (final c in _bottomBar) _ctl[c]!], dx: dx, dy: dy);
+    switch (to) {
+      case WalkToNode(:final node):
+        node.requestFocus();
+      case WalkToRow() || WalkOff():
+        _focus.requestFocus();
     }
-    target == null ? _focus.requestFocus() : _ctl[target]!.requestFocus();
     setState(() {});
   }
-
-  static bool _isOk(LogicalKeyboardKey k) =>
-      k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (_controls) {
-      if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack) {
-        _hideControls();
-        return KeyEventResult.handled;
-      }
-      if (k == LogicalKeyboardKey.arrowRight) { _move(dx: 1); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.arrowLeft) { _move(dx: -1); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.arrowDown) { _move(dy: 1); return KeyEventResult.handled; }
-      if (k == LogicalKeyboardKey.arrowUp) { _move(dy: -1); return KeyEventResult.handled; }
-      if (_isOk(k) && _focus.hasPrimaryFocus) {
-        if (e is KeyDownEvent) _hideControls(); // nothing selected: OK hides, like a tap
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored; // OK on a control reaches the control (= tapping it)
-    }
+    if (_controls) return controlsKey(e, nothingSelected: _focus.hasPrimaryFocus, hide: _hideControls, move: _move);
     if (_end) return _onEndKey(e);
     if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) && hasVolumeKeys &&
         AppSettings.instance.display.volumeKeys) {
@@ -1076,7 +1051,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       if (to.context != null) to.requestFocus();
       return KeyEventResult.handled;
     }
-    if (_isOk(k)) {
+    if (isOkKey(k)) {
       if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _nextOrClose();
       return KeyEventResult.handled;
     }
@@ -1442,7 +1417,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
     final (at, last) = _sliderRange;
-    if (_isOk(k)) {
+    if (isOkKey(k)) {
       if (e is! KeyDownEvent) return KeyEventResult.handled;
       if (_scrubbing) {
         final target = _scrub ?? at;
@@ -1537,16 +1512,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     );
   }
 
-  /// Icon-only control, white, its label the tooltip (the comic reader's).
-  Widget _iconCtl(_Ctl c, IconData icon, String label, VoidCallback onPressed, {double size = 26}) =>
-      IconButton(focusNode: _ctl[c], tooltip: label, icon: Icon(icon, color: Colors.white, size: size),
-          onPressed: onPressed);
-
   List<Widget> _controlsOver(EpubBook b) {
-    const bar = Color(0xE6101012); // the comic reader's bars
     final accent = Theme.of(context).colorScheme.primary;
-    final showClock = AppSettings.instance.display.clock != ShowWhen.off;
-    final clockInBar = MediaQuery.sizeOf(context).width >= 700;
     final (at, _) = _sliderRange;
     final picked = _scrub ?? _seeking;
     final (sc, sp) = _sliderPage(picked ?? at);
@@ -1556,123 +1523,62 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
     final series = _bookNow['seriesTitle'] as String?;
     final number = _bookNow['metadata']?['number'];
     final completed = _completed;
-    return [
-      Positioned(
-        left: 0, right: 0, top: 0,
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Material(
-            color: bar,
-            child: Theme(
-              data: readerControlsTheme(context),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 12, 8, 12),
-                  child: Row(children: [
-                    FilledButton.tonalIcon(
-                      focusNode: _ctl[_Ctl.close],
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                        textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                      ),
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.arrow_back, size: 24),
-                      label: const Text('Close'),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                        if (series != null && series.isNotEmpty)
-                          Text('$series${number == null ? '' : ' #$number'}', maxLines: 1,
-                              overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 17)),
-                        Text(_title, maxLines: 1, overflow: TextOverflow.ellipsis,
-                            style: series != null && series.isNotEmpty
-                                ? const TextStyle(color: Colors.white60, fontSize: 13)
-                                : const TextStyle(color: Colors.white, fontSize: 17)),
-                      ]),
-                    ),
-                    if (showClock && clockInBar)
-                      const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: ReaderClock()),
-                    if (isDesktop)
-                      _iconCtl(_Ctl.fullscreen, fullscreen.value ? Icons.fullscreen_exit : Icons.fullscreen,
-                          fullscreen.value ? 'Leave full screen (F11)' : 'Full screen (F11)', toggleFullscreen),
-                    _iconCtl(_Ctl.read, completed ? Icons.check_circle : Icons.check_circle_outline,
-                        completed ? 'Mark unread' : 'Mark read', _toggleRead),
-                  ]),
-                ),
-              ),
-            ),
-          ),
-          // narrow screens: no room on the top bar - the clock just under it, at the right
-          if (showClock && !clockInBar)
-            Align(
-              alignment: Alignment.centerRight,
-              child: IgnorePointer(
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(0, 8, 10, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: bar, borderRadius: BorderRadius.circular(10)),
-                  child: const ReaderClock(fontSize: 12),
-                ),
-              ),
-            ),
-        ]),
+    // the shared bars (lib/reader/reader_bars.dart) with the EPUB reader's buttons
+    return readerBars(
+      top: ReaderTopBar(
+        closeNode: _ctl[_Ctl.close]!,
+        heading: series != null && series.isNotEmpty ? '$series${number == null ? '' : ' #$number'}' : null,
+        title: _title,
+        buttons: [
+          if (isDesktop) fullscreenButton(_ctl[_Ctl.fullscreen]!),
+          barIcon(node: _ctl[_Ctl.read]!, icon: completed ? Icons.check_circle : Icons.check_circle_outline,
+              label: completed ? 'Mark unread' : 'Mark read', onPressed: _toggleRead),
+        ],
       ),
-      Positioned(
-        left: 0, right: 0, bottom: 0,
-        child: Material(
-          color: bar,
-          child: Theme(
-            data: readerControlsTheme(context),
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      bottom: ReaderBottomBar(
+        prevNode: _ctl[_Ctl.prevBook]!,
+        onPrev: _prevBook,
+        nextNode: _ctl[_Ctl.nextBook]!,
+        onNext: _nextBook,
+        middle: [
+          // option F (user, 2026-10-06): the chapter's name over the slider, the book's page and % at the
+          // left, the chapter's page at the right - of the page picked while the slider moves
+          Expanded(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(children: [
-                  IconButton(focusNode: _ctl[_Ctl.prevBook], tooltip: 'Previous book', onPressed: _prevBook,
-                      icon: const Icon(Icons.skip_previous, size: 28)),
-                  const SizedBox(width: 4),
-                  // option F (user, 2026-10-06): the chapter's name over the slider, the book's page and % at the
-                  // left, the chapter's page at the right - of the page picked while the slider moves
                   Expanded(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Row(children: [
-                          Expanded(
-                            flex: 2,
-                            child: Text(bookAt, key: const ValueKey('epub-book-position'), style: numbers,
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 3,
-                            child: Text(title, key: const ValueKey('epub-chapter-title'), maxLines: 1,
-                                overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
-                                style: TextStyle(color: picked != null ? accent : Colors.white, fontSize: 14)),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            flex: 2,
-                            child: Text(inChapter, key: const ValueKey('epub-chapter-position'), style: numbers,
-                                maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right),
-                          ),
-                        ]),
-                      ),
-                      _slider(),
-                    ]),
+                    flex: 2,
+                    child: Text(bookAt, key: const ValueKey('epub-book-position'), style: numbers,
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
                   ),
-                  _iconCtl(_Ctl.contents, Icons.toc, 'Contents', _contents),
-                  _iconCtl(_Ctl.settings, Icons.text_fields, 'Text and page settings', _settingsPanel),
-                  IconButton(focusNode: _ctl[_Ctl.nextBook], tooltip: 'Next book', onPressed: _nextBook,
-                      icon: const Icon(Icons.skip_next, size: 28)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 3,
+                    child: Text(title, key: const ValueKey('epub-chapter-title'), maxLines: 1,
+                        overflow: TextOverflow.ellipsis, textAlign: TextAlign.center,
+                        style: TextStyle(color: picked != null ? accent : Colors.white, fontSize: 14)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: Text(inChapter, key: const ValueKey('epub-chapter-position'), style: numbers,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right),
+                  ),
                 ]),
               ),
-            ),
+              _slider(),
+            ]),
           ),
-        ),
+        ],
+        buttons: [
+          barIcon(node: _ctl[_Ctl.contents]!, icon: Icons.toc, label: 'Contents', onPressed: _contents),
+          barIcon(node: _ctl[_Ctl.settings]!, icon: Icons.text_fields, label: 'Text and page settings',
+              onPressed: _settingsPanel),
+        ],
       ),
-    ];
+    );
   }
 }
 
