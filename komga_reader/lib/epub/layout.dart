@@ -938,15 +938,23 @@ class Paginator {
           // each side on its own: one that differs from the usual is the book's own wish, kept; the usual one goes
           final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
           _align = TextAlign.justify;
-          _indent = prev is TextBlock && prev.paragraph && !b.breakBefore && !(ownTop && b.paraTop > _usualTop) &&
-                  !(prev.paraBottom - _usualBottom > 0.01) && (b.breakGap == 0 || _breaksAreSpacing)
-              ? 1.5 * baseSize // (the reader's own 1.5 em, not the book's)
-              : 0; // no indent after a space the book asked for (a scene break), as in print
-          // ... and only between two paragraphs: under a picture or a table the book's gap stays (the text touched
-          // Small Gods' turtle ornament - user, build 82)
+          // a first-line indent only where the book indents this paragraph, and by its own amount - none invented
+          // (user, 2026-10-07: "don't do that unless it's explicitly called for in some way in the book"); a hanging
+          // indent the book asks for stays as it is
+          final booksIndent = b.indent > 0;
+          _indent = b.indent < 0
+              ? b.indent
+              : booksIndent && prev is TextBlock && prev.paragraph && !b.breakBefore &&
+                      !(ownTop && b.paraTop > _usualTop) && !(prev.paraBottom - _usualBottom > 0.01) &&
+                      (b.breakGap == 0 || _breaksAreSpacing)
+                  ? b.indent
+                  : 0; // no indent after a space the book asked for (a scene break), as in print
+          // ... and only between two indented paragraphs: under a picture or a table the book's gap stays (the text
+          // touched Small Gods' turtle ornament - user, build 82), and so does it for a paragraph the book doesn't
+          // indent - its gap is what tells it from the one before (without either, paragraphs ran together)
           final afterBlock = prev is ImageBlock || prev is TableBlock;
-          mt = ownTop || afterBlock ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
-          mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
+          mt = ownTop || afterBlock || !booksIndent ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
+          mb = ownBottom || !booksIndent ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
         if (b.breakGap > 0 && !(_breaksAreSpacing && !theme.bookFormatting)) mt = math.max(mt, b.breakGap);
