@@ -942,7 +942,10 @@ class Paginator {
                   !(prev.paraBottom - _usualBottom > 0.01) && (b.breakGap == 0 || _breaksAreSpacing)
               ? 1.5 * baseSize // (the reader's own 1.5 em, not the book's)
               : 0; // no indent after a space the book asked for (a scene break), as in print
-          mt = ownTop ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
+          // ... and only between two paragraphs: under a picture or a table the book's gap stays (the text touched
+          // Small Gods' turtle ornament - user, build 82)
+          final afterBlock = prev is ImageBlock || prev is TableBlock;
+          mt = ownTop || afterBlock ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
           mb = ownBottom ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on

@@ -98,6 +98,21 @@ void main() {
     return Paginator(theme, size, hy.forLang('en')).run(blocks);
   }
 
+  test("own formatting keeps the book's gap between a picture and the paragraph under it (user, build 82, Small Gods' "
+      'turtle: the text touched it; the gap that goes is the one between two paragraphs)', () async {
+    Future<double> gapUnder({required bool own}) async {
+      final blocks = ChapterReader(StyleSheet(), (h) => h)
+          .read(parseXhtml('<body><center><img src="t.png"/></center><p>After the picture.</p><p>And on.</p></body>'));
+      (blocks.first as ImageBlock).image = await _image(200, 200);
+      final page = Paginator(EpubTheme(bookFormatting: !own), const Size(600, 900), null).run(blocks).single;
+      return page.textOrigins.first.dy - page.pictures.single.$1.bottom;
+    }
+
+    final book = await gapUnder(own: false), own = await gapUnder(own: true);
+    expect(book, greaterThan(10), reason: "the book's 1em");
+    expect(own, closeTo(book, 0.5), reason: 'kept with own formatting');
+  });
+
   test("a page never ends in a word broken by a hyphen when its paragraph goes on (user, build 82, Small Gods: "
       '"ea-" / "gle" across a page turn) - the line goes over to the next page', () {
     // ordinary sentences with some long words: a few lines end in a broken word, most don't
