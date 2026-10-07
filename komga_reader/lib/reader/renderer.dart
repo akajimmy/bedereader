@@ -38,12 +38,18 @@ abstract class ReaderHost {
   /// Right-click: the controls up or down.
   void toggleControls();
 
+  /// The controls down (a chapter picked in Contents: the reader goes to read it).
+  void hideControls();
+
   /// The page view moved to [place]. [curling]: a page curl started it - it counts as a turn once the curl
   /// completes ([turned]), not yet.
   void pageChanged(int place, {required bool curling});
 
   /// A page curl completed: the turn to [place] counts now.
   void turned(int place);
+
+  /// The renderer put the book at [place] itself (laid out, or out again at a new size): where it opened, not a turn.
+  void placed(int place);
 
   /// Forward from the end card: the next book.
   void nextBook();

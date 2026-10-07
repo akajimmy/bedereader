@@ -40,7 +40,7 @@ class ReaderPositionRow extends StatelessWidget {
                 child: Text('${t.name} hidden - tap to show', maxLines: 1, overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
               )
-            : Text(t.text, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: align,
+            : Text(t.text, key: ValueKey('pos-${at.name}-text'), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: align,
                 style: TextStyle(color: colour, fontSize: size, fontFeatures: const [FontFeature.tabularFigures()])),
       );
     }

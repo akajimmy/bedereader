@@ -138,7 +138,7 @@ void main() {
     Future<int> total() async {
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
-      final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
+      final t = tester.widgetList<Text>(find.byKey(const ValueKey('pos-left-text'))).single.data!;
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
       return int.parse(RegExp(r'/(\d+) ·').firstMatch(t)!.group(1)!);
