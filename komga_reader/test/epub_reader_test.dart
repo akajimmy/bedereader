@@ -209,7 +209,7 @@ void main() {
   MemorySource chapters(int n, {String? failing}) => MemorySource({
         for (var i = 1; i <= n; i++)
           if ('c$i.xhtml' != failing)
-            'c$i.xhtml': '<html><body><h1>Chapter $i</h1>${List.filled(12, para('word$i', 40)).join()}</body></html>',
+            'c$i.xhtml': '<html><body><h1>Chapter $i</h1>${List.filled(40, para('word$i', 40)).join()}</body></html>',
       }, EpubInfo(spine: [for (var i = 1; i <= n; i++) 'c$i.xhtml'],
           toc: [for (var i = 1; i <= n; i++) TocEntry('Chapter $i', 'c$i.xhtml', 0)], title: 'Book'));
 
