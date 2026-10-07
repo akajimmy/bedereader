@@ -41,9 +41,21 @@ class RowNav extends StatefulWidget {
 class _RowNavState extends State<RowNav> {
   final _node = FocusNode(debugLabel: RowNav._label, canRequestFocus: false, skipTraversal: true);
 
+  /// Every row's focus node, as rows are told apart. Not by the node's debugLabel: Flutter keeps that in debug builds
+  /// only - in the release app every label was empty, no row was ever found, and Up / Down fell back to Flutter's
+  /// straight-down rule, skipping rows (user, 2026-10-07: the fix of 2026-09-30 never worked on the tablet; the tests
+  /// run in debug mode and passed).
+  static final Set<FocusNode> _rows = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _rows.add(_node);
+  }
+
   static FocusNode? _rowOf(FocusNode n) {
     for (final a in n.ancestors) {
-      if (a.debugLabel == RowNav._label) return a;
+      if (_rows.contains(a)) return a;
     }
     return null;
   }
@@ -68,7 +80,7 @@ class _RowNavState extends State<RowNav> {
     double top(FocusNode n) { // the outermost row's top: a row and the rows nested in it stay together, in focus order
       FocusNode at = n;
       for (final a in n.ancestors) {
-        if (a.debugLabel == RowNav._label) at = a;
+        if (_rows.contains(a)) at = a;
       }
       return at.rect.top;
     }
@@ -116,6 +128,7 @@ class _RowNavState extends State<RowNav> {
 
   @override
   void dispose() {
+    _rows.remove(_node);
     _node.dispose();
     super.dispose();
   }
