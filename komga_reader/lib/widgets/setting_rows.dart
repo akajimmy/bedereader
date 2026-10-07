@@ -291,6 +291,37 @@ class SwitchRow extends StatelessWidget {
       );
 }
 
+/// One on/off choice of a [ToggleChipsRow].
+class ToggleChip {
+  const ToggleChip(this.label, this.on, this.onChanged);
+  final String label;
+  final bool on;
+  final ValueChanged<bool> onChanged;
+}
+
+/// A few things that are each on or off, as chips under the label (user, 2026-10-07: the posters' three caption
+/// lines; the position text's spots) - any combination.
+class ToggleChipsRow extends StatelessWidget {
+  const ToggleChipsRow({super.key, required this.title, this.subtitle, required this.chips});
+  final String title;
+  final String? subtitle;
+  final List<ToggleChip> chips;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 14.5)),
+          if (subtitle != null) Text(subtitle!, style: const TextStyle(fontSize: 12, color: hintColour)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final c in chips)
+              FilterChip(label: Text(c.label), selected: c.on, onSelected: c.onChanged, visualDensity: VisualDensity.compact),
+          ]),
+        ]),
+      );
+}
+
 /// One option of a [SegmentRow]: a short label, or an icon with a tooltip.
 class Choice<T> {
   const Choice(this.value, this.label, {this.icon, this.iconWidget, this.mark});

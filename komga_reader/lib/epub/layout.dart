@@ -19,12 +19,15 @@ class EpubTheme {
     this.fontSize = 19,
     this.lineHeight = 1.45,
     this.margins = const EdgeInsets.fromLTRB(36, 40, 36, 40),
-    this.bookFormatting = true,
+    bool bookFormatting = true,
+    TextAlign? ownAlign,
+    bool? ownParagraphs,
     this.hyphenate = true,
     this.accent = const Color(0xFF3D8BE0),
     this.pixelRatio = 1,
     this.paragraphGap = 0,
-  });
+  })  : ownAlign = ownAlign ?? (bookFormatting ? null : TextAlign.justify),
+        ownParagraphs = ownParagraphs ?? !bookFormatting;
   final Color background, text;
 
   /// Note markers' colour: the app's accent colour (user, 2026-10-06: they follow the app's colouring).
@@ -40,21 +43,27 @@ class EpubTheme {
   final double fontSize, lineHeight;
   final EdgeInsets margins;
 
-  /// The publisher's alignment, indents and paragraph spacing (on), or the reader's own for every book (off):
-  /// justified, the first line of each paragraph indented except after a heading or break, no gap between them
-  /// (user, 2026-10-06: "a switch: book's look / mine").
-  final bool bookFormatting;
+  /// The reader's own alignment for every ordinary paragraph (justified or left), or null: the book's. With
+  /// [ownParagraphs], the reader's own paragraphs: a first-line indent only where the book indents (its own amount),
+  /// none after a heading or break, the usual gap between them taken out. They were one switch ("Book's formatting"),
+  /// split 2026-10-07 (user); [bookFormatting] in the constructor still sets both (off: justified and the reader's).
+  final TextAlign? ownAlign;
+  final bool ownParagraphs;
   final bool hyphenate;
+
+  /// Both the book's: its alignment and its paragraphs.
+  bool get bookFormatting => ownAlign == null && !ownParagraphs;
 
   // equal themes lay out the same: a book isn't laid out again for an equal one
   @override
   bool operator ==(Object other) => other is EpubTheme && other.background == background && other.text == text &&
       other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
-      other.margins == margins && other.bookFormatting == bookFormatting && other.hyphenate == hyphenate &&
+      other.margins == margins && other.ownAlign == ownAlign && other.ownParagraphs == ownParagraphs &&
+      other.hyphenate == hyphenate &&
       other.accent == accent && other.pixelRatio == pixelRatio && other.paragraphGap == paragraphGap;
   @override
-  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, bookFormatting, hyphenate,
-      accent, pixelRatio, paragraphGap);
+  int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, ownAlign, ownParagraphs,
+      hyphenate, accent, pixelRatio, paragraphGap);
 }
 
 // ---- blocks
@@ -930,14 +939,15 @@ class Paginator {
         _align = b.align == TextAlign.start ? TextAlign.left : b.align; // a browser's default: left
         _indent = b.indent;
         final plain = b.paragraph && const {TextAlign.start, TextAlign.left, TextAlign.justify}.contains(b.align);
-        if (!theme.bookFormatting && plain) {
-          // the reader's own: justified, indented after another paragraph, no gaps between paragraphs. Only the
+        // the reader's own alignment for an ordinary paragraph (the book's otherwise)
+        if (theme.ownAlign != null && plain) _align = theme.ownAlign!;
+        if (theme.ownParagraphs && plain) {
+          // the reader's own paragraphs: no gaps between them (the alignment is apart, above). Only the
           // book's ordinary gap goes: spacing the book asks for specifically - round a wrapper, or on a paragraph
           // that differs from the chapter's usual one (a scene break, the first paragraph after one) - is kept (user,
           // 2026-10-06: "specific spacing requirements defined in the book are respected")
           // each side on its own: one that differs from the usual is the book's own wish, kept; the usual one goes
           final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
-          _align = TextAlign.justify;
           // a first-line indent only where the book indents this paragraph, and by its own amount - none invented
           // (user, 2026-10-07: "don't do that unless it's explicitly called for in some way in the book"); a hanging
           // indent the book asks for stays as it is
@@ -957,7 +967,7 @@ class Paginator {
           mb = ownBottom || !booksIndent ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
-        if (b.breakGap > 0 && !(_breaksAreSpacing && !theme.bookFormatting)) mt = math.max(mt, b.breakGap);
+        if (b.breakGap > 0 && !(_breaksAreSpacing && theme.ownParagraphs)) mt = math.max(mt, b.breakGap);
       }
       // the reader's own extra space between paragraphs (Paragraph spacing), on top of the book's
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore

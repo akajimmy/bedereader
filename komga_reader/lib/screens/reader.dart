@@ -108,6 +108,12 @@ class _ReaderScreenState extends State<ReaderScreen>
   int get _count => _r.last + 1; // the book's pages
   bool get _rtl => _renderer?.rtl ?? false;
   AppSettings get _settings => AppSettings.instance;
+
+  /// The open book's kind ([readerKind]) and its own reading settings (page corner, clock, progress bar, rotation,
+  /// position text - user, 2026-10-07: set apart for comics and eBooks).
+  @override
+  BookKind get readerKind => _renderer?.kind ?? (isEpub(widget.book as Map) ? BookKind.ebooks : BookKind.comics);
+  KindPrefs get _kindPrefs => _settings.display.kind(readerKind);
   String? get _seriesId => _book['seriesId'] as String?;
 
   // ---- what the renderer asks of the Reader (lib/reader/renderer.dart)
@@ -240,6 +246,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
       if (!reuse) {
         _renderer = r..addListener(_onRenderer);
+        kindChanged(); // its kind's rotation (a comic and an EPUB can differ)
         if (old != null) {
           old.removeListener(_onRenderer);
           WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose()); // its pages drawn this frame still
@@ -349,7 +356,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     } else {
       _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
     }
-    if (i <= _last && _settings.display.pageNote == PageNote.afterTurn) {
+    if (i <= _last && _kindPrefs.pageNote == PageNote.afterTurn) {
       _flashTimer?.cancel();
       setState(() => _flash = true);
       _flashTimer = Timer(const Duration(milliseconds: 1200), () { if (mounted) setState(() => _flash = false); });
@@ -683,11 +690,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       return KeyEventResult.ignored;
     }
     if (!_menu) {
-      // Volume keys (Android, a setting): down = forward, up = back, in any reading direction. Handled keys don't
-      // reach the system, so the volume stays put; a held key turns one page (its repeats are swallowed).
+      // The volume keys turn pages only when mapped (Remote and keys - user, 2026-10-07: no switch of their own);
+      // unmapped they're left to the system, the volume. Mapped, a held one turns one page (its repeats swallowed).
       if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) &&
-          hasVolumeKeys && _settings.display.volumeKeys) {
-        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _r.forward() : _r.back();
+          e is KeyRepeatEvent && ReaderKeys.instance.actionFor(k) != null) {
         return KeyEventResult.handled;
       }
       // a held key turns a page each time the slide before has ended, not on every repeat (each repeat restarted the
@@ -781,13 +787,13 @@ class _ReaderScreenState extends State<ReaderScreen>
                   // the page note, "12 / 36": always, or for a moment after a turn (Page corner - one setting with
                   // the EPUBs', and their corner: bottom right, user 2026-10-07) - not over the controls (they have
                   // the count) or the end card
-                  if (_settings.display.pageNote != PageNote.off)
+                  if (_kindPrefs.pageNote != PageNote.off)
                   Positioned(
                     right: 14,
                     bottom: 14,
                     child: IgnorePointer(
                       child: AnimatedOpacity(
-                        opacity: (_flash || _settings.display.pageNote == PageNote.always) && !_menu && _index <= _last
+                        opacity: (_flash || _kindPrefs.pageNote == PageNote.always) && !_menu && _index <= _last
                             ? 1 : 0,
                         duration: const Duration(milliseconds: 250),
                         child: Container(
@@ -801,7 +807,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                     ),
                   ),
                   // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
-                  if (!_menu && _settings.display.clock == ShowWhen.always)
+                  if (!_menu && _kindPrefs.clock == ShowWhen.always)
                     Positioned(
                       top: 8,
                       right: 10,
@@ -815,7 +821,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                       ),
                     ),
                   // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
-                  if (!_menu && _settings.display.progressBar && _index <= _last)
+                  if (!_menu && _kindPrefs.progressBar && _index <= _last)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -950,6 +956,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     return readerBars(
       onTapOutside: _hideControls,
       top: ReaderTopBar(
+        clock: _kindPrefs.clock,
         closeNode: _ctl[_Ctl.close]!,
         heading: _heading,
         title: _bookName,
@@ -999,7 +1006,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         onNext: _nextBook,
         above: _r.above(context),
         // the renderer's words for the place shown (decision 5, mockup "A")
-        position: ReaderPositionRow(left: spots.left, centre: spots.centre, right: spots.right, picking: _scrub != null),
+        position: ReaderPositionRow(kind: readerKind, left: spots.left, centre: spots.centre, right: spots.right, picking: _scrub != null),
         middle: [
           Expanded(
             child: _count < 2

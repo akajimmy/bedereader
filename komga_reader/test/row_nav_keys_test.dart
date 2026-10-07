@@ -109,7 +109,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
       await tester.pumpAndSettle();
     }
-    expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', 'Dark', "Book's formatting"]);
+    expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', 'Dark', "Book's"]); // (Alignment's first, 2026-10-07)
   });
 
   testWidgets("rows whose controls changed while the page was open (keys loaded or edited): Up / Down still go to the "

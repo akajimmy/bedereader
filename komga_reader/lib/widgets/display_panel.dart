@@ -189,9 +189,9 @@ class _ReaderPanel extends StatelessWidget {
         SettingsGroup(title: 'This device', children: [
           ...brightnessRows(s, compact: true),
           ...nightRows(s),
-          if (canRotate) rotationRow(s), // locked mid-book, lying down
+          if (canRotate) rotationRow(s, BookKind.comics), // locked mid-book, lying down
           pageTurnRow(s),
-          pageNoteRow(s),
+          pageNoteRow(s, BookKind.comics),
           pagePreviewsRow(s), // noticed mid-book, when they lag
           doubleTapRow(s),
           screenOnRow(s),
@@ -408,41 +408,45 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
 
 /// Rotation in the reader (Android only: a PC window doesn't turn). Portrait / Landscape hold the way the tablet is
 /// held when the lock starts; tapping the one in force again turns it upside down (user, 2026-10-07).
-Widget rotationRow(AppSettings s) => SegmentRow<Rotation>(
+/// [kind]'s rotation (each kind its own - user, 2026-10-07).
+Widget rotationRow(AppSettings s, BookKind kind) {
+  final k = s.display.kind(kind);
+  return SegmentRow<Rotation>(
       title: 'Rotation',
-      subtitle: s.display.rotation == Rotation.auto
+      subtitle: k.rotation == Rotation.auto
           ? 'Follow the device, or stay put'
-          : 'Stays put - while reading, tap ${s.display.rotation.label} again to turn it upside down',
+          : 'Stays put - while reading, tap ${k.rotation.label} again to turn it upside down',
       // the lock in force marked as a switch: tapped again, it turns over (user, 2026-10-07)
       choices: [
         for (final r in Rotation.values)
-          Choice(r, r.label, mark: r != Rotation.auto && r == s.display.rotation ? Icons.sync : null),
+          Choice(r, r.label, mark: r != Rotation.auto && r == k.rotation ? Icons.sync : null),
       ],
       markRoom: true, // the buttons the same size, mark or not (user, 2026-10-07: no resizing)
-      value: s.display.rotation,
-      onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
+      value: k.rotation,
+      onChanged: (r) => s.setDisplay(s.display.withKind(kind, k.copyWith(rotation: r))),
       onReselect: (r) {
         if (r != Rotation.auto) OrientationLock.instance.flip(); // (only while a book holds the lock)
       },
     );
+}
 
-Widget clockRow(AppSettings s) => SegmentRow<ShowWhen>(
+Widget clockRow(AppSettings s, BookKind kind) => SegmentRow<ShowWhen>(
       title: 'Clock and battery',
-      subtitle: switch (s.display.clock) {
+      subtitle: switch (s.display.kind(kind).clock) {
         ShowWhen.off => 'Not shown',
         ShowWhen.withControls => 'On the top bar when you tap the page',
         ShowWhen.always => 'Top right, all the time',
       },
       choices: [for (final w in ShowWhen.values) Choice(w, w.label)],
-      value: s.display.clock,
-      onChanged: (w) => s.setDisplay(s.display.copyWith(clock: w)),
+      value: s.display.kind(kind).clock,
+      onChanged: (w) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(clock: w))),
     );
 
-Widget progressBarRow(AppSettings s) => SwitchRow(
+Widget progressBarRow(AppSettings s, BookKind kind) => SwitchRow(
       title: 'Progress bar',
       subtitle: 'A thin line along the bottom while the controls are hidden',
-      value: s.display.progressBar,
-      onChanged: (v) => s.setDisplay(s.display.copyWith(progressBar: v)),
+      value: s.display.kind(kind).progressBar,
+      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(progressBar: v))),
     );
 
 Widget pagePreviewsRow(AppSettings s) => SwitchRow(
@@ -456,7 +460,7 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
 
 /// The note in the page's bottom-right corner - one setting for comics and EPUBs, and the same note in both: the page
 /// of the book's pages (user, 2026-10-07).
-Widget pageNoteRow(AppSettings s) => SegmentRow<PageNote>(
+Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(
       title: 'Page corner',
       subtitle: 'The page you\'re on, "12 / 36"',
       choices: const [
@@ -464,8 +468,8 @@ Widget pageNoteRow(AppSettings s) => SegmentRow<PageNote>(
         Choice(PageNote.afterTurn, 'After a turn'),
         Choice(PageNote.off, 'Off'),
       ],
-      value: s.display.pageNote,
-      onChanged: (v) => s.setDisplay(s.display.copyWith(pageNote: v)),
+      value: s.display.kind(kind).pageNote,
+      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(pageNote: v))),
     );
 
 Widget doubleTapRow(AppSettings s) => SwitchRow(

@@ -188,26 +188,75 @@ extension PosterSizeLabel on PosterSize {
   double get scale => switch (this) { PosterSize.small => 0.8, PosterSize.medium => 1.0, PosterSize.large => 1.3 };
 }
 
-/// The note in the page's corner while reading ([DisplayPrefs.pageNote]): always there, for a moment after each
+/// The note in the page's corner while reading ([KindPrefs.pageNote]): always there, for a moment after each
 /// turn, or not at all (user, 2026-10-06: option H, for EPUBs; both kinds since 2026-10-07).
 enum PageNote { always, afterTurn, off }
+
+/// The two kinds of book the one Reader reads (a renderer each).
+enum BookKind { comics, ebooks }
+
+/// The reading settings each kind of book has its own of (user, 2026-10-07, settings option A: the page corner,
+/// rotation, clock, progress bar and the position text set apart for comics and for eBooks). This device.
+@immutable
+class KindPrefs {
+  const KindPrefs({this.pageNote = PageNote.always, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
+      this.progressBar = false, this.hiddenSpots = const []});
+
+  /// The note in the page's bottom-right corner, "12 / 36".
+  final PageNote pageNote;
+  final Rotation rotation; // follow the device, or hold portrait / landscape (Android)
+  final ShowWhen clock; // the time and battery - top right, or on the top bar with the controls up
+  final bool progressBar; // a thin line along the bottom while the controls are hidden (their slider shows it)
+  /// The position text's spots not shown ('left', 'centre', 'right' - lib/reader/position_row.dart).
+  final List<String> hiddenSpots;
+
+  KindPrefs copyWith({PageNote? pageNote, Rotation? rotation, ShowWhen? clock, bool? progressBar,
+          List<String>? hiddenSpots}) =>
+      KindPrefs(pageNote: pageNote ?? this.pageNote, rotation: rotation ?? this.rotation, clock: clock ?? this.clock,
+          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots);
+
+  Map<String, dynamic> toJson() => {'pageNote': pageNote.name, 'rotation': rotation.name, 'clock': clock.name,
+      'progressBar': progressBar, 'hiddenSpots': hiddenSpots};
+
+  /// From [j]; anything it lacks from [was] (a save from before the kinds were apart: its one shared value).
+  factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs was = const KindPrefs()}) {
+    T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
+        values.firstWhere((v) => v.name == name, orElse: () => fallback);
+    final spots = j['hiddenSpots'];
+    return KindPrefs(
+      pageNote: pick(PageNote.values, j['pageNote'], was.pageNote),
+      rotation: pick(Rotation.values, j['rotation'], was.rotation),
+      clock: pick(ShowWhen.values, j['clock'], was.clock),
+      progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : was.progressBar,
+      hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : was.hiddenSpots,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is KindPrefs && jsonEncode(other.toJson()) == jsonEncode(toJson());
+  @override
+  int get hashCode => jsonEncode(toJson()).hashCode;
+}
 
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
 @immutable
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
-      this.pageNote = PageNote.always, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
+      this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
-      this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
-      this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
+      this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
+      this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
-      this.posterDate = true, this.hiddenSpots = const []});
+      this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs()});
   final bool night;
-  /// reader: the position text's spots tapped hidden ('left', 'centre', 'right' - lib/reader/position_row.dart), for
-  /// both kinds of book (user, 2026-10-07)
-  final List<String> hiddenSpots;
-  /// book posters: the release date under the title ("13 Mar 2024") - user, 2026-10-06; default on
-  final bool posterDate;
+
+  /// The reading settings set apart per kind of book ([KindPrefs]).
+  final KindPrefs comics, ebooks;
+  KindPrefs kind(BookKind k) => k == BookKind.comics ? comics : ebooks;
+
+  /// Book posters' caption, any of three lines, always in this order (user, 2026-10-07): the series and number
+  /// ("Saga #12"), the book's title, the release date ("13 Mar 2024").
+  final bool posterSeries, posterTitle, posterDate;
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
   /// button (user, 2026-10-02)
   final bool pageStrip;
@@ -220,23 +269,14 @@ class DisplayPrefs {
   final Accent accent;
 
   static const textScales = [0.9, 1.0, 1.15, 1.3];
-  final Rotation rotation; // reader: follow the device, or hold portrait / landscape (Android)
-  final ShowWhen clock; // reader: the time and battery - top right, or on the top bar with the controls up
-  final bool progressBar; // reader: a thin line along the bottom while the controls are hidden (their slider shows it)
-  /// reader: the note in the page's bottom-right corner - the page of the book's pages, "12 / 36", for both kinds -
-  /// always there, for a moment after each turn, or not at all. One setting for both kinds (the one Reader,
-  /// user 2026-10-07): it replaced the comics' "page number after a turn" and the EPUBs' "page corner".
-  final PageNote pageNote;
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
-  final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
   final MidBook midBook; // reader: Next book before the last page
   final int screenOn; // reader: minutes the screen stays on after the last page turn; 0 = the system's timeout
   final PosterSize posterSize; // library grids and Home's rows
-  final bool posterTitleOnly; // book posters: just the title, not "Series #N" over it
 
   static const alwaysOn = -1; // [screenOn]: as long as a book is open
   static const screenOnChoices = [0, 5, 10, 20, 30, alwaysOn];
-  final PageTurn pageTurn; // reader page-turn animation (this device)
+  final PageTurn pageTurn; // comics' page-turn animation (this device)
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
 
@@ -266,54 +306,65 @@ class DisplayPrefs {
     return (dimZone - b) / dimZone * 0.75;
   }
 
+  /// [pageNote], [rotation], [clock], [progressBar], [hiddenSpots]: for both kinds at once ([withKind] sets one).
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          PageNote? pageNote, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
-          int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
+          PageNote? pageNote, bool? doubleTapZoom, MidBook? midBook,
+          int? screenOn, PosterSize? posterSize, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pagePreviews, bool? pageStrip, bool? posterDate, List<String>? hiddenSpots}) =>
-      DisplayPrefs(
-          hiddenSpots: hiddenSpots ?? this.hiddenSpots,
-          pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
-          posterDate: posterDate ?? this.posterDate,
-          nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
-          nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
-          rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
-          night: night ?? this.night, warmth: warmth ?? this.warmth,
-          brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
-          pageNote: pageNote ?? this.pageNote, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
-          volumeKeys: volumeKeys ?? this.volumeKeys, midBook: midBook ?? this.midBook,
-          screenOn: screenOn ?? this.screenOn,
-          posterSize: posterSize ?? this.posterSize, posterTitleOnly: posterTitleOnly ?? this.posterTitleOnly);
+          bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
+          List<String>? hiddenSpots, KindPrefs? comics, KindPrefs? ebooks}) {
+    KindPrefs both(KindPrefs k) => k.copyWith(pageNote: pageNote, rotation: rotation, clock: clock,
+        progressBar: progressBar, hiddenSpots: hiddenSpots);
+    return DisplayPrefs(
+        comics: both(comics ?? this.comics), ebooks: both(ebooks ?? this.ebooks),
+        pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
+        posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
+        posterDate: posterDate ?? this.posterDate,
+        nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
+        nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
+        night: night ?? this.night, warmth: warmth ?? this.warmth,
+        brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
+        doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom, midBook: midBook ?? this.midBook,
+        screenOn: screenOn ?? this.screenOn, posterSize: posterSize ?? this.posterSize);
+  }
+
+  /// Kind [k]'s reading settings changed.
+  DisplayPrefs withKind(BookKind k, KindPrefs p) =>
+      k == BookKind.comics ? copyWith(comics: p) : copyWith(ebooks: p);
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
-      'pageTurn': pageTurn.name, 'pageNote': pageNote.name, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
+      'pageTurn': pageTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
-      'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
+      'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip, 'posterDate': posterDate,
-      'hiddenSpots': hiddenSpots};
+      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson()};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final on = j['screenOn'];
     int minutes(Object? v, int fallback) => v is int && v >= 0 && v < 24 * 60 ? v : fallback;
+    // saved before the kinds were set apart (build 91 and older): the one shared value, for both kinds
+    final shared = KindPrefs.fromJson({
+      ...j,
+      // older still: the comics' page-number switch (AppSettings.load then takes the EPUBs' choice)
+      'pageNote': j['pageNote'] ?? (j['pageNumber'] == false ? PageNote.off.name : PageNote.afterTurn.name),
+    });
+    KindPrefs kind(String key) => j[key] is Map ? KindPrefs.fromJson(Map<String, dynamic>.from(j[key] as Map),
+        was: shared) : shared;
     return DisplayPrefs(
         night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
         brightness: (j['brightness'] as num?)?.toDouble(),
         pageTurn: pick(PageTurn.values, j['pageTurn'], PageTurn.swipe),
-        // saved before there was one setting: the comics' switch (AppSettings.load then takes the EPUBs' choice)
-        pageNote: pick(PageNote.values, j['pageNote'], j['pageNumber'] == false ? PageNote.off : PageNote.afterTurn),
         doubleTapZoom: j['doubleTapZoom'] != false,
-        volumeKeys: j['volumeKeys'] != false,
         midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
-        posterTitleOnly: j['posterTitleOnly'] == true,
+        // saved before the three lines (build 91 and older): "Title only" was the title without the series line
+        posterSeries: j['posterSeries'] is bool ? j['posterSeries'] as bool : j['posterTitleOnly'] != true,
+        posterTitle: j['posterTitle'] != false,
         posterDate: j['posterDate'] != false,
-        rotation: pick(Rotation.values, j['rotation'], Rotation.auto),
-        clock: pick(ShowWhen.values, j['clock'], ShowWhen.withControls),
-        progressBar: j['progressBar'] == true,
         nightSchedule: j['nightSchedule'] == true,
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
@@ -321,7 +372,8 @@ class DisplayPrefs {
         accent: pick(Accent.values, j['accent'], Accent.blue),
         pagePreviews: j['pagePreviews'] != false, // on unless switched off
         pageStrip: j['pageStrip'] == true,
-        hiddenSpots: [for (final v in (j['hiddenSpots'] is List ? j['hiddenSpots'] as List : const [])) if (v is String) v]);
+        comics: kind('comics'),
+        ebooks: kind('ebooks'));
   }
 }
 
@@ -381,18 +433,40 @@ enum EpubParagraphGap {
 
 enum EpubTurn { slide, none }
 
+/// The text's alignment (user, 2026-10-07: "Book's formatting" split in three): the book's own, or every paragraph
+/// justified or ragged-right.
+enum EpubAlign {
+  book("Book's"), justified('Justified'), left('Left');
+
+  const EpubAlign(this.label);
+  final String label;
+}
+
+/// Paragraphs' first-line indents and the gaps between them: the book's own, or the reader's (indents only where the
+/// book indents, the usual gaps taken out).
+enum EpubParagraphs {
+  book("Book's"), mine('Mine');
+
+  const EpubParagraphs(this.label);
+  final String label;
+}
 
 @immutable
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
-      this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.bookFormatting = false,
-      this.turn = EpubTurn.slide, this.paragraphGap = EpubParagraphGap.none});
+      this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
+      this.paragraphs = EpubParagraphs.mine, this.hyphenate = true, this.turn = EpubTurn.slide,
+      this.paragraphGap = EpubParagraphGap.none});
   final EpubFont font;
-  final double size; // px at the app's text size
+  /// px at the app's text size - kept on this device (user, 2026-10-07: the tablet and the PC want their own); the
+  /// rest of the set is synced
+  final double size;
   final double lineSpacing;
   final EpubMargins margins;
   final EpubColours colours;
-  final bool bookFormatting; // the publisher's alignment, indents and spacing (default off: the reader's own)
+  final EpubAlign align;
+  final EpubParagraphs paragraphs;
+  final bool hyphenate;
   final EpubTurn turn;
   final EpubParagraphGap paragraphGap;
 
@@ -400,28 +474,34 @@ class EpubPrefs {
   static const spacings = [1.25, 1.45, 1.7];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          bool? bookFormatting, EpubTurn? turn, EpubParagraphGap? paragraphGap}) =>
+          EpubAlign? align, EpubParagraphs? paragraphs, bool? hyphenate, EpubTurn? turn,
+          EpubParagraphGap? paragraphGap}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
-          margins: margins ?? this.margins, colours: colours ?? this.colours,
-          bookFormatting: bookFormatting ?? this.bookFormatting, turn: turn ?? this.turn,
+          margins: margins ?? this.margins, colours: colours ?? this.colours, align: align ?? this.align,
+          paragraphs: paragraphs ?? this.paragraphs, hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
           paragraphGap: paragraphGap ?? this.paragraphGap);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
-      'margins': margins.name, 'colours': colours.name, 'bookFormatting': bookFormatting, 'turn': turn.name,
-      'paragraphGap': paragraphGap.name};
+      'margins': margins.name, 'colours': colours.name, 'align': align.name, 'paragraphs': paragraphs.name,
+      'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final size = (j['size'] as num?)?.toDouble();
     final spacing = (j['lineSpacing'] as num?)?.toDouble();
+    // saved before the split (build 91 and older): one switch, "Book's formatting" - on was the book's alignment and
+    // paragraphs, off justified text and the reader's paragraphs
+    final book = j['bookFormatting'] == true;
     return EpubPrefs(
       font: pick(EpubFont.values, j['font'], EpubFont.literata),
       size: size != null && size >= 10 && size <= 48 ? size : 19,
       lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.45,
       margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
-      bookFormatting: j['bookFormatting'] == true,
+      align: pick(EpubAlign.values, j['align'], book ? EpubAlign.book : EpubAlign.justified),
+      paragraphs: pick(EpubParagraphs.values, j['paragraphs'], book ? EpubParagraphs.book : EpubParagraphs.mine),
+      hyphenate: j['hyphenate'] != false,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
     );
@@ -448,10 +528,10 @@ class AppSettings extends ChangeNotifier {
 
   /// Tells only of changes to how posters look (size, title only, release date): poster grids listen to this, not to
   /// every setting - a brightness slider drag rebuilt every grid under the reader (code review 2026-10-05, #44).
-  final posterLook = ValueNotifier<(PosterSize, bool, bool)>((PosterSize.medium, false, true));
+  final posterLook = ValueNotifier<(PosterSize, bool, bool, bool)>((PosterSize.medium, true, true, true));
 
   void _posterLookFollows() =>
-      posterLook.value = (display.posterSize, display.posterTitleOnly, display.posterDate);
+      posterLook.value = (display.posterSize, display.posterSeries, display.posterTitle, display.posterDate);
   EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
   String? syncError; // last Komga sync problem, shown in the Display panel
 
@@ -579,7 +659,9 @@ class AppSettings extends ChangeNotifier {
     if (savedReader != null) _applyBlob(savedReader, remote: false);
     // saved before the one page-note setting (build 87 and older): the EPUBs' "page corner" becomes it, for both kinds
     final corner = savedReader?['epub'] is Map ? (savedReader!['epub'] as Map)['corner'] : null;
-    if (!(savedDisplay?.containsKey('pageNote') ?? false) && corner is String) {
+    // (a save since has its page note, or each kind's - build 92 on: not taken over again on every start)
+    if (!(savedDisplay?.containsKey('pageNote') ?? false) && !(savedDisplay?.containsKey('comics') ?? false) &&
+        corner is String) {
       final note = PageNote.values.where((v) => v.name == corner).firstOrNull;
       if (note != null) setDisplay(display.copyWith(pageNote: note));
     }
@@ -776,7 +858,11 @@ class AppSettings extends ChangeNotifier {
     final d = b['default'];
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
     final e = b['epub'];
-    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = EpubPrefs.fromJson(e);
+    // the size is this device's (user, 2026-10-07): Komga's copy brings the rest of the set, not that
+    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) {
+      final incoming = EpubPrefs.fromJson(e);
+      epub = remote ? incoming.copyWith(size: epub.size) : incoming;
+    }
     final s = b['series'];
     if (s is! Map) return;
     final next = <String, ReaderPrefs>{

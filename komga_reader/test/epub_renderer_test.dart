@@ -109,6 +109,20 @@ void main() {
     expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
+  testWidgets("an EPUB follows the eBooks' own reading settings, not the comics' (user, 2026-10-07: set apart per "
+      'kind): page corner, progress bar', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(
+        comics: KindPrefs(pageNote: PageNote.always, progressBar: true),
+        ebooks: KindPrefs(pageNote: PageNote.off, progressBar: false)));
+    await open(tester, twoChapters());
+    expect(find.byKey(const ValueKey('page-corner')), findsNothing, reason: "eBooks' Off, not comics' Always");
+    expect(find.byKey(const ValueKey('reading-progress')), findsNothing);
+    final s = AppSettings.instance;
+    s.setDisplay(s.display.withKind(BookKind.ebooks, s.display.ebooks.copyWith(pageNote: PageNote.always)));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('page-corner')), findsOneWidget);
+  });
+
   testWidgets("the pages either side are built ahead, as the comic reader's are: a tap's turn doesn't build the "
       'incoming page in its first frame (tap turns missed a refresh there - tablet, build 76)', (tester) async {
     await open(tester, twoChapters());

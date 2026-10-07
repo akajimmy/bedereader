@@ -233,10 +233,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       // what's drawn over the page (set once, so Settings only - except the page number, also in the Reader panel)
       SettingsGroup(title: 'On the page', children: [
-        pageNoteRow(s),
+        pageNoteRow(s, BookKind.comics),
         pagePreviewsRow(s),
-        clockRow(s),
-        progressBarRow(s),
+        clockRow(s, BookKind.comics),
+        progressBarRow(s, BookKind.comics),
       ]),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
@@ -250,7 +250,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       // the reader's alone: everywhere else the screen follows the system (user, 2026-10-05)
       SettingsGroup(title: 'Brightness while reading', children: brightnessRows(s)),
       SettingsGroup(title: 'Screen', children: [
-        if (canRotate) rotationRow(s),
+        if (canRotate) rotationRow(s, BookKind.comics),
         screenOnRow(s),
       ]),
     ]);
@@ -260,16 +260,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Widget _keys(BuildContext context) {
     final k = ReaderKeys.instance;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // the volume keys live here with the other keys (tablet bug, 2026-09-30), not under Reader
-      if (hasVolumeKeys)
-        _live((s) => SettingsGroup(title: 'Volume keys', children: [
-              SwitchRow(title: 'Volume keys turn pages', subtitle: 'Down: next page, up: previous',
-                  value: s.display.volumeKeys, onChanged: (v) => s.setDisplay(s.display.copyWith(volumeKeys: v))),
-            ])),
       SettingsGroup(title: 'In the reader, with the controls hidden', children: [
         for (final a in ReaderAction.values) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
-        const NoteRow('For a book read right to left, Left and Right swap. Shift+Space always goes back. Once the '
-            'controls are up, the arrows and OK move around them.'),
+        NoteRow('${hasVolumeKeys ? 'Any key can be added, the volume keys too (to turn pages with them: Volume down to '
+            'Next page, Volume up to Previous page). ' : ''}For a book read right to left, Left and Right swap. '
+            'Shift+Space always goes back. Once the controls are up, the arrows and OK move around them.'),
         ActionRow(
           title: 'Back to the usual keys',
           button: TextButton(onPressed: k.isDefault ? null : k.reset, child: const Text('Reset keys')),
@@ -388,17 +383,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               value: d.posterSize,
               onChanged: (p) => s.setDisplay(d.copyWith(posterSize: p)),
             ),
-            SegmentRow<bool>(
-              title: 'Book posters show',
-              choices: const [Choice(false, 'Series # and title'), Choice(true, 'Title only')],
-              value: d.posterTitleOnly,
-              onChanged: (v) => s.setDisplay(d.copyWith(posterTitleOnly: v)),
-            ),
-            SwitchRow(
-              title: 'Release date',
-              subtitle: 'Under the title on book posters',
-              value: d.posterDate,
-              onChanged: (v) => s.setDisplay(d.copyWith(posterDate: v)),
+            // any of three lines under a book's poster, always in this order (user, 2026-10-07)
+            ToggleChipsRow(
+              title: 'Under book posters',
+              chips: [
+                ToggleChip('Series #', d.posterSeries, (v) => s.setDisplay(d.copyWith(posterSeries: v))),
+                ToggleChip('Title', d.posterTitle, (v) => s.setDisplay(d.copyWith(posterTitle: v))),
+                ToggleChip('Release date', d.posterDate, (v) => s.setDisplay(d.copyWith(posterDate: v))),
+              ],
             ),
           ]);
         }),

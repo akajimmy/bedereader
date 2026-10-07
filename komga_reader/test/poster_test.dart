@@ -70,4 +70,32 @@ void main() {
     final off = [for (final e in find.byType(ClipRRect).evaluate()) e.size!.height];
     expect(off[0], greaterThan(h[0]), reason: 'without the line the cover gets its room back');
   });
+
+  testWidgets('book posters: any of three lines - series #, title, release date - always in that order (user, '
+      '2026-10-07: no title = the series # over the date)', (tester) async {
+    final api = plainKomga();
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    final b = {'id': 'b1', 'seriesTitle': 'X-Men', 'metadata': {'number': '3', 'title': 'Dated',
+        'releaseDate': '2024-03-13'}};
+    Future<List<String>> lines(bool series, bool title, bool date) async {
+      s.setDisplay(DisplayPrefs(posterSeries: series, posterTitle: title, posterDate: date));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) =>
+          SizedBox(width: 150, height: 300, child: bookTile(context, api, b, onOpen: () {}))))));
+      await tester.pump();
+      // the texts under the poster, top to bottom
+      final texts = [for (final e in find.byType(Text).evaluate()) (e.widget as Text).data ?? '']
+          .where((t) => ['X-Men #3', 'Dated', '13 Mar 2024'].contains(t)).toList();
+      final tops = {for (final t in texts) t: tester.getTopLeft(find.text(t)).dy};
+      return texts..sort((a, c) => tops[a]!.compareTo(tops[c]!));
+    }
+
+    expect(await lines(true, true, true), ['X-Men #3', 'Dated', '13 Mar 2024']);
+    expect(await lines(true, false, true), ['X-Men #3', '13 Mar 2024']);
+    expect(await lines(false, true, true), ['Dated', '13 Mar 2024']);
+    expect(await lines(false, true, false), ['Dated']);
+    expect(await lines(false, false, true), ['13 Mar 2024']);
+    expect(await lines(false, false, false), isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 }
