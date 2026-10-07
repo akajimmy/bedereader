@@ -347,6 +347,21 @@ void main() {
     expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
+  testWidgets('a held Right key keeps turning pages, one each time the slide ends (user, build 82, Windows: it crept '
+      'and never turned - each repeat restarted the slide)', (tester) async {
+    await open(tester, chapters(1));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowRight);
+    for (var i = 0; i < 30; i++) {
+      // a keyboard's repeats, about 30 a second, for about a second
+      await tester.pump(const Duration(milliseconds: 33));
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowRight);
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowRight);
+    await settle(tester);
+    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(await label(tester))![1]!);
+    expect(page, greaterThanOrEqualTo(3), reason: 'about a second of a held key: a few pages on');
+  });
+
   testWidgets("with the controls up the remote walks them (the comic reader's model): Down to the bottom bar, Right "
       'along it, OK presses; Back closes the controls, not the book', (tester) async {
     await open(tester, twoChapters());
