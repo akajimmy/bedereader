@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Downloads > Manage:** each book has a trash button again (it was a menu with one item), and a series' card has
+  one for the whole series (it asks first). A series stands apart from its books: a shaded card with a series icon
+  and its name in bold. The line above the storage bar starts with the number of books ("14 books · 1.0 GB used ·
+  limit 10.0 GB").
+
 ## 1.3.0
 
 ### Build 84 - 2026-10-07
@@ -16,9 +22,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Added**
 - **Downloads > Manage: Group by series.** One group per series - its books, size and how many are read - closed
   until you tap it. Sorting by size puts the biggest series first; the filters apply inside the groups. In select
-  mode a group's box ticks its whole series, and its menu removes the series. Remembered on each device. A series
-  is a shaded card with a series icon and its name in bold, so it stands apart from the books under it. The line
-  above the storage bar starts with the number of books ("14 books · 1.0 GB used · limit 10.0 GB").
+  mode a group's box ticks its whole series, and its menu removes the series. Remembered on each device.
 
 **Fixed**
 - **Progress bars looked full whatever they showed** - the storage bar in Downloads (10% used looked like 100%), a

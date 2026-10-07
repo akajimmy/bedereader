@@ -354,7 +354,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
         ),
       ]);
     }
-    final rows = _grouped ? _groupRows(shown, all) : [for (final item in shown) () => _row(item, all)];
+    final rows = _grouped ? _groupRows(shown, all) : [for (final item in shown) () => _row(item)];
     // built as they scroll into view (it rebuilt every row on each page downloaded - general scan #37)
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 32),
@@ -376,7 +376,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
       for (final g in order) ...[
         () => _groupHeader(g, all),
         if (_expanded.contains(g.first.seriesId))
-          for (final item in g) () => _row(item, all, inGroup: true),
+          for (final item in g) () => _row(item, inGroup: true),
       ],
     ];
   }
@@ -418,18 +418,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
               }),
       trailing: Row(mainAxisSize: MainAxisSize.min, children: [
         if (!_selecting)
-          PopupMenuButton<String>(
-            tooltip: 'Remove',
-            icon: const Icon(Icons.more_vert),
-            onSelected: (_) => _confirmRemove('Remove ${first.series}?', [
+          // one trash button (user, 2026-10-07 - not a menu of one item): the whole series, after asking
+          IconButton(
+            tooltip: 'Remove series',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _confirmRemove('Remove ${first.series}?', [
               for (final i in all) if (i.seriesId == id) i,
             ]),
-            itemBuilder: (_) {
-              final n = all.where((i) => i.seriesId == id).length;
-              return [
-                PopupMenuItem(value: 'series', child: Text(n == 1 ? 'Remove download' : 'Remove the series\' $n downloads')),
-              ];
-            },
           ),
         Padding(padding: const EdgeInsets.only(right: 8), child: chevron),
       ]),
@@ -437,7 +432,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
     );
   }
 
-  Widget _row(_Item item, List<_Item> all, {bool inGroup = false}) {
+  Widget _row(_Item item, {bool inGroup = false}) {
     final picked = _selected.contains(item.id);
     final state = item.read ? 'read' : item.started ? 'in progress' : null;
     void toggle() => setState(() => picked ? _selected.remove(item.id) : _selected.add(item.id));
@@ -464,24 +459,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
               }),
       trailing: _selecting
           ? null
-          : PopupMenuButton<String>(
-              tooltip: 'Remove',
-              icon: const Icon(Icons.more_vert),
-              onSelected: (what) async {
-                if (what == 'book') {
-                  await d.remove(item.id);
-                } else {
-                  final series = all.where((i) => i.seriesId == item.seriesId).toList();
-                  await _confirmRemove('Remove ${item.series}?', series);
-                }
-              },
-              itemBuilder: (_) {
-                final n = all.where((i) => i.seriesId == item.seriesId).length;
-                return [
-                  const PopupMenuItem(value: 'book', child: Text('Remove download')),
-                  if (n > 1) PopupMenuItem(value: 'series', child: Text('Remove the series\' $n downloads')),
-                ];
-              },
+          // one trash button (user, 2026-10-07): this book, at once, as before the tabs (a whole series: its card's
+          // button when grouped, or Select)
+          : IconButton(
+              tooltip: 'Remove download',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => d.remove(item.id),
             ),
     );
   }
