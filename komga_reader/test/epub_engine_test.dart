@@ -98,6 +98,28 @@ void main() {
     return Paginator(theme, size, hy.forLang('en')).run(blocks);
   }
 
+  test("a page never ends in a word broken by a hyphen when its paragraph goes on (user, build 82, Small Gods: "
+      '"ea-" / "gle" across a page turn) - the line goes over to the next page', () {
+    // ordinary sentences with some long words: a few lines end in a broken word, most don't
+    const words = 'The old lighthouse keeper walked down to the harbour every morning before breakfast, '
+        'counting the boats and remembering the extraordinary storms of his childhood. Nobody in the village '
+        'understood his particular fascination with the weather, but everyone appreciated the recommendations '
+        'he gave the fishermen about the temperature of the water and the uncomfortable winds from the north. ';
+    final src = '<body><p>${List.filled(12, words).join()}</p><p>${List.filled(12, words).join()}</p></body>';
+    var pagesChecked = 0, broken = 0;
+    // many page heights, so page ends fall on many different lines
+    for (var h = 300.0; h <= 700; h += 9) {
+      final pages = paginate(src, size: Size(360, h));
+      expect(pages.where((p) => p.hyphenMarks > 0), isNotEmpty, reason: 'the text is hyphenated at all');
+      for (final p in pages) {
+        pagesChecked++;
+        if (p.endsInBrokenWord) broken++;
+      }
+    }
+    expect(pagesChecked, greaterThan(300));
+    expect(broken, 0, reason: 'pages ending "ea-"');
+  });
+
   test('paginator: long text runs over several pages, none of them empty', () {
     final pages = paginate(chapter(40, 60));
     expect(pages.length, greaterThan(5));
