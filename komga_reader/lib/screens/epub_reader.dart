@@ -40,7 +40,13 @@ import 'open_book.dart';
 /// volume keys as in the comic reader. The slider and "page X of Y" cover the whole book once every chapter has
 /// been counted (in the background after the first page shows); until then they go by chapter.
 class EpubReaderScreen extends StatefulWidget {
-  const EpubReaderScreen({super.key, required this.api, required this.book, this.source, this.saveProgress = true});
+  const EpubReaderScreen({super.key, required this.api, required this.book, this.source, this.saveProgress = true,
+      this.readListId, this.skipRead = false});
+
+  /// Opened from a read list: the next and previous books are the read list's (else the series'). [skipRead]: opened
+  /// with Hide read on - the next / previous one not read yet (the comic reader's).
+  final String? readListId;
+  final bool skipRead;
 
   /// Opens at, and saves, the reading place through [api] (Komga online; the device offline, sent later). Off: neither
   /// (a book shown from memory in tests).
@@ -1030,8 +1036,22 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   final _endClose = FocusNode(debugLabel: 'epub-end-close');
   Future<Map<String, dynamic>?>? _upNextFuture;
 
-  /// What comes after this book (looked up once).
-  Future<Map<String, dynamic>?> get _upNext => _upNextFuture ??= widget.api.nextBook(widget.book['id'] as String);
+  /// What comes after this book (looked up once; a lookup that failed is asked again by Next book).
+  Future<Map<String, dynamic>?> get _upNext => _upNextFuture ??= _nextFrom(widget.book['id'] as String);
+
+  /// The book after [id] in the read list it was opened from, else the series - with read books hidden, the next one
+  /// not read yet.
+  Future<Map<String, dynamic>?> _nextFrom(String id) async {
+    var next = await widget.api.nextBook(id, readListId: widget.readListId);
+    for (var hops = 0; widget.skipRead && next != null && _isRead(next) && hops < 500; hops++) {
+      next = await widget.api.nextBook(next['id'] as String, readListId: widget.readListId);
+    }
+    return next;
+  }
+
+  static bool _isRead(Map<String, dynamic> book) => book['readProgress']?['completed'] == true;
+
+  String get _where => widget.readListId != null ? 'this read list' : 'the series';
 
   /// The end card is reached: the remote on Next book (on Close when there's none).
   void _endReached() {
@@ -1111,7 +1131,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
                 if (waiting)
                   const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))
                 else if (next != null) ...[
-                  Text('Up next in the series', style: dim),
+                  Text(widget.skipRead ? 'Next unread in $_where' : 'Up next in $_where', style: dim),
                   const SizedBox(height: 12),
                   Builder(builder: (context) {
                     final h = (MediaQuery.sizeOf(context).height * 0.38).clamp(160.0, 480.0);
@@ -1127,9 +1147,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
                           style: TextStyle(color: ink.withValues(alpha: 0.7))),
                     ),
                 ] else if (offline)
-                  Text("The next book in the series isn't downloaded", textAlign: TextAlign.center, style: dim)
+                  Text("The next book in $_where isn't downloaded", textAlign: TextAlign.center, style: dim)
                 else if (!snap.hasError)
-                  Text('That was the last book in the series', style: dim),
+                  Text(_lastText, textAlign: TextAlign.center, style: dim),
                 const SizedBox(height: 22),
                 if (canGoOn)
                   FilledButton.icon(
@@ -1152,7 +1172,6 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   /// Next book. From the end card the book is marked read; before it, as Settings > Reader says for comics ("Next
   /// book before the last page": ask, mark read, or keep it in progress). The next book opens in its own reader.
   Future<void> _nextBook() async {
-    final id = widget.book['id'] as String;
     var markRead = _end || AppSettings.instance.display.midBook == MidBook.markRead;
     if (!_end && AppSettings.instance.display.midBook == MidBook.ask) {
       final pct = (_book!.progression(_book!.positionOf(_chapter, _page)) * 100).round();
@@ -1176,14 +1195,20 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
       } else {
         _saveNow();
       }
-      final next = await widget.api.nextBook(id);
+      final Map<String, dynamic>? next;
+      try {
+        next = await _upNext; // the end card's answer, not asked again
+      } catch (_) {
+        _upNextFuture = null; // asked again next time
+        rethrow;
+      }
       if (!mounted) return;
       if (next == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('That was the last book in the series')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_lastText)));
         return;
       }
-      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => readerFor(widget.api, next)));
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => readerFor(widget.api, next, readListId: widget.readListId, skipRead: widget.skipRead)));
     } catch (e, st) {
       if (mounted) showErrorSnack(context, couldnt('open the next book', e, thing: 'book'), e, st);
     }
@@ -1193,18 +1218,32 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   Future<void> _prevBook() async {
     _saveNow();
     try {
-      final prev = await widget.api.previousBook(widget.book['id'] as String);
+      var prev = await widget.api.previousBook(widget.book['id'] as String, readListId: widget.readListId);
+      for (var hops = 0; widget.skipRead && prev != null && _isRead(prev) && hops < 500; hops++) {
+        prev = await widget.api.previousBook(prev['id'] as String, readListId: widget.readListId);
+      }
       if (!mounted) return;
       if (prev == null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('This is the first book of the series')));
+        final where = widget.readListId != null ? 'read list' : 'series';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(widget.skipRead
+            ? 'No unread books before this one in the $where'
+            : 'This is the first book of the $where')));
         return;
       }
-      await Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => readerFor(widget.api, prev)));
+      final open = prev;
+      await Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => readerFor(widget.api, open, readListId: widget.readListId, skipRead: widget.skipRead)));
     } catch (e, st) {
       if (mounted) showErrorSnack(context, couldnt('find the previous book', e, thing: 'book'), e, st);
     }
   }
+
+  String get _lastText => switch ((widget.readListId != null, widget.skipRead)) {
+        (true, true) => 'No unread books left in the read list',
+        (true, false) => 'That was the last book in the read list',
+        (false, true) => 'No unread books left in the series',
+        (false, false) => 'That was the last book in the series',
+      };
 
   bool get _completed => _bookNow['readProgress']?['completed'] == true || _markedRead;
 

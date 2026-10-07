@@ -15,6 +15,6 @@ Widget readerFor(Komga api, dynamic book, {String? readListId, bool skipRead = f
   if (!isEpub(book)) return ReaderScreen(api: api, book: book, readListId: readListId, skipRead: skipRead);
   // offline: a downloaded EPUB is read from its file (its progress kept on the device, sent to Komga later)
   final file = api is OfflineKomga ? api.epubFile(book['id'] as String) : null;
-  return EpubReaderScreen(api: api, book: book as Map<String, dynamic>,
+  return EpubReaderScreen(api: api, book: book as Map<String, dynamic>, readListId: readListId, skipRead: skipRead,
       source: file == null ? null : FileEpubSource(file));
 }
