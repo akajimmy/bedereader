@@ -576,7 +576,7 @@ void main() {
     await openLoaded(tester);
     double y() => zoomOf(tester).getTranslation().y;
     await keyAndSettle(tester, LogicalKeyboardKey.equal);
-    expect(y(), closeTo(-150, 0.5)); // zoomed on the middle
+    expect(y(), closeTo(0, 0.5)); // zoomed on the page's top, where reading starts (it was the middle: -150)
     await keyAndSettle(tester, LogicalKeyboardKey.arrowRight);
     expect(page(tester), 0.0, reason: 'zoomed: panned, not turned');
     expect(y(), closeTo(-300, 0.5), reason: 'down to the bottom of the page');
