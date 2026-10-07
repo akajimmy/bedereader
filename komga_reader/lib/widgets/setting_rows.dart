@@ -278,17 +278,18 @@ class SwitchRow extends StatelessWidget {
 
 /// One option of a [SegmentRow]: a short label, or an icon with a tooltip.
 class Choice<T> {
-  const Choice(this.value, this.label, {this.icon, this.iconWidget});
+  const Choice(this.value, this.label, {this.icon, this.iconWidget, this.mark});
   final T value;
   final String label;
   final IconData? icon; // shown instead of the label (the label becomes its tooltip)
   final Widget? iconWidget; // or a ready-made icon (a turned one, say)
+  final IconData? mark; // a small icon beside the label (Rotation: the lock in force is a switch - tap to turn over)
 }
 
 /// A choice between a few options, as compact segmented buttons in the row.
 class SegmentRow<T> extends StatelessWidget {
   const SegmentRow({super.key, required this.title, this.subtitle, required this.choices, required this.value,
-      required this.onChanged, this.enabled = true, this.onReselect});
+      required this.onChanged, this.enabled = true, this.onReselect, this.markRoom = false});
   final bool enabled; // off: greyed out, showing the value (a series following the defaults)
   final String title;
   final String? subtitle;
@@ -296,13 +297,16 @@ class SegmentRow<T> extends StatelessWidget {
   final T value;
   final ValueChanged<T> onChanged;
   final ValueChanged<T>? onReselect; // the choice in force tapped again (Rotation: turns the lock over)
+  final bool markRoom; // room for a mark kept whether one shows or not: the buttons never change size (user)
 
   /// How wide the buttons come out: every segment is as wide as the widest (its text, or an icon), plus padding
   /// and borders.
   double _width(BuildContext context) {
     var widest = 0.0;
     for (final c in choices) {
-      final w = c.icon != null || c.iconWidget != null ? 22.0 : textWidth(context, c.label, 13);
+      final w = c.icon != null || c.iconWidget != null
+          ? 22.0
+          : textWidth(context, c.label, 13) + (c.mark != null || markRoom ? 22 : 0); // (a mark: 16 and a gap)
       if (w > widest) widest = w;
     }
     return choices.length * (widest + 28);
@@ -360,7 +364,7 @@ class SegmentRow<T> extends StatelessWidget {
               ButtonSegment(
                 value: c.value,
                 label: c.icon == null && c.iconWidget == null ? Text(c.label) : null,
-                icon: c.iconWidget ?? (c.icon == null ? null : Icon(c.icon, size: 20)),
+                icon: c.iconWidget ?? (c.icon != null ? Icon(c.icon, size: 20) : c.mark != null ? Icon(c.mark, size: 16) : null),
                 tooltip: c.icon == null && c.iconWidget == null ? null : c.label,
               ),
           ],

@@ -413,7 +413,12 @@ Widget rotationRow(AppSettings s) => SegmentRow<Rotation>(
       subtitle: s.display.rotation == Rotation.auto
           ? 'Follow the device, or stay put'
           : 'Stays put - while reading, tap ${s.display.rotation.label} again to turn it upside down',
-      choices: [for (final r in Rotation.values) Choice(r, r.label)],
+      // the lock in force marked as a switch: tapped again, it turns over (user, 2026-10-07)
+      choices: [
+        for (final r in Rotation.values)
+          Choice(r, r.label, mark: r != Rotation.auto && r == s.display.rotation ? Icons.sync : null),
+      ],
+      markRoom: true, // the buttons the same size, mark or not (user, 2026-10-07: no resizing)
       value: s.display.rotation,
       onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
       onReselect: (r) {
