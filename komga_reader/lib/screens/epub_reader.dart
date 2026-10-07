@@ -430,6 +430,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   void _layout(Size size) {
     final b = _book!;
+    // no room at all (a minimised window): nothing to lay out - it lost the place, and opened at the chapter's
+    // start afterwards (EPUB review R12)
+    if (size.isEmpty) return;
     _size = size;
     if (b.size == size && b.theme == _theme) return;
     // still opening (the saved place not shown yet): the saved place again, not what's on screen - the system bars
@@ -470,13 +473,26 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _onBook());
       return;
     }
+    if (_bookWide && b.countChanges != _countChanges && b.counted && !_end) {
+      // a chapter's number of pages changed after counting: the book's page numbers after it moved - back to the
+      // same page (the page view kept its number, now another page - EPUB review R5)
+      _countChanges = b.countChanges;
+      final at = b.bookPage(_chapter, _page);
+      if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != at) {
+        _ownJump = true;
+        _pc.jumpToPage(at);
+        _ownJump = false;
+      }
+    }
     if (!_bookWide && b.counted && !_end) {
       // every chapter counted: the page view goes over the whole book, on the same page
       final at = b.bookPage(_chapter, _page)!;
       final old = _pc;
+      _countChanges = b.countChanges;
       setState(() {
         _bookWide = true;
         _pc = PageController(initialPage: at);
+        _scrub = null; // the slider's units change (thousandths -> pages): a scrub under way is let go (R11)
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     } else {
@@ -529,6 +545,14 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           _page = 0;
           _end = false;
         });
+        // the whole book in one page view: to that chapter's page, where its error and Retry show (the page view
+        // stayed on the page before - EPUB review R2)
+        final at = _bookWide ? b.bookPage(chapter, 0) : null;
+        if (at != null && _pc.hasClients) {
+          _ownJump = true;
+          _pc.jumpToPage(at);
+          _ownJump = false;
+        }
       }
       return;
     }
@@ -622,6 +646,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   bool _ownJump = false;
+  int _countChanges = 0; // the book's countChanges this reader has gone along with
+  bool _overscrolled = false; // this drag already turned past a chapter's end (R3)
 
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
   // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
@@ -651,7 +677,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     _lastTurn = DateTime.now();
     final b = _book;
     EpubTrace.instance.log('turn $by from chapter $_chapter page $_page');
-    if (b == null || !_pc.hasClients) return;
+    if (b == null) return;
     _awake();
     if (!_bookWide) {
       final n = b.pagesNow(_chapter)?.length ?? 0;
@@ -665,6 +691,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
         return;
       }
     }
+    // (a chapter that failed has no page view: turning leaves it through the chapter jumps above - EPUB review R2)
+    if (!_pc.hasClients) return;
     final target = (_pc.page ?? 0).round() + by;
     if (target < 0 || target >= _itemCount) return;
     if (_turnTime == Duration.zero) {
@@ -816,7 +844,17 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     }
     final ch = b.chapterOf(path);
     if (ch == null) return;
-    await _jump(ch, frag == null ? 0 : await b.positionOfFragment(ch, frag));
+    await _jump(ch, frag == null ? 0 : await _fragmentOr0(b, ch, frag));
+  }
+
+  /// Where [fragment] is in chapter [ch] - or its start if that can't be found out (the chapter couldn't be
+  /// fetched): the link still goes somewhere, it used to do nothing at all (EPUB review R13).
+  Future<int> _fragmentOr0(EpubBook b, int ch, String fragment) async {
+    try {
+      return await b.positionOfFragment(ch, fragment);
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// A picture full screen over the book, fitted to the screen (user, 2026-10-06: "a lightbox style view"): pinch
@@ -899,8 +937,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     final ch = b.chapterOf(picked.path);
     if (ch == null) return;
     final hash = picked.href.indexOf('#');
-    setState(() => _controls = false);
-    await _jump(ch, hash < 0 ? 0 : await b.positionOfFragment(ch, picked.href.substring(hash + 1)));
+    _hideControls(); // (the remote's focus back on the page, as any other way of hiding them)
+    await _jump(ch, hash < 0 ? 0 : await _fragmentOr0(b, ch, picked.href.substring(hash + 1)));
   }
 
   /// The Aa panel: the EPUB settings while reading; the page changes behind it as they're set.
@@ -998,11 +1036,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
-  Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) {
+  /// [bare]: without the page's background (over the reader's tap layer, which has its own under it).
+  Widget _chapterError(EpubBook b, int chapter, EpubTheme theme, {bool bare = false}) {
     final e = b.errorOf(chapter)!;
-    return ColoredBox(
-      color: theme.background,
-      child: Center(child: Padding(
+    final message = Center(child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ErrorText(couldnt('show this chapter', e, thing: 'book'), e, centre: true),
@@ -1016,8 +1053,20 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             label: const Text('Retry'),
           ),
         ]),
-      )),
-    );
+      ));
+    return bare ? message : ColoredBox(color: theme.background, child: message);
+  }
+
+  /// Chapter by chapter (the book not counted yet), a swipe pulled past the chapter's last page - or before its
+  /// first - goes on to the next (previous) chapter, once per swipe: the page view only holds this chapter, and
+  /// the swipe did nothing (taps, keys and the wheel went on - EPUB review R3).
+  bool _onScroll(ScrollNotification n) {
+    if (n is ScrollStartNotification) _overscrolled = false;
+    if (n is OverscrollNotification && !_bookWide && !_overscrolled && n.dragDetails != null && n.overscroll != 0) {
+      _overscrolled = true;
+      unawaited(_turn(n.overscroll > 0 ? 1 : -1));
+    }
+    return false;
   }
 
   // ---- the end card: the next book's poster and title (the comic reader's, user 2026-10-06), Next book and Close -
@@ -1250,8 +1299,10 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
           body: LayoutBuilder(builder: (context, box) {
             final size = box.biggest;
             _layout(size);
-            if (b.pagesNow(_chapter) == null) {
-              if (b.errorOf(_chapter) != null) return _chapterError(b, _chapter, theme);
+            final failed = b.pagesNow(_chapter) == null && b.errorOf(_chapter) != null;
+            // the whole book in one page view: a chapter not laid out yet waits as a page of it (the page view lays
+            // it out) - replacing the page view opened it at its first page, turning back into it (EPUB review R1)
+            if (b.pagesNow(_chapter) == null && !failed && !_bookWide) {
               // laid out afresh (a new size or setting): to the place kept through it, as [_layout] does - not the
               // chapter's start, which raced it (and let go of the place)
               final anchor = _anchor;
@@ -1260,10 +1311,16 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                   : _show(_chapter, 0, fraction: _startFraction));
               return const Center(child: CircularProgressIndicator());
             }
-            final pages = b.pagesNow(_chapter)!;
+            final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
             final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
+            // a chapter that failed (chapter by chapter): its error where the page goes - the controls, the taps and
+            // the turns stay (it took the whole screen: only Retry and Close - EPUB review R2)
+            final errorHere = failed && !_bookWide;
             return Stack(children: [
-              PageView.builder(
+              if (errorHere) Positioned.fill(child: ColoredBox(color: theme.background))
+              else NotificationListener<ScrollNotification>(
+                onNotification: _onScroll,
+                child: PageView.builder(
                 key: ValueKey(_bookWide),
                 controller: _pc,
                 itemCount: _itemCount,
@@ -1275,7 +1332,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
                 // of both pages again each frame
                 itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),
-              ),
+              )),
               // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
               // by - Windows check, build 79)
               Positioned.fill(child: Listener(
@@ -1293,6 +1350,8 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 onTapUp: (d) => _tap(d, size, shown),
                 onSecondaryTap: () => _controls ? _hideControls() : _showControls(), // right-click, as with comics
               )),
+              // (above the taps: Retry takes its own; the rest of the screen still turns and shows the controls)
+              if (errorHere) Positioned.fill(child: _chapterError(b, _chapter, theme, bare: true)),
               // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
               if (!_controls && display.clock == ShowWhen.always)
                 Positioned(
