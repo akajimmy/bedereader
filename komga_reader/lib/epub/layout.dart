@@ -938,8 +938,8 @@ class Paginator {
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
-      // never below nothing: negative margins (a book pulling a line up to tuck it under a heading) drew the text over
-      // the block before (EPUB review E12)
+      // never below nothing, so text is never drawn over the block before (the reader records margins at 0 or more
+      // already - EPUB review E12 found no way round that; this keeps it so)
       var gap = math.max(0.0, math.max(_pendingGap, mt * _bookEm)) + extra;
       // text under a heading: half a line at least, when the book leaves none (New Sun's, Xanth's, the Belgariad's
       // chapter titles sat on their first line - user, 2026-10-06 survey: "gap after headings")

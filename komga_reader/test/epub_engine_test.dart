@@ -660,7 +660,7 @@ void main() {
     expect(sheet.declsFor(ps[1]).containsKey('x'), isFalse);
   });
 
-  test('E12: a negative margin-top never draws text over the block before', () {
+  test('E12: negative margins never draw text over the block before (already so in 1.2: kept by a test)', () {
     final o = layOut('<p style="margin-bottom: -2em">One.</p><p style="margin-top: -3em">Two.</p>').single.textOrigins;
     final lineH = const EpubTheme().fontSize * const EpubTheme().lineHeight;
     expect(o[1].dy - o[0].dy, greaterThanOrEqualTo(lineH - 0.5));

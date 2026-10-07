@@ -23,6 +23,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   to its last page; before the whole book is counted, a swipe goes on into the next chapter as taps and keys do;
   minimising the window no longer loses the place; a link whose target can't be found opens its chapter instead of
   doing nothing.
+- **EPUB: how books look** - a book's styles now apply from its first rule (books made with Calibre lost it, often
+  the one setting their body text); scene breaks drawn as a rule or a blank line keep their space; a drop cap written
+  as a letter stays in its own paragraph; a floated picture on its own beside the text no longer disappears; French
+  and other accented characters written as named entities (`&laquo;`, `&egrave;`...) show as the characters; a
+  drop cap made by the book's style takes the opening quote mark with the letter; rules for a first paragraph
+  (`:first-child`) apply; text after a picture in a paragraph keeps the paragraph's formatting; deeply indented text
+  stays on the page; a table row taller than a page carries on over the next pages, and a table with very many
+  columns keeps them in order; links and footnotes land on the right page in long chapters; a chapter with an odd
+  character code or no room beside a picture no longer fails to show. Chapters with many copies of the same
+  ornament load faster and use less memory.
 - Build tools: a failed release step now really puts the changelog back; a build that fails early puts the version
   number back; and if a new Desktop copy can't be swapped in, the old one stays in place instead of none at all.
 
