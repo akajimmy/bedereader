@@ -501,13 +501,13 @@ void main() {
   });
 
   testWidgets("where you are (user's options F + H): the bar has the chapter's name with the book's page and % at "
-      "the left and the chapter's page at the right; the page's corner has the pages left in the chapter and the "
-      "book's % - always, for a moment after a turn, or not at all", (tester) async {
+      "the left and the chapter's page at the right; the page's corner has the book's page of its pages (\"1 / 342\", "
+      "as comics' - user 2026-10-07) - always, for a moment after a turn, or not at all", (tester) async {
     await open(tester, twoChapters());
     String corner() => tester.widget<Text>(find.byKey(const ValueKey('epub-corner'))).data!;
     double cornerOpacity() => tester.widget<AnimatedOpacity>(
         find.ancestor(of: find.byKey(const ValueKey('epub-corner')), matching: find.byType(AnimatedOpacity))).opacity;
-    expect(corner(), matches(RegExp(r'^\d+ left in chapter · \d+%$')));
+    expect(corner(), matches(RegExp(r'^1 / \d+$')), reason: "the book's page of its pages, as comics'");
     expect(cornerOpacity(), 1, reason: 'Always (the default)');
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
