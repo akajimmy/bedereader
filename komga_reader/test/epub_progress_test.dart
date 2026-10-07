@@ -172,7 +172,7 @@ void main() {
   Future<String> label(WidgetTester tester) async {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
+    final t = tester.widgetList<Text>(find.byKey(const ValueKey('pos-left-text'))).single.data!;
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     return t;
@@ -243,7 +243,7 @@ void main() {
       await run(tester, const Duration(milliseconds: 300));
     }
     expect(api.marked, ['B1']);
-    expect(find.text('The End'), findsOneWidget);
+    expect(find.text('End of book'), findsOneWidget);
   });
 
   // ---- the book moved on on another device while open here (as comics: user, 2026-10-05 - the tablet, left open on

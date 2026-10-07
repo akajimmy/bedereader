@@ -17,6 +17,7 @@ import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/no_network.dart';
+import 'support/reader_server.dart';
 
 class MemorySource implements EpubSource {
   MemorySource(this.files, this.infoValue, {this.binary = const {}});
@@ -128,7 +129,7 @@ void main() {
   Future<String> label(WidgetTester tester) async {
     await tester.tapAt(const Offset(400, 600)); // the middle: the controls
     await tester.pump();
-    final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-book-position'))).single.data!;
+    final t = tester.widgetList<Text>(find.byKey(const ValueKey('pos-left-text'))).single.data!;
     await tester.tapAt(const Offset(400, 600)); // and away again
     await tester.pump();
     return t;
@@ -141,10 +142,12 @@ void main() {
     }
   }
 
-  testWidgets('EPUBs open in the EPUB reader, comics in the comic reader', (tester) async {
+  testWidgets('EPUBs and comics open in the one Reader (user, 2026-10-07), each with its renderer', (tester) async {
     final api = plainKomga();
-    expect(readerFor(api, {'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isA<EpubReaderScreen>());
+    expect(readerFor(api, {'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isA<ReaderScreen>());
     expect(readerFor(api, {'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isA<ReaderScreen>());
+    expect(isEpub({'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isTrue);
+    expect(isEpub({'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isFalse);
   });
 
   testWidgets('opens on the first page; once every chapter is counted the position reads "page X of Y"; a tap on '
@@ -223,7 +226,7 @@ void main() {
       await tester.tapAt(const Offset(750, 600));
       await settle(tester);
     }
-    expect(find.text('The End'), findsOneWidget);
+    expect(find.text('End of book'), findsOneWidget);
   });
 
   // ---- moving through the book (EPUB review 2026-10-06, R1-R3)
@@ -239,7 +242,7 @@ void main() {
   Future<String> inChapter(WidgetTester tester) async {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    final t = tester.widgetList<Text>(find.byKey(const ValueKey('epub-chapter-position'))).single.data!;
+    final t = tester.widgetList<Text>(find.byKey(const ValueKey('pos-right-text'))).single.data!;
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     return t;
@@ -522,17 +525,17 @@ void main() {
       "the left and the chapter's page at the right; the page's corner has the book's page of its pages (\"1 / 342\", "
       "as comics' - user 2026-10-07) - always, for a moment after a turn, or not at all", (tester) async {
     await open(tester, twoChapters());
-    String corner() => tester.widget<Text>(find.byKey(const ValueKey('epub-corner'))).data!;
+    String corner() => tester.widget<Text>(find.byKey(const ValueKey('page-corner'))).data!;
     double cornerOpacity() => tester.widget<AnimatedOpacity>(
-        find.ancestor(of: find.byKey(const ValueKey('epub-corner')), matching: find.byType(AnimatedOpacity))).opacity;
+        find.ancestor(of: find.byKey(const ValueKey('page-corner')), matching: find.byType(AnimatedOpacity))).opacity;
     expect(corner(), matches(RegExp(r'^1 / \d+$')), reason: "the book's page of its pages, as comics'");
     expect(cornerOpacity(), 1, reason: 'Always (the default)');
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    expect(find.byKey(const ValueKey('epub-corner')), findsNothing, reason: 'not under the controls');
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-title'))).data, 'One');
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, matches(RegExp(r'^Ch\. 1 · Pg\. 1/\d+$')));
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-book-position'))).data,
+    expect(cornerOpacity(), 0, reason: 'not under the controls');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('pos-centre-text'))).data, 'One');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('pos-right-text'))).data, matches(RegExp(r'^Ch\. 1 · Pg\. 1/\d+$')));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('pos-left-text'))).data,
         matches(RegExp(r'^Book · Pg\. 1/\d+ · \d+%$')));
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
@@ -549,7 +552,7 @@ void main() {
     // Off: no corner
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.off));
     await tester.pump();
-    expect(find.byKey(const ValueKey('epub-corner')), findsNothing);
+    expect(find.byKey(const ValueKey('page-corner')), findsNothing);
     AppSettings.instance.setEpub(const EpubPrefs());
   });
 
@@ -575,20 +578,20 @@ void main() {
     String? focused() => FocusManager.instance.primaryFocus?.debugLabel;
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // the only page -> the end card
     await settle(tester);
-    expect(find.text('The End'), findsOneWidget);
+    expect(find.text('End of book'), findsOneWidget);
     expect(find.text('Homeland #2'), findsOneWidget);
     expect(find.text('Exile'), findsOneWidget);
     expect(find.byKey(const ValueKey('next-poster')), findsOneWidget);
-    expect(focused(), 'epub-end-next', reason: 'the remote starts on Next book');
+    expect(focused(), 'end-next', reason: 'the remote starts on Next book');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
-    expect(focused(), 'epub-end-close');
+    expect(focused(), 'end-close');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
-    expect(focused(), 'epub-end-next');
+    expect(focused(), 'end-next');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft); // back to the last page
     await settle(tester);
-    expect(find.text('The End'), findsNothing);
+    expect(find.text('End of book'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await settle(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -597,6 +600,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(EpubReaderScreen), findsNothing, reason: 'closed');
     expect(find.text('home'), findsOneWidget);
+  });
+
+  testWidgets('one Reader for both kinds (user, 2026-10-07): from an EPUB\'s end card Next book opens a comic in the '
+      'same Reader - no new screen; the EPUB has Night and Delete in its top bar; a Contents jump leaves the way back '
+      'marked on the slider', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = noNetwork(ReaderServer.new)
+      ..next = {'id': 'B2', 'seriesId': 'S1', 'seriesTitle': 'Test', 'metadata': {'number': '2', 'title': 'Comic'}};
+    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: api,
+        book: const {'id': 'H1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        source: chapters(3), saveProgress: false)));
+    for (var i = 0; i < 60 && find.byType(PageView).evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    // the top bar: Night and Delete, as comics have (decision 2)
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(find.byTooltip('Night mode on'), findsOneWidget);
+    expect(find.byTooltip('Delete book'), findsOneWidget);
+    // a jump through Contents: the way back is marked on the slider (decision 4)
+    await tester.tap(find.byTooltip('Contents'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chapter 3'));
+    await settle(tester);
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('scrub-start')), findsOneWidget, reason: 'the way back to chapter 1');
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    // on to the end card, then Next book (OK): the comic opens in the same Reader
+    for (var i = 0; i < 40 && find.text('End of book').evaluate().isEmpty; i++) {
+      await tester.tapAt(const Offset(750, 600));
+      await settle(tester);
+    }
+    expect(find.text('Test #2'), findsOneWidget, reason: 'the end card shows the comic up next');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await settle(tester);
+    expect(api.marked, ['H1'], reason: 'the EPUB left from its end card is read');
+    expect(find.byType(ReaderScreen), findsOneWidget, reason: 'the same Reader');
+    expect(tester.widget<Text>(find.byKey(const ValueKey('page-corner'))).data, '1 / 3', reason: "the comic's pages");
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets("opened from a read list, the next and previous books are the read list's (user, 2026-10-07: "
@@ -609,8 +656,8 @@ void main() {
     // readerFor - every place that opens a book, the next book's reader included - hands the read list and skip read
     // on (they were dropped for EPUBs)
     final handed = readerFor(noNetwork(ReadListKomga.new), hitchhiker, readListId: 'RL1', skipRead: true);
-    expect(handed, isA<EpubReaderScreen>());
-    expect(((handed as EpubReaderScreen).readListId, handed.skipRead), ('RL1', true));
+    expect(handed, isA<ReaderScreen>());
+    expect(((handed as ReaderScreen).readListId, handed.skipRead), ('RL1', true));
 
     for (final list in ['RL1', null]) {
       final api = noNetwork(ReadListKomga.new);
@@ -708,7 +755,7 @@ void main() {
       'notes.xhtml': '<html><body><p id="n1"><a href="c1.xhtml">*</a>The note itself.</p></body></html>',
     }, const EpubInfo(spine: ['c1.xhtml', 'notes.xhtml'], toc: [])));
     // the marker sits right after "Here" on the first line: find it through the page's links
-    final state = tester.state(find.byType(EpubReaderScreen));
+    final state = tester.state(find.byType(ReaderScreen));
     expect(state, isNotNull);
     // tap along the first line until the note opens (the marker's exact x depends on the font)
     var opened = false;

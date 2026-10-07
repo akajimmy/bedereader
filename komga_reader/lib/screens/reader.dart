@@ -8,7 +8,9 @@ import '../api.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
+import '../epub/source.dart';
 import '../reader/comic_renderer.dart';
+import '../reader/epub_renderer.dart';
 import '../reader/end_card.dart';
 import '../reader/position_row.dart';
 import '../reader/reader_bars.dart';
@@ -21,6 +23,7 @@ import '../settings.dart';
 import '../widgets/error_text.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
+import 'open_book.dart' show isEpub;
 
 export '../reader/comic_renderer.dart' show CurlLayer, trimPictures;
 
@@ -45,7 +48,8 @@ class ReaderScreen extends StatefulWidget {
   @visibleForTesting
   static int debugBuilds = 0;
 
-  const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false});
+  const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false,
+      this.epubSource, this.saveProgress = true});
   final Komga api;
   final dynamic book;
   final String? readListId; // continue within this read list at the end of the book
@@ -53,6 +57,17 @@ class ReaderScreen extends StatefulWidget {
   /// Opened from a series or read list with Hide read on: the next book is the next one not read yet (user,
   /// 2026-09-30) - for the whole visit, books moved on to included. Elsewhere it's simply the next in order.
   final bool skipRead;
+
+  /// Where the first book's EPUB files come from (tests: from memory); default: Komga, or the downloaded file.
+  final EpubSource? epubSource;
+
+  /// Opens EPUBs at, and saves, the reading place (a book shown from memory in tests: not).
+  final bool saveProgress;
+
+  /// Forgets the closing saves still on their way (tests: each starts with none).
+  @visibleForTesting
+  static void forgetClosingSaves() => _ReaderScreenState._closingSaves.clear();
+
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
@@ -114,7 +129,20 @@ class _ReaderScreenState extends State<ReaderScreen>
   @override
   void toggleControls() => _menu ? _hideControls() : _showControls();
   @override
+  void hideControls() {
+    if (_menu) _hideControls();
+  }
+  @override
   void turned(int place) => _pageTurned(place);
+  @override
+  void placed(int place) {
+    // laid out (an EPUB, opening or at a new size): where the book is now, not a turn; the way back's page numbers
+    // are another layout's
+    _openedAt = place;
+    _returnTo = null;
+    if (place > _last && !_menu) _endReached();
+    if (mounted) setState(() {});
+  }
   @override
   void nextBook() => _nextBook();
   @override
@@ -145,6 +173,13 @@ class _ReaderScreenState extends State<ReaderScreen>
     // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
+    // the book opened again before this lands waits for it - else it loaded the place before, and this save then
+    // looked like another device's (EPUB review R8)
+    final id = _book['id'] as String, closing = _saves;
+    _closingSaves[id] = closing;
+    closing.whenComplete(() {
+      if (identical(_closingSaves[id], closing)) _closingSaves.remove(id);
+    });
     deviceClosed();
     _renderer
       ?..removeListener(_onRenderer)
@@ -196,6 +231,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final r = reuse ? old : _newRenderer(book as Map);
     try {
       // current progress from the server
+      await _closingSaves[book['id']]?.timeout(const Duration(seconds: 20), onTimeout: () {});
       final fresh = (r.savesProgress ? await api.book(book['id']) : null) ?? book;
       final prepared = await r.prepare(fresh);
       if (!mounted || run != _openRun) { // closed, or another book asked for since
@@ -242,10 +278,18 @@ class _ReaderScreenState extends State<ReaderScreen>
   }
 
   /// A renderer for [book]'s kind.
-  Renderer _newRenderer(Map book) => ComicRenderer(this);
+  Renderer _newRenderer(Map book) => isEpub(book)
+      // the source given (tests) is the first book's only
+      ? EpubRenderer(this, source: book['id'] == widget.book['id'] ? widget.epubSource : null,
+          saves: widget.saveProgress)
+      : ComicRenderer(this);
+
+  /// Each book's save from its last closing, while it's on its way (the book opened again waits for it).
+  static final Map<String, Future<void>> _closingSaves = {};
 
   /// [r] draws books of [book]'s kind (and can go on to it in place).
-  bool _sameKind(Renderer r, Map book) => r is ComicRenderer;
+  /// (an EPUB renderer is a book's own: each book gets its own)
+  bool _sameKind(Renderer r, Map book) => r is ComicRenderer && !isEpub(book);
 
   /// On past a book that can't be read (no pages): the one after it.
   Future<void> _skipPast(dynamic book) async {
@@ -446,7 +490,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       final answer = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Mark #${_book['metadata']?['number'] ?? ''} as read?'),
+          title: Text(_book['metadata']?['number'] != null
+              ? 'Mark #${_book['metadata']?['number']} as read?'
+              : 'Mark "$_bookName" as read?'),
           content: Text(_r.whereText),
           actions: [
             TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep in progress')),
@@ -748,7 +794,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(12)),
-                          child: Text(r.corner(_index.clamp(0, _last)),
+                          child: Text(r.corner(_index.clamp(0, _last)), key: const ValueKey('page-corner'),
                               style: const TextStyle(color: Colors.white, fontSize: 13)),
                         ),
                       ),
@@ -905,8 +951,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       onTapOutside: _hideControls,
       top: ReaderTopBar(
         closeNode: _ctl[_Ctl.close]!,
-        heading: '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}',
-        title: '${_book['metadata']?['title'] ?? ''}',
+        heading: _heading,
+        title: _bookName,
         buttons: [
           for (final b in _r.topButtons()) b.child,
           IconButton(
@@ -984,6 +1030,16 @@ class _ReaderScreenState extends State<ReaderScreen>
         label: _r.placeLabel(shown),
         preview: (shown, x) => _r.preview(context, shown, x) ?? const SizedBox.shrink(),
       );
+
+  /// The top bar's first line: "Saga #1" (none for a book in no series).
+  String? get _heading {
+    final series = _book['seriesTitle'] as String?;
+    final number = _book['metadata']?['number'];
+    return series == null || series.isEmpty ? null : '$series${number == null ? '' : ' #$number'}';
+  }
+
+  /// The book's own title (its file name if it has none).
+  String get _bookName => '${_book['metadata']?['title'] ?? _book['name'] ?? ''}';
 
   /// Off to the page picked on the slider (or the strip) - remembering where the reader was, to come back to.
   void _sliderJump(int target) {
