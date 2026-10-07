@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/book.dart';
+import 'package:komga_reader/epub/css.dart';
 import 'package:komga_reader/epub/hyphenator.dart';
 import 'package:komga_reader/epub/layout.dart';
 import 'package:komga_reader/epub/source.dart';
+import 'package:komga_reader/epub/xhtml.dart';
 
 import 'epub_reader_test.dart' show MemorySource, para;
 
@@ -107,6 +109,22 @@ void main() {
       await book.pages(1);
       expect(book.pageCount(1), greaterThan(1));
       expect(book.countChanges, before + 1);
+      book.dispose();
+    });
+  });
+
+  testWidgets("E16: a link's target is where the chapter's reader put it - counted from the file's text it drifted "
+      'a character per block (the whitespace between them), and a target deep in a chapter landed late', (tester) async {
+    await tester.runAsync(() async {
+      final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
+      final body = '${List.generate(60, (i) => '\n    <p>Paragraph number $i of the chapter.</p>').join()}'
+          '\n    <p>Before <span id="note">the note</span> here.</p>';
+      final info = EpubInfo(spine: const ['c.xhtml'], toc: const []);
+      final book = EpubBook(MemorySource({'c.xhtml': '<html><body>$body</body></html>'}, info), info, hy);
+      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$body</body>'));
+      final last = blocks.last as TextBlock;
+      expect(await book.positionOfFragment(0, 'note'), last.start + 'Before '.length);
+      expect(await book.positionOfFragment(0, 'nowhere'), 0);
       book.dispose();
     });
   });

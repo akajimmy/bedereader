@@ -12,21 +12,35 @@ class CssRule {
 }
 
 class CssCompound {
-  CssCompound(this.tag, this.classes, this.id, this.pseudo);
+  CssCompound(this.tag, this.classes, this.id, this.pseudo, [this.states = const []]);
   final String? tag;
   final List<String> classes;
   final String? id;
-  final String? pseudo; // first-letter, first-line, first-child ... (only first-letter is used)
+  final String? pseudo; // a pseudo-element: first-letter, first-line, before ... (only first-letter is used)
+  // pseudo-classes: :first-child, :last-child, :first-of-type are checked; any other (:hover, :nth-child...) never
+  // matches. They were taken for pseudo-elements, so a "p:first-child" rule never applied (EPUB review E11)
+  final List<String> states;
+
+  static const pseudoElements = {'first-letter', 'first-line', 'before', 'after', 'marker', 'selection'};
 
   bool matches(XElement e) =>
       (tag == null || tag == '*' || tag == e.name) &&
       (id == null || e.id == id) &&
       classes.every(e.classes.contains) &&
-      (pseudo == null || pseudo == 'first-letter' || (pseudo == 'first-child' && _firstChild(e)));
+      states.every((s) => _state(s, e));
 
-  static bool _firstChild(XElement e) => e.parent?.elements.isNotEmpty == true && e.parent!.elements.first == e;
+  static bool _state(String s, XElement e) {
+    final siblings = e.parent?.elements.toList() ?? [e];
+    return switch (s) {
+      'first-child' => siblings.first == e,
+      'last-child' => siblings.last == e,
+      'first-of-type' => siblings.firstWhere((x) => x.name == e.name) == e,
+      _ => false,
+    };
+  }
 
-  int get specificity => (id != null ? 100 : 0) + classes.length * 10 + (tag != null && tag != '*' ? 1 : 0);
+  int get specificity =>
+      (id != null ? 100 : 0) + (classes.length + states.length) * 10 + (tag != null && tag != '*' ? 1 : 0);
 }
 
 class CssSelector {
@@ -62,8 +76,10 @@ class CssSelector {
           id = x[2];
         }
       }
-      final ps = (m[3] ?? '').replaceAll('::', ':').split(':').where((p) => p.isNotEmpty).toList();
-      parts.add(CssCompound(m[1]?.toLowerCase(), classes, id, ps.isEmpty ? null : ps.last.toLowerCase()));
+      final ps = (m[3] ?? '').replaceAll('::', ':').split(':').where((p) => p.isNotEmpty).map((p) => p.toLowerCase());
+      parts.add(CssCompound(m[1]?.toLowerCase(), classes, id,
+          ps.where(CssCompound.pseudoElements.contains).lastOrNull,
+          ps.where((p) => !CssCompound.pseudoElements.contains(p)).toList()));
     }
     return parts.isEmpty ? null : CssSelector(parts);
   }
@@ -80,7 +96,13 @@ class StyleSheet {
     while (i < src.length) {
       final open = src.indexOf('{', i);
       if (open < 0) break;
-      final head = src.substring(i, open).trim();
+      var head = src.substring(i, open).trim();
+      // statement at-rules ending in ';' before it (@charset "UTF-8"; @import ...; @namespace h "...";) aren't
+      // part of its selector - the whole first rule was skipped as an at-rule, and Calibre's stylesheets all start
+      // with @namespace (EPUB review 2026-10-06, E5)
+      while (head.startsWith('@') && head.contains(';')) {
+        head = head.substring(head.indexOf(';') + 1).trim();
+      }
       final close = _matching(src, open);
       final body = src.substring(open + 1, close < 0 ? src.length : close);
       i = close < 0 ? src.length : close + 1;
