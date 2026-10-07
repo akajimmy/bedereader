@@ -419,7 +419,7 @@ void main() {
 
   test("own formatting takes out only the book's usual gap between paragraphs: a paragraph that asks for its own "
       'spacing (a scene break) keeps it, and starts without an indent', () {
-    const css = 'p { margin: 1em 0 } p.break { margin-top: 3em }';
+    const css = 'p { margin: 1em 0; text-indent: 1.5em } p.break { margin-top: 3em }';
     final src = '<body><p>One.</p><p>Two.</p><p>Three.</p><p class="break">After the break.</p><p>Five.</p></body>';
     final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
@@ -433,9 +433,29 @@ void main() {
   test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
       "than the book's browser-default gaps; headings keep theirs", () {
     final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';
-    final book = paginate(src);
-    final mine = paginate(src, theme: const EpubTheme(bookFormatting: false));
+    // a book that indents its paragraphs (and leaves the browser's gap between them)
+    List<EpubPage> lay(EpubTheme theme) => Paginator(theme, const Size(400, 600), hy.forLang('en'))
+        .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h).read(parseXhtml(src)));
+    final book = lay(const EpubTheme());
+    final mine = lay(const EpubTheme(bookFormatting: false));
     expect(mine.length, lessThan(book.length), reason: 'no gap between paragraphs');
+  });
+
+  test("own formatting invents no indent (user, 2026-10-07: only where the book calls for one): a book that doesn't "
+      "indent its paragraphs keeps them unindented, with its gap between them - without either they ran together; "
+      "one that indents keeps its own amount, not the reader's", () {
+    EpubPage page(String css) => Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h)
+            .read(parseXhtml('<body><p>One.</p><p>Two.</p><p>Three.</p></body>')))
+        .single;
+    final plain = page('p { margin: 1em 0 }');
+    expect(plain.textIndents, everyElement(lessThan(1)), reason: 'no indent the book did not ask for');
+    final o = plain.textOrigins;
+    final line = page('p { margin: 0 }').textOrigins;
+    expect(o[2].dy - o[1].dy, greaterThan(line[2].dy - line[1].dy + 10), reason: "the book's gap stays");
+    final indented = page('p { margin: 0; text-indent: 3em }');
+    expect(indented.textIndents[1], closeTo(3 * 19, 1), reason: "the book's own 3 em, not the reader's 1.5");
+    expect(indented.textIndents[0], lessThan(1), reason: 'not the first paragraph, after nothing');
   });
 
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
@@ -609,8 +629,10 @@ void main() {
 
   test('E4: a scene break written as <hr/> keeps a gap, and the paragraph after it starts without an indent (with '
       "the reader's own formatting)", () {
+    // (a book whose paragraphs are indented: the indent is the book's, never the reader's - user, 2026-10-07)
     EpubPage page(String body) => Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
-        .run(ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$body</body>')))
+        .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h)
+            .read(parseXhtml('<body>$body</body>')))
         .single;
     List<Offset> lay(String body) => page(body).textOrigins;
     const plainSrc = '<p>One.</p><p>Two.</p><p>Three.</p>', brokenSrc = '<p>One.</p><p>Two.</p><hr/><p>Three.</p>';
