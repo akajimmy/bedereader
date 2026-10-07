@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 91 - 2026-10-07
+
 **Fixed**
 - **The last rows of a page sat behind Android's home / back bar** when the remote moved down to them (Comics > Keep
   the screen on, for one). Settings, Home, the libraries, search, a book's or series' details, Downloads, About and
@@ -22,8 +26,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Settings: "Reader" is now "Comics", and "Books (EPUB)" is "eBooks"** - the two pages for the two kinds of book.
 - **EPUBs: the chapter's page over the slider reads "Ch. · Pg. 3/12"**, with no chapter number. The number was the
   book's own file count, so it could say "Ch. 4" under a chapter named "Chapter One".
-
-## 1.3.0
 
 ### Build 90 - 2026-10-07
 
