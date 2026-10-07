@@ -13,6 +13,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **EPUB: a downloaded book opened at an older place** (left at 31%, it came up at 12% offline), and a page read
   offline could have moved Komga's place for it the wrong way. Downloaded EPUBs now keep the exact place - kept
   current while you read online or elsewhere - and send the place itself back to Komga when you're online again.
+- **EPUB: the mouse wheel turns pages**, as it does with comics (it did nothing).
+- **EPUB: resizing the window or changing a setting no longer moves you back** - each change started from the top of
+  the page on screen, so a few of them walked back a page.
+- **Downloads: an EPUB shows as "EPUB · size"**, not "0 pages".
+- **EPUB: small black-and-white pictures on white** (chapter numbers, drop caps, ornaments) are drawn in the page's
+  colours, instead of as a white box on a dark page.
 
 ## 1.2.0 - in development
 
