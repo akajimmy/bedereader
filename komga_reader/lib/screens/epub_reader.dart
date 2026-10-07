@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -572,6 +573,23 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   Duration get _turnTime =>
       AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 320);
   static const _turnCurve = Curves.easeInOut;
+
+  // the wheel: notches added up to a turn, at most one turn a quarter second (a spun wheel doesn't race through the
+  // book) - as the comic reader's
+  double _wheelAcc = 0;
+  DateTime _lastWheelTurn = DateTime(0);
+
+  void _onWheel(double dy) {
+    if (_book == null) return;
+    _wheelAcc += dy;
+    if (_wheelAcc.abs() < 40) return;
+    final forward = _wheelAcc > 0;
+    _wheelAcc = 0;
+    final now = DateTime.now();
+    if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
+    _lastWheelTurn = now;
+    unawaited(_turn(forward ? 1 : -1));
+  }
 
   Future<void> _turn(int by) async {
     _lastTurn = DateTime.now();
@@ -1202,6 +1220,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
                 // of both pages again each frame
                 itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),
               ),
+              // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
+              // by - Windows check, build 79)
+              Positioned.fill(child: Listener(
+                behavior: HitTestBehavior.translucent,
+                onPointerSignal: (e) {
+                  if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+                    GestureBinding.instance.pointerSignalResolver
+                        .register(e, (ev) => _onWheel((ev as PointerScrollEvent).scrollDelta.dy));
+                  }
+                },
+                child: const SizedBox.expand(),
+              )),
               Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTapUp: (d) => _tap(d, size, shown),
