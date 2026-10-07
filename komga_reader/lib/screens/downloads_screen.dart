@@ -233,12 +233,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
           child: Text('Nothing downloading. Long-press a book, series or read list and choose Download.',
               style: TextStyle(color: _grey)),
         ),
-      if (d.recentlyDone.isNotEmpty) ...[
-        const _Heading('Finished this session'),
-        for (final t in d.recentlyDone.take(5))
-          ListTile(dense: true, contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.check, color: Color(0xFF16C75F)), title: Text(t)),
-      ],
     ]);
   }
 
@@ -399,10 +393,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
       tileColor: Colors.white.withValues(alpha: 0.07),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       contentPadding: const EdgeInsets.only(left: 8, right: 4),
-      leading: _selecting
-          ? Checkbox(tristate: true, value: picked == 0 ? false : picked == g.length ? true : null,
-              onChanged: (_) => toggleGroup())
-          : Icon(Icons.collections_bookmark_outlined, color: Theme.of(context).colorScheme.primary),
+      // the open / close arrow at the left, away from the trash button (user, 2026-10-07: no control right next to it)
+      leading: Row(mainAxisSize: MainAxisSize.min, children: [
+        chevron,
+        const SizedBox(width: 4),
+        _selecting
+            ? Checkbox(tristate: true, value: picked == 0 ? false : picked == g.length ? true : null,
+                onChanged: (_) => toggleGroup())
+            : Icon(Icons.collections_bookmark_outlined, color: Theme.of(context).colorScheme.primary),
+      ]),
       title: Text(first.series, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
       subtitle: Text([
         '${g.length} book${g.length == 1 ? '' : 's'}',
@@ -416,18 +415,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                 _selecting = true;
                 _selected.addAll(g.map((i) => i.id));
               }),
-      trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-        if (!_selecting)
-          // one trash button (user, 2026-10-07 - not a menu of one item): the whole series, after asking
-          IconButton(
-            tooltip: 'Remove series',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => _confirmRemove('Remove ${first.series}?', [
-              for (final i in all) if (i.seriesId == id) i,
-            ]),
-          ),
-        Padding(padding: const EdgeInsets.only(right: 8), child: chevron),
-      ]),
+      // one trash button (user, 2026-10-07 - not a menu of one item): the whole series, after asking
+      trailing: _selecting
+          ? null
+          : IconButton(
+              tooltip: 'Remove series',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _confirmRemove('Remove ${first.series}?', [
+                for (final i in all) if (i.seriesId == id) i,
+              ]),
+            ),
       ),
     );
   }

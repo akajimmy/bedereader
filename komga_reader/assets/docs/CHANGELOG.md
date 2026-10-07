@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Downloads > Manage:** a series card's open / close arrow is at its left, away from the trash button.
+- **Downloads > Queue:** no "Finished this session" list - what's downloaded is in Manage.
+
 ## 1.3.0
 
 ### Build 85 - 2026-10-07
