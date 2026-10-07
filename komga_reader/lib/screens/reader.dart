@@ -195,11 +195,7 @@ class _ReaderScreenState extends State<ReaderScreen> with SingleTickerProviderSt
     final r = _settings.display.rotation;
     if (r == _rotation) return;
     _rotation = r;
-    SystemChrome.setPreferredOrientations(switch (r) {
-      Rotation.auto => DeviceOrientation.values,
-      Rotation.portrait => const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown],
-      Rotation.landscape => const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-    });
+    holdOrientation(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape); // (both ways up of it)
   }
 
   void _onSettings() {

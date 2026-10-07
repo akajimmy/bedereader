@@ -110,7 +110,19 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   void _onSettings() {
+    _applyRotation();
     if (mounted) setState(() {}); // a new look: laid out again on the next build (same place kept)
+  }
+
+  // the rotation lock (Settings > Reader, and the Text and page panel's This device part), as in the comic reader -
+  // it was offered here but never applied
+  Rotation? _rotation;
+
+  void _applyRotation() {
+    final r = AppSettings.instance.display.rotation;
+    if (r == _rotation) return;
+    _rotation = r;
+    holdOrientation(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape); // (both ways up of it)
   }
 
   @override
@@ -122,6 +134,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     Downloads.instance.readerOpened();
     AppSettings.instance.readerOpened();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _applyRotation();
     if (readerTiming) SchedulerBinding.instance.addTimingsCallback(_onFrames); // a measuring build only
     // back in the app: has the book moved on on another device meanwhile?
     if (_online) _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
@@ -153,6 +166,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     AppSettings.instance.readerClosed();
     Downloads.instance.readerClosed();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (_rotation != Rotation.auto) SystemChrome.setPreferredOrientations(const []); // a lock ends with the book
     _awakeTimer?.cancel();
     _cornerTimer?.cancel();
     for (final t in _prefetchTimers) {

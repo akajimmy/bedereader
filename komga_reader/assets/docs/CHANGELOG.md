@@ -16,6 +16,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   each zoom a full step. Pinch and double-tap still zoom where your finger is.
 
 **Fixed**
+- **Rotation lock (Android): locked to portrait or landscape, the tablet still turns over** - held upside down, the
+  page follows it, as both ways up are the same orientation. The lock now holds in EPUBs too (it was in their panel
+  but did nothing).
 - **EPUB: holding down an arrow key (or any page-turn key) turned no pages** - the page crept and never turned,
   each of the key's repeats starting the slide over. A held key now turns a page each time the slide ends.
 - **EPUB: a word split across a page turn** ("ea-" at the bottom of one page, "gle" at the top of the next). As in

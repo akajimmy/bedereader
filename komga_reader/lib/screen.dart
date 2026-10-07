@@ -83,6 +83,27 @@ Future<void> keepScreenOn(bool on) async {
   }
 }
 
+/// The readers' rotation lock (Settings > Reader > Rotation): [portrait] or [landscape] held - still turning over
+/// (180°) with the tablet, as both ways up are the same orientation (user, 2026-10-05: locked, the flip was lost) -
+/// or neither: the device's own way. On Android a lock asks for the sensor orientations through the screen channel:
+/// Flutter's request for both portraits is the "user" one, which only turns over when the system's auto-rotate is
+/// on. Elsewhere, and if that fails, Flutter's own.
+Future<void> holdOrientation({bool portrait = false, bool landscape = false}) async {
+  if (defaultTargetPlatform == TargetPlatform.android && (portrait || landscape)) {
+    try {
+      await _channel.invokeMethod('orientation', portrait ? 'sensorPortrait' : 'sensorLandscape');
+      return;
+    } catch (_) {
+      // no native side: Flutter's request below
+    }
+  }
+  await SystemChrome.setPreferredOrientations(portrait
+      ? const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
+      : landscape
+          ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+          : DeviceOrientation.values);
+}
+
 /// The screen's current brightness 0..1 (this app's own level if set, else the tablet's). Null where unknown.
 Future<double?> getScreenBrightness() async {
   try {

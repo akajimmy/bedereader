@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -61,6 +62,18 @@ class MainActivity : FlutterActivity() {
         // so nothing is left behind if the app is closed while reading.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/screen").setMethodCallHandler { call, result ->
             when (call.method) {
+                // The readers' rotation lock (lib/screen.dart holdOrientation): portrait or landscape held, but still
+                // turning over (180°) with the tablet - the sensor orientations follow the tablet whatever the
+                // system's auto-rotate switch says. Flutter's own request is the "user" one, which obeys the switch
+                // (user, 2026-10-05: the flip was lost while locked).
+                "orientation" -> {
+                    requestedOrientation = when (call.arguments) {
+                        "sensorPortrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                        "sensorLandscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    }
+                    result.success(null)
+                }
                 "keepOn" -> {
                     if (call.arguments == true) {
                         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
