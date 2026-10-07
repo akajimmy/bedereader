@@ -44,7 +44,9 @@ This app shows them and keeps everything in sync.
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
   keeps the screen's own brightness, so it never opens too dark to use), a black, grey or white
   background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
-- At the end of a book: the next one in the series or read list, with its poster.
+- At the end of a book: the next one in the series or read list, with its poster - Next book or Close.
+- Comics and EPUBs open in the same reader, with the same controls; a read list that mixes them goes from one to the
+  other without leaving it.
 - Read further (or finished) on another device while the book was open here? The reader asks before saving: stay
   where you are, or go to that page - it never saves over the other device's place without asking.
 
@@ -57,9 +59,9 @@ This app shows them and keeps everything in sync.
   *Book's formatting* switches between the publisher's alignment and spacing and your own for every book. A book set
   smaller or larger all through shows at your text size; small black-and-white pictures (chapter numbers, drop caps)
   take the page's colours.
-- Contents, a slider and "page X of Y" over the whole book, a page-corner note (pages left in the chapter, how far
-  through the book), and the place you stopped kept on Komga in the same form its own web reader uses - pick up in
-  either.
+- Contents, a slider and "page X of Y" over the whole book, and the place you stopped kept on Komga in the same form
+  its own web reader uses - pick up in either. A book is laid out and its pages counted before it shows: a few seconds
+  the first time, at once after that (the count is kept on the device, per book and per text setting).
 - Pictures at their own resolution; tap a large one to see it full screen.
 - Downloaded EPUBs read offline too, opening at the place you stopped.
 
@@ -141,7 +143,8 @@ The rest of this file is about building the app.
 ### The repository
 
 - `komga_reader\` - the Flutter app: Dart in `lib\`, shaders in `shaders\`, tests in `test\`, native code in
-  `android\` and `windows\`.
+  `android\` and `windows\`. The reader is one screen (`lib\screens\reader.dart`: controls, keys, progress, moving
+  between books) with a renderer per kind of book (`lib\reader\`: comic pages, EPUB).
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
