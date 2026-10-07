@@ -201,8 +201,11 @@ class DisplayPrefs {
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
-      this.posterDate = true});
+      this.posterDate = true, this.hiddenSpots = const []});
   final bool night;
+  /// reader: the position text's spots tapped hidden ('left', 'centre', 'right' - lib/reader/position_row.dart), for
+  /// both kinds of book (user, 2026-10-07)
+  final List<String> hiddenSpots;
   /// book posters: the release date under the title ("13 Mar 2024") - user, 2026-10-06; default on
   final bool posterDate;
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
@@ -267,8 +270,9 @@ class DisplayPrefs {
           PageNote? pageNote, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pagePreviews, bool? pageStrip, bool? posterDate}) =>
+          bool? pagePreviews, bool? pageStrip, bool? posterDate, List<String>? hiddenSpots}) =>
       DisplayPrefs(
+          hiddenSpots: hiddenSpots ?? this.hiddenSpots,
           pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
           posterDate: posterDate ?? this.posterDate,
           nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
@@ -286,7 +290,8 @@ class DisplayPrefs {
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip, 'posterDate': posterDate};
+      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip, 'posterDate': posterDate,
+      'hiddenSpots': hiddenSpots};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -315,7 +320,8 @@ class DisplayPrefs {
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
         accent: pick(Accent.values, j['accent'], Accent.blue),
         pagePreviews: j['pagePreviews'] != false, // on unless switched off
-        pageStrip: j['pageStrip'] == true);
+        pageStrip: j['pageStrip'] == true,
+        hiddenSpots: [for (final v in (j['hiddenSpots'] is List ? j['hiddenSpots'] as List : const [])) if (v is String) v]);
   }
 }
 

@@ -1,0 +1,68 @@
+import 'package:flutter/material.dart';
+
+import '../settings.dart';
+
+/// The three spots of the position text over the slider (the one Reader, user 2026-10-07, decision 5 - mockup "A").
+enum PositionSpot { left, centre, right }
+
+/// What a renderer puts in a spot: [text], and [name] for the place left when it's hidden ("title hidden").
+class SpotText {
+  const SpotText(this.text, this.name);
+  final String text, name;
+}
+
+/// The reader's position, on two lines over the slider: [centre] on its own line on top (the title: the longest),
+/// [left] and [right] sharing the line just above the slider's ends. A spot the renderer leaves null isn't there
+/// (comics fill two). Each spot is tapped to hide it, and its place - dimmed - tapped to show it again; that's kept
+/// on this device, for both kinds of book ([DisplayPrefs.hiddenSpots]). [picking]: a place is being picked on the
+/// slider - the text is in the accent colour.
+class ReaderPositionRow extends StatelessWidget {
+  const ReaderPositionRow({super.key, this.left, this.centre, this.right, this.picking = false});
+  final SpotText? left, centre, right;
+  final bool picking;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSettings.instance;
+    final hidden = s.display.hiddenSpots;
+    final colour = picking ? Theme.of(context).colorScheme.primary : Colors.white;
+    Widget spot(PositionSpot at, SpotText t, TextAlign align, double size) {
+      final off = hidden.contains(at.name);
+      return GestureDetector(
+        key: ValueKey('pos-${at.name}'),
+        behavior: HitTestBehavior.opaque,
+        onTap: () => s.setDisplay(s.display.copyWith(
+            hiddenSpots: off ? (List.of(hidden)..remove(at.name)) : [...hidden, at.name])),
+        child: off
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(4)),
+                child: Text('${t.name} hidden - tap to show', maxLines: 1, overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              )
+            : Text(t.text, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: align,
+                style: TextStyle(color: colour, fontSize: size, fontFeatures: const [FontFeature.tabularFigures()])),
+      );
+    }
+
+    final l = left, c = centre, r = right;
+    return Padding(
+      // over the slider: its ends are past the book buttons
+      padding: const EdgeInsets.fromLTRB(60, 0, 60, 2),
+      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (c != null) Center(child: spot(PositionSpot.centre, c, TextAlign.center, 13)),
+        if (l != null || r != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Row(children: [
+              Expanded(child: Align(alignment: Alignment.centerLeft,
+                  child: l == null ? const SizedBox.shrink() : spot(PositionSpot.left, l, TextAlign.left, 14))),
+              const SizedBox(width: 12),
+              Expanded(child: Align(alignment: Alignment.centerRight,
+                  child: r == null ? const SizedBox.shrink() : spot(PositionSpot.right, r, TextAlign.right, 14))),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
