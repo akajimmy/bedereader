@@ -298,11 +298,13 @@ class Downloads extends ChangeNotifier {
     return ids;
   }
 
-  /// "Delete" in answer to Ask.
+  /// Removes several downloads together ("Delete" in answer to Ask; Manage: a selection, a series, everything read)
+  /// - the downloads record written once, not once per book.
   Future<void> removeAll(Iterable<String> ids) async {
-    for (final id in ids) {
-      if (isDownloaded(id)) await remove(id);
-    }
+    final gone = [for (final id in ids) if (isDownloaded(id)) id];
+    if (gone.isEmpty) return;
+    await _deleteFiles(gone);
+    await _roomAgain(); // room freed: books that stopped for lack of it carry on (and the listeners hear of it)
   }
 
   /// Tests: books read while a reader was open, waiting for it to close before they're deleted (Always).
@@ -436,7 +438,7 @@ class Downloads extends ChangeNotifier {
         j._cancel = true; // the worker removes it
       } else {
         queue.remove(j);
-        await _deleteFiles(j.bookId);
+        await _deleteFiles([j.bookId]);
       }
     }
     await _saveQueue();
@@ -452,7 +454,7 @@ class Downloads extends ChangeNotifier {
       return;
     }
     queue.remove(j);
-    await _deleteFiles(bookId);
+    await _deleteFiles([bookId]);
     await _saveQueue();
     notifyListeners();
   }
@@ -460,19 +462,21 @@ class Downloads extends ChangeNotifier {
   /// Deletes a downloaded book from this device (not from the server). Reading progress made offline that hasn't
   /// reached Komga yet is kept, so it can still be sent.
   Future<void> remove(String bookId) async {
-    await _deleteFiles(bookId);
+    await _deleteFiles([bookId]);
     await _roomAgain(); // room freed: books that stopped for lack of it carry on (and the listeners hear of it)
   }
 
-  Future<void> _deleteFiles(String bookId) async {
-    if (keptRead.remove(bookId)) {
-      await (await SharedPreferences.getInstance()).setStringList(_keptKey, keptRead.toList());
-    }
+  Future<void> _deleteFiles(Iterable<String> bookIds) async {
     final s = store!;
-    final dir = Directory(s.file(bookId).path);
-    if (await dir.exists()) await dir.delete(recursive: true);
-    s.books.remove(bookId);
-    if (s.progress[bookId]?['synced'] != false) s.progress.remove(bookId);
+    var kept = false;
+    for (final bookId in bookIds.toList()) {
+      kept |= keptRead.remove(bookId);
+      final dir = Directory(s.file(bookId).path);
+      if (await dir.exists()) await dir.delete(recursive: true);
+      s.books.remove(bookId);
+      if (s.progress[bookId]?['synced'] != false) s.progress.remove(bookId);
+    }
+    if (kept) await (await SharedPreferences.getInstance()).setStringList(_keptKey, keptRead.toList());
     await s.save();
   }
 
@@ -683,7 +687,7 @@ class Downloads extends ChangeNotifier {
       }
       if (job._cancel) {
         queue.remove(job);
-        await _deleteFiles(job.bookId);
+        await _deleteFiles([job.bookId]);
       } else if (paused || _hold || offWifi) {
         // held (offline) or off Wi-Fi: back in the queue, carries on later; paused by hand: paused
         job.state = paused && !_hold && !offWifi ? JobState.paused : JobState.queued;

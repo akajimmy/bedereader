@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Downloads in two tabs: Queue and Manage.** Queue is what's downloading (pause, retry, cancel, as before).
+  Manage is what you've downloaded: sort by name or by size (largest first), show all, only read, only unread, or
+  books no longer on Komga, and remove in bulk - **Select** (or long-press a book) to tick several, with how many
+  and how much space before you confirm; a book's menu removes it or its whole series; **Remove all read** clears
+  everything you've finished. The screen opens on Queue while something is downloading, on Manage otherwise.
+
 ## 1.2.0
 
 **Released as build 82, tagged `v1.2.0`** (2026-10-07). Release candidates: build 62 (`v1.2.0-rc.1`).
