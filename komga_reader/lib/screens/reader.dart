@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -64,7 +63,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     with TickerProviderStateMixin, ReaderDevice<ReaderScreen>
     implements ReaderHost {
   late dynamic _book = widget.book;
-  late final ComicRenderer _comic = ComicRenderer(this)..addListener(_onRenderer);
+  // the pages of the book open - a renderer for its kind (lib/reader/renderer.dart); null until the first has opened
+  Renderer? _renderer;
+  Renderer get _r => _renderer!;
   bool _menu = false; // controls shown
   final _scrubber = SliderScrub(); // the page picked on the slider, not jumped to yet (lib/reader/reader_slider.dart)
   int? get _scrub => _scrubber.value;
@@ -87,10 +88,10 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   Komga get api => widget.api;
-  int get _index => _comic.index;
-  List<dynamic> get _pages => _comic.pages;
-  int get _last => _comic.last;
-  bool get _rtl => _comic.rtl;
+  int get _index => _r.place;
+  int get _last => _r.last;
+  int get _count => _r.last + 1; // the book's pages
+  bool get _rtl => _renderer?.rtl ?? false;
   AppSettings get _settings => AppSettings.instance;
   String? get _seriesId => _book['seriesId'] as String?;
 
@@ -145,8 +146,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
     deviceClosed();
-    _comic
-      ..removeListener(_onRenderer)
+    _renderer
+      ?..removeListener(_onRenderer)
       ..dispose();
     _keys.dispose();
     _sliderInner.dispose();
@@ -173,7 +174,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     final d = _settings.display.toJson()
       ..remove('brightness')
       ..remove('warmth');
-    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson()});
+    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson(),
+        'e': _settings.epub.toJson()});
   }
 
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
@@ -188,27 +190,43 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> _open(dynamic book, {VoidCallback? onOpened}) async {
     final run = ++_openRun;
     setState(() { _loading = true; _menu = false; _openError = null; });
+    // the book's kind: the renderer open goes on (comics), or a new one takes over once the book has loaded
+    final old = _renderer;
+    final reuse = old != null && _sameKind(old, book as Map);
+    final r = reuse ? old : _newRenderer(book as Map);
     try {
-      final fresh = await api.book(book['id']) ?? book; // current progress from the server
-      final prepared = await _comic.prepare(fresh as Map);
-      if (!mounted || run != _openRun) return; // closed, or another book asked for since
-      final start = ComicRenderer.startOf(fresh, prepared.pages.length);
-      _comic.show(fresh, prepared, start);
+      // current progress from the server
+      final fresh = (r.savesProgress ? await api.book(book['id']) : null) ?? book;
+      final prepared = await r.prepare(fresh);
+      if (!mounted || run != _openRun) { // closed, or another book asked for since
+        if (!reuse) r.dispose();
+        return;
+      }
+      if (!reuse) {
+        _renderer = r..addListener(_onRenderer);
+        if (old != null) {
+          old.removeListener(_onRenderer);
+          WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose()); // its pages drawn this frame still
+        }
+      }
+      r.show(fresh, prepared);
       setState(() {
         _book = fresh; _returnTo = null;
-        _openedAt = start; _turned = false;
-        _known[fresh['id'] as String] = _progressOf(fresh); // as Komga has it now: a change elsewhere is from here on
+        _openedAt = r.openedAt; _turned = false;
+        // as Komga has it now: a change elsewhere is from here on
+        _known[fresh['id'] as String] = r.openedProgress;
         _loading = false;
       });
       onOpened?.call();
       _keys.requestFocus();
     } catch (e, st) {
+      if (!reuse) r.dispose();
       if (!mounted || run != _openRun) return;
       final empty = e is NoPages;
       final message = empty
           ? '"${_titleOf(book)}" has no pages (Komga may need to analyse it again).'
           : couldnt('open "${_titleOf(book)}"', e, thing: 'book');
-      if (!_comic.opened) {
+      if (_renderer == null || !_r.opened) {
         // nothing to show: say so on the screen (a book with no pages: Close, or on to the next book)
         setState(() { _loading = false; _openError = (message, e, st); });
       } else {
@@ -222,6 +240,12 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
     }
   }
+
+  /// A renderer for [book]'s kind.
+  Renderer _newRenderer(Map book) => ComicRenderer(this);
+
+  /// [r] draws books of [book]'s kind (and can go on to it in place).
+  bool _sameKind(Renderer r, Map book) => r is ComicRenderer;
 
   /// On past a book that can't be read (no pages): the one after it.
   Future<void> _skipPast(dynamic book) async {
@@ -275,7 +299,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   void _pageTurned(int i) {
     if (i != _openedAt) _turned = true;
     _saveTimer?.cancel();
-    if (_turned && i == _last) {
+    // saved at once at the place that finishes the book (comics: the last page; EPUBs: the end card) - once
+    if (_turned && _r.finishedAt(i) && !_r.finishedAt(i - 1)) {
       _saveNow();
     } else {
       _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
@@ -291,15 +316,15 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// it over (Komga's own behaviour). [ask]: false while closing (no question then): if another device has moved the
   /// book on meanwhile, nothing is saved over it.
   void _saveNow({bool ask = true}) {
-    if (!_turned || _pages.isEmpty) return;
-    // the end card counts as the last page: finished (closing from it used to save nothing if the last page's
-    // save hadn't happened yet - the 1.5 s settle timer is cancelled by the turn onto the card)
-    final page = math.min(_index, _last);
+    final r = _renderer;
+    if (!_turned || r == null || !r.opened || !r.savesProgress) return;
     final id = _book['id'] as String;
+    // what's saved, and how Komga's progress is read, captured now: the save may run once another book has opened
+    final save = r.progressSaver(_index), read = r.progressReader();
     // one at a time, in order; one queued before the reader went to another device's page is dropped (it waited for
     // the question's answer, then saved this reader's page over theirs - #5)
     final wentElsewhere = _wentElsewhere;
-    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, page + 1, page >= _last, ask: ask) : null);
+    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, r, save, read, ask: ask) : null);
   }
 
   // ---- progress moved on another device while this book was open (user, 2026-10-05: read on the PC, then the
@@ -308,44 +333,38 @@ class _ReaderScreenState extends State<ReaderScreen>
   // changed it, and it asks: finished there -> Stay here / Mark as read; another page -> Stay / Go to that page.
   // Content is compared, not times: Komga doesn't hand back the time of the reader's own saves.
 
-  // per book (a book left for the next one is saved after that one has opened): (page from 1, or null: not started;
-  // finished)
-  final Map<String, (int?, bool)> _known = {};
+  // per book (a book left for the next one is saved after that one has opened): Komga's progress as this reader last
+  // loaded, saved or accepted - the renderer's kind (comics: page and finished; EPUBs: a place in the book)
+  final Map<String, Object?> _known = {};
   Future<void> _saves = Future.value();
   Future<bool>? _question; // the question on screen: a second asker waits for its answer
   int _wentElsewhere = 0; // times the reader went with another device's progress (saves queued before: dropped)
   AppLifecycleListener? _life;
 
-  static (int?, bool) _progressOf(dynamic book) {
-    final rp = book?['readProgress'];
-    return rp == null ? (null, false) : ((rp['page'] as num?)?.toInt(), rp['completed'] == true);
-  }
-
   /// Komga's progress for [id] if it's not what this reader knows (another device moved it); null if it is, or if
   /// Komga can't say (offline, unreachable - the save goes ahead as before).
-  Future<(int?, bool)?> _movedElsewhere(String id) async {
-    if (Connection.instance.offline) return null;
+  Future<({Object? now})?> _movedElsewhere(String id, Renderer r, Future<Object?> Function() read) async {
+    if (Connection.instance.offline || !_known.containsKey(id)) return null;
     try {
-      final now = _progressOf(await api.book(id));
-      final known = _known[id];
-      return known == null || now == known ? null : now;
+      final now = await read();
+      return r.sameProgress(now, _known[id]) ? null : (now: now);
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> _save(String id, int page, bool completed, {required bool ask}) async {
-    final moved = await _movedElsewhere(id);
+  Future<void> _save(String id, Renderer r, Future<Object?> Function() save, Future<Object?> Function() read,
+      {required bool ask}) async {
+    final moved = await _movedElsewhere(id, r, read);
     if (moved != null) {
       if (!ask || !mounted || _book['id'] != id) return; // closing, or another book by now: theirs stands
-      if (!await _askAboutElsewhere(moved)) return; // gone with theirs: nothing of this one's to save
+      if (!await _askAboutElsewhere(moved.now)) return; // gone with theirs: nothing of this one's to save
     }
     // known as this reader's page once Komga has it: noted before, a save that failed (a network blip) left Komga on
     // the earlier page, and the next save asked about this reader's own page as if another device had moved it
     // (code review 2026-10-05, #4). A failed save stays silent: the next one carries the newer page.
     try {
-      await api.setProgress(id, page, completed: completed);
-      _known[id] = (page, completed);
+      _known[id] = await save();
     } catch (_) {}
   }
 
@@ -353,9 +372,10 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// In line with the saves: a save on its way when the app came back was taken for another device's (#4).
   Future<void> _checkElsewhere() {
     _saves = _saves.then((_) async {
-      if (!mounted || _loading || _pages.isEmpty || _question != null) return;
-      final moved = await _movedElsewhere(_book['id'] as String);
-      if (moved != null && mounted) await _askAboutElsewhere(moved);
+      final r = _renderer;
+      if (!mounted || _loading || r == null || !r.ready || _question != null) return;
+      final moved = await _movedElsewhere(_book['id'] as String, r, r.progressReader());
+      if (moved != null && mounted) await _askAboutElsewhere(moved.now);
     });
     return _saves;
   }
@@ -364,42 +384,31 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// Asked once at a time: a second asker (a save coming due while it's on screen) waits for the answer - Stay: it
   /// saves; the other device's: it doesn't (it used to be told "stay" at once and save over the other device's page
   /// with the question still up - code review 2026-10-05, #5).
-  Future<bool> _askAboutElsewhere((int?, bool) moved) =>
+  Future<bool> _askAboutElsewhere(Object? moved) =>
       _question ??= _ask(moved).whenComplete(() => _question = null);
 
-  Future<bool> _ask((int?, bool) moved) async {
-    final (page, finished) = moved;
-    final here = math.min(_index, _last) + 1;
-    final goTo = finished ? null : (page ?? 1).clamp(1, _pages.length);
+  Future<bool> _ask(Object? moved) async {
+    final t = _r.elsewhereText(moved, _index);
     final stay = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(finished ? 'Finished on another device' : 'Read further on another device'),
-        content: Text(finished
-            ? 'This book was read to the end on another device.'
-            : page == null
-                ? 'This book was marked unread on another device.'
-                : 'On another device this book is on page $page.'),
+        title: Text(t.title),
+        content: Text(t.text),
         actions: [
-          TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true),
-              child: Text(finished ? 'Stay here' : 'Stay on page $here')),
-          TextButton(onPressed: () => Navigator.pop(c, false),
-              child: Text(finished ? 'Mark as read' : 'Go to page $goTo')),
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(c, true), child: Text(t.stay)),
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t.go)),
         ],
       ),
     );
     _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
     if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
     _saveTimer?.cancel();
-    setState(() => _book = {..._book, 'readProgress': finished
-        ? {'page': _pages.length, 'completed': true}
-        : page == null ? null : {'page': page, 'completed': false}});
-    _comic.bookChanged(_book as Map);
     _wentElsewhere++;
     _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
-    final target = finished ? _pages.length : goTo! - 1; // finished: the end card, with the next book
+    final target = _r.acceptElsewhere(moved); // finished: the end card, with the next book
+    setState(() => _book = _r.book);
     _openedAt = target;
-    _comic.jumpTo(target);
+    _r.jumpTo(target);
     return false;
   }
 
@@ -409,9 +418,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// A single tap at [x] (0..1 across the screen). Tap zones follow the reading direction.
   void _tap(double x) {
     if (x < 0.33) {
-      _rtl ? _comic.forward() : _comic.back();
+      _rtl ? _r.forward(snap: true) : _r.back(snap: true);
     } else if (x > 0.67) {
-      _rtl ? _comic.back() : _comic.forward();
+      _rtl ? _r.back(snap: true) : _r.forward(snap: true);
     } else {
       _showControls();
     }
@@ -438,7 +447,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         context: context,
         builder: (ctx) => AlertDialog(
           title: Text('Mark #${_book['metadata']?['number'] ?? ''} as read?'),
-          content: Text('You are on page ${_index + 1} of ${_pages.length}.'),
+          content: Text(_r.whereText),
           actions: [
             TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep in progress')),
             TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Mark read')),
@@ -452,7 +461,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (markRead) {
       try {
         await api.markRead(_book['id']);
-        _known[_book['id'] as String] = (_pages.length, true); // this reader's own: not a change from elsewhere
+        _known.remove(_book['id']); // this reader's own: not a change from elsewhere (the book is left)
       } catch (e, st) {
         // said as what it is - it used to say "Couldn't find the next book" (#16); the book stays open
         if (mounted) {
@@ -549,13 +558,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     _saveTimer?.cancel();
     _turned = false;
     _openedAt = _index;
-    final id = _book['id'];
+    final id = _book['id'], r = _r;
     final fresh = await api.book(id).catchError((_) => null);
-    if (fresh != null) _known[id as String] = _progressOf(fresh); // this reader's own mark: not another device's
+    // this reader's own mark: not another device's
+    if (fresh != null) _known[id as String] = await r.progressAfterMark(fresh).catchError((Object _) => null);
     // only if that book is still the one open (a quick Next book meanwhile: the answer is for the book left behind)
     if (mounted && fresh != null && _book['id'] == id && !_busy) {
       setState(() => _book = fresh);
-      _comic.bookChanged(fresh);
+      r.bookChanged(fresh);
     }
   }
 
@@ -563,7 +573,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   void _showControls() {
     setState(() { _menu = true; _scrubber.reset(); });
     _keys.requestFocus(); // nothing selected (not the end card's buttons)
-    _comic.controlsShown(); // the strip on the page being read now
+    _r.controlsShown(); // the comic strip on the page being read now
   }
 
   void _hideControls() {
@@ -579,7 +589,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// The two bars, left to right, as the remote walks them: the Reader's own controls with the renderer's in them.
   List<FocusNode> get _topBar => [
         _ctl[_Ctl.close]!,
-        for (final b in _comic.topButtons()) b.node,
+        for (final b in _r.topButtons()) b.node,
         _ctl[_Ctl.night]!,
         if (isDesktop) _ctl[_Ctl.fullscreen]!,
         _ctl[_Ctl.read]!,
@@ -587,8 +597,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       ];
   List<FocusNode> _bottomBar(BuildContext context) => [
         _ctl[_Ctl.prevBook]!,
-        if (_pages.length > 1) _ctl[_Ctl.slider]!,
-        for (final b in _comic.bottomButtons(context)) b.node,
+        if (_count > 1) _ctl[_Ctl.slider]!,
+        for (final b in _r.bottomButtons(context)) b.node,
         _ctl[_Ctl.nextBook]!,
       ];
 
@@ -600,14 +610,14 @@ class _ReaderScreenState extends State<ReaderScreen>
       bottom: _bottomBar(context),
       dx: dx,
       dy: dy,
-      row: _comic.stripShown ? _comic.stripNode : null,
-      rowBelow: _pages.length > 1 ? _comic.pagesNode : _ctl[_Ctl.prevBook],
+      row: _r.rowNode,
+      rowBelow: _r.rowBelow ?? _ctl[_Ctl.prevBook],
     );
     switch (to) {
       case WalkToNode(:final node):
         node.requestFocus();
       case WalkToRow():
-        _comic.stripFocus(); // into the strip, on the page shown
+        _r.rowFocus(); // into the strip, on the page shown
         return;
       case WalkOff():
         _keys.requestFocus();
@@ -621,17 +631,25 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     awake();
     final k = e.logicalKey;
+    if (_renderer == null || !_r.ready) {
+      // nothing to read yet (loading, an EPUB being laid out): only closing (Back goes through the route)
+      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) Navigator.of(context).maybePop();
+      return KeyEventResult.ignored;
+    }
     if (!_menu) {
       // Volume keys (Android, a setting): down = forward, up = back, in any reading direction. Handled keys don't
       // reach the system, so the volume stays put; a held key turns one page (its repeats are swallowed).
       if ((k == LogicalKeyboardKey.audioVolumeDown || k == LogicalKeyboardKey.audioVolumeUp) &&
           hasVolumeKeys && _settings.display.volumeKeys) {
-        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _comic.forward() : _comic.back();
+        if (e is KeyDownEvent) k == LogicalKeyboardKey.audioVolumeDown ? _r.forward() : _r.back();
         return KeyEventResult.handled;
       }
+      // a held key turns a page each time the slide before has ended, not on every repeat (each repeat restarted the
+      // slide: the page crept and never turned - user, build 82)
+      final repeatWhileSliding = e is KeyRepeatEvent && _r.sliding;
       // Shift+Space goes back, whatever Space is set to do
       if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
-        _comic.back();
+        if (!repeatWhileSliding) _r.back();
         return KeyEventResult.handled;
       }
       // on the end card: Up / Down move between Next book and Close, OK presses the one the remote is on (the EPUB
@@ -643,7 +661,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           return KeyEventResult.handled;
         }
         if (isOkKey(k)) {
-          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _comic.forward();
+          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _r.forward();
           return KeyEventResult.handled;
         }
       }
@@ -651,17 +669,17 @@ class _ReaderScreenState extends State<ReaderScreen>
       switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
-          if (e is KeyDownEvent || _index < _pages.length) _comic.forward();
+          if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward();
         case ReaderAction.previous:
-          _comic.back();
+          if (!repeatWhileSliding) _r.back();
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
           if (e is KeyDownEvent) Navigator.of(context).maybePop();
         case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
-          _comic.zoomStep(true);
+          _r.zoomStep(true);
         case ReaderAction.zoomOut:
-          _comic.zoomStep(false);
+          _r.zoomStep(false);
         case null:
           return KeyEventResult.ignored;
       }
@@ -676,7 +694,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       ReaderScreen.debugBuilds++;
       return true;
     }());
-    final bg = _comic.background;
+    final r = _renderer;
+    final bg = r?.background ?? Colors.black;
     return PopScope(
       // Back (tablet or remote) closes the controls first, then the book
       canPop: !_menu,
@@ -687,11 +706,11 @@ class _ReaderScreenState extends State<ReaderScreen>
           focusNode: _keys,
           autofocus: true,
           onKeyEvent: _onKey,
-          child: _openError != null && !_comic.opened
+          child: _openError != null && (r == null || !r.opened)
               ? Center(child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
                   child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
-                      style: TextStyle(color: _comic.ink(0.7)),
+                      style: TextStyle(color: r?.ink(0.7) ?? Colors.white70),
                       action: Row(mainAxisSize: MainAxisSize.min, children: [
                         // a book with no pages: retrying won't help - on to the next book instead
                         if (_openError!.$2 is NoPages)
@@ -701,10 +720,18 @@ class _ReaderScreenState extends State<ReaderScreen>
                         TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
                       ])),
                 ))
-              : !_comic.opened
+              : r == null || !r.opened
               ? const Center(child: CircularProgressIndicator())
+              : !r.ready
+              // being made ready (an EPUB laid out and counted): its own screen, with Close
+              ? Stack(children: [
+                  Positioned.fill(child: r.waiting(context)),
+                  if (_loading)
+                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
+                        child: const Center(child: CircularProgressIndicator())))),
+                ])
               : Stack(children: [
-                  ..._comic.buildPages(context),
+                  ...r.buildPages(context),
                   // the page note, "12 / 36": always, or for a moment after a turn (Page corner - one setting with
                   // the EPUBs', and their corner: bottom right, user 2026-10-07) - not over the controls (they have
                   // the count) or the end card
@@ -721,7 +748,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65),
                               borderRadius: BorderRadius.circular(12)),
-                          child: Text('${_index + 1} / ${_pages.length}',
+                          child: Text(r.corner(_index.clamp(0, _last)),
                               style: const TextStyle(color: Colors.white, fontSize: 13)),
                         ),
                       ),
@@ -742,7 +769,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                       ),
                     ),
                   // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
-                  if (!_menu && _settings.display.progressBar && _pages.isNotEmpty && _index <= _last)
+                  if (!_menu && _settings.display.progressBar && _index <= _last)
                     Positioned(
                       left: 0,
                       right: 0,
@@ -753,9 +780,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                           textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, // fills from the reading side
                           child: LinearProgressIndicator(
                             key: const ValueKey('reading-progress'),
-                            value: (_index + 1) / _pages.length,
+                            value: (_index + 1) / _count,
                             minHeight: 3,
-                            backgroundColor: _comic.ink(0.12),
+                            backgroundColor: r.ink(0.12),
                             color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
                           ),
                         ),
@@ -846,7 +873,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   Widget _endCard() => ReaderEndCard(
         api: api,
         next: _upNext(),
-        ink: _comic.ink,
+        ink: _r.ink,
         where: widget.readListId != null ? 'this read list' : 'the series',
         lastText: _endText,
         skipRead: widget.skipRead,
@@ -858,7 +885,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   final _endNext = FocusNode(debugLabel: 'end-next');
   final _endClose = FocusNode(debugLabel: 'end-close');
-  bool get _onEnd => _comic.opened && _index > _last;
+  bool get _onEnd => _renderer != null && _r.opened && _index > _last;
 
   /// The end card is reached (or the controls went down over it): the remote on Next book, on Close when there's none.
   void _endReached() =>
@@ -870,8 +897,9 @@ class _ReaderScreenState extends State<ReaderScreen>
   List<Widget> _controls() {
     // read: marked so, or the last page reached in this visit (saved as read at once, _pageTurned). Not merely being
     // on the last page: after Mark unread there, the tick has to show unread (code review, 2026-09-30)
-    final completed = _book['readProgress']?['completed'] == true || (_turned && _index >= _last);
+    final completed = _book['readProgress']?['completed'] == true || (_turned && _r.finishedAt(_index));
     final shown = _scrub ?? _index.clamp(0, _last);
+    final spots = _r.spots(shown);
     final night = _settings.display.night;
     return readerBars(
       onTapOutside: _hideControls,
@@ -880,7 +908,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         heading: '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}',
         title: '${_book['metadata']?['title'] ?? ''}',
         buttons: [
-          for (final b in _comic.topButtons()) b.child,
+          for (final b in _r.topButtons()) b.child,
           IconButton(
             focusNode: _ctl[_Ctl.night],
             tooltip: night ? 'Night mode off' : 'Night mode on',
@@ -895,6 +923,11 @@ class _ReaderScreenState extends State<ReaderScreen>
             label: completed ? 'Mark unread' : 'Mark read',
             onPressed: () async {
               try {
+                // in line with the saves: one waiting is dropped and one under way finishes first, so the mark is the
+                // last word (EPUB review R4)
+                _saveTimer?.cancel();
+                _wentElsewhere++;
+                await _saves;
                 completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
                 await _afterMark();
               } catch (e, st) {
@@ -918,22 +951,18 @@ class _ReaderScreenState extends State<ReaderScreen>
         onPrev: _prevBook,
         nextNode: _ctl[_Ctl.nextBook]!,
         onNext: _nextBook,
-        above: _comic.stripShown ? _comic.strip(context) : null,
-        // the title on top, the page and how far through on the left (the right spot is free - mockup "A, comic")
-        position: ReaderPositionRow(
-          centre: SpotText(_bookTitle, 'title'),
-          left: SpotText('Pg. ${shown + 1}/${_pages.length} · ${((shown + 1) / _pages.length * 100).round()}%', 'page'),
-          picking: _scrub != null,
-        ),
+        above: _r.above(context),
+        // the renderer's words for the place shown (decision 5, mockup "A")
+        position: ReaderPositionRow(left: spots.left, centre: spots.centre, right: spots.right, picking: _scrub != null),
         middle: [
           Expanded(
-            child: _pages.length < 2
+            child: _count < 2
                 ? const SizedBox.shrink()
                 // right to left: page 1 at the right end of the slider
                 : Directionality(textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, child: _slider(shown)),
           ),
         ],
-        buttons: [for (final b in _comic.bottomButtons(context)) b.child],
+        buttons: [for (final b in _r.bottomButtons(context)) b.child],
       ),
     );
   }
@@ -946,29 +975,21 @@ class _ReaderScreenState extends State<ReaderScreen>
         at: _index.clamp(0, _last),
         last: _last,
         rtl: _rtl,
-        upDownStep: true,
+        upDownStep: _r.sliderUpDown,
         wayBack: _scrubOrigin,
         markWayBack: _scrub != null || _returnTo != null, // while scrubbing, and whenever there's a page to go back to
-        onScrubStart: _comic.scrubStarted, // not the last scrub's picture
+        onScrubStart: _r.scrubStarted, // not the last scrub's picture
         onJump: _sliderJump,
         changed: () => setState(() {}),
-        label: 'Page ${shown + 1}',
-        preview: (shown, x) => _comic.preview(context, shown, x),
+        label: _r.placeLabel(shown),
+        preview: (shown, x) => _r.preview(context, shown, x) ?? const SizedBox.shrink(),
       );
-
-  /// "Saga #1 - Chapter One": the series and number, and the book's own title when it says more.
-  String get _bookTitle {
-    final heading = _titleOf(_book);
-    final title = '${_book['metadata']?['title'] ?? ''}';
-    return title.isEmpty || title == heading || heading.endsWith(title) ? heading : '$heading - $title';
-  }
 
   /// Off to the page picked on the slider (or the strip) - remembering where the reader was, to come back to.
   void _sliderJump(int target) {
     if (target == _index) return;
-    _comic.finishCurlNow();
     if (_index <= _last) _returnTo ??= _index;
     _jumpingTo = target;
-    _comic.jumpTo(target);
+    _r.jumpTo(target);
   }
 }

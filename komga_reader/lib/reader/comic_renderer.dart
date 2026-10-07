@@ -16,6 +16,7 @@ import '../screen.dart';
 import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
+import 'position_row.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
 
@@ -35,8 +36,8 @@ class ComicPages {
 /// image and reader settings). The Reader around it does the rest; this asks it through [host].
 ///
 /// Places are the pages, 0..[last]; [last] + 1 is the end card.
-class ComicRenderer extends ChangeNotifier {
-  ComicRenderer(this.host) {
+class ComicRenderer extends Renderer {
+  ComicRenderer(super.host) {
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
     _curlAnim = AnimationController(vsync: host.vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_onCurlTick)
@@ -45,8 +46,6 @@ class ComicRenderer extends ChangeNotifier {
       });
   }
 
-  final ReaderHost host;
-  Komga get api => host.api;
   AppSettings get _settings => AppSettings.instance;
   bool _disposed = false;
 
@@ -59,9 +58,15 @@ class ComicRenderer extends ChangeNotifier {
   PageLoader? _loader;
   PageController? pc;
   int index = 0;
+  @override
+  int get place => index;
+  @override
   int get last => pages.length - 1;
+  @override
   bool get opened => pc != null;
   bool get onEndCard => index > last;
+  @override
+  int openedAt = 0;
 
   String? get seriesId => _book['seriesId'] as String?;
 
@@ -74,7 +79,9 @@ class ComicRenderer extends ChangeNotifier {
   }
 
   FitMode? _bookFit; // this book only, for now: not saved; a book opening goes back to the default (user, 2026-09-30)
+  @override
   Color get background => prefs.background.colour; // the series' own, or the reading defaults'
+  @override
   Color ink(double alpha) => prefs.background.ink.withValues(alpha: alpha); // text on it
 
   /// The series' reading direction in Komga (LEFT_TO_RIGHT, RIGHT_TO_LEFT, VERTICAL, WEBTOON), fetched on open.
@@ -82,6 +89,7 @@ class ComicRenderer extends ChangeNotifier {
   String? _directionSeries; // which series _komgaDirection belongs to
 
   /// Right to left: forced per series, or (on Auto) because Komga says so. Vertical/webtoon read as left to right.
+  @override
   bool get rtl => switch (prefs.direction) {
         ReadingDirection.rtl => true,
         ReadingDirection.ltr => false,
@@ -92,6 +100,7 @@ class ComicRenderer extends ChangeNotifier {
 
   /// [book]'s pages and its series' reading direction, from Komga - nothing shown changes (the book being read stays
   /// until [show]). Throws [NoPages] for a book with none.
+  @override
   Future<ComicPages> prepare(Map book) async {
     final pages = await api.pages(book['id'] as String);
     if (pages.isEmpty) throw NoPages();
@@ -113,8 +122,14 @@ class ComicRenderer extends ChangeNotifier {
     return rp == null || rp['completed'] == true ? 0 : ((rp['page'] as int) - 1).clamp(0, pageCount - 1);
   }
 
-  /// Shows [book] (prepared): its pages from [start]. The last book's page view goes once the new one has replaced it.
-  void show(Map book, ComicPages prepared, int start) {
+  /// Shows [book] (prepared): its pages from where its progress is. The last book's page view goes once the new one has
+  /// replaced it.
+  @override
+  void show(Map book, Object prepared) {
+    prepared as ComicPages;
+    final start = startOf(book, prepared.pages.length);
+    openedAt = start;
+    _openedProgress = progressOf(book);
     final oldPc = pc, oldScrolls = List.of(_scrolls.values);
     _scrolls.clear();
     _clearThumbs();
@@ -144,8 +159,104 @@ class ComicRenderer extends ChangeNotifier {
     _changed();
   }
 
-  /// The book's record changed (marked read, say): the same pages.
+  @override
   void bookChanged(Map book) => _book = book;
+  @override
+  Map get book => _book;
+
+  // ---- the strip as the Reader's row over the bottom bar; the slider's Up / Down
+  @override
+  Widget? above(BuildContext context) => stripShown ? strip(context) : null;
+  @override
+  FocusNode? get rowNode => stripShown ? stripNode : null;
+  @override
+  FocusNode? get rowBelow => pages.length > 1 ? pagesNode : null;
+  @override
+  void rowFocus() => stripFocus();
+  @override
+  bool get sliderUpDown => true;
+
+  // ---- what's said
+  @override
+  ({SpotText? left, SpotText? centre, SpotText? right}) spots(int place) => (
+        // the title on top, the page and how far through on the left (the right spot is free - mockup "A, comic")
+        centre: SpotText(_bookTitle, 'title'),
+        left: SpotText('Pg. ${place + 1}/${pages.length} · ${((place + 1) / pages.length * 100).round()}%', 'page'),
+        right: null,
+      );
+
+  /// "Saga #1 - Chapter One": the series and number, and the book's own title when it says more.
+  String get _bookTitle {
+    final heading = titleOf(_book);
+    final title = '${_book['metadata']?['title'] ?? ''}';
+    return title.isEmpty || title == heading || heading.endsWith(title) ? heading : '$heading - $title';
+  }
+
+  @override
+  String corner(int place) => '${place + 1} / ${pages.length}';
+  @override
+  String placeLabel(int place) => 'Page ${place + 1}';
+  @override
+  String get whereText => 'You are on page ${index + 1} of ${pages.length}.';
+
+  // ---- progress on Komga: the page (from 1, or null: not started) and finished
+
+  static (int?, bool) progressOf(Map book) {
+    final rp = book['readProgress'];
+    return rp == null ? (null, false) : ((rp['page'] as num?)?.toInt(), rp['completed'] == true);
+  }
+
+  (int?, bool)? _openedProgress;
+  @override
+  Object? get openedProgress => _openedProgress;
+
+  @override
+  Future<Object?> Function() progressReader() {
+    final id = _book['id'] as String;
+    return () async => progressOf((await api.book(id)) ?? const {});
+  }
+
+  @override
+  Future<Object?> Function() progressSaver(int place) {
+    // the end card counts as the last page: finished
+    final page = math.min(place, last), id = _book['id'] as String, completed = page >= last;
+    return () async {
+      await api.setProgress(id, page + 1, completed: completed);
+      return (page + 1, completed);
+    };
+  }
+
+  @override
+  Future<Object?> progressAfterMark(Map fresh) async => progressOf(fresh);
+
+  @override
+  bool finishedAt(int place) => place >= last;
+
+  @override
+  ElsewhereText elsewhereText(Object? moved, int here) {
+    final (page, finished) = moved as (int?, bool);
+    final at = math.min(here, last) + 1;
+    return (
+      title: finished ? 'Finished on another device' : 'Read further on another device',
+      text: finished
+          ? 'This book was read to the end on another device.'
+          : page == null
+              ? 'This book was marked unread on another device.'
+              : 'On another device this book is on page $page.',
+      stay: finished ? 'Stay here' : 'Stay on page $at',
+      go: finished ? 'Mark as read' : 'Go to page ${(page ?? 1).clamp(1, pages.length)}',
+    );
+  }
+
+  @override
+  int acceptElsewhere(Object? moved) {
+    final (page, finished) = moved as (int?, bool);
+    _book = {..._book, 'readProgress': finished
+        ? {'page': pages.length, 'completed': true}
+        : page == null ? null : {'page': page, 'completed': false}};
+    // finished: the end card, with the next book
+    return finished ? pages.length : (page ?? 1).clamp(1, pages.length) - 1;
+  }
 
   @override
   void dispose() {
@@ -212,6 +323,7 @@ class ComicRenderer extends ChangeNotifier {
   }
 
   /// To [place] at once (the slider, the strip, another device's page) - not a turn (the Reader knows it's coming).
+  @override
   void jumpTo(int place) {
     finishCurlNow();
     pc?.jumpToPage(place);
@@ -223,7 +335,8 @@ class ComicRenderer extends ChangeNotifier {
   bool get _blocked => pc == null || host.busy || _curlSettling;
 
   /// Forward: in fit width/height scroll on through the page first, then turn; from the end card, the next book.
-  void forward() {
+  @override
+  void forward({bool snap = false}) {
     if (_blocked) return;
     if (index >= pages.length) {
       host.nextBook();
@@ -243,7 +356,8 @@ class ComicRenderer extends ChangeNotifier {
   }
 
   /// Back: scroll back through the page first; the previous page then opens at its end.
-  void back() {
+  @override
+  void back({bool snap = false}) {
     if (_blocked) return;
     if (zoomed && (_steppers[index]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
     final c = _scrolls[index];
@@ -283,6 +397,7 @@ class ComicRenderer extends ChangeNotifier {
   }
 
   /// A Zoom in / Zoom out step (the keys) - fit screen, the only fit that zooms.
+  @override
   void zoomStep(bool zoomIn) {
     if (prefs.fit == FitMode.screen) _zoomSteps[index]?.call(zoomIn);
   }
@@ -541,6 +656,7 @@ class ComicRenderer extends ChangeNotifier {
   // ---- the pages on screen
 
   /// The page view, with its gestures and the curl over it - for the Reader's Stack.
+  @override
   List<Widget> buildPages(BuildContext context) => [
         LayoutBuilder(builder: (context, box) {
           _area = Size(box.maxWidth, box.maxHeight);
@@ -661,6 +777,7 @@ class ComicRenderer extends ChangeNotifier {
   final stripNode = FocusNode(debugLabel: 'ctl-strip');
 
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
+  @override
   List<BarButton> topButtons() => [
         BarButton(
           fitNode,
@@ -674,6 +791,7 @@ class ComicRenderer extends ChangeNotifier {
       ];
 
   /// The bottom bar's own: the page strip, image settings (a series), reader settings.
+  @override
   List<BarButton> bottomButtons(BuildContext context) => [
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
@@ -767,6 +885,7 @@ class ComicRenderer extends ChangeNotifier {
   }
 
   /// The controls came up: the strip on the page being read now.
+  @override
   void controlsShown() {
     if (stripShown) _stripCentre(index.clamp(0, last), jump: true);
   }
@@ -924,10 +1043,12 @@ class ComicRenderer extends ChangeNotifier {
   static const _previewSize = Size(120, 196);
 
   /// A scrub started: not the last scrub's picture.
+  @override
   void scrubStarted() => _thumbShown = null;
 
   /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
   /// of it and its number, over the thumb at [x].
+  @override
   Widget preview(BuildContext context, int shown, double x) {
     if (!_settings.display.pagePreviews) {
       // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
