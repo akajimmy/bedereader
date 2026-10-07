@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../reader/position_row.dart';
 import '../screen.dart';
 import '../settings.dart';
 import 'setting_rows.dart';
@@ -8,8 +9,9 @@ import 'setting_rows.dart';
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Reader: fit, reading direction and background (this series), then this device: brightness, night mode,
-///   rotation, page turn animation and the rest.
+/// * Comic settings: Save / Copy page, fit, reading direction and page colours (this series), then what's changed
+///   mid-book (user, 2026-10-07): position text, brightness, rotation, keep the screen on. What's set once is in
+///   Settings > Comics; night mode is the top bar's moon.
 /// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
 ///
 /// Each panel's series group starts with "Override the defaults" (user, 2026-09-30): off, the series follows the
@@ -147,7 +149,7 @@ class _ReaderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(title: 'Reader', side: side, groups: (s) {
+    return _Panel(title: 'Comic settings', side: side, groups: (s) {
       final id = seriesId;
       final p = s.prefsFor(id);
       final own = id != null && s.ownsLayout(id);
@@ -185,15 +187,11 @@ class _ReaderPanel extends StatelessWidget {
                 ),
               ),
           ]),
-        // this device, the same settings as in Settings (Display and Reader), for changing mid-book
-        SettingsGroup(title: 'This device', children: [
+        // what's changed mid-book (user, 2026-10-07: not the settings set once - those are in Settings > Comics)
+        SettingsGroup(title: 'Reading', children: [
+          positionTextRow(s, BookKind.comics),
           ...brightnessRows(s, compact: true),
-          ...nightRows(s),
           if (canRotate) rotationRow(s, BookKind.comics), // locked mid-book, lying down
-          pageTurnRow(s),
-          pageNoteRow(s, BookKind.comics),
-          pagePreviewsRow(s), // noticed mid-book, when they lag
-          doubleTapRow(s),
           screenOnRow(s),
         ]),
       ];
@@ -312,7 +310,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
     ),
     // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
     SettingRow(
-      title: 'Background',
+      title: 'Page colours', // as eBooks' (user, 2026-10-07: it was "Background")
       trailing: IgnorePointer(
         ignoring: !enabled,
         child: Opacity(
@@ -386,18 +384,60 @@ List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
   ];
 }
 
-/// Night mode, and its warmth while it's on. It tints the whole app, so it's in Settings > Display as well.
+/// Night mode as one choice, Off / On / Scheduled (user, 2026-10-07: it was a switch and an "On a schedule" switch).
+/// Scheduled, it goes on and off by itself at the times (the top bar's moon still switches it in between).
+enum NightMode { off, on, scheduled }
+
+NightMode nightModeOf(DisplayPrefs d) => d.nightSchedule ? NightMode.scheduled : d.night ? NightMode.on : NightMode.off;
+
+/// Night mode, and its warmth while it's on or scheduled. It tints the whole app: Settings > Look.
 List<Widget> nightRows(AppSettings s) {
   final d = s.display;
+  final m = nightModeOf(d);
   return [
-    SwitchRow(title: 'Night mode', value: d.night, // no sub-label (user, 2026-09-30)
-        onChanged: (v) => s.setDisplay(s.display.copyWith(night: v))),
-    if (d.night)
+    SegmentRow<NightMode>(
+      title: 'Night mode',
+      subtitle: m == NightMode.scheduled ? 'On and off by itself; the moon in the reader still switches it' : null,
+      choices: const [Choice(NightMode.off, 'Off'), Choice(NightMode.on, 'On'), Choice(NightMode.scheduled, 'Scheduled')],
+      value: m,
+      onChanged: (v) => s.setDisplay(switch (v) {
+        NightMode.off => d.copyWith(night: false, nightSchedule: false),
+        NightMode.on => d.copyWith(night: true, nightSchedule: false),
+        NightMode.scheduled => d.copyWith(nightSchedule: true),
+      }),
+    ),
+    if (m != NightMode.off)
       SliderRow(label: 'Warmth', value: d.warmth, divisions: 20, // 5% steps
           valueText: '${(d.warmth * 100).round()}%',
           onChanged: (v) => s.setDisplay(s.display.copyWith(warmth: v))),
   ];
 }
+
+/// Which of the position text's spots are shown, [kind]'s own (user, 2026-10-07: a setting as well as a tap on the
+/// text itself). Comics fill two spots, EPUBs three.
+Widget positionTextRow(AppSettings s, BookKind kind) {
+  final k = s.display.kind(kind);
+  final spots = kind == BookKind.comics
+      ? const [(PositionSpot.centre, 'Title'), (PositionSpot.left, 'Page')]
+      : const [(PositionSpot.centre, 'Chapter'), (PositionSpot.left, 'Book page'), (PositionSpot.right, 'Chapter page')];
+  return ToggleChipsRow(
+    title: 'Position text',
+    subtitle: 'Over the slider - a tap on it there hides it too',
+    chips: [
+      for (final (spot, label) in spots)
+        ToggleChip(label, !k.hiddenSpots.contains(spot.name), (on) => s.setDisplay(s.display.withKind(kind,
+            k.copyWith(hiddenSpots: on ? (List.of(k.hiddenSpots)..remove(spot.name)) : [...k.hiddenSpots, spot.name])))),
+    ],
+  );
+}
+
+/// The comic reader's page strip (the Pages button) as a setting too (user, 2026-10-07).
+Widget pageStripRow(AppSettings s) => SwitchRow(
+      title: 'Page strip',
+      subtitle: 'Opens with the controls; the Pages button in the reader switches it too',
+      value: s.display.pageStrip,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(pageStrip: v)),
+    );
 
 Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
       title: 'Page turn animation',

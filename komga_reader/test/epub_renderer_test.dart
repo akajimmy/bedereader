@@ -299,7 +299,7 @@ void main() {
   testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
       'Done on a wide screen', (tester) async {
     await open(tester, twoChapters());
-    for (final (tooltip, title) in [('Text and page settings', 'Text and page'), ('Contents', 'Contents')]) {
+    for (final (tooltip, title) in [('eBook settings', 'eBook settings'), ('Contents', 'Contents')]) {
       if (find.byTooltip(tooltip).evaluate().isEmpty) {
         await tester.tapAt(const Offset(400, 600)); // the controls (they stay up behind a panel, as with comics)
         await tester.pump();

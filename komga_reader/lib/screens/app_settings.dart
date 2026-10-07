@@ -23,48 +23,67 @@ import 'about.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
 
-/// The pages of Settings, in order.
-enum SettingsPage { server, defaults, books, reader, keys, display, library, downloads, about }
+/// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
+/// then help.
+enum SettingsPage { reading, comics, ebooks, keys, server, library, downloads, look, about }
 
-extension on SettingsPage {
+/// The headings the pages are listed under.
+enum SettingsSection { reading, app, help }
+
+extension SettingsSectionLabel on SettingsSection {
   String get label => switch (this) {
-        SettingsPage.server => 'Server',
-        SettingsPage.defaults => 'Reading defaults',
-        SettingsPage.books => 'eBooks',
-        SettingsPage.reader => 'Comics',
-        SettingsPage.display => 'Display',
+        SettingsSection.reading => 'Reading',
+        SettingsSection.app => 'App',
+        SettingsSection.help => 'Help',
+      };
+}
+
+extension SettingsPageInfo on SettingsPage {
+  String get label => switch (this) {
+        SettingsPage.reading => 'Reading',
+        SettingsPage.comics => 'Comics',
+        SettingsPage.ebooks => 'eBooks',
         SettingsPage.keys => 'Remote and keys',
+        SettingsPage.server => 'Server and sync',
         SettingsPage.library => 'Library & Home',
         SettingsPage.downloads => 'Downloads',
+        SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
       };
   IconData get icon => switch (this) {
-        SettingsPage.server => Icons.dns_outlined,
-        SettingsPage.defaults => Icons.menu_book_outlined,
-        SettingsPage.books => Icons.text_fields,
-        SettingsPage.reader => Icons.chrome_reader_mode_outlined,
-        SettingsPage.display => Icons.palette_outlined, // (brightness moved to Comics: it's the readers' now)
+        SettingsPage.reading => Icons.menu_book_outlined,
+        SettingsPage.comics => Icons.chrome_reader_mode_outlined,
+        SettingsPage.ebooks => Icons.text_fields,
         SettingsPage.keys => Icons.settings_remote_outlined,
+        SettingsPage.server => Icons.dns_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
         SettingsPage.downloads => Icons.download_outlined,
+        SettingsPage.look => Icons.palette_outlined,
         SettingsPage.about => Icons.info_outline,
       };
+  SettingsSection get section => switch (this) {
+        SettingsPage.reading || SettingsPage.comics || SettingsPage.ebooks || SettingsPage.keys => SettingsSection.reading,
+        SettingsPage.about => SettingsSection.help,
+        _ => SettingsSection.app,
+      };
 
-  /// Where the page's settings are kept, said once under its title.
+  /// Where the page's settings are kept, said once under its title (a synced group is also marked itself).
   String? get scope => switch (this) {
-        SettingsPage.defaults => 'Synced through Komga - every device',
-        SettingsPage.books => 'Synced through Komga - every device; also in the eBook reader (Aa)',
-        SettingsPage.library => 'Kept on this device, except On deck and pins (synced)',
+        SettingsPage.reading => 'For comics and eBooks alike. Kept on this device',
+        SettingsPage.comics || SettingsPage.ebooks => 'Groups marked synced are the same on every device (through '
+            'Komga); the rest are kept on this device',
+        SettingsPage.server => null,
+        SettingsPage.library => 'Kept on this device, except On deck (synced)',
         SettingsPage.about => null,
         _ => 'Kept on this device',
       };
 }
 
 /// Every setting (side menu > Settings), one page at a time (user, 2026-09-30): the pages listed down the side on a
-/// wide screen, or across the top as a table of contents on a narrow one. The rows are the shared setting rows
-/// (widgets/setting_rows.dart), the same as in the reader's panels.
+/// wide screen, or across the top as a table of contents on a narrow one, under their headings. The rows are the
+/// shared setting rows (widgets/setting_rows.dart), the same as in the reader's panels.
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.server});
+  const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading});
   final Komga api;
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
@@ -94,8 +113,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(
               width: 230,
-              child: ListView(padding: const EdgeInsets.fromLTRB(12, 12, 8, 24), children: [
-                for (final p in _pages) _NavItem(page: p, selected: p == _page, onTap: () => _go(p)),
+              child: ListView(padding: const EdgeInsets.fromLTRB(12, 4, 8, 24), children: [
+                for (final section in SettingsSection.values) ...[
+                  _SectionHeading(section.label),
+                  for (final p in _pages)
+                    if (p.section == section) _NavItem(page: p, selected: p == _page, onTap: () => _go(p)),
+                ],
               ]),
             ),
             const VerticalDivider(width: 1, color: Color(0xFF26282E)),
@@ -113,17 +136,21 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ]);
         }
         // narrow: the pages as a table of contents at the top, then the chosen page
-        return ListView(padding: const EdgeInsets.fromLTRB(14, 10, 14, 40), children: [
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final p in _pages)
-              ChoiceChip(
-                avatar: Icon(p.icon, size: 18),
-                label: Text(p.label),
-                selected: p == _page,
-                showCheckmark: false,
-                onSelected: (_) => _go(p),
-              ),
-          ]),
+        return ListView(padding: const EdgeInsets.fromLTRB(14, 2, 14, 40), children: [
+          for (final section in SettingsSection.values) ...[
+            _SectionHeading(section.label),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final p in _pages)
+                if (p.section == section)
+                  ChoiceChip(
+                    avatar: Icon(p.icon, size: 18),
+                    label: Text(p.label),
+                    selected: p == _page,
+                    showCheckmark: false,
+                    onSelected: (_) => _go(p),
+                  ),
+            ]),
+          ],
           const SizedBox(height: 18),
           ...page,
         ]);
@@ -142,12 +169,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       const SizedBox(height: 16),
       // the page's segmented choices share one width (a fresh column per page)
       SettingsColumn(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
+        SettingsPage.reading => [_live((s) => _reading(context, s))],
+        SettingsPage.comics => [_live((s) => _comics(context, s))],
+        SettingsPage.ebooks => [_live((s) => _ebooks(context, s))],
         SettingsPage.server => _server(context),
-        SettingsPage.defaults => [_live(_defaults)],
-        SettingsPage.books => [_live((s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: epubSettingRows(context, s.epub, s.setEpub)))],
-        SettingsPage.reader => [_live(_reader)],
-        SettingsPage.display => [_live(_display)],
+        SettingsPage.look => [_live((s) => _look(context, s))],
         SettingsPage.library => _library(),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
         SettingsPage.keys => [ListenableBuilder(listenable: ReaderKeys.instance, builder: (context, _) => _keys(context))],
@@ -160,7 +186,121 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Widget _live(Widget Function(AppSettings s) build) =>
       ListenableBuilder(listenable: AppSettings.instance, builder: (context, _) => build(AppSettings.instance));
 
-  // ---- Server ----------------------------------------------------------------------------------------------------
+  // ---- Reading: for both kinds of book -----------------------------------------------------------------------------
+  Widget _reading(BuildContext context, AppSettings s) {
+    final d = s.display;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // the reader's alone: everywhere else the screen follows the system (user, 2026-10-05)
+      SettingsGroup(title: 'Screen while reading', children: [
+        ...brightnessRows(s),
+        screenOnRow(s),
+      ]),
+      SettingsGroup(title: 'Moving on', children: [
+        SegmentRow<MidBook>(
+          title: "'Next book' before the last page", // wording: user, 2026-09-30
+          subtitle: 'What should happen to the current book?',
+          choices: [for (final m in const [MidBook.markRead, MidBook.keep, MidBook.ask]) Choice(m, m.label)],
+          value: d.midBook,
+          onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
+        ),
+      ]),
+      _resetRow(context, 'Reading', 'Screen brightness, Keep the screen on and Next book back to the defaults.', () {
+        const z = DisplayPrefs();
+        s.setDisplay(s.display.copyWith(brightness: () => z.brightness, screenOn: z.screenOn, midBook: z.midBook));
+      }),
+    ]);
+  }
+
+  // ---- Comics ----------------------------------------------------------------------------------------------------
+  Widget _comics(BuildContext context, AppSettings s) {
+    final p = s.defaults;
+    final n = s.series.length;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Padding(
+        padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
+        child: Text("Pages and Image: for every series you haven't adjusted. A series' own are changed in the reader.",
+            style: TextStyle(color: hintColour)),
+      ),
+      SettingsGroup(title: 'Pages', synced: true, children: layoutRows(p, s.setDefault)),
+      SettingsGroup(title: 'Image', synced: true, children: [
+        ...imageRows(p, s.setDefault),
+        ActionRow(title: 'Image settings back to the original scan',
+            button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
+      ]),
+      SettingsGroup(title: 'Turning pages', children: [
+        pageTurnRow(s),
+        doubleTapRow(s),
+      ]),
+      SettingsGroup(title: 'Over the page', children: [
+        pageNoteRow(s, BookKind.comics),
+        clockRow(s, BookKind.comics),
+        progressBarRow(s, BookKind.comics),
+      ]),
+      SettingsGroup(title: 'Controls', children: [
+        positionTextRow(s, BookKind.comics),
+        pagePreviewsRow(s),
+        pageStripRow(s),
+      ]),
+      if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.comics)]),
+      SettingsGroup(title: 'Series with their own settings', synced: true, children: [
+        ActionRow(
+          title: n == 0 ? 'Every series follows the defaults' : '$n series ${n == 1 ? 'has its' : 'have their'} own settings',
+          button: n == 0 ? null : TextButton(onPressed: () => _resetSeries(context, n), child: const Text('Reset all')),
+        ),
+      ]),
+      _resetRow(context, 'Comics', "Every setting on this page back to the defaults - Pages and Image on every device "
+          "(they're synced). Series with their own settings keep them.", () {
+        const z = DisplayPrefs();
+        s.setDefault(const ReaderPrefs());
+        s.setDisplay(s.display.copyWith(pageTurn: z.pageTurn, doubleTapZoom: z.doubleTapZoom,
+            pagePreviews: z.pagePreviews, pageStrip: z.pageStrip, comics: z.comics));
+      }),
+    ]);
+  }
+
+  // ---- eBooks ----------------------------------------------------------------------------------------------------
+  Widget _ebooks(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ...epubSettingRows(context, s.epub, s.setEpub),
+        SettingsGroup(title: 'Over the page', children: [
+          pageNoteRow(s, BookKind.ebooks),
+          clockRow(s, BookKind.ebooks),
+          progressBarRow(s, BookKind.ebooks),
+        ]),
+        SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
+        if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.ebooks)]),
+        _resetRow(context, 'eBooks', "Every setting on this page back to the defaults - Text, Formatting and Page on "
+            "every device (they're synced), the size on this one.", () {
+          s.setEpub(const EpubPrefs());
+          s.setDisplay(s.display.copyWith(ebooks: const DisplayPrefs().ebooks));
+        }),
+      ]);
+
+  /// A page's reset (user, 2026-10-07: one on each page), asked first: [what] says what goes back.
+  Widget _resetRow(BuildContext context, String page, String what, VoidCallback reset) => SettingsGroup(children: [
+        ActionRow(
+          title: 'Back to the defaults',
+          icon: Icons.restart_alt,
+          button: TextButton(
+            onPressed: () async {
+              final ok = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: Text('Reset $page?'),
+                  content: Text(what),
+                  actions: [
+                    TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset')),
+                  ],
+                ),
+              );
+              if (ok == true) reset();
+            },
+            child: Text('Reset $page'),
+          ),
+        ),
+      ]);
+
+  // ---- Server and sync -------------------------------------------------------------------------------------------
   List<Widget> _server(BuildContext context) => [
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
@@ -172,6 +312,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onTap: () => _signOut(context),
           ),
         ]),
+        // what goes through Komga, said in one place (user, 2026-10-07)
+        ListenableBuilder(
+          listenable: Pins.instance,
+          builder: (context, _) {
+            final pins = Pins.instance;
+            return SettingsGroup(title: "What's synced through Komga", synced: true, children: [
+              const NoteRow('The same on every device signed in to this account: comics\' Pages and Image defaults and '
+                  "each series' own; eBooks' Text, Formatting and Page settings (not the text size); what's hidden "
+                  'from On deck; reading progress.'),
+              SwitchRow(
+                title: 'Sync pins across devices',
+                subtitle: pins.sync
+                    ? 'The same pins on every device signed in to this account'
+                    : 'This device has its own pins',
+                value: pins.sync,
+                onChanged: (on) => _setPinSync(context, on),
+              ),
+            ]);
+          },
+        ),
         if (Connection.instance.available)
           ListenableBuilder(
             listenable: Connection.instance,
@@ -197,64 +357,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             },
           ),
       ];
-
-  // ---- Reading defaults ------------------------------------------------------------------------------------------
-  Widget _defaults(AppSettings s) {
-    final p = s.defaults;
-    final n = s.series.length;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      const Padding(
-        padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
-        child: Text("For every series you haven't adjusted. A series' own settings are changed in the reader.",
-            style: TextStyle(color: hintColour)),
-      ),
-      SettingsGroup(title: 'Pages', children: layoutRows(p, s.setDefault)),
-      SettingsGroup(title: 'Image', children: [
-        ...imageRows(p, s.setDefault),
-        ActionRow(title: 'Image settings back to the original scan',
-            button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
-      ]),
-      SettingsGroup(title: 'Series with their own settings', children: [
-        ActionRow(
-          title: n == 0 ? 'Every series follows the defaults' : '$n series ${n == 1 ? 'has its' : 'have their'} own settings',
-          button: n == 0 ? null : TextButton(onPressed: () => _resetSeries(context, n), child: const Text('Reset all')),
-        ),
-      ]),
-    ]);
-  }
-
-  // ---- Reader ----------------------------------------------------------------------------------------------------
-  Widget _reader(AppSettings s) {
-    final d = s.display;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      SettingsGroup(title: 'Turning pages', children: [
-        pageTurnRow(s),
-        doubleTapRow(s),
-      ]),
-      // what's drawn over the page (set once, so Settings only - except the page number, also in the Reader panel)
-      SettingsGroup(title: 'On the page', children: [
-        pageNoteRow(s, BookKind.comics),
-        pagePreviewsRow(s),
-        clockRow(s, BookKind.comics),
-        progressBarRow(s, BookKind.comics),
-      ]),
-      SettingsGroup(title: 'Moving on', children: [
-        SegmentRow<MidBook>(
-          title: "'Next book' before the last page", // wording: user, 2026-09-30
-          subtitle: 'What should happen to the current book?',
-          choices: [for (final m in const [MidBook.markRead, MidBook.keep, MidBook.ask]) Choice(m, m.label)],
-          value: d.midBook,
-          onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
-        ),
-      ]),
-      // the reader's alone: everywhere else the screen follows the system (user, 2026-10-05)
-      SettingsGroup(title: 'Brightness while reading', children: brightnessRows(s)),
-      SettingsGroup(title: 'Screen', children: [
-        if (canRotate) rotationRow(s, BookKind.comics),
-        screenOnRow(s),
-      ]),
-    ]);
-  }
 
   // ---- Remote and keys -------------------------------------------------------------------------------------------
   Widget _keys(BuildContext context) {
@@ -310,16 +412,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     }
   }
 
-  // ---- Display ---------------------------------------------------------------------------------------------------
-  Widget _display(AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+  // ---- Look ------------------------------------------------------------------------------------------------------
+  Widget _look(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SettingsGroup(title: 'Night', children: [
           ...nightRows(s),
-          SwitchRow(
-            title: 'On a schedule',
-            subtitle: 'Turns night mode on and off by itself; you can still switch it in between',
-            value: s.display.nightSchedule,
-            onChanged: (v) => s.setDisplay(s.display.copyWith(nightSchedule: v)),
-          ),
           if (s.display.nightSchedule)
             SettingRow(
               title: 'From / to',
@@ -331,7 +427,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               ]),
             ),
         ]),
-        SettingsGroup(title: 'Look', children: [
+        SettingsGroup(title: 'Text and colour', children: [
           SegmentRow<double>(
             title: 'Text size',
             subtitle: 'This app only, on top of the device\'s own',
@@ -354,10 +450,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ),
         ]),
         const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 4),
-          child: Text('The whole app, not just the reader. Also in the reader\'s Reader panel.',
+          padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
+          child: Text("The whole app, not just the reader. In the reader, the top bar's moon switches night mode.",
               style: TextStyle(color: hintColour, fontSize: 12)),
         ),
+        _resetRow(context, 'Look', 'Night mode, its schedule and warmth, the text size and the accent colour back to '
+            'the defaults.', () {
+          const z = DisplayPrefs();
+          s.setDisplay(s.display.copyWith(night: z.night, nightSchedule: z.nightSchedule, nightFrom: z.nightFrom,
+              nightTo: z.nightTo, warmth: z.warmth, textScale: z.textScale, accent: z.accent));
+        }),
       ]);
 
   /// A time (minutes after midnight) as a button that opens the time picker.
@@ -395,22 +497,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ]);
         }),
         _librariesShown(),
-        ListenableBuilder(
-          listenable: Pins.instance,
-          builder: (context, _) {
-            final pins = Pins.instance;
-            return SettingsGroup(title: 'Pins', children: [
-              SwitchRow(
-                title: 'Sync pins across devices',
-                subtitle: pins.sync
-                    ? 'The same pins on every device signed in to this account'
-                    : 'This device has its own pins',
-                value: pins.sync,
-                onChanged: (on) => _setPinSync(context, on),
-              ),
-            ]);
-          },
-        ),
         const SettingsGroup(title: 'Home sections', children: [
           NoteRow('Switch on or off; reorder with the arrows or the handle'),
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
@@ -419,7 +505,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           listenable: OnDeckHidden.instance,
           builder: (context, _) {
             final h = OnDeckHidden.instance;
-            return SettingsGroup(title: 'On deck', children: [
+            return SettingsGroup(title: 'On deck', synced: true, children: [
               ActionRow(
                 title: 'Hidden from On deck',
                 subtitle: h.isEmpty
@@ -553,7 +639,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'This device', children: [
         ActionRow(
           title: "Reset this device's settings",
-          subtitle: 'Reader, display, Home and library layout back to the defaults',
+          subtitle: 'Everything kept on this device back to the defaults',
           icon: Icons.restart_alt,
           button: TextButton(onPressed: () => _resetDevice(context), child: const Text('Reset')),
         ),
@@ -587,8 +673,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
-        content: const Text('Back to the defaults: the Reader page, screen brightness, night mode and its schedule, text '
-            "size and accent colour, the reader's keys, posters, the libraries shown, Home "
+        content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
+            "what's shown over the page, rotation), night mode and its schedule, text size and accent colour, the reader's keys, posters, the libraries shown, Home "
             "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
             'settings, pins, On deck), your sign-in and your downloaded books.'),
@@ -665,6 +751,18 @@ class _KeyRow extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// A heading over the pages in the side list or the chips: Reading, App, Help.
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 6),
+        child: Text(text.toUpperCase(),
+            style: const TextStyle(color: hintColour, fontSize: 11.5, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+      );
 }
 
 /// A page in the side list (wide screens).

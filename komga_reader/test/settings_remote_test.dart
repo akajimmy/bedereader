@@ -30,14 +30,14 @@ class TwoLibraries extends StatusServer {
 
 /// Settings' pages as the side list names them (a switch: a new page doesn't compile here until it's added).
 String label(SettingsPage p) => switch (p) {
-      SettingsPage.server => 'Server',
-      SettingsPage.defaults => 'Reading defaults',
-      SettingsPage.books => 'eBooks',
-      SettingsPage.reader => 'Comics',
+      SettingsPage.reading => 'Reading',
+      SettingsPage.comics => 'Comics',
+      SettingsPage.ebooks => 'eBooks',
       SettingsPage.keys => 'Remote and keys',
-      SettingsPage.display => 'Display',
+      SettingsPage.server => 'Server and sync',
       SettingsPage.library => 'Library & Home',
       SettingsPage.downloads => 'Downloads',
+      SettingsPage.look => 'Look',
       SettingsPage.about => 'About',
     };
 
@@ -220,17 +220,17 @@ void main() {
     setView(tester, const Size(1280, 720));
     everyRowShown();
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
-        initialPage: SettingsPage.reader)));
+        initialPage: SettingsPage.comics)));
     await tester.pump();
     final pageView = find.byType(ListView).at(1);
     await tester.drag(pageView, const Offset(0, -2000)); // to the end of a long page
     await tester.pumpAndSettle();
     expect(find.text('Comics'), findsOneWidget, reason: 'the list still has it'); // (the title is off the screen)
-    await tester.tap(find.widgetWithText(ListTile, 'Display')); // another long page
+    await tester.tap(find.widgetWithText(ListTile, 'eBooks')); // another long page
     await tester.pumpAndSettle();
     expect(tester.state<ScrollableState>(find.descendant(of: pageView, matching: find.byType(Scrollable)).first)
-        .position.pixels, 0, reason: 'Display opens at its top');
-    expect(find.descendant(of: pageView, matching: find.text('Display')), findsOneWidget, reason: 'its title shows');
+        .position.pixels, 0, reason: 'eBooks opens at its top');
+    expect(find.descendant(of: pageView, matching: find.text('eBooks')), findsOneWidget, reason: 'its title shows');
   });
 
   testWidgets("at phone width (320 x 640), the app's largest text size on top of a large device text size (130%), "
@@ -249,7 +249,14 @@ void main() {
       ));
       await tester.pump();
       await tester.pump(); // the libraries, the shared segment width
-      expect(find.byType(ChoiceChip), findsNWidgets(SettingsPage.values.length), reason: 'narrow: the pages on top');
+      // narrow: the pages on top, under their headings (all of them, by the end of the scroll: at this size the last
+      // heading's are below the part of the list that's built at first)
+      final chips = <String>{};
+      void seen() => chips.addAll([
+            for (final c in tester.widgetList<ChoiceChip>(find.byType(ChoiceChip)))
+              if (c.label case Text(:final data?)) data,
+          ]);
+      seen();
       expect(tester.takeException(), isNull, reason: '${p.name}: at the top');
       // down the whole page, a screen at a time (rows are only laid out once they're near the screen)
       final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
@@ -257,7 +264,9 @@ void main() {
         await tester.drag(find.byType(Scrollable).first, const Offset(0, -500));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull, reason: '${p.name}: at ${scroll.pixels}');
+        seen();
       }
+      expect(chips, containsAll([for (final q in SettingsPage.values) label(q)]), reason: '${p.name}: every page on top');
       expect(scroll.pixels, scroll.maxScrollExtent, reason: '${p.name}: reached the end');
     }
   });

@@ -31,17 +31,31 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final done = tester.getRect(find.text('Done'));
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
+    expect(find.text('Comic settings'), findsOneWidget); // (user, 2026-10-07: it was "Reader")
     expect(find.text('Settings for Series: Planet Comics'), findsOneWidget);
-    expect(find.text('This device'), findsOneWidget);
     expect(find.text('Override the defaults'), findsOneWidget);
     expect(find.text('Using the defaults'), findsOneWidget);
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
-    expect(find.text('Page corner'), findsOneWidget); // mid-book toggles, here too
-    expect(find.text("The page you're on, \"12 / 36\""), findsOneWidget, reason: 'one wording for both kinds');
-    expect(find.text('Double-tap to zoom'), findsOneWidget);
-    expect(find.text('Keep the screen on'), findsOneWidget);
+    expect(find.text('Page colours'), findsOneWidget); // (it was "Background")
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("Comic settings holds what's changed mid-book (user, 2026-10-07): position text, brightness, keep the "
+      'screen on - not the settings set once (those are in Settings > Comics), nor night mode (the moon)',
+      (tester) async {
+    await openPanel(tester, const Size(1280, 2000)); // tall: the whole panel laid out
+    expect(find.text('Reading'), findsOneWidget);
+    for (final here in ['Position text', 'Keep the screen on']) {
+      expect(find.text(here), findsOneWidget, reason: here);
+    }
+    expect(find.byIcon(Icons.brightness_6_outlined), findsOneWidget, reason: 'brightness, by its icon');
+    expect([for (final c in tester.widgetList<FilterChip>(find.byType(FilterChip))) (c.label as Text).data],
+        ['Title', 'Page']);
+    for (final gone in ['This device', 'Night mode', 'Page turn animation', 'Page corner', 'Page previews',
+        'Double-tap to zoom', 'Clock and battery', 'Progress bar']) {
+      expect(find.text(gone), findsNothing, reason: gone);
+    }
   });
 
   testWidgets('narrow: a bottom sheet', (tester) async {

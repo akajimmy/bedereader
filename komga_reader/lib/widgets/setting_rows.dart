@@ -141,10 +141,13 @@ class _RowNavState extends State<RowNav> {
 
 /// A labelled box of rows.
 class SettingsGroup extends StatelessWidget {
-  const SettingsGroup({super.key, this.title, required this.children, this.trailing});
+  const SettingsGroup({super.key, this.title, required this.children, this.trailing, this.synced = false});
   final String? title;
   final Widget? trailing; // beside the label (a status chip, say)
   final List<Widget> children;
+
+  /// Synced through Komga - every device: a cloud and "synced" beside the label (user, 2026-10-07).
+  final bool synced;
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +161,12 @@ class SettingsGroup extends StatelessWidget {
             child: Row(children: [
               Flexible(child: Text(title!, overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: accent, fontSize: 12.5, fontWeight: FontWeight.w500))),
+              if (synced) ...[
+                const SizedBox(width: 8),
+                const Icon(Icons.cloud_outlined, size: 14, color: hintColour),
+                const SizedBox(width: 4),
+                const Text('synced', style: TextStyle(color: hintColour, fontSize: 12)),
+              ],
               if (trailing != null) ...[const SizedBox(width: 8), trailing!],
             ]),
           ),
