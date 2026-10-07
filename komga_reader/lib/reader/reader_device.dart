@@ -61,7 +61,7 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
     onReaderSettings();
   }
 
-  // ---- Rotation (Settings > Reader, and the readers' panels): follow the device, or hold portrait / landscape
+  // ---- Rotation (Settings > Comics, and the readers' panels): follow the device, or hold portrait / landscape
   Rotation? _rotation;
 
   void _applyRotation() {
@@ -71,7 +71,7 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
     OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
   }
 
-  // ---- Keep the screen on (Settings > Reader): always while a book is open, for N minutes after the last page turn
+  // ---- Keep the screen on (Settings > Comics): always while a book is open, for N minutes after the last page turn
   // or touch, or never (the system's own timeout)
   Timer? _awakeTimer;
   bool _screenHeld = false;

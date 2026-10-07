@@ -1051,7 +1051,7 @@ class ComicRenderer extends Renderer {
   @override
   Widget preview(BuildContext context, int shown, double x) {
     if (!_settings.display.pagePreviews) {
-      // Page previews off (Settings > Reader): just the number over the thumb - nothing asked of Komga
+      // Page previews off (Settings > Comics): just the number over the thumb - nothing asked of Komga
       const w = 96.0;
       return Positioned(
         left: x - w / 2,

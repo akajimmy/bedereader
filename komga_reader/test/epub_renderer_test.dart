@@ -189,7 +189,9 @@ void main() {
   Future<String> inChapter(WidgetTester tester) async {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    final t = tester.widgetList<Text>(find.byKey(const ValueKey('pos-right-text'))).single.data!;
+    // the chapter by its name on top (the right spot has no number - user, 2026-10-07), then its page: "Chapter 5 · Ch. · Pg. 3/9"
+    final name = tester.widgetList<Text>(find.byKey(const ValueKey('pos-centre-text'))).single.data!;
+    final t = '$name · ${tester.widgetList<Text>(find.byKey(const ValueKey('pos-right-text'))).single.data!}';
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     return t;
@@ -211,9 +213,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50)); // straight back - before chapter 5 is laid out ahead
     await tester.tapAt(const Offset(50, 600));
     await settle(tester);
-    final at = await inChapter(tester); // "Ch. 5 · Pg. X/Y"
+    final at = await inChapter(tester); // "Chapter 5 · Ch. · Pg. X/Y"
     final m = RegExp(r'Pg\. (\d+)/(\d+)').firstMatch(at)!;
-    expect(at, startsWith('Ch. 5'));
+    expect(at, startsWith('Chapter 5 '));
     expect(m.group(1), m.group(2), reason: 'the last page of chapter 5: $at');
   });
 
@@ -241,7 +243,7 @@ void main() {
     await tester.tapAt(const Offset(750, 600)); // and a turn goes on to chapter 3
     await settle(tester);
     expect(find.text('Retry'), findsNothing);
-    expect(await inChapter(tester), startsWith('Ch. 3'));
+    expect(await inChapter(tester), startsWith('Chapter 3 '));
   });
 
   testWidgets('R12: the window shrunk to nothing (minimised) and back - the same page, not the chapter start',
@@ -277,7 +279,7 @@ void main() {
     }
     await tester.fling(find.byType(PageView), const Offset(-500, 0), 2000);
     await settle(tester);
-    expect(await inChapter(tester), startsWith('Ch. 2'));
+    expect(await inChapter(tester), startsWith('Chapter 2 '));
   });
 
   testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
@@ -481,7 +483,8 @@ void main() {
     await tester.pump();
     expect(cornerOpacity(), 0, reason: 'not under the controls');
     expect(tester.widget<Text>(find.byKey(const ValueKey('pos-centre-text'))).data, 'One');
-    expect(tester.widget<Text>(find.byKey(const ValueKey('pos-right-text'))).data, matches(RegExp(r'^Ch\. 1 · Pg\. 1/\d+$')));
+    expect(tester.widget<Text>(find.byKey(const ValueKey('pos-right-text'))).data, matches(RegExp(r'^Ch\. · Pg\. 1/\d+$')),
+        reason: "no chapter number: it's the book's file count, not the chapter's (user, 2026-10-07)");
     expect(tester.widget<Text>(find.byKey(const ValueKey('pos-left-text'))).data,
         matches(RegExp(r'^Book · Pg\. 1/\d+ · \d+%$')));
     await tester.tapAt(const Offset(400, 600));

@@ -4,7 +4,7 @@ import '../settings.dart';
 import 'display_panel.dart';
 import 'setting_rows.dart';
 
-/// The EPUB settings rows (one set for every book, synced): the reader's Aa panel and Settings > Books use them.
+/// The EPUB settings rows (one set for every book, synced): the reader's Aa panel and Settings > eBooks use them.
 List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set) {
   final i = EpubPrefs.sizes.indexOf(e.size);
   final at = i < 0 ? EpubPrefs.sizes.indexWhere((s) => s >= e.size) : i;

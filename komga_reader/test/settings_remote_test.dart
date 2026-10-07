@@ -31,8 +31,8 @@ class TwoLibraries extends StatusServer {
 String label(SettingsPage p) => switch (p) {
       SettingsPage.server => 'Server',
       SettingsPage.defaults => 'Reading defaults',
-      SettingsPage.books => 'Books (EPUB)',
-      SettingsPage.reader => 'Reader',
+      SettingsPage.books => 'eBooks',
+      SettingsPage.reader => 'Comics',
       SettingsPage.keys => 'Remote and keys',
       SettingsPage.display => 'Display',
       SettingsPage.library => 'Library & Home',
@@ -229,7 +229,7 @@ void main() {
     final pageView = find.byType(ListView).at(1);
     await tester.drag(pageView, const Offset(0, -2000)); // to the end of a long page
     await tester.pumpAndSettle();
-    expect(find.text('Reader'), findsOneWidget, reason: 'the list still has it'); // (the title is off the screen)
+    expect(find.text('Comics'), findsOneWidget, reason: 'the list still has it'); // (the title is off the screen)
     await tester.tap(find.widgetWithText(ListTile, 'Display')); // another long page
     await tester.pumpAndSettle();
     expect(tester.state<ScrollableState>(find.descendant(of: pageView, matching: find.byType(Scrollable)).first)

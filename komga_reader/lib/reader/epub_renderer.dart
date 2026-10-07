@@ -693,7 +693,8 @@ class EpubRenderer extends Renderer {
     return (
       left: SpotText('Book · Pg. ${at + 1}/${b.totalPages} · $pct%', 'book page'),
       centre: SpotText(_chapterNameOf(c), 'chapter'),
-      right: SpotText('Ch. ${c + 1} · Pg. ${p + 1}/${b.pageCount(c)}', 'chapter page'),
+      // no chapter number: the book's file count, not the chapter's own ("Ch. 4" under "Chapter One" - user, 2026-10-07)
+      right: SpotText('Ch. · Pg. ${p + 1}/${b.pageCount(c)}', 'chapter page'),
     );
   }
 
