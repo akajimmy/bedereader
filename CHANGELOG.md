@@ -10,6 +10,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **Fixed**
+- **The last rows of a page sat behind Android's home / back bar** when the remote moved down to them (Comics > Keep
+  the screen on, for one). Settings, Home, the libraries, search, a book's or series' details, Downloads, About and
+  the documents now end above the bar.
 - **With a remote, Up and Down in Settings and the readers' side panels skipped rows** - from a long row they jumped
   past a shorter one under it (Remote and keys: "Show the controls" to "Zoom in"; the EPUB panel: Font to Line
   spacing, Margins to Book's formatting). The fix for this in build 52 only ever worked in the test setup, never in

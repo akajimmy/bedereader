@@ -120,7 +120,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
       appBar: AppBar(title: const Text('Details'), actions: const [FullscreenExit()]),
       // pull down to refresh (re-reads the book and series from Komga)
-      body: RefreshIndicator(onRefresh: _load, child: ListView(controller: scroll,
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: RefreshIndicator(onRefresh: _load, child: ListView(controller: scroll,
           physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(20, 8, 20, 32), children: [
         if (_error != null)
           Padding(padding: const EdgeInsets.only(bottom: 12),
@@ -141,7 +143,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
           Text(summary, style: const TextStyle(fontSize: 15, height: 1.45)),
         ],
         ...creditsSection(m['authors'] as List?),
-      ])),
+      ]))),
     ));
   }
 

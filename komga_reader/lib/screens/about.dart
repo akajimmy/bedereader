@@ -36,7 +36,9 @@ class _AboutScreenState extends State<AboutScreen> {
     final accent = Theme.of(context).colorScheme.primary;
     return Scaffold(
       appBar: AppBar(title: const Text('About'), actions: const [FullscreenExit()]),
-      body: Center(
+      // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
+      // edge behind it (user, 2026-10-07)
+      body: SafeArea(top: false, child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 620),
           child: ListView(padding: const EdgeInsets.fromLTRB(20, 12, 20, 40), children: [
@@ -126,7 +128,7 @@ class _AboutScreenState extends State<AboutScreen> {
             ]),
           ]),
         ),
-      ),
+      )),
     );
   }
 
