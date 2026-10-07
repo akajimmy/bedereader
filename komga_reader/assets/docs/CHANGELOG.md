@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **EPUB: holding down an arrow key (or any page-turn key) turned no pages** - the page crept and never turned,
+  each of the key's repeats starting the slide over. A held key now turns a page each time the slide ends.
+
 ## 1.3.0
 
 ### Build 86 - 2026-10-07

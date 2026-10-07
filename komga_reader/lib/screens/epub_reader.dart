@@ -695,9 +695,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
     } else {
-      await _pc.animateToPage(target, duration: _turnTime, curve: _turnCurve);
+      _sliding = true;
+      try {
+        await _pc.animateToPage(target, duration: _turnTime, curve: _turnCurve);
+      } finally {
+        _sliding = false;
+      }
     }
   }
+
+  /// A turn's slide is under way: a held key's repeats wait for it to end (each one restarted the slide at its
+  /// slowest part, so a held key crept and never turned a page - user, build 82, Windows).
+  bool _sliding = false;
 
   void _tap(TapUpDetails d, Size size, EpubPage? page) {
     // a link under the finger first (footnotes)
@@ -799,16 +808,18 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       if (e is KeyDownEvent) _turn(k == LogicalKeyboardKey.audioVolumeDown ? 1 : -1);
       return KeyEventResult.handled;
     }
+    // a held key turns a page each time the slide before has ended, not on every repeat
+    final repeatWhileSliding = e is KeyRepeatEvent && _sliding;
     // Shift+Space goes back, whatever Space is set to do (as in the comic reader)
     if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
-      _turn(-1);
+      if (!repeatWhileSliding) _turn(-1);
       return KeyEventResult.handled;
     }
     switch (ReaderKeys.instance.actionFor(k)) {
       case ReaderAction.next:
-        _turn(1);
+        if (!repeatWhileSliding) _turn(1);
       case ReaderAction.previous:
-        _turn(-1);
+        if (!repeatWhileSliding) _turn(-1);
       case ReaderAction.controls:
         if (e is KeyDownEvent) _showControls();
       case ReaderAction.close:
