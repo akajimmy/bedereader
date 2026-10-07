@@ -55,7 +55,9 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
     final q = value.trim();
     final gen = ++_generation;
     if (q.isEmpty) {
-      setState(() { _query = ''; _series = _books = _readLists = _collections = {}; _error = null; });
+      // a search still on its way is ignored when it answers (generation), so the bar goes off here (code review
+      // 2026-10-05, #13: it stayed on above "Type to search.")
+      setState(() { _query = ''; _series = _books = _readLists = _collections = {}; _error = null; _searching = false; });
       return;
     }
     setState(() { _query = q; _searching = true; _error = null; });

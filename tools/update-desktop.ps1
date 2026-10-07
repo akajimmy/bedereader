@@ -52,11 +52,20 @@ if (-not (Test-Path $exe)) {
     Remove-Item $fresh -Recurse -Force
     throw "$(Split-Path $Zip -Leaf) has no BeDeReader.exe - the Desktop copy was left as it was"
 }
+$movedAside = $false
 if (Test-Path $Dest) {
     if (Test-Path $previous) { Remove-Item $previous -Recurse -Force }
     Rename-Item $Dest (Split-Path $previous -Leaf)
+    $movedAside = $true
 }
-Rename-Item $fresh (Split-Path $Dest -Leaf)
+try {
+    Rename-Item $fresh (Split-Path $Dest -Leaf) -ErrorAction Stop
+} catch {
+    # the new copy couldn't take its place (antivirus scanning the new .exe, say): the old copy goes back, so there's
+    # always a Desktop copy - it used to be left with none (code review 2026-10-05, #9). The new one stays as ".new".
+    if ($movedAside -and -not (Test-Path $Dest)) { Rename-Item $previous (Split-Path $Dest -Leaf) }
+    throw "the new copy couldn't be put in place ($($_.Exception.Message)) - the Desktop copy was left as it was; the new build is in $fresh"
+}
 $version = (Get-Item (Join-Path $Dest 'BeDeReader.exe')).VersionInfo.ProductVersion
 Say "Desktop copy updated: $(Split-Path $Zip -Leaf) -> $Dest (BeDeReader.exe $version; the copy before it: $previous)"
 exit 0

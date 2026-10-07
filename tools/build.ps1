@@ -117,16 +117,9 @@ $m = [regex]::Match($text, '(?m)^version:\s*(\d+\.\d+\.\d+)\+(\d+)')
 if (-not $m.Success) { throw 'No "version: x.y.z+n" line in pubspec.yaml' }
 $name = $m.Groups[1].Value
 $build = [int]$m.Groups[2].Value
-if ($Bump) {
-    $build++
-    # checked before building: a tag that already exists used to fail only after the bump was committed
-    if (Git "tag -l build-$build") { throw "tag build-$build already exists - pubspec.yaml's build number is behind the tags" }
-    $text = $text.Substring(0, $m.Index) + "version: $name+$build" + $text.Substring($m.Index + $m.Length)
-    [IO.File]::WriteAllText($pubspec, $text, (New-Object Text.UTF8Encoding($false)))  # no BOM
-    Say "version bumped to $name+$build"
-}
-# ---- 2b. changelog, and the documents bundled into the app (About > What's new / Read me) ---------------------------
-# Done before building so the app's copy of the changelog already lists this build. Put back if the build fails.
+# ---- 2a. what to put back if anything below fails (the version, the changelog, the documents bundled into the app):
+# recorded before anything is written - the bump used to happen before the safety net began, so a failure in between
+# left a bumped version and a filed changelog behind (code review 2026-10-05, #15)
 $changelog = Join-Path $root 'CHANGELOG.md'
 $docsDir = Join-Path $app 'assets\docs'
 $utf8 = New-Object Text.UTF8Encoding($false)
@@ -137,6 +130,28 @@ foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
     $originalDocs[$f] = if (Test-Path $p) { [IO.File]::ReadAllText($p) } else { $null }
 }
 $filed = $false
+
+function Restore-Documents {
+    if ($filed) { [IO.File]::WriteAllText($changelog, $originalChangelog, $utf8) }
+    foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
+        $p = Join-Path $docsDir $f
+        if ($null -eq $originalDocs[$f]) { if (Test-Path $p) { Remove-Item $p } }
+        else { [IO.File]::WriteAllText($p, $originalDocs[$f], $utf8) }
+    }
+}
+
+$artifacts = @()
+try {
+if ($Bump) {
+    $build++
+    # checked before building: a tag that already exists used to fail only after the bump was committed
+    if (Git "tag -l build-$build") { throw "tag build-$build already exists - pubspec.yaml's build number is behind the tags" }
+    $text = $text.Substring(0, $m.Index) + "version: $name+$build" + $text.Substring($m.Index + $m.Length)
+    [IO.File]::WriteAllText($pubspec, $text, (New-Object Text.UTF8Encoding($false)))  # no BOM
+    Say "version bumped to $name+$build"
+}
+# ---- 2b. changelog, and the documents bundled into the app (About > What's new / Read me) ---------------------------
+# Done before building so the app's copy of the changelog already lists this build. Put back if the build fails (2a).
 if ($Bump -and $originalChangelog) {
     # the "Unreleased" entries become "### Build <n> - <date>", first in this version's "## <version>" section
     # (a new section is started above the others for a new version)
@@ -167,14 +182,6 @@ foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
     if (Test-Path $src) { Copy-Item $src (Join-Path $docsDir $f) -Force }
 }
 
-function Restore-Documents {
-    if ($filed) { [IO.File]::WriteAllText($changelog, $originalChangelog, $utf8) }
-    foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
-        $p = Join-Path $docsDir $f
-        if ($null -eq $originalDocs[$f]) { if (Test-Path $p) { Remove-Item $p } }
-        else { [IO.File]::WriteAllText($p, $originalDocs[$f], $utf8) }
-    }
-}
 
 $version = "$name-b$build"
 $out = Join-Path $dist "$name+$build"
@@ -183,8 +190,6 @@ Say "building $name+$build for: $($Platforms -join ', ') -> $out"
 if ($Timing) { Say 'with the EPUB timing instruments (-Timing): a measuring build, not an everyday one' }
 
 # ---- 3. platforms ------------------------------------------------------------------------------------------------
-$artifacts = @()
-try {
 if ($Platforms -contains 'android') {
     # Release signing: android\key.properties names the keystore; its password is kept encrypted with this Windows
     # account (DPAPI) in %USERPROFILE%\.keystores\android-release.pass and handed to Gradle through
