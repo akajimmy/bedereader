@@ -66,6 +66,15 @@ void main() {
     }
   }
 
+  testWidgets("the Aa panel's Page corner says what the corner shows now - the book's page, as comics' (it still "
+      'described the pages left in the chapter - user, 2026-10-07)', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
+        ListView(children: epubSettingRows(c, const EpubPrefs(), (_) {}))))));
+    await tester.pump();
+    expect(find.text("The page you're on, \"12 / 36\""), findsOneWidget);
+    expect(find.textContaining('left in the chapter'), findsNothing);
+  });
+
   testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
       (tester) async {
     final api = noNetwork(() => SettingsServer({

@@ -77,7 +77,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         onChanged: (v) => set(e.copyWith(turn: v)),
       ),
       // one setting with comics' page number (this device's, not the EPUB set's)
-      pageNoteRow(AppSettings.instance, subtitle: 'Pages left in the chapter and how far through the book'),
+      pageNoteRow(AppSettings.instance),
     ]),
   ];
 }

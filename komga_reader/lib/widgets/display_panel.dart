@@ -191,7 +191,7 @@ class _ReaderPanel extends StatelessWidget {
           ...nightRows(s),
           if (canRotate) rotationRow(s), // locked mid-book, lying down
           pageTurnRow(s),
-          pageNoteRow(s, subtitle: 'The page number, "12 / 36"'),
+          pageNoteRow(s),
           pagePreviewsRow(s), // noticed mid-book, when they lag
           doubleTapRow(s),
           screenOnRow(s),
@@ -454,13 +454,11 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
-/// The note in the page's bottom-right corner - one setting for comics and EPUBs (the one Reader, user 2026-10-07);
-/// [subtitle]: what it shows in the kind of book it's set from.
-Widget pageNoteRow(AppSettings s, {String subtitle = 'Comics: the page number. EPUBs: pages left in the chapter '
-        'and how far through the book'}) =>
-    SegmentRow<PageNote>(
+/// The note in the page's bottom-right corner - one setting for comics and EPUBs, and the same note in both: the page
+/// of the book's pages (user, 2026-10-07).
+Widget pageNoteRow(AppSettings s) => SegmentRow<PageNote>(
       title: 'Page corner',
-      subtitle: subtitle,
+      subtitle: 'The page you\'re on, "12 / 36"',
       choices: const [
         Choice(PageNote.always, 'Always'),
         Choice(PageNote.afterTurn, 'After a turn'),
