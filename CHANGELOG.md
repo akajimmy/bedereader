@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 88 - 2026-10-07
+
 **Changed**
 - **Comics: the end-of-book card has Next book and Close buttons**, as EPUBs' does. The remote lands on Next book
   (on Close when there's no next book); Up and Down move between them and OK presses the one it's on. A tap on the
@@ -23,8 +27,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   the page and how far through ("Pg. 12/36 · 33%") on the left just above the slider, which gets the room the
   "12 / 36" beside it had. **Tap either one to hide it**; its place stays, dimmed, to tap it back. That's
   remembered on this device. (EPUBs get the same row when their reader moves over.)
-
-## 1.3.0
 
 ### Build 87 - 2026-10-07
 
