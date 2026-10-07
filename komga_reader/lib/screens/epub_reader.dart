@@ -400,14 +400,23 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
       }
       return;
     }
-    final keep = _book!.size == Size.zero ? null : b.positionOf(_chapter, _page);
+    // the place being read: the anchor from the layout before, if nothing has moved since - not the start of the page
+    // now on screen, which is earlier than the place, so each new size or setting walked back a little more
+    // (Windows, build 79: two resizes and back, a page back)
+    final keep = _book!.size == Size.zero ? null : (_anchor ?? b.positionOf(_chapter, _page));
+    _anchor = keep;
     b.setLayout(_theme, size);
     _bookWide = false;
     _counting = false;
     // the same text stays in view: back to its chapter, its page found once laid out again (the first layout: the
     // opening shows the saved place itself - a "start of the chapter" here overrode it, found on the tablet)
-    if (keep != null) WidgetsBinding.instance.addPostFrameCallback((_) => _show(keep.chapter, keep.position));
+    if (keep != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _show(keep.chapter, keep.position, relayout: true));
+    }
   }
+
+  /// The place being read through new layouts (window sizes, settings); let go of at any other move.
+  EpubPosition? _anchor;
 
   void _onBook() {
     final b = _book;
@@ -459,7 +468,9 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
   }
 
   /// Shows chapter [chapter] at [position] - or at [fraction] of the way through it (a saved place).
-  Future<void> _show(int chapter, int position, {double? fraction}) async {
+  /// [relayout]: the place kept through a new layout ([_anchor] stays); any other show is a move of its own.
+  Future<void> _show(int chapter, int position, {double? fraction, bool relayout = false}) async {
+    if (!relayout) _anchor = null;
     final b = _book!;
     EpubTrace.instance.log('show chapter $chapter at ${fraction ?? position}');
     final List<EpubPage>? pages;
@@ -528,6 +539,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
 
   void _pageChanged(int i) {
     final b = _book!;
+    if (!_ownJump) _anchor = null; // a turn: the page shown is the place now
     if (!_ownJump) _lastTurn = DateTime.now(); // (swipes too)
     EpubTrace.instance.log('page $i (${_bookWide ? 'book' : 'chapter $_chapter'})${_ownJump ? ' by the reader' : ''}');
     _awake();
@@ -1201,7 +1213,12 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> {
             _layout(size);
             if (b.pagesNow(_chapter) == null) {
               if (b.errorOf(_chapter) != null) return _chapterError(b, _chapter, theme);
-              unawaited(_show(_chapter, 0, fraction: _startFraction));
+              // laid out afresh (a new size or setting): to the place kept through it, as [_layout] does - not the
+              // chapter's start, which raced it (and let go of the place)
+              final anchor = _anchor;
+              unawaited(anchor != null && anchor.chapter == _chapter
+                  ? _show(anchor.chapter, anchor.position, relayout: true)
+                  : _show(_chapter, 0, fraction: _startFraction));
               return const Center(child: CircularProgressIndicator());
             }
             final pages = b.pagesNow(_chapter)!;
