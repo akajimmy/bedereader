@@ -14,6 +14,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   until you tap it. Sorting by size puts the biggest series first; the filters apply inside the groups. In select
   mode a group's box ticks its whole series, and its menu removes the series. Remembered on each device.
 
+**Fixed**
+- **Progress bars looked full whatever they showed** - the storage bar in Downloads (10% used looked like 100%), a
+  download's progress in the queue, and the bar under the search box: the unfilled part was drawn in the accent
+  colour too. It's grey now.
+
 ## 1.3.0
 
 ### Build 83 - 2026-10-07
