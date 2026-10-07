@@ -5,10 +5,15 @@
     python tab.py key <KEYCODE>         - a key event
     python tab.py xy <x> <y>            - tap a point
 """
+import html
 import re
 import subprocess
 import sys
 import time
+
+# labels hold any character ("A → Z" in a tooltip): the Windows console's code page can't print them all, and a
+# print that failed stopped the script mid-listing (2026-10-07) - written as UTF-8, anything else replaced
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 ADB = r'C:\Dev\android-sdk\platform-tools\adb.exe'
 
@@ -32,7 +37,9 @@ def nodes():
         d = dm.group(1) if dm else ''
         b = list(map(int, re.findall(r'\d+', bm.group(1))))
         if t or d:
-            out.append(((t or d).replace('&#10;', ' | '), (b[0] + b[2]) // 2, (b[1] + b[3]) // 2))
+            # as shown, not as the XML has it ("Simpsons &amp; Futurama"); line breaks as " | "
+            label = html.unescape(t or d).replace('\n', ' | ')
+            out.append((label, (b[0] + b[2]) // 2, (b[1] + b[3]) // 2))
     return out
 
 
