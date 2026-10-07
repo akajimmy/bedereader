@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'chapter.dart';
+import 'count_store.dart';
 import 'hyphenator.dart';
 import 'layout.dart';
 import 'source.dart';
@@ -19,6 +20,7 @@ class _Chapter {
   Paginator? paginator;
   List<EpubPage>? pages; // laid out: kept near the reading position only
   List<int>? starts; // every page's start, once counted (kept)
+  bool failed = false; // counted as one page because it couldn't be read (its counts aren't kept)
   int length = 0; // characters
   Future<List<EpubPage>>? laying;
   Future<LoadedChapter>? loading; // its text on the way (one load shared by everyone waiting for it)
@@ -120,10 +122,35 @@ class EpubBook extends ChangeNotifier {
         ..paginator = null
         ..pages = null
         ..starts = null
+        ..failed = false
         ..laying = null;
     }
     notifyListeners();
   }
+
+  /// Every chapter's counts in this layout from [counts] (remembered from before): the book is counted at once.
+  /// False (nothing changed) if they don't fit this book.
+  bool restoreCounts(EpubCounts counts) {
+    if (counts.starts.length != _chapters.length || counts.starts.any((s) => s.isEmpty)) return false;
+    for (var i = 0; i < _chapters.length; i++) {
+      final c = _chapters[i];
+      if (c.starts != null) continue; // laid out already in this layout: its own count stands
+      c
+        ..starts = counts.starts[i]
+        ..length = counts.lengths[i];
+    }
+    notifyListeners();
+    return true;
+  }
+
+  /// The counts to remember, once every chapter is counted (null before, or if a chapter couldn't be read: that
+  /// one is tried again next time).
+  EpubCounts? get counts => !counted || _chapters.any((c) => c.failed)
+      ? null
+      : EpubCounts([for (final c in _chapters) c.length], [for (final c in _chapters) c.starts!]);
+
+  /// How many chapters are counted (the reader's "chapter 12 of 37" while it waits).
+  int get countedChapters => _chapters.where((c) => c.starts != null).length;
 
   /// The pages of chapter [i], laid out if they aren't (null if the layout changed meanwhile).
   Future<List<EpubPage>?> pages(int i) async {
@@ -189,6 +216,7 @@ class EpubBook extends ChangeNotifier {
       ..paginator = p
       ..pages = pages
       ..starts = [for (final pg in pages) pg.start]
+      ..failed = false
       ..error = null;
     notifyListeners();
     return pages;
@@ -212,11 +240,11 @@ class EpubBook extends ChangeNotifier {
     if (gone.isNotEmpty) EpubTrace.instance.log('around chapter $current: let go of $gone');
   }
 
-  /// Counts every chapter's pages (in the background after the book opens): lays each out and lets it go again
-  /// unless it's near [current]. Stops if the layout changes; [progress] after each chapter.
-  /// [busy]: the reader is in the middle of turning pages - counting waits (laying a chapter out holds the screen
-  /// up for a moment, and turns stuttered while a big book was being counted - user, 2026-10-06).
-  Future<void> countAll({required int Function() current, bool Function()? busy}) async {
+  /// Counts every chapter's pages - while the reader waits behind its spinner (user, 2026-10-07: the book shows once
+  /// it's counted): lays each out and lets it go again unless it's near [current]. Stops if the layout changes;
+  /// listeners hear of each chapter counted. [breath]: the pause between chapters (default: the next frame, so the
+  /// spinner moves on; tests outside frames pass their own).
+  Future<void> countAll({required int Function() current, Future<void> Function()? breath}) async {
     final gen = _generation;
     for (var i = 0; i < _chapters.length; i++) {
       if (gen != _generation) return;
@@ -227,28 +255,18 @@ class EpubBook extends ChangeNotifier {
         // a chapter that can't be read: counted as one page (it shows the error when reached) - in this layout only
         // (one from a layout before landed in the new one's count), and told (it could be the last one counted)
         if (gen == _generation && _chapters[i].starts == null) {
-          _chapters[i].starts = [0];
+          _chapters[i]
+            ..starts = [0]
+            ..failed = true;
           notifyListeners();
         }
       }
       if (gen != _generation) return;
       final cur = current();
       if ((i - cur).abs() > around) keepAround(cur);
-      // a breath between chapters, and none at all while pages are being turned
-      await _rest(const Duration(milliseconds: 16));
-      for (var waits = 0; busy != null && busy() && waits < 50; waits++) {
-        await _rest(const Duration(milliseconds: 100));
-        if (gen != _generation) return;
-      }
+      // a frame between chapters: the spinner and its count move on
+      await (breath?.call() ?? SchedulerBinding.instance.endOfFrame);
     }
-  }
-
-  // counting's pause: cancelled when the book closes (the counting then just stops where it was)
-  Timer? _pause;
-  Future<void> _rest(Duration d) {
-    final done = Completer<void>();
-    _pause = Timer(d, done.complete);
-    return done.future;
   }
 
   /// Every chapter counted: the whole book's page numbers are known.
@@ -301,30 +319,8 @@ class EpubBook extends ChangeNotifier {
     return EpubPosition(chapter, s == null || s.isEmpty ? 0 : s[page.clamp(0, s.length - 1)]);
   }
 
-  /// The chapter [fraction] (0..1) of the way through the book falls in, and how far through that chapter (0..1) -
-  /// [progression] the other way round.
-  (int, double) chapterAtFraction(double fraction) {
-    final n = _chapters.length;
-    final f = fraction.clamp(0.0, 1.0);
-    final lengths = _weights;
-    if (lengths == null) {
-      final at = f * n;
-      final i = at.floor().clamp(0, n - 1);
-      return (i, (at - i).clamp(0.0, 1.0));
-    }
-    final total = lengths.fold(0, (a, b) => a + b);
-    var before = 0;
-    for (var i = 0; i < n; i++) {
-      if (f * total < before + lengths[i] || i == n - 1) {
-        return (i, ((f * total - before) / lengths[i]).clamp(0.0, 1.0));
-      }
-      before += lengths[i];
-    }
-    return (n - 1, 1);
-  }
-
-  /// How far through the book [p] is, 0..1: chapters count by their length once known, by [estimateFrom]'s shares
-  /// till then, else equally.
+  /// How far through the book [p] is, 0..1: chapters count by their length once known (counted: all are), else
+  /// equally.
   double progression(EpubPosition p) {
     final own = _chapters[p.chapter].length;
     final within = own == 0 ? 0.0 : (p.position / own).clamp(0.0, 1.0);
@@ -335,26 +331,10 @@ class EpubBook extends ChangeNotifier {
     return total == 0 ? 0 : ((before + within * lengths[p.chapter]) / total).clamp(0.0, 1.0);
   }
 
-  /// Each chapter's share of the book before they've all been read in (the counting does that): from Komga's
-  /// positions, about one per 1,000 characters of a chapter's file. With every chapter counted as equal, a book with
-  /// long and short chapters showed 24% that became 2% once counted (The Dispossessed, build 74).
-  List<int>? _estimate;
-
-  /// Sets the chapters' shares from the chapter path of each of Komga's positions (a chapter with none counts as one).
-  void estimateFrom(Iterable<String> positionPaths) {
-    final per = <String, int>{};
-    for (final p in positionPaths) {
-      per[p] = (per[p] ?? 0) + 1;
-    }
-    final est = [for (final s in info.spine) per[s] ?? 1];
-    if (per.isEmpty) return;
-    _estimate = est;
-  }
-
-  /// The chapters' lengths when all are known, else the estimate (null: none - equal shares).
+  /// The chapters' lengths when all are known (null: not yet - equal shares).
   List<int>? get _weights {
     final lengths = [for (final c in _chapters) c.length];
-    return lengths.every((l) => l > 0) ? lengths : _estimate;
+    return lengths.every((l) => l > 0) ? lengths : null;
   }
 
   /// The chapter a book path is in (a table-of-contents entry, a link); null if it isn't one of the chapters.
@@ -375,8 +355,7 @@ class EpubBook extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _generation++; // the background counting stops (it checks between chapters)
-    _pause?.cancel();
+    _generation++; // the counting stops (it checks between chapters)
     // two frames on, as when a chapter is let go of: the closing transition may still draw these pages (they were
     // freed at once - EPUB review R10)
     for (final c in _chapters) {

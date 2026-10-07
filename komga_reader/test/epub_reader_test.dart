@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/epub_reader.dart';
 import 'package:komga_reader/screens/open_book.dart';
@@ -312,19 +313,9 @@ void main() {
     expect(pct(await label(tester)), pct(before));
   });
 
-  testWidgets("R3: chapter by chapter (not counted yet), a swipe past the chapter's last page goes on to the next",
+  testWidgets("R3: a swipe past a chapter's last page goes on into the next (the whole book is one page view)",
       (tester) async {
-    tester.view.physicalSize = const Size(800, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    // one chapter never comes: the book is never wholly counted - it stays chapter by chapter
-    await tester.pumpWidget(MaterialApp(home: EpubReaderScreen(api: noNetwork(() => EndKomga(null)),
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
-        source: HangingSource(chapters(7).files, chapters(7).infoValue, hangs: 'c7.xhtml'), saveProgress: false)));
-    for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-    }
+    await open(tester, chapters(7));
     await settle(tester);
     // to chapter 1's last page by taps, then swipe on
     for (var i = 0; i < 40; i++) {
@@ -628,27 +619,60 @@ void main() {
     }
   });
 
-  testWidgets('the slider runs through the whole book even before every chapter is counted (user: it ran through '
-      "the chapter, so it couldn't go far): 60% of the way along lands in the fourth of six chapters", (tester) async {
+  testWidgets('the book shows once it is counted (user, 2026-10-07): until then a spinner with the chapter being '
+      'counted, and Close; nothing on it turns or opens the controls', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
-    await open(tester, HangingSource({for (final c in spine) c: '<html><body>${List.filled(4, para('delta', 40)).join()}'
-        '</body></html>'}, EpubInfo(spine: spine, toc: const []), hangs: 'c5.xhtml'));
-    await tester.tapAt(const Offset(400, 600));
-    await tester.pump();
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-book-position'))).data, startsWith('Book · '),
-        reason: 'not counted: the last chapter never comes');
-    final r = tester.getRect(find.byType(Slider));
-    final g = await tester.startGesture(r.centerLeft + const Offset(24, 0));
-    await tester.pump();
-    await g.moveTo(Offset(r.left + 20 + 0.6 * (r.width - 40), r.center.dy));
-    await tester.pump();
-    await g.up();
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Text('home')));
+    // the last chapter never comes: the book is never counted
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => EpubReaderScreen(
+        api: noNetwork(() => EndKomga(null)), book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        source: HangingSource({for (final c in spine) c: '<html><body>${para('delta', 40)}</body></html>'},
+            EpubInfo(spine: spine, toc: const []), hangs: 'c5.xhtml'),
+        saveProgress: false))));
     await settle(tester);
-    if (find.byKey(const ValueKey('epub-chapter-position')).evaluate().isEmpty) {
-      await tester.tapAt(const Offset(400, 600));
-      await tester.pump();
-    }
-    expect(tester.widget<Text>(find.byKey(const ValueKey('epub-chapter-position'))).data, startsWith('Ch. 4 '));
+    expect(find.text('Laying out the book'), findsOneWidget);
+    expect(find.text('Chapter 6 of 6'), findsOneWidget, reason: 'five counted, on the sixth');
+    expect(find.byType(PageView), findsNothing, reason: 'no page before the book is counted');
+    await tester.tapAt(const Offset(750, 300)); // a turn's tap
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.tapAt(const Offset(400, 300)); // the controls' tap
+    await settle(tester);
+    expect(find.byTooltip('Contents'), findsNothing);
+    expect(find.text('Chapter 6 of 6'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('home'), findsOneWidget, reason: 'closed');
+  });
+
+  testWidgets('counts are remembered per book and layout: opened again the same way, the book shows at once - even '
+      'with a chapter that would never come; at another text size it is counted again', (tester) async {
+    final store = MemoryCountStore();
+    EpubCountStore.instance = store;
+    addTearDown(() {
+      EpubCountStore.instance = FileCountStore();
+      AppSettings.instance.setEpub(const EpubPrefs());
+    });
+    final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+    final files = {for (final c in spine) c: '<html><body>${List.filled(4, para('delta', 40)).join()}</body></html>'};
+    final info = EpubInfo(spine: spine, toc: const []);
+    await open(tester, MemorySource(files, info));
+    final first = await label(tester);
+    expect(store.kept, hasLength(1), reason: 'counted, and kept');
+    await tester.pumpWidget(const SizedBox());
+
+    // the same book again, its last chapter never coming: the counts kept stand in
+    await open(tester, HangingSource(files, info, hangs: 'c5.xhtml'));
+    expect(await label(tester), first, reason: 'the same page of the same count, at once');
+
+    // another text size: another layout, counted (the hanging chapter keeps it on the spinner)
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(size: 28));
+    await settle(tester);
+    expect(find.text('Laying out the book'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
