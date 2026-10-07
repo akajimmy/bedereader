@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -57,6 +58,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
   ManageSort _sort = ManageSort.name;
   final Set<String> _selected = {};
   bool _selecting = false;
+
+  /// Group by series (user, 2026-10-07): one collapsible group per series - remembered on this device.
+  bool _grouped = false;
+  final Set<String> _expanded = {}; // series ids open (groups start closed)
+  static const groupedKey = 'downloads.groupBySeries';
+
+  @override
+  void initState() {
+    super.initState();
+    SharedPreferences.getInstance().then((p) {
+      if (mounted && (p.getBool(groupedKey) ?? false)) setState(() => _grouped = true);
+    });
+  }
+
+  void _setGrouped(bool on) {
+    setState(() => _grouped = on);
+    SharedPreferences.getInstance().then((p) => p.setBool(groupedKey, on));
+  }
 
   void _onTab() {
     if (!_tabs.indexIsChanging) setState(() => _endSelecting());
@@ -289,6 +308,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                 selected: _filter == f,
                 onSelected: (_) => setState(() => _filter = f),
               ),
+          FilterChip(
+            label: const Text('Group by series'),
+            selected: _grouped,
+            onSelected: _setGrouped,
+          ),
           PopupMenuButton<ManageSort>(
             tooltip: 'Sort',
             initialValue: _sort,
@@ -330,21 +354,85 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
         ),
       ]);
     }
+    final rows = _grouped ? _groupRows(shown, all) : [for (final item in shown) () => _row(item, all)];
     // built as they scroll into view (it rebuilt every row on each page downloaded - general scan #37)
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 32),
-      itemCount: shown.length + 1,
-      itemBuilder: (context, i) => i == 0 ? header : _row(shown[i - 1], all),
+      itemCount: rows.length + 1,
+      itemBuilder: (context, i) => i == 0 ? header : rows[i - 1](),
     );
   }
 
-  Widget _row(_Item item, List<_Item> all) {
+  /// Grouped: a header per series (in the sort's order - by name, or by the series' total size), then its books
+  /// when the group is open. The filter applies first: a group holds the books shown, a series with none isn't there.
+  List<Widget Function()> _groupRows(List<_Item> shown, List<_Item> all) {
+    final groups = <String, List<_Item>>{}; // (shown is sorted: each group's books, and by name the groups, follow)
+    for (final item in shown) {
+      groups.putIfAbsent(item.seriesId, () => []).add(item);
+    }
+    final order = groups.values.toList();
+    if (_sort == ManageSort.size) order.sort((a, b) => _bytes(b).compareTo(_bytes(a)));
+    return [
+      for (final g in order) ...[
+        () => _groupHeader(g, all),
+        if (_expanded.contains(g.first.seriesId))
+          for (final item in g) () => _row(item, all, inGroup: true),
+      ],
+    ];
+  }
+
+  Widget _groupHeader(List<_Item> g, List<_Item> all) {
+    final first = g.first, id = first.seriesId;
+    final open = _expanded.contains(id);
+    final picked = g.where((i) => _selected.contains(i.id)).length;
+    final read = g.where((i) => i.read).length;
+    final chevron = Icon(open ? Icons.expand_more : Icons.chevron_right);
+    void toggleOpen() => setState(() => open ? _expanded.remove(id) : _expanded.add(id));
+    void toggleGroup() => setState(() =>
+        picked == g.length ? _selected.removeAll(g.map((i) => i.id)) : _selected.addAll(g.map((i) => i.id)));
+    return ListTile(
+      key: ValueKey('series-$id'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      leading: _selecting
+          ? Checkbox(tristate: true, value: picked == 0 ? false : picked == g.length ? true : null,
+              onChanged: (_) => toggleGroup())
+          : chevron,
+      title: Text(first.series, style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text([
+        '${g.length} book${g.length == 1 ? '' : 's'}',
+        DownloadsScreen.size(_bytes(g)),
+        if (read > 0) read == g.length ? 'all read' : '$read read',
+      ].join(' · ')),
+      onTap: toggleOpen,
+      onLongPress: _selecting
+          ? null
+          : () => setState(() {
+                _selecting = true;
+                _selected.addAll(g.map((i) => i.id));
+              }),
+      trailing: _selecting
+          ? chevron
+          : PopupMenuButton<String>(
+              tooltip: 'Remove',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (_) => _confirmRemove('Remove ${first.series}?', [
+                for (final i in all) if (i.seriesId == id) i,
+              ]),
+              itemBuilder: (_) {
+                final n = all.where((i) => i.seriesId == id).length;
+                return [PopupMenuItem(value: 'series', child: Text(n == 1 ? 'Remove download' : 'Remove the series\' $n downloads'))];
+              },
+            ),
+    );
+  }
+
+  Widget _row(_Item item, List<_Item> all, {bool inGroup = false}) {
     final picked = _selected.contains(item.id);
     final state = item.read ? 'read' : item.started ? 'in progress' : null;
     void toggle() => setState(() => picked ? _selected.remove(item.id) : _selected.add(item.id));
     return ListTile(
       key: ValueKey(item.id),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      contentPadding: EdgeInsets.only(left: inGroup ? 48 : 16, right: 16),
       leading: _selecting
           ? Checkbox(value: picked, onChanged: (_) => toggle())
           : Icon(item.read ? Icons.done_all : Icons.download_done, color: item.read ? _grey : null),
