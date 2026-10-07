@@ -33,5 +33,20 @@ $results += "failure: renames tried: $($global:renames -join ' | ')"
 $results += "failure: reported: $failed ($msg)"
 $results += "failure: Dest still exists: $(Test-Path $dest); it is the old build: $((Get-Content (Join-Path $dest 'BeDeReader.exe')) -eq 'old build'); the new one kept as .new: $(Test-Path "$dest.new")"
 
+# 3. the app open from the Desktop copy: closed first, then updated (user, 2026-10-07). A copy of ping.exe stands in
+# for BeDeReader.exe, running from the temporary Dest for a minute.
+Remove-Item $dest, "$dest.previous", "$dest.new" -Recurse -Force -ErrorAction SilentlyContinue
+Old
+$stand = Join-Path $dest 'standin.exe'
+Copy-Item "$env:SystemRoot\System32\PING.EXE" $stand
+$p = Start-Process $stand -ArgumentList '-n 60 127.0.0.1' -WindowStyle Hidden -PassThru
+Start-Sleep -Milliseconds 500
+$runningBefore = -not $p.HasExited
+& $script -Zip $zip -Dest $dest *> $null
+$code = $LASTEXITCODE
+$p.Refresh()
+$results += "open: running before: $runningBefore; exit code: $code; closed: $($p.HasExited); Dest has the new build: $((Get-Content (Join-Path $dest 'BeDeReader.exe')) -eq 'new build')"
+if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+
 Remove-Item $base -Recurse -Force
 $results
