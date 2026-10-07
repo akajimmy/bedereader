@@ -82,7 +82,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   int _openedAt = 0;
   Timer? _saveTimer;
   Timer? _flashTimer;
-  bool _flash = false; // the page number shows for a moment after a turn (setting: Show the page number after a turn)
+  bool _flash = false; // the page note shows for a moment after a turn (Page corner: After a turn)
   final FocusNode _keys = FocusNode(debugLabel: 'reader-keys', skipTraversal: true);
   final FocusNode _sliderInner = FocusNode(canRequestFocus: false, skipTraversal: true); // the wrapper takes focus
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
@@ -282,7 +282,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     } else {
       _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
     }
-    if (i <= _last && _settings.display.pageNumber) {
+    if (i <= _last && _settings.display.pageNote == PageNote.afterTurn) {
       _flashTimer?.cancel();
       setState(() => _flash = true);
       _flashTimer = Timer(const Duration(milliseconds: 1200), () { if (mounted) setState(() => _flash = false); });
@@ -707,14 +707,17 @@ class _ReaderScreenState extends State<ReaderScreen>
               ? const Center(child: CircularProgressIndicator())
               : Stack(children: [
                   ..._comic.buildPages(context),
-                  // "12 / 36" for a moment after a turn, bottom left (user, 2026-09-30) - not over the controls (they
-                  // have the count) or the end card
+                  // the page note, "12 / 36": always, or for a moment after a turn (Page corner - one setting with
+                  // the EPUBs', and their corner: bottom right, user 2026-10-07) - not over the controls (they have
+                  // the count) or the end card
+                  if (_settings.display.pageNote != PageNote.off)
                   Positioned(
-                    left: 14,
+                    right: 14,
                     bottom: 14,
                     child: IgnorePointer(
                       child: AnimatedOpacity(
-                        opacity: _flash && !_menu && _index <= _last ? 1 : 0,
+                        opacity: (_flash || _settings.display.pageNote == PageNote.always) && !_menu && _index <= _last
+                            ? 1 : 0,
                         duration: const Duration(milliseconds: 250),
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../settings.dart';
+import 'display_panel.dart';
 import 'setting_rows.dart';
 
 /// The EPUB settings rows (one set for every book, synced): the reader's Aa panel and Settings > Books use them.
@@ -75,17 +76,8 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         value: e.turn,
         onChanged: (v) => set(e.copyWith(turn: v)),
       ),
-      SegmentRow<EpubCorner>(
-        title: 'Page corner',
-        subtitle: 'Pages left in the chapter and how far through the book',
-        choices: const [
-          Choice(EpubCorner.always, 'Always'),
-          Choice(EpubCorner.afterTurn, 'After a turn'),
-          Choice(EpubCorner.off, 'Off'),
-        ],
-        value: e.corner,
-        onChanged: (v) => set(e.copyWith(corner: v)),
-      ),
+      // one setting with comics' page number (this device's, not the EPUB set's)
+      pageNoteRow(AppSettings.instance, subtitle: 'Pages left in the chapter and how far through the book'),
     ]),
   ];
 }

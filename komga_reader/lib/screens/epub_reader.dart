@@ -953,7 +953,7 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
   Timer? _cornerTimer;
 
   void _flashCorner() {
-    if (AppSettings.instance.epub.corner != EpubCorner.afterTurn) return;
+    if (AppSettings.instance.display.pageNote != PageNote.afterTurn) return;
     _cornerTimer?.cancel();
     setState(() => _cornerFlash = true);
     _cornerTimer = Timer(const Duration(milliseconds: 2500), () {
@@ -1321,13 +1321,13 @@ class _EpubReaderScreenState extends State<EpubReaderScreen> with ReaderDevice<E
                   ),
                 ),
               // the page corner (option H): quiet, in the page's own colour, bottom right
-              if (!_controls && !_end && AppSettings.instance.epub.corner != EpubCorner.off)
+              if (!_controls && !_end && AppSettings.instance.display.pageNote != PageNote.off)
                 Positioned(
                   right: math.max(12, theme.margins.right - 4),
                   bottom: 8,
                   child: IgnorePointer(
                     child: AnimatedOpacity(
-                      opacity: AppSettings.instance.epub.corner == EpubCorner.always || _cornerFlash ? 1 : 0,
+                      opacity: AppSettings.instance.display.pageNote == PageNote.always || _cornerFlash ? 1 : 0,
                       duration: const Duration(milliseconds: 250),
                       child: Text(_cornerText, key: const ValueKey('epub-corner'),
                           style: TextStyle(color: theme.text.withValues(alpha: 0.5), fontSize: 12,

@@ -25,7 +25,7 @@ void main() {
       'formatting, slide; a size out of range gets the default', () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, bookFormatting: true, turn: EpubTurn.none,
-        corner: EpubCorner.afterTurn, paragraphGap: EpubParagraphGap.large);
+        paragraphGap: EpubParagraphGap.large);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     final d = EpubPrefs.fromJson(const {});
     expect((d.font, d.colours, d.bookFormatting, d.turn, d.size), (EpubFont.literata, EpubColours.dark, false,
@@ -78,6 +78,27 @@ void main() {
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
     expect(EpubPrefs.fromJson(Map<String, dynamic>.from(sent['epub'] as Map)).font, EpubFont.lora);
     expect(sent['default'], isNotNull, reason: 'the reading defaults stay');
+  });
+
+  testWidgets("one page corner for both kinds (user, 2026-10-07): a device saved before takes the EPUBs' choice; "
+      "with no EPUB choice, the comics' switch (off stays off); saved since, it's kept as it is", (tester) async {
+    final api = noNetwork(() => SettingsServer({}));
+    Future<PageNote> loaded(Map<String, dynamic> display, {String? corner}) async {
+      SharedPreferences.setMockInitialValues({
+        'displayPrefs': jsonEncode(display),
+        if (corner != null) 'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': {'corner': corner}}),
+      });
+      await tester.runAsync(() => AppSettings.instance.load(api, fetch: false));
+      return AppSettings.instance.display.pageNote;
+    }
+
+    expect(await loaded({'pageNumber': true}, corner: 'off'), PageNote.off, reason: "the EPUBs' choice");
+    expect(await loaded({'pageNumber': false}, corner: 'always'), PageNote.always, reason: "the EPUBs' choice");
+    expect(await loaded({'pageNumber': false}), PageNote.off, reason: "no EPUB choice: the comics' switch");
+    expect(await loaded({'pageNumber': true}), PageNote.afterTurn, reason: "no EPUB choice: the comics' switch");
+    expect(await loaded({'pageNote': 'afterTurn'}, corner: 'off'), PageNote.afterTurn, reason: 'saved since: kept');
+    final p = await tester.runAsync(SharedPreferences.getInstance);
+    expect(jsonDecode(p!.getString('displayPrefs')!)['pageNote'], 'afterTurn', reason: 'saved in its new place');
   });
 
   testWidgets("a change made while Komga can't be reached stays (Komga's older copy doesn't replace it) and goes "

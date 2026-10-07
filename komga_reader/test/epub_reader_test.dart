@@ -497,7 +497,7 @@ void main() {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     // After a turn: hidden until a page turns, then for a moment
-    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(corner: EpubCorner.afterTurn));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.afterTurn));
     await tester.pump();
     expect(cornerOpacity(), 0);
     await tester.tapAt(const Offset(750, 600));
@@ -507,7 +507,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(cornerOpacity(), 0, reason: 'a moment later');
     // Off: no corner
-    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(corner: EpubCorner.off));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.off));
     await tester.pump();
     expect(find.byKey(const ValueKey('epub-corner')), findsNothing);
     AppSettings.instance.setEpub(const EpubPrefs());

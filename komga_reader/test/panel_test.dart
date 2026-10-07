@@ -37,7 +37,7 @@ void main() {
     expect(find.text('Using the defaults'), findsOneWidget);
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
-    expect(find.text('Page number after a turn'), findsOneWidget); // mid-book toggles, here too
+    expect(find.text('Page corner'), findsOneWidget); // mid-book toggles, here too
     expect(find.text('Double-tap to zoom'), findsOneWidget);
     expect(find.text('Keep the screen on'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -132,7 +132,7 @@ void main() {
     final sheet = tester.getRect(find.byType(ListView).last);
     final choices = tester.getRect(find.byType(SegmentedButton<int>));
     expect(choices.right, lessThanOrEqualTo(sheet.right + 0.5)); // not cut off at the right edge
-    expect(find.text('Always'), findsOneWidget);
+    expect(find.descendant(of: find.byType(SegmentedButton<int>), matching: find.text('Always')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

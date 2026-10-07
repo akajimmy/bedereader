@@ -188,11 +188,15 @@ extension PosterSizeLabel on PosterSize {
   double get scale => switch (this) { PosterSize.small => 0.8, PosterSize.medium => 1.0, PosterSize.large => 1.3 };
 }
 
+/// The note in the page's corner while reading ([DisplayPrefs.pageNote]): always there, for a moment after each
+/// turn, or not at all (user, 2026-10-06: option H, for EPUBs; both kinds since 2026-10-07).
+enum PageNote { always, afterTurn, off }
+
 /// App-wide display settings: kept on this device only (a phone and the tablet need different brightness).
 @immutable
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
-      this.pageNumber = true, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
+      this.pageNote = PageNote.always, this.doubleTapZoom = true, this.volumeKeys = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterTitleOnly = false, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
       this.progressBar = false, this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
@@ -216,7 +220,10 @@ class DisplayPrefs {
   final Rotation rotation; // reader: follow the device, or hold portrait / landscape (Android)
   final ShowWhen clock; // reader: the time and battery - top right, or on the top bar with the controls up
   final bool progressBar; // reader: a thin line along the bottom while the controls are hidden (their slider shows it)
-  final bool pageNumber; // reader: flash "12 / 36" in the corner for a moment after each page turn (this device)
+  /// reader: the note in the page's bottom-right corner - comics "12 / 36", EPUBs pages left in the chapter and the
+  /// book's % - always there, for a moment after each turn, or not at all. One setting for both kinds (the one Reader,
+  /// user 2026-10-07): it replaced the comics' "page number after a turn" and the EPUBs' "page corner".
+  final PageNote pageNote;
   final bool doubleTapZoom; // reader, fit screen: double-tap zooms in on the spot (single taps then wait a moment)
   final bool volumeKeys; // reader, Android: volume down = next page, volume up = previous
   final MidBook midBook; // reader: Next book before the last page
@@ -257,7 +264,7 @@ class DisplayPrefs {
   }
 
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          bool? pageNumber, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
+          PageNote? pageNote, bool? doubleTapZoom, bool? volumeKeys, MidBook? midBook,
           int? screenOn, PosterSize? posterSize, bool? posterTitleOnly, Rotation? rotation, ShowWhen? clock,
           bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterDate}) =>
@@ -269,13 +276,13 @@ class DisplayPrefs {
           rotation: rotation ?? this.rotation, clock: clock ?? this.clock, progressBar: progressBar ?? this.progressBar,
           night: night ?? this.night, warmth: warmth ?? this.warmth,
           brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
-          pageNumber: pageNumber ?? this.pageNumber, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
+          pageNote: pageNote ?? this.pageNote, doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom,
           volumeKeys: volumeKeys ?? this.volumeKeys, midBook: midBook ?? this.midBook,
           screenOn: screenOn ?? this.screenOn,
           posterSize: posterSize ?? this.posterSize, posterTitleOnly: posterTitleOnly ?? this.posterTitleOnly);
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
-      'pageTurn': pageTurn.name, 'pageNumber': pageNumber, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
+      'pageTurn': pageTurn.name, 'pageNote': pageNote.name, 'doubleTapZoom': doubleTapZoom, 'volumeKeys': volumeKeys,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterTitleOnly': posterTitleOnly, 'rotation': rotation.name, 'clock': clock.name, 'progressBar': progressBar,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
@@ -289,8 +296,9 @@ class DisplayPrefs {
         night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
         brightness: (j['brightness'] as num?)?.toDouble(),
         pageTurn: pick(PageTurn.values, j['pageTurn'], PageTurn.swipe),
-        // on unless switched off
-        pageNumber: j['pageNumber'] != false, doubleTapZoom: j['doubleTapZoom'] != false,
+        // saved before there was one setting: the comics' switch (AppSettings.load then takes the EPUBs' choice)
+        pageNote: pick(PageNote.values, j['pageNote'], j['pageNumber'] == false ? PageNote.off : PageNote.afterTurn),
+        doubleTapZoom: j['doubleTapZoom'] != false,
         volumeKeys: j['volumeKeys'] != false,
         midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
@@ -367,15 +375,12 @@ enum EpubParagraphGap {
 
 enum EpubTurn { slide, none }
 
-/// The note in the page's corner while reading - pages left in the chapter and the book's % (user, 2026-10-06:
-/// option H): always there, for a moment after each turn, or not at all.
-enum EpubCorner { always, afterTurn, off }
 
 @immutable
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.bookFormatting = false,
-      this.turn = EpubTurn.slide, this.corner = EpubCorner.always, this.paragraphGap = EpubParagraphGap.none});
+      this.turn = EpubTurn.slide, this.paragraphGap = EpubParagraphGap.none});
   final EpubFont font;
   final double size; // px at the app's text size
   final double lineSpacing;
@@ -383,22 +388,21 @@ class EpubPrefs {
   final EpubColours colours;
   final bool bookFormatting; // the publisher's alignment, indents and spacing (default off: the reader's own)
   final EpubTurn turn;
-  final EpubCorner corner;
   final EpubParagraphGap paragraphGap;
 
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   static const spacings = [1.25, 1.45, 1.7];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          bool? bookFormatting, EpubTurn? turn, EpubCorner? corner, EpubParagraphGap? paragraphGap}) =>
+          bool? bookFormatting, EpubTurn? turn, EpubParagraphGap? paragraphGap}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours,
           bookFormatting: bookFormatting ?? this.bookFormatting, turn: turn ?? this.turn,
-          corner: corner ?? this.corner, paragraphGap: paragraphGap ?? this.paragraphGap);
+          paragraphGap: paragraphGap ?? this.paragraphGap);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'bookFormatting': bookFormatting, 'turn': turn.name,
-      'corner': corner.name, 'paragraphGap': paragraphGap.name};
+      'paragraphGap': paragraphGap.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -413,7 +417,6 @@ class EpubPrefs {
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       bookFormatting: j['bookFormatting'] == true,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
-      corner: pick(EpubCorner.values, j['corner'], EpubCorner.always),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
     );
   }
@@ -552,7 +555,8 @@ class AppSettings extends ChangeNotifier {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final d = p.getString(_localDisplay);
-    if (d != null) display = DisplayPrefs.fromJson(jsonDecode(d) as Map<String, dynamic>);
+    final savedDisplay = d == null ? null : jsonDecode(d) as Map<String, dynamic>;
+    if (savedDisplay != null) display = DisplayPrefs.fromJson(savedDisplay);
     _posterLookFollows();
     try {
       final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
@@ -565,7 +569,14 @@ class AppSettings extends ChangeNotifier {
       // damaged: nothing counts as unsent
     }
     final r = p.getString(_localReader);
-    if (r != null) _applyBlob(jsonDecode(r) as Map<String, dynamic>, remote: false);
+    final savedReader = r == null ? null : jsonDecode(r) as Map<String, dynamic>;
+    if (savedReader != null) _applyBlob(savedReader, remote: false);
+    // saved before the one page-note setting (build 87 and older): the EPUBs' "page corner" becomes it, for both kinds
+    final corner = savedReader?['epub'] is Map ? (savedReader!['epub'] as Map)['corner'] : null;
+    if (!(savedDisplay?.containsKey('pageNote') ?? false) && corner is String) {
+      final note = PageNote.values.where((v) => v.name == corner).firstOrNull;
+      if (note != null) setDisplay(display.copyWith(pageNote: note));
+    }
     applyBacklight();
     notifyListeners();
     _loaded = true;
