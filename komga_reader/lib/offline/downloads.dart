@@ -600,13 +600,12 @@ class Downloads extends ChangeNotifier {
         if (epub) 'epubFile': 'book.epub',
         if (epub) 'positions': positions,
       };
-      await s.put(job.bookId, entry);
       // the exact place with Komga's page (the page alone is only as near as Komga's page count: opened from it, a
-      // book left at 31% came up at 12% - Windows, build 79)
+      // book left at 31% came up at 12% - Windows, build 79) - set first, so the entry's save writes it too
       if (epub && !unsent) {
         s.setServerProgress(job.bookId, book['readProgress'] as Map?, place: komgaPlace, keepPlace: false);
-        await s.saveProgress();
       }
+      await s.put(job.bookId, entry);
 
       // posters (series / list / collection posters are shared between books: fetched once)
       Future<void> poster(String url, String relative, {bool refresh = false}) async {

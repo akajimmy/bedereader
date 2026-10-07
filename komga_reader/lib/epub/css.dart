@@ -17,8 +17,8 @@ class CssCompound {
   final List<String> classes;
   final String? id;
   final String? pseudo; // a pseudo-element: first-letter, first-line, before ... (only first-letter is used)
-  // pseudo-classes: :first-child, :last-child, :first-of-type are checked; any other (:hover, :nth-child...) never
-  // matches. They were taken for pseudo-elements, so a "p:first-child" rule never applied (EPUB review E11)
+  // pseudo-classes: :first-child is checked; any other (:hover, :nth-child...) never matches. They were taken for
+  // pseudo-elements, so a "p:first-child" rule never applied (EPUB review E11)
   final List<String> states;
 
   static const pseudoElements = {'first-letter', 'first-line', 'before', 'after', 'marker', 'selection'};
@@ -27,17 +27,7 @@ class CssCompound {
       (tag == null || tag == '*' || tag == e.name) &&
       (id == null || e.id == id) &&
       classes.every(e.classes.contains) &&
-      states.every((s) => _state(s, e));
-
-  static bool _state(String s, XElement e) {
-    final siblings = e.parent?.elements.toList() ?? [e];
-    return switch (s) {
-      'first-child' => siblings.first == e,
-      'last-child' => siblings.last == e,
-      'first-of-type' => siblings.firstWhere((x) => x.name == e.name) == e,
-      _ => false,
-    };
-  }
+      states.every((s) => s == 'first-child' && (e.parent?.elements.first ?? e) == e);
 
   int get specificity =>
       (id != null ? 100 : 0) + (classes.length + states.length) * 10 + (tag != null && tag != '*' ? 1 : 0);

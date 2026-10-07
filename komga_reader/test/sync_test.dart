@@ -52,10 +52,14 @@ class ProgressServer extends LibraryServer {
   // EPUBs: the exact place (Readium progression); Komga makes the read progress page from it - how far through the
   // book times its page count (10 here), as the real one does
   final places = <String, Map<String, dynamic>>{};
+  int placeAsks = 0;
+  bool placeFails = false; // Komga answers, but with an error, when asked for a place
 
   @override
   Future<Map<String, dynamic>?> epubProgression(String bookId) async {
     _reach();
+    placeAsks++;
+    if (placeFails) throw KomgaError(500, '/api/v1/books/$bookId/progression');
     return places[bookId];
   }
 
@@ -422,5 +426,44 @@ void main() {
     await epubB1();
     Komga.onProgressWritten!(server, const ProgressWrite(bookId: 'B1', completed: true));
     expect(d.store!.readProgressOf('B1')!['page'], 10);
+  });
+
+  test("a refresh asks Komga for a downloaded EPUB's place only when Komga changed its progress (it asked for every "
+      'one, every time); a place Komga can\'t give keeps the one here', () async {
+    await epubB1();
+    server.rp['B1'] = {'page': 3, 'completed': false, 'lastModified': '2026-10-06T12:00:00Z'};
+    server.places['B1'] = place('c1', 0.3, 12);
+    Future<void> refresh() async {
+      await Future<void>.delayed(const Duration(milliseconds: 30)); // (a save here in the same tick is the newer)
+      await sync.run();
+    }
+
+    await refresh();
+    expect(totalOf(d.store!.placeOf('B1')), 0.3);
+    final asked = server.placeAsks;
+    await refresh();
+    expect(server.placeAsks, asked, reason: 'nothing changed on Komga: not asked again');
+    // moved on another device within the same page: Komga's progress changed
+    server.places['B1'] = place('c2', 0.33, 13);
+    server.rp['B1'] = {...server.rp['B1']!, 'lastModified': '2026-10-06T12:05:00Z'};
+    await refresh();
+    expect(totalOf(d.store!.placeOf('B1')), 0.33);
+    // changed again, but the place can't be had: the one here stays (asked again next time)
+    server.rp['B1'] = {...server.rp['B1']!, 'lastModified': '2026-10-06T12:10:00Z'};
+    server.placeFails = true;
+    await refresh();
+    expect(totalOf(d.store!.placeOf('B1')), 0.33);
+  });
+
+  test("S1, Komga winning but not saying its place: the place read here isn't kept with Komga's further page (it "
+      'would open there, and go back over it)', () async {
+    await epubB1();
+    final off = offlineApi();
+    await off.setEpubProgression('B1', place('c1', 0.3, 12));
+    server.rp['B1'] = {'page': 7, 'completed': false};
+    server.placeFails = true;
+    await sync.run();
+    expect(d.store!.readProgressOf('B1')!['page'], 7);
+    expect(d.store!.placeOf('B1'), isNull, reason: 'the page alone, not the 30% place');
   });
 }

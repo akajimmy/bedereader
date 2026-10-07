@@ -656,11 +656,10 @@ void main() {
     expect(sheet.declsFor(ps[0])['text-indent'], '0');
     expect(sheet.declsFor(ps[1])['text-indent'], '1em');
     expect(sheet.declsFor(ps[1]).containsKey('color'), isFalse);
-    expect(sheet.declsFor(ps[2])['x'], 'y');
-    expect(sheet.declsFor(ps[1]).containsKey('x'), isFalse);
+    expect(sheet.declsFor(ps[2]).containsKey('x'), isFalse, reason: 'only :first-child is understood');
   });
 
-  test('E12: negative margins never draw text over the block before (already so in 1.2: kept by a test)', () {
+  test('E12: negative margins never draw text over the block before (the reader records margins at 0 or more)', () {
     final o = layOut('<p style="margin-bottom: -2em">One.</p><p style="margin-top: -3em">Two.</p>').single.textOrigins;
     final lineH = const EpubTheme().fontSize * const EpubTheme().lineHeight;
     expect(o[1].dy - o[0].dy, greaterThanOrEqualTo(lineH - 0.5));

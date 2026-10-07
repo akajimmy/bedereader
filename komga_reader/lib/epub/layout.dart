@@ -938,9 +938,7 @@ class Paginator {
       final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
-      // never below nothing, so text is never drawn over the block before (the reader records margins at 0 or more
-      // already - EPUB review E12 found no way round that; this keeps it so)
-      var gap = math.max(0.0, math.max(_pendingGap, mt * _bookEm)) + extra;
+      var gap = math.max(_pendingGap, mt * _bookEm) + extra;
       // text under a heading: half a line at least, when the book leaves none (New Sun's, Xanth's, the Belgariad's
       // chapter titles sat on their first line - user, 2026-10-06 survey: "gap after headings")
       if (b is TextBlock && prev is TextBlock && isHeading(prev) && !isHeading(b) && !b.breakBefore) {
@@ -1038,39 +1036,30 @@ class Paginator {
       // drawn past the page's bottom and lost (EPUB review E6)
       final done = List<double>.filled(laid.length, 0); // how far down each cell has been placed
       while (true) {
-        final room = _bottom - _y;
-        var used = 0.0;
+        final room = _bottom - _y, empty = _pageEmpty;
+        var used = 0.0, more = false;
         var x = theme.margins.left;
-        final slices = <(double, double)>[];
         for (var c = 0; c < laid.length; c++) {
           final from = done[c];
           var to = from, edge = 0.0;
           for (final lm in laid[c].metrics) {
             edge += lm.height;
             if (edge <= from + 0.5) continue;
-            if (edge - from <= room + 0.5 || (to == from && _pageEmpty)) {
-              to = edge; // (a line taller than a page goes on an empty one anyway)
-            } else {
-              break;
-            }
+            if (edge - from > room + 0.5 && (to > from || !empty)) break; // (a line taller than a page: on anyway)
+            to = edge;
           }
-          if (to >= edge - 0.5 || to >= laid[c].tp.height - 0.5) to = laid[c].tp.height; // all its lines: done
-          slices.add((from, to));
-          used = math.max(used, to - from);
-        }
-        for (var c = 0; c < laid.length; c++) {
-          final (from, to) = slices[c];
+          if (to >= edge - 0.5) to = laid[c].tp.height; // all its lines: done
           if (to > from) _place(laid[c], Offset(x, _y), from, to);
           done[c] = to;
+          more |= to < laid[c].tp.height;
+          used = math.max(used, to - from);
           x += widths[c] + gap;
         }
-        final more = [for (var c = 0; c < laid.length; c++) done[c] < laid[c].tp.height - 0.5].contains(true);
         if (t.bordered) {
           x = theme.margins.left;
-          for (var c = 0; c < laid.length; c++) {
-            pages.last.pieces
-                .add(_RectPiece(Rect.fromLTWH(x - gap / 2, _y - 3, widths[c] + gap, used + 6), theme.text));
-            x += widths[c] + gap;
+          for (final w in widths.take(laid.length)) {
+            pages.last.pieces.add(_RectPiece(Rect.fromLTWH(x - gap / 2, _y - 3, w + gap, used + 6), theme.text));
+            x += w + gap;
           }
         }
         if (!more) {
