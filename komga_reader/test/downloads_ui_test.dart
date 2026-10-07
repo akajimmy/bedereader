@@ -257,6 +257,71 @@ void main() {
     expect(find.byType(Checkbox), findsNothing, reason: 'select mode over');
   });
 
+  testWidgets('Manage, Group by series: collapsed groups with their count, size and read; a tap opens one; filters and '
+      'sort apply inside; the choice is remembered', (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.tap(find.text('Group by series'));
+    await tester.pump();
+    expect(titles(), ['Flash', 'Saga'], reason: 'one closed group per series, by name');
+    expect(find.text('2 books · 4.0 MB · 1 read'), findsOneWidget);
+    expect(find.text('1 book · 2.0 MB'), findsOneWidget);
+
+    await tester.tap(find.text('Saga'));
+    await tester.pump();
+    expect(titles(), ['Flash', 'Saga', 'Saga #1', 'Saga #2']);
+
+    await tester.tap(find.text('Sort: Name'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Size, largest first'));
+    await tester.pumpAndSettle();
+    expect(titles(), ['Saga', 'Saga #1', 'Saga #2', 'Flash'], reason: "groups by their total size, books by theirs");
+
+    await tester.tap(find.text('Unread'));
+    await tester.pump();
+    expect(titles(), ['Flash', 'Saga', 'Saga #2'], reason: 'the filter first: a group holds the books shown (Saga 1 MB now)');
+    expect(find.text('1 book · 1.0 MB'), findsOneWidget);
+
+    expect((await tester.runAsync(SharedPreferences.getInstance))!.getBool('downloads.groupBySeries'), isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.pump();
+    expect(titles(), ['Flash', 'Saga'], reason: 'opened again: still grouped (groups closed again)');
+  });
+
+  testWidgets("Manage, Group by series: in select mode a group's box ticks its books (a dash when some are); its menu "
+      'removes the series', (tester) async {
+    await library(tester);
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    await tester.tap(find.text('Group by series'));
+    await tester.pump();
+    await tester.tap(find.text('Select'));
+    await tester.pump();
+    Checkbox box(String series) => tester.widget<Checkbox>(
+        find.descendant(of: find.widgetWithText(ListTile, series), matching: find.byType(Checkbox)));
+    await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga'), matching: find.byType(Checkbox)));
+    await tester.pump();
+    expect(find.text('2 selected · 4.0 MB'), findsOneWidget);
+    expect(box('Saga').value, isTrue);
+    await tester.tap(find.text('Saga')); // opens it (select mode or not)
+    await tester.pump();
+    await tester.tap(find.text('Saga #2'));
+    await tester.pump();
+    expect(box('Saga').value, isNull, reason: 'some of it ticked');
+    expect(find.text('1 selected · 3.0 MB'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Done selecting'));
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga'), matching: find.byTooltip('Remove')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("Remove the series' 2 downloads"));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove'));
+    await until(tester, () => find.text('Manage · 1').evaluate().isNotEmpty, 'Saga gone');
+    expect(titles(), ['Flash']);
+  });
+
   testWidgets("Manage: a row's menu removes the whole series", (tester) async {
     await library(tester);
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));

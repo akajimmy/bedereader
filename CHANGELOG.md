@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Added**
+- **Downloads > Manage: Group by series.** One group per series - its books, size and how many are read - closed
+  until you tap it. Sorting by size puts the biggest series first; the filters apply inside the groups. In select
+  mode a group's box ticks its whole series, and its menu removes the series. Remembered on each device.
+
 ## 1.3.0
 
 ### Build 83 - 2026-10-07
