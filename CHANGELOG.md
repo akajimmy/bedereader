@@ -15,6 +15,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   takes that place (the older one used to stay, and could be sent back over it), marking a book unread clears it,
   and removing a download before it's synced still sends the place. Saving a place offline no longer rewrites the
   whole downloads list.
+- **EPUB: no false "Read on another device" questions about your own reading**, and no lost last page: Mark read /
+  unread waits for a save on its way (it could put the book back in progress), a save that failed is sent again on
+  closing, and a book closed and quickly opened again waits for the closing save.
 - Build tools: a failed release step now really puts the changelog back; a build that fails early puts the version
   number back; and if a new Desktop copy can't be swapped in, the old one stays in place instead of none at all.
 
