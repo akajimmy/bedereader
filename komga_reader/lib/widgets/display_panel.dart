@@ -406,13 +406,19 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),
     );
 
-/// Rotation in the reader (Android only: a PC window doesn't turn).
+/// Rotation in the reader (Android only: a PC window doesn't turn). Portrait / Landscape hold the way the tablet is
+/// held when the lock starts; tapping the one in force again turns it upside down (user, 2026-10-07).
 Widget rotationRow(AppSettings s) => SegmentRow<Rotation>(
       title: 'Rotation',
-      subtitle: 'Follow the device, or stay put',
+      subtitle: s.display.rotation == Rotation.auto
+          ? 'Follow the device, or stay put'
+          : 'Stays put - while reading, tap ${s.display.rotation.label} again to turn it upside down',
       choices: [for (final r in Rotation.values) Choice(r, r.label)],
       value: s.display.rotation,
       onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
+      onReselect: (r) {
+        if (r != Rotation.auto) OrientationLock.instance.flip(); // (only while a book holds the lock)
+      },
     );
 
 Widget clockRow(AppSettings s) => SegmentRow<ShowWhen>(

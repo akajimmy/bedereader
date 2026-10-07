@@ -4,7 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Intent
-import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -62,17 +63,27 @@ class MainActivity : FlutterActivity() {
         // so nothing is left behind if the app is closed while reading.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/screen").setMethodCallHandler { call, result ->
             when (call.method) {
-                // The readers' rotation lock (lib/screen.dart holdOrientation): portrait or landscape held, but still
-                // turning over (180°) with the tablet - the sensor orientations follow the tablet whatever the
-                // system's auto-rotate switch says. Flutter's own request is the "user" one, which obeys the switch
-                // (user, 2026-10-05: the flip was lost while locked).
-                "orientation" -> {
-                    requestedOrientation = when (call.arguments) {
-                        "sensorPortrait" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
-                        "sensorLandscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-                        else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    }
-                    result.success(null)
+                // Which way up the screen is now, for the readers' rotation lock (lib/screen.dart OrientationLock): a
+                // lock starts the way the tablet is held. The display's rotation counts from the device's natural
+                // orientation, so that is worked out first (portrait now at 0 or 180 degrees = a natural portrait).
+                "currentWayUp" -> {
+                    @Suppress("DEPRECATION")
+                    val rotation = if (Build.VERSION.SDK_INT >= 30) display?.rotation ?: Surface.ROTATION_0
+                        else windowManager.defaultDisplay.rotation
+                    val portraitNow = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+                    val upright = rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180
+                    val naturalPortrait = upright == portraitNow
+                    result.success(if (naturalPortrait) when (rotation) {
+                        Surface.ROTATION_0 -> "portrait"
+                        Surface.ROTATION_90 -> "landscape"
+                        Surface.ROTATION_180 -> "reversePortrait"
+                        else -> "reverseLandscape"
+                    } else when (rotation) {
+                        Surface.ROTATION_0 -> "landscape"
+                        Surface.ROTATION_90 -> "reversePortrait"
+                        Surface.ROTATION_180 -> "reverseLandscape"
+                        else -> "portrait"
+                    })
                 }
                 "keepOn" -> {
                     if (call.arguments == true) {

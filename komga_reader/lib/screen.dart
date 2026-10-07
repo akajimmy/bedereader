@@ -83,25 +83,68 @@ Future<void> keepScreenOn(bool on) async {
   }
 }
 
-/// The readers' rotation lock (Settings > Reader > Rotation): [portrait] or [landscape] held - still turning over
-/// (180°) with the tablet, as both ways up are the same orientation (user, 2026-10-05: locked, the flip was lost) -
-/// or neither: the device's own way. On Android a lock asks for the sensor orientations through the screen channel:
-/// Flutter's request for both portraits is the "user" one, which only turns over when the system's auto-rotate is
-/// on. Elsewhere, and if that fails, Flutter's own.
-Future<void> holdOrientation({bool portrait = false, bool landscape = false}) async {
-  if (defaultTargetPlatform == TargetPlatform.android && (portrait || landscape)) {
-    try {
-      await _channel.invokeMethod('orientation', portrait ? 'sensorPortrait' : 'sensorLandscape');
+/// The readers' rotation lock (Settings > Reader > Rotation, and the readers' panels - user, 2026-10-07): Portrait
+/// or Landscape held exactly one way up, the tablet turning doesn't move it. The way up is the screen's when the
+/// lock starts (opening a book with it on, or choosing it), so it starts the way the tablet is held; choosing it
+/// again turns it over (180°) - to read upside down on purpose. The way up isn't stored: only Auto / Portrait /
+/// Landscape is. Auto: the device's own way.
+class OrientationLock {
+  OrientationLock._();
+  static final instance = OrientationLock._();
+
+  bool? _portrait; // the axis held: true portrait, false landscape, null none
+  bool _flipped = false; // the other way up of it (portrait down, landscape right)
+
+  bool get held => _portrait != null;
+
+  /// [portrait] or [landscape] held (a new axis starts the way the screen is up now), or neither: the device's way.
+  Future<void> hold({required bool portrait, required bool landscape}) async {
+    if (!portrait && !landscape) {
+      _portrait = null;
+      await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       return;
+    }
+    if (_portrait != portrait) {
+      _portrait = portrait;
+      _flipped = await _upsideDownNow(portrait);
+    }
+    await _apply();
+  }
+
+  /// The lock turned over (the choice tapped again). Nothing when no lock is held.
+  Future<void> flip() async {
+    if (_portrait == null) return;
+    _flipped = !_flipped;
+    await _apply();
+  }
+
+  /// The book closed: the app follows the device again.
+  Future<void> release() async {
+    _portrait = null;
+    await SystemChrome.setPreferredOrientations(const []);
+  }
+
+  /// The screen is now the other way up of [portrait] / landscape (Android; elsewhere: no).
+  Future<bool> _upsideDownNow(bool portrait) async {
+    if (defaultTargetPlatform != TargetPlatform.android) return false;
+    try {
+      final now = await _channel.invokeMethod<String>('currentWayUp');
+      return now == (portrait ? 'reversePortrait' : 'reverseLandscape');
     } catch (_) {
-      // no native side: Flutter's request below
+      return false; // not known: the usual way up
     }
   }
-  await SystemChrome.setPreferredOrientations(portrait
-      ? const [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]
-      : landscape
-          ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
-          : DeviceOrientation.values);
+
+  // one orientation, exactly (on Android: PORTRAIT / REVERSE_PORTRAIT / LANDSCAPE / REVERSE_LANDSCAPE - fixed, not
+  // the sensor's)
+  Future<void> _apply() => SystemChrome.setPreferredOrientations([
+        switch ((_portrait!, _flipped)) {
+          (true, false) => DeviceOrientation.portraitUp,
+          (true, true) => DeviceOrientation.portraitDown,
+          (false, false) => DeviceOrientation.landscapeLeft,
+          (false, true) => DeviceOrientation.landscapeRight,
+        },
+      ]);
 }
 
 /// The screen's current brightness 0..1 (this app's own level if set, else the tablet's). Null where unknown.
