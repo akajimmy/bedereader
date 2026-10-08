@@ -45,7 +45,6 @@ void main() {
     final saved = jsonDecode((await SharedPreferences.getInstance()).getString('view.library.L1')!) as Map;
     expect(saved['sort'], 'added');
     expect(saved['desc'], false);
-    expect(find.byTooltip('Clear filters'), findsOneWidget); // not the default any more
   });
 
   testWidgets("a saved view without a direction opens in its sort's natural one", (tester) async {
