@@ -412,6 +412,30 @@ class Komga {
 
   Future<Map<String, dynamic>?> book(String id) async => await _get('/api/v1/books/$id') as Map<String, dynamic>?;
 
+  /// A collection's series in the collection's own order (Komga's: as arranged for an ordered collection, by title
+  /// otherwise), optionally only unread / read; the shown libraries only, when some are hidden.
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) async {
+    final path = '/api/v1/collections/$collectionId/series';
+    final r = await _get(path, {'library_id': await _scope(null), 'read_status': readStatus, 'page': page, 'size': size});
+    if (r == null) throw KomgaError(404, path); // the collection is gone
+    return r as Map<String, dynamic>;
+  }
+
+  /// A read list's books sorted by a book field ([sort], e.g. "metadata.releaseDate,asc") instead of the list's
+  /// order: Komga's book search with the list as the condition.
+  Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
+      int page = 0, int size = 500}) async =>
+      await _post('/api/v1/books/list', {'page': page, 'size': size, 'sort': sort}, {
+        'condition': {
+          'allOf': [
+            {'readListId': {'operator': 'is', 'value': readListId}},
+            if (readStatus != null)
+              {'anyOf': [for (final s in readStatus) {'readStatus': {'operator': 'is', 'value': s}}]},
+          ],
+        },
+      }) as Map<String, dynamic>;
+
   // ---- pages and posters
   Future<List<dynamic>> pages(String bookId) async => (await _get('/api/v1/books/$bookId/pages')) as List<dynamic>;
   String pageUrl(String bookId, int number) => '$baseUrl/api/v1/books/$bookId/pages/$number'; // 1-based

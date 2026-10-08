@@ -71,6 +71,7 @@ class OfflineKomga extends Komga {
       'metadata.title' => (item['metadata'] as Map?)?['title'] ?? item['name'],
       'metadata.numberSort' => _numberSort(item),
       'metadata.releaseDate' => (item['metadata'] as Map?)?['releaseDate'],
+      'booksMetadata.releaseDate' => (item['booksMetadata'] as Map?)?['releaseDate'],
       'readProgress.readDate' => (item['readProgress'] as Map?)?['readDate'],
       'createdDate' => item['created'] ?? item['createdDate'],
       'lastModifiedDate' => item['lastModified'] ?? item['lastModifiedDate'],
@@ -236,6 +237,24 @@ class OfflineKomga extends Komga {
     final list = <dynamic>[
       for (final id in _readListOrder(readListId)) _book(id),
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
+    return _page(list, page, size);
+  }
+
+  /// A collection's downloaded series. Its own order isn't kept with the downloads: by title, as Komga orders an
+  /// unordered collection.
+  @override
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) =>
+      series(collectionId: collectionId, readStatus: readStatus, page: page, size: size);
+
+  /// A read list's downloaded books sorted by a book field, as Komga's search does.
+  @override
+  Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
+      int page = 0, int size = 500}) async {
+    final list = <dynamic>[
+      for (final id in _readListOrder(readListId)) _book(id),
+    ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
+    _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
   }
 

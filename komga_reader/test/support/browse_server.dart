@@ -12,6 +12,7 @@ class BrowseServer extends TestKomga {
 
   final requests = <String>[]; // "series p0 all", "series C1 p0 UNREAD+IN_PROGRESS", "books p0 READ", ...
   final sorts = <String>[]; // the sort each series, books and series-books request asked for
+  final readListAsks = <String>[]; // read lists' books: "RL3 p0 all" (list order), "RL3 p0 all metadata.releaseDate,desc"
   int libraryCalls = 0;
   final deleted = <String>[];
   final failing = <String>{};
@@ -55,6 +56,25 @@ class BrowseServer extends TestKomga {
     ], page, size);
   }
 
+  /// A collection's series in its own order (recorded as "collectionSeries C1 p0 all", sort "(collection order)").
+  @override
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) async {
+    final r = await series(collectionId: collectionId, readStatus: readStatus, page: page, size: size);
+    requests.last = 'collectionSeries $collectionId p$page ${_filter(readStatus)}';
+    sorts.last = '(collection order)';
+    return r;
+  }
+
+  /// A read list's books by a book field (Komga's search), in the list's order here: recorded with the sort.
+  @override
+  Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
+      int page = 0, int size = 500}) async {
+    final r = await readListBooks(readListId, readStatus: readStatus, page: page, size: size);
+    readListAsks.last = '$readListId p$page ${_filter(readStatus)} $sort';
+    return r;
+  }
+
   @override
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
@@ -82,16 +102,18 @@ class BrowseServer extends TestKomga {
   @override
   Future<Map<String, dynamic>> collections({String? libraryId, int page = 0, int size = 200}) async {
     requests.add('collections p$page');
-    return _page([{'id': 'C1', 'name': 'Marvel cosmic', 'seriesIds': ['S1']}], page, size);
+    return _page([{'id': 'C1', 'name': 'Marvel cosmic', 'seriesIds': ['S1'], 'lastModifiedDate': '2026-01-01T00:00:00Z'}],
+        page, size);
   }
 
+  /// RL3 updated last, RL2 first.
   @override
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async {
     requests.add('readLists p$page');
     return _page([
-      {'id': 'RL1', 'name': 'Infinity', 'bookIds': ['B1']},
-      {'id': 'RL2', 'name': 'Done', 'bookIds': ['B1']}, // all read
-      {'id': 'RL3', 'name': 'Fresh', 'bookIds': ['B2']}, // nothing read
+      {'id': 'RL1', 'name': 'Infinity', 'bookIds': ['B1'], 'lastModifiedDate': '2026-02-01T00:00:00Z'},
+      {'id': 'RL2', 'name': 'Done', 'bookIds': ['B1'], 'lastModifiedDate': '2026-01-01T00:00:00Z'}, // all read
+      {'id': 'RL3', 'name': 'Fresh', 'bookIds': ['B2'], 'lastModifiedDate': '2026-03-01T00:00:00Z'}, // nothing read
     ], page, size);
   }
 
@@ -99,6 +121,7 @@ class BrowseServer extends TestKomga {
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0,
       int size = 1000}) async {
+    readListAsks.add('$readListId p$page ${_filter(readStatus)}');
     final ids = switch (readListId) { 'RL2' => ['B1'], 'RL3' => ['B2'], _ => <String>[] };
     final books = [for (final b in shelf) if (ids.contains(b['id']) && _wanted(b, readStatus)) b];
     return {..._page(books, page, size)};

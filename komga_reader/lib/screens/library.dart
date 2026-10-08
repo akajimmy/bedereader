@@ -8,13 +8,14 @@ import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
 import '../view_prefs.dart';
+import '../view_sort.dart';
 import '../widgets/download_badge.dart';
 import '../widgets/drawer.dart';
-import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
+import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'book_details.dart' show posterDate;
 import 'open_book.dart';
@@ -60,7 +61,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   /// Shows [m] (a breadcrumb back to this screen), as picking its chip would.
   void _show(BrowseMode m) {
     if (_mode == m) return;
-    _sel.end(); _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); _load();
+    _sel.end(); _mode = m; _sort = _defaultSort(m); _load();
   }
   @override
   void refreshView() => _refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
@@ -71,21 +72,21 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   late String? _libraryId = widget.libraryId; // null = all libraries
   BrowseMode _mode = BrowseMode.series;
   ReadFilter _filter = ReadFilter.all;
-  String _sortKey = 'title';
-  bool _desc = false; // sort direction
+  ViewSort _sort = const ViewSort('title', false);
   late final Paged _paged = Paged(_fetch);
   final _sel = Selection(); // multi-select, in Books mode
 
-  /// The natural direction when a field is picked: titles A -> Z, dates newest first (one rule with pins').
-  static bool _defaultDesc(String key) => naturalDesc(key);
+  /// The mode's sort fields (each starts in its natural direction: titles A -> Z, dates newest first).
+  static List<SortField> _fieldsOf(BrowseMode m) => switch (m) {
+        BrowseMode.series => librarySeriesSorts,
+        BrowseMode.books => libraryBookSorts,
+        BrowseMode.collections || BrowseMode.readLists => listSorts,
+      };
+  List<SortField> get _fields => _fieldsOf(_mode);
 
-  // sort key -> Komga field (shared with pins, pins.dart); the direction is separate (_desc)
-  Map<String, String> get _sorts => _mode == BrowseMode.series ? seriesSortFields : bookSortFields;
-  String get _sortParam => '${_sorts[_sortKey] ?? _sorts.values.first},${_desc ? 'desc' : 'asc'}';
-
-  /// Direction wording that suits the field.
-  static String _dirLabel(String key, bool desc) =>
-      key == 'title' ? (desc ? 'Z → A' : 'A → Z') : (desc ? 'Newest first' : 'Oldest first');
+  // sort key -> Komga field (shared with pins, pins.dart); the direction is separate
+  Map<String, String> get _komgaFields => _mode == BrowseMode.series ? seriesSortFields : bookSortFields;
+  String get _sortParam => '${_komgaFields[_sort.key] ?? _komgaFields.values.first},${_sort.dir}';
 
   Komga get api => widget.api;
 
@@ -104,18 +105,27 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     super.dispose();
   }
 
-  static String _defaultSort(BrowseMode m) => m == BrowseMode.books ? 'added' : 'title';
+  /// A mode's default sort: books newest added first, the others by title / name.
+  static ViewSort _defaultSort(BrowseMode m) =>
+      m == BrowseMode.books ? const ViewSort('added', true) : ViewSort.first(_fieldsOf(m));
   String get _viewKey => 'view.library.${_libraryId ?? 'all'}';
-  bool get _filtered =>
-      _filter != ReadFilter.all || _sortKey != _defaultSort(_mode) || _desc != _defaultDesc(_defaultSort(_mode));
+  bool get _filtered => _filter != ReadFilter.all || _sort != _defaultSort(_mode);
+  bool get _listMode => _mode == BrowseMode.collections || _mode == BrowseMode.readLists;
+
+  /// A saved or pinned sort in this mode: an unknown key is the mode's default field; no direction, the field's
+  /// natural one.
+  ViewSort _sortOf(Object? key, Object? desc) {
+    final f = _fields.where((f) => f.key == key).firstOrNull;
+    final k = f?.key ?? _defaultSort(_mode).key;
+    return ViewSort(k, desc is bool ? desc : _fields.firstWhere((f) => f.key == k).desc);
+  }
 
   /// This library's remembered mode / filter / sort.
   Future<void> _restoreView() async {
     final v = await ViewPrefs.load(_viewKey);
     _mode = BrowseMode.values.firstWhere((m) => m.name == v['mode'], orElse: () => BrowseMode.series);
     _filter = ReadFilterApi.fromName(v['filter']);
-    _sortKey = _sorts.containsKey(v['sort']) ? v['sort'] as String : _defaultSort(_mode);
-    _desc = v['desc'] is bool ? v['desc'] as bool : _defaultDesc(_sortKey); // none saved: the sort's natural one
+    _sort = _sortOf(v['sort'], v['desc']);
   }
 
   Future<void> _init() async {
@@ -123,14 +133,13 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     if (pin != null) {
       _mode = BrowseMode.values.firstWhere((m) => m.name == pin.mode, orElse: () => BrowseMode.series);
       _filter = pin.readFilter;
-      // pin.sort is "key:asc" / "key:desc" (just "key": the sort's natural direction)
+      // pin.sort is "key:asc" / "key:desc" (just "key": the sort's natural direction; none: the mode's default)
       final parts = (pin.sort ?? '').split(':');
-      _sortKey = _sorts.containsKey(parts.first) ? parts.first : _defaultSort(_mode);
-      _desc = parts.length > 1 ? parts[1] == 'desc' : _defaultDesc(_sortKey);
+      _sort = _sortOf(parts.first, parts.length > 1 ? parts[1] == 'desc' : null);
     } else {
       await _restoreView();
       final m = widget.startMode;
-      if (m != null && m != _mode) { _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); }
+      if (m != null && m != _mode) { _mode = m; _sort = _defaultSort(m); }
     }
     if (!mounted) return;
     setState(() {});
@@ -148,10 +157,11 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
             sort: _sortParam, page: page, size: size),
         BrowseMode.books => api.books(libraryId: _libraryId, readStatus: _filter.api,
             sort: _sortParam, page: page, size: size),
-        BrowseMode.collections || BrowseMode.readLists when _filter != ReadFilter.all => page > 0
+        BrowseMode.collections || BrowseMode.readLists when _filter != ReadFilter.all || _sort != _defaultSort(_mode) =>
+          page > 0
             ? Future.value(const {'content': [], 'last': true}) // (all of them came as the first page)
             : ListContents.matching(api, readLists: _mode == BrowseMode.readLists, libraryId: _libraryId,
-                filter: _filter),
+                filter: _filter, sort: _sort),
         BrowseMode.collections => api.collections(libraryId: _libraryId, page: page, size: size),
         BrowseMode.readLists => api.readLists(libraryId: _libraryId, page: page, size: size),
       };
@@ -160,7 +170,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   void _load() {
     setState(() {});
     _paged.reset();
-    ViewPrefs.save(_viewKey, {'mode': _mode.name, 'filter': _filter.name, 'sort': _sortKey, 'desc': _desc});
+    ViewPrefs.save(_viewKey, {'mode': _mode.name, 'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc});
   }
 
   Future<void> _switchLibrary(String? id) async {
@@ -173,8 +183,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
 
   void _clearFilters() {
     _filter = ReadFilter.all;
-    _sortKey = _defaultSort(_mode);
-    _desc = _defaultDesc(_sortKey);
+    _sort = _defaultSort(_mode);
     _load();
   }
 
@@ -190,8 +199,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
 
   @override
   Widget build(BuildContext context) {
-    // the eye in every view (user, 2026-10-07); sorting for series and books only (Komga sorts no lists)
-    final sortable = _mode == BrowseMode.series || _mode == BrowseMode.books;
+    // the eye and Sort in every mode (user, 2026-10-07 / 2026-10-08)
     return SideMenuFrame(api: api, onSignOut: widget.onSignOut, page: (context, docked) =>
         selectionScope(_sel, (context) => Scaffold(
       key: _scaffold,
@@ -211,50 +219,23 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
             Text(_libraryName), const Icon(Icons.arrow_drop_down),
           ]),
         ),
-        actions: [
-          Center(child: CountBadge(paged: _paged)),
-          ReadFilterButton(value: _filter, onChanged: (f) { _filter = f; _load(); }),
-          if (sortable)
-            // Sort: pick a field (it starts in its natural direction), then flip the direction below the divider.
-            PopupMenuButton<String>(
-              tooltip: 'Sort: ${_sortLabel(_sortKey)}, ${_dirLabel(_sortKey, _desc)}',
-              icon: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.sort),
-                Icon(_desc ? Icons.arrow_downward : Icons.arrow_upward, size: 14),
-              ]),
-              onSelected: (s) {
-                final value = s.substring(2);
-                if (s.startsWith('f:') && value != _sortKey) {
-                  _sortKey = value;
-                  _desc = _defaultDesc(value);
-                } else if (s.startsWith('d:')) {
-                  _desc = value == 'desc';
-                }
-                _load();
-              },
-              itemBuilder: (_) => [
-                for (final e in _sorts.keys)
-                  CheckedPopupMenuItem(value: 'f:$e', checked: e == _sortKey, child: Text(_sortLabel(e))),
-                const PopupMenuDivider(),
-                for (final d in const [false, true])
-                  CheckedPopupMenuItem(value: d ? 'd:desc' : 'd:asc', checked: _desc == d,
-                      child: Text(_dirLabel(_sortKey, d))),
-              ],
-            ),
-          if (_filtered) ClearFiltersButton(onPressed: _clearFilters),
-          if (_mode == BrowseMode.books) SelectButton(selection: _sel),
-          const PosterSizeButton(),
-          PinButton(current: Pin(
+        actions: viewBarActions(
+          paged: _paged,
+          filter: _filter, onFilter: (f) { _filter = f; _load(); },
+          sort: SortMenuButton(fields: _fields, value: _sort, onChanged: (s) { _sort = s; _load(); }),
+          onClear: _filtered ? _clearFilters : null,
+          select: _mode == BrowseMode.books ? _sel : null,
+          pin: Pin(
             name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!].join(' · '),
             kind: 'library', id: _libraryId, title: _libraryName,
-            filter: _filter.name, mode: _mode.name, sort: sortable ? '$_sortKey:${_desc ? 'desc' : 'asc'}' : null,
-          )),
-          IconButton(tooltip: 'Search', icon: const Icon(Icons.search),
-              onPressed: () => _push(SearchScreen(api: api, libraryId: _libraryId,
-                  libraryName: _libraryId == null ? null : _libraryName))),
-          IconButton(tooltip: 'Refresh', icon: const Icon(Icons.refresh), onPressed: _refresh),
-          const FullscreenExit(),
-        ],
+            filter: _filter.name, mode: _mode.name,
+            // collections / read lists: none for the default, as pins made before they could be sorted
+            sort: _listMode && _sort == _defaultSort(_mode) ? null : _sort.pinValue,
+          ),
+          onSearch: () => _push(SearchScreen(api: api, libraryId: _libraryId,
+              libraryName: _libraryId == null ? null : _libraryName)),
+          onRefresh: _refresh,
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(44),
           child: SingleChildScrollView(
@@ -268,7 +249,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
                     label: Text(_modeLabel(m)),
                     selected: _mode == m,
                     onSelected: (_) {
-                      _sel.end(); _mode = m; _sortKey = _defaultSort(m); _desc = _defaultDesc(_sortKey); _load();
+                      _sel.end(); _mode = m; _sort = _defaultSort(m); _load();
                     },
                   ),
                 ),
@@ -317,8 +298,6 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
         BrowseMode.series => 'Series', BrowseMode.books => 'Books',
         BrowseMode.collections => 'Collections', BrowseMode.readLists => 'Read lists',
       };
-  static String _sortLabel(String k) =>
-      {'title': 'Title', 'added': 'Date added', 'updated': 'Date updated', 'release': 'Release date'}[k] ?? k;
 }
 
 /// "12 books · 3 unread · 1 in progress", or "12 books · read" once every book is finished.

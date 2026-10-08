@@ -4,16 +4,16 @@ import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_prefs.dart';
+import '../view_sort.dart';
 import '../widgets/breadcrumb.dart';
 import '../widgets/drawer.dart';
-import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
+import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'library.dart';
 import 'open_book.dart';
-import 'series.dart';
 
 /// A read list (event / era) in its own order, e.g. "only the unread books of Civil War".
 /// Books opened from here continue to the next book of the list, not the next of the series.
@@ -31,21 +31,42 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
   void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
 
   ReadFilter _filter = ReadFilter.all;
-  late final Paged _paged = Paged((page, size) =>
-      widget.api.readListBooks(widget.readList['id'], readStatus: _filter.api, page: page, size: size));
+  ViewSort _sort = ViewSort.first(readListBookSorts);
+  late final Paged _paged = Paged((page, size) => readListBooksPage(widget.api, widget.readList['id'] as String, _sort,
+      readStatus: _filter.api, page: page, size: size));
   String get _viewKey => 'view.readlist.${widget.readList['id']}';
   final _sel = Selection();
 
   @override
   void initState() {
     super.initState();
-    (widget.pin != null ? Future.value(widget.pin!.readFilter) : restoreFilter(_viewKey))
-        .then((f) { if (mounted) { setState(() => _filter = f); _paged.more(); } });
+    _restore().then((_) { if (mounted) { setState(() {}); _paged.more(); } });
   }
+
+  /// From the pin it was opened from, else this list's remembered view.
+  Future<void> _restore() async {
+    final pin = widget.pin;
+    if (pin != null) {
+      _filter = pin.readFilter;
+      _sort = ViewSort.fromPin(readListBookSorts, pin.sort);
+    } else {
+      final v = await ViewPrefs.load(_viewKey);
+      _filter = ReadFilterApi.fromName(v['filter']);
+      _sort = ViewSort.of(readListBookSorts, v['sort'], v['desc']);
+    }
+  }
+
+  void _save() => ViewPrefs.save(_viewKey, {'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc});
 
   void _setFilter(ReadFilter f) {
     setState(() => _filter = f);
-    ViewPrefs.save(_viewKey, {'filter': f.name});
+    _save();
+    _paged.reset();
+  }
+
+  void _setSort(ViewSort s) {
+    setState(() => _sort = s);
+    _save();
     _paged.reset();
   }
 
@@ -59,6 +80,7 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
   @override
   Widget build(BuildContext context) {
     final rlId = widget.readList['id'] as String;
+    final name = widget.readList['name'] as String;
     return withSideMenu(widget.api, (docked) => selectionScope(_sel, (context) => Scaffold(
       key: menuScaffold,
       drawer: menuDrawer(widget.api, docked: docked),
@@ -67,22 +89,24 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
           ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh)
           : AppBar(
         leading: const BackButton(),
-        title: Breadcrumb(parent: 'Read lists', title: widget.readList['name'] as String,
+        title: Breadcrumb(parent: 'Read lists', title: name,
             onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
                 mode: BrowseMode.readLists)),
-        actions: [
-          Center(child: CountBadge(paged: _paged)),
-          ReadFilterButton(value: _filter, onChanged: _setFilter),
-          const PosterSizeButton(),
-          PinButton(current: Pin(
-            name: [widget.readList['name'] as String, if (_filter.shows != null) _filter.shows!].join(' · '),
-            kind: 'readlist', id: rlId, title: widget.readList['name'] as String, filter: _filter.name,
-          )),
-          SelectButton(selection: _sel),
-          IconButton(tooltip: 'Read list actions', icon: const Icon(Icons.more_vert),
-              onPressed: () => showReadListActions(context, widget.api, widget.readList, onChanged: _paged.refresh)),
-          const FullscreenExit(),
-        ],
+        actions: viewBarActions(
+          paged: _paged,
+          filter: _filter, onFilter: _setFilter,
+          sort: SortMenuButton(fields: readListBookSorts, value: _sort, onChanged: _setSort),
+          select: _sel,
+          pin: Pin(
+            name: [name, if (_filter.shows != null) _filter.shows!,
+                if (_sort.words(readListBookSorts) != null) _sort.words(readListBookSorts)!].join(' · '),
+            kind: 'readlist', id: rlId, title: name, filter: _filter.name,
+            sort: _sort.isDefault(readListBookSorts) ? null : _sort.pinValue, // null: as pins made before sorts
+          ),
+          onRefresh: _paged.refresh,
+          onMore: () => showReadListActions(context, widget.api, widget.readList, onChanged: _paged.refresh),
+          moreTooltip: 'Read list actions',
+        ),
       ),
       body: menuEdge(PagedPosterGrid(
         paged: _paged,

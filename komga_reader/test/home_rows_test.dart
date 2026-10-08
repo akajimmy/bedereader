@@ -57,6 +57,14 @@ class HomeRowsServer extends HomeServer with ClientSettingsStore {
         'booksCount': 1, 'booksUnreadCount': 1, 'booksInProgressCount': 0}));
   }
 
+  /// A pinned collection's view (in the collection's own order: its default sort).
+  @override
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) async {
+    asked.add('collectionSeries $collectionId');
+    return onePage([]);
+  }
+
   // pins: the views and the things themselves
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async =>
