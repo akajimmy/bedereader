@@ -6,12 +6,11 @@ import '../offline/offline_komga.dart';
 
 enum ServerState { checking, ok, warning, down }
 
-/// The server's traffic light with Retry (Settings > Server & connection). Green: answered and the API key
+/// The server's traffic light with Retry (Settings > Server and sync). Green: answered and the API key
 /// is accepted. Amber: answered but refused the key, took over 3 s, or offline mode. Red: no answer.
 class ServerStatus extends StatefulWidget {
-  const ServerStatus({super.key, required this.api, this.autofocus = false});
+  const ServerStatus({super.key, required this.api});
   final Komga api;
-  final bool autofocus;
   @override
   State<ServerStatus> createState() => _ServerStatusState();
 }
@@ -83,7 +82,6 @@ class _ServerStatusState extends State<ServerStatus> {
       ),
       const SizedBox(width: 10),
       FilledButton.tonalIcon(
-        autofocus: widget.autofocus,
         onPressed: _state == ServerState.checking ? null : _check,
         icon: const Icon(Icons.refresh),
         label: const Text('Retry'),

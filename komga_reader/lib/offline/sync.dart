@@ -106,13 +106,13 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
           final place = local['placeHere'] == true ? store.placeOf(id) : null;
           if (!komgaChanged) {
             // (an EPUB's place goes even on the same page: Komga's pages are coarser than its places)
-            if (!_same(server, here) || place != null) await _send(api, id, here, book, place: place);
+            if (!_same(server, here) || place != null) await _send(api, id, here, place: place);
             sent++;
             store.setServerProgress(id, _asReadProgress(here, book));
           } else {
             final keepHere = _rank(here) >= _rank(server);
             if (keepHere) {
-              await _send(api, id, here, book, place: place);
+              await _send(api, id, here, place: place);
               store.setServerProgress(id, _asReadProgress(here, book));
             } else {
               // Komga's is further: its place too - the one read here stayed and, opened at offline and read on a
@@ -258,7 +258,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   /// [place]: an EPUB's exact place read here (its stored progression): sent as it is - Komga works its read progress
   /// out from it, and the book reopens there on every device; sent as a page, only the page moved, and Komga's place
   /// stayed where it was.
-  static Future<void> _send(Komga api, String id, Map<String, dynamic> p, Map book, {Map? place}) async {
+  static Future<void> _send(Komga api, String id, Map<String, dynamic> p, {Map? place}) async {
     if (p['none'] == true) {
       await api.markUnread(id);
     } else if (p['completed'] == true) {

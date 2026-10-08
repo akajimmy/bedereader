@@ -29,15 +29,17 @@ class HomeSectionsEditor extends StatelessWidget {
                   child: Text(HomeSections.names[order[i]]!,
                       style: TextStyle(color: sections[order[i]] ? null : const Color(0xFF8A8A8A))),
                 ),
+                // at the ends they do nothing but stay focusable, dimmed: a disabled button with the remote's focus
+                // drops it - moved to the top with ▲, the focus was gone (code review 2026-10-05, #26)
                 IconButton(
                   tooltip: 'Move ${HomeSections.names[order[i]]} up',
-                  icon: const Icon(Icons.keyboard_arrow_up),
-                  onPressed: i == 0 ? null : () => sections.move(order[i], -1),
+                  icon: Icon(Icons.keyboard_arrow_up, color: i == 0 ? _dim : null),
+                  onPressed: () { if (i > 0) sections.move(order[i], -1); },
                 ),
                 IconButton(
                   tooltip: 'Move ${HomeSections.names[order[i]]} down',
-                  icon: const Icon(Icons.keyboard_arrow_down),
-                  onPressed: i == order.length - 1 ? null : () => sections.move(order[i], 1),
+                  icon: Icon(Icons.keyboard_arrow_down, color: i == order.length - 1 ? _dim : null),
+                  onPressed: () { if (i < order.length - 1) sections.move(order[i], 1); },
                 ),
                 ReorderableDragStartListener(
                   index: i,
@@ -50,6 +52,8 @@ class HomeSectionsEditor extends StatelessWidget {
     );
   }
 }
+
+const _dim = Color(0xFF5A5A5A); // an arrow that can't move its section any further
 
 /// Home's ⋮ > Arrange sections…
 Future<void> showHomeSectionsEditor(BuildContext context) => showModalBottomSheet<void>(

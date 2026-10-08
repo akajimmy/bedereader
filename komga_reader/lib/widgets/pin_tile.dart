@@ -9,7 +9,7 @@ import 'readlist_tile.dart';
 /// count, and offline to hide pins with nothing downloaded.
 Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
   final status = p.readFilter.api;
-  final parts = (p.sort ?? '').split(':');
+  final parts = (p.fullSort ?? '').split(':');
   final desc = parts.length > 1 && parts[1] == 'desc';
   String? sortParam(Map<String, String> fields) =>
       fields[parts.first] == null ? null : '${fields[parts.first]},${desc ? 'desc' : 'asc'}';

@@ -255,13 +255,9 @@ bool LoadSavedWindow(SavedWindow* out) {
   if (!(in >> first)) return false;
   RECT r{};
   int max = 0;
-  if (first == "v2") {
-    if (!(in >> r.left >> r.top >> r.right >> r.bottom >> max)) return false;
-  } else {
-    // saved by an earlier build: logical x y w h, maximized, then the physical rectangle - that's the one used
-    int y, w, h;
-    if (!(in >> y >> w >> h >> max >> r.left >> r.top >> r.right >> r.bottom)) return false;
-  }
+  // the one format (no older ones read - user, 2026-10-07): anything else is the default window
+  if (first != "v2") return false;
+  if (!(in >> r.left >> r.top >> r.right >> r.bottom >> max)) return false;
   if (r.right - r.left < 400 || r.bottom - r.top < 300) return false;
   // only restore if that spot is still on a connected monitor (a screen may have been unplugged): else the default
   if (!MonitorFromRect(&r, MONITOR_DEFAULTTONULL)) return false;

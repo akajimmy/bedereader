@@ -37,8 +37,8 @@ export '../reader/comic_renderer.dart' show CurlLayer, trimPictures;
 /// preview of it over the thumb.
 ///
 /// Touch: tap the left/right third to go back/forward, the middle for the controls; any tap off the controls hides
-/// them. Pinch or double-tap to zoom in fit-screen mode. Android: the volume keys turn pages (a setting). Progress
-/// goes straight to Komga (no local copy).
+/// them. Pinch or double-tap to zoom in fit-screen mode. Keys, the volume keys included, are mapped in Settings >
+/// Remote and keys. Progress goes to Komga, or to the downloaded copy offline (synced later).
 ///
 /// The one Reader (user, 2026-10-07; reports\plan-reader-renderer-2026-10-07.md): the controls, the keys and taps,
 /// the book's progress and the moving between books are here; the pages themselves are the comic renderer's

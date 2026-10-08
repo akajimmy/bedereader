@@ -152,7 +152,7 @@ class _AppDrawerState extends State<AppDrawer> {
           ListTile(leading: const Icon(Icons.info_outline), title: const Text('About'),
               onTap: () {
                 _close();
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => AboutScreen(api: widget.api)));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AboutScreen()));
               }),
         ]),
       ),

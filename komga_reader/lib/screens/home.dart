@@ -92,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   bool _started = false; // the first load has begun
 
   Future<void> _load() async {
+    if (!mounted) return; // Home closed before the sections had loaded (code review 2026-10-05, #19)
     _started = true;
     PinTile.invalidate(); // pin posters show the current first items
     // what's synced through Komga, again: changes made on another device arrive (user, 2026-10-05) - not while offline

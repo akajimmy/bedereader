@@ -40,8 +40,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
 
   Future<void> _load() async {
     try {
-      final fresh = await api.book(_book['id'] as String);
-      final series = await api.oneSeries(_book['seriesId'] as String);
+      // together, not one after the other (code review 2026-10-05, #47)
+      // (Future.wait throws the first error as it is: a record's .wait would wrap it, and explain() wouldn't know it)
+      final both = await Future.wait([api.book(_book['id'] as String), api.oneSeries(_book['seriesId'] as String)]);
+      final fresh = both[0], series = both[1];
       if (mounted) setState(() { if (fresh != null) _book = fresh; _series = series; _error = null; });
     } catch (e) {
       if (mounted) setState(() => _error = e);
@@ -67,8 +69,17 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   }
 
   Future<void> _viewSeries() async {
-    final s = _series ?? await api.oneSeries(_book['seriesId'] as String);
-    if (s == null || !mounted) return;
+    final dynamic s;
+    try {
+      final found = _series ?? await api.oneSeries(_book['seriesId'] as String);
+      if (found == null) throw StateError('series not found');
+      s = found;
+    } catch (e, st) {
+      // it said nothing (code review 2026-10-05, #28)
+      if (mounted) showErrorSnack(context, couldnt('open the series', e, thing: 'series'), e, st);
+      return;
+    }
+    if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: api, series: s)));
     unawaited(_load()); // back from the series: read state may have changed
   }

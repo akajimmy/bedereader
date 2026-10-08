@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart' show KomgaUnreachable;
 import 'package:komga_reader/screens/book_details.dart';
 import 'package:komga_reader/screens/library.dart' show seriesStatus;
 import 'package:komga_reader/screens/readlist.dart';
@@ -244,6 +247,33 @@ void main() {
     await tester.pump();
     expect(find.text('Open series'), findsNothing);
   });
+
+  testWidgets('book details asks for the book and its series together, not one after the other (code review '
+      '2026-10-05, #47)', (tester) async {
+    final api = noNetwork(_HeldBook.new);
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: api, book: theBook)));
+    await tester.pump();
+    expect(api.seriesAsked, 1, reason: 'the series asked for while the book is still on its way');
+    api.bookAnswer.complete(theBook);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('The Origin of the Silver Surfer'), findsOneWidget);
+  });
+
+  testWidgets("View series when Komga can't be reached says so, and stays (code review 2026-10-05, #28)",
+      (tester) async {
+    setView(tester, const Size(1280, 1600));
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: noNetwork(_SeriesDown.new), book: theBook)));
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.text('View series'));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SnackBar), findsOneWidget);
+    expect(find.byType(BookDetailsScreen), findsOneWidget);
+  });
+
 }
 
 class _SeriesKomga extends FakeKomga {
@@ -251,4 +281,27 @@ class _SeriesKomga extends FakeKomga {
   final Map<String, dynamic> s;
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async => s;
+}
+
+/// The book held until the test answers; how often the series was asked for.
+class _HeldBook extends FakeKomga {
+  final bookAnswer = Completer<Map<String, dynamic>?>();
+  int seriesAsked = 0;
+  @override
+  Future<Map<String, dynamic>?> book(String id) => bookAnswer.future;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) {
+    seriesAsked++;
+    return super.oneSeries(id);
+  }
+}
+
+/// The book there, the series found missing on the first look and unreachable on the second (View series).
+class _SeriesDown extends FakeKomga {
+  int looks = 0;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) async {
+    if (looks++ == 0) return null;
+    throw KomgaUnreachable(baseUrl);
+  }
 }

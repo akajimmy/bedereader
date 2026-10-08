@@ -6,16 +6,13 @@ import 'package:komga_reader/screens/about.dart';
 import 'package:komga_reader/widgets/server_status.dart';
 
 import 'support/helpers.dart';
-import 'support/no_network.dart';
-import 'support/status_server.dart';
 
 /// The About screen. The server status (now in Settings > Server) and the side menu's order are tested in
 /// app_settings_test (test audit, 2026-09-30).
 void main() {
   testWidgets('About: name, author, licence, documents, AI disclosure, Komga credits - no server section', (tester) async {
     setView(tester, const Size(900, 1400));
-    final api = noNetwork(StatusServer.new); // counts me() calls: About mustn't check the server
-    await tester.pumpWidget(MaterialApp(home: AboutScreen(api: api)));
+    await tester.pumpWidget(MaterialApp(home: const AboutScreen()));
     await tester.pump();
     expect(find.text('About'), findsOneWidget); // the title
     expect(find.text(appName), findsOneWidget);
@@ -27,7 +24,6 @@ void main() {
     // the server's address and status are in Settings > Server now
     expect(find.text('http://192.168.1.10:25600'), findsNothing);
     expect(find.byType(ServerStatus), findsNothing);
-    expect(api.calls, 0);
   });
 
   testWidgets("the version: as the app's platform side reports it (name and build); unknown if it can't say",
@@ -43,13 +39,13 @@ void main() {
       asked++;
       return {'name': '1.2.0', 'code': 57};
     });
-    await tester.pumpWidget(MaterialApp(home: AboutScreen(api: noNetwork(StatusServer.new))));
+    await tester.pumpWidget(MaterialApp(home: const AboutScreen()));
     await tester.pump();
     expect(asked, 1);
     expect(find.text('Version 1.2.0 (build 57)'), findsOneWidget);
 
     messenger.setMockMethodCallHandler(channel, (call) async => throw PlatformException(code: 'none'));
-    await tester.pumpWidget(MaterialApp(home: AboutScreen(key: UniqueKey(), api: noNetwork(StatusServer.new))));
+    await tester.pumpWidget(MaterialApp(home: AboutScreen(key: UniqueKey())));
     await tester.pump();
     expect(find.text('Version unknown'), findsOneWidget);
   });

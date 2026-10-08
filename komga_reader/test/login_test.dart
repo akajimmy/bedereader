@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
@@ -81,6 +83,36 @@ void main() {
     expect(signedIn, same(built.single));
     expect(find.byType(ErrorText), findsNothing);
   });
+
+  testWidgets('Enter pressed again while connecting: Komga is asked once (code review 2026-10-05, #20)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final built = <_SlowKomga>[];
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(
+      onSignedIn: (_) async {},
+      client: (server, key) {
+        final api = noNetwork(() => _SlowKomga(server, key));
+        built.add(api);
+        return api;
+      },
+    )));
+    await tester.pump();
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
+        'http://nas:25600');
+    final key = find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'API key');
+    await tester.enterText(key, 'key1');
+    await tester.showKeyboard(key);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.showKeyboard(key); // (the first Enter put the keyboard away)
+    await tester.testTextInput.receiveAction(TextInputAction.done); // again, while the first is still connecting
+    await tester.pump();
+    expect(built, hasLength(1), reason: 'one client, one question to Komga');
+    expect(built.single.meCalls, 1);
+    built.single.answer.complete({'id': 'U1'});
+    await tester.pump();
+  });
+
 }
 
 /// Komga at the address typed, answering /users/me (no network: anything else fails the test).
@@ -93,3 +125,16 @@ class _SignInKomga extends Komga {
     return {'id': 'U1'};
   }
 }
+
+/// Komga that answers /users/me only when the test says.
+class _SlowKomga extends Komga {
+  _SlowKomga(super.baseUrl, super.apiKey);
+  int meCalls = 0;
+  final answer = Completer<Map<String, dynamic>?>();
+  @override
+  Future<Map<String, dynamic>?> me() {
+    meCalls++;
+    return answer.future;
+  }
+}
+

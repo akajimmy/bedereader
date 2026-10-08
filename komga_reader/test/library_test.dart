@@ -287,4 +287,21 @@ void main() {
     expect([for (final l in r['content'] as List) l['name']], ['Done']);
     expect(r['totalElements'], 1);
   });
+
+  test('a library pin saved with just its sort key (no direction): its poster asks in the direction the screen '
+      'opens it - the natural one - and pinning that view again is the same pin (code review 2026-10-05, #29)',
+      () async {
+    final api = noNetwork(BrowseServer.new);
+    for (final (sort, asked) in const [('added', 'createdDate,desc'), ('title', 'metadata.titleSort,asc')]) {
+      api.sorts.clear();
+      await pinView(api, Pin(name: 'P', kind: 'library', id: 'L1', title: 'Events', mode: 'series', sort: sort));
+      expect(api.sorts, [asked], reason: sort);
+    }
+    Pin pin(String? sort) => Pin(name: 'P', kind: 'library', id: 'L1', title: 'Events', mode: 'series', sort: sort);
+    expect(pin('added').sameView(pin('added:desc')), isTrue);
+    expect(pin('title').sameView(pin('title:asc')), isTrue);
+    expect(pin('added').sameView(pin('added:asc')), isFalse, reason: 'the other direction is another view');
+    // a series pin's missing sort is its own default (oldest first) - not touched
+    expect(const Pin(name: 'S', kind: 'series', id: 'S1', title: 'Saga').fullSort, isNull);
+  });
 }

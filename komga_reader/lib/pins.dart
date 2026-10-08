@@ -8,6 +8,9 @@ import 'api.dart';
 import 'errors.dart';
 import 'refresh_gate.dart';
 
+/// A library sort field's natural direction: titles A -> Z, dates newest first.
+bool naturalDesc(String key) => key != 'title';
+
 /// A view pinned to Home under a name of your choosing, e.g. "Ultimate Universe · unread" = that read list with
 /// read books hidden. Opening it restores exactly that view (list, hide-read, and for libraries mode and sort).
 @immutable
@@ -25,8 +28,18 @@ class Pin {
 
   ReadFilter get readFilter => ReadFilterApi.fromName(filter);
 
+  /// A library pin's sort with its direction always there: "key" alone (no direction saved with it) is the sort's
+  /// natural one, as the library screen opens it (code review 2026-10-05, #29: the poster showed it oldest first and
+  /// the screen newest first, and pinning the same view again made a second pin).
+  String? get fullSort {
+    final s = sort;
+    if (kind != 'library' || s == null || s.contains(':')) return s;
+    return '$s:${naturalDesc(s) ? 'desc' : 'asc'}';
+  }
+
   /// Same view (the name doesn't matter).
-  bool sameView(Pin o) => o.kind == kind && o.id == id && o.filter == filter && o.mode == mode && o.sort == sort;
+  bool sameView(Pin o) =>
+      o.kind == kind && o.id == id && o.filter == filter && o.mode == mode && o.fullSort == fullSort;
 
   Pin renamed(String n) => Pin(name: n, kind: kind, id: id, title: title, filter: filter, mode: mode, sort: sort);
 
