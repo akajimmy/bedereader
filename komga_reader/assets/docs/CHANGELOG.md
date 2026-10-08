@@ -9,6 +9,23 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **Filters**: a funnel button on libraries (Series and Books), series, collections and read lists opens a filter
+  panel (beside the grid on a tablet or PC, from the bottom on a phone): **Writer** (Author for eBooks), **Artist**
+  (penciller, inker or cover), **Release years**, and for series **Publisher**, **Status** and **Genre**. Names are
+  picked by typing; only what the view holds is offered; the Show button counts what you'll get. Active filters
+  show as chips under the bar - tap one to remove it. Remembered per view, kept by pins, and working offline on your
+  downloads.
+- **Select several series** (library Series mode, a collection): mark them read or unread, or download them.
+
+**Changed**
+- **One top bar**: libraries, series, collections and read lists have their buttons in the same order (count, eye,
+  filter, sort, select, size, pin, search, refresh, more); buttons that don't apply are left out.
+- **Sort everywhere**: a series sorts by number, release date or date added (the oldest / newest toggle became the
+  sort menu - a series set to newest first opens oldest first once); a collection by its own order, title, release
+  date or date added; a read list by its order or release date; collections and read lists by name or last update.
+  Refresh on every view.
+
 ## 1.3.0
 
 ### Build 96 - 2026-10-08
