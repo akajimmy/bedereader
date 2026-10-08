@@ -23,6 +23,9 @@ void main() {
   });
   tearDown(() async {
     d.paused = false;
+    // the store let go first: a queue save still on its way then has nowhere to write - it used to create the folder
+    // again after it was deleted (a leftover komga_downloads_ui* in Temp after a loaded full run, 2026-10-07)
+    d.store = null;
     await deleteTemp(dir);
   });
 
