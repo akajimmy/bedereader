@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../pins.dart';
+import '../view_sort.dart';
 import 'poster.dart';
 import 'readlist_tile.dart';
 
@@ -13,14 +14,17 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
   final desc = parts.length > 1 && parts[1] == 'desc';
   String? sortParam(Map<String, String> fields) =>
       fields[parts.first] == null ? null : '${fields[parts.first]},${desc ? 'desc' : 'asc'}';
+  // the same requests as the screens (lib/view_sort.dart), in the pin's sort
   switch (p.kind) {
     case 'series':
-      return api.seriesBooks(p.id!, readStatus: status,
-          sort: p.sort == 'number:desc' ? 'metadata.numberSort,desc' : 'metadata.numberSort,asc', size: size);
+      return seriesBooksPage(api, p.id!, ViewSort.fromPin(seriesBookSorts, p.sort), readStatus: status, page: 0,
+          size: size);
     case 'readlist':
-      return api.readListBooks(p.id!, readStatus: status, size: size);
+      return readListBooksPage(api, p.id!, ViewSort.fromPin(readListBookSorts, p.sort), readStatus: status, page: 0,
+          size: size);
     case 'collection':
-      return api.series(collectionId: p.id, readStatus: status, size: size);
+      return collectionSeriesPage(api, p.id!, ViewSort.fromPin(collectionSeriesSorts, p.sort), readStatus: status,
+          page: 0, size: size);
   }
   switch (p.mode) {
     case 'books':
@@ -28,10 +32,11 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
       return s == null
           ? api.books(libraryId: p.id, readStatus: status, size: size)
           : api.books(libraryId: p.id, readStatus: status, sort: s, size: size);
-    case 'collections' || 'readLists' when p.readFilter != ReadFilter.all:
-      // the lists with something matching, as the library screen shows them (Komga can't filter lists itself)
+    case 'collections' || 'readLists' when p.readFilter != ReadFilter.all || p.sort != null:
+      // the lists with something matching, as the library screen shows them (Komga can't filter lists itself), in
+      // the pin's sort
       final r = await ListContents.matching(api, readLists: p.mode == 'readLists', libraryId: p.id,
-          filter: p.readFilter);
+          filter: p.readFilter, sort: ViewSort.fromPin(listSorts, p.sort));
       return {...r, 'content': (r['content'] as List).take(size).toList()};
     case 'collections':
       return api.collections(libraryId: p.id, size: size);

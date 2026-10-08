@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../view_sort.dart';
 import 'download_badge.dart';
 import 'poster.dart';
 
@@ -43,9 +44,10 @@ class ListContents {
   }
 
   /// A library's read lists or collections with something matching [filter] - all of them, in one page: Komga can't
-  /// filter them by read state, so each is looked at, and a page filtered short would end the paging early.
+  /// filter them by read state, so each is looked at, and a page filtered short would end the paging early. In
+  /// [sort] if given (sorted here: lib/view_sort.dart sortLists).
   static Future<Map<String, dynamic>> matching(Komga api,
-      {required bool readLists, String? libraryId, required ReadFilter filter}) async {
+      {required bool readLists, String? libraryId, required ReadFilter filter, ViewSort? sort}) async {
     final all = <dynamic>[];
     for (var page = 0;; page++) {
       final r = readLists
@@ -55,11 +57,15 @@ class ListContents {
       all.addAll(content);
       if (r['last'] != false || content.isEmpty) break;
     }
-    final looked = await Future.wait([
-      for (final it in all) of(api, readList: readLists, id: it['id'] as String, filter: filter),
-    ]);
-    // (a list Komga couldn't say about stays: better shown than lost)
-    final kept = [for (var i = 0; i < all.length; i++) if (looked[i]['matching'] != 0) all[i]];
+    var kept = all;
+    if (filter != ReadFilter.all) {
+      final looked = await Future.wait([
+        for (final it in all) of(api, readList: readLists, id: it['id'] as String, filter: filter),
+      ]);
+      // (a list Komga couldn't say about stays: better shown than lost)
+      kept = [for (var i = 0; i < all.length; i++) if (looked[i]['matching'] != 0) all[i]];
+    }
+    if (sort != null) kept = sortLists(kept, sort);
     return {'content': kept, 'last': true, 'totalElements': kept.length};
   }
 }

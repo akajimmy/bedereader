@@ -20,19 +20,21 @@ void main() {
     return api;
   }
 
-  testWidgets('series order: oldest first by default, one tap for newest first, remembered', (tester) async {
+  // (2026-10-08: the toggle became the Sort menu - picking newest first there instead of tapping the toggle)
+  testWidgets('series order: oldest first by default, newest first from the Sort menu, remembered', (tester) async {
     SharedPreferences.setMockInitialValues({});
     var api = await open(tester);
     expect(api.sorts.last, 'metadata.numberSort,asc');
-    await tester.tap(find.byTooltip('Oldest first (switch to newest first)'));
-    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('bar.sort')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sort.desc')));
+    await tester.pumpAndSettle();
     expect(api.sorts.last, 'metadata.numberSort,desc');
     final saved = jsonDecode((await SharedPreferences.getInstance()).getString('view.series.S1')!) as Map;
-    expect(saved['newestFirst'], true);
+    expect((saved['sort'], saved['desc']), ('number', true));
 
     api = await open(tester); // reopen: remembered
     expect(api.sorts.last, 'metadata.numberSort,desc');
-    expect(find.byTooltip('Newest first (switch to oldest first)'), findsOneWidget);
   });
 
   testWidgets("a series' saved filter is restored when it is opened again (its order, not saved, oldest first)",

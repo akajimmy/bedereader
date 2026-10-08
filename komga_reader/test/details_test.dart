@@ -45,6 +45,9 @@ class FakeKomga extends TestKomga {
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async =>
       onePage([{'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}]);
+  @override // the collection screen's listing in the collection's own order (its default sort)
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) => series(collectionId: collectionId);
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async =>
       {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer', 'publisher': 'Marvel'}};
