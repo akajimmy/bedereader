@@ -29,7 +29,7 @@ void main() {
       'pins': jsonEncode([const Pin(name: 'Events', kind: 'library', id: 'L1', title: 'Events').toJson()]),
       'readerPrefs': jsonEncode({'v': 1, 'default': const ReaderPrefs().toJson(), 'series': {'S1': const ReaderPrefs().toJson()}}),
       'ondeck.hidden': jsonEncode({'series': ['S9'], 'books': ['B9']}),
-      'displayPrefs': jsonEncode(const DisplayPrefs(accent: Accent.teal).toJson()), // this device's
+      'displayPrefs': jsonEncode(const DisplayPrefs(accent: Accent.green).toJson()), // this device's
       'downloads.capBytes': 5 * 1024 * 1024 * 1024, // this device's
     });
     final komga = ShellKomga();
@@ -77,7 +77,7 @@ void main() {
     expect(p.getString('server'), url, reason: 'the address is kept for signing in again');
     expect(find.text(url), findsOneWidget, reason: 'and filled in');
     expect(p.getString('displayPrefs'), isNotNull, reason: "this device's own settings stay");
-    expect(AppSettings.instance.display.accent, Accent.teal);
+    expect(AppSettings.instance.display.accent, Accent.green);
     expect(p.getInt('downloads.capBytes'), 5 * 1024 * 1024 * 1024);
     expect(find.byType(HomeScreen), findsNothing);
   });

@@ -76,8 +76,8 @@ void main() {
     }
   }
 
-  testWidgets("the text size is this device's (user, 2026-10-07): Komga's copy of the EPUB set brings the rest, not "
-      'the size', (tester) async {
+  testWidgets("the text size is synced like the rest of the EPUB set (user, 2026-10-07 QA: one size again): Komga's "
+      'copy brings it', (tester) async {
     final api = noNetwork(() => SettingsServer({
       AppSettings.komgaKey: jsonEncode({'v': 1, 'series': {},
           'epub': const EpubPrefs(size: 28, font: EpubFont.lora).toJson()}),
@@ -87,7 +87,7 @@ void main() {
     });
     await tester.runAsync(() => AppSettings.instance.load(api));
     expect(AppSettings.instance.epub.font, EpubFont.lora, reason: "Komga's copy of the rest");
-    expect(AppSettings.instance.epub.size, 16, reason: "this device's size, not Komga's 28");
+    expect(AppSettings.instance.epub.size, 28, reason: "Komga's size, not the device's 16");
   });
 
   testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
@@ -98,7 +98,7 @@ void main() {
     }));
     await tester.runAsync(() => AppSettings.instance.load(api));
     expect(AppSettings.instance.epub.font, isNot(EpubFont.lora), reason: 'not set yet');
-    expect(AppSettings.instance.epub.size, 19, reason: "the size is this device's, not Komga's 24");
+    expect(AppSettings.instance.epub.size, 24, reason: "Komga's copy, the size included");
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(font: EpubFont.lora));
     await wait(tester, const Duration(seconds: 3));
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;

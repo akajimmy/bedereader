@@ -154,30 +154,38 @@ extension ShowWhenLabel on ShowWhen {
 /// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark
 /// background (the "Rich" set, 2026-09-30 - the first, pale set was too muted). Listed in the order shown; the names
 /// are what's saved, so the original seven keep theirs (purple is now a violet).
-enum Accent { blue, sky, cyan, teal, green, lime, yellow, amber, orange, red, pink, fuchsia, purple, indigo }
+/// The app's accent colours (user, 2026-10-07 QA: hues spread out - the old ones crowded round blue - and greys).
+enum Accent { red, orange, yellow, lime, green, blue, violet, purple, magenta, pink, bronze, olive, white, silver, slate,
+  charcoal }
 
 extension AccentColour on Accent {
   Color get colour => switch (this) {
-        Accent.blue => const Color(0xFF3B82F6),
-        Accent.sky => const Color(0xFF0EA5E9),
-        Accent.cyan => const Color(0xFF06B6D4),
-        Accent.teal => const Color(0xFF14B8A6),
-        Accent.green => const Color(0xFF22C55E),
-        Accent.lime => const Color(0xFF84CC16),
-        Accent.yellow => const Color(0xFFEAB308),
-        Accent.amber => const Color(0xFFF59E0B),
-        Accent.orange => const Color(0xFFF97316),
-        Accent.red => const Color(0xFFEF4444),
-        Accent.pink => const Color(0xFFEC4899),
-        Accent.fuchsia => const Color(0xFFD946EF),
-        Accent.purple => const Color(0xFF8B5CF6),
-        Accent.indigo => const Color(0xFF6366F1),
+        Accent.red => const Color(0xFFE5484D),
+        Accent.orange => const Color(0xFFF76B15),
+        Accent.yellow => const Color(0xFFF5D90A),
+        Accent.lime => const Color(0xFF99D52A),
+        Accent.green => const Color(0xFF30A46C),
+        Accent.blue => const Color(0xFF0090FF),
+        Accent.violet => const Color(0xFF6E56CF),
+        Accent.purple => const Color(0xFF9A5CD0),
+        Accent.magenta => const Color(0xFFD6409F),
+        Accent.pink => const Color(0xFFE93D82),
+        Accent.bronze => const Color(0xFFAD7F58),
+        Accent.olive => const Color(0xFF8E8C5C),
+        Accent.white => const Color(0xFFEDEDED),
+        Accent.silver => const Color(0xFFA0A4AB),
+        Accent.slate => const Color(0xFF6B7280),
+        Accent.charcoal => const Color(0xFF4A4F57),
       };
 
   /// Text and icons on the accent (a selected choice, a filled button): black on the light ones, white on the dark.
   Color get onColour => colour.computeLuminance() > 0.25 ? const Color(0xFF101012) : const Color(0xFFFFFFFF);
 
-  String get label => this == Accent.purple ? 'Violet' : '${name[0].toUpperCase()}${name.substring(1)}';
+  String get label => '${name[0].toUpperCase()}${name.substring(1)}';
+
+  /// Where the remote's focus is shown: the accent, or on the dark greys a lighter one - charcoal on the app's
+  /// near-black was hard to find.
+  Color get focus => colour.computeLuminance() < 0.1 ? Color.lerp(colour, const Color(0xFFFFFFFF), 0.45)! : colour;
 }
 
 /// Library grids and Home's rows: how big the posters are.
@@ -390,8 +398,9 @@ enum EpubFont {
 }
 
 enum EpubColours {
+  black(Color(0xFF000000), Color(0xFFC9C9C9), 'Black'),
   dark(Color(0xFF1B1B1D), Color(0xFFE4E0D8), 'Dark'),
-  sepia(Color(0xFFF4ECD8), Color(0xFF5B4636), 'Sepia'),
+  sepia(Color(0xFFEFE4CC), Color(0xFF2A2018), 'Sepia'),
   light(Color(0xFFFFFFFF), Color(0xFF1A1A1A), 'Light');
 
   const EpubColours(this.background, this.text, this.label);
@@ -452,9 +461,7 @@ class EpubPrefs {
       this.paragraphs = EpubParagraphs.mine, this.hyphenate = true, this.turn = EpubTurn.slide,
       this.paragraphGap = EpubParagraphGap.none});
   final EpubFont font;
-  /// px at the app's text size - kept on this device (user, 2026-10-07: the tablet and the PC want their own); the
-  /// rest of the set is synced
-  final double size;
+  final double size; // px at the app's text size
   final double lineSpacing;
   final EpubMargins margins;
   final EpubColours colours;
@@ -766,7 +773,21 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  void applyBacklight() => setScreenBrightness(inReader ? display.backlight : -1);
+  /// The reader's brightness is shown: a book is open, or its slider in Settings is being used (dragged, or the
+  /// remote on it) - the slider shows nothing otherwise, the reader being the only place it applies (user, 2026-10-07).
+  bool get brightnessShown => inReader || _previewing.isNotEmpty;
+  final _previewing = <Object>{};
+
+  /// [who] (a slider) starts or stops previewing the reader's brightness.
+  void previewBrightness(Object who, bool on) {
+    final was = brightnessShown;
+    on ? _previewing.add(who) : _previewing.remove(who);
+    if (brightnessShown == was) return;
+    applyBacklight();
+    scheduleMicrotask(notifyListeners); // (it can come from a dispose, where the overlay can't be rebuilt there and then)
+  }
+
+  void applyBacklight() => setScreenBrightness(brightnessShown ? display.backlight : -1);
 
   void _changedReader() {
     notifyListeners();
@@ -841,11 +862,7 @@ class AppSettings extends ChangeNotifier {
     final d = b['default'];
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
     final e = b['epub'];
-    // the size is this device's (user, 2026-10-07): Komga's copy brings the rest of the set, not that
-    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) {
-      final incoming = EpubPrefs.fromJson(e);
-      epub = remote ? incoming.copyWith(size: epub.size) : incoming;
-    }
+    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = EpubPrefs.fromJson(e);
     final s = b['series'];
     if (s is! Map) return;
     final next = <String, ReaderPrefs>{

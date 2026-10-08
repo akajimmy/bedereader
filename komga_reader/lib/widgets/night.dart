@@ -31,7 +31,7 @@ class NightOverlay extends StatelessWidget {
             IgnorePointer(
               child: BackdropFilter(filter: ColorFilter.matrix(warmMatrix(d.warmth)), child: const SizedBox.expand()),
             ),
-          if (s.inReader && d.dimOverlay > 0)
+          if (s.brightnessShown && d.dimOverlay > 0)
             IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: d.dimOverlay))),
         ]);
       },

@@ -335,23 +335,24 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ena
     ];
 
 /// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
-/// extra dimming on Android, dimming only on a PC.
+/// extra dimming on Android, dimming only on a PC. Outside the reader (Settings), the screen takes it while the slider
+/// is being used, so it can be seen ([BrightnessPreview]).
 List<Widget> brightnessRows(AppSettings s) {
   final d = s.display;
   if (!DisplayPrefs.backlightControl) {
     // a monitor's backlight can't be set, so the slider only dims (right = no dimming)
     return [
-      SliderRow(
+      BrightnessPreview(child: SliderRow(
         label: 'Screen brightness',
         divisions: 20, // 5% steps
         value: d.brightness ?? 1,
         valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
         onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
-      ),
+      )),
     ];
   }
   return [
-    SliderRow(
+    BrightnessPreview(child: SliderRow(
       label: 'Screen brightness',
       divisions: 20, // 5% steps
       value: d.brightness ?? 0.6,
@@ -360,7 +361,7 @@ List<Widget> brightnessRows(AppSettings s) {
           ? 'Auto'
           : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
       onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v)),
-    ),
+    )),
     SwitchRow(
       title: 'Automatic brightness',
       value: d.brightness == null,
@@ -372,6 +373,45 @@ List<Widget> brightnessRows(AppSettings s) {
       },
     ),
   ];
+}
+
+/// Shows the reader's brightness on the whole screen while [child] (its slider) is in use - a finger on it, or the
+/// remote's focus on it - so in Settings, where it doesn't otherwise apply, moving it shows what it does (user,
+/// 2026-10-07 QA). Let go or move on, and the screen follows the system again.
+class BrightnessPreview extends StatefulWidget {
+  const BrightnessPreview({super.key, required this.child});
+  final Widget child;
+  @override
+  State<BrightnessPreview> createState() => _BrightnessPreviewState();
+}
+
+class _BrightnessPreviewState extends State<BrightnessPreview> {
+  bool _touched = false, _focused = false;
+
+  void _set({bool? touched, bool? focused}) {
+    _touched = touched ?? _touched;
+    _focused = focused ?? _focused;
+    AppSettings.instance.previewBrightness(this, _touched || _focused);
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.previewBrightness(this, false); // never left on with the page gone
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+        onPointerDown: (_) => _set(touched: true),
+        onPointerUp: (_) => _set(touched: false),
+        onPointerCancel: (_) => _set(touched: false),
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onFocusChange: (f) => _set(focused: f),
+          child: widget.child,
+        ),
+      );
 }
 
 /// Night mode as one choice, Off / On / Scheduled (user, 2026-10-07: it was a switch and an "On a schedule" switch).
@@ -492,7 +532,7 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
 /// The note in the page's bottom-right corner, [kind]'s own - the same note for both kinds: the page of the book's
 /// pages (user, 2026-10-07).
 Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(
-      title: 'Page corner',
+      title: 'Show page counter', // (it was "Page corner" - user, 2026-10-07 QA)
       subtitle: 'The page you\'re on, "12 / 36"',
       choices: const [
         Choice(PageNote.always, 'Always'),

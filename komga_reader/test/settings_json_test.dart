@@ -55,7 +55,7 @@ void main() {
             progressBar: true, hiddenSpots: ['right', 'centre']),
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
-        nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
+        nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
         pagePreviews: false, pageStrip: true, posterDate: false);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
@@ -83,7 +83,7 @@ void main() {
       ('nightFrom', (d) => d.nightFrom, 1320, 21 * 60),
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
       ('textScale', (d) => d.textScale, 1.15, 1.0),
-      ('accent', (d) => d.accent, Accent.teal, Accent.blue),
+      ('accent', (d) => d.accent, Accent.green, Accent.blue),
       ('pagePreviews', (d) => d.pagePreviews, false, true),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)

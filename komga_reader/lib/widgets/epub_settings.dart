@@ -6,7 +6,7 @@ import 'display_panel.dart';
 import 'setting_rows.dart';
 
 /// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting and
-/// Page. The size in it is this device's own (user, 2026-10-07).
+/// Page.
 List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set) => [
       SettingsGroup(title: 'Text', synced: true, children: [
         ..._fontRows(e, set),
@@ -78,7 +78,6 @@ Widget _sizeRow(EpubPrefs e, ValueChanged<EpubPrefs> set) {
   void size(int by) => set(e.copyWith(size: EpubPrefs.sizes[(at + by).clamp(0, EpubPrefs.sizes.length - 1)]));
   return SettingRow(
     title: 'Font size',
-    subtitle: 'This device', // not synced (user, 2026-10-07)
     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
       IconButton(icon: const Icon(Icons.text_decrease), tooltip: 'Smaller', onPressed: at > 0 ? () => size(-1) : null),
       SizedBox(width: 40, child: Text('${e.size.round()}', textAlign: TextAlign.center)),

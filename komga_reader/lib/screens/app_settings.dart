@@ -197,9 +197,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
-          title: "'Next book' before the last page", // wording: user, 2026-09-30
-          subtitle: 'What should happen to the current book?',
-          choices: [for (final m in const [MidBook.markRead, MidBook.keep, MidBook.ask]) Choice(m, m.label)],
+          title: 'Skipping to the next book', // wording: user, 2026-10-07 QA
+          subtitle: 'Mark the one you leave as read?',
+          choices: const [Choice(MidBook.markRead, 'Yes'), Choice(MidBook.keep, 'No'), Choice(MidBook.ask, 'Ask')],
           value: d.midBook,
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
         ),
@@ -218,11 +218,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       const Padding(
         padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
-        child: Text("Pages and Image: for every series you haven't adjusted. A series' own are changed in the reader.",
+        child: Text('The defaults for every series; a series can override them in the reader (Comic settings).',
             style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages', synced: true, children: layoutRows(p, s.setDefault)),
-      SettingsGroup(title: 'Image', synced: true, children: [
+      SettingsGroup(title: 'Pages - defaults', synced: true, children: layoutRows(p, s.setDefault)),
+      SettingsGroup(title: 'Image - defaults', synced: true, children: [
         ...imageRows(p, s.setDefault),
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
@@ -269,7 +269,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
         if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.ebooks)]),
         _resetRow(context, 'eBooks', "Every setting on this page back to the defaults - Text, Formatting and Page on "
-            "every device (they're synced), the size on this one.", () {
+            "every device (they're synced).", () {
           s.setEpub(const EpubPrefs());
           s.setDisplay(s.display.copyWith(ebooks: const DisplayPrefs().ebooks));
         }),
@@ -278,7 +278,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   /// A page's reset (user, 2026-10-07: one on each page), asked first: [what] says what goes back.
   Widget _resetRow(BuildContext context, String page, String what, VoidCallback reset) => SettingsGroup(children: [
         ActionRow(
-          title: 'Back to the defaults',
+          title: 'Reset to default',
           icon: Icons.restart_alt,
           button: TextButton(
             onPressed: () async {
@@ -319,7 +319,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             final pins = Pins.instance;
             return SettingsGroup(title: "What's synced through Komga", synced: true, children: [
               const NoteRow('The same on every device signed in to this account: comics\' Pages and Image defaults and '
-                  "each series' own; eBooks' Text, Formatting and Page settings (not the text size); what's hidden "
+                  "each series' own; eBooks' Text, Formatting and Page settings; what's hidden "
                   'from On deck; reading progress.'),
               SwitchRow(
                 title: 'Sync pins across devices',
@@ -691,7 +691,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
-            "what's shown over the page, rotation, the eBook text size), night mode and its schedule, text size and "
+            "what's shown over the page, rotation), night mode and its schedule, text size and "
             "accent colour, the reader's keys, posters, the libraries shown, Home "
             "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
@@ -705,7 +705,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     if (ok != true) return;
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
-    s.setEpub(s.epub.copyWith(size: const EpubPrefs().size)); // this device's own (the rest of the set is synced)
     await HomeSections.instance.reset();
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
