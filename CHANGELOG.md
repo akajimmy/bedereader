@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Settings > Remote and keys: + Add didn't take the key you pressed** (the volume keys included) on the tablet. It
+  now takes the next key pressed, wherever the focus is.
+
 ## 1.3.0
 
 ### Build 92 - 2026-10-07
