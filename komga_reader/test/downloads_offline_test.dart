@@ -35,8 +35,8 @@ class SyncingServer extends LibraryServer {
 
 Map<String, dynamic> book(String id, int n) => {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
 
-/// Downloads when things change under them: another server, offline mode, Wi-Fi or Komga going mid-book, a failure
-/// and Retry (test audit, 2026-09-30: none of these had a test).
+/// Downloads when things change under them: another server, offline mode, Wi-Fi or Komga going mid-book (test audit,
+/// 2026-09-30: none of these had a test). Retry after a failure: downloads_ui_test.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized(); // the connection and the sync watch the app's lifecycle
   late Directory dir, root;
@@ -172,7 +172,7 @@ void main() {
   });
 
   test("Komga gone mid-book: back in the queue with its pages kept, a look every serverRecheck (no hammering), and on "
-      'from where it stopped once Komga answers', () async {
+      'from where it stopped once Komga answers; gone before books start: they wait in the queue too', () async {
     Downloads.serverRecheck = const Duration(milliseconds: 30);
     addTearDown(() => Downloads.serverRecheck = const Duration(seconds: 30));
     final api = noNetwork(LibraryServer.new)..pageCount = 8;
@@ -200,25 +200,20 @@ void main() {
     expect(d.isDownloaded('B1'), isTrue);
     expect(api.pageRequests, 8, reason: 'pages 5-8 only: the four it had were kept');
     expect(d.waitingForServer, isFalse);
-  });
 
-  test('a failed download: Retry tries that book again; Retry all the rest - and they download', () async {
-    final api = noNetwork(LibraryServer.new)..booksFail = true;
-    await d.attach(api, root: root);
-    await d.add([book('B1', 1), book('B2', 2)]);
+    // Komga out of reach before the books start (code review, 2026-09-30): they go back in the queue, not failed,
+    // and carry on by themselves once Komga answers
+    api
+      ..pagesDown = true
+      ..up = false; // its "are you there" check fails too
+    await d.add([book('B2', 2), book('B3', 3)]);
+    await waitUntil(() => d.waitingForServer && !d.busy, reason: 'B2 and B3 waiting for Komga');
+    expect(d.queue.map((j) => j.state), everyElement(JobState.queued), reason: 'waiting, not failed');
+    api
+      ..pagesDown = false
+      ..up = true; // back
     await settle();
-    expect(d.queue.map((j) => j.state), [JobState.failed, JobState.failed]);
-    expect(d.jobFor('B1')!.error, isNotEmpty, reason: 'says why');
-
-    api.booksFail = false;
-    d.retry('B1');
-    await settle();
-    expect(d.isDownloaded('B1'), isTrue);
-    expect(d.jobFor('B2')!.state, JobState.failed, reason: 'Retry is for that book only');
-
-    d.retryAll();
-    await settle();
-    expect(d.isDownloaded('B2'), isTrue);
-    expect(d.queue, isEmpty);
+    expect(d.isDownloaded('B2') && d.isDownloaded('B3'), isTrue, reason: 'both downloaded once Komga is back');
+    expect(d.waitingForServer, isFalse);
   });
 }
