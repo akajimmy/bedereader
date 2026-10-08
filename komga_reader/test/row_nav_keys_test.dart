@@ -8,9 +8,9 @@ import 'package:komga_reader/widgets/epub_settings.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'settings_remote_test.dart' show TwoLibraries, everyRowShown, focus, name;
 import 'support/helpers.dart';
 import 'support/no_network.dart';
+import 'support/settings_pages.dart';
 
 /// Settings rows with the remote, as in the release app (user, 2026-10-07: from the rightmost control of "Show the
 /// controls", Down jumped past "Close the book" to "Zoom in"; in the EPUB panel, from Font to Line spacing and from
@@ -30,39 +30,6 @@ void main() {
     }
     clear(FocusManager.instance.rootScope);
   }
-
-  testWidgets('Remote and keys: Down from the far right of a row goes to the next row, however short it is; Up back',
-      (tester) async {
-    setView(tester, const Size(1280, 720));
-    everyRowShown();
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
-        initialPage: SettingsPage.keys)));
-    await tester.pumpAndSettle();
-    asInRelease();
-    // the action rows: each one's controls, by the row they're in
-    Finder addIn(String label) => find.descendant(
-        of: find.ancestor(of: find.text(label), matching: find.byType(Column)).first,
-        matching: find.widgetWithText(TextButton, 'Add'));
-    FocusNode nodeOf(Finder f) => Focus.of(tester.element(find.descendant(of: f, matching: find.byType(Text)).first));
-    final controlsAdd = nodeOf(addIn('Show the controls'));
-    controlsAdd.requestFocus(); // the rightmost control of "Show the controls"
-    await tester.pumpAndSettle();
-    expect(focus(), controlsAdd);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
-    await tester.pumpAndSettle();
-    expect(name(focus()), 'Esc', reason: '"Close the book", its first control');
-
-    // from a key chip (as on the tablet: Space, Next page's last chip, Down went to Previous page's Add - straight
-    // below - not its first control)
-    final space = Focus.of(tester.element(find.descendant(
-        of: find.widgetWithText(InputChip, 'Space'), matching: find.byType(Text)).first));
-    space.requestFocus();
-    await tester.pumpAndSettle();
-    expect(name(focus()), 'Space');
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
-    await tester.pumpAndSettle();
-    expect(name(focus()), '←', reason: "Previous page's first control");
-  });
 
   testWidgets("with Android's navigation bar over the bottom of the screen (user, 2026-10-07: Comics > Keep the screen "
       'on, focused, sat behind it), every row reached with Down is above the bar', (tester) async {
@@ -113,9 +80,11 @@ void main() {
     expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', "Book's", "Book's"]);
   });
 
-  testWidgets("rows whose controls changed while the page was open (keys loaded or edited): Up / Down still go to the "
-      "next row's first control on screen - the focus tree's order (which put a row's kept Add button before its new "
-      'chips) no longer decides', (tester) async {
+  // (the rows' order by screen position, not the focus tree's, is checked by settings_remote_test's walk of Library &
+  // Home, whose library switches are added once the libraries arrive)
+  testWidgets("Remote and keys: Down from anywhere in a row goes to the next row's first control, however short it "
+      "is; Up to the row above's first control - also once a row's controls changed while the page was open (keys "
+      'added: the kept Add button before the new chips in the focus tree)', (tester) async {
     setView(tester, const Size(1280, 720));
     everyRowShown();
     final k = ReaderKeys.instance;
@@ -123,31 +92,46 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(TwoLibraries.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
     await tester.pumpAndSettle();
+    FocusNode chip(String label) =>
+        Focus.of(tester.element(find.descendant(of: find.widgetWithText(InputChip, label), matching: find.byType(Text)).first));
+    FocusNode addOf(String row) => Focus.of(tester.element(find.descendant(
+        of: find.descendant(of: find.ancestor(of: find.text(row), matching: find.byType(Column)).first,
+            matching: find.widgetWithText(TextButton, 'Add')),
+        matching: find.byType(Text)).first));
+    Future<void> press(LogicalKeyboardKey key, FocusNode from) async {
+      from.requestFocus();
+      await tester.pumpAndSettle();
+      expect(focus(), from);
+      await tester.sendKeyEvent(key, platform: 'android');
+      await tester.pumpAndSettle();
+    }
+
+    asInRelease();
+    // from the far right of Show the controls (its Add), Down: Close the book's first control, Esc - at its left
+    await press(LogicalKeyboardKey.arrowDown, addOf('Show the controls'));
+    expect(focus(), chip('Esc'), reason: '"Close the book", its first control - not ${name(focus())}');
+    // from a key chip (as on the tablet: Space, Next page's last chip, Down went to Previous page's Add - straight
+    // below - not its first control)
+    await press(LogicalKeyboardKey.arrowDown, chip('Space'));
+    expect(name(focus()), '←', reason: "Previous page's first control");
+
     // Close the book gains two keys while the page is open: its Add button is kept, the new chips come after it in
-    // the focus tree, though they show before it
+    // the focus tree, though they show before it - the row's last control in focus order isn't its last on screen
     await tester.runAsync(() async {
       await k.assign(ReaderAction.close, LogicalKeyboardKey.keyQ);
       await k.assign(ReaderAction.close, LogicalKeyboardKey.keyW);
     });
     await tester.pumpAndSettle();
     asInRelease();
-    FocusNode chip(String label) =>
-        Focus.of(tester.element(find.descendant(of: find.widgetWithText(InputChip, label), matching: find.byType(Text)).first));
-    // from the far right of Show the controls (its Add), Down: Close the book's first control - Esc, at its left
-    final controlsAdd = Focus.of(tester.element(find.descendant(
-        of: find.descendant(of: find.ancestor(of: find.text('Show the controls'), matching: find.byType(Column)).first,
-            matching: find.widgetWithText(TextButton, 'Add')),
-        matching: find.byType(Text)).first));
-    controlsAdd.requestFocus();
-    await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
-    await tester.pumpAndSettle();
-    expect(focus(), chip('Esc'), reason: "Close the book's first control on screen, not ${name(focus())}");
-    // and from Zoom in's first control, Up: Close the book's first control again
-    chip('=').requestFocus();
-    await tester.pumpAndSettle();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp, platform: 'android');
-    await tester.pumpAndSettle();
+    final closeRow = RowNav.rowOf(chip('Esc'));
+    expect([
+      for (final n in chip('Esc').nearestScope!.traversalDescendants)
+        if (n.canRequestFocus && RowNav.rowOf(n) == closeRow) name(n),
+    ], ['Esc', 'Add', 'Q', 'W'], reason: 'the scenario: the kept Add before the new chips in the focus tree');
+    await press(LogicalKeyboardKey.arrowDown, addOf('Show the controls'));
+    expect(focus(), chip('Esc'), reason: "Close the book's first control, not ${name(focus())}");
+    // and from Zoom in's first control, Up: Close the book's first control - not the row's last (W, or Add on screen)
+    await press(LogicalKeyboardKey.arrowUp, chip('='));
     expect(focus(), chip('Esc'), reason: 'Up: the row above, its first control - not ${name(focus())}');
   });
 }

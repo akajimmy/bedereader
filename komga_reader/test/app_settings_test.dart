@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 import 'support/no_network.dart';
+import 'support/settings_pages.dart';
 import 'support/status_server.dart';
 
 /// A tall window, wide enough for the side list of pages: a whole page fits, nothing to scroll to.
@@ -34,19 +35,6 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
       initialPage: page)));
   await tester.pump();
 }
-
-/// Each page's name in the list (to move between pages; a switch, so a new page doesn't compile here until added).
-String pageName(SettingsPage p) => switch (p) {
-      SettingsPage.reading => 'Reading',
-      SettingsPage.comics => 'Comics',
-      SettingsPage.ebooks => 'eBooks',
-      SettingsPage.keys => 'Remote and keys',
-      SettingsPage.server => 'Server and sync',
-      SettingsPage.library => 'Library & Home',
-      SettingsPage.downloads => 'Downloads',
-      SettingsPage.look => 'Look',
-      SettingsPage.about => 'About',
-    };
 
 void main() {
   setUp(() async {
