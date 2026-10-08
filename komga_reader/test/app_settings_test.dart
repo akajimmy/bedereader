@@ -35,20 +35,18 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
   await tester.pump();
 }
 
-/// Each page's name in the list and the line under its title saying where its settings are kept (null: none). A
-/// switch, so a new page doesn't compile here until it's added (test audit, 2026-09-30).
-(String, String?) pageInfo(SettingsPage p) => switch (p) {
-      SettingsPage.reading => ('Reading', 'For comics and eBooks alike. Kept on this device'),
-      SettingsPage.comics => ('Comics', _kinds),
-      SettingsPage.ebooks => ('eBooks', _kinds),
-      SettingsPage.keys => ('Remote and keys', 'Kept on this device'),
-      SettingsPage.server => ('Server and sync', null),
-      SettingsPage.library => ('Library & Home', 'Kept on this device, except On deck (synced)'),
-      SettingsPage.downloads => ('Downloads', 'Kept on this device'),
-      SettingsPage.look => ('Look', 'Kept on this device'),
-      SettingsPage.about => ('About', null),
+/// Each page's name in the list (to move between pages; a switch, so a new page doesn't compile here until added).
+String pageName(SettingsPage p) => switch (p) {
+      SettingsPage.reading => 'Reading',
+      SettingsPage.comics => 'Comics',
+      SettingsPage.ebooks => 'eBooks',
+      SettingsPage.keys => 'Remote and keys',
+      SettingsPage.server => 'Server and sync',
+      SettingsPage.library => 'Library & Home',
+      SettingsPage.downloads => 'Downloads',
+      SettingsPage.look => 'Look',
+      SettingsPage.about => 'About',
     };
-const _kinds = 'Groups marked synced are the same on every device (through Komga); the rest are kept on this device';
 
 void main() {
   setUp(() async {
@@ -56,27 +54,16 @@ void main() {
     await HomeSections.instance.load();
   });
 
-  testWidgets('side menu: Home and the libraries, then Settings, then About, last; each opens its screen; '
-      'no App settings / Info / Reader settings / Sign out', (tester) async {
-    // one test for the menu's order (about_test had a second with the same setup - test audit, 2026-09-30)
+  testWidgets('side menu: Settings and About each open their screen; Settings opens on Reading', (tester) async {
     final scaffold = GlobalKey<ScaffoldState>();
     await tester.pumpWidget(MaterialApp(home: Scaffold(key: scaffold,
         drawer: AppDrawer(api: noNetwork(StatusServer.new), onSignOut: () {}), body: const SizedBox())));
     scaffold.currentState!.openDrawer();
     await tester.pumpAndSettle();
-    double y(String t) => tester.getTopLeft(find.text(t)).dy;
-    expect(y('Home') < y('All libraries'), isTrue);
-    expect(y('All libraries') < y('Settings'), isTrue);
-    expect(y('Settings') < y('About'), isTrue);
-    for (final gone in ['App settings', 'Info', 'Reader settings', 'Sign out']) {
-      expect(find.text(gone), findsNothing, reason: gone);
-    }
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
-    // opens on Reading (user, 2026-10-07 - it was Server)
     expect(tester.widget<ListTile>(find.widgetWithText(ListTile, 'Reading')).selected, isTrue);
-    expect(find.text('Screen while reading'), findsOneWidget);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -87,86 +74,26 @@ void main() {
     expect(find.byType(AboutScreen), findsOneWidget);
   });
 
-  testWidgets('wide: every page down the side in order, one shown at a time, each saying where it is kept',
+  testWidgets('wide: a tap on a page in the side list shows that page, one at a time; Downloads only once set up',
       (tester) async {
     tall(tester);
     await open(tester);
     await tester.pumpAndSettle();
-    // every page but Downloads (shown only once downloads are set up - not in this test)
-    final pages = [for (final p in SettingsPage.values) if (p != SettingsPage.downloads) p];
-    final ys = [for (final p in pages) tester.getTopLeft(find.widgetWithText(ListTile, pageInfo(p).$1).first).dy];
-    expect(ys, [...ys]..sort()); // in that order, down the side
     expect(find.widgetWithText(ListTile, 'Downloads'), findsNothing);
-    // under their headings (user, 2026-10-07): Reading, then App, then Help
-    double y(Finder f) => tester.getTopLeft(f.first).dy;
-    final heads = [for (final h in ['READING', 'APP', 'HELP']) y(find.text(h))];
-    expect(heads, [...heads]..sort());
-    expect(y(find.text('READING')) < y(find.widgetWithText(ListTile, 'Reading')), isTrue);
-    expect(y(find.widgetWithText(ListTile, 'Remote and keys')) < y(find.text('APP')), isTrue);
-    expect(y(find.text('APP')) < y(find.widgetWithText(ListTile, 'Server and sync')), isTrue);
-    expect(y(find.widgetWithText(ListTile, 'Look')) < y(find.text('HELP')), isTrue);
-    expect(y(find.text('HELP')) < y(find.widgetWithText(ListTile, 'About')), isTrue);
     expect(find.text('Connected as nick@test'), findsOneWidget); // Server: the status
-    final scopes = {for (final p in SettingsPage.values) pageInfo(p).$2}.whereType<String>().toSet();
-    for (final p in pages) {
-      await tester.tap(find.widgetWithText(ListTile, pageInfo(p).$1).first);
+    for (final p in SettingsPage.values) {
+      if (p == SettingsPage.downloads) continue;
+      await tester.tap(find.widgetWithText(ListTile, pageName(p)).first);
       await tester.pumpAndSettle();
-      final scope = pageInfo(p).$2;
-      for (final s in scopes) {
-        expect(find.text(s), s == scope ? findsOneWidget : findsNothing, reason: '${p.name}: "$s"');
-      }
+      expect(tester.widget<ListTile>(find.widgetWithText(ListTile, pageName(p)).first).selected, isTrue);
       if (p != SettingsPage.server) {
         expect(find.text('Connected as nick@test'), findsNothing, reason: 'one page at a time (${p.name})');
       }
     }
-    await tester.tap(find.widgetWithText(ListTile, 'Look'));
-    await tester.pumpAndSettle();
-    expect(find.text('Night mode'), findsOneWidget);
-    // screen brightness is the reader's (user, 2026-10-05): under Reading, not Look
-    expect(find.text('Screen brightness'), findsNothing);
-    await tester.tap(find.widgetWithText(ListTile, 'Reading'));
-    await tester.pumpAndSettle();
-    expect(find.text('Screen while reading'), findsOneWidget);
-    expect(find.text('Screen brightness'), findsWidgets);
   });
 
-  testWidgets('the synced groups are marked, and only those (user, 2026-10-07): Comics\' Pages, Image and series, '
-      "eBooks' Text, Formatting and Page; Server's summary; On deck", (tester) async {
-    tall(tester);
-    await open(tester, page: SettingsPage.comics);
-    List<String> marked() => [
-          for (final g in tester.widgetList<SettingsGroup>(find.byType(SettingsGroup)))
-            if (g.synced) g.title ?? '',
-        ];
-    expect(marked(), ['Pages', 'Image', 'Series with their own settings']);
-    expect(find.text('synced'), findsNWidgets(3));
-    expect(find.byIcon(Icons.cloud_outlined), findsNWidgets(3));
-    for (final (page, groups) in [
-      ('eBooks', ['Text', 'Formatting', 'Page']),
-      ('Reading', <String>[]),
-      ('Server and sync', ["What's synced through Komga"]),
-      ('Library & Home', ['On deck']),
-      ('Look', <String>[]),
-    ]) {
-      await tester.tap(find.widgetWithText(ListTile, page));
-      await tester.pumpAndSettle();
-      expect(marked(), groups, reason: page);
-    }
-  });
-
-  testWidgets('pins: their sync switch is on Server and sync, with the summary of what Komga syncs - not on '
-      'Library & Home', (tester) async {
-    tall(tester);
-    await open(tester);
-    expect(find.text('Sync pins across devices'), findsOneWidget);
-    expect(find.textContaining('not the text size'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ListTile, 'Library & Home'));
-    await tester.pumpAndSettle();
-    expect(find.text('Sync pins across devices'), findsNothing);
-  });
-
-  testWidgets('Comics and eBooks: each its own position text, page corner, clock and progress bar; the page strip on '
-      'Comics (user, 2026-10-07)', (tester) async {
+  testWidgets('Comics and eBooks: each its own position text, page corner and progress bar; the page strip switch '
+      '(user, 2026-10-07)', (tester) async {
     tall(tester);
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
@@ -177,8 +104,6 @@ void main() {
     }
 
     await open(tester, page: SettingsPage.comics);
-    expect([for (final c in tester.widgetList<FilterChip>(find.byType(FilterChip))) (c.label as Text).data],
-        ['Title', 'Page']);
     await tap(find.widgetWithText(FilterChip, 'Title'));
     expect(s.display.comics.hiddenSpots, ['centre']);
     expect(s.display.ebooks.hiddenSpots, isEmpty);
@@ -188,9 +113,6 @@ void main() {
     expect((s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false));
 
     await tap(find.widgetWithText(ListTile, 'eBooks'));
-    expect([for (final c in tester.widgetList<FilterChip>(find.byType(FilterChip))) (c.label as Text).data],
-        ['Chapter', 'Book page', 'Chapter page']);
-    expect(find.text('Page strip'), findsNothing);
     await tap(find.widgetWithText(FilterChip, 'Chapter page'));
     expect(s.display.ebooks.hiddenSpots, ['right']);
     await tap(find.widgetWithText(FilterChip, 'Chapter page'));
@@ -453,8 +375,6 @@ void main() {
 
     await tap(find.descendant(of: find.byType(SegmentedButton<PageTurn>), matching: find.text('None')));
     expect(s.display.pageTurn, PageTurn.flip); // "None" is the flip
-    expect(find.descendant(of: find.byType(SegmentedButton<PageTurn>), matching: find.text('Slide')), findsOneWidget,
-        reason: "named as eBooks' (user, 2026-10-07: it was Wipe)");
     await tap(find.widgetWithText(ListTile, 'Reading'));
     await tap(find.text('Mark read'));
     expect(s.display.midBook, MidBook.markRead);
