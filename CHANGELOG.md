@@ -12,6 +12,25 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 - **Settings > Remote and keys: + Add didn't take the key you pressed** (the volume keys included) on the tablet. It
   now takes the next key pressed, wherever the focus is.
+- **eBook settings no longer lay the book out at every step**: changing the size five times in a row lays it out
+  once, when you stop.
+- **The brightness slider in the reader's panels had lost its label**; it's back.
+
+**Changed**
+- **Settings wording**: "Skipping to the next book" - "Mark the one you leave as read?" Yes / No / Ask (it was
+  "'Next book' before the last page"); "Show page counter" (was Page corner); "Font face" and "Font size";
+  Paragraphs Book's / Auto; "Auto-hyphenation"; "Override defaults" with no line under it; "Reset to default" on every
+  page; Comics' groups "Pages - defaults" and "Image - defaults".
+- **Position text names**: Chapter progress, Book progress and Chapter name for eBooks; Book title and Progress for
+  comics.
+- **The eBook text size is synced again**, with the rest of the eBook settings.
+- **eBook page colours**: a Black page added; Sepia is now a warmer, more book-like paper with darker text.
+- **Accent colours**: 12 colours spread round the wheel (several crowded round blue before) and four greys - White,
+  Silver, Slate and Charcoal. Teal, Amber, Cyan, Sky, Indigo and Fuchsia are gone; a device using one goes back to
+  Blue.
+- **Settings > Reading: moving Screen brightness shows it** - the screen takes that brightness while you hold the
+  slider (or the remote is on it), and goes back when you let go.
+- Settings > Downloads: the "a book that won't fit" note is now part of Storage limit.
 
 ## 1.3.0
 

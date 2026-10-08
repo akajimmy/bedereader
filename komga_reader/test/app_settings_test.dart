@@ -97,7 +97,7 @@ void main() {
     String spots(BookKind k) => s.display.kind(k).hiddenSpots.join(',');
     final steps = <(SettingsPage, Finder, Object? Function(), Object?)>[
       // Comics: each kind its own position text, progress bar
-      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Title'),
+      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Book title'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Page strip'), () => s.display.pageStrip, true),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
@@ -108,9 +108,9 @@ void main() {
           () => (s.defaults.background, s.prefsFor('S-follows-defaults').background),
           (ReaderBackground.white, ReaderBackground.white)),
       // eBooks: the other kind's position text, progress bar and page corner
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', 'right')),
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Progress bar'),
           () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true)),
@@ -121,10 +121,11 @@ void main() {
       (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
       (SettingsPage.ebooks, segment<EpubAlign>('Left'),
           () => (s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine)),
-      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Hyphenation'), () => s.epub.hyphenate, false),
+      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Auto-hyphenation'), () => s.epub.hyphenate, false),
       (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.7),
       // Reading
-      (SettingsPage.reading, find.text('Mark read'), () => s.display.midBook, MidBook.markRead),
+      (SettingsPage.reading, find.descendant(of: find.byType(SegmentedButton<MidBook>), matching: find.text('Yes')),
+          () => s.display.midBook, MidBook.markRead),
       (SettingsPage.reading, find.text('10 min'), () => s.display.screenOn, 10),
       // Library & Home: the poster size, and the three caption lines each on or off (user, 2026-10-07)
       (SettingsPage.library, find.text('Large'), () => s.display.posterSize, PosterSize.large),
@@ -134,7 +135,7 @@ void main() {
           () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, false)),
       // Look
       (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),
-      (SettingsPage.look, find.bySemanticsLabel('Teal'), () => s.display.accent, Accent.teal),
+      (SettingsPage.look, find.bySemanticsLabel('Green'), () => s.display.accent, Accent.green),
     ];
     expect((s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (true, true, true));
     await open(tester, page: steps.first.$1);
@@ -166,7 +167,7 @@ void main() {
     // could be dropped from a reset and nothing failed)
     const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
         midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
-        posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.teal,
+        posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
         pagePreviews: false, pageStrip: true,
         comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
             progressBar: true, hiddenSpots: ['left']),
@@ -383,7 +384,7 @@ void main() {
     await conn.setAutoSwitch(true);
     // every setting kept on this device, away from its default (test audit, 2026-09-30)
     s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 5, nightSchedule: true,
-        textScale: 1.3, accent: Accent.teal));
+        textScale: 1.3, accent: Accent.green));
     await ReaderKeys.instance.assign(ReaderAction.next, LogicalKeyboardKey.keyN);
     await HiddenLibraries.instance.setHidden('L1', true);
     await HomeSections.instance.set('ondeck', false);
@@ -419,7 +420,7 @@ void main() {
     expect(d.capBytes, Downloads.defaultCap);
     expect(d.deleteRead, DeleteRead.never);
     expect(s.series['S9']?.fit, FitMode.width);
-    expect((s.epub.size, s.epub.font), (19.0, EpubFont.lora), reason: "the eBook text size is this device's");
+    expect((s.epub.size, s.epub.font), (24.0, EpubFont.lora), reason: 'the EPUB set is synced: untouched');
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
   });
 
@@ -489,5 +490,37 @@ void main() {
       expect(HomeSections.names[HomeSections.instance.order.first], second, reason: 'moved to the top');
       expect(on(tester, up), isTrue, reason: 'still there for the remote');
     });
+  });
+
+  testWidgets("Reading: the screen takes the reader's brightness while its slider is in use - touched, or the remote "
+      'on it - and goes back once let go, left, or the page changed (user, 2026-10-07 QA: it showed nothing)',
+      (tester) async {
+    tall(tester);
+    final s = AppSettings.instance;
+    s.setDisplay(const DisplayPrefs(brightness: 0.4));
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    await open(tester, page: SettingsPage.reading);
+    await tester.pumpAndSettle();
+    final slider = find.byType(Slider);
+    expect(s.brightnessShown, isFalse, reason: 'Settings: the system brightness');
+    final g = await tester.startGesture(tester.getCenter(slider));
+    await tester.pump();
+    expect(s.brightnessShown, isTrue, reason: 'a finger on the slider');
+    await g.up();
+    await tester.pump();
+    expect(s.brightnessShown, isFalse, reason: 'let go');
+    // the remote's focus on it (the slider's own node)
+    final sliderEl = slider.evaluate().single;
+    final node = FocusManager.instance.rootScope.descendants.firstWhere((n) {
+      var inside = false;
+      n.context?.visitAncestorElements((e) => !(inside = e == sliderEl));
+      return inside;
+    });
+    node.requestFocus();
+    await tester.pump();
+    expect(s.brightnessShown, isTrue, reason: 'the remote on the slider');
+    await tester.tap(find.widgetWithText(ListTile, 'Look')); // another page: the slider gone
+    await tester.pumpAndSettle();
+    expect(s.brightnessShown, isFalse, reason: 'never left on with the page gone');
   });
 }

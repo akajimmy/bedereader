@@ -76,8 +76,8 @@ void main() {
     }
   }
 
-  testWidgets("the text size is this device's (user, 2026-10-07): Komga's copy of the EPUB set brings the rest, not "
-      'the size', (tester) async {
+  testWidgets("the text size is synced like the rest of the EPUB set (user, 2026-10-07 QA: one size again): Komga's "
+      'copy brings it', (tester) async {
     final api = noNetwork(() => SettingsServer({
       AppSettings.komgaKey: jsonEncode({'v': 1, 'series': {},
           'epub': const EpubPrefs(size: 28, font: EpubFont.lora).toJson()}),
@@ -87,7 +87,7 @@ void main() {
     });
     await tester.runAsync(() => AppSettings.instance.load(api));
     expect(AppSettings.instance.epub.font, EpubFont.lora, reason: "Komga's copy of the rest");
-    expect(AppSettings.instance.epub.size, 16, reason: "this device's size, not Komga's 28");
+    expect(AppSettings.instance.epub.size, 28, reason: "Komga's size, not the device's 16");
   });
 
   testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
@@ -98,7 +98,7 @@ void main() {
     }));
     await tester.runAsync(() => AppSettings.instance.load(api));
     expect(AppSettings.instance.epub.font, isNot(EpubFont.lora), reason: 'not set yet');
-    expect(AppSettings.instance.epub.size, 19, reason: "the size is this device's, not Komga's 24");
+    expect(AppSettings.instance.epub.size, 24, reason: "Komga's copy, the size included");
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(font: EpubFont.lora));
     await wait(tester, const Duration(seconds: 3));
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
@@ -169,10 +169,49 @@ void main() {
     await settle();
     final before = await total();
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(size: 28, colours: EpubColours.light));
+    await tester.pump(); // the page drawn with the change: the pause starts
+    await tester.pump(EpubRenderer.settleDelay); // laid out once the settings stop changing
     await settle();
     expect(await total(), greaterThan(before));
     expect(tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor, EpubColours.light.background);
     await tester.pumpWidget(const SizedBox()); // closed: the background counting stops
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+  });
+
+  testWidgets('settings changed in quick succession lay the book out once, when they stop - not at every step (user, '
+      '2026-10-07: the size up several steps); meanwhile the page stays as it was', (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final store = EpubCountStore.instance as MemoryCountStore;
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: twoChapters(),
+        saveProgress: false)));
+    Future<void> settle() async {
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump();
+      }
+    }
+    await settle();
+    expect(find.byType(PageView), findsOneWidget, reason: 'open');
+    final before = store.loads;
+    final s = AppSettings.instance;
+    for (final size in [20.0, 22.0, 24.0, 26.0]) { // four steps up, each well inside the pause
+      s.setEpub(s.epub.copyWith(size: size));
+      await tester.pump(EpubRenderer.settleDelay ~/ 4);
+      await settle();
+    }
+    expect(store.loads, before, reason: 'not laid out while the size was still changing');
+    expect(find.byType(PageView), findsOneWidget, reason: 'the page stays meanwhile');
+    await tester.pump(EpubRenderer.settleDelay);
+    await settle();
+    expect(store.loads, before + 1, reason: 'one layout, for the last size');
+    expect(find.byType(PageView), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
     for (var i = 0; i < 10; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
       await tester.pump(const Duration(milliseconds: 10));

@@ -6,7 +6,7 @@ import 'display_panel.dart';
 import 'setting_rows.dart';
 
 /// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting and
-/// Page. The size in it is this device's own (user, 2026-10-07).
+/// Page.
 List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set) => [
       SettingsGroup(title: 'Text', synced: true, children: [
         ..._fontRows(e, set),
@@ -44,7 +44,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     SettingsGroup(title: 'Reading', children: [
       _coloursRow(e, set),
       positionTextRow(s, BookKind.ebooks),
-      ...brightnessRows(s, compact: true),
+      ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
       screenOnRow(s),
     ]),
@@ -52,18 +52,22 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
 }
 
 // the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down to fit
-// the side sheet until the names couldn't be read (user, 2026-10-06)
+// the side sheet until the names couldn't be read (user, 2026-10-06). One row with its label, so the chips have room
+// above them (user, 2026-10-07: they sat against the line above)
 List<Widget> _fontRows(EpubPrefs e, ValueChanged<EpubPrefs> set) => [
-      const SettingRow(title: 'Font'),
       Padding(
-        padding: const EdgeInsets.fromLTRB(14, 0, 14, 8),
-        child: Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final f in EpubFont.values)
-            ChoiceChip(
-              label: Text(f.label, style: TextStyle(fontFamily: f.family, fontSize: 14)),
-              selected: e.font == f,
-              onSelected: (_) => set(e.copyWith(font: f)),
-            ),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Font face', style: TextStyle(fontSize: 14.5)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final f in EpubFont.values)
+              ChoiceChip(
+                label: Text(f.label, style: TextStyle(fontFamily: f.family, fontSize: 14)),
+                selected: e.font == f,
+                onSelected: (_) => set(e.copyWith(font: f)),
+              ),
+          ]),
         ]),
       ),
     ];
@@ -73,8 +77,7 @@ Widget _sizeRow(EpubPrefs e, ValueChanged<EpubPrefs> set) {
   final at = i < 0 ? EpubPrefs.sizes.indexWhere((s) => s >= e.size) : i;
   void size(int by) => set(e.copyWith(size: EpubPrefs.sizes[(at + by).clamp(0, EpubPrefs.sizes.length - 1)]));
   return SettingRow(
-    title: 'Size',
-    subtitle: 'This device', // not synced (user, 2026-10-07)
+    title: 'Font size',
     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
       IconButton(icon: const Icon(Icons.text_decrease), tooltip: 'Smaller', onPressed: at > 0 ? () => size(-1) : null),
       SizedBox(width: 40, child: Text('${e.size.round()}', textAlign: TextAlign.center)),
@@ -121,7 +124,7 @@ List<Widget> _formattingRows(EpubPrefs e, ValueChanged<EpubPrefs> set) => [
         onChanged: (v) => set(e.copyWith(paragraphs: v)),
       ),
       SwitchRow(
-        title: 'Hyphenation',
+        title: 'Auto-hyphenation',
         value: e.hyphenate,
         onChanged: (v) => set(e.copyWith(hyphenate: v)),
       ),

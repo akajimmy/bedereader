@@ -58,11 +58,11 @@ ThemeData buildTheme([Accent choice = Accent.blue]) {
     colorScheme: ColorScheme.dark(primary: accent, secondary: accent, onPrimary: choice.onColour,
         onSecondary: choice.onColour, surface: const Color(0xFF141416)),
     appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF0B0B0C), elevation: 0, centerTitle: false),
-    focusColor: accent.withValues(alpha: 0.4), // list rows (side menu, sheets) under the remote
-    iconButtonTheme: IconButtonThemeData(style: strongFocusStyle(accent)),
-    textButtonTheme: TextButtonThemeData(style: strongFocusStyle(accent)),
-    filledButtonTheme: FilledButtonThemeData(style: strongFocusStyle(accent)),
-    outlinedButtonTheme: OutlinedButtonThemeData(style: strongFocusStyle(accent)),
+    focusColor: choice.focus.withValues(alpha: 0.4), // list rows (side menu, sheets) under the remote
+    iconButtonTheme: IconButtonThemeData(style: strongFocusStyle(choice.focus)),
+    textButtonTheme: TextButtonThemeData(style: strongFocusStyle(choice.focus)),
+    filledButtonTheme: FilledButtonThemeData(style: strongFocusStyle(choice.focus)),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: strongFocusStyle(choice.focus)),
     // a bar's unfilled part in grey: left to Material, it is the scheme's secondary container - the accent here, the
     // same as the filled part - so a bar looked full whatever it showed (Downloads' storage bar at 10% - user,
     // build 83)
