@@ -27,6 +27,8 @@ This application was developed with the aid of AI coding tools, but was designed
 | `http` | 1.6.0 | BSD-3-Clause | Talking to Komga |
 | `shared_preferences` and its Android / Apple / Linux / Windows parts | 2.5.5 | BSD-3-Clause | Settings kept on the device |
 | `path_provider` Linux / Windows parts, `xdg_directories` | 2.2.2 / 2.3.0, 1.1.0 | BSD-3-Clause | Where settings are stored (desktop) |
+| `flutter_secure_storage` and its Windows part | 11.2.0 / 4.2.2 | BSD-3-Clause | The API key, stored encrypted |
+| `path_provider` and its Android part, `win32`, `jni`, `jni_flutter`, `jni_util`, `crypto`, `logging` | 2.1.6 / 2.3.1, 6.4.0, 1.1.0, 1.0.4, 1.0.0, 3.0.7, 1.3.0 | BSD-3-Clause | Used by the encrypted storage |
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
 | `async`, `characters`, `collection`, `ffi`, `file`, `http_parser`, `meta`, `path`, `platform`, `plugin_platform_interface`, `source_span`, `string_scanner`, `term_glyph`, `typed_data`, `vector_math` | various | BSD-3-Clause | Supporting libraries used by the above |
 
@@ -41,6 +43,7 @@ licence); both covered by Flutter's notices.
 | AndroidX: activity, annotation, appcompat, arch.core, asynclayoutinflater, coordinatorlayout, core, cursoradapter, customview, datastore, documentfile, drawerlayout, exifinterface, fragment, interpolator, legacy, lifecycle, loader, localbroadcastmanager, preference, print, profileinstaller, recyclerview, savedstate, slidingpanelayout, startup, swiperefreshlayout, tracing, transition, vectordrawable, versionedparcelable, viewpager, window | 1.0.0 - 2.7.0 (per library) | Apache-2.0 |
 | Kotlin standard library | with Kotlin 2.4 | Apache-2.0 |
 | kotlinx.coroutines (core, android) | 1.7.3 | Apache-2.0 |
+| Google Tink (tink-android), brought in by the encrypted storage | 1.23.0 | Apache-2.0 |
 
 Flutter gathers the full licence texts of the framework, engine and Dart packages into every build; they're shown
 in the app under About > *Licences of included open-source software*, together with the app's own licence, AMD's
