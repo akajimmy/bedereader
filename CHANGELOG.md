@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 93 - 2026-10-07
+
 **Fixed**
 - **Settings > Remote and keys: + Add didn't take the key you pressed** (the volume keys included) on the tablet. It
   now takes the next key pressed, wherever the focus is.
@@ -31,8 +35,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Settings > Reading: moving Screen brightness shows it** - the screen takes that brightness while you hold the
   slider (or the remote is on it), and goes back when you let go.
 - Settings > Downloads: the "a book that won't fit" note is now part of Storage limit.
-
-## 1.3.0
 
 ### Build 92 - 2026-10-07
 
