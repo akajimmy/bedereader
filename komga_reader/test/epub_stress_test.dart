@@ -55,7 +55,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  bool stuck() => find.byType(PageView).evaluate().isEmpty;
+  // no page view yet, or a spinner on screen - the page on a spinner inside the page view is the build-65 bug (a page
+  // built ahead off screen may show one: only what's on screen counts)
+  bool stuck() =>
+      find.byType(PageView).evaluate().isEmpty || find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
 
   testWidgets("a chapter that fails to load shows why, with Retry - not a spinner for good (it used to stay stuck: "
       'the failed try was kept); Retry brings it', (tester) async {
@@ -86,11 +89,11 @@ void main() {
     expect(find.byType(ErrorText), findsOneWidget, reason: 'why, in plain words');
     source.down = false; // Komga answers again
     await tester.tap(find.text('Retry'));
-    for (var i = 0; i < 20 && find.text('Retry').evaluate().isNotEmpty; i++) {
+    for (var i = 0; i < 20 && (find.text('Retry').evaluate().isNotEmpty || stuck()); i++) {
       await step(tester, 20);
     }
     expect(find.text('Retry'), findsNothing, reason: 'the chapter shows after Retry');
-    expect(stuck(), isFalse);
+    expect(stuck(), isFalse, reason: 'its page, not a spinner');
     await tester.pumpWidget(const SizedBox());
     for (var i = 0; i < 20; i++) {
       await step(tester, 10);
