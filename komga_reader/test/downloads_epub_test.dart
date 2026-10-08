@@ -13,11 +13,11 @@ import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show settle;
-import 'epub_source_test.dart' show epub3, zip;
+import 'support/epub_files.dart';
 import 'support/helpers.dart';
 import 'support/library_server.dart';
 import 'support/no_network.dart';
+import 'support/settle.dart';
 
 /// The library server, with B1 an EPUB: its file, its positions (Komga's "pages" for it).
 class EpubLibrary extends LibraryServer {
