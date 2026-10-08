@@ -94,16 +94,30 @@ void main() {
     expect(isEpub({'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isFalse);
   });
 
-  testWidgets('opens on the first page; once every chapter is counted the position reads "page X of Y"; a tap on '
-      'the right turns forward, on the left back', (tester) async {
+  testWidgets('opens on the first page, "page X of Y"; forward and back turn a page each way - a tap on the right / '
+      'left, the mouse wheel down / up (as with comics: it did nothing in the Windows app - build 79), the remote\'s '
+      'Right / Left', (tester) async {
     await open(tester, twoChapters());
     expect(await label(tester), startsWith('Book · Pg. 1/'));
-    await tester.tapAt(const Offset(750, 600));
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.tapAt(const Offset(50, 600));
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
+    Future<void> wheel(double dy) async {
+      // a turn at most every 250 ms
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+      await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
+    }
+    for (final (input, forward, back) in <(String, Future<void> Function(), Future<void> Function())>[
+      ('tap', () => tester.tapAt(const Offset(750, 600)), () => tester.tapAt(const Offset(50, 600))),
+      ('wheel', () => wheel(120), () => wheel(-120)), // a notch down, a notch up
+      ('remote', () => tester.sendKeyEvent(LogicalKeyboardKey.arrowRight),
+          () => tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft)),
+    ]) {
+      await forward();
+      await settle(tester);
+      expect(await label(tester), startsWith('Book · Pg. 2/'), reason: '$input: forward');
+      await back();
+      await settle(tester);
+      expect(await label(tester), startsWith('Book · Pg. 1/'), reason: '$input: back');
+    }
   });
 
   testWidgets("an EPUB follows the eBooks' own reading settings, not the comics' (user, 2026-10-07: set apart per "
@@ -148,22 +162,6 @@ void main() {
       await settle(tester);
     }
     expect(await label(tester), before, reason: 'back at the first size: the same page');
-  });
-
-  testWidgets('the mouse wheel turns pages, as with comics (it did nothing in the Windows app - build 79)',
-      (tester) async {
-    await open(tester, twoChapters());
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
-    Future<void> wheel(double dy) async {
-      final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
-      await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
-      await settle(tester);
-    }
-    await wheel(120); // one notch down
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300))); // a turn at most every 250 ms
-    await wheel(-120); // and up
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
@@ -311,16 +309,6 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
     }
-  });
-
-  testWidgets('the remote: Right turns forward, Left back, OK shows the controls', (tester) async {
-    await open(tester, twoChapters());
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('the rotation lock holds in EPUBs too (it was offered in the panel but never applied): one way up, the '

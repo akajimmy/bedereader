@@ -135,19 +135,15 @@ void main() {
     expect(broken, 0, reason: 'pages ending "ea-"');
   });
 
-  test('paginator: long text runs over several pages, none of them empty', () {
-    final pages = paginate(chapter(40, 60));
-    expect(pages.length, greaterThan(5));
-    expect(pages.every((p) => p.pieces.isNotEmpty), isTrue);
-  });
-
-  test("pages know the chapter position they start at: rising, the first at 0; a position finds its page, at any "
-      'text size', () {
+  test("paginator: long text runs over several pages, none of them empty; pages know the chapter position they start "
+      'at: rising, the first at 0; a position finds its page, at any text size', () {
     final src = chapter(30, 50);
     final blocks = ChapterReader(StyleSheet(), (h) => h)..read(parseXhtml(src));
     final total = blocks.length;
     for (final size in [16.0, 24.0]) {
       final pages = paginate(src, theme: EpubTheme(fontSize: size));
+      expect(pages.length, greaterThan(5), reason: 'at $size px');
+      expect(pages.every((p) => p.pieces.isNotEmpty), isTrue, reason: 'none empty at $size px');
       expect(pages.first.start, 0);
       for (var i = 1; i < pages.length; i++) {
         expect(pages[i].start, greaterThan(pages[i - 1].start), reason: 'page ${i + 1} at $size px');
