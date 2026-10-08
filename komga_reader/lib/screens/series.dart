@@ -145,6 +145,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
   late final Paged _paged = Paged((page, size) => collectionSeriesPage(widget.api, widget.collectionId, _sort,
       readStatus: _filter.api, page: page, size: size));
   String get _viewKey => 'view.collection.${widget.collectionId}';
+  final _sel = Selection();
 
   @override
   void initState() {
@@ -182,22 +183,26 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
   @override
   void dispose() {
     _paged.dispose();
+    _sel.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return withSideMenu(widget.api, (docked) => Scaffold(
+    return withSideMenu(widget.api, (docked) => selectionScope(_sel, (context) => Scaffold(
       key: menuScaffold,
       drawer: menuDrawer(widget.api, docked: docked),
       onDrawerChanged: onMenuChanged,
-      appBar: AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title,
+      appBar: _sel.active
+          ? selectionAppBar(context, widget.api, _sel, all: () => _paged.items, onChanged: _paged.refresh, series: true)
+          : AppBar(leading: const BackButton(), title: Breadcrumb(parent: 'Collections', title: widget.title,
               onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
                   mode: BrowseMode.collections)),
           actions: viewBarActions(
             paged: _paged,
             filter: _filter, onFilter: _setFilter,
             sort: SortMenuButton(fields: collectionSeriesSorts, value: _sort, onChanged: _setSort),
+            select: _sel,
             pin: Pin(
               name: [widget.title, if (_filter.shows != null) _filter.shows!,
                   if (_sort.words(collectionSeriesSorts) != null) _sort.words(collectionSeriesSorts)!].join(' · '),
@@ -209,11 +214,11 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
       body: menuEdge(PagedPosterGrid(
         paged: _paged,
         itemBuilder: (context, it, i) => seriesTile(context, widget.api, it, autofocus: i == 0,
-            onChanged: _paged.refresh, onOpen: () async {
+            onChanged: _paged.refresh, selection: _sel, onOpen: () async {
           // coming back loads afresh: refreshView
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesScreen(api: widget.api, series: it)));
         }),
       )),
-    ));
+    )));
   }
 }

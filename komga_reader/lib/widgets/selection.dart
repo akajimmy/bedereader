@@ -7,13 +7,15 @@ import '../screens/actions.dart';
 import 'error_text.dart';
 import 'fullscreen_exit.dart';
 
-/// Multi-select state for a book grid. While [active], tapping (or OK on) a book toggles it instead of opening it.
+/// Multi-select state for a book or series grid (one kind at a time: a screen that shows both ends the selection
+/// when it switches). While [active], tapping (or OK on) a tile toggles it instead of opening it.
 class Selection extends ChangeNotifier {
   bool active = false;
-  final Map<String, dynamic> _books = {}; // id -> book, in the order picked
+  final Map<String, dynamic> _books = {}; // id -> book (or series), in the order picked
 
   int get count => _books.length;
   List<dynamic> get books => _books.values.toList();
+  List<dynamic> get series => books; // (the same list, for a series grid)
   bool isSelected(dynamic b) => _books.containsKey(b['id']);
 
   void start([dynamic first]) {
@@ -44,13 +46,39 @@ class Selection extends ChangeNotifier {
 
 /// Top bar while selecting: close, "N selected", select all (everything loaded), mark read, mark unread, delete.
 /// [all] gives the books currently loaded in the grid; [onChanged] refreshes the grid after an action.
+/// [series]: a series grid - select all, download, mark read, mark unread (no delete).
 PreferredSizeWidget selectionAppBar(BuildContext context, Komga api, Selection sel,
-    {required List<dynamic> Function() all, required VoidCallback onChanged}) {
+    {required List<dynamic> Function() all, required VoidCallback onChanged, bool series = false}) {
   final none = sel.count == 0;
   Future<void> run(Future<void> Function() action) async {
     await action();
     sel.end();
     onChanged();
+  }
+
+  if (series) {
+    // each ends the selection once done; cancelled (its confirm or menu), the selection stays
+    Future<void> runSeries(Future<bool> Function() action) async {
+      if (!await action()) return;
+      sel.end();
+      onChanged();
+    }
+
+    return AppBar(
+      leading: IconButton(tooltip: 'Stop selecting', icon: const Icon(Icons.close), onPressed: sel.end),
+      title: Text(none ? 'Select series' : '${sel.count} selected'),
+      actions: [
+        IconButton(tooltip: 'Select all', icon: const Icon(Icons.select_all), onPressed: () => sel.selectAll(all())),
+        if (Downloads.instance.ready)
+          IconButton(tooltip: 'Download', icon: const Icon(Icons.download_outlined),
+              onPressed: none ? null : () => runSeries(() => bulkDownloadSeries(context, api, sel.series))),
+        IconButton(tooltip: 'Mark as read', icon: const Icon(Icons.check_circle_outline),
+            onPressed: none ? null : () => runSeries(() => bulkMarkSeries(context, api, sel.series, read: true))),
+        IconButton(tooltip: 'Mark as unread', icon: const Icon(Icons.radio_button_unchecked),
+            onPressed: none ? null : () => runSeries(() => bulkMarkSeries(context, api, sel.series, read: false))),
+        const FullscreenExit(),
+      ],
+    );
   }
 
   return AppBar(

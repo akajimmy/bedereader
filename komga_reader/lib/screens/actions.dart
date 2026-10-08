@@ -185,9 +185,10 @@ Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) as
   return done > 0;
 }
 
-/// Series actions: mark whole series read/unread, delete series.
+/// Series actions: mark whole series read/unread, download, select multiple (where the grid supports it), delete
+/// series.
 Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
-    {required VoidCallback onChanged, bool inSeries = false}) async {
+    {required VoidCallback onChanged, bool inSeries = false, VoidCallback? onSelectMultiple}) async {
   final title = (s['metadata']?['title'] ?? s['name']) as String;
   final choice = await showModalBottomSheet<String>(
     context: context,
@@ -209,6 +210,9 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
             : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
                 subtitle: const Text('This series never shows in On deck'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
+        if (onSelectMultiple != null)
+          ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
+              onTap: () => Navigator.pop(ctx, 'select')),
         ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
             title: const Text('Delete series…', style: TextStyle(color: Color(0xFFFF8A80))),
             onTap: () => Navigator.pop(ctx, 'delete')),
@@ -216,6 +220,10 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'select') {
+    onSelectMultiple!();
+    return;
+  }
   if (choice == 'details') {
     await Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => SeriesDetailsScreen(api: api, series: s, showOpen: !inSeries)));
@@ -227,7 +235,8 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
     return;
   }
   if (choice == 'dl-all' || choice == 'dl-unread') {
-    return queueDownloads(context, title, (status) => api.seriesBooks(s['id'] as String, readStatus: status, size: 2000),
+    return queueDownloads(context, '"$title"',
+        (status) => api.seriesBooks(s['id'] as String, readStatus: status, size: 2000),
         unreadOnly: choice == 'dl-unread');
   }
   final n = s['booksCount'] ?? 0;
@@ -290,7 +299,7 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
   );
   if (choice == null || !context.mounted) return;
   if (choice == 'dl-all' || choice == 'dl-unread') {
-    return queueDownloads(context, name, (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
+    return queueDownloads(context, '"$name"', (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
         unreadOnly: choice == 'dl-unread');
   }
   final read = choice == 'read';
@@ -379,7 +388,8 @@ List<Widget> downloadTiles(BuildContext ctx) => !Downloads.instance.ready
             onTap: () => Navigator.pop(ctx, 'dl-all')),
       ];
 
-/// Queues the books of a series or read list (in their order) and says how many were added.
+/// Queues the books of a series or read list (in their order) and says how many were added. [name] as shown in the
+/// messages (a title in quotes, or "3 series").
 Future<void> queueDownloads(BuildContext context, String name,
     Future<Map<String, dynamic>> Function(List<String>? readStatus) fetch, {required bool unreadOnly}) async {
   final messenger = ScaffoldMessenger.of(context);
@@ -389,10 +399,81 @@ Future<void> queueDownloads(BuildContext context, String name,
     final added = await Downloads.instance.add(books);
     final skipped = books.length - added;
     messenger.showSnackBar(SnackBar(content: Text(added == 0
-        ? 'Nothing new to download from "$name"'
-        : 'Queued $added book${added == 1 ? '' : 's'} from "$name"'
+        ? 'Nothing new to download from $name'
+        : 'Queued $added book${added == 1 ? '' : 's'} from $name'
             '${skipped > 0 ? ' ($skipped already downloaded or queued)' : ''}')));
   } catch (e, st) {
-    showErrorOn(messenger, couldnt('queue "$name" for download', e), e, st);
+    showErrorOn(messenger, couldnt('queue $name for download', e), e, st);
   }
+}
+
+/// Download several series (a series selection): asks "unread" or "all" as the one-series menu does, then queues
+/// their books, series by series in the order they were picked, each in its number order. False if cancelled.
+Future<bool> bulkDownloadSeries(BuildContext context, Komga api, List<dynamic> series) async {
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF141416),
+    builder: (ctx) => SafeArea(child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+      ListTile(title: Text('Download ${series.length} series')),
+      const Divider(height: 1),
+      ...downloadTiles(ctx),
+    ]))),
+  );
+  if (choice == null || !context.mounted) return false;
+  if (series.length == 1) {
+    final title = (series.first['metadata']?['title'] ?? series.first['name']) as String;
+    await queueDownloads(context, '"$title"',
+        (status) => api.seriesBooks(series.first['id'] as String, readStatus: status, size: 2000),
+        unreadOnly: choice == 'dl-unread');
+  } else {
+    await queueDownloads(context, '${series.length} series', (status) async => {
+          'content': [
+            for (final s in series)
+              ...((await api.seriesBooks(s['id'] as String, readStatus: status, size: 2000))['content'] as List? ?? []),
+          ],
+        }, unreadOnly: choice == 'dl-unread');
+  }
+  return true;
+}
+
+/// Would marking this series read / unread change anything, by its counts? Read: a book not finished; unread: a book
+/// read or in progress.
+bool seriesNeedsChange(dynamic s, {required bool read}) {
+  final total = (s['booksCount'] ?? 0) as int;
+  final unread = (s['booksUnreadCount'] ?? 0) as int, inProgress = (s['booksInProgressCount'] ?? 0) as int;
+  return read ? unread + inProgress > 0 : unread < total;
+}
+
+/// Mark several series read or unread (a series selection), confirmed first as for one series; those already in that
+/// state are skipped, the rest a few at a time. False if cancelled.
+Future<bool> bulkMarkSeries(BuildContext context, Komga api, List<dynamic> series, {required bool read}) async {
+  final n = series.length;
+  final word = read ? 'read' : 'unread';
+  if (!await confirmBulk(context, 'Mark all books of $n series $word?',
+      read ? 'Books in progress are marked finished.' : 'This also clears the saved page of books in progress.',
+      read ? 'Mark read' : 'Mark unread')) {
+    return false;
+  }
+  if (!context.mounted) return false;
+  final todo = series.where((s) => seriesNeedsChange(s, read: read)).toList();
+  final messenger = ScaffoldMessenger.of(context);
+  var done = 0;
+  try {
+    for (var i = 0; i < todo.length; i += 4) {
+      final batch = todo.skip(i).take(4).toList();
+      await Future.wait([
+        for (final s in batch) read ? api.markSeriesRead(s['id'] as String) : api.markSeriesUnread(s['id'] as String),
+      ]);
+      done += batch.length;
+    }
+    final skipped = n - todo.length;
+    messenger.showSnackBar(SnackBar(content: Text(todo.isEmpty
+        ? 'All $n series already $word'
+        : '${todo.length} series marked $word${skipped > 0 ? ' ($skipped already $word)' : ''}')));
+  } catch (e, st) {
+    showErrorOn(messenger, done == 0
+        ? couldnt('mark the series as $word', e, thing: 'series')
+        : stoppedAfter('Marked $done of ${todo.length} series as $word', e), e, st);
+  }
+  return true;
 }
