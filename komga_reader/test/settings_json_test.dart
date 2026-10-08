@@ -30,8 +30,6 @@ void main() {
 
     // older saves: (what was saved, what it reads as)
     for (final (saved, read, expected, why) in <(Map<String, dynamic>, Object? Function(ReaderPrefs), Object?, String)>[
-      ({'s': 0.4}, (p) => p.sharpen, true, 'build-4 sharpen slider: on'),
-      ({'s': 0}, (p) => p.sharpen, false, 'build-4 sharpen slider at 0: off'),
       ({'fit': 'width'}, (p) => p.direction, ReadingDirection.auto, 'from before the direction: Auto'),
       ({'fit': 'width'}, (p) => p.ownLayout, true, 'from before the toggles: overrides the layout'),
       ({'fit': 'width'}, (p) => p.ownImage, true, 'from before the toggles: overrides the image'),

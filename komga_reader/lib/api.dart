@@ -411,10 +411,7 @@ extension ReadFilterApi on ReadFilter {
         ReadFilter.hideUnread => 'read',
       };
 
-  /// Saved names, including the four-way filter of builds 5-7 (unread / in progress became "hide read").
-  static ReadFilter fromName(Object? name) => name == 'hideUnread'
-      ? ReadFilter.hideUnread
-      : const {'hideRead', 'unread', 'inProgress'}.contains(name)
-          ? ReadFilter.hideRead
-          : ReadFilter.all;
+  /// A saved name; anything else is everything.
+  static ReadFilter fromName(Object? name) =>
+      ReadFilter.values.firstWhere((f) => f.name == name, orElse: () => ReadFilter.all);
 }

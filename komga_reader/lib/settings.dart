@@ -83,7 +83,7 @@ class ReaderPrefs {
         fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
         brightness: (j['b'] as num?)?.toDouble() ?? 0,
         contrast: (j['c'] as num?)?.toDouble() ?? 0,
-        sharpen: j['s'] == true || (j['s'] is num && (j['s'] as num) > 0), // was a 0..1 slider in build 4
+        sharpen: j['s'] == true,
         autoLevels: j['l'] == true,
         direction: ReadingDirection.values.firstWhere((d) => d.name == j['d'], orElse: () => ReadingDirection.auto),
         crop: ((j['x'] as num?)?.toDouble() ?? 0).clamp(0.0, maxCrop),

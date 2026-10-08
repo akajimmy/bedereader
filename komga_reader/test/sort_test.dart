@@ -59,7 +59,7 @@ void main() {
     expect(find.byTooltip('Clear filters'), findsOneWidget); // not the default any more
   });
 
-  testWidgets('a sort saved before directions existed opens in its natural direction', (tester) async {
+  testWidgets("a saved view without a direction opens in its sort's natural one", (tester) async {
     SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': 'series', 'sort': 'updated'})});
     final api = await open(tester);
     expect(api.sorts.last, 'lastModifiedDate,desc');

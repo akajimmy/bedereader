@@ -8,7 +8,10 @@ void main() {
   test('read filters map to Komga read_status values', () {
     expect(ReadFilter.all.api, isNull);
     expect(ReadFilter.hideRead.api, ['UNREAD', 'IN_PROGRESS']); // in progress counts as unread
-    expect(ReadFilterApi.fromName('inProgress'), ReadFilter.hideRead); // old saved filters carry over
+    expect(ReadFilter.hideUnread.api, ['READ']);
+    for (final f in ReadFilter.values) {
+      expect(ReadFilterApi.fromName(f.name), f, reason: 'saved and read back');
+    }
     expect(ReadFilterApi.fromName('read'), ReadFilter.all);
   });
 

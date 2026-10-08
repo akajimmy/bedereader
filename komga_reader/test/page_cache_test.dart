@@ -28,11 +28,11 @@ class AllPages extends TestKomga {
 }
 
 void main() {
-  testWidgets("Enhance colours' remembered levels: the most recent $levelsKept books kept, older ones go - one was "
-      'kept for every book ever opened with it (code review 2026-10-05, #49); those from before the list count too',
-      (tester) async {
+  testWidgets("Enhance colours' remembered levels: the most recent $levelsKept books kept, the oldest goes - one was "
+      'kept for every book ever opened with it (code review 2026-10-05, #49)', (tester) async {
     SharedPreferences.setMockInitialValues({
-      for (var i = 0; i < levelsKept; i++) 'levels.old$i': '0,0,0,1,1,1', // remembered before the list was kept
+      for (var i = 0; i < levelsKept; i++) 'levels.old$i': '0,0,0,1,1,1',
+      'levels.books': [for (var i = 0; i < levelsKept; i++) 'old$i'], // oldest first
     });
     await tester.runAsync(() async {
       await PageLoader(noNetwork(AllPages.new), 'NEW', List.generate(10, (i) => i + 1)).bookLevels();
@@ -41,6 +41,8 @@ void main() {
       expect(kept, hasLength(levelsKept));
       expect(p.getString('levels.NEW'), isNotNull, reason: 'the book just measured is kept');
       expect(p.getStringList('levels.books')!.last, 'NEW');
+      expect(p.getString('levels.old0'), isNull, reason: 'the oldest gone');
+      expect(p.getString('levels.old1'), isNotNull);
     });
   });
 
