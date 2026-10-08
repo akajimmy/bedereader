@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../app_identity.dart';
 import '../licences.dart';
 import '../screen.dart';
@@ -14,10 +13,9 @@ const appLicense = 'MIT licence - free to use, change and share, keeping the cop
 
 /// About (side menu, Settings > About): the app's name, version, author, licence, What's new / Read me /
 /// Third-party software, the AI usage disclosure, and credits and links for Komga. The server's status is in
-/// Settings > Server & connection.
+/// Settings > Server and sync.
 class AboutScreen extends StatefulWidget {
-  const AboutScreen({super.key, required this.api});
-  final Komga api;
+  const AboutScreen({super.key});
   @override
   State<AboutScreen> createState() => _AboutScreenState();
 }

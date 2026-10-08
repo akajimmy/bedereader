@@ -626,7 +626,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return [
       SettingsGroup(title: appName, children: [
         ActionRow(title: 'About $appName', subtitle: 'Version, author, licence, credits', icon: Icons.info_outline,
-            onTap: () => open(AboutScreen(api: widget.api))),
+            onTap: () => open(const AboutScreen())),
         ActionRow(title: "What's new", subtitle: 'What changed in each build', icon: Icons.new_releases_outlined,
             onTap: () => open(DocumentScreen.whatsNew())),
         ActionRow(title: 'Read me', subtitle: 'What the app does, getting started, where settings live',

@@ -93,7 +93,7 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(null)
                 }
-                // App-wide brightness (lib/screen.dart): only this app's window, so leaving the app restores the
+                // The reader's brightness (lib/screen.dart): only this app's window, so leaving the app restores the
                 // tablet's own level. -1 = follow the system.
                 "brightness" -> {
                     val v = (call.arguments as Number).toFloat()
@@ -112,13 +112,13 @@ class MainActivity : FlutterActivity() {
                         result.success((sys / 255.0).coerceIn(0.0, 1.0))
                     }
                 }
-                // Installed version for the Info screen (versionName + build number from pubspec's version).
+                // Installed version for About (versionName + build number from pubspec's version).
                 "appVersion" -> {
                     val info = packageManager.getPackageInfo(packageName, 0)
                     val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
                     result.success(mapOf("name" to info.versionName, "code" to code))
                 }
-                // Open a web link (Info screen credits) in the tablet's browser.
+                // Open a web link (About's credits) in the tablet's browser.
                 "openUrl" -> {
                     try {
                         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.arguments as String)))

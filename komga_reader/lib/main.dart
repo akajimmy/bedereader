@@ -99,8 +99,6 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     _restore();
   }
 
-  /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one). Also shows
-  /// the "can't reach Komga" prompt and the messages about switching.
   /// F11 anywhere (desktop): full screen is app-wide (lib/screen.dart). A keyboard-level handler, so it works on
   /// any screen whether or not something has focus.
   bool _onF11(KeyEvent e) {
@@ -133,6 +131,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.dispose();
   }
 
+  /// Online <-> offline: back to Home, rebuilt on the other connection (open screens hold the old one). Also shows
+  /// the "can't reach Komga" prompt and the messages about switching.
   void _onConnection() {
     final c = Connection.instance;
     if (c.keyPromptPending && !_prompting) {
