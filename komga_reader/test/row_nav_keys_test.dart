@@ -77,7 +77,8 @@ void main() {
       await tester.pumpAndSettle();
     }
     // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment and Paragraphs open on Book's)
-    expect(seen, ['Literata', 'Smaller', 'Tight', 'None', 'Narrow', "Book's", "Book's"]);
+    // (each row named by its first button: Line spacing's is Compact since its five steps, 2026-10-08)
+    expect(seen, ['Literata', 'Smaller', 'Compact', 'None', 'Narrow', "Book's", "Book's"]);
   });
 
   // (the rows' order by screen position, not the focus tree's, is checked by settings_remote_test's walk of Library &
