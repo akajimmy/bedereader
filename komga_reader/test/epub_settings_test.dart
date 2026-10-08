@@ -48,11 +48,37 @@ void main() {
       "shortest) and the rest goes to the margins; on a narrow one it's the setting's own margin (user: the margin "
       "setting didn't seem to do anything)", () {
     double side(EpubMargins m, double w) => EpubRenderer.sideMargin(EpubPrefs(margins: m), w);
-    for (final w in [800.0, 1200.0, 2000.0]) {
-      expect(side(EpubMargins.narrow, w), lessThan(side(EpubMargins.normal, w)), reason: 'at $w');
-      expect(side(EpubMargins.normal, w), lessThan(side(EpubMargins.wide, w)), reason: 'at $w');
+    for (final w in [360.0, 800.0, 1280.0, 2000.0]) {
+      for (var i = 1; i < EpubMargins.values.length; i++) {
+        final (a, b) = (EpubMargins.values[i - 1], EpubMargins.values[i]);
+        expect(side(a, w), lessThan(side(b, w)), reason: '${a.name} < ${b.name} at $w');
+      }
     }
-    expect(side(EpubMargins.wide, 360), EpubMargins.wide.side, reason: 'a phone: the margin itself');
+    expect(side(EpubMargins.wide, 360), 360 * EpubMargins.wide.share, reason: 'a phone: the setting\'s share');
+  });
+
+  test('wider margins than before (user, 2026-10-08): on the tablet in portrait (800 wide, size 19), Widest leaves '
+      'a quarter of the width each side, against 17% for Wide', () {
+    double side(EpubMargins m) => EpubRenderer.sideMargin(EpubPrefs(margins: m), 800);
+    expect(side(EpubMargins.wide) / 800, closeTo(0.17, 0.01));
+    expect(side(EpubMargins.widest) / 800, greaterThanOrEqualTo(0.25));
+  });
+
+  test('the margins setting leaves the top and bottom alone (user, 2026-10-08)', () {
+    expect(EpubMargins.topBottom, 40);
+  });
+
+  test('line spacing: five steps, 1 to 2; a spacing saved before them shows as the nearest step', () {
+    expect(EpubPrefs.spacings, [1.0, 1.25, 1.5, 1.75, 2.0]);
+    expect(nearestSpacing(1.45), 1.5);
+    expect(nearestSpacing(1.7), 1.75);
+    expect(EpubPrefs.fromJson(const {'lineSpacing': 1.45}).lineSpacing, 1.45, reason: 'kept as saved');
+  });
+
+  test('paragraph spacing: five steps; a saved choice keeps its spacing', () {
+    expect([for (final g in EpubParagraphGap.values) g.ems], [0, 0.25, 0.5, 1, 1.5]);
+    expect(EpubPrefs.fromJson(const {'paragraphGap': 'small'}).paragraphGap.ems, 0.5);
+    expect(EpubPrefs.fromJson(const {'paragraphGap': 'large'}).paragraphGap.ems, 1);
   });
 
   testWidgets("the font choices keep their size in the reader's side sheet (380 wide): they wrap under the label, "

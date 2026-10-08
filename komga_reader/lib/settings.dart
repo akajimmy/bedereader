@@ -408,26 +408,38 @@ enum EpubColours {
   final String label;
 }
 
+/// The page's left and right margins (user, 2026-10-08: "wider margins than currently possible" - five steps; the top
+/// and bottom no longer follow them: [topBottom] is the same for all).
 enum EpubMargins {
-  narrow(18, 28, 40, 'Narrow'),
-  normal(36, 40, 34, 'Normal'),
-  wide(64, 56, 28, 'Wide');
+  narrow(0.04, 40, 'Narrow'),
+  normal(0.08, 34, 'Normal'),
+  wide(0.14, 28, 'Wide'),
+  wider(0.20, 24, 'Wider'),
+  widest(0.26, 20, 'Widest');
 
-  const EpubMargins(this.side, this.topBottom, this.lineEms, this.label);
-  final double side, topBottom;
+  const EpubMargins(this.share, this.lineEms, this.label);
+
+  /// Each side's margin as a share of the page's width - at least.
+  final double share;
 
   /// The longest a line gets, in ems: on a wide screen the rest goes to the margins - so on a tablet or the PC the
-  /// margins are set by this, not [side] (user, 2026-10-06: the setting "doesn't seem to do anything").
+  /// margins are set by this more than by [share] (user, 2026-10-06: the setting "doesn't seem to do anything").
   final double lineEms;
   final String label;
+
+  /// The top and bottom margins, whichever the sides are (user, 2026-10-08).
+  static const double topBottom = 40;
 }
 
 /// Space added between paragraphs, in ems of the text (user, 2026-10-06: "an option to increase the spacing between
 /// paragraphs"): on top of the book's own spacing, or of none with the reader's own formatting.
 enum EpubParagraphGap {
+  // (saved by name: 'small' stays half a line - shown as Medium since the steps became five, user 2026-10-08)
   none(0, 'None'),
-  small(0.5, 'Small'),
-  large(1, 'Large');
+  tiny(0.25, 'Small'),
+  small(0.5, 'Medium'),
+  large(1, 'Large'),
+  huge(1.5, 'Extra large');
 
   const EpubParagraphGap(this.ems, this.label);
   final double ems;
@@ -456,7 +468,7 @@ enum EpubParagraphs {
 
 @immutable
 class EpubPrefs {
-  const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.45,
+  const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.5,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
       this.paragraphs = EpubParagraphs.mine, this.hyphenate = true, this.turn = EpubTurn.slide,
       this.paragraphGap = EpubParagraphGap.none});
@@ -472,7 +484,8 @@ class EpubPrefs {
   final EpubParagraphGap paragraphGap;
 
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
-  static const spacings = [1.25, 1.45, 1.7];
+  /// Line spacing's steps (user, 2026-10-08: 1 to 2 by a quarter, "names as above": Compact .. Double).
+  static const spacings = [1.0, 1.25, 1.5, 1.75, 2.0];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
           EpubAlign? align, EpubParagraphs? paragraphs, bool? hyphenate, EpubTurn? turn,
@@ -494,7 +507,7 @@ class EpubPrefs {
     return EpubPrefs(
       font: pick(EpubFont.values, j['font'], EpubFont.literata),
       size: size != null && size >= 10 && size <= 48 ? size : 19,
-      lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.45,
+      lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.5,
       margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       align: pick(EpubAlign.values, j['align'], EpubAlign.justified),

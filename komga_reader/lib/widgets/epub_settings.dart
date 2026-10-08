@@ -87,12 +87,19 @@ Widget _sizeRow(EpubPrefs e, ValueChanged<EpubPrefs> set) {
   );
 }
 
+/// Line spacing's five steps; a spacing saved before them (1.45, 1.7) shows as the nearest step and stays as it is
+/// until another is picked (no migration - user rule).
 Widget _lineSpacingRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<double>(
       title: 'Line spacing',
-      choices: const [Choice(1.25, 'Tight'), Choice(1.45, 'Normal'), Choice(1.7, 'Loose')],
-      value: EpubPrefs.spacings.contains(e.lineSpacing) ? e.lineSpacing : 1.45,
+      choices: const [Choice(1.0, 'Compact'), Choice(1.25, 'Tight'), Choice(1.5, 'Normal'), Choice(1.75, 'Loose'),
+          Choice(2.0, 'Double')],
+      value: nearestSpacing(e.lineSpacing),
       onChanged: (v) => set(e.copyWith(lineSpacing: v)),
     );
+
+/// The line-spacing step nearest [spacing].
+double nearestSpacing(double spacing) =>
+    EpubPrefs.spacings.reduce((a, b) => (b - spacing).abs() < (a - spacing).abs() ? b : a);
 
 Widget _paragraphGapRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<EpubParagraphGap>(
       title: 'Paragraph spacing',

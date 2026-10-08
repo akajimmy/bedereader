@@ -60,10 +60,10 @@ class EpubRenderer extends Renderer {
 
   static Hyphenators? _hyphenators; // loaded once (the value, not the future: a future is tied to where it began)
 
-  /// The page's left / right margin at [width]: the setting's, or more on a wide screen, where lines stop at the
-  /// setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
+  /// The page's left / right margin at [width]: the setting's share of the width ([EpubMargins.share]), or more on a
+  /// wide screen, where lines stop at the setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
   static double sideMargin(EpubPrefs e, double width) =>
-      math.max(e.margins.side, (width - e.size * e.margins.lineEms) / 2);
+      math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
 
   /// Where book [id]'s files come from: offline, a downloaded EPUB's file (its progress kept on the device, sent to
   /// Komga later); else Komga.
@@ -133,7 +133,7 @@ class EpubRenderer extends Renderer {
       fontFamily: family,
       fontSize: e.size,
       lineHeight: e.lineSpacing,
-      margins: EdgeInsets.fromLTRB(side, e.margins.topBottom, side, e.margins.topBottom),
+      margins: EdgeInsets.fromLTRB(side, EpubMargins.topBottom, side, EpubMargins.topBottom),
       // the book's alignment and paragraphs, or the reader's (user, 2026-10-07: three settings, from one)
       ownAlign: switch (e.align) {
         EpubAlign.book => null,

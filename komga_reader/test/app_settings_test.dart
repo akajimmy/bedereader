@@ -122,7 +122,7 @@ void main() {
       (SettingsPage.ebooks, segment<EpubAlign>('Left'),
           () => (s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine)),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Auto-hyphenation'), () => s.epub.hyphenate, false),
-      (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.7),
+      (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.75),
       // Reading
       (SettingsPage.reading, find.descendant(of: find.byType(SegmentedButton<MidBook>), matching: find.text('Yes')),
           () => s.display.midBook, MidBook.markRead),
