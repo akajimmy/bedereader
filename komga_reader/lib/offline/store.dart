@@ -7,7 +7,6 @@ import 'dart:io';
 ///   progress.json                   reading progress (see [progress]) - its own small file, written on each page
 ///                                   settle; it was in index.json, rewritten whole each time (a few MB with hundreds
 ///                                   of downloads - code review 2026-10-05, #36)
-///   index.v1.json                   index.json as it was before progress moved out (kept once, a backup)
 ///   `<bookId>`/pages/0001.jpg ...     page images, fetched through Komga's page endpoint (any source format)
 ///   `<bookId>`/thumb.jpg              the book's poster
 ///   series/`<id>`.jpg, readlists/`<id>`.jpg, collections/`<id>`.jpg   posters of what the books belong to
@@ -32,19 +31,18 @@ class OfflineStore {
 
   File get _index => File('${root.path}${Platform.pathSeparator}index.json');
   File get _progressFile => File('${root.path}${Platform.pathSeparator}progress.json');
-  File get _backup => File('${root.path}${Platform.pathSeparator}index.v1.json');
 
   File file(String relative) => File('${root.path}${Platform.pathSeparator}${relative.replaceAll('/', Platform.pathSeparator)}');
 
   Future<void> load() async {
     books.clear();
     progress.clear();
-    Map? oldProgress; // still in index.json (a store from before progress.json)
+    Map? indexProgress; // index.json's copy: only while progress.json couldn't be written (see [save])
     if (await _index.exists()) {
       try {
         final j = jsonDecode(await _index.readAsString()) as Map<String, dynamic>;
         (j['books'] as Map? ?? {}).forEach((k, v) => books[k as String] = Map<String, dynamic>.from(v as Map));
-        oldProgress = j['progress'] as Map?;
+        indexProgress = j['progress'] as Map?;
       } catch (_) {
         // a damaged index: start empty rather than crash (the page files stay on disk)
       }
@@ -56,31 +54,11 @@ class OfflineStore {
         (j['progress'] as Map? ?? {}).forEach((k, v) => progress[k as String] = Map<String, dynamic>.from(v as Map));
       } catch (_) {
         // damaged: the copy still in index.json, if there is one
-        oldProgress?.forEach((k, v) => progress[k as String] = Map<String, dynamic>.from(v as Map));
+        indexProgress?.forEach((k, v) => progress[k as String] = Map<String, dynamic>.from(v as Map));
       }
       return;
     }
-    if (oldProgress == null) return;
-    oldProgress.forEach((k, v) => progress[k as String] = Map<String, dynamic>.from(v as Map));
-    await _moveProgressOut();
-  }
-
-  /// Once, from a store made before progress.json: index.json backed up as it is (and the copy checked), progress
-  /// written to progress.json and read back to check it. index.json itself is left alone here - the next save writes
-  /// it without the progress. Anything failing leaves the old index as the record (nothing is lost).
-  Future<void> _moveProgressOut() async {
-    try {
-      if (!await _backup.exists()) {
-        await _index.copy(_backup.path);
-        if (await _backup.length() != await _index.length()) throw StateError('backup incomplete');
-      }
-      await _writeProgress();
-      final back = jsonDecode(await _progressFile.readAsString()) as Map<String, dynamic>;
-      if (jsonEncode(back['progress']) != jsonEncode(progress)) throw StateError('progress.json read back differently');
-    } catch (_) {
-      // left as it was: progress.json gone again if it was written wrong, index.json still has the progress
-      if (await _progressFile.exists()) await _progressFile.delete();
-    }
+    indexProgress?.forEach((k, v) => progress[k as String] = Map<String, dynamic>.from(v as Map));
   }
 
   /// Written to a temporary file first, then moved over the index, so a crash mid-write can't leave half an index.

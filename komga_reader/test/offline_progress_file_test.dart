@@ -23,21 +23,20 @@ void main() {
     'progress': {'B1': {'page': 7, 'completed': false, 'at': '2026-10-01T10:00:00.000', 'synced': false}},
   };
 
-  test('a store from before: its progress kept, moved to progress.json (read back to check), index.json backed up '
-      'as it was; the next save writes the index without the progress', () async {
-    final original = jsonEncode(oldIndex);
-    await f('index.json').writeAsString(original);
+  test("progress only in index.json (progress.json couldn't be written): read from there, nothing moved or backed "
+      'up at load (user, 2026-10-07: no migrations); the next save puts it in progress.json', () async {
+    await f('index.json').writeAsString(jsonEncode(oldIndex));
 
     final s = OfflineStore(dir);
     await s.load();
-    expect(s.progress['B1']!['page'], 7, reason: 'progress kept');
+    expect(s.progress['B1']!['page'], 7, reason: 'progress read from the index');
     expect(s.unsynced, ['B1'], reason: 'still to send');
-    expect(await f('index.v1.json').readAsString(), original, reason: 'the old index backed up as it was');
-    expect((jsonDecode(await f('progress.json').readAsString()) as Map)['progress'], oldIndex['progress']);
+    expect(await f('index.v1.json').exists(), isFalse, reason: 'no backup made');
+    expect(await f('progress.json').exists(), isFalse, reason: 'nothing written by a load');
 
     await s.save();
     final index = jsonDecode(await f('index.json').readAsString()) as Map;
-    expect(index.containsKey('progress'), isFalse, reason: 'progress lives in progress.json now');
+    expect(index.containsKey('progress'), isFalse, reason: 'progress lives in progress.json once it can be written');
     expect(index['books'], oldIndex['books']);
 
     final again = OfflineStore(dir);
