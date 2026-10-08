@@ -533,7 +533,7 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
 /// pages (user, 2026-10-07).
 Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(
       title: 'Show page counter', // (it was "Page corner" - user, 2026-10-07 QA)
-      subtitle: 'The page you\'re on, "12 / 36"',
+      subtitle: '"12 / 36" in the corner', // (it wrapped as "12 / / 36" beside the buttons - user, 2026-10-07)
       choices: const [
         Choice(PageNote.always, 'Always'),
         Choice(PageNote.afterTurn, 'After a turn'),

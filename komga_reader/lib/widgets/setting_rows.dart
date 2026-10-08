@@ -547,7 +547,12 @@ class ColourSwatch extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colour,
                 shape: BoxShape.circle,
-                border: Border.all(color: selected ? accent : const Color(0xFF55585F), width: selected ? 3 : 1),
+                // a dark one keeps a lighter ring, or it's lost on the dark background (user, 2026-10-07: Black)
+                border: selected
+                    ? Border.all(color: accent, width: 3)
+                    : colour.computeLuminance() < 0.05
+                        ? Border.all(color: const Color(0xFF9A9A9A), width: 1.5)
+                        : Border.all(color: const Color(0xFF55585F)),
               ),
               child: selected ? Icon(Icons.check, size: 16, color: tick) : null,
             ),
