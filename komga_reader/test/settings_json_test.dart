@@ -96,19 +96,21 @@ void main() {
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
   });
 
-  test('saved before the kinds were set apart (build 91 and older): the one shared value goes to both kinds; '
-      '"Title only" posters keep the title without the series line', () {
+  test('old saves are not migrated (user, 2026-10-07: one user, settings re-set by hand): the old flat keys are '
+      "ignored - each kind gets its own defaults - and so is \"Title only\"", () {
     final old = DisplayPrefs.fromJson({'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
-        'pageNote': 'off', 'hiddenSpots': ['centre'], 'posterTitleOnly': true, 'posterDate': false});
-    for (final k in [old.comics, old.ebooks]) {
-      expect((k.rotation, k.clock, k.progressBar, k.pageNote, k.hiddenSpots.join()),
-          (Rotation.landscape, ShowWhen.always, true, PageNote.off, 'centre'));
-    }
-    expect((old.posterSeries, old.posterTitle, old.posterDate), (false, true, false));
-    expect(DisplayPrefs.fromJson({'posterTitleOnly': false}).posterSeries, isTrue);
-    // and set apart since: one kind changed, the other not
-    final apart = DisplayPrefs.fromJson(old.withKind(BookKind.ebooks, old.ebooks.copyWith(pageNote: PageNote.always))
-        .toJson());
-    expect((apart.comics.pageNote, apart.ebooks.pageNote), (PageNote.off, PageNote.always));
+        'pageNote': 'off', 'pageNumber': false, 'hiddenSpots': ['centre'], 'posterTitleOnly': true});
+    const none = DisplayPrefs();
+    expect(old.comics, none.comics);
+    expect(old.ebooks, none.ebooks);
+    expect((old.comics.pageNote, old.ebooks.pageNote), (PageNote.afterTurn, PageNote.always));
+    expect(old.posterSeries, isTrue);
+    // a kind saved without some of its settings: that kind's defaults for them
+    final part = DisplayPrefs.fromJson({'comics': {'clock': 'off'}, 'ebooks': {'clock': 'off'}});
+    expect((part.comics.pageNote, part.ebooks.pageNote), (PageNote.afterTurn, PageNote.always));
+    // each kind set apart: one changed, the other not
+    final apart = DisplayPrefs.fromJson(
+        none.withKind(BookKind.ebooks, none.ebooks.copyWith(pageNote: PageNote.off)).toJson());
+    expect((apart.comics.pageNote, apart.ebooks.pageNote), (PageNote.afterTurn, PageNote.off));
   });
 }

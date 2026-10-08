@@ -139,13 +139,14 @@ void main() {
     await d.setDeleteRead(DeleteRead.never);
   });
 
-  test("the old on/off switch carries over: on is Always, off Never", () async {
+  test("the old on/off switch isn't migrated (user, 2026-10-07): ignored, Never; the setting itself is kept",
+      () async {
     SharedPreferences.setMockInitialValues({'downloads.deleteWhenRead': true});
     await d.attach(server(), root: dir);
-    expect(d.deleteRead, DeleteRead.always);
-    SharedPreferences.setMockInitialValues({'downloads.deleteWhenRead': false});
-    await d.attach(server(), root: dir);
     expect(d.deleteRead, DeleteRead.never);
+    SharedPreferences.setMockInitialValues({'downloads.deleteRead': 'ask'});
+    await d.attach(server(), root: dir);
+    expect(d.deleteRead, DeleteRead.ask);
   });
 
 

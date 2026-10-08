@@ -218,17 +218,17 @@ class KindPrefs {
   Map<String, dynamic> toJson() => {'pageNote': pageNote.name, 'rotation': rotation.name, 'clock': clock.name,
       'progressBar': progressBar, 'hiddenSpots': hiddenSpots};
 
-  /// From [j]; anything it lacks from [was] (a save from before the kinds were apart: its one shared value).
-  factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs was = const KindPrefs()}) {
+  /// From [j]; anything it lacks, [fallback]'s (the kind's defaults).
+  factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs fallback = const KindPrefs()}) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final spots = j['hiddenSpots'];
     return KindPrefs(
-      pageNote: pick(PageNote.values, j['pageNote'], was.pageNote),
-      rotation: pick(Rotation.values, j['rotation'], was.rotation),
-      clock: pick(ShowWhen.values, j['clock'], was.clock),
-      progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : was.progressBar,
-      hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : was.hiddenSpots,
+      pageNote: pick(PageNote.values, j['pageNote'], fallback.pageNote),
+      rotation: pick(Rotation.values, j['rotation'], fallback.rotation),
+      clock: pick(ShowWhen.values, j['clock'], fallback.clock),
+      progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : fallback.progressBar,
+      hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : fallback.hiddenSpots,
     );
   }
 
@@ -328,7 +328,7 @@ class DisplayPrefs {
   DisplayPrefs withKind(BookKind k, KindPrefs p) =>
       k == BookKind.comics ? copyWith(comics: p) : copyWith(ebooks: p);
 
-  /// Both kinds' reading settings changed the same way (an old save's one value taken over for both).
+  /// Both kinds' reading settings changed the same way.
   DisplayPrefs bothKinds(KindPrefs Function(KindPrefs k) change) =>
       copyWith(comics: change(comics), ebooks: change(ebooks));
 
@@ -344,14 +344,9 @@ class DisplayPrefs {
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final on = j['screenOn'];
     int minutes(Object? v, int fallback) => v is int && v >= 0 && v < 24 * 60 ? v : fallback;
-    // saved before the kinds were set apart (build 91 and older): the one shared value, for both kinds
-    final shared = KindPrefs.fromJson({
-      ...j,
-      // older still: the comics' page-number switch (AppSettings.load then takes the EPUBs' choice)
-      'pageNote': j['pageNote'] ?? (j['pageNumber'] == false ? PageNote.off.name : PageNote.afterTurn.name),
-    });
-    KindPrefs kind(String key) => j[key] is Map ? KindPrefs.fromJson(Map<String, dynamic>.from(j[key] as Map),
-        was: shared) : shared;
+    const none = DisplayPrefs();
+    KindPrefs kind(String key, KindPrefs fallback) =>
+        j[key] is Map ? KindPrefs.fromJson(Map<String, dynamic>.from(j[key] as Map), fallback: fallback) : fallback;
     return DisplayPrefs(
         night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
         brightness: (j['brightness'] as num?)?.toDouble(),
@@ -361,8 +356,7 @@ class DisplayPrefs {
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
-        // saved before the three lines (build 91 and older): "Title only" was the title without the series line
-        posterSeries: j['posterSeries'] is bool ? j['posterSeries'] as bool : j['posterTitleOnly'] != true,
+        posterSeries: j['posterSeries'] != false,
         posterTitle: j['posterTitle'] != false,
         posterDate: j['posterDate'] != false,
         nightSchedule: j['nightSchedule'] == true,
@@ -372,8 +366,8 @@ class DisplayPrefs {
         accent: pick(Accent.values, j['accent'], Accent.blue),
         pagePreviews: j['pagePreviews'] != false, // on unless switched off
         pageStrip: j['pageStrip'] == true,
-        comics: kind('comics'),
-        ebooks: kind('ebooks'));
+        comics: kind('comics', none.comics),
+        ebooks: kind('ebooks', none.ebooks));
   }
 }
 
@@ -490,17 +484,14 @@ class EpubPrefs {
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final size = (j['size'] as num?)?.toDouble();
     final spacing = (j['lineSpacing'] as num?)?.toDouble();
-    // saved before the split (build 91 and older): one switch, "Book's formatting" - on was the book's alignment and
-    // paragraphs, off justified text and the reader's paragraphs
-    final book = j['bookFormatting'] == true;
     return EpubPrefs(
       font: pick(EpubFont.values, j['font'], EpubFont.literata),
       size: size != null && size >= 10 && size <= 48 ? size : 19,
       lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.45,
       margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
-      align: pick(EpubAlign.values, j['align'], book ? EpubAlign.book : EpubAlign.justified),
-      paragraphs: pick(EpubParagraphs.values, j['paragraphs'], book ? EpubParagraphs.book : EpubParagraphs.mine),
+      align: pick(EpubAlign.values, j['align'], EpubAlign.justified),
+      paragraphs: pick(EpubParagraphs.values, j['paragraphs'], EpubParagraphs.mine),
       hyphenate: j['hyphenate'] != false,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
@@ -657,14 +648,6 @@ class AppSettings extends ChangeNotifier {
     final r = p.getString(_localReader);
     final savedReader = r == null ? null : jsonDecode(r) as Map<String, dynamic>;
     if (savedReader != null) _applyBlob(savedReader, remote: false);
-    // saved before the one page-note setting (build 87 and older): the EPUBs' "page corner" becomes it, for both kinds
-    final corner = savedReader?['epub'] is Map ? (savedReader!['epub'] as Map)['corner'] : null;
-    // (a save since has its page note, or each kind's - build 92 on: not taken over again on every start)
-    if (!(savedDisplay?.containsKey('pageNote') ?? false) && !(savedDisplay?.containsKey('comics') ?? false) &&
-        corner is String) {
-      final note = PageNote.values.where((v) => v.name == corner).firstOrNull;
-      if (note != null) setDisplay(display.bothKinds((k) => k.copyWith(pageNote: note)));
-    }
     applyBacklight();
     notifyListeners();
     _loaded = true;
