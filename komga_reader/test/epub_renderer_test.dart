@@ -469,8 +469,9 @@ void main() {
     expect(find.text('Close'), findsOneWidget, reason: 'the controls instead');
   });
 
-  testWidgets('the picture takes 95% of the screen; a button in each of its top corners turns it a quarter, left '
-      'counterclockwise, right clockwise, without closing it (user, 2026-10-08)', (tester) async {
+  testWidgets('the picture takes 95% of the screen; a button in each top corner of the screen turns it a quarter, '
+      'left counterclockwise, right clockwise, without closing it - and stays put as it turns (user, 2026-10-08)',
+      (tester) async {
     final map = (await tester.runAsync(() async {
       final rec = ui.PictureRecorder();
       Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 300, 500), Paint()..color = const Color(0xFF808080));
@@ -488,13 +489,15 @@ void main() {
     expect(picture().height, closeTo(1140, 0.5));
     expect(picture().center.dx, closeTo(400, 0.5));
     expect(picture().center.dy, closeTo(600, 0.5));
+    // the screen's top corners (800 x 1200), not the picture's
+    Rect button(String key) => tester.getRect(find.byKey(ValueKey(key)));
     bool inTopCorner(String key, {required bool left}) {
-      final b = tester.getRect(find.byKey(ValueKey(key))), p = picture();
-      return p.contains(b.topLeft) && p.contains(b.bottomRight - const Offset(1, 1)) && b.top - p.top < 24 &&
-          (left ? b.left - p.left < 24 : p.right - b.right < 24);
+      final b = button(key);
+      return b.top < 24 && (left ? b.left < 24 : 800 - b.right < 24);
     }
     expect(inTopCorner('picture.rotate.ccw', left: true), isTrue);
     expect(inTopCorner('picture.rotate.cw', left: false), isTrue);
+    final (ccwAt, cwAt) = (button('picture.rotate.ccw'), button('picture.rotate.cw'));
 
     await tester.tap(find.byKey(const ValueKey('picture.rotate.cw')));
     await settle(tester);
@@ -503,7 +506,8 @@ void main() {
     // turned: 500 x 300, as wide as the area (760), 456 tall
     expect(picture().width, closeTo(760, 0.5));
     expect(picture().height, closeTo(456, 0.5));
-    expect(inTopCorner('picture.rotate.cw', left: false), isTrue, reason: 'the buttons follow its corners');
+    expect((button('picture.rotate.ccw'), button('picture.rotate.cw')), (ccwAt, cwAt),
+        reason: "the buttons stay where they were as the picture turns (on the picture's corners they moved - user)");
 
     await tester.tap(find.byKey(const ValueKey('picture.rotate.ccw')));
     await tester.tap(find.byKey(const ValueKey('picture.rotate.ccw')));

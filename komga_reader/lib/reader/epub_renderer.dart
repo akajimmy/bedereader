@@ -1007,7 +1007,7 @@ class EpubRenderer extends Renderer {
 }
 
 /// The picture over the book: fitted to 95% of the screen (enlarged if small), pinch or wheel to zoom; a tap, Back,
-/// Esc or OK closes it. A button in each top corner of the picture turns it a quarter - left: counterclockwise,
+/// Esc or OK closes it. A button in each top corner of the screen turns it a quarter - left: counterclockwise,
 /// right: clockwise (user, 2026-10-08; buttons only, no key, not kept). The remote reaches them with Left / Right.
 class _PictureView extends StatefulWidget {
   const _PictureView({required this.image});
@@ -1034,45 +1034,39 @@ class _PictureViewState extends State<_PictureView> {
     super.dispose();
   }
 
-  /// The picture at [area], turned: fitted in it, centred, and its two rotate buttons in its top corners.
+  /// The picture at [area], turned: fitted in it, centred.
   Widget _picture(Size area) {
     final w = widget.image.width.toDouble(), h = widget.image.height.toDouble();
     final (iw, ih) = _turns.isOdd ? (h, w) : (w, h);
     final scale = math.min(area.width / iw, area.height / ih);
     final shown = Size(iw * scale, ih * scale);
-    final left = (area.width - shown.width) / 2, top = (area.height - shown.height) / 2;
-    Widget button(String key, FocusNode node, IconData icon, String tip, int by) => Material(
-          key: ValueKey(key),
-          color: Colors.black.withValues(alpha: 0.55),
-          shape: const CircleBorder(),
-          child: IconButton(focusNode: node, tooltip: tip, color: Colors.white, icon: Icon(icon),
-              onPressed: () => _turn(by)),
-        );
     return SizedBox.fromSize(
       size: area,
-      child: Stack(children: [
-        Positioned.fill(
-          child: InteractiveViewer(
-            maxScale: 6,
-            child: Center(
-              child: SizedBox.fromSize(
-                size: shown,
-                child: RotatedBox(
-                  key: const ValueKey('picture.turned'),
-                  quarterTurns: _turns,
-                  child: RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
-                ),
-              ),
+      child: InteractiveViewer(
+        maxScale: 6,
+        child: Center(
+          child: SizedBox.fromSize(
+            size: shown,
+            child: RotatedBox(
+              key: const ValueKey('picture.turned'),
+              quarterTurns: _turns,
+              child: RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
             ),
           ),
         ),
-        Positioned(left: left + 8, top: top + 8,
-            child: button('picture.rotate.ccw', _ccw, Icons.rotate_90_degrees_ccw, 'Rotate left', 3)),
-        Positioned(right: left + 8, top: top + 8,
-            child: button('picture.rotate.cw', _cw, Icons.rotate_90_degrees_cw, 'Rotate right', 1)),
-      ]),
+      ),
     );
   }
+
+  /// A rotate button: in a top corner of the screen, where it stays as the picture turns (user, 2026-10-08: on the
+  /// picture's corners they moved with it, "which makes it annoying").
+  Widget _button(String key, FocusNode node, IconData icon, String tip, int by) => Material(
+        key: ValueKey(key),
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        child: IconButton(focusNode: node, tooltip: tip, color: Colors.white, icon: Icon(icon),
+            onPressed: () => _turn(by)),
+      );
 
   @override
   Widget build(BuildContext context) => Focus(
@@ -1100,8 +1094,14 @@ class _PictureViewState extends State<_PictureView> {
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.of(context).pop(),
           child: SafeArea(
-            child: LayoutBuilder(builder: (context, box) => Center(child: _picture(
-                Size(box.maxWidth * _PictureView.share, box.maxHeight * _PictureView.share)))),
+            child: Stack(children: [
+              Positioned.fill(child: LayoutBuilder(builder: (context, box) => Center(child: _picture(
+                  Size(box.maxWidth * _PictureView.share, box.maxHeight * _PictureView.share))))),
+              Positioned(left: 12, top: 12,
+                  child: _button('picture.rotate.ccw', _ccw, Icons.rotate_90_degrees_ccw, 'Rotate left', 3)),
+              Positioned(right: 12, top: 12,
+                  child: _button('picture.rotate.cw', _cw, Icons.rotate_90_degrees_cw, 'Rotate right', 1)),
+            ]),
           ),
         ),
       );
