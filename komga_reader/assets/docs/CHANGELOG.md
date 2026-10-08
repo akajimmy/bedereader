@@ -9,6 +9,18 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBook margins in five steps**: Narrow, Normal, Wide, **Wider** and **Widest** - Widest leaves about a quarter of
+  the page each side on the tablet. The top and bottom margins no longer change with them.
+- **Line spacing in five steps**, 1 to 2: Compact, Tight, Normal, Loose, Double. **Paragraph spacing in five**: None,
+  Small, Medium, Large, Extra large. What you had chosen keeps its spacing (paragraph "Small" now shows as Medium).
+- **Filters**: no Clear filters button in the top bar any more - clear them in the filter panel or with the chips;
+  the funnel is filled with your accent colour while filters are on.
+
+**Fixed**
+- **Option buttons too wide for the screen** (Keep the screen on, on a phone) were shrunk as a whole, hard to tap.
+  Now only their text shrinks; the buttons keep their full size.
+
 ## 1.3.0
 
 ### Build 97 - 2026-10-08
