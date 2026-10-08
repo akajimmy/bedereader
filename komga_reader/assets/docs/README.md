@@ -104,8 +104,9 @@ sync, Library & Home, Downloads and Look for the app; About. Groups marked "sync
 ## Privacy
 
 - The app talks only to **your own Komga server**. No analytics, no tracking, no accounts, no ads.
-- Your server address and API key are stored **on the device, unencrypted** (the app's private storage on Android;
-  your Windows profile on a PC). Encrypted storage is planned. Anyone with that API key can use your Komga account:
+- Your API key is stored **on the device, encrypted**: with a key held in the Android Keystore on Android, with
+  Windows' own data protection (only your Windows account can read it) on a PC. The server address is stored
+  unencrypted. Anyone with that API key can use your Komga account:
   you can revoke it any time in Komga (your account > API keys).
 - On Android the app allows plain `http://` connections, so it can reach a Komga server on your home network that
   has no HTTPS. On a network you don't trust, use HTTPS.
