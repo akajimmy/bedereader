@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Search: the Books row left out the books of the series found** - it showed only books whose own title matched.
+  It now also lists every book of the series in the Series row, after the matched ones, in series and number order,
+  each once. Offline, the same from your downloads.
+
 ## 1.3.0
 
 ### Build 94 - 2026-10-07
