@@ -172,12 +172,13 @@ void main() {
     await tester.pump();
     await startSelecting(tester);
     await tester.tap(find.text('Series 3'));
+    await tester.tap(find.text('Series 1'));
     await tester.pump();
     await tester.tap(find.byTooltip('Download'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Download unread'));
     await frames(tester);
-    expect(api.booksAsked, ['S3 UNREAD+IN_PROGRESS']);
+    expect(api.booksAsked, ['S3 UNREAD+IN_PROGRESS', 'S1 UNREAD+IN_PROGRESS']);
     await tester.runAsync(() async {
       d.pauseAll();
       for (var i = 0; i < 300 && d.busy; i++) {
