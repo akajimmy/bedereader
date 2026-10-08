@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 99 - 2026-10-08
+
 **New**
 - **Rotate a picture in an eBook**: a tapped picture now opens at 95% of the screen with a rotate button in each top
   corner - left turns it counterclockwise, right clockwise. With the remote, Left / Right go to them and OK presses.
@@ -20,8 +24,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 - **eBooks: the spinner while a book is laid out says "Adjusting and storing layout"** (it was "Laying out the
   book") - it shows the first time a book opens in your settings, and again after you change them.
-
-## 1.3.0
 
 ### Build 98 - 2026-10-08
 
