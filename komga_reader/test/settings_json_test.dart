@@ -10,8 +10,10 @@ import 'package:komga_reader/settings.dart';
 void main() {
   test('reader settings (ReaderPrefs) survive the JSON used for Komga sync; older saves read as they meant', () {
     // round trips
-    const p = ReaderPrefs(fit: FitMode.height, brightness: 0.1, contrast: -0.2, sharpen: true, autoLevels: true);
+    const p = ReaderPrefs(fit: FitMode.height, brightness: 0.1, contrast: -0.2, sharpen: true, autoLevels: true,
+        crop: 0.05);
     expect(ReaderPrefs.fromJson(p.toJson()), p);
+    expect(ReaderPrefs.fromJson(p.toJson()).crop, 0.05, reason: 'crop edges');
     for (final direction in ReadingDirection.values) {
       expect(ReaderPrefs.fromJson(ReaderPrefs(direction: direction).toJson()).direction, direction,
           reason: 'direction ${direction.name}');
@@ -26,6 +28,8 @@ void main() {
         ReaderBackground.white, reason: 'part of the layout: kept by an image reset');
     final flags = ReaderPrefs.fromJson(const ReaderPrefs(ownLayout: false).toJson());
     expect([flags.ownLayout, flags.ownImage], [false, true], reason: 'the override flags');
+    final image = ReaderPrefs.fromJson(const ReaderPrefs(ownImage: false).toJson());
+    expect([image.ownLayout, image.ownImage], [true, false], reason: 'the override flags: the image one');
     expect(const ReaderPrefs().toJson().containsKey('ol'), isFalse); // unchanged form for everything saved before
 
     // older saves: (what was saved, what it reads as)
@@ -41,26 +45,34 @@ void main() {
     expect(const ReaderPrefs(direction: ReadingDirection.rtl, contrast: 0.2).imageReset().direction, ReadingDirection.rtl);
   });
 
-  test("this device's settings (DisplayPrefs) survive the saved form; older saves get the defaults; a value that isn't "
-      'a choice gets the default', () {
+  test("this device's settings (DisplayPrefs) survive the saved form; a save without them gets the defaults; a value "
+      "that isn't a choice gets the default", () {
     // every setting away from its default at once: (name, read it, the value set, its default)
-    const changed = DisplayPrefs(pageTurn: PageTurn.curl,
+    const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl,
         comics: KindPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true,
             pageNote: PageNote.off, hiddenSpots: ['left']),
-        ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn),
+        ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn,
+            progressBar: true, hiddenSpots: ['right', 'centre']),
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.teal,
         pagePreviews: false, pageStrip: true, posterDate: false);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
+      ('night', (d) => d.night, true, false),
+      ('warmth', (d) => d.warmth, 0.3, 0.5),
+      ('brightness', (d) => d.brightness, 0.4, null),
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
       // each kind its own (user, 2026-10-07)
+      ('comics pageNote', (d) => d.comics.pageNote, PageNote.off, PageNote.afterTurn),
       ('comics rotation', (d) => d.comics.rotation, Rotation.landscape, Rotation.auto),
       ('comics clock', (d) => d.comics.clock, ShowWhen.always, ShowWhen.withControls),
       ('comics progressBar', (d) => d.comics.progressBar, true, false),
-      ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(), 'left', ''),
+      ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(','), 'left', ''),
+      ('ebooks pageNote', (d) => d.ebooks.pageNote, PageNote.afterTurn, PageNote.always),
       ('ebooks rotation', (d) => d.ebooks.rotation, Rotation.portrait, Rotation.auto),
       ('ebooks clock', (d) => d.ebooks.clock, ShowWhen.off, ShowWhen.withControls),
+      ('ebooks progressBar', (d) => d.ebooks.progressBar, true, false),
+      ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 20, 0),
@@ -77,14 +89,17 @@ void main() {
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
-    final old = DisplayPrefs.fromJson({'night': true}); // a save from before all of these
-    final oldWithTurn = DisplayPrefs.fromJson({'night': true, 'pageTurn': 'flip'}); // ... with the page turn
+    final none = DisplayPrefs.fromJson({}); // a save with none of them
+    final onlyTurn = DisplayPrefs.fromJson({'pageTurn': 'flip'}); // ... with only the page turn
     for (final (name, read, set, byDefault) in settings) {
       expect(read(changed), set, reason: '$name: the table matches the settings above');
       expect(read(back), set, reason: '$name survives the saved form');
-      expect(read(old), byDefault, reason: '$name: an older save gets the default');
-      expect(read(oldWithTurn), name == 'pageTurn' ? PageTurn.flip : byDefault, reason: '$name, older save with a turn');
+      expect(read(none), byDefault, reason: '$name: missing from a save, the default');
+      expect(read(onlyTurn), name == 'pageTurn' ? PageTurn.flip : byDefault, reason: '$name, a save with only a turn');
     }
+    // the table has every saved setting (a new one fails here until it has a row)
+    expect(settings.length, changed.toJson().length - 2 + changed.comics.toJson().length * 2,
+        reason: 'one row per setting (the two kinds a row per field)');
     for (final turn in PageTurn.values) {
       expect(DisplayPrefs.fromJson(DisplayPrefs(pageTurn: turn).toJson()).pageTurn, turn, reason: turn.name);
     }
@@ -94,15 +109,9 @@ void main() {
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
   });
 
-  test('old saves are not migrated (user, 2026-10-07: one user, settings re-set by hand): the old flat keys are '
-      "ignored - each kind gets its own defaults - and so is \"Title only\"", () {
-    final old = DisplayPrefs.fromJson({'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
-        'pageNote': 'off', 'pageNumber': false, 'hiddenSpots': ['centre'], 'posterTitleOnly': true});
+  test("each kind's settings: one saved without some of them gets that kind's defaults for them; one kind changed "
+      'leaves the other as it was', () {
     const none = DisplayPrefs();
-    expect(old.comics, none.comics);
-    expect(old.ebooks, none.ebooks);
-    expect((old.comics.pageNote, old.ebooks.pageNote), (PageNote.afterTurn, PageNote.always));
-    expect(old.posterSeries, isTrue);
     // a kind saved without some of its settings: that kind's defaults for them
     final part = DisplayPrefs.fromJson({'comics': {'clock': 'off'}, 'ebooks': {'clock': 'off'}});
     expect((part.comics.pageNote, part.ebooks.pageNote), (PageNote.afterTurn, PageNote.always));
