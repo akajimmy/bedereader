@@ -368,7 +368,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             'Next page, Volume up to Previous page). ' : ''}For a book read right to left, Left and Right swap. '
             'Shift+Space always goes back. Once the controls are up, the arrows and OK move around them.'),
         ActionRow(
-          title: 'Back to the usual keys',
+          title: 'Reset to default',
           button: TextButton(onPressed: k.isDefault ? null : k.reset, child: const Text('Reset keys')),
         ),
       ]),
@@ -598,7 +598,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Storage', children: [
         SettingRow(
           title: 'Storage limit',
-          subtitle: '${DownloadsScreen.size(d.usedBytes)} used on this device',
+          // what the limit does, with it (user, 2026-10-07 QA: it was a line of its own, with no control)
+          subtitle: '${DownloadsScreen.size(d.usedBytes)} used on this device. A book that won\'t fit waits in the '
+              'queue, and carries on when there\'s room.',
           trailing: DropdownButton<int?>(
             value: choices.contains(current) ? current : 10,
             underline: const SizedBox.shrink(),
@@ -606,7 +608,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
           ),
         ),
-        const NoteRow("A book that won't fit stops in the queue, and carries on when space is available."),
         if (canRotate) // Android: a PC has no mobile data to save (the same test: a phone or tablet)
           SwitchRow(
             title: 'Download on Wi-Fi only',

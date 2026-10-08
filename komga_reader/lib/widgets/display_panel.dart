@@ -14,7 +14,7 @@ import 'setting_rows.dart';
 ///   Settings > Comics; night mode is the top bar's moon.
 /// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
 ///
-/// Each panel's series group starts with "Override the defaults" (user, 2026-09-30): off, the series follows the
+/// Each panel's series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off, the series follows the
 /// defaults for that part (page layout, or image) and its controls are greyed out showing the default values; on,
 /// they're the series' own - starting from the defaults, so nothing jumps. The two parts are separate.
 ///
@@ -159,12 +159,7 @@ class _ReaderPanel extends StatelessWidget {
           SettingsGroup(title: _seriesHeading(seriesTitle), children: [
             // on: this series' own fit and direction; off: the defaults', greyed out (user, 2026-09-30)
             SwitchRow(
-              title: 'Override the defaults',
-              subtitle: own
-                  ? 'Fit, direction and background for this series'
-                  : bookFit != null
-                      ? 'Using the defaults. This book: fit ${bookFit!.label.toLowerCase()}, for now'
-                      : 'Using the defaults',
+              title: 'Override defaults',
               value: own,
               onChanged: (v) {
                 s.setOverride(id, layout: v);
@@ -190,7 +185,7 @@ class _ReaderPanel extends StatelessWidget {
         // what's changed mid-book (user, 2026-10-07: not the settings set once - those are in Settings > Comics)
         SettingsGroup(title: 'Reading', children: [
           positionTextRow(s, BookKind.comics),
-          ...brightnessRows(s, compact: true),
+          ...brightnessRows(s),
           if (canRotate) rotationRow(s, BookKind.comics), // locked mid-book, lying down
           screenOnRow(s),
         ]),
@@ -217,8 +212,7 @@ class _ImagePanel extends StatelessWidget {
           SettingsGroup(title: _seriesHeading(seriesTitle), children: [
             // on: this series' own image settings; off: the defaults', greyed out (user, 2026-09-30)
             SwitchRow(
-              title: 'Override the defaults',
-              subtitle: own ? 'Image settings for this series' : 'Using the defaults',
+              title: 'Override defaults',
               value: own,
               onChanged: (v) => s.setOverride(seriesId, image: v),
             ),
@@ -342,17 +336,14 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ena
 
 /// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
 /// extra dimming on Android, dimming only on a PC.
-/// [compact]: an icon instead of the "Screen brightness" label (the reader's narrow sheet).
-List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
+List<Widget> brightnessRows(AppSettings s) {
   final d = s.display;
-  final icon = compact ? Icons.brightness_6_outlined : null;
   if (!DisplayPrefs.backlightControl) {
     // a monitor's backlight can't be set, so the slider only dims (right = no dimming)
     return [
       SliderRow(
         label: 'Screen brightness',
         divisions: 20, // 5% steps
-        icon: icon,
         value: d.brightness ?? 1,
         valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
         onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
@@ -363,7 +354,6 @@ List<Widget> brightnessRows(AppSettings s, {bool compact = false}) {
     SliderRow(
       label: 'Screen brightness',
       divisions: 20, // 5% steps
-      icon: icon,
       value: d.brightness ?? 0.6,
       enabled: d.brightness != null,
       valueText: d.brightness == null
@@ -418,8 +408,9 @@ List<Widget> nightRows(AppSettings s) {
 Widget positionTextRow(AppSettings s, BookKind kind) {
   final k = s.display.kind(kind);
   final spots = kind == BookKind.comics
-      ? const [(PositionSpot.centre, 'Title'), (PositionSpot.left, 'Page')]
-      : const [(PositionSpot.centre, 'Chapter'), (PositionSpot.left, 'Book page'), (PositionSpot.right, 'Chapter page')];
+      ? const [(PositionSpot.centre, 'Book title'), (PositionSpot.left, 'Progress')]
+      : const [(PositionSpot.right, 'Chapter progress'), (PositionSpot.left, 'Book progress'),
+          (PositionSpot.centre, 'Chapter name')];
   return ToggleChipsRow(
     title: 'Position text',
     subtitle: 'Over the slider - a tap on it there hides it too',

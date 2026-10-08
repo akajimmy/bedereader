@@ -215,6 +215,7 @@ class EpubRenderer extends Renderer {
   @override
   void dispose() {
     _disposed = true;
+    _settle?.cancel();
     if (readerTiming) {
       SchedulerBinding.instance.removeTimingsCallback(_onFrames);
       final last = _frameStats.flush();
@@ -252,7 +253,26 @@ class EpubRenderer extends Renderer {
     if (size.isEmpty) return;
     _size = size;
     final theme = _theme;
-    if (b.size == size && b.theme == theme) return;
+    if (b.size == size && b.theme == theme) {
+      _settle?.cancel(); // changed and changed back before it was due
+      _settle = null;
+      return;
+    }
+    // only the settings changed (the same page, laid out before): laid out once they stop changing - the size up five
+    // steps is one layout and one count, not five (user, 2026-10-07). The page shows as it was meanwhile ([_drawn]).
+    if (b.size == size && !_settled) {
+      _settle?.cancel();
+      _settle = Timer(settleDelay, () {
+        _settle = null;
+        if (_disposed) return;
+        _settled = true;
+        _changed();
+      });
+      return;
+    }
+    _settled = false;
+    _settle?.cancel();
+    _settle = null;
     // the place being read: the anchor from the layout before, if nothing has moved since - not the start of the page
     // now on screen, which is earlier than the place, so each new size or setting walked back a little more
     // (Windows, build 79: two resizes and back, a page back). Still opening (the saved place not shown yet): the
@@ -262,6 +282,18 @@ class EpubRenderer extends Renderer {
     b.setLayout(theme, size);
     _ready = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _count());
+  }
+
+  /// How long the settings must stay put before the book is laid out again for them.
+  @visibleForTesting
+  static Duration settleDelay = const Duration(milliseconds: 600);
+  Timer? _settle; // a layout for new settings, due once they stop changing
+  bool _settled = false; // that time has come: lay out at the next build
+
+  /// The look the book is laid out in: what the page is drawn with until a layout for new settings is due.
+  EpubTheme get _drawn {
+    final b = _book;
+    return b == null || b.size == Size.zero ? _theme : b.theme;
   }
 
   /// The place being read through new layouts (window sizes, settings); let go of at any other move.
@@ -788,9 +820,9 @@ class EpubRenderer extends Renderer {
         _layout(box.biggest);
         final b = _book!;
         final n = b.chapterCount, done = b.countedChapters;
-        final ink = _theme.text;
+        final ink = _drawn.text;
         return ColoredBox(
-          color: _theme.background,
+          color: _drawn.background,
           child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3)),
             const SizedBox(height: 20),
@@ -815,7 +847,7 @@ class EpubRenderer extends Renderer {
           final size = box.biggest;
           _layout(size);
           final b = _book!;
-          if (!_ready) return ColoredBox(color: _theme.background); // laid out again: the spinner next frame
+          if (!_ready) return ColoredBox(color: _drawn.background); // laid out again: the spinner next frame
           final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
           final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
           return Stack(children: [
@@ -854,7 +886,7 @@ class EpubRenderer extends Renderer {
 
   Widget _pageAt(int i, Size size) {
     final b = _book!;
-    final theme = _theme;
+    final theme = _drawn;
     if (i >= b.totalPages!) return host.endCard();
     final (c, p) = b.chapterPage(i);
     final pages = b.pagesNow(c);

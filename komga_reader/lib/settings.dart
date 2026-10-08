@@ -439,7 +439,7 @@ enum EpubAlign {
 /// Paragraphs' first-line indents and the gaps between them: the book's own, or the reader's (indents only where the
 /// book indents, the usual gaps taken out).
 enum EpubParagraphs {
-  book("Book's"), mine('Mine');
+  book("Book's"), mine('Auto'); // (saved as 'mine'; shown as Auto - user, 2026-10-07)
 
   const EpubParagraphs(this.label);
   final String label;

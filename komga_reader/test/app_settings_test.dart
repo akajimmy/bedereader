@@ -97,7 +97,7 @@ void main() {
     String spots(BookKind k) => s.display.kind(k).hiddenSpots.join(',');
     final steps = <(SettingsPage, Finder, Object? Function(), Object?)>[
       // Comics: each kind its own position text, progress bar
-      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Title'),
+      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Book title'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Page strip'), () => s.display.pageStrip, true),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
@@ -108,9 +108,9 @@ void main() {
           () => (s.defaults.background, s.prefsFor('S-follows-defaults').background),
           (ReaderBackground.white, ReaderBackground.white)),
       // eBooks: the other kind's position text, progress bar and page corner
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', 'right')),
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Progress bar'),
           () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true)),
@@ -121,7 +121,7 @@ void main() {
       (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
       (SettingsPage.ebooks, segment<EpubAlign>('Left'),
           () => (s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine)),
-      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Hyphenation'), () => s.epub.hyphenate, false),
+      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Auto-hyphenation'), () => s.epub.hyphenate, false),
       (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.7),
       // Reading
       (SettingsPage.reading, find.text('Mark read'), () => s.display.midBook, MidBook.markRead),

@@ -32,8 +32,7 @@ void main() {
     final done = tester.getRect(find.text('Done'));
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
     expect(find.text('Settings for Series: Planet Comics'), findsOneWidget);
-    expect(find.text('Override the defaults'), findsOneWidget);
-    expect(find.text('Using the defaults'), findsOneWidget);
+    expect(find.text('Override defaults'), findsOneWidget);
     expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
     expect(tester.takeException(), isNull);
@@ -53,12 +52,12 @@ void main() {
     await openPanel(tester, const Size(1280, 800), image: true);
     expect(find.text('Settings for Series: Planet Comics'), findsOneWidget); // the heading (user, 2026-09-30)
     SwitchListTile row(String t) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, t));
-    expect(row('Override the defaults').value, isFalse);
+    expect(row('Override defaults').value, isFalse);
     expect(row('Enhance').value, isTrue, reason: "shows the defaults' value");
     expect(row('Enhance').onChanged, isNull, reason: 'greyed out');
     expect(find.text('Reset to original'), findsNothing); // only with the override on
 
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.pumpAndSettle();
     expect(s.ownsImage('S1'), isTrue);
     expect(s.ownsLayout('S1'), isFalse, reason: 'the layout part is separate');
@@ -67,7 +66,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.prefsFor('S1').sharpen, isFalse); // the series' own now
 
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.pumpAndSettle();
     expect(s.hasOwn('S1'), isFalse, reason: 'neither part overridden: the series follows the defaults entirely');
     expect(s.prefsFor('S1').sharpen, isTrue);
@@ -86,7 +85,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.ownsLayout('S1'), isFalse);
     expect(s.prefsFor('S1').background, s.defaults.background, reason: 'still the defaults');
-    final override = find.widgetWithText(SwitchRow, 'Override the defaults').first;
+    final override = find.widgetWithText(SwitchRow, 'Override defaults').first;
     await tester.ensureVisible(override);
     await tester.pumpAndSettle();
     await tester.tap(override);
@@ -105,8 +104,7 @@ void main() {
       (tester) async {
     final s = AppSettings.instance;
     await openPanel(tester, const Size(1280, 800), bookFit: FitMode.width); // the top bar: fit width, this book only
-    expect(find.text('Using the defaults. This book: fit width, for now'), findsOneWidget);
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Override the defaults'));
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.pumpAndSettle();
     expect(s.ownsLayout('S1'), isTrue);
     expect(s.prefsFor('S1').fit, FitMode.width, reason: 'the series starts from what was on screen');
