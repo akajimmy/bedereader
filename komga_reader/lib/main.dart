@@ -317,20 +317,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       navigatorObservers: [ReturnObserver.instance], // library views refresh when they're back on top
       scaffoldMessengerKey: _messenger,
       theme: _themeOf(display.accent),
-      // this app's text size (Settings > Look), on top of the device's own
-      builder: (context, child) {
-        final mq = MediaQuery.of(context);
-        final scale = display.textScale;
-        return MediaQuery(
-          data: scale == 1.0 ? mq : mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * scale)),
-          child: Focus(
-            canRequestFocus: false,
-            skipTraversal: true,
-            onKeyEvent: _onEsc,
-            child: HoldOkGuard(child: NightOverlay(child: child!)), // a held OK's repeats don't press in its menu
-          ),
-        );
-      },
+      builder: (context, child) => appFrame(context, child!, textScale: display.textScale, onKey: _onEsc),
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
           : _api == null
@@ -342,4 +329,21 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
                 ),
     );
   }
+}
+
+/// What the app puts around every screen ([MaterialApp.builder]): this app's text size (Settings > Look) on top of
+/// the device's own, [onKey] (Esc), the held-OK guard and the night overlay. A function of its own so the tests can
+/// put the same frame around theirs (test audit, 2026-10-07).
+Widget appFrame(BuildContext context, Widget child, {required double textScale,
+    required KeyEventResult Function(FocusNode, KeyEvent) onKey}) {
+  final mq = MediaQuery.of(context);
+  return MediaQuery(
+    data: textScale == 1.0 ? mq : mq.copyWith(textScaler: TextScaler.linear(mq.textScaler.scale(1) * textScale)),
+    child: Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: onKey,
+      child: HoldOkGuard(child: NightOverlay(child: child)), // a held OK's repeats don't press in its menu
+    ),
+  );
 }
