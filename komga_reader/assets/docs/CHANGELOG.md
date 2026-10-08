@@ -21,7 +21,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **eBooks: "Book's formatting" is now three settings** - Alignment (the book's, justified or left), Paragraphs (the
   book's indents and gaps, or yours) and Hyphenation (on or off). They start at Justified, Mine and on.
 - **eBooks: the text size is kept on each device**, so the tablet and the PC can read at different sizes. The rest of
-  the eBook look is still the same everywhere.
+  the eBook look is still the same everywhere. "Reset this device's settings" puts it back too.
 - **The volume keys are ordinary keys now.** "Volume keys turn pages" is gone: to turn pages with them, add Volume
   down to Next page and Volume up to Previous page in Settings > Remote and keys. Until then they change the volume.
 - **Book posters: Series #, Title and Release date are three separate choices**, shown in that order - any of them,
