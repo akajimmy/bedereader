@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/key_store.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
@@ -25,13 +27,13 @@ void main() {
     appStorage(tester);
     SharedPreferences.setMockInitialValues({
       'server': url,
-      'apiKey': 'k',
       'pins': jsonEncode([const Pin(name: 'Events', kind: 'library', id: 'L1', title: 'Events').toJson()]),
       'readerPrefs': jsonEncode({'v': 1, 'default': const ReaderPrefs().toJson(), 'series': {'S1': const ReaderPrefs().toJson()}}),
       'ondeck.hidden': jsonEncode({'series': ['S9'], 'books': ['B9']}),
       'displayPrefs': jsonEncode(const DisplayPrefs(accent: Accent.green).toJson()), // this device's
       'downloads.capBytes': 5 * 1024 * 1024 * 1024, // this device's
     });
+    FlutterSecureStorage.setMockInitialValues({'apiKey': 'k'});
     final komga = ShellKomga();
     await komga.pumpApp(tester);
     await waitUntil(() => shows(find.byType(HomeScreen)) && Pins.instance.items.length == 1 &&
@@ -66,7 +68,7 @@ void main() {
     await frames();
 
     final p = await SharedPreferences.getInstance();
-    expect(p.getString('apiKey'), isNull, reason: 'the key is removed');
+    expect(await KeyStore.read(), isNull, reason: 'the key is removed');
     for (final key in ['pins', 'readerPrefs', 'ondeck.hidden']) {
       expect(p.containsKey(key), isFalse, reason: "the account's $key are gone from the device");
     }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/screens/app_settings.dart';
@@ -14,7 +15,8 @@ import 'support/helpers.dart';
 void main() {
   testWidgets('Esc: closes a dialog only, then leaves Settings for Home; on Home it does nothing', (tester) async {
     appStorage(tester);
-    SharedPreferences.setMockInitialValues({'server': 'http://komga.test:25600', 'apiKey': 'k'});
+    SharedPreferences.setMockInitialValues({'server': 'http://komga.test:25600'});
+    FlutterSecureStorage.setMockInitialValues({'apiKey': 'k'});
     await ShellKomga().pumpApp(tester);
     await waitUntil(() => shows(find.byType(HomeScreen)) && Connection.instance.online != null, tester: tester,
         timeout: const Duration(seconds: 5), reason: 'Home');

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/main.dart';
 import 'package:komga_reader/screens/login.dart';
@@ -15,6 +16,7 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues({}); // no server: the sign-in screen
+    FlutterSecureStorage.setMockInitialValues({});
     s.setDisplay(const DisplayPrefs());
   });
   tearDown(() => s.setDisplay(const DisplayPrefs()));

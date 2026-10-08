@@ -10,6 +10,7 @@ import 'book_title.dart';
 import 'app_identity.dart';
 import 'errors.dart';
 import 'hidden_libraries.dart';
+import 'key_store.dart';
 import 'licences.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
@@ -242,7 +243,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
-    final url = p.getString('server'), key = p.getString('apiKey');
+    // the key in plain text from before it was kept encrypted: not used, just removed (signing in once more)
+    if (p.containsKey('apiKey')) await p.remove('apiKey');
+    final url = p.getString('server'), key = await KeyStore.read();
     final api = url != null && key != null ? Komga(url, key) : null;
     if (api != null) {
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
@@ -263,7 +266,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _signIn(Komga api) async {
     final p = await SharedPreferences.getInstance();
     await p.setString('server', api.baseUrl);
-    await p.setString('apiKey', api.apiKey);
+    await KeyStore.write(api.apiKey);
     setState(() => _api = api);
     // in the background: each shows its local copy at once and its own sync problems
     unawaited(AppSettings.instance.load(api));
@@ -281,8 +284,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   }
 
   Future<void> _signOut() async {
-    final p = await SharedPreferences.getInstance();
-    await p.remove('apiKey');
+    await KeyStore.delete();
     // nothing more goes to Komga with the old key (a return to the app used to check with it)
     Connection.instance.signedOut();
     Downloads.instance.detach();
