@@ -154,6 +154,25 @@ void main() {
     expect(k.isDefault, isTrue);
   });
 
+  testWidgets('Settings: + Add takes Volume down (and any key) even with the focus outside the dialog - on the '
+      'tablet the dialog never got a key (user, build 92: "it does not let me set the volume keys")', (tester) async {
+    addTearDown(k.reset);
+    setView(tester, const Size(1000, 2000));
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
+        initialPage: SettingsPage.keys)));
+    await tester.pump();
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsOneWidget);
+    FocusManager.instance.primaryFocus?.unfocus(); // as on the tablet: no focus in the dialog
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.audioVolumeDown);
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsNothing, reason: 'the key was the answer');
+    expect(k.actionFor(LogicalKeyboardKey.audioVolumeDown), ReaderAction.next);
+    expect(find.text('Volume down'), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets('the reader follows the map: a remapped key turns the page', (tester) async {
     await k.assign(ReaderAction.next, LogicalKeyboardKey.mediaTrackNext);
     await k.assign(ReaderAction.previous, LogicalKeyboardKey.arrowRight); // Right now goes back
