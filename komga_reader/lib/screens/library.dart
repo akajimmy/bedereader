@@ -79,8 +79,8 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   static const _seriesSorts = {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'};
   static const _bookSorts = {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'};
 
-  /// The natural direction when a field is picked: titles A -> Z, dates newest first.
-  static bool _defaultDesc(String key) => key != 'title';
+  /// The natural direction when a field is picked: titles A -> Z, dates newest first (one rule with pins').
+  static bool _defaultDesc(String key) => naturalDesc(key);
 
   Map<String, String> get _sorts => _mode == BrowseMode.series ? _seriesSorts : _bookSorts;
   String get _sortParam => '${_sorts[_sortKey] ?? _sorts.values.first},${_desc ? 'desc' : 'asc'}';
