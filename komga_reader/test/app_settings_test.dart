@@ -403,6 +403,9 @@ void main() {
       conn.reset();
       d.store = null; // downloads not set up again, for the other tests
       dir.deleteSync(recursive: true);
+      s.setDisplay(const DisplayPrefs());
+      s.setEpub(const EpubPrefs());
+      s.series.remove('S9');
     });
     await tester.runAsync(() async {
       await d.attach(noNetwork(StatusServer.new), root: dir, start: false);
@@ -419,6 +422,7 @@ void main() {
     final p = await SharedPreferences.getInstance();
     await p.setString('view.library.all', '{"hideRead":true}');
     s.setSeries('S9', const ReaderPrefs(fit: FitMode.width)); // synced: untouched
+    s.setEpub(const EpubPrefs(size: 24, font: EpubFont.lora)); // the size is this device's; the font is synced
     expect(ReaderKeys.instance.isDefault, isFalse);
 
     await open(tester, page: SettingsPage.about);
@@ -447,7 +451,7 @@ void main() {
     expect(d.capBytes, Downloads.defaultCap);
     expect(d.deleteRead, DeleteRead.never);
     expect(s.series['S9']?.fit, FitMode.width);
-    s.series.remove('S9');
+    expect((s.epub.size, s.epub.font), (19.0, EpubFont.lora), reason: "the eBook text size is this device's");
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
   });
 

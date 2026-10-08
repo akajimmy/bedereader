@@ -117,7 +117,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     _mode = BrowseMode.values.firstWhere((m) => m.name == v['mode'], orElse: () => BrowseMode.series);
     _filter = ReadFilterApi.fromName(v['filter']);
     _sortKey = _sorts.containsKey(v['sort']) ? v['sort'] as String : _defaultSort(_mode);
-    _desc = v['desc'] is bool ? v['desc'] as bool : _defaultDesc(_sortKey); // saved before directions existed: natural one
+    _desc = v['desc'] is bool ? v['desc'] as bool : _defaultDesc(_sortKey); // none saved: the sort's natural one
   }
 
   Future<void> _init() async {
@@ -125,7 +125,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     if (pin != null) {
       _mode = BrowseMode.values.firstWhere((m) => m.name == pin.mode, orElse: () => BrowseMode.series);
       _filter = pin.readFilter;
-      // pin.sort is "key:asc" / "key:desc" (pins made before directions existed have just "key")
+      // pin.sort is "key:asc" / "key:desc" (just "key": the sort's natural direction)
       final parts = (pin.sort ?? '').split(':');
       _sortKey = _sorts.containsKey(parts.first) ? parts.first : _defaultSort(_mode);
       _desc = parts.length > 1 ? parts[1] == 'desc' : _defaultDesc(_sortKey);

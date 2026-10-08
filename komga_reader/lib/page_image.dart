@@ -108,9 +108,7 @@ class PageLoader {
 const levelsKept = 300;
 
 Future<void> _rememberLevelsOf(SharedPreferences prefs, String bookId) async {
-  // (first time: the books remembered before this list was kept - their order unknown)
-  final books = prefs.getStringList('levels.books') ??
-      [for (final k in prefs.getKeys()) if (k.startsWith('levels.') && k != 'levels.books') k.substring(7)];
+  final books = prefs.getStringList('levels.books') ?? [];
   books
     ..remove(bookId)
     ..add(bookId);
