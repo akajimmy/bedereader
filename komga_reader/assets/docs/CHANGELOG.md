@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBook pictures: the rotate buttons sit in the screen's top corners** now, and stay there as the picture turns
+  (on the picture's own corners they moved with it).
+
 ## 1.3.0
 
 ### Build 100 - 2026-10-08
