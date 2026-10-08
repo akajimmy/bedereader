@@ -378,18 +378,6 @@ class OfflineKomga extends Komga {
             if (g is String && g.trim().isNotEmpty) g,
       ]);
 
-  @override
-  Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId, String? readListId}) async {
-    if (seriesId != null || readListId != null) {
-      return Komga.yearsOf([
-        for (final v in _scoped(seriesId: seriesId, readListId: readListId)) _releaseDateOf(v['book'] as Map, 'metadata'),
-      ]);
-    }
-    return Komga.yearsOf([
-      for (final s in _scopedSeries(libraryId: libraryId, collectionId: collectionId)) _releaseDateOf(s, 'booksMetadata'),
-    ]);
-  }
-
   /// The downloaded books' kinds (their media profiles), in the view's scope.
   @override
   Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) async => ViewKind.ofProfiles([

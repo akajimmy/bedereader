@@ -14,6 +14,7 @@ import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
 import 'package:komga_reader/view_filter.dart';
+import 'package:komga_reader/widgets/filter_panel.dart' show firstYear;
 import 'package:komga_reader/widgets/pin_tile.dart';
 import 'package:komga_reader/widgets/poster.dart';
 import 'package:komga_reader/widgets/readlist_tile.dart';
@@ -35,7 +36,6 @@ class FilterServer extends BrowseServer {
   ViewKind kind = ViewKind.comics;
   List<String> writers = ['Al Ewing', 'Jonathan Hickman'], artists = ['Esad Ribic', 'Mike Allred'];
   List<String> publisherValues = ['DC', 'Marvel'], genreValues = ['Action', 'Horror'];
-  List<int> years = [2014, 2015, 2020];
   Set<String> statusesHere = {'ONGOING', 'ENDED'};
 
   /// The listings asked for (pages - not the panel's counts and probes, which ask for one).
@@ -87,9 +87,6 @@ class FilterServer extends BrowseServer {
   Future<List<String>> publishers({String? libraryId, String? collectionId}) async => publisherValues;
   @override
   Future<List<String>> genres({String? libraryId, String? collectionId}) async => genreValues;
-  @override
-  Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId,
-      String? readListId}) async => years;
   /// A collection in its own order: Series 3, 2, 1 (not by title).
   @override
   Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
@@ -162,6 +159,16 @@ void main() {
 
   bool section(String name) => find.byKey(ValueKey('filter.section.$name')).evaluate().isNotEmpty;
 
+  // years near the top of the newest-first lists (the menu shows them without scrolling)
+  final thisYear = DateTime.now().year, lastYear = DateTime.now().year - 1;
+
+  /// Pick [year] (null: Any) in the From or To year list.
+  Future<void> pickYear(WidgetTester tester, String which, int? year) async {
+    await tapKey(tester, 'filter.$which');
+    await tester.tap(find.text(year == null ? 'Any' : '$year').last);
+    await settle(tester);
+  }
+
   /// Add [names] through the writer / artist picker.
   Future<void> pickNames(WidgetTester tester, String field, List<String> names) async {
     await tapKey(tester, 'filter.add.$field');
@@ -185,13 +192,13 @@ void main() {
     expect(api.searches, isNotEmpty, reason: "the picker lists Komga's names");
     await tapKey(tester, 'filter.publisher.Marvel');
     await tapKey(tester, 'filter.status.ENDED');
-    await tapKey(tester, 'filter.years.2020-2020'); // (a quick pick: the 2020s, as far as the view goes)
+    await pickYear(tester, 'from', lastYear); // (To follows: that year only)
     final before = api.listings.length;
     await tapKey(tester, 'filter.show');
 
     expect(api.listings.length, before + 1);
-    expect(api.listings.last.filter, const ViewFilter(writers: ['Jonathan Hickman'], publishers: ['Marvel'],
-        statuses: ['ENDED'], fromYear: 2020, toYear: 2020));
+    expect(api.listings.last.filter, ViewFilter(writers: const ['Jonathan Hickman'], publishers: const ['Marvel'],
+        statuses: const ['ENDED'], fromYear: lastYear, toYear: lastYear));
     expect(api.listings.last.where, 'series L1');
     expect(find.byType(PosterTile), findsOneWidget, reason: 'what Komga answered');
     for (final c in ['writer', 'publisher', 'status', 'years']) {
@@ -299,20 +306,49 @@ void main() {
     expect(section('publisher'), isTrue, reason: 'a collection lists series');
   });
 
-  testWidgets('a filter with fewer than two values in the view is left out (writer / artist: any)', (tester) async {
+  testWidgets('a filter with fewer than two values in the view is left out (writer / artist: any; years: always)',
+      (tester) async {
     await library(tester, api: server((s) {
       s.writers = ['Al Ewing'];
       s.artists = [];
       s.publisherValues = ['Marvel'];
       s.genreValues = [];
-      s.years = [2020];
       s.statusesHere = {'ONGOING'};
     }));
     await openPanel(tester);
     expect(section('writer'), isTrue, reason: 'one writer is enough');
-    for (final s in ['artist', 'years', 'publisher', 'genre', 'status']) {
+    expect(section('years'), isTrue, reason: 'any year can be asked for');
+    for (final s in ['artist', 'publisher', 'genre', 'status']) {
       expect(section(s), isFalse, reason: s);
     }
+  });
+
+  testWidgets("release years: the same list in every view (this year back to 1800); From fills To", (tester) async {
+    final api = await library(tester);
+    await openPanel(tester);
+    List<int?> offered(String which) => [
+          for (final i in tester.widget<DropdownButton<int?>>(find.byKey(ValueKey('filter.$which'))).items!) i.value,
+        ];
+    expect(offered('from').first, isNull, reason: 'Any');
+    expect(offered('from')[1], thisYear, reason: 'newest first');
+    expect(offered('from').last, firstYear);
+    expect(offered('to'), offered('from'));
+
+    await pickYear(tester, 'from', lastYear);
+    await tapKey(tester, 'filter.show');
+    expect(api.listings.last.filter, ViewFilter(fromYear: lastYear, toYear: lastYear), reason: 'one pick: that year');
+
+    await openPanel(tester);
+    await pickYear(tester, 'to', null);
+    await tapKey(tester, 'filter.show');
+    expect(api.listings.last.filter, ViewFilter(fromYear: lastYear), reason: 'To back to Any: that year and later');
+
+    await openPanel(tester);
+    await pickYear(tester, 'to', thisYear);
+    await pickYear(tester, 'from', lastYear);
+    await tapKey(tester, 'filter.show');
+    expect(api.listings.last.filter, ViewFilter(fromYear: lastYear, toYear: thisYear),
+        reason: 'a To already after From stays: a range');
   });
 
   testWidgets('no Artist for eBooks; the kind is asked once', (tester) async {
@@ -366,12 +402,13 @@ void main() {
     var r = server();
     await show(tester, r, ReadListScreen(key: UniqueKey(), api: r, readList: readList));
     await openPanel(tester);
-    await tapKey(tester, 'filter.years.2014-2019'); // the 2010s, as far as the view goes
+    await pickYear(tester, 'to', thisYear);
+    await pickYear(tester, 'from', lastYear);
     await tapKey(tester, 'filter.show');
-    expect(r.listings.last.filter, const ViewFilter(fromYear: 2014, toYear: 2019));
+    expect(r.listings.last.filter, ViewFilter(fromYear: lastYear, toYear: thisYear));
     r = server();
     await show(tester, r, ReadListScreen(key: UniqueKey(), api: r, readList: readList));
-    expect(r.listings.first.filter, const ViewFilter(fromYear: 2014, toYear: 2019));
+    expect(r.listings.first.filter, ViewFilter(fromYear: lastYear, toYear: thisYear));
   });
 
   testWidgets('a pin keeps the filters, and opening it applies them', (tester) async {

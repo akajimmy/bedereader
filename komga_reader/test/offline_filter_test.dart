@@ -87,8 +87,6 @@ void main() {
     expect(await api.publishers(), ['Marvel', 'Marvel Knights']);
     expect(await api.publishers(collectionId: 'C1'), ['Marvel']);
     expect(await api.genres(libraryId: 'L1'), ['Action', 'Cosmic']);
-    expect(await api.releaseYears(), [2014, 2020]); // the series'
-    expect(await api.releaseYears(seriesId: 'S1'), [2014, 2015, 2016]); // its books'
   });
 }
 
