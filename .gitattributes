@@ -7,6 +7,10 @@
 *.cmd text eol=crlf
 # shell scripts need LF
 *.sh text eol=lf
+# Flutter writes its generated plugin files with LF: checked out as CRLF, every `flutter pub get` rewrote them and the
+# build's clean-tree check stopped it
+komga_reader/windows/flutter/generated_* text eol=lf
+komga_reader/linux/flutter/generated_* text eol=lf
 
 *.png binary
 *.jpg binary
