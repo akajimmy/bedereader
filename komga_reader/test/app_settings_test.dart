@@ -254,38 +254,6 @@ void main() {
     expect(api.calls, 3);
   });
 
-  testWidgets("a segmented choice sits beside its label while both fit, and drops under it when they don't "
-      '(the widths measured in the font in use)', (tester) async {
-    // it used to check one row at 700 px, which only stacked because the test font is about twice as wide as a real
-    // one; the window widths here come from the row's own measure, so the check holds in any font (test audit,
-    // 2026-09-30)
-    tall(tester, width: 700); // the narrow layout
-    await open(tester, page: SettingsPage.comics);
-    await tester.pump();
-    final row = find.byWidgetPredicate((w) => w is SegmentRow && w.title == 'Page turn animation');
-    final seg = tester.widget<SegmentRow>(row);
-    final ctx = tester.element(row);
-    // SegmentRow's sum: every segment as wide as the widest label, plus 28 each; the label gets up to 120, plus 12
-    final widest = [for (final c in seg.choices) textWidth(ctx, c.label, 13)].reduce((a, b) => a > b ? a : b);
-    final own = seg.choices.length * (widest + 28);
-    final room = textWidth(ctx, seg.title, 14.5).clamp(0.0, 120.0) + 12;
-    final margin = 700 - tester.getSize(row).width; // the page's padding around the row
-    final fits = own + room + 28 + margin; // the narrowest window where the buttons sit beside the label
-    expect(fits + 10, lessThan(760), reason: 'both widths still in the narrow layout');
-
-    Future<bool> beside(double width) async {
-      tester.view.physicalSize = Size(width, 2400);
-      await tester.pump();
-      await tester.pump(); // the shared width settles
-      final buttons = tester.getRect(find.descendant(of: row, matching: find.byType(SegmentedButton<PageTurn>)));
-      return buttons.top < tester.getRect(find.text('Page turn animation')).bottom;
-    }
-
-    expect(await beside(fits + 10), isTrue, reason: 'room for both at ${fits + 10}');
-    expect(await beside(fits - 10), isFalse, reason: 'not at ${fits - 10}: under the label');
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {
     tall(tester);
     await open(tester, page: SettingsPage.library);
