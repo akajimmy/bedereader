@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBooks: the spinner while a book is laid out says "Adjusting and storing layout"** (it was "Laying out the
+  book") - it shows the first time a book opens in your settings, and again after you change them.
+
 ## 1.3.0
 
 ### Build 98 - 2026-10-08
