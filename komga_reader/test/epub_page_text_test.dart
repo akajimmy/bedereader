@@ -57,6 +57,21 @@ void main() {
     expect(text.wordAt(const Offset(2, 2)), isNull, reason: 'the margin: no word');
   });
 
+  test('an emoji (two UTF-16 halves) is never split: not by a selection edge, not by the search for one', () {
+    const smile = '\u{1F600}';
+    final page = paginate('<p>a$smile$smile$smile b ${smile}x$smile c</p>').single, text = page.text;
+    bool whole(String s) => s.isEmpty || !(s.codeUnitAt(s.length - 1) >= 0xD800 && s.codeUnitAt(s.length - 1) <= 0xDBFF);
+    final line = text.boxesOf('a$smile').first;
+    // every point along the line, a pixel at a time: the edge there leaves no half emoji behind it
+    for (var x = 0.0; x < 400; x += 1) {
+      final s = text.textOf(text.first, text.spotAt(Offset(x, line.center.dy)));
+      expect(whole(s), isTrue, reason: 'an edge at x $x split an emoji: ${s.codeUnits}');
+    }
+    final r = text.boxesOf('${smile}x').first;
+    final (a, b) = text.wordAt(r.centerLeft + const Offset(2, 0))!;
+    expect(whole(text.textOf(a, b)) && text.textOf(a, b).contains(smile), isTrue, reason: 'the emoji whole');
+  });
+
   test('a selection across paragraphs: in reading order, a newline between them, no space left at the line end', () {
     final page = paginate(paras(2, 12)).single, text = page.text;
     final a = text.wordAt(text.boxesOf('w0x10').first.center)!, b = text.wordAt(text.boxesOf('w1x1').first.center)!;

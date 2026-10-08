@@ -82,10 +82,17 @@ class PageText {
 
   // ---- points to characters
 
+  /// [k] moved off the middle of a surrogate pair (an emoji, a rare CJK character): the engine is never asked about
+  /// half a character - an out-of-range answer there is the kind of bounds check that stopped release builds.
+  static int _whole(String t, int k) =>
+      k > 0 && k < t.length && _isHigh(t.codeUnitAt(k - 1)) && _isLow(t.codeUnitAt(k)) ? k + 1 : k;
+  static bool _isHigh(int u) => u >= 0xD800 && u <= 0xDBFF;
+  static bool _isLow(int u) => u >= 0xDC00 && u <= 0xDFFF;
+
   /// Where a caret at painter offset [k] on line [i] stands across [l] (painter x).
   static double _caretX(_Laid l, int i, int k) {
     final s = l.lines[i].start;
-    final at = math.min(k, l.lines[i].end);
+    final at = math.min(_whole(l.tp.plainText, k), l.lines[i].end);
     if (at <= s) return l.metrics[i].left;
     final boxes = l.tp.getBoxesForSelection(TextSelection(baseOffset: s, extentOffset: at));
     if (boxes.isEmpty) return l.metrics[i].left;
@@ -105,10 +112,12 @@ class PageText {
         hi = mid - 1;
       }
     }
-    final char = math.max(s, math.min(lo, e - 1));
+    final t = l.tp.plainText;
+    var char = math.max(s, math.min(lo, e - 1));
+    if (char > s && _isLow(t.codeUnitAt(char)) && _isHigh(t.codeUnitAt(char - 1))) char--; // a pair's first half
     var caret = lo;
     if (lo < e && x - _caretX(l, i, lo) > _caretX(l, i, lo + 1) - x) caret = lo + 1;
-    return (char, caret);
+    return (char, math.min(_whole(t, caret), e)); // a selection's edge never splits a pair either
   }
 
   /// The segment whose lines run across page height [p].dy - the one under [p], else the nearest sideways (table
