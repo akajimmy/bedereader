@@ -9,12 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 96 - 2026-10-08
+
 **Changed**
 - **Your API key is now stored encrypted** (the Android Keystore; Windows' own data protection), no longer in plain
   text in the app's settings. **You'll need to sign in once more** after updating: the old plain-text key is
   removed, not moved over.
-
-## 1.3.0
 
 ### Build 95 - 2026-10-08
 
