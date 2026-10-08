@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 95 - 2026-10-08
+
 **Fixed**
 - **Search: the Books row left out the books of the series found** - it showed only books whose own title matched.
   It now also lists every book of the series in the Series row, after the matched ones, in series and number order,
@@ -23,8 +27,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   and on Home's Refresh); connections are closed after a failed sign-in and on signing out.
 - **A book with no number showed as "Saga #null"** (the end card, the series line under posters, sync messages) **or
   "Saga #"** (elsewhere). It's now just "Saga", the same everywhere.
-
-## 1.3.0
 
 ### Build 94 - 2026-10-07
 
