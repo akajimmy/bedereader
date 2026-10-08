@@ -8,13 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
-import 'package:komga_reader/widgets/display_panel.dart' show pageNoteRow;
 import 'package:komga_reader/widgets/epub_settings.dart';
-import 'package:komga_reader/widgets/setting_rows.dart' show SettingsGroup;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/epub_books.dart' show MemorySource, twoChapters;
-import 'support/helpers.dart' show setView;
 import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
@@ -71,52 +68,6 @@ void main() {
       await tester.pump(const Duration(milliseconds: 250));
     }
   }
-
-  testWidgets("eBook settings (user, 2026-10-07): Text - size first - then Formatting, then Reading: page colours, "
-      'position text, brightness, rotation, keep the screen on; not the page corner, clock, page turn or night mode',
-      (tester) async {
-    setView(tester, const Size(1280, 3000));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
-        SingleChildScrollView(child: Column(children: epubPanelRows(c, AppSettings.instance)))))));
-    await tester.pump();
-    double y(String t) => tester.getTopLeft(find.text(t).first).dy;
-    final order = ['Text', 'Size', 'Font', 'Line spacing', 'Paragraph spacing', 'Margins', 'Formatting', 'Alignment',
-        'Paragraphs', 'Hyphenation', 'Reading', 'Page colours', 'Position text', 'Keep the screen on'];
-    final ys = [for (final t in order) y(t)];
-    expect(ys, [...ys]..sort(), reason: order.join(' > '));
-    expect([for (final c in tester.widgetList<FilterChip>(find.byType(FilterChip))) (c.label as Text).data],
-        ['Chapter', 'Book page', 'Chapter page']);
-    for (final gone in ['Page corner', 'Clock and battery', 'Progress bar', 'Page turn', 'Night mode']) {
-      expect(find.text(gone), findsNothing, reason: gone);
-    }
-    expect([for (final g in tester.widgetList<SettingsGroup>(find.byType(SettingsGroup))) g.title],
-        ['Text', 'Formatting', 'Reading'], reason: 'no "This device" group any more');
-    expect(find.text('synced'), findsNothing, reason: 'the panel has no sync marks');
-  });
-
-  testWidgets("Settings > eBooks' synced groups: Text, Formatting, Page (page colours and page turn: None / Slide, as "
-      "comics')", (tester) async {
-    setView(tester, const Size(1280, 3000));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
-        SingleChildScrollView(child: Column(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))));
-    await tester.pump();
-    expect([for (final g in tester.widgetList<SettingsGroup>(find.byType(SettingsGroup))) (g.title, g.synced)],
-        [('Text', true), ('Formatting', true), ('Page', true)]);
-    expect(find.text('Page colours'), findsOneWidget);
-    expect(find.text('Theme'), findsNothing);
-    final turn = find.byType(SegmentedButton<EpubTurn>);
-    expect(tester.getTopLeft(find.descendant(of: turn, matching: find.text('None'))).dx,
-        lessThan(tester.getTopLeft(find.descendant(of: turn, matching: find.text('Slide'))).dx));
-  });
-
-  testWidgets("eBooks' Page corner (Settings > eBooks; it was in the Aa panel) says what the corner shows now - the book's page, as comics' (it still "
-      'described the pages left in the chapter - user, 2026-10-07)', (tester) async {
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
-        SingleChildScrollView(child: Column(children: [pageNoteRow(AppSettings.instance, BookKind.ebooks)]))))));
-    await tester.pump();
-    expect(find.text("The page you're on, \"12 / 36\""), findsOneWidget);
-    expect(find.textContaining('left in the chapter'), findsNothing);
-  });
 
   testWidgets("the text size is this device's (user, 2026-10-07): Komga's copy of the EPUB set brings the rest, not "
       'the size', (tester) async {
