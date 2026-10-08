@@ -186,13 +186,18 @@ void main() {
     for (final m in ['INDEX', 'MAPS', 'TH', 'a', '1234', 'Chapter 1']) {
       expect(Paginator.noteMarker.hasMatch(m), isFalse, reason: m);
     }
-    List<double> lines(String a) {
-      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>Shed by the deserving$a, and '
-          'then wondered where the stories went, and why, and where to.</p><p>Next.</p></body>'));
-      return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.textOrigins.map((o) => o.dy).toList()
-        ..add(blocks.length.toDouble());
-    }
-    expect(lines('<a href="n.html#f1">*</a>'), lines('*'));
+    EpubPage page(String a) => Paginator(const EpubTheme(), const Size(400, 600), null).run(ChapterReader(StyleSheet(),
+            (h) => h).read(parseXhtml('<body><p>Shed by the deserving$a, and then wondered where the stories went, and '
+            'why, and where to.</p><p>Next.</p></body>'))).single;
+    List<double> lines(EpubPage p) => p.textOrigins.map((o) => o.dy).toList();
+    final marked = page('<a href="n.html#f1">*</a>');
+    expect(lines(marked), lines(page('*')), reason: 'no line taller');
+    final glyph = TextPainter(text: TextSpan(text: '*', style: TextStyle(fontSize: const EpubTheme().fontSize)),
+        textDirection: TextDirection.ltr)..layout();
+    final marker = marked.links.single.rect;
+    expect(marker.width, greaterThan(glyph.width * 1.2), reason: 'drawn bigger than the same "*" in the text: $marker, '
+        '${glyph.width} wide');
+    glyph.dispose();
   });
 
   test('superscripts: digits become superscript characters (footnote numbers); other text stays itself', () {
