@@ -17,28 +17,26 @@ class FakeKomga extends TestKomga {
   final marked = <String>[];
   @override
   Future<void> markRead(String bookId) async => marked.add(bookId);
-  Map<String, dynamic> page(List<Map<String, dynamic>> items) =>
-      {'content': items, 'totalElements': items.length, 'last': true};
 
   @override
   Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async {
     scopes.add(libraryId);
-    return page(query == 'surf'
+    return onePage(query == 'surf'
         ? [{'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 2, 'metadata': {'title': 'Silver Surfer'}}]
         : []);
   }
 
   @override
-  Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async => page(query == 'surf'
+  Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async => onePage(query == 'surf'
       ? [
           for (var i = 1; i <= 2; i++)
             {'id': 'B$i', 'seriesTitle': 'Silver Surfer', 'name': 'b$i', 'metadata': {'number': '$i', 'title': 'T$i'}},
         ]
       : []);
   @override
-  Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async => page([]);
+  Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async => onePage([]);
   @override
-  Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async => page([]);
+  Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async => onePage([]);
 }
 
 /// A search that only answers when told to (one still on its way when the box is cleared).
@@ -132,7 +130,7 @@ void main() {
       expect(ids(await api.searchCollections('cosm')), ['C1']);
       expect(ids(await api.searchSeries('   ')), isEmpty);
     } finally {
-      await dir.delete(recursive: true);
+      await deleteTemp(dir);
     }
   });
 }

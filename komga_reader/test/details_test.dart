@@ -41,17 +41,16 @@ class FakeKomga extends TestKomga {
   @override // the collection screen's listing (test audit, 2026-09-30: without it that screen showed an HTTP 400)
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async =>
-      {'content': [{'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}],
-        'totalElements': 1, 'last': true};
+      onePage([{'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer'}}]);
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async =>
       {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 1, 'metadata': {'title': 'Silver Surfer', 'publisher': 'Marvel'}};
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
-      {'content': [theBook], 'totalElements': 1, 'last': true};
+      onePage([theBook]);
   @override
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus, String sort = '', int page = 0, int size = 500}) async =>
-      {'content': [theBook], 'totalElements': 1, 'last': true};
+      onePage([theBook]);
 }
 
 void main() {

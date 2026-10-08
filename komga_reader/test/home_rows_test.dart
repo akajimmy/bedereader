@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/client_settings.dart';
 import 'support/helpers.dart';
+import 'support/home_server.dart';
 import 'support/no_network.dart';
 
 /// Home's rows and pins (test audit, 2026-09-30: only the section menu and order had tests).
@@ -24,21 +25,14 @@ Map<String, dynamic> book(String id, String series, int n) =>
 /// A Komga with one book for each of Home's rows - unless [empty] - told apart by the query each row runs; series
 /// S1 "Saga", read list RL1 "Infinity" and collection C1 "Marvel cosmic", and a series and a read list deleted from
 /// the server ("gone"). Komga's client settings are kept, for the pins.
-class HomeRowsServer extends TestKomga with ClientSettingsStore {
-  HomeRowsServer({this.empty = false});
+class HomeRowsServer extends HomeServer with ClientSettingsStore {
+  HomeRowsServer({this.empty = false})
+      : super(inProgressBooks: empty ? const [] : [book('C1', 'Ongoing', 4)],
+            onDeckBooks: empty ? const [] : [book('D1', 'Next Up', 2)]);
   final bool empty;
   final asked = <String>[]; // the queries the rows ran
 
   List<Map<String, dynamic>> _one(Map<String, dynamic> b) => empty ? [] : [b];
-
-  @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}];
-  @override
-  Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) async =>
-      onePage(_one(book('C1', 'Ongoing', 4)));
-  @override
-  Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async =>
-      onePage(_one(book('D1', 'Next Up', 2)));
 
   @override
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
@@ -86,10 +80,7 @@ class HomeRowsServer extends TestKomga with ClientSettingsStore {
 }
 
 void main() {
-  setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    await HomeSections.instance.load();
-  });
+  setUp(() => SharedPreferences.setMockInitialValues({})); // (Home loads its sections itself)
 
   /// Home, tall enough for every row, with every section switched on.
   Future<HomeRowsServer> open(WidgetTester tester, {bool empty = false, List<Pin> pins = const []}) async {
@@ -98,7 +89,7 @@ void main() {
     final api = noNetwork(() => HomeRowsServer(empty: empty));
     api.written[Pins.komgaKey] = jsonEncode([for (final p in pins) p.toJson()]);
     await Pins.instance.load(api);
-    addTearDown(() => Pins.instance.items = []);
+    addTearDown(Pins.instance.clearAccount); // all of it: the server, what's unsent, a retry timer
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
     await tester.pump();
     await tester.pump();

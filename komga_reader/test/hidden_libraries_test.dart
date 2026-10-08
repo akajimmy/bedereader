@@ -26,13 +26,20 @@ void main() {
     {'id': 'L3', 'name': 'Demo Library'},
   ];
 
-  /// A Komga whose requests are recorded (and answered with the three libraries, or an empty page).
+  /// A Komga whose requests are recorded, answered with the three libraries or an empty page - only on the paths
+  /// these tests use: anything else fails the test (test audit, 2026-10-07: every path was answered).
   (Komga, List<Uri>) recorded() {
-    final asked = <Uri>[];
+    final asked = <Uri>[], unexpected = <String>[];
+    addTearDown(() => expect(unexpected, isEmpty, reason: 'requests no test here expects'));
     final client = MockClient((r) async {
       asked.add(r.url);
-      final body = r.url.path.endsWith('/libraries') ? libs : {'content': [], 'totalElements': 0, 'last': true};
-      return http.Response(jsonEncode(body), 200);
+      final path = r.url.path;
+      if (path == '/api/v1/libraries') return http.Response(jsonEncode(libs), 200);
+      if (const {'/api/v1/series', '/api/v1/books', '/api/v1/books/ondeck'}.contains(path)) {
+        return http.Response(jsonEncode({'content': [], 'totalElements': 0, 'last': true}), 200);
+      }
+      unexpected.add('${r.method} ${r.url}');
+      return http.Response('not in this test', 404);
     });
     return (http.runWithClient(() => Komga('http://test', 'k'), () => client), asked);
   }
