@@ -76,7 +76,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
   ReadFilter _filter = ReadFilter.all;
   ViewSort _sort = const ViewSort('title', false);
   late final Paged _paged = Paged(_fetch);
-  final _sel = Selection(); // multi-select, in Books mode
+  final _sel = Selection(); // multi-select, in Books and Series modes (ended on every mode switch)
 
   /// The mode's sort fields (each starts in its natural direction: titles A -> Z, dates newest first).
   static List<SortField> _fieldsOf(BrowseMode m) => switch (m) {
@@ -235,7 +235,8 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
       onDrawerChanged: (open) { if (!open) _edge.currentState?.restore(); },
       drawer: docked ? null : AppDrawer(api: api, onSignOut: widget.onSignOut), // docked: beside the page instead
       appBar: _sel.active
-          ? selectionAppBar(context, api, _sel, all: () => _paged.items, onChanged: _refresh)
+          ? selectionAppBar(context, api, _sel, all: () => _paged.items, onChanged: _refresh,
+              series: _mode == BrowseMode.series)
           : AppBar(
         title: PopupMenuButton<String?>(
           tooltip: 'Library',
@@ -254,7 +255,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           filters: _listMode ? null : filterButton(),
           sort: SortMenuButton(fields: _fields, value: _sort, onChanged: (s) { _sort = s; _load(); }),
           onClear: _filtered ? _clearFilters : null,
-          select: _mode == BrowseMode.books ? _sel : null,
+          select: _mode == BrowseMode.books || _mode == BrowseMode.series ? _sel : null,
           pin: Pin(
             name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!,
                 if (!_listMode) ...filterWords()].join(' · '),
@@ -311,7 +312,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
   Widget _tile(dynamic it, bool first) {
     switch (_mode) {
       case BrowseMode.series:
-        return seriesTile(context, api, it, autofocus: first, onChanged: _refresh,
+        return seriesTile(context, api, it, autofocus: first, onChanged: _refresh, selection: _sel,
             onOpen: () => _push(SeriesScreen(api: api, series: it)));
       case BrowseMode.books:
         return bookTile(context, api, it, autofocus: first, onChanged: _refresh, selection: _sel,
@@ -345,18 +346,24 @@ String seriesStatus(dynamic s) {
   return [books, if (unread > 0) '$unread unread', if (inProgress > 0) '$inProgress in progress'].join(' · ');
 }
 
-/// Series tile used in every series grid (libraries, collections). Long-press = series actions.
+/// Series tile used in every series grid (libraries, collections). Long-press = series actions. With a [selection],
+/// as a book tile: long-press offers "Select multiple", and while selecting a tap toggles the series.
 Widget seriesTile(BuildContext context, Komga api, dynamic s,
-    {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false}) {
+    {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false, Selection? selection}) {
+  final selecting = selection != null && selection.active;
   final total = (s['booksCount'] ?? 0) as int;
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.seriesThumb(s['id']),
     title: (s['metadata']?['title'] ?? s['name']) as String,
     subtitle: seriesStatus(s),
     read: total > 0 && s['booksUnreadCount'] == 0 && s['booksInProgressCount'] == 0,
+    selected: selecting ? selection.isSelected(s) : null,
     badge: DownloadBadge.series(s['id'] as String, total: total),
-    onOpen: onOpen,
-    onMenu: () => showSeriesActions(context, api, s, onChanged: onChanged ?? () {}),
+    onOpen: selecting ? () => selection.toggle(s) : onOpen,
+    onMenu: selecting
+        ? () => selection.toggle(s)
+        : () => showSeriesActions(context, api, s, onChanged: onChanged ?? () {},
+            onSelectMultiple: selection == null ? null : () => selection.start(s)),
   );
 }
 
