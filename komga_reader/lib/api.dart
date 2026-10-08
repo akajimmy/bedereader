@@ -83,6 +83,18 @@ class Komga {
         }
       });
 
+  /// A POST that answers (Komga's searches with a condition): [body] as JSON, the answer decoded.
+  Future<dynamic> _post(String path, Map<String, Object?> query, Object body) => _net(() async {
+        final r = await _http.post(_u(path, query), headers: {...headers, 'Content-Type': 'application/json'},
+            body: jsonEncode(body));
+        if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
+        try {
+          return jsonDecode(utf8.decode(r.bodyBytes));
+        } on FormatException {
+          throw KomgaNotKomga(baseUrl);
+        }
+      });
+
   Future<void> _send(String method, String path, [Object? body]) => _net(() async {
         final req = http.Request(method, _u(path))..headers.addAll(headers);
         if (body != null) {
@@ -179,6 +191,14 @@ class Komga {
       await _get('/api/v1/series', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/books', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
+  /// The books of any of [seriesIds], by number - one request, however many series (Search's Books row: a series
+  /// found brings its books along - bug #15).
+  Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async =>
+      await _post('/api/v1/books/list', {'size': size, 'sort': 'metadata.numberSort,asc'}, {
+        'condition': {
+          'anyOf': [for (final id in seriesIds) {'seriesId': {'operator': 'is', 'value': id}}],
+        },
+      }) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/readlists', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async =>
