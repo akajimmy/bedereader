@@ -21,6 +21,27 @@ void main() {
     expect(b.style!.backgroundColor!.resolve({WidgetState.disabled}), isNull); // the others as usual
   });
 
+  testWidgets('choices too long for the row: the labels shrink, the buttons keep their full height and the row\'s width '
+      '(user, 2026-10-08: shrinking the whole control "just makes it harder to tap")', (tester) async {
+    const long = [
+      Choice(1, 'the first of the choices'), Choice(2, 'the second of the choices'),
+      Choice(3, 'the third of the choices'), Choice(4, 'the fourth of the choices'),
+    ];
+    Future<Size> buttons(double width) async {
+      setView(tester, Size(width, 800));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
+        SettingsGroup(children: [SegmentRow<int>(title: 'Keep it', value: 1, onChanged: (_) {}, choices: long)]),
+      ]))));
+      return tester.getSize(find.byType(SegmentedButton<int>));
+    }
+
+    final roomy = await buttons(3000); // all of it fits
+    final narrow = await buttons(320); // a phone: far too narrow for those labels
+    expect(tester.takeException(), isNull, reason: 'no overflow');
+    expect(narrow.height, roomy.height, reason: 'as tall as when everything fits');
+    expect(narrow.width, greaterThan(320 - 2 * 14 - 28 - 1), reason: "the row's width, not shrunk inside it");
+  });
+
   testWidgets('alignment: choices beside their labels share one width, flush right; one under its label spans the row',
       (tester) async {
     setView(tester, const Size(700, 800));
