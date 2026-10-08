@@ -62,11 +62,15 @@ class _LoginScreenState extends State<LoginScreen> {
     _server.text = server; // show what's actually used
     setState(() { _busy = true; _error = null; });
     final api = (widget.client ?? Komga.new)(server, _key.text.trim());
+    var handedOver = false;
     try {
       final me = await api.me();
       if (me == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga at that address
+      handedOver = true;
       await widget.onSignedIn(api);
     } catch (e) {
+      // this attempt's connection isn't used again: its client goes (code review 2026-10-05, #50: one left per try)
+      if (!handedOver) api.close();
       if (mounted) setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _busy = false);

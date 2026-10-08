@@ -61,7 +61,7 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pump();
     expect(Connection.instance.offline, isFalse);
-    expect(komga.requests.where((r) => r == 'GET /api/v1/client-settings/user/list').length, 3,
-        reason: 'one each: reader settings, pins, On deck hidden - ${komga.requests}');
-  });
+    // one request, shared by the three (code review 2026-10-05, #35: one each)
+    expect(komga.requests.where((r) => r == 'GET /api/v1/client-settings/user/list').length, 1,
+        reason: 'reader settings, pins and On deck hidden share one - ${komga.requests}');  });
 }

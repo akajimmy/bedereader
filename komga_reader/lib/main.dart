@@ -291,7 +291,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await AppSettings.instance.clearAccount();
     await Pins.instance.clearAccount();
     await OnDeckHidden.instance.clearAccount();
+    final old = _api;
     if (mounted) setState(() => _api = null);
+    // the old connection isn't used again (signing in makes a new one): its client goes once what's on its way has
+    // finished (code review 2026-10-05, #50)
+    old?.close();
   }
 
   // the theme is made again only when the accent colour changes, not on every settings change (a slider drag)

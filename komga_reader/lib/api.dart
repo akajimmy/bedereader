@@ -11,11 +11,25 @@ import 'hidden_libraries.dart';
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
 /// override changes made in the web client.
 class Komga {
-  Komga(String baseUrl, this.apiKey) : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), '');
+  /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
+  Komga(String baseUrl, this.apiKey, {http.Client? client})
+      : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
+        _http = client ?? http.Client();
 
   final String baseUrl;
   final String apiKey;
-  final http.Client _http = http.Client();
+  final http.Client _http;
+
+  int _inFlight = 0; // requests on their way
+  bool _closing = false;
+
+  /// This connection is dropped for good (a failed sign-in, signing out): its HTTP client - and the sockets it keeps
+  /// open - is closed once the requests on their way have finished (code review 2026-10-05, #50: none was ever
+  /// closed). Anything asked after that fails as unreachable.
+  void close() {
+    _closing = true;
+    if (_inFlight == 0) _http.close();
+  }
 
   Map<String, String> get headers => {'X-API-Key': apiKey, 'Accept': 'application/json'};
 
@@ -38,6 +52,15 @@ class Komga {
   /// Runs a request with a time limit, turning "no answer" into one clear error instead of a spinner forever.
   /// [slowIsNotDown]: running out of time isn't taken as Komga being unreachable (still an error for the caller).
   Future<T> _net<T>(Future<T> Function() request, {Duration limit = timeout, bool slowIsNotDown = false}) async {
+    _inFlight++;
+    try {
+      return await _netOnce(request, limit: limit, slowIsNotDown: slowIsNotDown);
+    } finally {
+      if (--_inFlight == 0 && _closing) _http.close();
+    }
+  }
+
+  Future<T> _netOnce<T>(Future<T> Function() request, {required Duration limit, required bool slowIsNotDown}) async {
     try {
       final r = await request().timeout(limit);
       onReachability?.call(this, true);
@@ -114,36 +137,58 @@ class Komga {
 
   Future<List<dynamic>>? _librariesOnce;
 
-  /// A library's name, for breadcrumbs ("Ongoing › Absolute Flash"). The list is fetched once per connection; null
-  /// if it can't be had (tried again next time).
+  /// The library list, kept: fetched once, then again after [forgetLibraries] (the app back in the foreground) or a
+  /// fresh fetch ([visibleLibraries] - Home's load and Refresh). A failed fetch isn't kept (asked again next time).
+  /// Libraries change rarely; the side menu asked for them on every opening (code review 2026-10-05, #43).
+  Future<List<dynamic>> keptLibraries() async {
+    final kept = _librariesOnce ??= libraries();
+    try {
+      return await kept;
+    } catch (_) {
+      if (identical(_librariesOnce, kept)) _librariesOnce = null;
+      rethrow;
+    }
+  }
+
+  /// The kept library list is out of date (the app back in the foreground): the next use fetches it again.
+  void forgetLibraries() => _librariesOnce = null;
+
+  /// A library's name, for breadcrumbs ("Ongoing › Absolute Flash"), from the kept list; null if it can't be had
+  /// (tried again next time).
   Future<String?> libraryName(String? id) async {
     if (id == null) return null;
     try {
-      final all = await (_librariesOnce ??= libraries());
-      for (final l in all) {
+      for (final l in await keptLibraries()) {
         if (l['id'] == id) return l['name'] as String?;
       }
       return null;
     } catch (_) {
-      _librariesOnce = null;
       return null;
     }
   }
 
-  /// The libraries this device shows (Settings > Library & Home): side menu, Home, the library picker.
-  Future<List<dynamic>> visibleLibraries() async =>
-      [for (final l in await libraries()) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
+  /// The libraries this device shows (Settings > Library & Home): Home, the library picker. Fetched fresh, and kept
+  /// for the side menu ([kept]: the kept list, fetched only if there's none).
+  Future<List<dynamic>> visibleLibraries({bool kept = false}) async {
+    final List<dynamic> all;
+    if (kept) {
+      all = await keptLibraries();
+    } else {
+      all = await libraries();
+      _librariesOnce = Future.value(all);
+    }
+    return [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
+  }
 
   /// What to ask Komga for: one library, or - across libraries, with some hidden on this device - the shown ones
   /// (Komga takes a list), so every list leaves the hidden ones out. Null: no filter at all.
   Future<Object?> _scope(String? libraryId) async {
     if (libraryId != null || HiddenLibraries.instance.ids.isEmpty) return libraryId;
     try {
-      final all = await (_librariesOnce ??= libraries());
+      final all = await keptLibraries();
       final shown = [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l['id'] as String];
       return shown.isEmpty ? null : shown; // (Settings keeps at least one shown)
     } catch (_) {
-      _librariesOnce = null;
       return null; // can't tell which: the request itself will say what's wrong
     }
   }
@@ -271,10 +316,28 @@ class Komga {
   }
 
   // ---- this app's settings, kept in the user's Komga client-settings store (key -> {value})
-  Future<Map<String, dynamic>> clientSettings() async =>
+  /// The whole store. Callers asking while a request for it is on its way share that one answer: reader settings,
+  /// pins and On deck hidden each refresh from it, and a Home reload asked three times (code review 2026-10-05, #35).
+  /// A write starts afresh: nobody joins a request that went out before it.
+  Future<Map<String, dynamic>> clientSettings() {
+    final running = _settingsAsking;
+    if (running != null) return running;
+    late final Future<Map<String, dynamic>> asking;
+    asking = _fetchClientSettings().whenComplete(() {
+      if (identical(_settingsAsking, asking)) _settingsAsking = null;
+    });
+    return _settingsAsking = asking;
+  }
+
+  Future<Map<String, dynamic>>? _settingsAsking;
+
+  Future<Map<String, dynamic>> _fetchClientSettings() async =>
       (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
-  Future<void> putClientSetting(String key, String value) =>
-      _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+
+  Future<void> putClientSetting(String key, String value) {
+    _settingsAsking = null;
+    return _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+  }
 
   // ---- EPUB books (Readium web publication): the manifest (reading order, table of contents) and the book's files
   /// Komga answers 406 to Accept: application/json here (its API docs list it; the server doesn't serve it), so it's
