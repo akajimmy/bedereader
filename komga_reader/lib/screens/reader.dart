@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
@@ -221,7 +222,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
 
-  static String _titleOf(dynamic b) => ComicRenderer.titleOf(b);
+  static String _titleOf(dynamic b) => bookTitle(b, trim: true);
 
   int _openRun = 0; // each _open's number: an older one still loading doesn't take over
 
@@ -568,10 +569,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       return;
     }
     try {
-      var prev = await api.previousBook(_book['id'], readListId: widget.readListId);
-      for (var hops = 0; widget.skipRead && prev != null && _isRead(prev) && hops < 500; hops++) {
-        prev = await api.previousBook(prev['id'] as String, readListId: widget.readListId);
-      }
+      final prev = await _neighbour(_book['id'], forward: false);
       if (!mounted) return;
       if (prev == null) {
         final where = widget.readListId != null ? 'read list' : 'series';
@@ -588,7 +586,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   /// Delete the open book's file on the server (confirmed first, Cancel focused), then close the reader.
   Future<void> _deleteBook() async {
-    final title = '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}';
+    final title = bookTitle(_book);
     final ok = await confirmDelete(context, 'Delete "$title"?',
         'This deletes the file from the server. It cannot be undone from the app.');
     if (!ok || !mounted) return;
@@ -905,11 +903,21 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// ([ReaderScreen.skipRead]), the next one after it that isn't read yet.
   Future<Map<String, dynamic>?> _nextFrom(String id) async {
     if (_at + 1 < _visited.length && _visited[_at]['id'] == id) return _visited[_at + 1];
-    var next = await api.nextBook(id, readListId: widget.readListId);
-    for (var hops = 0; widget.skipRead && next != null && _isRead(next) && hops < 500; hops++) {
-      next = await api.nextBook(next['id'] as String, readListId: widget.readListId);
+    return _neighbour(id, forward: true);
+  }
+
+  /// The book after (or, not [forward], before) [id] in the read list it was opened from, or the series - opened
+  /// from a view with read books hidden ([ReaderScreen.skipRead]), the nearest one that way that isn't read yet
+  /// (at most 500 read ones skipped).
+  Future<Map<String, dynamic>?> _neighbour(String id, {required bool forward}) async {
+    Future<Map<String, dynamic>?> step(String id) => forward
+        ? api.nextBook(id, readListId: widget.readListId)
+        : api.previousBook(id, readListId: widget.readListId);
+    var book = await step(id);
+    for (var hops = 0; widget.skipRead && book != null && _isRead(book) && hops < 500; hops++) {
+      book = await step(book['id'] as String);
     }
-    return next;
+    return book;
   }
 
   static bool _isRead(Map<String, dynamic> book) => book['readProgress']?['completed'] == true;
@@ -1039,11 +1047,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       );
 
   /// The top bar's first line: "Saga #1" (none for a book in no series).
-  String? get _heading {
-    final series = _book['seriesTitle'] as String?;
-    final number = _book['metadata']?['number'];
-    return series == null || series.isEmpty ? null : '$series${number == null ? '' : ' #$number'}';
-  }
+  String? get _heading => bookHeading(_book);
 
   /// The book's own title (its file name if it has none).
   String get _bookName => '${_book['metadata']?['title'] ?? _book['name'] ?? ''}';

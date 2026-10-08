@@ -11,6 +11,14 @@ import 'refresh_gate.dart';
 /// A library sort field's natural direction: titles A -> Z, dates newest first.
 bool naturalDesc(String key) => key != 'title';
 
+/// A library's sort keys -> Komga's sort fields, series mode. One definition for the library screen and a pinned
+/// view's poster (pin_tile.dart's pinView), so a key added here sorts the same in both (code review 2026-10-05, #52).
+/// The first entry is the fallback field for an unknown key.
+const seriesSortFields = {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'};
+
+/// The same for books mode.
+const bookSortFields = {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'};
+
 /// A view pinned to Home under a name of your choosing, e.g. "Ultimate Universe · unread" = that read list with
 /// read books hidden. Opening it restores exactly that view (list, hide-read, and for libraries mode and sort).
 @immutable

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../errors.dart';
 import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -55,7 +56,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       completed ? await api.markUnread(_book['id']) : await api.markRead(_book['id']);
       await _load();
     } catch (e, st) {
-      final title = '${_book['seriesTitle'] ?? ''} #${_book['metadata']?['number'] ?? ''}';
+      final title = bookTitle(_book);
       if (mounted) {
         showErrorSnack(context, couldnt('mark "$title" as ${completed ? 'unread' : 'read'}', e, thing: 'book'), e, st);
       }
@@ -106,7 +107,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
 
     final facts = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('${_book['seriesTitle'] ?? ''} #${m['number'] ?? ''}',
+      Text(bookTitle(_book),
           style: const TextStyle(fontSize: 15, color: Color(0xFF9A9A9A))),
       const SizedBox(height: 4),
       Text((m['title'] ?? _book['name'] ?? '') as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),

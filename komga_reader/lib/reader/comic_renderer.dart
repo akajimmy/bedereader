@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../errors.dart';
 import '../page_curl.dart';
 import '../page_image.dart';
@@ -826,7 +827,7 @@ class ComicRenderer extends Renderer {
   // ---- Save page / Copy page (the Comic settings panel; user, 2026-10-02): the page's own image as Komga sends it - not the
   // picture on screen (no crop, levels or Enhance) - from what's loaded already, else asked for
 
-  static String titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();
+  static String titleOf(dynamic b) => bookTitle(b, trim: true);
 
   /// The page being read: (its picture file, a name for it). Null on the end card.
   Future<(Uint8List, String)?> _pageFile() async {

@@ -24,7 +24,7 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
   }
   switch (p.mode) {
     case 'books':
-      final s = sortParam(const {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'});
+      final s = sortParam(bookSortFields);
       return s == null
           ? api.books(libraryId: p.id, readStatus: status, size: size)
           : api.books(libraryId: p.id, readStatus: status, sort: s, size: size);
@@ -38,7 +38,7 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
     case 'readLists':
       return api.readLists(libraryId: p.id, size: size);
   }
-  final s = sortParam(const {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'});
+  final s = sortParam(seriesSortFields);
   return s == null
       ? api.series(libraryId: p.id, readStatus: status, size: size)
       : api.series(libraryId: p.id, readStatus: status, sort: s, size: size);

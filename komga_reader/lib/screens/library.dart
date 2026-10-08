@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
@@ -75,14 +76,11 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   late final Paged _paged = Paged(_fetch);
   final _sel = Selection(); // multi-select, in Books mode
 
-  // sort key -> Komga field; the direction is separate (_desc)
-  static const _seriesSorts = {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'};
-  static const _bookSorts = {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'};
-
   /// The natural direction when a field is picked: titles A -> Z, dates newest first (one rule with pins').
   static bool _defaultDesc(String key) => naturalDesc(key);
 
-  Map<String, String> get _sorts => _mode == BrowseMode.series ? _seriesSorts : _bookSorts;
+  // sort key -> Komga field (shared with pins, pins.dart); the direction is separate (_desc)
+  Map<String, String> get _sorts => _mode == BrowseMode.series ? seriesSortFields : bookSortFields;
   String get _sortParam => '${_sorts[_sortKey] ?? _sorts.values.first},${_desc ? 'desc' : 'asc'}';
 
   /// Direction wording that suits the field.
@@ -356,13 +354,12 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final rp = b['readProgress'];
   final pagesCount = (b['media']?['pagesCount'] ?? 0) as int;
   final completed = rp != null && rp['completed'] == true;
-  final number = b['metadata']?['number'] ?? b['number'];
   final title = (b['metadata']?['title'] ?? b['name']) as String;
   final display = AppSettings.instance.display;
   // Settings > Library & Home: any of the three lines, always in this order (user, 2026-10-07) - the first is the
   // tile's title, the next its subtitle, the third its caption ('' keeps a book's date line when it has none)
   final lines = [
-    if (display.posterSeries) '${b['seriesTitle'] ?? ''} #$number',
+    if (display.posterSeries) bookTitle(b, bookNumber: true),
     if (display.posterTitle) title,
     if (display.posterDate) posterDate(b['metadata']?['releaseDate'] as String?) ?? '',
   ];
