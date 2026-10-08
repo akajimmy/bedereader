@@ -168,7 +168,7 @@ Nothing is on PATH; the build script sets it up itself.
 | Flutter 3.47 | `C:\Dev\flutter` |
 | JDK 17 | `C:\Dev\jdk17` |
 | Android SDK | `C:\Dev\android-sdk` |
-| Visual Studio Build Tools 2022 (C++) | for Windows builds |
+| Visual Studio Build Tools 2022 (C++, with the "C++ ATL" component) | for Windows builds (ATL: the encrypted key storage's Windows part) |
 | Windows Developer Mode | on (needed for plugins) |
 
 For an interactive shell:
