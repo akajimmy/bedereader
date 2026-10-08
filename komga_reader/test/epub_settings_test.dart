@@ -53,7 +53,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(
         width: 380,
         child: Builder(builder: (c) => SingleChildScrollView(
-            child: Column(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))))));
+            child: Column(children: epubPanelRows(c, AppSettings.instance)))))))));
     await tester.pump();
     for (final f in EpubFont.values) {
       // on screen (getRect takes in any scaling round it; getSize wouldn't)
