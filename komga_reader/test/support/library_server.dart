@@ -44,14 +44,24 @@ class LibraryServer extends TestKomga {
     return Uint8List(100);
   }
 
+  int seriesRequests = 0, librariesRequests = 0, collectionsRequests = 0; // how often each was asked for
   @override
-  Future<Map<String, dynamic>?> oneSeries(String id) async => {'id': id, 'name': 'Silver Surfer', 'metadata': {'title': 'Silver Surfer'}};
+  Future<Map<String, dynamic>?> oneSeries(String id) async {
+    seriesRequests++;
+    return {'id': id, 'name': 'Silver Surfer', 'metadata': {'title': 'Silver Surfer'}};
+  }
   @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Archive'}];
+  Future<List<dynamic>> libraries() async {
+    librariesRequests++;
+    return [{'id': 'L1', 'name': 'Archive'}];
+  }
   @override
   Future<List<dynamic>> bookReadLists(String bookId) async => [{'id': 'RL1', 'name': 'Cosmic', 'bookIds': ['B0', bookId]}];
   @override
-  Future<List<dynamic>> seriesCollections(String seriesId) async => [{'id': 'C1', 'name': 'Marvel cosmic'}];
+  Future<List<dynamic>> seriesCollections(String seriesId) async {
+    collectionsRequests++;
+    return [{'id': 'C1', 'name': 'Marvel cosmic'}];
+  }
   @override
   Future<Uint8List?> thumbBytes(String url) async => Uint8List(10);
   @override

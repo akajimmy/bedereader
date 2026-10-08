@@ -39,6 +39,14 @@ class DownloadJob {
       );
 }
 
+/// What one run of the queue has asked Komga about the books' series (a series and its collections by series id, the
+/// library list): asked for once per run, not once per book (code review 2026-10-05, #42).
+class _Lookups {
+  final Map<String, Map<String, dynamic>?> series = {};
+  final Map<String, List<dynamic>> collections = {};
+  List<dynamic>? libraries;
+}
+
 /// Downloads books for offline reading (1.1 phase 2): a queue worked one book at a time, page by page, into the
 /// [OfflineStore]. The queue survives restarts; a size limit (or none) is checked before each book.
 class Downloads extends ChangeNotifier {
@@ -481,6 +489,7 @@ class Downloads extends ChangeNotifier {
     if (_running || paused || _hold || _api == null || store == null) return;
     _running = true;
     final session = _session;
+    final lookups = _Lookups(); // this run's: a worker from an older session can't fill the new one's
     try {
       while (!paused && !_hold && session == _session) {
         DownloadJob? next;
@@ -493,7 +502,7 @@ class Downloads extends ChangeNotifier {
         if (next == null) break;
         if (!await _networkOk()) break; // Wi-Fi only, on mobile data: wait for Wi-Fi
         if (!await _serverOk()) break; // Komga couldn't be reached: wait for it
-        await _run(next);
+        await _run(next, lookups);
       }
     } finally {
       if (session == _session) _running = false;
@@ -526,7 +535,7 @@ class Downloads extends ChangeNotifier {
 
   String _gb(int bytes) => '${(bytes / gb).toStringAsFixed(1)} GB';
 
-  Future<void> _run(DownloadJob job) async {
+  Future<void> _run(DownloadJob job, _Lookups lookups) async {
     final api = _api!, s = store!;
     // signed out (or another server attached) meanwhile: this book stops where it is - it carried on with the old key
     // to its last page (code review 2026-10-05, #14)
@@ -562,9 +571,14 @@ class Downloads extends ChangeNotifier {
       }
 
       // what it belongs to, for browsing offline
+      // (the series, the library list and the series' collections: asked for once per run of the queue, not once per
+      // book - a 50-book series made 150 of the same requests; code review 2026-10-05, #42)
       final seriesId = book['seriesId'] as String;
-      final series = await api.oneSeries(seriesId) ?? {'id': seriesId, 'name': book['seriesTitle']};
-      final libraries = await api.libraries();
+      final series = (lookups.series.containsKey(seriesId)
+              ? lookups.series[seriesId]
+              : lookups.series[seriesId] = await api.oneSeries(seriesId)) ??
+          {'id': seriesId, 'name': book['seriesTitle']};
+      final libraries = lookups.libraries ??= await api.libraries();
       final library = libraries.firstWhere((l) => l['id'] == book['libraryId'], orElse: () => {'id': book['libraryId'], 'name': 'Library'});
       final readLists = [
         for (final rl in await api.bookReadLists(job.bookId))
@@ -583,7 +597,9 @@ class Downloads extends ChangeNotifier {
       } catch (_) {
         // not worth failing the download for: offline falls back to the next downloaded book
       }
-      final collections = [for (final c in await api.seriesCollections(seriesId)) {'id': c['id'], 'name': c['name']}];
+      final collections = [
+        for (final c in lookups.collections[seriesId] ??= await api.seriesCollections(seriesId)) {'id': c['id'], 'name': c['name']},
+      ];
 
       final plan = [
         for (final p in pages)

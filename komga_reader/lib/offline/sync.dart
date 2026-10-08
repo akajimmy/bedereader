@@ -66,7 +66,19 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     final l = _lastRun;
-    if (l == null || DateTime.now().difference(l) > refreshGap || (_store?.unsynced.isNotEmpty ?? false)) unawaited(run());
+    if (l == null || DateTime.now().difference(l) > refreshGap || _unsentToTry) unawaited(run());
+  }
+
+  /// Books whose last send Komga refused (a 403, a 400... - not "can't reach"), with the progress record that was
+  /// refused. Unsent progress makes a resume run at once - except these: one book Komga keeps refusing made every
+  /// resume a full refresh (code review 2026-10-05, #41). They're tried again on the usual [refreshGap], on any run
+  /// (going online, a sync asked for), and at once if they're changed here again (a new record).
+  final Map<String, Map<String, dynamic>> _refused = {};
+
+  bool get _unsentToTry {
+    final store = _store;
+    if (store == null) return false;
+    return store.unsynced.any((id) => !identical(_refused[id], store.progress[id]));
   }
 
   SyncResult? takeResult() {
@@ -90,8 +102,10 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       // each book on its own: one Komga keeps refusing (a 403, a page it no longer has) waits for the next run
       // instead of holding up all the others behind it (code review, 2026-09-30)
       for (final id in List.of(store.unsynced)) {
+        final local = store.progress[id];
+        if (local == null) continue; // gone meanwhile
+        _refused.remove(id);
         try {
-          final local = store.progress[id]!;
           final book = await api.book(id);
           if (book == null) {
             store.progress.remove(id);
@@ -128,7 +142,8 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
         } on KomgaUnreachable {
           rethrow; // gone offline: stop, everything left stays queued
         } catch (_) {
-          // this book: next time; the rest carry on
+          // this book: next time; the rest carry on - and it alone doesn't make a resume run before the usual gap
+          if (identical(store.progress[id], local)) _refused[id] = local;
         }
       }
       await _refresh(api, store);
@@ -319,6 +334,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     running = false;
     last = null;
     _lastRun = null;
+    _refused.clear();
     Komga.onProgressWritten = null;
   }
 }
