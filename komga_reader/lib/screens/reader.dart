@@ -752,6 +752,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
       child: Scaffold(
         backgroundColor: bg,
+        // the reader has no text box: a keyboard coming up (Search's, under it, as Back closes the book) leaves the
+        // page alone - it laid the book out again for the smaller space (tablet, build 99)
+        resizeToAvoidBottomInset: false,
         body: Focus(
           focusNode: _keys,
           autofocus: true,

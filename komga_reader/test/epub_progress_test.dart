@@ -102,6 +102,14 @@ class EpubKomga extends TestKomga {
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async => null; // the series' last
 }
 
+/// Counts never had and never done: a book laid out again stays "being counted" (a long book's recount, frozen).
+class _NeverCounted implements EpubCountStore {
+  @override
+  Future<EpubCounts?> load(String bookId, String layout) => Completer<EpubCounts?>().future;
+  @override
+  Future<void> save(String bookId, String layout, EpubCounts counts) async {}
+}
+
 Map<String, dynamic> _saved(String href, double progression) =>
     {'locator': {'href': href, 'type': 'application/xhtml+xml', 'locations': {'progression': progression}}};
 
@@ -218,6 +226,50 @@ void main() {
     }
     expect(api.marked, ['B1']);
     expect(find.text('End of book'), findsOneWidget);
+  });
+
+  testWidgets('closing saves the place reached, not the start (tablet, build 99: three turns saved, then Back saved the '
+      "title page's start over them)", (tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final api = noNetwork(EpubKomga.new);
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Scaffold(body: Text('library'))));
+    unawaited(nav.currentState!.push(MaterialPageRoute<void>(builder: (_) => ReaderScreen(api: api,
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}))));
+    await run(tester, const Duration(seconds: 2));
+    for (var i = 0; i < 3; i++) {
+      await tester.tapAt(const Offset(750, 600));
+      await run(tester, const Duration(seconds: 2));
+    }
+    double total(Map put) => ((put['locator'] as Map)['locations'] as Map)['totalProgression'] as double;
+    final reached = total(api.puts.last);
+    expect(reached, greaterThan(0), reason: 'three pages in, saved');
+    // the page area changes size (on the tablet: Search's keyboard coming back up as Back closed the book) and the
+    // book is laid out again - its recount still going when the book closes (a long book takes seconds; here: never
+    // done)
+    EpubCountStore.instance = _NeverCounted();
+    tester.view.physicalSize = const Size(800, 1100);
+    await tester.pump();
+    await tester.pump();
+    nav.currentState!.pop();
+    await run(tester, const Duration(seconds: 1));
+    expect(find.text('library'), findsOneWidget);
+    expect(total(api.puts.last), reached, reason: "the save on closing is the place reached, not the book's start");
+  });
+
+  testWidgets("the keyboard coming up doesn't lay the book out again (the reader has no text box)", (tester) async {
+    final api = await open(tester);
+    await tester.tapAt(const Offset(750, 600));
+    await run(tester, const Duration(seconds: 2));
+    final saves = api.puts.length;
+    EpubCountStore.instance = _NeverCounted(); // a new layout would never be ready: the spinner would show
+    tester.view.viewInsets = const FakeViewPadding(bottom: 500);
+    addTearDown(tester.view.resetViewInsets);
+    await run(tester, const Duration(seconds: 1));
+    expect(find.byType(PageView), findsOneWidget, reason: 'the page, not a spinner');
+    expect(api.puts.length, saves);
   });
 
   // ---- the book moved on on another device while open here (as comics: user, 2026-10-05 - the tablet, left open on
