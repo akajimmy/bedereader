@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 97 - 2026-10-08
+
 **New**
 - **Filters**: a funnel button on libraries (Series and Books), series, collections and read lists opens a filter
   panel (beside the grid on a tablet or PC, from the bottom on a phone): **Writer** (Author for eBooks), **Artist**
@@ -25,8 +29,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   sort menu - a series set to newest first opens oldest first once); a collection by its own order, title, release
   date or date added; a read list by its order or release date; collections and read lists by name or last update.
   Refresh on every view.
-
-## 1.3.0
 
 ### Build 96 - 2026-10-08
 
