@@ -326,7 +326,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   static String _describe(Map p) =>
       p['none'] == true ? 'unread' : p['completed'] == true ? 'read' : 'page ${p['page']}';
 
-  static String _title(Map book) => bookTitle(book, trim: true, bookNumber: true);
+  static String _title(Map book) => bookTitle(book);
 
   /// Tests: back to a clean state.
   @visibleForTesting

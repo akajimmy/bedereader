@@ -206,7 +206,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (ids.isEmpty) return;
     String title(String id) {
       final b = (d.store?.books[id]?['book'] as Map?) ?? const {};
-      return bookTitle(b, trim: true);
+      return bookTitle(b);
     }
 
     _asking = true;

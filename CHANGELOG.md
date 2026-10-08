@@ -21,6 +21,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Fewer requests to Komga**: a Home reload asks for the synced settings once, not three times; the side menu keeps
   the library list instead of asking at every opening (it asks again when the app starts or comes back to the front,
   and on Home's Refresh); connections are closed after a failed sign-in and on signing out.
+- **A book with no number showed as "Saga #null"** (the end card, the series line under posters, sync messages) **or
+  "Saga #"** (elsewhere). It's now just "Saga", the same everywhere.
 
 ## 1.3.0
 

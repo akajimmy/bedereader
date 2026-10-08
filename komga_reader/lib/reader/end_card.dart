@@ -65,7 +65,7 @@ class ReaderEndCard extends StatelessWidget {
               } else {
                 final number = book['metadata']?['number'] ?? book['number'];
                 final title = (book['metadata']?['title'] ?? book['name']) as String?;
-                final heading = bookTitle(book, trim: true, bookNumber: true);
+                final heading = bookTitle(book);
                 body = [
                   Text(skipRead ? 'Next unread in $where' : 'Up next in $where', style: dim),
                   const SizedBox(height: 12),
