@@ -18,6 +18,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **One book Komga kept refusing (its reading progress) made every return to the app refresh all your downloaded
   series.** It's still retried every couple of minutes, when you come back online and when you sync, and at once if
   you read it again; on its own it no longer triggers the full refresh.
+- **Fewer requests to Komga**: a Home reload asks for the synced settings once, not three times; the side menu keeps
+  the library list instead of asking at every opening (it asks again when the app starts or comes back to the front,
+  and on Home's Refresh); connections are closed after a failed sign-in and on signing out.
 
 ## 1.3.0
 
