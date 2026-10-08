@@ -826,7 +826,8 @@ class EpubRenderer extends Renderer {
           child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3)),
             const SizedBox(height: 20),
-            Text('Laying out the book', style: TextStyle(color: ink.withValues(alpha: 0.8), fontSize: 16)),
+            // the first time in these settings and this page size, and again after a change (user, 2026-10-08)
+            Text('Adjusting and storing layout', style: TextStyle(color: ink.withValues(alpha: 0.8), fontSize: 16)),
             const SizedBox(height: 6),
             Text('Chapter ${math.min(done + 1, n)} of $n', key: const ValueKey('epub-counting'),
                 style: TextStyle(color: ink.withValues(alpha: 0.55), fontSize: 13,

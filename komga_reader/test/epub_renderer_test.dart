@@ -656,7 +656,7 @@ void main() {
             EpubInfo(spine: spine, toc: const []), hangs: 'c5.xhtml'),
         saveProgress: false))));
     await settle(tester);
-    expect(find.text('Laying out the book'), findsOneWidget);
+    expect(find.byKey(const ValueKey('epub-counting')), findsOneWidget); // the spinner's progress line
     expect(find.text('Chapter 6 of 6'), findsOneWidget, reason: 'five counted, on the sixth');
     expect(find.byType(PageView), findsNothing, reason: 'no page before the book is counted');
     await tester.tapAt(const Offset(750, 300)); // a turn's tap
@@ -689,7 +689,7 @@ void main() {
     // another text size: another layout, counted (the hanging chapter keeps it on the spinner)
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(size: 28));
     await settle(tester);
-    expect(find.text('Laying out the book'), findsOneWidget);
+    expect(find.byKey(const ValueKey('epub-counting')), findsOneWidget); // the spinner's progress line
     await tester.pumpWidget(const SizedBox());
   });
 
