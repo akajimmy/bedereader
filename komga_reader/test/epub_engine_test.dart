@@ -449,17 +449,6 @@ void main() {
     expect(const EpubTheme(bookFormatting: false).ownParagraphs, isTrue);
   });
 
-  test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
-      "than the book's browser-default gaps; headings keep theirs", () {
-    final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';
-    // a book that indents its paragraphs (and leaves the browser's gap between them)
-    List<EpubPage> lay(EpubTheme theme) => Paginator(theme, const Size(400, 600), hy.forLang('en'))
-        .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h).read(parseXhtml(src)));
-    final book = lay(const EpubTheme());
-    final mine = lay(const EpubTheme(bookFormatting: false));
-    expect(mine.length, lessThan(book.length), reason: 'no gap between paragraphs');
-  });
-
   test("own formatting invents no indent (user, 2026-10-07: only where the book calls for one): a book that doesn't "
       "indent its paragraphs keeps them unindented, with its gap between them - without either they ran together; "
       "one that indents keeps its own amount, not the reader's", () {

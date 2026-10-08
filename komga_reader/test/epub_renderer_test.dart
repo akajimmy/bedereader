@@ -89,10 +89,7 @@ void main() {
     }
   }
 
-  testWidgets('EPUBs and comics open in the one Reader (user, 2026-10-07), each with its renderer', (tester) async {
-    final api = plainKomga();
-    expect(readerFor(api, {'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isA<ReaderScreen>());
-    expect(readerFor(api, {'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isA<ReaderScreen>());
+  test("an EPUB is told from a comic by its media profile (the one Reader picks its renderer by it)", () {
     expect(isEpub({'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isTrue);
     expect(isEpub({'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isFalse);
   });

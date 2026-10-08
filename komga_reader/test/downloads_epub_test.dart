@@ -9,8 +9,6 @@ import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
-import 'package:komga_reader/screens/open_book.dart';
-import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/epub_files.dart';
@@ -96,8 +94,7 @@ void main() {
     final f = offline.epubFile('B1')!;
     final info = await FileEpubSource(f).info();
     expect(info.title, 'Sourcery', reason: 'the downloaded file reads');
-    // offline, every way of opening it reads that file
-    expect(readerFor(offline, (await offline.book('B1'))!), isA<ReaderScreen>()); // the one Reader
+    // offline, the reader reads that file
     expect(EpubRenderer.sourceFor(offline, 'B1'), isA<FileEpubSource>());
     // online, from Komga as usual
     expect(EpubRenderer.sourceFor(api, 'B1'), isA<KomgaEpubSource>());

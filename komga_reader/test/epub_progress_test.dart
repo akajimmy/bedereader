@@ -19,9 +19,8 @@ String _para(String w, int n) => '<p>${List.filled(n, w).join(' ')}</p>';
 
 /// A Komga with one EPUB (two chapters), its positions, and a progression that can be read and saved.
 class EpubKomga extends TestKomga {
-  EpubKomga({this.saved, this.slow = Duration.zero});
+  EpubKomga({this.saved});
   Map<String, dynamic>? saved;
-  final Duration slow; // each chapter file takes this long to come (as over the network)
   final puts = <Map<String, dynamic>>[];
   final marked = <String>[];
 
@@ -37,10 +36,7 @@ class EpubKomga extends TestKomga {
       };
 
   @override
-  Future<Uint8List> epubResource(String bookId, String path) async {
-    if (slow > Duration.zero) await Future<void>.delayed(slow);
-    return Uint8List.fromList(utf8.encode(files[path]!));
-  }
+  Future<Uint8List> epubResource(String bookId, String path) async => Uint8List.fromList(utf8.encode(files[path]!));
 
   // Komga's positions: hrefs as it writes them (full URLs), 3 per chapter
   @override
@@ -190,39 +186,6 @@ void main() {
     await run(tester, const Duration(milliseconds: 300));
     expect(api.puts, isEmpty, reason: 'nothing turned: nothing saved, not even on closing (another device\'s place '
         'stays)');
-  });
-
-  // NB: this passes on the code before the fix too - the test's timing doesn't reproduce the tablet's (where the
-  // book opened at the chapter's start: checked on the tablet, 2026-10-06, before and after). Kept for the case.
-  testWidgets('the screen changing size while the book opens (the system bars hiding, as on the tablet) still opens '
-      'at the saved place', (tester) async {
-    tester.view.physicalSize = const Size(800, 1100);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final api = noNetwork(() => EpubKomga(saved: _saved('${_base}OEBPS/c2.xhtml', 0.5),
-        slow: const Duration(milliseconds: 300)));
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api,
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
-    // the book opens and is laid out once; its chapter is still on its way when the bars go
-    final laidOut = find.descendant(of: find.byType(ReaderScreen), matching: find.byType(LayoutBuilder));
-    for (var i = 0; i < 40 && laidOut.evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
-      await tester.pump();
-    }
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
-    tester.view.physicalSize = const Size(800, 1200); // the bars go
-    await tester.pump();
-    await run(tester, const Duration(seconds: 1));
-    for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
-      await tester.pump();
-    }
-    await run(tester, const Duration(seconds: 2));
-    final l = await label(tester);
-    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(l)!.group(1)!);
-    expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
   });
 
   testWidgets('a turn is saved once the page has been on screen 1.5 s (quick turns: only the last); the end card '
