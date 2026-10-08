@@ -37,6 +37,34 @@ class FakeKomga extends TestKomga {
   Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async => onePage([]);
   @override
   Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async => onePage([]);
+  @override // the found series' books: the two already matched
+  Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async =>
+      searchBooks('surf');
+}
+
+/// Bug #15's case: two series found, Komga's book search matching only one book (its own title has the words); each
+/// series has more books.
+class SeriesBooksKomga extends FakeKomga {
+  final asked = <List<String>>[];
+  @override
+  Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async => onePage([
+        {'id': 'S1', 'name': 'Absolute Power', 'booksCount': 2, 'metadata': {'title': 'Absolute Power'}},
+        {'id': 'S2', 'name': 'Task Force VII', 'booksCount': 2, 'metadata': {'title': 'Task Force VII'}},
+      ]);
+  @override
+  Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async => onePage([
+        {'id': 'B9', 'seriesId': 'S2', 'seriesTitle': 'Task Force VII', 'metadata': {'number': '6', 'title': 'Absolute power'}},
+      ]);
+  @override // by number across both series, as Komga sorts them
+  Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async {
+    asked.add(seriesIds);
+    return onePage([
+      {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Absolute Power', 'metadata': {'number': '1', 'title': 'One'}},
+      {'id': 'B8', 'seriesId': 'S2', 'seriesTitle': 'Task Force VII', 'metadata': {'number': '1', 'title': 'Start'}},
+      {'id': 'B2', 'seriesId': 'S1', 'seriesTitle': 'Absolute Power', 'metadata': {'number': '2', 'title': 'Two'}},
+      {'id': 'B9', 'seriesId': 'S2', 'seriesTitle': 'Task Force VII', 'metadata': {'number': '6', 'title': 'Absolute power'}},
+    ]);
+  }
 }
 
 /// A search that only answers when told to (one still on its way when the box is cleared).
@@ -129,8 +157,30 @@ void main() {
       expect(ids(await api.searchReadLists('event')), ['RL1']);
       expect(ids(await api.searchCollections('cosm')), ['C1']);
       expect(ids(await api.searchSeries('   ')), isEmpty);
+      // a found series' downloaded books, by number - Search's Books row (bug #15)
+      expect(ids(await api.booksOfSeries(['S1'])), ['B1', 'B2', 'B5']);
+      expect(ids(await api.booksOfSeries(['S2', 'S1'])).toSet(), {'B1', 'B2', 'B5', 'B3'});
     } finally {
       await deleteTemp(dir);
     }
+  });
+
+  testWidgets("bug #15: the Books row has the books of the series found too - the matched ones first, then each "
+      "series' books in the Series row's order and by number, each once; one request for every series", (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = noNetwork(SeriesBooksKomga.new);
+    await tester.pumpWidget(MaterialApp(home: SearchScreen(api: api)));
+    await tester.enterText(find.byType(TextField), 'absolute power');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(api.asked, [['S1', 'S2']], reason: 'one request, both series');
+    expect(find.text('Books · 4'), findsOneWidget);
+    double x(String t) => tester.getTopLeft(find.text(t)).dx;
+    final shown = ['Task Force VII #6', 'Absolute Power #1', 'Absolute Power #2', 'Task Force VII #1'];
+    for (final t in shown) {
+      expect(find.text(t), findsOneWidget, reason: '$t once');
+    }
+    final xs = [for (final t in shown) x(t)];
+    expect(xs, [...xs]..sort(), reason: shown.join(', '));
   });
 }

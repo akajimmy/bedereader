@@ -70,11 +70,33 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
         api.searchCollections(q, libraryId: lib),
       ]);
       if (gen != _generation || !mounted) return;
-      setState(() { _series = r[0]; _books = r[1]; _readLists = r[2]; _collections = r[3]; _searching = false; });
+      final books = await _withSeriesBooks(r[0], r[1]);
+      if (gen != _generation || !mounted) return;
+      setState(() { _series = r[0]; _books = books; _readLists = r[2]; _collections = r[3]; _searching = false; });
     } catch (e) {
       if (gen != _generation || !mounted) return;
       setState(() { _error = e; _searching = false; });
     }
+  }
+
+  /// The Books row: the books Komga matched, then the books of the series found - each once, in the Series row's
+  /// order and by number within a series (bug #15: "absolute power" found 4 series with 5 books, Books showed only the
+  /// one whose own title had the words - Komga's book search looks at the book's own fields, not its series').
+  Future<Map<String, dynamic>> _withSeriesBooks(Map<String, dynamic> series, Map<String, dynamic> matched) async {
+    final ids = [for (final s in _items(series)) s['id'] as String];
+    if (ids.isEmpty) return matched;
+    final ofSeries = _items(await api.booksOfSeries(ids));
+    final order = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    final extra = [
+      for (final b in ofSeries)
+        if (!_items(matched).any((m) => m['id'] == b['id'])) b,
+    ];
+    // by series (the Series row's order), keeping Komga's number order within one (the index breaks ties: a stable sort)
+    final at = {for (var i = 0; i < extra.length; i++) extra[i]['id']: i};
+    int rank(dynamic b) => order[b['seriesId']] ?? ids.length;
+    extra.sort((a, b) => rank(a) != rank(b) ? rank(a).compareTo(rank(b)) : at[a['id']]!.compareTo(at[b['id']]!));
+    final all = [..._items(matched), ...extra];
+    return {'content': all, 'totalElements': all.length};
   }
 
   // coming back searches again: refreshView

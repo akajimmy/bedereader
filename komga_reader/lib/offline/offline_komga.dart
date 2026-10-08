@@ -403,6 +403,12 @@ class OfflineKomga extends Komga {
   }
 
   @override
+  Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async {
+    final all = (await books(sort: 'metadata.numberSort,asc', size: 100000))['content'] as List;
+    return _page([for (final b in all) if (seriesIds.contains(b['seriesId'])) b], 0, size);
+  }
+
+  @override
   Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async {
     final all = (await readLists(libraryId: libraryId, size: 100000))['content'] as List;
     return _page([for (final r in all) if (_matches(query, [r['name']])) r], 0, size);
