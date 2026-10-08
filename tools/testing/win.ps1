@@ -20,7 +20,16 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(int f, int dx, int dy, int d, int e);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
   public struct RECT { public int Left, Top, Right, Bottom; }
+  public struct POINT { public int X, Y; public POINT(int x, int y) { X = x; Y = y; } }
 }
 '@
 [void][W]::SetProcessDPIAware()
@@ -31,14 +40,41 @@ function App {
     if (-not $p) { throw 'BeDeReader is not running (win.ps1 start)' }
     $p
 }
-function Front($p) { [void][W]::ShowWindow($p.MainWindowHandle, 9); [void][W]::SetForegroundWindow($p.MainWindowHandle); Start-Sleep -Milliseconds 250 }
+# Bring the app forward. Windows ignores SetForegroundWindow from a program that isn't in front (this session, when
+# the user hasn't just clicked the app themselves), so: pin it on top (it shows and takes clicks without being the
+# active window), and borrow the active window's input to make it active too (no keystrokes sent anywhere).
+function Front($p) {
+    $h = $p.MainWindowHandle
+    [void][W]::ShowWindow($h, 9)
+    [void][W]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0003)  # HWND_TOPMOST; SWP_NOSIZE | SWP_NOMOVE
+    $fg = [W]::GetForegroundWindow()
+    if ($fg -ne $h) {
+        $pid0 = [uint32]0
+        $fgThread = [W]::GetWindowThreadProcessId($fg, [ref]$pid0)
+        $me = [W]::GetCurrentThreadId()
+        [void][W]::AttachThreadInput($me, $fgThread, $true)
+        [void][W]::BringWindowToTop($h); [void][W]::SetForegroundWindow($h)
+        [void][W]::AttachThreadInput($me, $fgThread, $false)
+    }
+    Start-Sleep -Milliseconds 250
+}
 function Rect($p) { $r = New-Object W+RECT; [void][W]::GetWindowRect($p.MainWindowHandle, [ref]$r); $r }
+
+# The window under screen point x,y belongs to the app - else throw: a click must never land on another program.
+function MustBeApp($p, [int]$x, [int]$y) {
+    $under = [W]::GetAncestor([W]::WindowFromPoint((New-Object W+POINT $x, $y)), 2)  # GA_ROOT
+    $pid0 = [uint32]0
+    [void][W]::GetWindowThreadProcessId($under, [ref]$pid0)
+    if ($pid0 -ne $p.Id) { throw "not clicking: the window at $x,$y is another program's (pid $pid0), not BeDeReader's" }
+}
 
 switch ($cmd) {
     'start' {
         $p = Get-Process -Name BeDeReader -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
         if (-not $p) {
-            Start-Process "$env:USERPROFILE\Desktop\BeDeReader\BeDeReader.exe" -WorkingDirectory "$env:USERPROFILE\Desktop\BeDeReader"
+            # through Explorer: started by it, not by this (possibly sandboxed) session, the app reads the user's own
+            # AppData, not a redirected copy
+            Start-Process explorer.exe -ArgumentList "`"$env:USERPROFILE\Desktop\BeDeReader\BeDeReader.exe`""
             for ($i = 0; $i -lt 40 -and -not $p; $i++) {
                 Start-Sleep -Milliseconds 500
                 $p = Get-Process -Name BeDeReader -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
@@ -61,6 +97,7 @@ switch ($cmd) {
     }
     { $_ -in 'click', 'rclick' } {
         $p = App; Front $p; $r = Rect $p
+        MustBeApp $p ($r.Left + [int]$a) ($r.Top + [int]$b)
         [void][W]::SetCursorPos($r.Left + [int]$a, $r.Top + [int]$b); Start-Sleep -Milliseconds 80
         if ($cmd -eq 'click') { [W]::mouse_event(2, 0, 0, 0, 0); [W]::mouse_event(4, 0, 0, 0, 0) }
         else { [W]::mouse_event(8, 0, 0, 0, 0); [W]::mouse_event(16, 0, 0, 0, 0) }
@@ -68,11 +105,31 @@ switch ($cmd) {
     }
     'wheel' {
         $p = App; Front $p; $r = Rect $p
+        MustBeApp $p ($r.Left + [int]$a) ($r.Top + [int]$b)
         [void][W]::SetCursorPos($r.Left + [int]$a, $r.Top + [int]$b); Start-Sleep -Milliseconds 80
         [W]::mouse_event(0x800, 0, 0, 120 * [int]$c, 0)
         "wheel $c at $a,$b"
     }
-    'key' { $p = App; Front $p; [System.Windows.Forms.SendKeys]::SendWait($a); "keys $a" }
+    'key' {
+        $p = App; Front $p
+        # keys go to the active window: only if that is the app
+        if ([W]::GetForegroundWindow() -ne $p.MainWindowHandle) { throw 'not sending keys: BeDeReader is not the active window' }
+        [System.Windows.Forms.SendKeys]::SendWait($a); "keys $a"
+    }
+    'drag' {
+        # left button down at a,b; move to c,d in steps; up (window-relative)
+        $p = App; Front $p; $r = Rect $p
+        $x1 = $r.Left + [int]$a; $y1 = $r.Top + [int]$b; $parts = $c -split ','; $x2 = $r.Left + [int]$parts[0]; $y2 = $r.Top + [int]$parts[1]
+        MustBeApp $p $x1 $y1; MustBeApp $p $x2 $y2
+        [void][W]::SetCursorPos($x1, $y1); Start-Sleep -Milliseconds 80
+        [W]::mouse_event(2, 0, 0, 0, 0)
+        for ($i = 1; $i -le 20; $i++) {
+            [void][W]::SetCursorPos([int]($x1 + ($x2 - $x1) * $i / 20), [int]($y1 + ($y2 - $y1) * $i / 20)); Start-Sleep -Milliseconds 20
+        }
+        [W]::mouse_event(4, 0, 0, 0, 0)
+        "drag $a,$b -> $c"
+    }
+    'unpin' { $p = App; [void][W]::SetWindowPos($p.MainWindowHandle, [IntPtr](-2), 0, 0, 0, 0, 0x0003); 'no longer on top' }  # HWND_NOTOPMOST
     'size' { $p = App; [void][W]::ShowWindow($p.MainWindowHandle, 9); [void][W]::MoveWindow($p.MainWindowHandle, 40, 40, [int]$a, [int]$b, $true); Start-Sleep -Milliseconds 400; "sized $a x $b" }
-    default { 'usage: start | shot f | click x y | rclick x y | key k | size w h | wheel x y n | info' }
+    default { 'usage: start | shot f | click x y | rclick x y | drag x1 y1 "x2,y2" | key k | size w h | wheel x y n | unpin | info' }
 }
