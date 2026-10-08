@@ -22,8 +22,8 @@ void main() {
   });
   tearDown(() => AppSettings.instance.clearAccount());
 
-  test('saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, my own '
-      'formatting, slide; a size out of range gets the default', () {
+  test("saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, justified, "
+      "the reader's paragraphs, slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
         turn: EpubTurn.none, paragraphGap: EpubParagraphGap.large);
