@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 94 - 2026-10-07
+
 **Changed**
 - **Library & Home and Downloads have a "Reset to default" too.** The Black page colour's swatch has a light ring,
   so it shows on the dark background.
-
-## 1.3.0
 
 ### Build 93 - 2026-10-07
 
