@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -532,6 +534,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ]);
           },
         ),
+        _resetRow(context, 'Library & Home', "Posters, the libraries shown and Home's sections back to the defaults. "
+            "What's hidden from On deck stays (it's synced).", () {
+          const z = DisplayPrefs();
+          final s = AppSettings.instance;
+          s.setDisplay(s.display.copyWith(posterSize: z.posterSize, posterSeries: z.posterSeries,
+              posterTitle: z.posterTitle, posterDate: z.posterDate));
+          unawaited(HiddenLibraries.instance.clear());
+          unawaited(HomeSections.instance.reset());
+        }),
       ];
 
   /// Sync pins across devices (user, 2026-10-05). Back on, the shared list returns: this device's pins that it
@@ -634,6 +645,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DownloadsScreen())),
         ),
       ]),
+      _resetRow(context, 'Downloads', 'The storage limit, Wi-Fi only and Delete once read back to the defaults. '
+          'Your downloaded books stay.', () {
+        unawaited(d.setCap(Downloads.defaultCap));
+        unawaited(d.setWifiOnly(false));
+        unawaited(d.setDeleteRead(DeleteRead.never));
+      }),
     ]);
   }
 

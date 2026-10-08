@@ -523,4 +523,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.brightnessShown, isFalse, reason: 'never left on with the page gone');
   });
+
+  testWidgets('Library & Home and Downloads have their reset too (user, 2026-10-07): asked first; posters, the '
+      'libraries shown and Home sections back - On deck (synced) untouched; the download settings back - the books stay',
+      (tester) async {
+    tall(tester);
+    final s = AppSettings.instance, d = Downloads.instance;
+    final dir = (await tester.runAsync(() => Directory.systemTemp.createTemp('komga_page_reset')))!;
+    addTearDown(() async {
+      d.store = null;
+      s.setDisplay(const DisplayPrefs());
+      await deleteTemp(dir);
+    });
+    await tester.runAsync(() async {
+      await d.attach(noNetwork(StatusServer.new), root: dir, start: false);
+      await d.setCap(Downloads.gb);
+      await d.setWifiOnly(true);
+      await d.setDeleteRead(DeleteRead.always);
+    });
+    s.setDisplay(const DisplayPrefs(posterSize: PosterSize.large, posterTitle: false, screenOn: 5));
+    await HiddenLibraries.instance.setHidden('L1', true);
+    await HomeSections.instance.set('ondeck', false);
+    Future<void> reset(String page) async {
+      await tester.tap(find.widgetWithText(ListTile, page));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.widgetWithText(TextButton, 'Reset $page'), 200,
+          scrollable: find.byType(Scrollable).last);
+      await tester.tap(find.widgetWithText(TextButton, 'Reset $page'));
+      await tester.pumpAndSettle();
+      expect(find.text('Reset $page?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(TextButton, 'Reset').last);
+      await tester.runAsync(pumpEventQueue);
+      await tester.pumpAndSettle();
+    }
+
+    await open(tester, page: SettingsPage.library);
+    await reset('Library & Home');
+    expect((s.display.posterSize, s.display.posterTitle), (PosterSize.medium, true));
+    expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');
+    expect(HomeSections.instance['ondeck'], isTrue);
+    expect(s.display.screenOn, 5, reason: "another page's setting stays");
+    await reset('Downloads');
+    expect((d.capBytes, d.wifiOnly, d.deleteRead), (Downloads.defaultCap, false, DeleteRead.never));
+  });
 }
