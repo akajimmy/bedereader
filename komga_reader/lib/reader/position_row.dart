@@ -15,7 +15,7 @@ class SpotText {
 /// The reader's position, on two lines over the slider: [centre] on its own line on top (the title: the longest),
 /// [left] and [right] sharing the line just above the slider's ends. A spot the renderer leaves null isn't there
 /// (comics fill two). Each spot is tapped to hide it - then nothing is drawn there, but its place stays and a tap on it
-/// shows it again; that's kept on this device, for both kinds of book ([DisplayPrefs.hiddenSpots]). [picking]: a place
+/// shows it again; that's kept on this device, each kind its own ([KindPrefs.hiddenSpots]; also Settings' Position text). [picking]: a place
 /// is being picked on the slider - the text is in the accent colour.
 class ReaderPositionRow extends StatelessWidget {
   const ReaderPositionRow({super.key, required this.kind, this.left, this.centre, this.right, this.picking = false});

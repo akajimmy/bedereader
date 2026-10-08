@@ -35,15 +35,16 @@ This app shows them and keeps everything in sync.
 **Reading**
 - Fit to screen, width or height; pinch, double-tap or Ctrl+wheel to zoom; a zoomed-in page is read across and down
   before turning.
-- Tap the sides, swipe, use the arrow keys, the mouse wheel, a remote or (on Android) the volume keys. Page turn
-  animation: none, a wipe, or a 3D page curl that follows your finger.
+- Tap the sides, swipe, use the arrow keys, the mouse wheel, a remote, or (on Android) the volume keys once you add
+  them in Settings > Remote and keys. Page turn animation: none, a slide, or a 3D page curl that follows your finger.
 - A page slider with a preview of the page you're picking (the previews can be switched off for a slow server).
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
 - **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
   sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
-  keeps the screen's own brightness, so it never opens too dark to use), a black, grey or white
-  background, and the screen kept on while reading if you want it (for a few minutes after each page, or always).
+  keeps the screen's own brightness, so it never opens too dark to use), black, grey or white page colours, and the
+  screen kept on while reading if you want it (for a few minutes after each page, or always).
+- Comics and eBooks each have their own page corner, clock, progress bar, rotation and position text.
 - At the end of a book: the next one in the series or read list, with its poster - Next book or Close.
 - Comics and EPUBs open in the same reader, with the same controls; a read list that mixes them goes from one to the
   other without leaving it.
@@ -55,8 +56,9 @@ This app shows them and keeps everything in sync.
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
 - Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
-  spacing, paragraph spacing, margins and a dark, sepia or light theme - in the reader (**Aa**) or Settings > eBooks.
-  *Book's formatting* switches between the publisher's alignment and spacing and your own for every book. A book set
+  spacing, paragraph spacing, margins and dark, sepia or light page colours - in the reader (**Aa**) or Settings >
+  eBooks. *Alignment* (the book's, justified or left), *Paragraphs* (the book's indents and gaps, or yours) and
+  *Hyphenation* are set apart. A book set
   smaller or larger all through shows at your text size; small black-and-white pictures (chapter numbers, drop caps)
   take the page's colours.
 - Contents, a slider and "page X of Y" over the whole book, and the place you stopped kept on Komga in the same form
@@ -87,15 +89,17 @@ This app shows them and keeps everything in sync.
 
 ## Where your settings live
 
-- **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, background)
-  and image settings and their defaults, the EPUB settings (font, size, theme...), pins
-  (unless Settings > Library & Home > Sync pins across devices is off on a device - then it has its own), and what's
-  hidden from On deck.
+- **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, page
+  colours) and image settings and their defaults, the EPUB settings (font, spacing, formatting, page colours... - not
+  the text size, which each device keeps), pins (unless Settings > Server and sync > Sync pins across devices is off
+  on a device - then it has its own), and what's hidden from On deck.
 - **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
-  turn animation, taps, volume keys, keeping the screen on), poster size, Home's layout, remembered
-  filters and sort orders, downloads and the offline mode switch. Settings > About can reset all of these at once.
+  turn animation, taps, keys, what's shown over the page, keeping the screen on), the EPUB text size, posters, Home's
+  layout, remembered filters and sort orders, downloads and the offline mode switch. Settings > About can reset all
+  of these at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place, each section labelled with where it's kept.
+Settings (side menu) has everything in one place: Reading, Comics, eBooks and Remote and keys for reading; Server and
+sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every device.
 
 ## Privacy
 

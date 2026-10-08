@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import 'settings.dart';
 
-/// Night mode on a schedule (Settings > Display > On a schedule): switched on at the start time and off at the end
+/// Night mode on a schedule (Settings > Look > Night mode: Scheduled): switched on at the start time and off at the end
 /// time. In between it can still be flipped by hand; the schedule acts again at its next change. When the app starts
 /// it's set to what the schedule says; coming back to the front, only if a change was passed while the app was away
 /// (Android doesn't run timers in the background) - a hand-made change since the last one stands.

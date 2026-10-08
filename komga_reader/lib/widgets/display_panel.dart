@@ -498,8 +498,8 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
-/// The note in the page's bottom-right corner - one setting for comics and EPUBs, and the same note in both: the page
-/// of the book's pages (user, 2026-10-07).
+/// The note in the page's bottom-right corner, [kind]'s own - the same note for both kinds: the page of the book's
+/// pages (user, 2026-10-07).
 Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(
       title: 'Page corner',
       subtitle: 'The page you\'re on, "12 / 36"',

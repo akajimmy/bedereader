@@ -810,7 +810,7 @@ class ComicRenderer extends Renderer {
       ];
 
   /// The top bar's fit button: the series' own fit when it overrides the default layout (saved, synced); otherwise
-  /// this book only, for now (the Reader panel's toggle turns the override on). A book with no series: the default.
+  /// this book only, for now (the Comic settings panel's toggle turns the override on). A book with no series: the default.
   void _setFit(FitMode f) {
     final id = seriesId;
     if (id == null) {
@@ -823,7 +823,7 @@ class ComicRenderer extends Renderer {
     }
   }
 
-  // ---- Save page / Copy page (the Reader panel; user, 2026-10-02): the page's own image as Komga sends it - not the
+  // ---- Save page / Copy page (the Comic settings panel; user, 2026-10-02): the page's own image as Komga sends it - not the
   // picture on screen (no crop, levels or Enhance) - from what's loaded already, else asked for
 
   static String titleOf(dynamic b) => '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'.trim();

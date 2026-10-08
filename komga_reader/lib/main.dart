@@ -48,7 +48,7 @@ void main() {
   runApp(const KomgaReaderApp());
 }
 
-/// Minimal dark theme in the chosen accent colour (Settings > Display). Focus is made clearly visible because the
+/// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the
 /// app is driven by a D-pad remote as well as touch.
 ThemeData buildTheme([Accent choice = Accent.blue]) {
   final accent = choice.colour;
@@ -317,7 +317,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       navigatorObservers: [ReturnObserver.instance], // library views refresh when they're back on top
       scaffoldMessengerKey: _messenger,
       theme: _themeOf(display.accent),
-      // this app's text size (Settings > Display), on top of the device's own
+      // this app's text size (Settings > Look), on top of the device's own
       builder: (context, child) {
         final mq = MediaQuery.of(context);
         final scale = display.textScale;
