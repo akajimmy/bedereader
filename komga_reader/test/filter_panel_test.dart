@@ -263,16 +263,28 @@ void main() {
     expect(find.byKey(const ValueKey('filter.chip.clear')), findsNothing);
   });
 
-  testWidgets("the library's Clear filters button clears the panel's filters too", (tester) async {
+  testWidgets('no Clear filters button in the top bar - clearing is in the panel (user, 2026-10-08)', (tester) async {
     SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({
-      'mode': 'books', 'filters': const ViewFilter(writers: ['Al Ewing']).toJson(),
+      'mode': 'books', 'filter': 'hideRead', 'sort': 'title', 'desc': true,
+      'filters': const ViewFilter(writers: ['Al Ewing']).toJson(),
     })});
-    final api = await library(tester, mode: 'books');
-    expect(api.listings.last.filter, const ViewFilter(writers: ['Al Ewing']));
-    await tester.tap(find.byKey(const ValueKey('bar.clear')));
-    await settle(tester);
-    expect(api.listings.last.filter, ViewFilter.none);
-    expect(find.byKey(const ValueKey('filter.chip.writer')), findsNothing);
+    await library(tester, mode: 'books');
+    expect(find.byKey(const ValueKey('bar.clear')), findsNothing, reason: 'filters, the eye and a sort all on');
+  });
+
+  testWidgets('the funnel is filled with the accent while filters are on, plain when none (user, 2026-10-08)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({
+      'mode': 'series', 'filters': const ViewFilter(publishers: ['Marvel']).toJson(),
+    })});
+    await library(tester);
+    IconButton funnel() => tester.widget<IconButton>(find.descendant(
+        of: find.byKey(const ValueKey('bar.filter')), matching: find.byType(IconButton)));
+    final accent = Theme.of(tester.element(find.byKey(const ValueKey('bar.filter')))).colorScheme.primary;
+    Color? fill() => funnel().style?.backgroundColor?.resolve({});
+    expect(fill(), accent, reason: 'a filter on');
+    await tapKey(tester, 'filter.chip.clear');
+    expect(fill(), isNot(accent), reason: 'none on');
   });
 
   // ---- which sections ----------------------------------------------------------------------------------------------
