@@ -11,17 +11,21 @@ void main() {
 
   EpubCounts counts(int n) => EpubCounts([100 * n, 50], [[0, 40 * n], [0]]);
 
-  test('kept per book and layout; a book keeps its last six layouts; another book is its own file', () async {
+  test('kept per book and layout; a book keeps the six layouts saved most recently; another book is its own file',
+      () async {
     final store = FileCountStore(root: root);
     expect(await store.load('B1', 'L0'), isNull, reason: 'nothing yet');
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < 6; i++) {
       await store.save('B1', 'L$i', counts(i + 1));
     }
-    expect(await store.load('B1', 'L0'), isNull, reason: 'the oldest of seven let go of');
+    await store.save('B1', 'L0', counts(8)); // the first saved again: now the newest
+    await store.save('B1', 'L6', counts(7)); // a seventh
+    expect(await store.load('B1', 'L1'), isNull, reason: 'the one saved longest ago let go of');
+    expect((await store.load('B1', 'L0'))!.lengths, counts(8).lengths, reason: 'saved again: kept, its new counts');
     final last = (await store.load('B1', 'L6'))!;
     expect(last.lengths, counts(7).lengths);
     expect(last.starts, counts(7).starts);
-    expect((await store.load('B1', 'L1'))!.lengths, counts(2).lengths);
+    expect((await store.load('B1', 'L2'))!.lengths, counts(3).lengths);
     await store.save('B2', 'L0', counts(9));
     expect((await store.load('B2', 'L0'))!.lengths, counts(9).lengths);
     expect(await store.load('B2', 'L6'), isNull);

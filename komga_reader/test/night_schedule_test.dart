@@ -40,20 +40,6 @@ void main() {
     }
   });
 
-  testWidgets('switching the schedule on sets night mode for now; a change by hand then stands', (tester) async {
-    final s = AppSettings.instance;
-    NightSchedule.instance.start();
-    final now = DateTime.now();
-    final m = now.hour * 60 + now.minute;
-    // a window around now, ending in two hours
-    s.setDisplay(s.display.copyWith(nightSchedule: true, nightFrom: (m - 60) % 1440, nightTo: (m + 120) % 1440));
-    expect(s.display.night, isTrue);
-    s.setDisplay(s.display.copyWith(night: false)); // by hand
-    NightSchedule.instance.didChangeAppLifecycleState(AppLifecycleState.resumed); // back to the app
-    expect(s.display.night, isFalse, reason: 'no change has passed since: the hand-made choice stands');
-    NightSchedule.instance.stop(); // its timer to the next change
-  });
-
   // ---- on the clock (NightSchedule.clock: test audit, 2026-09-30 - the boundaries had no test, needing a clock)
 
   /// The schedule's clock reads [start] now, then moves with the test's fake time (pumps); [jump] moves it on
@@ -113,14 +99,18 @@ void main() {
     NightSchedule.instance.stop();
   });
 
-  testWidgets('back in the app after a change passed while it was away (no timer ran): set to what the schedule '
-      'says, over a change made by hand before', (tester) async {
+  testWidgets('back in the app: a change made by hand stands while no change of the schedule has passed; after one '
+      'passed while it was away (no timer ran), set to what the schedule says', (tester) async {
+    // (the first case was a test of its own, on the real clock - test audit, 2026-10-07)
     final s = AppSettings.instance;
     final jump = clockFrom(tester, DateTime(2026, 9, 30, 20, 0));
     NightSchedule.instance.start();
     schedule(night: false);
     s.setDisplay(s.display.copyWith(night: true)); // on by hand, at 20:00
-    jump(const Duration(hours: 11, minutes: 30)); // 07:30 the next morning: 21:00 and 07:00 passed, unseen
+    jump(const Duration(minutes: 30)); // 20:30: no change passed
+    NightSchedule.instance.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    expect(s.display.night, isTrue, reason: 'no change has passed since: the hand-made choice stands');
+    jump(const Duration(hours: 11)); // 07:30 the next morning: 21:00 and 07:00 passed, unseen
     NightSchedule.instance.didChangeAppLifecycleState(AppLifecycleState.resumed);
     expect(s.display.night, isFalse, reason: 'day, as the schedule says: the hand-made choice was before a change');
     NightSchedule.instance.stop();

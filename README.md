@@ -184,9 +184,11 @@ flutter test               # the test suite
 flutter run -d windows     # run on this PC with hot reload
 ```
 
-Checks over a real EPUB library, skipped unless pointed at one: `epub_library_check_test.dart` (every book opens and
-lays out; `BEDEREADER_EPUB_DIR`) and `epub_sample_pages_check_test.dart` (sample pages of each book as pictures, laid
-out as on a tablet; `BEDEREADER_EPUB_LIST` and `BEDEREADER_EPUB_OUT`).
+Checks over real EPUBs live in `tool\epub_checks\`, outside the test suite, and do nothing unless pointed at books
+(run one with `flutter test tool\epub_checks\<file>`): `epub_library_check_test.dart` (every book opens and lays out;
+`BEDEREADER_EPUB_DIR`) and `epub_sample_pages_check_test.dart` (sample pages of each book as pictures, laid out as on
+a tablet; `BEDEREADER_EPUB_LIST` and `BEDEREADER_EPUB_OUT`, or one book with `BEDEREADER_EPUB_FILE` and optionally
+`BEDEREADER_EPUB_CHAPTER`).
 
 ### Building
 

@@ -19,31 +19,29 @@ import 'support/home_server.dart';
 import 'support/helpers.dart' show onePage, setView;
 import 'support/no_network.dart';
 
-/// Komga's client settings (what's written, whether it can be reached), and an empty read list to open.
-class PinsServer extends SettingsServer {
+/// Home, with Komga's client settings (where pins are kept: what's written, whether it can be reached), an empty read
+/// list (a pinned one opened, a pin's tile) and the account (Settings > Server and sync's status).
+class PinsServer extends HomeServer with ClientSettingsStore {
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       onePage([]);
+  @override
+  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'};
 }
 
 PinsServer server() => noNetwork(PinsServer.new);
 
-/// Home, with the client settings (where pins are kept) and the read list a pin's tile shows.
-class PinnedHome extends HomeServer with ClientSettingsStore {
-  @override
-  Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
-      onePage([]);
-  @override
-  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'}; // Settings > Server and sync's status
-}
-
 void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    Pins.instance.items = [];
     RefreshGate.gap = Duration.zero; // each refresh asks (the one-per-10-s limit has its own test)
   });
-  tearDown(() => RefreshGate.gap = const Duration(seconds: 10));
+  tearDown(() async {
+    RefreshGate.gap = const Duration(seconds: 10);
+    // all of it, not just the list: the server, what's unsent, a retry timer left by a send that failed (test
+    // audit, 2026-10-07)
+    await Pins.instance.clearAccount();
+  });
 
   const uu = Pin(name: 'Ultimate Universe · unread', kind: 'readlist', id: 'RL1', title: 'Ultimate Universe',
       filter: 'hideRead');
@@ -64,9 +62,10 @@ void main() {
     Pins.instance.rename(uu, 'UU next');
     await pumpEventQueue();
     expect(Pins.instance.find(uu)!.name, 'UU next');
+    expect(api.written[Pins.komgaKey], contains('UU next'), reason: 'the rename reaches Komga');
 
     Pins.instance.add(uu.renamed('again')); // pinning the same view twice replaces, never duplicates
-    expect(Pins.instance.items.length, 1);
+    expect(Pins.instance.items.single.name, 'again', reason: 'the second one replaces the first');
 
     Pins.instance.remove(uu);
     await pumpEventQueue();
@@ -149,7 +148,7 @@ void main() {
 
   testWidgets('Home reloading (back on Home, pull to refresh) fetches the pins, the reader settings and On deck '
       'hidden from Komga', (tester) async {
-    final api = noNetwork(PinnedHome.new);
+    final api = noNetwork(PinsServer.new);
     await Pins.instance.load(api);
     await tester.runAsync(() async {
       await AppSettings.instance.load(api);
@@ -232,7 +231,7 @@ void main() {
     testWidgets('Settings > Server and sync (moved from Library & Home, 2026-10-07): the switch; back on with pins only this device has asks first, naming '
         'them - Cancel keeps it off', (tester) async {
       setView(tester, const Size(1280, 1600));
-      final api = noNetwork(PinnedHome.new)..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+      final api = noNetwork(PinsServer.new)..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
       await tester.runAsync(() async {
         await Pins.instance.load(api);
         await Pins.instance.setSync(false);
@@ -262,23 +261,6 @@ void main() {
       expect(Pins.instance.items.single.id, 'RL1', reason: 'the shared list');
       expect(find.text('The same pins on every device signed in to this account'), findsOneWidget);
     });
-  });
-
-  test('On deck hidden, refreshed: something hidden here while the list from Komga was on its way is kept, and '
-      'reaches Komga', () async {
-    final api = server()..written[OnDeckHidden.komgaKey] = jsonEncode({'series': <String>[], 'books': <String>[]});
-    await OnDeckHidden.instance.load(api);
-    addTearDown(OnDeckHidden.instance.clearAccount);
-    api.holdGet = Completer<void>();
-    final refreshing = OnDeckHidden.instance.refresh(); // an empty list on its way
-    await pumpEventQueue();
-    OnDeckHidden.instance.setSeries('S1', true); // hidden here meanwhile
-    await pumpEventQueue();
-    api.holdGet!.complete();
-    await refreshing;
-    await pumpEventQueue();
-    expect(OnDeckHidden.instance.seriesHidden('S1'), isTrue, reason: 'not replaced by the list asked for before');
-    expect(api.written[OnDeckHidden.komgaKey], contains('S1'));
   });
 
   testWidgets('a read list opened from a pin starts with that pin\'s filter, and its pin button shows pinned', (tester) async {

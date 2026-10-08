@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
+
+import 'package:flutter/widgets.dart';
 
 import 'no_network.dart';
 
@@ -26,6 +29,14 @@ class ReaderServer extends TestKomga {
     // another device moved it - 2026-10-05)
     savedProgress[bookId] = {'page': page, 'completed': completed};
   }
+
+  /// A book's poster on the end card: a 1 x 1 picture from memory. Komga's is a NetworkImage - dart:io, which
+  /// [noNetwork] doesn't stop: every end card with a next book made a real request, answered 400 and swallowed
+  /// (test audit, 2026-10-07).
+  @override
+  ImageProvider thumbImage(String ref) => MemoryImage(onePixel);
+  static final onePixel = Uint8List.fromList(base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
 
   /// Progress saved here, by book ([withProgress] puts it on a book as Komga would).
   final savedProgress = <String, Map<String, dynamic>?>{};

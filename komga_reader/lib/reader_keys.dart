@@ -20,8 +20,8 @@ extension ReaderActionLabel on ReaderAction {
 
 /// The reader's keys, kept on this device: which keys turn pages, show the controls, close the book. Written for
 /// left-to-right reading - in a right-to-left book Left and Right swap, as before. A key has one job at a time.
-/// Not covered (fixed): Shift+Space goes back, the volume keys (their own setting), and moving around the controls
-/// once they're up (arrows and OK), so a mapping can never strand the remote.
+/// Not covered (fixed): Shift+Space goes back, and moving around the controls once they're up (arrows and OK), so a
+/// mapping can never strand the remote. The volume keys are keys like any other here (mapped to an action or not).
 class ReaderKeys extends ChangeNotifier {
   ReaderKeys._();
   static final ReaderKeys instance = ReaderKeys._();

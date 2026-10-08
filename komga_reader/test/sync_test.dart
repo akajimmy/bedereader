@@ -121,15 +121,17 @@ void main() {
     await d.store!.put('B2', entry('B2'));
     await conn.load(server);
     sync.reset();
-    sync.start();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    sync.start(); // the start-up run
+    await waitUntil(() => !sync.running, reason: 'the start-up run');
     sync.takeResult();
     server.writes.clear();
   });
   tearDown(() async {
+    await waitUntil(() => !sync.running, reason: 'a run still on its way');
+    await d.store?.saveProgress(); // (waits for the writes queued so far)
     sync.reset();
     conn.reset();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    d.reset();
     await deleteTemp(dir);
   });
 
@@ -197,12 +199,17 @@ void main() {
     expect(sync.takeResult()!.conflicts, isEmpty);
   });
 
-  test('book gone from Komga: its queued progress is dropped and counted', () async {
+  test("a downloaded book deleted on Komga with its offline progress unsent: the progress is dropped and counted, and "
+      'the message says so', () async {
     await offlineApi().setProgress('B2', 2);
     server.missing.add('B2');
     await sync.run();
     expect(sync.pending, 0);
-    expect(sync.takeResult()!.gone, 1);
+    final r = sync.takeResult()!;
+    expect(r.gone, 1);
+    expect(syncSummary(r), '1 book is no longer on Komga');
+    expect(d.store!.progress.containsKey('B2'), isFalse);
+    expect(d.isDownloaded('B2'), isTrue, reason: 'the download itself stays until removed');
   });
 
   test('offline: nothing is sent; back online: sent', () async {
@@ -297,17 +304,6 @@ void main() {
     await tester.pump();
     expect(find.textContaining('no longer on Komga'), findsNothing, reason: 'the mark and its filter gone');
     expect(find.textContaining('3 pages · 0.0 MB'), findsNWidgets(2));
-  });
-
-  test("a downloaded book deleted on Komga with its offline progress unsent: the progress is dropped, and the message "
-      'says so', () async {
-    await offlineApi().setProgress('B2', 2);
-    server.missing.add('B2');
-    await sync.run();
-    final r = sync.takeResult()!;
-    expect(syncSummary(r), '1 book is no longer on Komga');
-    expect(d.store!.progress.containsKey('B2'), isFalse);
-    expect(d.isDownloaded('B2'), isTrue, reason: 'the download itself stays until removed');
   });
 
   test('a single downloaded book deleted on Komga (its series still there) is marked "no longer on Komga" too',
@@ -413,14 +409,7 @@ void main() {
     expect(server.writes, ['B1 place 0.6']);
   });
 
-  test("S7: a place saved offline writes only the small progress file, not the downloads' whole index", () async {
-    await epubB1();
-    final index = File('${dir.path}${Platform.pathSeparator}index.json');
-    final before = await index.readAsString();
-    await offlineApi().setEpubProgression('B1', place('c1', 0.6, 24));
-    await d.store!.saveProgress(); // (waits for the writes queued so far)
-    expect(await index.readAsString(), before);
-  });
+  // (S7, a place saved offline writes only the small progress file: offline_progress_file_test)
 
   test("S9: an EPUB marked read online: its read progress here is Komga's page count, not page 0", () async {
     await epubB1();

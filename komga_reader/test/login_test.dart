@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/login.dart';
+import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/no_network.dart';
 
 /// Sign-in: no server address filled in for a new user (just an example hint); the last address when signing in
 /// again after Sign out.
@@ -49,15 +53,43 @@ void main() {
     expect(find.textContaining('FormatException'), findsNothing);
   });
 
-  testWidgets('an address typed without http:// is tidied: the field shows the address used', (tester) async {
+  testWidgets('an address typed without http:// is tidied: Komga is asked at the address used, the field shows it, '
+      'and the sign-in goes on with that client', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
+    final built = <_SignInKomga>[];
+    Komga? signedIn;
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(
+      onSignedIn: (api) async => signedIn = api,
+      client: (server, key) {
+        final api = noNetwork(() => _SignInKomga(server, key));
+        built.add(api);
+        return api;
+      },
+    )));
     await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
         '192.168.1.10: 25600');
+    await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'API key'),
+        ' key1 ');
     await tester.tap(find.text('Connect'));
     await tester.pump();
     expect(field(tester, 'Server').controller!.text, 'http://192.168.1.10:25600');
-    expect(find.textContaining('FormatException'), findsNothing);
+    expect(built, hasLength(1));
+    expect(built.single.baseUrl, 'http://192.168.1.10:25600');
+    expect(built.single.apiKey, 'key1', reason: 'the key trimmed');
+    expect(built.single.meCalls, 1, reason: 'Komga asked who this key is');
+    expect(signedIn, same(built.single));
+    expect(find.byType(ErrorText), findsNothing);
   });
+}
+
+/// Komga at the address typed, answering /users/me (no network: anything else fails the test).
+class _SignInKomga extends Komga {
+  _SignInKomga(super.baseUrl, super.apiKey);
+  int meCalls = 0;
+  @override
+  Future<Map<String, dynamic>?> me() async {
+    meCalls++;
+    return {'id': 'U1'};
+  }
 }

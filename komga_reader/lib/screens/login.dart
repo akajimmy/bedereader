@@ -20,8 +20,11 @@ String? serverAddress(String typed) {
 
 /// Server address + a Komga API key (create one in the Komga web client: Account settings > API keys).
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn});
+  const LoginScreen({super.key, required this.onSignedIn, this.client});
   final Future<void> Function(Komga api) onSignedIn;
+
+  /// Builds the client Connect tries (tests: a fake); null = the real [Komga].
+  final Komga Function(String server, String apiKey)? client;
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -50,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     _server.text = server; // show what's actually used
     setState(() { _busy = true; _error = null; });
-    final api = Komga(server, _key.text.trim());
+    final api = (widget.client ?? Komga.new)(server, _key.text.trim());
     try {
       final me = await api.me();
       if (me == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga at that address

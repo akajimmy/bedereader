@@ -9,6 +9,7 @@ import 'package:komga_reader/widgets/download_badge.dart';
 /// Tile badges: a book shows downloaded / in the queue / failed; a series or read list shows how many of its books are
 /// downloaded (tick alone when all are). No file IO - the store's index is filled in memory.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized(); // (the plain test may run alone)
   final d = Downloads.instance;
 
   Map<String, dynamic> entry(String series, List<String> lists, {String state = 'done'}) => {
@@ -74,7 +75,7 @@ void main() {
     expect(tester.getSize(find.byType(DownloadBadge)), Size.zero);
   });
 
-  testWidgets('the counts follow changes to the store', (tester) async {
+  test('the counts follow changes to the store', () {
     expect(d.downloadedInSeries('s1'), 2);
     d.store!.books['b3']!['state'] = 'done';
     d.notifyListeners();

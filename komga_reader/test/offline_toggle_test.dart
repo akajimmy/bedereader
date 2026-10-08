@@ -22,7 +22,9 @@ void main() {
     dir = await Directory.systemTemp.createTemp('komga_toggle_test');
   });
   tearDown(() async {
-    await conn.setForcedOffline(false);
+    await conn.setForcedOffline(false); // (lets Downloads go too)
+    conn.reset();
+    Downloads.instance.reset();
     await deleteTemp(dir);
   });
 
@@ -54,12 +56,12 @@ void main() {
       await conn.setForcedOffline(true);
     });
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: conn.api, onSignOut: () {})));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
-    await tester.pump();
-    expect(find.text('Offline mode - showing downloaded books'), findsOneWidget);
+    final banner = find.text('Offline mode - showing downloaded books');
+    await waitUntil(() => shows(banner), tester: tester, reason: 'Home loaded, with the banner');
     await tester.tap(find.text('Go online'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    expect(conn.offline, isFalse);
+    await waitUntil(() => !conn.offline, tester: tester, reason: 'back online');
+    await tester.pump();
+    expect(banner, findsNothing);
   });
 
   testWidgets('side menu has the Offline mode switch', (tester) async {
@@ -77,9 +79,8 @@ void main() {
     expect(tester.widget<SwitchListTile>(sw).value, isFalse);
     expect(find.text('Connected to Komga'), findsNothing); // the label says it all (user)
     await tester.tap(find.widgetWithText(SwitchListTile, 'Offline mode'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await waitUntil(() => conn.offline, tester: tester, reason: 'offline');
     await tester.pump();
-    expect(conn.offline, isTrue);
     expect(tester.widget<SwitchListTile>(sw).value, isTrue);
   });
 }

@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 
-/// The reader's Reader and Image panels: side sheets on a wide screen, bottom sheets on a narrow one.
+/// The reader's Comic settings and Image panels: side sheets on a wide screen, bottom sheets on a narrow one.
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => AppSettings.instance.series.clear());
@@ -74,7 +74,7 @@ void main() {
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
-  testWidgets("Reader: the background follows the defaults until Override is on; then it's this series' own "
+  testWidgets("Comic settings: the background follows the defaults until Override is on; then it's this series' own "
       '(user, 2026-10-05)', (tester) async {
     final s = AppSettings.instance;
     addTearDown(() => s.series.remove('S1'));
@@ -101,7 +101,7 @@ void main() {
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
 
-  testWidgets('Reader: turning Override on with a fit picked for this book keeps that fit (nothing jumps)',
+  testWidgets('Comic settings: turning Override on with a fit picked for this book keeps that fit (nothing jumps)',
       (tester) async {
     final s = AppSettings.instance;
     await openPanel(tester, const Size(1280, 800), bookFit: FitMode.width); // the top bar: fit width, this book only
@@ -113,7 +113,8 @@ void main() {
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
-  testWidgets('side sheet (380 wide): sliders go full width under their label and value; the remote can move off them',
+  testWidgets('side sheet (380 wide): sliders go full width under their label and value, in directional navigation '
+      '(the remote walk in settings_remote_test covers Up / Down off them)',
       (tester) async {
     await openPanel(tester, const Size(1280, 800), image: true); // side sheet, 380 wide
     final slider = tester.getRect(find.byType(Slider).at(1)); // Brightness
@@ -123,7 +124,7 @@ void main() {
   });
 
   testWidgets('side sheet (380 wide): Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
-    await openPanel(tester, const Size(1280, 800)); // Reader panel, side sheet
+    await openPanel(tester, const Size(1280, 800)); // Comic settings, side sheet
     await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
     final sheet = tester.getRect(find.byType(ListView).last);
     final choices = tester.getRect(find.byType(SegmentedButton<int>));

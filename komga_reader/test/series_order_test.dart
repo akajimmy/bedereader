@@ -6,58 +6,14 @@ import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/series.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/browse_server.dart';
 import 'support/no_network.dart';
-
-/// Records the sort each series-books request asks for.
-class FakeKomga extends TestKomga {
-  final sorts = <String>[];
-  @override
-  Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus, String sort = '', int page = 0,
-      int size = 500}) async {
-    sorts.add(sort);
-    return {'content': [], 'totalElements': 0, 'last': true};
-  }
-}
 
 const series = {'id': 'S1', 'name': 'Silver Surfer', 'booksCount': 3, 'metadata': {'title': 'Silver Surfer'}};
 
-/// [FakeKomga] with libraries, for the breadcrumb.
-class LibrariesKomga extends FakeKomga {
-  int libraryCalls = 0;
-  @override
-  Future<List<dynamic>> libraries() async {
-    libraryCalls++;
-    return [{'id': 'L1', 'name': 'Archive'}, {'id': 'L2', 'name': 'Ongoing'}];
-  }
-}
-
 void main() {
-  testWidgets('breadcrumb: the series title bar shows its library first - "Ongoing › Absolute Flash"', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final api = noNetwork(LibrariesKomga.new);
-    const flash = {'id': 'S2', 'libraryId': 'L2', 'name': 'Absolute Flash', 'metadata': {'title': 'Absolute Flash'}};
-    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: api, series: flash)));
-    await tester.pump();
-    await tester.pump();
-    final bar = find.byType(AppBar);
-    expect(find.descendant(of: bar, matching: find.text('Ongoing')), findsOneWidget);
-    expect(find.descendant(of: bar, matching: find.text('Absolute Flash')), findsOneWidget);
-
-    await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: flash))); // another visit
-    await tester.pump();
-    expect(api.libraryCalls, 1); // the library names are fetched once
-  });
-
-  testWidgets('breadcrumb: a series whose library is unknown just shows its title', (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: noNetwork(FakeKomga.new), series: series)));
-    await tester.pump();
-    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Silver Surfer')), findsOneWidget);
-    expect(find.descendant(of: find.byType(AppBar), matching: find.textContaining('›')), findsNothing);
-  });
-
-  Future<FakeKomga> open(WidgetTester tester, {Pin? pin}) async {
-    final api = noNetwork(FakeKomga.new);
+  Future<BrowseServer> open(WidgetTester tester, {Pin? pin}) async {
+    final api = noNetwork(BrowseServer.new);
     await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: series, pin: pin)));
     await tester.pump();
     await tester.pump();
@@ -79,7 +35,8 @@ void main() {
     expect(find.byTooltip('Newest first (switch to oldest first)'), findsOneWidget);
   });
 
-  testWidgets('a saved view without newestFirst defaults to oldest first', (tester) async {
+  testWidgets("a series' saved filter is restored when it is opened again (its order, not saved, oldest first)",
+      (tester) async {
     SharedPreferences.setMockInitialValues({'view.series.S1': jsonEncode({'filter': 'hideRead'})});
     final api = await open(tester);
     expect(api.sorts.last, 'metadata.numberSort,asc');

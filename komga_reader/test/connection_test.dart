@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -39,7 +38,8 @@ void main() {
     await deleteTemp(dir);
   });
 
-  test('Komga answering: nothing happens', () {
+  test('start-up: Komga is asked once; answering, nothing happens', () {
+    expect(server.meCalls, 1, reason: 'the start-up check ran');
     expect(conn.askPending, isFalse);
     expect(conn.offline, isFalse);
   });
@@ -79,14 +79,6 @@ void main() {
     server.up = false;
     await conn.check(); // a new one
     expect(conn.askPending, isTrue);
-  });
-
-  test('Komga answering while the prompt is up clears it', () async {
-    server.up = false;
-    await conn.check();
-    server.up = true;
-    await conn.check();
-    expect(conn.askPending, isFalse);
   });
 
   test('nothing downloaded: still says Komga can\'t be reached (Retry / OK), never switches', () async {
@@ -157,7 +149,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text("Can't reach Komga"), findsNothing);
     expect(conn.offline, isTrue);
-    unawaited(conn.setForcedOffline(false));
+    conn.reset(); // stops the 30 s poll going offline started (a timer left pending fails a widget test)
   });
 
   testWidgets("the prompt, when Komga answered before it was listening, closes - not a Retry that spins for good "

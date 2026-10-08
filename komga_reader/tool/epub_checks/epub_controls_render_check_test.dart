@@ -10,12 +10,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'support/epub_books.dart' show twoChapters;
-import 'support/no_network.dart';
+import '../../test/support/epub_books.dart' show twoChapters;
+import '../../test/support/no_network.dart';
 
 void main() {
   final shot = Platform.environment['BEDEREADER_SHOT'];
   testWidgets('the controls, as a picture', (tester) async {
+    // (a test run by hand from tool\: the analyzer doesn't count it as a test)
+    // ignore: invalid_use_of_visible_for_testing_member
     SharedPreferences.setMockInitialValues({});
     await tester.runAsync(() async {
       Future<ByteData> bytes(String f) async => ByteData.sublistView(File(f).readAsBytesSync());

@@ -116,8 +116,9 @@ void main() {
     expect(k.actionFor(LogicalKeyboardKey.arrowRight), ReaderAction.next, reason: 'the rest of the save kept');
   });
 
-  testWidgets("the press-a-key dialog: Back and Esc cancel - they're never taken as the key (code review)",
-      (tester) async {
+  testWidgets("Settings: + Add takes the next key pressed - Back and Esc cancel, they're never taken as the key (code "
+      'review); a chip removes its key', (tester) async {
+    // (two tests on the same page, merged - test audit, 2026-10-07)
     setView(tester, const Size(1000, 2000));
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
@@ -132,6 +133,24 @@ void main() {
       expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
       expect(k.keys[ReaderAction.next], isNot(contains(cancel)), reason: '${ReaderKeys.nameOf(cancel)} not added');
     }
+    expect(k.isDefault, isTrue);
+
+    expect(find.text('Next page'), findsOneWidget);
+    expect(find.text('PgDn'), findsOneWidget);
+    final chip = tester.widget<InputChip>(find.ancestor(of: find.text('PgDn'), matching: find.byType(InputChip)));
+    expect(chip.onDeleted, isNull, reason: 'one stop per key for the remote - no separate delete button');
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
+    await tester.pumpAndSettle();
+    expect(k.actionFor(LogicalKeyboardKey.keyN), ReaderAction.next);
+    expect(find.text('N'), findsOneWidget);
+    await tester.tap(find.text('PgDn'));
+    await tester.pumpAndSettle();
+    expect(k.actionFor(LogicalKeyboardKey.pageDown), isNull);
+    await tester.tap(find.text('Reset keys'));
+    await tester.pumpAndSettle();
     expect(k.isDefault, isTrue);
   });
 
@@ -154,29 +173,5 @@ void main() {
     await press(LogicalKeyboardKey.arrowRight);
     expect(page(), 0.0);
     await tester.pump(const Duration(seconds: 2));
-  });
-
-  testWidgets('Settings: + Add takes the next key pressed; a chip removes its key', (tester) async {
-    setView(tester, const Size(1000, 2000));
-    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
-        initialPage: SettingsPage.keys)));
-    await tester.pump();
-    expect(find.text('Next page'), findsOneWidget);
-    expect(find.text('PgDn'), findsOneWidget);
-    final chip = tester.widget<InputChip>(find.ancestor(of: find.text('PgDn'), matching: find.byType(InputChip)));
-    expect(chip.onDeleted, isNull, reason: 'one stop per key for the remote - no separate delete button');
-    await tester.tap(find.text('Add').first); // Next page
-    await tester.pumpAndSettle();
-    expect(find.text('Next page: press a key'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyN);
-    await tester.pumpAndSettle();
-    expect(k.actionFor(LogicalKeyboardKey.keyN), ReaderAction.next);
-    expect(find.text('N'), findsOneWidget);
-    await tester.tap(find.text('PgDn'));
-    await tester.pumpAndSettle();
-    expect(k.actionFor(LogicalKeyboardKey.pageDown), isNull);
-    await tester.tap(find.text('Reset keys'));
-    await tester.pumpAndSettle();
-    expect(k.isDefault, isTrue);
   });
 }

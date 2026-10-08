@@ -37,8 +37,11 @@ void main() {
     return komga;
   }
 
-  testWidgets('the download queue and the connection contact nothing: the queued book waits, offline Home shows',
-      (tester) async {
+  // Bug found 2026-09-30 (missing-tests audit): _restore loaded AppSettings, Pins and On deck hidden with the online
+  // client (3 x GET client-settings) before offline mode was applied, and the first Home was built on the online
+  // client (GET libraries, books, books/ondeck). Fixed in main.dart _restore.
+  testWidgets('forced-offline start: nothing at all is sent to Komga - not the download queue (the queued book '
+      'waits), not the connection check, not the account\'s settings; offline Home shows', (tester) async {
     final requests = (await start(tester)).requests;
     expect(Connection.instance.offline, isTrue);
     await waitUntil(() => shows(find.text('Offline mode - showing downloaded books')), tester: tester,
@@ -46,17 +49,8 @@ void main() {
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(Downloads.instance.jobFor('B9')?.state, JobState.queued, reason: 'still waiting');
     expect(Downloads.instance.hold, isTrue);
-    // the queue would ask for the book first (then its pages); the connection's check is "me"
-    expect(requests.where((r) => r.contains('/books/B9') || r.contains('/pages/') || r.contains('/users/me')), isEmpty,
-        reason: '$requests');
-  });
-
-  // Bug found 2026-09-30 (missing-tests audit): _restore loaded AppSettings, Pins and On deck hidden with the online
-  // client (3 x GET client-settings) before offline mode was applied, and the first Home was built on the online
-  // client (GET libraries, books, books/ondeck). Fixed in main.dart _restore.
-  testWidgets('forced-offline start: nothing at all is sent to Komga', (tester) async {
-    final komga = await start(tester);
-    expect(komga.requests, isEmpty);
+    // (the queue would ask for the book first, then its pages; the connection's check is "me")
+    expect(requests, isEmpty);
   });
 
   // an offline start loads the account's things from this device only; going online fetches them (user, 2026-09-30)

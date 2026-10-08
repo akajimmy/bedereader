@@ -1,6 +1,7 @@
 // Opt-in: every .epub under the folder in BEDEREADER_EPUB_DIR, read from its file (read-only) - contents, the first
-// chapters loaded and laid out. Skipped unless the variable is set; e.g. (PowerShell)
-//   $env:BEDEREADER_EPUB_DIR = '\\nick-nas\nas-share\comics\E-Books'; flutter test test/epub_library_check_test.dart
+// chapters loaded and laid out. Skipped unless the variable is set; e.g. (PowerShell, from komga_reader\)
+//   $env:BEDEREADER_EPUB_DIR = '\\nick-nas\nas-share\comics\E-Books'
+//   flutter test tool\epub_checks\epub_library_check_test.dart
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';

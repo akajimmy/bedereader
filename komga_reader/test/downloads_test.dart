@@ -9,22 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/helpers.dart';
 import 'support/library_server.dart';
 import 'support/no_network.dart';
+import 'support/settle.dart';
 
 LibraryServer server() => noNetwork(LibraryServer.new);
 
 Map<String, dynamic> book(String id, int n) =>
     {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
-
-/// Waits (on the real clock, 2 s at most) until nothing is queued or downloading. Fails the test if that never happens:
-/// it used to return quietly, so the next expectation failed for the wrong reason (test audit, 2026-09-30).
-Future<void> settle(Downloads d) async {
-  bool working() => d.queue.any((j) => j.state == JobState.queued || j.state == JobState.downloading);
-  try {
-    await waitUntil(() => !working());
-  } on TestFailure {
-    fail('the queue never settled: ${[for (final j in d.queue) '${j.bookId} ${j.state.name}']}');
-  }
-}
 
 void main() {
   late Directory dir;
@@ -97,6 +87,7 @@ void main() {
 
   test('Delete once read: Never, nothing goes; Always, a book read goes - after the reader closes if it was open',
       () async {
+    addTearDown(() => d.setDeleteRead(DeleteRead.never));
     await d.attach(server(), root: dir);
     await d.add([book('B1', 1), book('B2', 2)]);
     await settle(d);
@@ -115,10 +106,10 @@ void main() {
     expect(d.isDownloaded('B2'), isFalse);
     expect(d.store!.unsynced, contains('B2')); // the read mark is still on its way to Komga
     expect(d.isDownloaded('B1'), isTrue); // read before it was switched on: not touched
-    await d.setDeleteRead(DeleteRead.never);
   });
 
   test('Delete once read, Ask: finished books are kept and gathered, handed over once no book is open', () async {
+    addTearDown(() => d.setDeleteRead(DeleteRead.never));
     await d.attach(server(), root: dir);
     await d.add([book('B1', 1), book('B2', 2)]);
     await settle(d);
@@ -136,19 +127,16 @@ void main() {
     await d.removeAll(['B1']); // the answer: delete (just one, say)
     expect(d.isDownloaded('B1'), isFalse);
     expect(d.isDownloaded('B2'), isTrue);
-    await d.setDeleteRead(DeleteRead.never);
   });
 
-  test("the old on/off switch isn't migrated (user, 2026-10-07): ignored, Never; the setting itself is kept",
-      () async {
-    SharedPreferences.setMockInitialValues({'downloads.deleteWhenRead': true});
+  test('Delete once read is kept across a restart', () async {
+    addTearDown(() => d.setDeleteRead(DeleteRead.never));
     await d.attach(server(), root: dir);
-    expect(d.deleteRead, DeleteRead.never);
-    SharedPreferences.setMockInitialValues({'downloads.deleteRead': 'ask'});
+    await d.setDeleteRead(DeleteRead.ask);
+    d.deleteRead = DeleteRead.never; // forgotten in memory: "the next start" has only what was saved
     await d.attach(server(), root: dir);
     expect(d.deleteRead, DeleteRead.ask);
   });
-
 
   test('queuing the same book twice, or one already downloaded, does nothing', () async {
     await d.attach(server(), root: dir);
@@ -203,31 +191,13 @@ void main() {
     expect(d.store!.progress['B2']!['synced'], false);
   });
 
-  test("Komga out of reach: the books go back in the queue (not failed) and it carries on by itself once Komga answers "
-      '(code review, 2026-09-30)', () async {
-    Downloads.serverRecheck = const Duration(milliseconds: 30);
-    addTearDown(() => Downloads.serverRecheck = const Duration(seconds: 30));
-    final api = server()..pagesDown = true;
-    await d.attach(api, root: dir);
-    api.up = false; // its "are you there" check fails too
-    await d.add([book('B1', 1), book('B2', 2)]);
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(d.queue.map((j) => j.state), everyElement(JobState.queued), reason: 'waiting, not failed');
-    expect(d.waitingForServer, isTrue);
-
-    api
-      ..pagesDown = false
-      ..up = true; // back
-    await waitUntil(() => d.isDownloaded('B1') && d.isDownloaded('B2'), timeout: const Duration(seconds: 1),
-        reason: 'both downloaded once Komga is back');
-    expect(d.isDownloaded('B1') && d.isDownloaded('B2'), isTrue);
-    expect(d.waitingForServer, isFalse);
-  });
+  // (Komga out of reach before the books start: downloads_offline_test, with Komga gone mid-book)
 
   test('Pause all is kept across a restart (the queue stays paused, with Resume)', () async {
     await d.attach(server(), root: dir);
     d.pauseAll();
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final prefs = await SharedPreferences.getInstance();
+    await waitUntil(() => prefs.getBool('downloads.paused') == true, reason: 'the pause saved');
     d.paused = false; // forgotten in memory: "the next start"
     final api = server();
     await d.attach(api, root: dir);
@@ -275,7 +245,8 @@ void main() {
     expect(files.length, 3);
   });
 
-  test('Wi-Fi only: on mobile data the queue waits and says so; back on Wi-Fi it carries on by itself', () async {
+  test('Wi-Fi only: off (the default), mobile data downloads as before; on, on mobile data the queue waits and says '
+      'so; back on Wi-Fi it carries on by itself', () async {
     var wifi = false;
     Downloads.isOnWifi = () async => wifi;
     Downloads.wifiRecheck = const Duration(milliseconds: 30);
@@ -286,10 +257,16 @@ void main() {
     });
     final api = server();
     await d.attach(api, root: dir);
+    expect(d.wifiOnly, isFalse);
+    await d.add([book('B2', 2)]); // on mobile data, Wi-Fi only off
+    await settle(d);
+    expect(d.isDownloaded('B2'), isTrue);
+
     await d.setWifiOnly(true);
+    final before = api.pageRequests;
     await d.add([book('B1', 1)]);
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(api.pageRequests, 0, reason: 'nothing fetched on mobile data');
+    expect(api.pageRequests, before, reason: 'nothing fetched on mobile data');
     expect(d.waitingForWifi, isTrue);
     expect(d.jobFor('B1')!.state, JobState.queued);
 
@@ -301,16 +278,6 @@ void main() {
     d.wifiOnly = false; // forgotten in memory: "the next launch" has only what was saved (test audit, 2026-09-30)
     await d.attach(server(), root: dir);
     expect(d.wifiOnly, isTrue, reason: 'the choice is kept');
-  });
-
-  test('Wi-Fi only off (the default): mobile data downloads as before', () async {
-    Downloads.isOnWifi = () async => false;
-    addTearDown(() => Downloads.isOnWifi = () async => true);
-    await d.attach(server(), root: dir);
-    expect(d.wifiOnly, isFalse);
-    await d.add([book('B1', 1)]);
-    await settle(d);
-    expect(d.isDownloaded('B1'), isTrue);
   });
 
   test('the queue survives a restart, and pages already on disk are not fetched again', () async {

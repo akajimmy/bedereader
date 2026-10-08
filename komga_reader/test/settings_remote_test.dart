@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 import 'support/no_network.dart';
+import 'support/settings_pages.dart';
 import 'support/status_server.dart';
 
 /// Settings with the remote: every page walked with the arrows; and every page at phone width with large text (test
@@ -21,25 +22,6 @@ import 'support/status_server.dart';
 /// Downloads are set up (so the Downloads page and Server's Offline group are there), night mode is on a schedule
 /// (its times and Warmth show), and the test platform is Android (volume keys, rotation, Wi-Fi only): every row
 /// the tablet has.
-
-/// Two libraries, so Library & Home has its switches.
-class TwoLibraries extends StatusServer {
-  @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}, {'id': 'L2', 'name': 'Ongoing'}];
-}
-
-/// Settings' pages as the side list names them (a switch: a new page doesn't compile here until it's added).
-String label(SettingsPage p) => switch (p) {
-      SettingsPage.reading => 'Reading',
-      SettingsPage.comics => 'Comics',
-      SettingsPage.ebooks => 'eBooks',
-      SettingsPage.keys => 'Remote and keys',
-      SettingsPage.server => 'Server and sync',
-      SettingsPage.library => 'Library & Home',
-      SettingsPage.downloads => 'Downloads',
-      SettingsPage.look => 'Look',
-      SettingsPage.about => 'About',
-    };
 
 /// Downloads set up in a temporary folder (undone when the test ends).
 Future<void> setUpDownloads(WidgetTester tester) async {
@@ -54,17 +36,8 @@ Future<void> setUpDownloads(WidgetTester tester) async {
   expect(d.ready, isTrue);
 }
 
-/// Every row on: night mode on a schedule (its times, Warmth). Put back when the test ends.
-void everyRowShown() {
-  final s = AppSettings.instance;
-  s.setDisplay(const DisplayPrefs(night: true, nightSchedule: true));
-  addTearDown(() => s.setDisplay(const DisplayPrefs()));
-}
-
 /// The row [n] is in (RowNav, widgets/setting_rows.dart - from its own list of rows, not a debug label).
 FocusNode? rowOf(FocusNode n) => RowNav.rowOf(n);
-
-FocusNode focus() => FocusManager.instance.primaryFocus!;
 
 /// Whether [n]'s widget is inside what [f] finds.
 bool under(FocusNode n, Finder f) {
@@ -77,13 +50,6 @@ bool under(FocusNode n, Finder f) {
 Rect rectOf(FocusNode n) {
   final box = n.context!.findRenderObject()! as RenderBox;
   return MatrixUtils.transformRect(box.getTransformTo(null), Offset.zero & box.size);
-}
-
-/// A focused control, for messages: its text, else its tooltip.
-String name(FocusNode n) {
-  final texts = find.descendant(of: find.byWidget(n.context!.widget), matching: find.byType(Text));
-  final t = texts.evaluate().isEmpty ? null : (texts.evaluate().first.widget as Text).data;
-  return t ?? n.context!.findAncestorWidgetOfExactType<Tooltip>()?.message ?? n.toString();
 }
 
 /// Opens Settings from a screen with one button, by the remote (OK), and walks [page]: Down along the list of pages
@@ -112,21 +78,21 @@ Future<void> walk(WidgetTester tester, SettingsPage page) async {
   final pageView = find.byType(ListView).at(1); // and the page beside it
   String? navLabel(FocusNode n) {
     for (final p in SettingsPage.values) {
-      final tile = find.widgetWithText(ListTile, label(p));
-      if (tile.evaluate().isNotEmpty && under(n, find.descendant(of: list, matching: tile))) return label(p);
+      final tile = find.widgetWithText(ListTile, pageName(p));
+      if (tile.evaluate().isNotEmpty && under(n, find.descendant(of: list, matching: tile))) return pageName(p);
     }
     return null;
   }
 
   // Down into the list (the top bar's back button comes first), then along it to the page, and OK
-  for (var i = 0; i < 12 && navLabel(focus()) != label(page); i++) {
+  for (var i = 0; i < 12 && navLabel(focus()) != pageName(page); i++) {
     await press(LogicalKeyboardKey.arrowDown);
   }
-  expect(navLabel(focus()), label(page), reason: 'Down along the list reaches ${page.name}');
+  expect(navLabel(focus()), pageName(page), reason: 'Down along the list reaches ${page.name}');
   await press(LogicalKeyboardKey.enter);
-  expect(tester.widget<ListTile>(find.descendant(of: list, matching: find.widgetWithText(ListTile, label(page))))
+  expect(tester.widget<ListTile>(find.descendant(of: list, matching: find.widgetWithText(ListTile, pageName(page))))
       .selected, isTrue, reason: '${page.name} chosen');
-  expect(find.descendant(of: pageView, matching: find.text(label(page))), findsOneWidget, reason: 'and shown');
+  expect(find.descendant(of: pageView, matching: find.text(pageName(page))), findsOneWidget, reason: 'and shown');
 
   // the page's controls, in the order the focus tree has them, and the rows they're in
   final controls = [
@@ -209,7 +175,7 @@ void main() {
     // bug found 2026-09-30 (missing-tests audit): on Library & Home the library switches came after Home sections in
     // RowNav's order (the focus tree's: they're added once the libraries arrive); RowNav now goes by screen position
     for (final p in SettingsPage.values) {
-      testWidgets(label(p), (tester) => walk(tester, p));
+      testWidgets(pageName(p), (tester) => walk(tester, p));
     }
   });
 
@@ -266,7 +232,7 @@ void main() {
         expect(tester.takeException(), isNull, reason: '${p.name}: at ${scroll.pixels}');
         seen();
       }
-      expect(chips, containsAll([for (final q in SettingsPage.values) label(q)]), reason: '${p.name}: every page on top');
+      expect(chips, containsAll([for (final q in SettingsPage.values) pageName(q)]), reason: '${p.name}: every page on top');
       expect(scroll.pixels, scroll.maxScrollExtent, reason: '${p.name}: reached the end');
     }
   });

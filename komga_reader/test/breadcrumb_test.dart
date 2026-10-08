@@ -12,14 +12,6 @@ import 'support/browse_server.dart';
 import 'support/helpers.dart';
 import 'support/no_network.dart';
 
-/// [BrowseServer], with the books of a series (the series screen lists them).
-class CrumbServer extends BrowseServer {
-  @override
-  Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
-          String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async =>
-      onePage([]);
-}
-
 /// The breadcrumb's parent is a link (user, 2026-10-02): "Events › Series 1" opens Events, "Read lists › Infinity"
 /// the read lists, "Collections › ..." the collections - back to the library screen the user came through when
 /// there is one, else a new one.
@@ -27,8 +19,33 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   const parent = ValueKey('breadcrumb-parent');
 
-  Future<CrumbServer> start(WidgetTester tester, Widget Function(CrumbServer) home) async {
-    final api = noNetwork(CrumbServer.new);
+  // (moved from series_order_test, test audit 2026-10-07)
+  testWidgets('the series title bar shows its library first - "Events › Series 2" - and the library names are '
+      'fetched once', (tester) async {
+    final api = noNetwork(BrowseServer.new);
+    const s2 = {'id': 'S2', 'libraryId': 'L1', 'name': 'Series 2', 'metadata': {'title': 'Series 2'}};
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: api, series: s2)));
+    await tester.pump();
+    await tester.pump();
+    final bar = find.byType(AppBar);
+    expect(find.descendant(of: bar, matching: find.text('Events')), findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.text('Series 2')), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(key: UniqueKey(), api: api, series: s2))); // another visit
+    await tester.pump();
+    expect(api.libraryCalls, 1);
+  });
+
+  testWidgets('a series whose library is unknown just shows its title', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: noNetwork(BrowseServer.new),
+        series: const {'id': 'S1', 'name': 'Series 1', 'metadata': {'title': 'Series 1'}})));
+    await tester.pump();
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Series 1')), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.textContaining('›')), findsNothing);
+  });
+
+  Future<BrowseServer> start(WidgetTester tester, Widget Function(BrowseServer) home) async {
+    final api = noNetwork(BrowseServer.new);
     setView(tester, const Size(1280, 900));
     await tester.pumpWidget(MaterialApp(home: home(api)));
     await tester.pump();
@@ -122,12 +139,18 @@ void main() {
   });
 
   testWidgets('the remote reaches the link, and OK opens it', (tester) async {
-    await start(tester, (api) => ReadListScreen(api: api, readList: {'id': 'RL1', 'name': 'Infinity'}));
-    final link = tester.widget<InkWell>(find.byKey(parent));
-    expect(link.canRequestFocus, isTrue);
-    Focus.of(tester.element(find.descendant(of: find.byKey(parent), matching: find.text('Read lists'))))
-        .requestFocus();
+    await start(tester, (api) => ReadListScreen(api: api, readList: {'id': 'RL2', 'name': 'Done'}));
+    final linkFocus = Focus.of(tester.element(find.descendant(of: find.byKey(parent), matching: find.text('Read lists'))));
+    final firstBook = FocusManager.instance.primaryFocus;
+    expect(firstBook?.context?.findAncestorWidgetOfExactType<InkWell>(), isNotNull, reason: 'starts on the first book');
+    // by the arrow keys alone (test audit, 2026-10-07: the focus used to be put on the link directly): Up from the
+    // grid into the top bar (Back), Right to the link
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
+    expect(FocusManager.instance.primaryFocus, isNot(firstBook), reason: 'up into the top bar');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(linkFocus.hasPrimaryFocus, isTrue, reason: 'the link reached with the arrows');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await settle(tester);
     expect(find.byType(LibraryScreen), findsOneWidget);

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/main.dart' show appFrame;
 import 'package:komga_reader/widgets/poster.dart';
 
 import 'support/no_network.dart';
@@ -49,7 +50,10 @@ void main() {
     // the real menu: a sheet whose first entry takes focus - on the tablet, holding OK opened Details at once
     var details = 0;
     await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => HoldOkGuard(child: child!), // as in main.dart
+      // the app's own frame (its guard was copied in here, so taking it out of the app stayed green - test audit,
+      // 2026-10-07)
+      builder: (context, child) =>
+          appFrame(context, child!, textScale: 1, onKey: (_, __) => KeyEventResult.ignored),
       home: Scaffold(body: Builder(builder: (context) => SizedBox(width: 170, height: 330, child: PosterTile(
         api: plainKomga(),
         imageUrl: '',

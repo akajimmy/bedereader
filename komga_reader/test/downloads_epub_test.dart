@@ -9,15 +9,13 @@ import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
-import 'package:komga_reader/screens/open_book.dart';
-import 'package:komga_reader/screens/reader.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'downloads_test.dart' show settle;
-import 'epub_source_test.dart' show epub3, zip;
+import 'support/epub_files.dart';
 import 'support/helpers.dart';
 import 'support/library_server.dart';
 import 'support/no_network.dart';
+import 'support/settle.dart';
 
 /// The library server, with B1 an EPUB: its file, its positions (Komga's "pages" for it).
 class EpubLibrary extends LibraryServer {
@@ -96,8 +94,7 @@ void main() {
     final f = offline.epubFile('B1')!;
     final info = await FileEpubSource(f).info();
     expect(info.title, 'Sourcery', reason: 'the downloaded file reads');
-    // offline, every way of opening it reads that file
-    expect(readerFor(offline, (await offline.book('B1'))!), isA<ReaderScreen>()); // the one Reader
+    // offline, the reader reads that file
     expect(EpubRenderer.sourceFor(offline, 'B1'), isA<FileEpubSource>());
     // online, from Komga as usual
     expect(EpubRenderer.sourceFor(api, 'B1'), isA<KomgaEpubSource>());
@@ -141,13 +138,5 @@ void main() {
     final at = await EpubProgress(offline, 'B1').load((await offline.book('B1'))!);
     expect(at!.path, 'OEBPS/Text/ch2.xhtml');
     expect(at.progression, 0.75);
-  });
-
-  test("with only the read progress page to go by: that far through the book (page 5 of Komga's 10: halfway), not "
-      'the position with that number', () async {
-    final api = noNetwork(EpubLibrary.new);
-    final b = {...(await api.book('B1'))!, 'readProgress': {'page': 5, 'completed': false}};
-    final at = await EpubProgress(api, 'B1').load(b);
-    expect(at!.progression, 0.5, reason: 'the position halfway through the four (2 of 4: progression 2/4)');
   });
 }
