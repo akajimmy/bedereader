@@ -47,6 +47,7 @@ const libs = [
     if (p == '/api/v1/libraries') return json(libs);
     if (p == '/api/v1/client-settings/user/list') return json({for (final e in settings.entries) e.key: {'value': e.value}});
     if (p == '/api/v2/users/me') return json({'id': 'U1'});
+    if (r.method == 'PATCH' && p == '/api/v1/client-settings/user') return http.Response('', 204);
     unexpected.add('${r.method} ${r.url}');
     return http.Response('not in this test', 404);
   });
@@ -93,13 +94,20 @@ void main() {
     expect(AppSettings.instance.hasOwn('S7'), isTrue);
   });
 
-  test('#35: a write in between starts afresh - nobody shares an answer asked for before it', () async {
+  test('#35: shared only while on its way; a write in between starts afresh', () async {
     final (api, client) = komga();
     final before = api.clientSettings();
     expect(identical(api.clientSettings(), before), isTrue, reason: 'asked while on its way: the same answer');
-    await api.clientSettings();
+    await before;
     await api.clientSettings(); // after the answer: asked again
     expect(count(client.requests, 'GET /api/v1/client-settings/user/list'), 2);
+
+    final asked = api.clientSettings();
+    final writing = api.putClientSetting('x', 'y');
+    final after = api.clientSettings();
+    expect(identical(after, asked), isFalse, reason: 'an answer asked for before the write is not shared after it');
+    await Future.wait([asked, writing, after]);
+    expect(count(client.requests, 'GET /api/v1/client-settings/user/list'), 4);
   });
 
   testWidgets('#43: the side menu keeps the library list - opened twice, one request; back in the app, the next '
