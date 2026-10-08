@@ -5,11 +5,14 @@ library;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart' show TextGranularity;
 import 'package:flutter/widgets.dart';
 
 import 'css.dart';
 import 'hyphenator.dart';
 import 'xhtml.dart';
+
+part 'page_text.dart';
 
 class EpubTheme {
   const EpubTheme({
@@ -538,6 +541,24 @@ class _Laid {
   final int base; // the chapter position of the painter's first character
   final List<(Rect, String, String)> links = []; // painter coordinates, where to, the link's text
 
+  /// The block this text is (part of): pieces of one paragraph laid out apart - beside a drop cap and below it, a
+  /// hanging indent's first line and the rest - are copied as one paragraph ([PageText]).
+  Object? block;
+
+  /// A drop cap's letter, drawn apart, that starts this text: copied with it.
+  String? lead;
+
+  /// Each line's top, painter coordinates.
+  late final List<double> tops = () {
+    final out = <double>[];
+    var y = 0.0;
+    for (final m in metrics) {
+      out.add(y);
+      y += m.height;
+    }
+    return out;
+  }();
+
   /// The lines, in order: their measures, and the text each holds. The ranges come from the engine's line boundaries,
   /// never from asking which character is at a point (getPositionForOffset): that trips a bounds check inside
   /// Flutter's engine on some lines, and its release build stops the app dead - the crashes on the tablet (SIGTRAP)
@@ -729,6 +750,9 @@ class EpubPage {
 
   /// The pictures on the page big enough to open full screen with a tap: where each is drawn, and the picture.
   List<(Rect, ui.Image)> get pictures => [for (final p in pieces) if (p is _ImagePiece && p.zoomable) (p.rect, p.image)];
+
+  /// The page's text for selecting and copying (worked out the first time it's asked for).
+  late final PageText text = PageText._(this);
 
   /// The chapter position (characters) the page starts at: progress is saved and restored by it.
   int start = 0;
@@ -1192,7 +1216,7 @@ class Paginator {
     tp.layout(minWidth: width.isFinite ? width : 0, maxWidth: width);
     _made.add(tp);
     final hyphen = _hyphen;
-    final laid = _Laid(tp, hyphen, base ?? b.start);
+    final laid = _Laid(tp, hyphen, base ?? b.start)..block = b;
     for (final (s, e, href, text) in linkRanges) {
       // one tap area per line the link is on (justified lines give a box per word)
       final lines = <double, Rect>{};
@@ -1327,7 +1351,7 @@ class Paginator {
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
       floatPiece = _DropPiece(dropTp, Rect.fromLTWH(x, _y + 2, boxW, boxH - 4), b.dropBoxed, theme.text);
     }
-    final narrow = _painter(b, b.runs, width - boxW - 14, indent: false);
+    final narrow = _painter(b, b.runs, width - boxW - 14, indent: false)..lead = fimg == null ? drop?.text : null;
     final nLines = narrow.tp.computeLineMetrics();
     var k = 0;
     var h = 0.0;
