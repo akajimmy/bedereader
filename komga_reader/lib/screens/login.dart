@@ -45,7 +45,15 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _server.dispose();
+    _key.dispose();
+    super.dispose();
+  }
+
   Future<void> _connect() async {
+    if (_busy) return; // Enter pressed again while connecting (code review 2026-10-05, #20)
     final server = serverAddress(_server.text);
     if (server == null) {
       setState(() => _error = FormatException('not a server address (scheme/host)', _server.text));

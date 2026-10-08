@@ -252,4 +252,14 @@ void main() {
     expect(tester.getTopLeft(find.text('Libraries')).dy < tester.getTopLeft(find.text('Continue reading')).dy, isTrue);
   });
 
+
+  testWidgets('Home closed before its sections have loaded: nothing happens after (code review 2026-10-05, #19)',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
+    await tester.pumpWidget(const SizedBox()); // gone at once
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }
