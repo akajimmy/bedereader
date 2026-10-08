@@ -763,16 +763,27 @@ class EpubRenderer extends Renderer {
   @override
   Future<Object?> Function() progressSaver(int place) {
     final p = _progress!, id = _record['id'] as String;
-    if (place > last) {
-      // the end card: the book is read
-      return () async {
-        await api.markRead(id);
-        return p.place();
-      };
+    Future<Object?> markRead() async {
+      await api.markRead(id);
+      return p.place();
     }
     final b = _book!;
-    final (c, pg) = b.chapterPage(place);
-    final at = b.positionOf(c, pg);
+    // the place to save: [place], a page of this layout - or, while the book is being laid out again (a new size or
+    // setting: on the tablet, Search's keyboard coming back up as Back closed the book), the place kept through it.
+    // [place] reads 0 then: closing saved the book's start over the page reached (tablet, build 99), or failed.
+    final EpubPosition at;
+    if (_ready) {
+      if (place > last) return markRead; // the end card: the book is read
+      final (c, pg) = b.chapterPage(place);
+      at = b.positionOf(c, pg);
+    } else if (_end) {
+      return markRead;
+    } else if (_anchor != null) {
+      at = _anchor!;
+    } else {
+      return p.place; // still opening: nothing of this reader's to save - Komga's place read back, nothing written
+    }
+    final c = at.chapter;
     final length = b.lengthOf(c);
     final path = b.info.spine[c], progression = length == 0 ? 0.0 : at.position / length, total = b.progression(at);
     return () async {
