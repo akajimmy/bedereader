@@ -90,6 +90,15 @@ class FilterServer extends BrowseServer {
   @override
   Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId,
       String? readListId}) async => years;
+  /// A collection in its own order: Series 3, 2, 1 (not by title).
+  @override
+  Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
+      int size = 60}) async {
+    final all = [for (final i in [3, 2, 1]) {..._series1, 'id': 'S$i', 'name': 'Series $i'}];
+    final from = (page * size).clamp(0, all.length), to = ((page + 1) * size).clamp(0, all.length);
+    return {'content': all.sublist(from, to), 'totalElements': all.length, 'last': to >= all.length};
+  }
+
   @override
   Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) async => kind;
 }
@@ -410,7 +419,9 @@ void main() {
     final r = await pinView(api, const Pin(name: 'x', kind: 'collection', id: 'C1', title: 'C',
         filters: ViewFilter(genres: ['Horror'])));
     expect(api.asked.last.filter, const ViewFilter(genres: ['Horror']));
-    expect([for (final s in r['content'] as List) s['id']], ['S1']);
+    expect([for (final s in r['content'] as List) s['id']], ['S1'], reason: 'the collection holds S3, S2, S1');
+    final unfiltered = await pinView(api, const Pin(name: 'x', kind: 'collection', id: 'C1', title: 'C'));
+    expect([for (final s in unfiltered['content'] as List) s['id']], ['S3', 'S2', 'S1']);
   });
 
   // ---- offline ------------------------------------------------------------------------------------------------------
