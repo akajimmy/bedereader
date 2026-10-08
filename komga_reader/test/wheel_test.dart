@@ -44,14 +44,16 @@ void main() {
     expect(wheel, isEmpty);
   });
 
+  // up and down in one test each: the page hands the wheel's travel on as it is, either way (four tests before - test
+  // audit, 2026-10-07)
   for (final (name, at) in [('picture', const Offset(800, 500)), ('margin', const Offset(100, 500))]) {
-    for (final dy in [-120.0, 120.0]) {
-      testWidgets('wheel ${dy < 0 ? 'up' : 'down'} over the $name: turns, no zoom', (tester) async {
-        final (wheel, zoom) = await page(tester);
+    testWidgets('wheel up and down over the $name: turns, no zoom', (tester) async {
+      final (wheel, zoom) = await page(tester);
+      for (final dy in [-120.0, 120.0]) {
         await scroll(tester, at, dy);
-        expect(zoom.value.getMaxScaleOnAxis(), 1.0);
-        expect(wheel, [dy]);
-      });
-    }
+        expect(zoom.value.getMaxScaleOnAxis(), 1.0, reason: '$dy');
+      }
+      expect(wheel, [-120.0, 120.0]);
+    });
   }
 }
