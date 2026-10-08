@@ -377,28 +377,44 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   /// "+ Add": the next key pressed (on the remote or a keyboard) goes to [action].
   Future<void> _addKey(BuildContext context, ReaderAction action) async {
-    final key = await showDialog<LogicalKeyboardKey>(
-      context: context,
-      builder: (ctx) => Focus(
-        autofocus: true,
-        // every key is the answer, OK included - nothing in the dialog takes the remote's focus - except Back and Esc,
-        // which cancel (code review, 2026-09-30: Back was taken as the key, and then no longer closed the book)
-        onKeyEvent: (_, e) {
-          if (e is KeyDownEvent) {
-            final cancel = e.logicalKey == LogicalKeyboardKey.goBack || e.logicalKey == LogicalKeyboardKey.escape;
-            Navigator.pop(ctx, cancel ? null : e.logicalKey);
-          }
-          return KeyEventResult.handled;
+    // The key is caught from the keyboard itself while the dialog is up, not by a widget waiting for the focus: on
+    // the tablet the dialog never got a key that way - not the volume keys, not any (user, build 92: "it does not let
+    // me set the volume keys"). Every key is the answer, OK included, except Back and Esc, which cancel (code review,
+    // 2026-09-30: Back was taken as the key, and then no longer closed the book). Taken keys go no further (a volume
+    // key doesn't change the volume).
+    BuildContext? dialog;
+    var answered = false;
+    bool onKey(KeyEvent e) {
+      final ctx = dialog;
+      if (ctx == null || !ctx.mounted) return false;
+      if (e is KeyDownEvent && !answered) {
+        answered = true;
+        final cancel = e.logicalKey == LogicalKeyboardKey.goBack || e.logicalKey == LogicalKeyboardKey.escape;
+        Navigator.pop(ctx, cancel ? null : e.logicalKey);
+      }
+      return true; // the rest of the press too, while the dialog is up
+    }
+
+    HardwareKeyboard.instance.addHandler(onKey);
+    final LogicalKeyboardKey? key;
+    try {
+      key = await showDialog<LogicalKeyboardKey>(
+        context: context,
+        builder: (ctx) {
+          dialog = ctx;
+          return AlertDialog(
+            title: Text('${action.label}: press a key'),
+            content: const Text('Press the key on the remote or keyboard. (Back, Esc or a tap outside cancels.)'),
+            actions: [
+              // touch; never the remote's focus (OK on it would be the answer, not a press)
+              ExcludeFocus(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))),
+            ],
+          );
         },
-        child: AlertDialog(
-          title: Text('${action.label}: press a key'),
-          content: const Text('Press the key on the remote or keyboard. (Back, Esc or a tap outside cancels.)'),
-          actions: [
-            ExcludeFocus(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))), // touch
-          ],
-        ),
-      ),
-    );
+      );
+    } finally {
+      HardwareKeyboard.instance.removeHandler(onKey);
+    }
     if (key == null || !context.mounted) return;
     final no = ReaderKeys.instance.cantAssign(action, key);
     if (no != null) {
