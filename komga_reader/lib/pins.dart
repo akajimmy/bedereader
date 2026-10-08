@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'errors.dart';
 import 'refresh_gate.dart';
+import 'view_filter.dart';
 
 /// A library sort field's natural direction: titles A -> Z, dates newest first.
 bool naturalDesc(String key) => key != 'title';
@@ -24,7 +25,7 @@ const bookSortFields = {'title': 'metadata.title', 'added': 'createdDate', 'rele
 @immutable
 class Pin {
   const Pin({required this.name, required this.kind, this.id, required this.title, this.filter = 'all', this.mode,
-      this.sort});
+      this.sort, this.filters = ViewFilter.none});
 
   final String name;
   final String kind; // library | series | readlist | collection
@@ -33,6 +34,7 @@ class Pin {
   final String filter; // ReadFilter name: all | hideRead | hideUnread
   final String? mode; // libraries: series | books | collections | readLists
   final String? sort; // libraries: sort key
+  final ViewFilter filters; // the filter panel's filters (writer, years, ...); none = not filtered
 
   ReadFilter get readFilter => ReadFilterApi.fromName(filter);
 
@@ -47,12 +49,16 @@ class Pin {
 
   /// Same view (the name doesn't matter).
   bool sameView(Pin o) =>
-      o.kind == kind && o.id == id && o.filter == filter && o.mode == mode && o.fullSort == fullSort;
+      o.kind == kind && o.id == id && o.filter == filter && o.mode == mode && o.fullSort == fullSort &&
+      o.filters == filters;
 
-  Pin renamed(String n) => Pin(name: n, kind: kind, id: id, title: title, filter: filter, mode: mode, sort: sort);
+  Pin renamed(String n) =>
+      Pin(name: n, kind: kind, id: id, title: title, filter: filter, mode: mode, sort: sort, filters: filters);
 
-  Map<String, dynamic> toJson() =>
-      {'name': name, 'kind': kind, 'id': id, 'title': title, 'filter': filter, 'mode': mode, 'sort': sort};
+  Map<String, dynamic> toJson() => {
+        'name': name, 'kind': kind, 'id': id, 'title': title, 'filter': filter, 'mode': mode, 'sort': sort,
+        if (filters.isNotEmpty) 'filters': filters.toJson(),
+      };
 
   factory Pin.fromJson(Map<String, dynamic> j) => Pin(
         name: j['name'] as String? ?? '?',
@@ -62,6 +68,7 @@ class Pin {
         filter: j['filter'] as String? ?? 'all',
         mode: j['mode'] as String?,
         sort: j['sort'] as String?,
+        filters: ViewFilter.fromJson(j['filters']),
       );
 }
 

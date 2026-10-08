@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 import 'hidden_libraries.dart';
+import 'view_filter.dart';
 
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
@@ -253,6 +254,158 @@ class Komga {
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       await _get('/api/v1/readlists/$readListId/books',
           {'read_status': readStatus, 'page': page, 'size': size}) as Map<String, dynamic>;
+
+  // ---- filtered views (the filter panel: lib/view_filter.dart) -------------------------------------------------------
+  /// A view's series with its read filter and filters: one library ([libraryId]; null = all shown libraries) or a
+  /// collection. With no filter (or only book-less ones) this is [series] - the same request as before filters existed;
+  /// with one, Komga's search (POST /api/v1/series/list) with all of them as one condition.
+  Future<Map<String, dynamic>> filteredSeries({String? libraryId, String? collectionId,
+      ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String sort = 'metadata.titleSort,asc',
+      int page = 0, int size = 60}) async {
+    final f = filter.forView(seriesView: true);
+    if (f.isEmpty) {
+      return series(libraryId: libraryId, collectionId: collectionId, readStatus: read.api, sort: sort, page: page,
+          size: size);
+    }
+    final condition = ViewFilter.allOf([
+      if (await _scopeCondition(libraryId) case final scope?) scope,
+      if (collectionId != null) _is('collectionId', collectionId),
+      if (_readCondition(read) case final r?) r,
+      ...f.conditions(seriesView: true),
+    ]);
+    return await _post('/api/v1/series/list', {'sort': sort, 'page': page, 'size': size}, {'condition': condition})
+        as Map<String, dynamic>;
+  }
+
+  /// A view's books with its read filter and filters: a series' ([seriesId]), a read list's ([readListId]) or a
+  /// library's (else; null = all shown libraries). The series filters (publisher, genre, status) don't apply to books.
+  /// No filter: the same request as before filters existed - [seriesBooks], [readListBooks] (in list order: no
+  /// [sort]) or [books]. [sort] / [size] null: that view's usual ones.
+  /// With a filter (or a read list sorted otherwise than in list order): Komga's search, POST /api/v1/books/list.
+  Future<Map<String, dynamic>> filteredBooks({String? libraryId, String? seriesId, String? readListId,
+      ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String? sort, int page = 0,
+      int? size}) async {
+    final f = filter.forView(seriesView: false);
+    if (f.isEmpty) {
+      if (seriesId != null) {
+        return seriesBooks(seriesId, readStatus: read.api, sort: sort ?? 'metadata.numberSort,asc', page: page,
+            size: size ?? 500);
+      }
+      if (readListId != null && sort == null) {
+        return readListBooks(readListId, readStatus: read.api, page: page, size: size ?? 1000);
+      }
+      if (readListId == null) {
+        return books(libraryId: libraryId, readStatus: read.api, sort: sort ?? 'metadata.releaseDate,desc', page: page,
+            size: size ?? 60);
+      }
+    }
+    final condition = ViewFilter.allOf([
+      if (seriesId != null)
+        _is('seriesId', seriesId)
+      else if (readListId != null)
+        _is('readListId', readListId)
+      else if (await _scopeCondition(libraryId) case final scope?)
+        scope,
+      if (_readCondition(read) case final r?) r,
+      ...f.conditions(seriesView: false),
+    ]);
+    final usualSort = seriesId != null
+        ? 'metadata.numberSort,asc'
+        : readListId != null
+            ? 'readList.number,asc' // the list's own order
+            : 'metadata.releaseDate,desc';
+    return await _post('/api/v1/books/list', {
+      'sort': sort ?? usualSort, 'page': page, 'size': size ?? (seriesId != null ? 500 : readListId != null ? 1000 : 60),
+    }, {
+      if (condition != null) 'condition': condition,
+    }) as Map<String, dynamic>;
+  }
+
+  static Map<String, dynamic> _is(String field, String value) => {field: {'operator': 'is', 'value': value}};
+
+  /// [_scope] as a search condition: one library, or any of the shown ones; null = every library.
+  Future<Map<String, dynamic>?> _scopeCondition(String? libraryId) async {
+    final scope = await _scope(libraryId);
+    if (scope is String) return _is('libraryId', scope);
+    if (scope is List<String>) return ViewFilter.anyOf([for (final id in scope) _is('libraryId', id)]);
+    return null;
+  }
+
+  /// The eye as a search condition (any of its read statuses); null = everything.
+  static Map<String, dynamic>? _readCondition(ReadFilter read) {
+    final statuses = read.api;
+    return statuses == null ? null : ViewFilter.anyOf([for (final s in statuses) _is('readStatus', s)]);
+  }
+
+  // ---- what the filter panel offers (value lists, scoped to the view) ------------------------------------------------
+  /// Komga's scope parameters for the value lists: the narrowest of series, read list, collection, library (null =
+  /// all shown libraries).
+  Future<Map<String, Object?>> _valueScope({String? libraryId, String? collectionId, String? seriesId,
+          String? readListId}) async =>
+      seriesId != null
+          ? {'series_id': seriesId}
+          : readListId != null
+              ? {'readlist_id': readListId}
+              : collectionId != null
+                  ? {'collection_id': collectionId}
+                  : {'library_id': await _scope(libraryId)};
+
+  /// The names of the authors in [roles] (any of them: Artist is penciller, inker or cover) in the view, A -> Z, each
+  /// once; [search]: names containing it. Komga gives no book counts here.
+  Future<List<String>> authorNames(List<String> roles, {String? search, String? libraryId, String? collectionId,
+      String? seriesId, String? readListId, int size = 1000}) async {
+    final scope = await _valueScope(libraryId: libraryId, collectionId: collectionId, seriesId: seriesId,
+        readListId: readListId);
+    final pages = await Future.wait([
+      for (final role in roles)
+        _get('/api/v2/authors', {
+          'role': role, if (search != null && search.isNotEmpty) 'search': search, ...scope, 'page': 0, 'size': size,
+        }),
+    ]);
+    final names = <String, String>{}; // lower case -> as Komga has it (first seen)
+    for (final p in pages) {
+      for (final a in (p as Map?)?['content'] as List? ?? const []) {
+        final n = (a as Map)['name'];
+        if (n is String && n.trim().isNotEmpty) names.putIfAbsent(n.toLowerCase(), () => n);
+      }
+    }
+    return sortedValues(names.values);
+  }
+
+  /// The publishers of the series in a library (null = all shown) or a collection, A -> Z.
+  Future<List<String>> publishers({String? libraryId, String? collectionId}) async =>
+      _strings(await _get('/api/v1/publishers', await _valueScope(libraryId: libraryId, collectionId: collectionId)));
+
+  /// The genres of the series in a library (null = all shown) or a collection, A -> Z.
+  Future<List<String>> genres({String? libraryId, String? collectionId}) async =>
+      _strings(await _get('/api/v1/genres', await _valueScope(libraryId: libraryId, collectionId: collectionId)));
+
+  /// The release years in the view, oldest first. A library or collection: Komga's series release dates (a series'
+  /// is its first book's); a series or a read list: its books' release dates.
+  Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId, String? readListId}) async {
+    if (seriesId != null || readListId != null) {
+      final page = seriesId != null
+          ? await seriesBooks(seriesId, size: 2000)
+          : await readListBooks(readListId!, size: 2000);
+      return yearsOf([for (final b in page['content'] as List) ((b as Map)['metadata'] as Map?)?['releaseDate']]);
+    }
+    final r = await _get('/api/v1/series/release-dates', await _valueScope(libraryId: libraryId, collectionId: collectionId));
+    return yearsOf(r is List ? r : const []);
+  }
+
+  static List<String> _strings(Object? r) =>
+      sortedValues([if (r is List) for (final v in r) if (v is String && v.trim().isNotEmpty) v]);
+
+  /// Each value once, A -> Z (case aside).
+  static List<String> sortedValues(Iterable<String> values) =>
+      values.toSet().toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+  /// The years of release dates ('2015', '2015-03-01', null), each once, oldest first.
+  static List<int> yearsOf(Iterable<Object?> dates) => {
+        for (final d in dates)
+          if (d is String && d.length >= 4 && int.tryParse(d.substring(0, 4)) != null) int.parse(d.substring(0, 4)),
+      }.toList()
+        ..sort();
 
   Future<Map<String, dynamic>?> oneSeries(String id) async => await _get('/api/v1/series/$id') as Map<String, dynamic>?;
   Future<Map<String, dynamic>?> readList(String id) async => await _get('/api/v1/readlists/$id') as Map<String, dynamic>?;

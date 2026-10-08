@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../api.dart';
 import '../hidden_libraries.dart';
 import '../epub/progress.dart' show komgaEpubPage;
+import '../view_filter.dart';
 import 'downloads.dart';
 import 'store.dart';
 
@@ -255,6 +256,138 @@ class OfflineKomga extends Komga {
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
+  }
+
+  // ---- filtered views: the same filters, on the downloads' stored Komga JSON ------------------------------------------
+  static const _all = 1 << 30; // "every one": a page as big as can be
+
+  @override
+  Future<Map<String, dynamic>> filteredSeries({String? libraryId, String? collectionId,
+      ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String sort = 'metadata.titleSort,asc',
+      int page = 0, int size = 60}) async {
+    final f = filter.forView(seriesView: true);
+    final all = (await series(libraryId: libraryId, collectionId: collectionId, readStatus: read.api, sort: sort,
+        size: _all))['content'] as List;
+    return _page([for (final s in all) if (_seriesMatches(s as Map, f)) s], page, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>> filteredBooks({String? libraryId, String? seriesId, String? readListId,
+      ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String? sort, int page = 0,
+      int? size}) async {
+    final f = filter.forView(seriesView: false);
+    final List<dynamic> all;
+    if (seriesId != null) {
+      all = (await seriesBooks(seriesId, readStatus: read.api, sort: sort ?? 'metadata.numberSort,asc',
+          size: _all))['content'] as List;
+    } else if (readListId != null) {
+      all = List.of((await readListBooks(readListId, readStatus: read.api, size: _all))['content'] as List);
+      if (sort != null && sort.startsWith('readList.number')) {
+        if (sort.endsWith(',desc')) all.setAll(0, all.reversed.toList());
+      } else if (sort != null) {
+        _sort(all, sort, (m) => _sortKey(sort, m));
+      }
+    } else {
+      all = (await books(libraryId: libraryId, readStatus: read.api, sort: sort ?? 'metadata.releaseDate,desc',
+          size: _all))['content'] as List;
+    }
+    return _page([for (final b in all) if (_bookMatches(b as Map, f)) b], page,
+        size ?? (seriesId != null ? 500 : readListId != null ? 1000 : 60));
+  }
+
+  static List<dynamic> _authorsOf(Map? item, String metadataKey) =>
+      ((item?[metadataKey] as Map?)?['authors'] as List?) ?? const [];
+
+  static String? _releaseDateOf(Map? item, String metadataKey) =>
+      (item?[metadataKey] as Map?)?['releaseDate'] as String?;
+
+  /// A downloaded book against the filter: its authors and release date (Komga's book JSON).
+  static bool _bookMatches(Map b, ViewFilter f) {
+    final authors = _authorsOf(b, 'metadata');
+    return ViewFilter.authorsMatch(authors, f.writers, writerRoles) &&
+        ViewFilter.authorsMatch(authors, f.artists, artistRoles) &&
+        f.yearMatches(_releaseDateOf(b, 'metadata'));
+  }
+
+  /// A series against the filter, as Komga does it: the authors of its books (Komga's booksMetadata, and those of the
+  /// downloaded books), its release date (its first book's), its publisher, genres and status.
+  bool _seriesMatches(Map s, ViewFilter f) {
+    if (f.isEmpty) return true;
+    final books = [for (final id in _booksOfSeries(s['id'] as String)) store.books[id]!['book'] as Map];
+    final authors = [..._authorsOf(s, 'booksMetadata'), for (final b in books) ..._authorsOf(b, 'metadata')];
+    final dates = [for (final b in books) _releaseDateOf(b, 'metadata')].whereType<String>().toList()..sort();
+    final meta = (s['metadata'] as Map?) ?? const {};
+    return ViewFilter.authorsMatch(authors, f.writers, writerRoles) &&
+        ViewFilter.authorsMatch(authors, f.artists, artistRoles) &&
+        f.yearMatches(_releaseDateOf(s, 'booksMetadata') ?? dates.firstOrNull) &&
+        ViewFilter.oneOf(meta['publisher'], f.publishers) &&
+        ViewFilter.anyIn((meta['genres'] as List?) ?? const [], f.genres) &&
+        ViewFilter.oneOf(meta['status'], f.statuses);
+  }
+
+  /// The downloaded books in a view's scope (the narrowest given).
+  Iterable<Map<String, dynamic>> _scoped({String? libraryId, String? collectionId, String? seriesId,
+      String? readListId}) sync* {
+    for (final e in _done) {
+      final v = e.value;
+      if (seriesId != null) {
+        if ((v['book'] as Map)['seriesId'] != seriesId) continue;
+      } else if (readListId != null) {
+        if (!((v['readLists'] as List?) ?? const []).any((r) => (r as Map)['id'] == readListId)) continue;
+      } else if (collectionId != null) {
+        if (!((v['collections'] as List?) ?? const []).any((c) => (c as Map)['id'] == collectionId)) continue;
+      } else if (libraryId != null && (v['library'] as Map?)?['id'] != libraryId) {
+        continue;
+      }
+      yield v;
+    }
+  }
+
+  @override
+  Future<List<String>> authorNames(List<String> roles, {String? search, String? libraryId, String? collectionId,
+      String? seriesId, String? readListId, int size = 1000}) async {
+    final q = search?.trim().toLowerCase() ?? '';
+    final names = <String, String>{};
+    for (final v in _scoped(libraryId: libraryId, collectionId: collectionId, seriesId: seriesId, readListId: readListId)) {
+      for (final a in _authorsOf(v['book'] as Map, 'metadata')) {
+        final n = (a as Map)['name'];
+        if (n is! String || n.trim().isEmpty || !roles.contains('${a['role']}'.toLowerCase())) continue;
+        if (q.isNotEmpty && !n.toLowerCase().contains(q)) continue;
+        names.putIfAbsent(n.toLowerCase(), () => n);
+      }
+    }
+    return Komga.sortedValues(names.values).take(size).toList();
+  }
+
+  /// The series JSON of the downloaded books in scope, one per series.
+  Iterable<Map> _scopedSeries({String? libraryId, String? collectionId}) => {
+        for (final v in _scoped(libraryId: libraryId, collectionId: collectionId))
+          (v['book'] as Map)['seriesId']: v['series'] as Map,
+      }.values;
+
+  @override
+  Future<List<String>> publishers({String? libraryId, String? collectionId}) async => Komga.sortedValues([
+        for (final s in _scopedSeries(libraryId: libraryId, collectionId: collectionId))
+          if ((s['metadata'] as Map?)?['publisher'] case final String p when p.trim().isNotEmpty) p,
+      ]);
+
+  @override
+  Future<List<String>> genres({String? libraryId, String? collectionId}) async => Komga.sortedValues([
+        for (final s in _scopedSeries(libraryId: libraryId, collectionId: collectionId))
+          for (final g in ((s['metadata'] as Map?)?['genres'] as List?) ?? const [])
+            if (g is String && g.trim().isNotEmpty) g,
+      ]);
+
+  @override
+  Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId, String? readListId}) async {
+    if (seriesId != null || readListId != null) {
+      return Komga.yearsOf([
+        for (final v in _scoped(seriesId: seriesId, readListId: readListId)) _releaseDateOf(v['book'] as Map, 'metadata'),
+      ]);
+    }
+    return Komga.yearsOf([
+      for (final s in _scopedSeries(libraryId: libraryId, collectionId: collectionId)) _releaseDateOf(s, 'booksMetadata'),
+    ]);
   }
 
   @override
