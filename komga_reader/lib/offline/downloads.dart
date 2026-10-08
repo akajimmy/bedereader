@@ -194,9 +194,7 @@ class Downloads extends ChangeNotifier {
       ..clear()
       ..addAll(p.getStringList(_keptKey) ?? const []);
     final saved = p.getString(_deleteReadKey);
-    deleteRead = saved != null
-        ? DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never)
-        : (p.getBool(_oldDeleteReadKey) ?? false) ? DeleteRead.always : DeleteRead.never; // the old switch: on = Always
+    deleteRead = DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never);
     queue.clear();
     if (await _queueFile.exists()) {
       try {
@@ -243,7 +241,6 @@ class Downloads extends ChangeNotifier {
 
   // ---- Delete once read (Settings > Downloads, this device): Never / Ask / Always (tablet bug, 2026-09-30) -----------
   static const _deleteReadKey = 'downloads.deleteRead';
-  static const _oldDeleteReadKey = 'downloads.deleteWhenRead'; // build 42-51: on/off (on = Always)
   DeleteRead deleteRead = DeleteRead.never;
   final Set<String> _finished = {}; // Always: read while a book was open - deleted once the reader closes
   final Set<String> askPending = {}; // Ask: finished, waiting to be asked about once no book is open

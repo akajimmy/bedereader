@@ -35,11 +35,9 @@ void main() {
     expect((d.font, d.colours, d.align, d.paragraphs, d.hyphenate, d.turn, d.size), (EpubFont.literata,
         EpubColours.dark, EpubAlign.justified, EpubParagraphs.mine, true, EpubTurn.slide, 19.0));
     expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
-    // saved before "Book's formatting" was split (user, 2026-10-07): on = the book's alignment and paragraphs
+    // the old "Book's formatting" switch isn't migrated (user, 2026-10-07): ignored, the defaults
     final was = EpubPrefs.fromJson(const {'bookFormatting': true});
-    expect((was.align, was.paragraphs, was.hyphenate), (EpubAlign.book, EpubParagraphs.book, true));
-    final wasOff = EpubPrefs.fromJson(const {'bookFormatting': false});
-    expect((wasOff.align, wasOff.paragraphs), (EpubAlign.justified, EpubParagraphs.mine));
+    expect((was.align, was.paragraphs), (EpubAlign.justified, EpubParagraphs.mine));
   });
 
   test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "
@@ -150,32 +148,22 @@ void main() {
     expect(sent['default'], isNotNull, reason: 'the reading defaults stay');
   });
 
-  testWidgets("one page corner for both kinds (user, 2026-10-07): a device saved before takes the EPUBs' choice; "
-      "with no EPUB choice, the comics' switch (off stays off); saved since, it's kept as it is", (tester) async {
+  testWidgets("the EPUBs' old page corner isn't taken over on load (user, 2026-10-07: no migrations) - each kind "
+      'keeps its own, or its default', (tester) async {
     final api = noNetwork(() => SettingsServer({}));
-    Future<PageNote> loaded(Map<String, dynamic> display, {String? corner, bool same = true}) async {
+    Future<(PageNote, PageNote)> loaded(Map<String, dynamic> display) async {
       SharedPreferences.setMockInitialValues({
         'displayPrefs': jsonEncode(display),
-        if (corner != null) 'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': {'corner': corner}}),
+        'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': {'corner': 'off'}}),
       });
       await tester.runAsync(() => AppSettings.instance.load(api, fetch: false));
       final d = AppSettings.instance.display;
-      if (same) expect(d.comics.pageNote, d.ebooks.pageNote, reason: 'taken over for both kinds');
-      return d.ebooks.pageNote;
+      return (d.comics.pageNote, d.ebooks.pageNote);
     }
 
-    expect(await loaded({'pageNumber': true}, corner: 'off'), PageNote.off, reason: "the EPUBs' choice");
-    expect(await loaded({'pageNumber': false}, corner: 'always'), PageNote.always, reason: "the EPUBs' choice");
-    expect(await loaded({'pageNumber': false}), PageNote.off, reason: "no EPUB choice: the comics' switch");
-    expect(await loaded({'pageNumber': true}), PageNote.afterTurn, reason: "no EPUB choice: the comics' switch");
-    expect(await loaded({'pageNote': 'afterTurn'}, corner: 'off'), PageNote.afterTurn, reason: 'saved since: kept');
-    final p = await tester.runAsync(SharedPreferences.getInstance);
-    expect(jsonDecode(p!.getString('displayPrefs')!)['pageNote'], 'afterTurn', reason: 'saved in its new place');
-    // saved since the kinds were set apart (no page note of its own, each kind's instead): not taken over again on
-    // every start (it would have put the EPUBs' old corner over both kinds' own)
-    expect(await loaded({'comics': {'pageNote': 'always'}, 'ebooks': {'pageNote': 'afterTurn'}}, corner: 'off', same: false),
-        PageNote.afterTurn, reason: "the eBooks' own, kept");
-    expect(AppSettings.instance.display.comics.pageNote, PageNote.always, reason: "the comics' own, kept");
+    expect(await loaded({'pageNumber': true}), (PageNote.afterTurn, PageNote.always), reason: 'the defaults');
+    expect(await loaded({'comics': {'pageNote': 'always'}, 'ebooks': {'pageNote': 'afterTurn'}}),
+        (PageNote.always, PageNote.afterTurn), reason: "each kind's own");
   });
 
   testWidgets("a change made while Komga can't be reached stays (Komga's older copy doesn't replace it) and goes "

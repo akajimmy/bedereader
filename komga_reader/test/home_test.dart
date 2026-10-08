@@ -9,7 +9,7 @@ import 'support/no_network.dart';
 
 void main() {
   testWidgets('the ⋮ menu shows or hides each Home section, and the choice is remembered', (tester) async {
-    SharedPreferences.setMockInitialValues({'showOnDeck': false}); // old build-15 setting carries over
+    SharedPreferences.setMockInitialValues({'home.show.ondeck': false});
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();

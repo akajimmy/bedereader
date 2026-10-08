@@ -31,8 +31,7 @@ class HomeSections extends ChangeNotifier {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     for (final k in names.keys) {
-      // 'showOnDeck' was the only toggle up to build 15
-      show[k] = p.getBool('home.show.$k') ?? (k == 'ondeck' ? p.getBool('showOnDeck') : null) ?? !_hiddenByDefault.contains(k);
+      show[k] = p.getBool('home.show.$k') ?? !_hiddenByDefault.contains(k);
     }
     // saved order first (sections that still exist), then any new ones in their default place at the end
     final saved = p.getStringList('home.order') ?? const [];
@@ -44,7 +43,7 @@ class HomeSections extends ChangeNotifier {
   /// Back to the default sections and order (Settings > Reset this device's settings).
   Future<void> reset() async {
     final p = await SharedPreferences.getInstance();
-    for (final k in p.getKeys().where((k) => k.startsWith('home.show.') || k == 'home.order' || k == 'showOnDeck')) {
+    for (final k in p.getKeys().where((k) => k.startsWith('home.show.') || k == 'home.order')) {
       await p.remove(k);
     }
     await load();
