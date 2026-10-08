@@ -10,6 +10,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **Fixed**
+- **The remote lost its place** after removing a key in Settings > Remote and keys, or moving a Home section to the
+  top or bottom with its arrows. The focus now goes to the row's Add, or stays on the arrow (dimmed at the ends).
+- **A pin saved without a sort direction** showed its poster in one order and opened in the other, and pinning the
+  same view again made a second pin. Both now use the sort's natural direction, as the screen does.
+- **View series in a book's details said nothing** when Komga couldn't be reached; it now says so.
+- **Sign-in: pressing Enter twice connected twice.** Book details now loads the book and its series together.
 - **The Page corner setting's description was out of date**: it still said EPUBs show the pages left in the chapter.
   It now reads "The page you're on, "12 / 36"" - what both comics and EPUBs show.
 
