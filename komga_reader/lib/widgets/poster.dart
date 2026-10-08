@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../paged.dart';
+import '../reader/reader_bars.dart' show isOkKey;
 import '../reader_keys.dart';
 import '../settings.dart';
 import 'error_text.dart';
@@ -154,9 +155,7 @@ class _HoldOkForMenuState extends State<HoldOkForMenu> {
   Timer? _timer;
   bool _down = false; // an OK press that started here, not yet let go (and not yet a hold)
 
-  bool _isOk(LogicalKeyboardKey k) =>
-      k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select || k == LogicalKeyboardKey.numpadEnter ||
-      ReaderKeys.instance.actionFor(k) == ReaderAction.controls;
+  bool _isOk(LogicalKeyboardKey k) => isOkKey(k) || ReaderKeys.instance.actionFor(k) == ReaderAction.controls;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     final hold = widget.onHold;

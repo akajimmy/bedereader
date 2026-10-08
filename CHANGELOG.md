@@ -13,6 +13,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Search: the Books row left out the books of the series found** - it showed only books whose own title matched.
   It now also lists every book of the series in the Series row, after the matched ones, in series and number order,
   each once. Offline, the same from your downloads.
+- **Downloading a whole series asked Komga the same three things for every book** (the series, the library list,
+  the series' collections) - about 150 requests for a 50-book series. Now once per run of the queue.
+- **One book Komga kept refusing (its reading progress) made every return to the app refresh all your downloaded
+  series.** It's still retried every couple of minutes, when you come back online and when you sync, and at once if
+  you read it again; on its own it no longer triggers the full refresh.
 
 ## 1.3.0
 

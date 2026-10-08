@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../book_title.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../offline/sync.dart';
@@ -45,7 +46,7 @@ class _Item {
 
   String get series => '${book['seriesTitle'] ?? ''}';
   String get seriesId => '${book['seriesId'] ?? ''}';
-  String get title => '$series #${book['metadata']?['number'] ?? ''}';
+  String get title => bookTitle(book);
   num get number => (book['metadata']?['numberSort'] as num?) ?? 0;
 }
 

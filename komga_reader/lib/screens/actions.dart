@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../errors.dart';
 import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
@@ -16,7 +17,7 @@ import 'series_details.dart';
 /// Returns what was done: 'read', 'unread', 'deleted', or null (cancelled / nothing to do / failed).
 Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     {required VoidCallback onChanged, VoidCallback? onSelectMultiple, String? readListId, bool showViewSeries = true}) async {
-  final title = '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}';
+  final title = bookTitle(b);
   final dl = Downloads.instance;
   final choice = await showModalBottomSheet<String>(
     context: context,
