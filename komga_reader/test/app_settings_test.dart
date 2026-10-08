@@ -447,4 +447,47 @@ void main() {
     await tester.pump();
     expect(find.byTooltip('Leave full screen (F11)'), findsNothing);
   });
+
+  group('the remote keeps its place (code review 2026-10-05, #26)', () {
+    /// The remote's focus is on what [f] finds (the focused control's box holds its centre).
+    bool on(WidgetTester tester, Finder f) {
+      final r = FocusManager.instance.primaryFocus?.rect;
+      // its own box, not a row's that happens to hold it
+      return r != null && r.contains(tester.getCenter(f)) && r.width < tester.getSize(f).width + 80;
+    }
+
+    testWidgets("a key chip removed with OK: the focus goes to its row's Add, not lost with the chip", (tester) async {
+      tall(tester);
+      addTearDown(ReaderKeys.instance.reset);
+      await open(tester, page: SettingsPage.keys);
+      await tester.pumpAndSettle();
+      Focus.of(tester.element(find.text('PgDn'))).requestFocus();
+      await tester.pump();
+      expect(on(tester, find.text('PgDn')), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('PgDn'), findsNothing);
+      final focused = FocusManager.instance.primaryFocus!.rect;
+      expect(focused.top, greaterThan(tester.getRect(find.text('Next page')).bottom), reason: 'in the Next page row');
+      expect(focused.bottom, lessThan(tester.getRect(find.text('Previous page')).top));
+      final add = find.descendant(of: find.ancestor(of: find.text('Next page'), matching: find.byType(Column)).first,
+          matching: find.text('Add'));
+      expect(on(tester, add), isTrue, reason: 'on Add');
+    });
+
+    testWidgets('a Home section moved to the top with ▲: the focus stays on that ▲', (tester) async {
+      tall(tester);
+      await open(tester, page: SettingsPage.library);
+      await tester.pumpAndSettle();
+      final second = HomeSections.names[HomeSections.instance.order[1]]!;
+      final up = find.byTooltip('Move $second up');
+      Focus.of(tester.element(find.descendant(of: up, matching: find.byType(Icon)))).requestFocus(); // the button's own
+      await tester.pump();
+      expect(on(tester, up), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(HomeSections.names[HomeSections.instance.order.first], second, reason: 'moved to the top');
+      expect(on(tester, up), isTrue, reason: 'still there for the remote');
+    });
+  });
 }

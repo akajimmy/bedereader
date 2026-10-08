@@ -722,12 +722,34 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 }
 
 /// One job's keys as chips (select one to remove it - Show the controls always keeps one), and + Add.
-class _KeyRow extends StatelessWidget {
+class _KeyRow extends StatefulWidget {
   const _KeyRow({required this.action, required this.onAdd});
   final ReaderAction action;
   final VoidCallback onAdd;
   @override
+  State<_KeyRow> createState() => _KeyRowState();
+}
+
+class _KeyRowState extends State<_KeyRow> {
+  final _addNode = FocusNode(debugLabel: 'key-add');
+
+  @override
+  void dispose() {
+    _addNode.dispose();
+    super.dispose();
+  }
+
+  /// [key] off [ReaderAction]; the remote's focus, which was on its chip, goes to the row's Add (the chip is gone -
+  /// the focus went with it; code review 2026-10-05, #26).
+  void _remove(LogicalKeyboardKey key) {
+    final hadFocus = FocusManager.instance.primaryFocus?.context?.findAncestorStateOfType<_KeyRowState>() == this;
+    ReaderKeys.instance.remove(widget.action, key);
+    if (hadFocus) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _addNode.requestFocus(); });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final action = widget.action;
     final k = ReaderKeys.instance;
     final removable = k.canRemove(action);
     return Padding(
@@ -746,10 +768,11 @@ class _KeyRow extends StatelessWidget {
               ]),
               visualDensity: VisualDensity.compact,
               tooltip: removable ? 'Remove ${ReaderKeys.nameOf(key)}' : 'Show the controls keeps at least one key',
-              onPressed: removable ? () => k.remove(action, key) : null,
+              onPressed: removable ? () => _remove(key) : null,
             ),
           if (k.keys[action]!.isEmpty) const Text('No key', style: TextStyle(color: hintColour)),
-          TextButton.icon(onPressed: onAdd, icon: const Icon(Icons.add, size: 18), label: const Text('Add')),
+          TextButton.icon(focusNode: _addNode, onPressed: widget.onAdd, icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add')),
         ]),
       ]),
     );
