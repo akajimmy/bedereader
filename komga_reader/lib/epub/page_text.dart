@@ -282,7 +282,7 @@ class PageText {
       if (block != null && !identical(block, s.block)) out = '${out.trimRight()}\n';
       block = s.block;
       if (to <= from) continue;
-      var t = plain.substring(from, to).replaceAll('­', '').replaceAll('￼', '');
+      var t = plain.substring(from, to).replaceAll('\u00AD', '').replaceAll('\uFFFC', '');
       final lead = s.laid.lead;
       if (lead != null && from == 0) t = lead + t;
       out += t;

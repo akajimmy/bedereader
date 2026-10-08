@@ -900,17 +900,13 @@ class EpubRenderer extends Renderer {
             )),
             ValueListenableBuilder<bool>(
               valueListenable: _selected,
-              builder: (_, selected, __) => Positioned.fill(child: RawGestureDetector(
+              // the page's taps win every tap over the selection area's (they're first in the arena), so a tap
+              // never starts a double tap that selects - quick taps turn pages as before
+              builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                gestures: {
-                  PageTapRecognizer: GestureRecognizerFactoryWithHandlers<PageTapRecognizer>(
-                    () => PageTapRecognizer(debugOwner: this),
-                    (t) => t
-                      ..onTapUp = ((d) => _tap(d, size, shown))
-                      // right-click, as with comics - with text selected it's the selection's (its menu)
-                      ..onSecondaryTap = selected ? null : host.toggleControls,
-                  ),
-                },
+                onTapUp: (d) => _tap(d, size, shown),
+                // right-click, as with comics - with text selected it's the selection's (its menu)
+                onSecondaryTap: selected ? null : host.toggleControls,
               )),
             ),
           ]);

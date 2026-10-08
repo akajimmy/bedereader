@@ -135,7 +135,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     final source = _long.replaceAll('.', '').split(' ').where((w) => w.isNotEmpty).toSet()..add('word');
     expect(copied, startsWith('The extraordinary'));
-    expect(copied, isNot(contains('­')));
+    expect(copied, isNot(contains('\u00AD')));
     for (final w in copied!.replaceAll('.', '').split(RegExp(r'\s+')).where((w) => w.isNotEmpty)) {
       expect(source, contains(w), reason: 'every word whole: "$w"');
     }

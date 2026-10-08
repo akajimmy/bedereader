@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -31,54 +28,6 @@ class SelectablePage extends SingleChildRenderObjectWidget {
       ..page = page
       ..colour = colour
       ..registrar = registrar;
-  }
-}
-
-/// The page's taps (turns, the controls, links, pictures). A press that comes straight after a tap, near it - a
-/// second quick tap, turning pages fast - is claimed for the page if it's still a tap [claimAfter] in: the selection
-/// area counts it as a double tap, and held a moment longer (kPressTimeout) it would select a word instead of turning
-/// the page. A swipe moves off before then and still turns. (So a double click doesn't select a word on Windows
-/// either: its first click has already turned the page or shown the controls.)
-class PageTapRecognizer extends TapGestureRecognizer {
-  PageTapRecognizer({super.debugOwner});
-
-  static const claimAfter = Duration(milliseconds: 70); // before the selection's kPressTimeout (100 ms)
-
-  Timer? _recent; // running for a double tap's time after a tap
-  Offset? _lastAt;
-  Timer? _claim;
-
-  @override
-  void addAllowedPointer(PointerDownEvent event) {
-    super.addAllowedPointer(event);
-    final at = _lastAt;
-    if (_recent?.isActive == true && at != null && (event.position - at).distance <= kDoubleTapSlop) {
-      _claim?.cancel();
-      _claim = Timer(claimAfter, () {
-        if (state == GestureRecognizerState.possible) resolve(GestureDisposition.accepted);
-      });
-    }
-  }
-
-  @override
-  void handleTapUp({required PointerDownEvent down, required PointerUpEvent up}) {
-    _lastAt = up.position;
-    _recent?.cancel();
-    _recent = Timer(kDoubleTapTimeout, () {});
-    super.handleTapUp(down: down, up: up);
-  }
-
-  @override
-  void didStopTrackingLastPointer(int pointer) {
-    _claim?.cancel();
-    super.didStopTrackingLastPointer(pointer);
-  }
-
-  @override
-  void dispose() {
-    _recent?.cancel();
-    _claim?.cancel();
-    super.dispose();
   }
 }
 

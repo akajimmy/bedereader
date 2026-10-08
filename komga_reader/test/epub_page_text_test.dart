@@ -27,11 +27,11 @@ void main() {
       final (a, b) = wordAround(t, c);
       return t.substring(a, b);
     }
-    const t = 'He said “don’t” to a well-known extra­ordinary man — twice.';
+    const t = 'He said “don’t” to a well-known extra\u00ADordinary man — twice.';
     expect(word(t, t.indexOf('on’t')), 'don’t');
     expect(word(t, t.indexOf('known')), 'well-known');
     expect(word(t, t.indexOf('well') + 4), 'well-known', reason: 'on the hyphen itself');
-    expect(word(t, t.indexOf('ordinary')), 'extra­ordinary');
+    expect(word(t, t.indexOf('ordinary')), 'extra\u00ADordinary');
     expect(word(t, t.indexOf(' to')), 'to', reason: 'a space after a quote mark: the word after it');
     expect(word(t, t.indexOf(' a ') + 1), 'a');
     expect(word(t, t.indexOf('said') - 1), 'He', reason: 'a space: the word before it');
@@ -79,8 +79,8 @@ void main() {
     expect(page.hyphenMarks, greaterThan(0), reason: 'words broken at line ends on the page');
     expect(page.textIndents.first, greaterThan(0), reason: 'an indent (its placeholder in the text)');
     final all = text.textOf(text.first, text.last);
-    expect(all, isNot(contains('­')));
-    expect(all, isNot(contains('￼')));
+    expect(all, isNot(contains('\u00AD')));
+    expect(all, isNot(contains('\uFFFC')));
     for (final w in all.replaceAll('.', '').split(RegExp(r'\s+')).where((w) => w.isNotEmpty)) {
       expect(source, contains(w), reason: 'every word whole');
     }
