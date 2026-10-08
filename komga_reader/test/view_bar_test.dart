@@ -64,7 +64,7 @@ void main() {
   // ---- the order of the buttons (a guard: it mustn't drift view to view) ------------------------------------------
 
   testWidgets('every view has its buttons in the one order, those that do not apply left out', (tester) async {
-    for (final (mode, select) in [('series', false), ('books', true), ('collections', false), ('readLists', false)]) {
+    for (final (mode, select) in [('series', true), ('books', true), ('collections', false), ('readLists', false)]) {
       SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': mode})});
       await library(tester);
       expect(bar(tester), ['count', 'eye', 'sort', if (select) 'select', 'size', 'pin', 'search', 'refresh',
@@ -74,7 +74,7 @@ void main() {
     await seriesView(tester);
     expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
     await collection(tester);
-    expect(bar(tester), ['count', 'eye', 'sort', 'size', 'pin', 'refresh', 'fullscreen']);
+    expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'fullscreen']);
     await list(tester);
     expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
   });
