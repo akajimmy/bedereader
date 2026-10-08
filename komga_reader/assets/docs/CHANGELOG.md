@@ -12,6 +12,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **New**
 - **Rotate a picture in an eBook**: a tapped picture now opens at 95% of the screen with a rotate button in each top
   corner - left turns it counterclockwise, right clockwise. With the remote, Left / Right go to them and OK presses.
+- **Select text in an eBook and copy it**: press and hold a word (on a PC: drag with the mouse), drag the handles to
+  take more - across paragraphs on the page - and Copy from the pane that pops up (Ctrl+C on a PC). Copied text is
+  plain: words split over two lines come out whole. A tap lets go of the selection; turning the page does too.
+  (Holding a finger on the page now selects a word rather than turning the page.)
 
 **Changed**
 - **eBooks: the spinner while a book is laid out says "Adjusting and storing layout"** (it was "Laying out the
