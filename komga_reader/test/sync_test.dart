@@ -147,6 +147,35 @@ void main() {
     expect(sync.pending, 1, reason: 'B1 waits for the next run');
   });
 
+  test('one book Komga keeps refusing doesn\'t make every resume a full refresh (code review 2026-10-05, #41); an '
+      'ordinary unsent change, or the refused book changed again, still runs at once on resume', () async {
+    Future<void> resume() async {
+      sync.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await waitUntil(() => !sync.running, reason: 'the resume run');
+    }
+
+    final off = offlineApi();
+    await off.setProgress('B1', 2);
+    server.refused.add('B1');
+    server.seriesCalls = 0;
+    await resume(); // (within refreshGap of the start-up run) unsent: runs, and Komga refuses B1
+    expect(server.seriesCalls, 1);
+    await resume();
+    expect(server.seriesCalls, 1, reason: 'B1 alone, refused last time: waits for the usual gap');
+    expect(sync.pending, 1);
+
+    await off.setProgress('B2', 2); // an ordinary change, Komga reachable and accepting
+    await resume();
+    expect(server.seriesCalls, 2);
+    expect(server.writes, ['B2 page 2']);
+
+    server.refused.clear();
+    await off.setProgress('B1', 3); // the refused book changed again: tried at once
+    await resume();
+    expect(server.writes, ['B2 page 2', 'B1 page 3']);
+    expect(sync.pending, 0);
+  });
+
   test('a series deleted on Komga: its downloads are marked, and the series after it still refresh', () async {
     await d.store!.put('B3', {...entry('B3'), 'book': {'id': 'B3', 'seriesId': 'S2'}}); // another series, after S1
     server.goneSeries.add('S1');
