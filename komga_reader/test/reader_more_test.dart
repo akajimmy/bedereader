@@ -273,8 +273,9 @@ void main() {
     };
 
     for (final MapEntry(key: how, value: cancel) in cancels.entries) {
-      // a finger and a mouse drag reach the slider the same way (raw pointer events): both are tried
-      for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
+      // a finger and a mouse drag reach the slider the same way (raw pointer events, the kind never read): every way
+      // out with a finger, and one with the mouse as a guard (all six ran - test audit, 2026-10-07)
+      for (final kind in [PointerDeviceKind.touch, if (how == 'Esc') PointerDeviceKind.mouse]) {
       testWidgets('dragging (${kind.name}), then $how: no page change, even when it lets go', (tester) async {
         await openLoaded(tester, pages: 20);
         await key(tester, LogicalKeyboardKey.enter); // controls
@@ -489,10 +490,8 @@ void main() {
       AppSettings.instance.setDefault(const ReaderPrefs());
     });
     await openLoaded(tester);
-    for (var i = 0; i < 20; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-    }
+    await waitUntil(() => shows(find.descendant(of: current, matching: find.byType(RawImage))), tester: tester,
+        reason: 'the page, plain');
     expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget, reason: 'the page, plain');
     expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
   });
@@ -505,17 +504,15 @@ void main() {
     final api = noNetwork(() => FirstPageOnly(pageCount: 10));
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
     await tester.pump();
-    for (var i = 0; i < 20; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-    }
+    await waitUntil(() => shows(find.descendant(of: current, matching: find.byType(RawImage))), tester: tester,
+        reason: 'the first page, while its sample pages are still on their way');
     expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget,
         reason: 'the first page, while its sample pages are still on their way');
     expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
   });
 
   testWidgets('Enhance switched on while reading: the page stays on screen until its enhanced picture is ready (it '
-      'vanished and came back - user, build 73)', (tester) async {
+      'vanished and came back - user, build 73), which then takes its place', (tester) async {
     addTearDown(() {
       Enhancer.holdRuns = null;
       AppSettings.instance.setDefault(const ReaderPrefs());
@@ -530,9 +527,15 @@ void main() {
     }
     expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget, reason: 'still there');
     expect(find.descendant(of: current, matching: find.byType(CircularProgressIndicator)), findsNothing);
+    int shownWidth() =>
+        tester.widget<RawImage>(find.descendant(of: current, matching: find.byType(RawImage))).image!.width;
+    expect(shownWidth(), 200, reason: 'meanwhile: the plain page, as it came (200 x 300)');
+    // then the enhanced picture takes its place: made at the page's size on screen, in physical pixels - it was never
+    // checked that it came (test audit, 2026-10-07)
     hold.complete();
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
+    await waitUntil(() => shownWidth() != 200, tester: tester, reason: 'the enhanced picture');
+    final box = tester.getSize(find.descendant(of: current, matching: find.byType(RawImage)));
+    expect(shownWidth(), (box.width * tester.view.devicePixelRatio).round(), reason: 'the enhanced one, 1:1 on screen');
   });
 
   testWidgets('zoom keys: + zooms in a step at a time, - back out to fit; in fit width they do nothing', (tester) async {
@@ -863,7 +866,8 @@ void main() {
     testWidgets('fit height, a spread wider than the screen: dragging on past its edge towards the start of the book '
         'does nothing; towards the end turns forward, on to the end card', (tester) async {
       // 800 x 600 screen, a 400 x 200 spread in fit height = 1200 x 600: drags sideways, 400 to go, opens centred.
-      // One page: with more, the turn that drops a spread out of the page view hits the bug in the skipped test below.
+      // One page, so the drag forward lands on the end card. (Spreads dropping out of the page view as it turns on:
+      // the fit-height test below.)
       final api = await openLoaded(tester, w: 400, h: 200, pages: 1);
       await key(tester, LogicalKeyboardKey.enter);
       await tester.tap(find.byTooltip('Fit screen'));

@@ -367,8 +367,8 @@ void main() {
     expect(api.saves, [2]);
   });
 
-  testWidgets('Next book mid-book: set to Ask it asks, and Keep in progress does not mark read; set to Mark read or '
-      'Keep in progress, no question asked', (tester) async {
+  testWidgets('Next book mid-book: set to ask, it asks, and keeping the book in progress does not mark it read; set to '
+      'mark it read or to leave it as it is, no question asked - and only the first marks it', (tester) async {
     // one test over the three settings (they were two - test audit, 2026-09-30)
     final s = AppSettings.instance;
     addTearDown(() => s.setDisplay(s.display.copyWith(midBook: MidBook.ask)));
@@ -473,7 +473,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await toEndCard(tester);
     expect(find.text("The next book in the series isn't downloaded"), findsOneWidget);
-    expect(find.byType(Image), findsNothing);
+    // the poster is a RawImage in a box keyed 'next-poster' (an empty plate until it's in): no box at all
+    // (it looked for an Image, which the poster never is - test audit, 2026-10-07)
+    expect(find.byKey(const ValueKey('next-poster')), findsNothing, reason: 'no poster');
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
@@ -529,13 +531,13 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('end card: shows the next book in the series - title and poster', (tester) async {
+  // its poster: the poster tests above (a key check here passed on the empty plate too - test audit, 2026-10-07)
+  testWidgets('end card: shows the next book in the series - its number and title', (tester) async {
     await openReader(tester, next: second);
     await toEndCard(tester);
     expect(find.text('Up next in the series'), findsOneWidget);
     expect(find.text('Test #2'), findsOneWidget);
     expect(find.text('The Second One'), findsOneWidget);
-    expect(find.byKey(const ValueKey('next-poster')), findsOneWidget); // its poster (its size: the tests below)
     expect(api.askedReadList, isNull); // opened outside a read list: the series
     await tester.pump(const Duration(seconds: 2));
   });
@@ -865,12 +867,22 @@ void main() {
     }
   });
 
-  testWidgets('page turn animation: Instant flip cuts to the next page with no slide', (tester) async {
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+  // the looks of a turn, one table (Instant flip and Swipe were two tests - test audit, 2026-10-07); the curl: its group
+  testWidgets('page turn look: Instant flip cuts to the next page in the same frame; Swipe slides (half-way through '
+      'after a few frames)', (tester) async {
     addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
-    await openReader(tester);
-    await key(tester, LogicalKeyboardKey.arrowRight);
-    expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, 1.0); // already there, same frame
+    for (final (turn, after, shown) in [
+      (PageTurn.flip, Duration.zero, equals(1.0)), // already there, same frame
+      (PageTurn.swipe, const Duration(milliseconds: 60), inExclusiveRange(0.0, 1.0)), // on its way
+    ]) {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
+      await openReader(tester);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      if (after > Duration.zero) await tester.pump(after);
+      expect(tester.widget<PageView>(find.byType(PageView)).controller!.page, shown, reason: turn.name);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 
   for (final turn in PageTurn.values) {
@@ -932,25 +944,12 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('a slow drag past halfway turns the page; a short one springs back', (tester) async {
+    // a short one springing back: the next test (this one did that too, the same way - test audit, 2026-10-07)
+    testWidgets('a slow drag past halfway turns the page', (tester) async {
       await openCurling(tester);
       final size = tester.getSize(find.byType(PageView));
       final y = size.height / 2;
-      // short and slow: back where it was
-      var g = await tester.startGesture(Offset(size.width * 0.8, y));
-      for (var i = 1; i <= 10; i++) {
-        await g.moveTo(Offset(size.width * 0.8 - i * 8.0, y));
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-      expect(curling(), findsOneWidget); // the page follows the finger
-      await g.up();
-      await tester.pump(); // the spring-back / finishing animation starts counting from this frame
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pump();
-      expect(curling(), findsNothing);
-      expect(page(tester), 0.0);
-      // long and slow: turned
-      g = await tester.startGesture(Offset(size.width * 0.9, y));
+      final g = await tester.startGesture(Offset(size.width * 0.9, y));
       for (var i = 1; i <= 20; i++) {
         await g.moveTo(Offset(size.width * 0.9 - i * size.width * 0.04, y));
         await tester.pump(const Duration(milliseconds: 50));
@@ -975,12 +974,14 @@ void main() {
         await g.moveTo(Offset(size.width * 0.8 - i * 8.0, y));
         await tester.pump(const Duration(milliseconds: 50));
       }
+      expect(curling(), findsOneWidget); // the page follows the finger
       await g.up();
       await tester.pump(); // the spring-back starts
       await tester.pump(const Duration(milliseconds: 100));
       await tester.tapAt(Offset(size.width * 0.9, y)); // forward, mid spring-back
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
+      expect(curling(), findsNothing, reason: 'sprung back');
       expect(page(tester), 0.0, reason: 'the tap waited for the spring-back: nothing turned');
       await tester.pump(const Duration(seconds: 2)); // past the save delay
       expect(api.saves, isEmpty, reason: 'nothing was turned, nothing saved');
@@ -1074,15 +1075,6 @@ void main() {
     });
   });
 
-  testWidgets('page turn: Swipe slides (half-way through after a few frames)', (tester) async {
-    await openReader(tester);
-    await key(tester, LogicalKeyboardKey.arrowRight);
-    await tester.pump(const Duration(milliseconds: 60));
-    final page = tester.widget<PageView>(find.byType(PageView)).controller!.page!;
-    expect(page > 0 && page < 1, isTrue);
-    await tester.pump(const Duration(seconds: 3));
-  });
-
   group('right to left', () {
     setUp(() => ReaderServer.direction = 'RIGHT_TO_LEFT');
     tearDown(() {
@@ -1154,22 +1146,17 @@ void main() {
         tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first).transformationController!.value
             .getMaxScaleOnAxis();
 
-    testWidgets('every page turn mode keeps the neighbouring pages built (processed before they are turned to)',
-        (tester) async {
+    testWidgets('the neighbouring pages are kept built (processed before they are turned to)', (tester) async {
       // test audit, 2026-09-30: it only read the page view's allowImplicitScrolling (a constant); now the next page
-      // must really be there, built and laid out off screen, in each mode
-      addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+      // must really be there, built and laid out off screen. One mode: every page turn mode is the same page view,
+      // only its physics differ (it looped over the three - test audit, 2026-10-07)
       // the page after the one showing (on page 1 of 3, the only page that isn't current)
       final next = find.byWidgetPredicate((w) => w is PageCanvas && !w.current, skipOffstage: false);
-      for (final turn in PageTurn.values) {
-        AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: turn));
-        await openLoaded(tester);
-        await until(tester, () => shows(next));
-        expect(next, findsOneWidget, reason: turn.name);
-        expect(page(tester), 0.0, reason: turn.name); // still on the first page: nothing turned to build it
-        await tester.pump(const Duration(seconds: 3));
-        await tester.pumpWidget(const SizedBox());
-      }
+      await openLoaded(tester);
+      await until(tester, () => shows(next));
+      expect(next, findsOneWidget);
+      expect(page(tester), 0.0); // still on the first page: nothing turned to build it
+      await tester.pump(const Duration(seconds: 3));
     });
 
     testWidgets('double-tap zooms in on the spot, again zooms back out - no controls, no page turn', (tester) async {
@@ -1293,9 +1280,9 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    // the slider takes a finger and a mouse the same way (raw pointer events): both are tried
-    for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
-    testWidgets('slider (${kind.name}): after a jump away the way back stays marked, scrubbing or not; an ordinary '
+    // the slider takes a finger and a mouse the same way (raw pointer events, the kind never read): a finger here
+    // (both kinds ran these - test audit, 2026-10-07); the mouse's guard is reader_more_test's cancelled scrub
+    testWidgets('slider: after a jump away the way back stays marked, scrubbing or not; an ordinary '
         'page turn forgets it - reading on from there (user, 2026-10-02)', (tester) async {
       await openLoaded(tester, pages: 200);
       await key(tester, LogicalKeyboardKey.enter); // controls
@@ -1303,7 +1290,7 @@ void main() {
       Offset at(int i) => Offset(r.left + 20 + i * (r.width - 40) / 199, r.center.dy);
       const mark = ValueKey('scrub-start');
       double markX() => tester.getRect(find.byKey(mark)).center.dx;
-      var g = await tester.startGesture(at(0), kind: kind);
+      var g = await tester.startGesture(at(0));
       await g.moveTo(at(100));
       await g.up();
       await tester.pump();
@@ -1312,7 +1299,7 @@ void main() {
       await key(tester, LogicalKeyboardKey.escape); // controls away and back: still there
       await key(tester, LogicalKeyboardKey.enter);
       expect(markX(), closeTo(at(0).dx, 1), reason: 'with the controls shown again');
-      g = await tester.startGesture(at(100), kind: kind);
+      g = await tester.startGesture(at(100));
       await tester.pump();
       expect(markX(), closeTo(at(0).dx, 1), reason: 'the way back is kept over the jump');
       await g.up();
@@ -1324,7 +1311,7 @@ void main() {
       expect(page(tester), 101.0);
       await key(tester, LogicalKeyboardKey.enter);
       expect(find.byKey(mark), findsNothing, reason: 'forgotten: no mark while not scrubbing');
-      g = await tester.startGesture(at(101), kind: kind);
+      g = await tester.startGesture(at(101));
       await g.moveTo(at(150));
       await tester.pump();
       expect(markX(), closeTo(at(101).dx, 1), reason: 'forgotten: scrubbing, the mark is where the reader is now');
@@ -1332,7 +1319,7 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('slider (${kind.name}): a mark where scrubbing started, kept after a jump away; a drag near it snaps '
+    testWidgets('slider: a mark where scrubbing started, kept after a jump away; a drag near it snaps '
         'back to it, and once back the mark follows the reader again (user, 2026-10-02)', (tester) async {
       await openLoaded(tester, pages: 200); // ~4 px a page on the slider: hard to hit one page by hand
       for (var i = 0; i < 3; i++) {
@@ -1348,7 +1335,7 @@ void main() {
       expect(find.byKey(mark), findsNothing, reason: 'nowhere to go back to, not scrubbing: no mark');
 
       // off to page 151 to look at it: the mark stays on page 4, where it started
-      var g = await tester.startGesture(at(3), kind: kind);
+      var g = await tester.startGesture(at(3));
       await g.moveTo(at(150));
       await tester.pump();
       expect(markX(), closeTo(at(3).dx, 1));
@@ -1358,7 +1345,7 @@ void main() {
       expect(markX(), closeTo(at(3).dx, 1), reason: 'after the jump: the way back, shown');
 
       // scrubbing again: the mark is still where the reader came from, not here
-      g = await tester.startGesture(at(150), kind: kind);
+      g = await tester.startGesture(at(150));
       await tester.pump();
       expect(markX(), closeTo(at(3).dx, 1), reason: 'the way back, after the jump');
       // a few pages off the mark (12 px: page 6 by position) - close enough to snap onto it
@@ -1385,16 +1372,15 @@ void main() {
       }
       expect(page(tester), 23.0);
       await key(tester, LogicalKeyboardKey.enter);
-      g = await tester.startGesture(at(23), kind: kind);
+      g = await tester.startGesture(at(23));
       await g.moveTo(at(100));
       await tester.pump();
       expect(markX(), closeTo(at(23).dx, 1));
       await g.up();
       await tester.pump(const Duration(seconds: 2));
     });
-    }
 
-    // Save page / Copy page (user, 2026-10-02): one line at the top of the Reader panel; the page's own picture file.
+    // Save page / Copy page (user, 2026-10-02): one line at the top of the Comic settings; the page's own picture file.
     // The platform side (MainActivity.kt / desktop_channel.cpp) is stood in for by a fake channel.
     group('save / copy page', () {
       const channel = MethodChannel('komga_reader/screen');
@@ -1437,8 +1423,7 @@ void main() {
         expect(tester.getRect(find.text('This page')).top, lessThan(tester.getRect(save).top), reason: 'its own group');
 
         await tester.tap(save);
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-        await tester.pump();
+        await until(tester, () => shows(find.textContaining('Page saved')));
         final s = named('savePicture').single.arguments as Map;
         expect(s['bytes'], ImageKomga.png, reason: "the page's own file");
         expect(s['name'], 'Test #1 - page 1.png');
@@ -1447,8 +1432,7 @@ void main() {
 
         await clearMessages(tester);
         await tester.tap(copy);
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-        await tester.pump();
+        await until(tester, () => shows(find.text('Page copied')));
         final c = named('copyPicture').single.arguments as Map;
         expect(c['bytes'], ImageKomga.png);
         expect(c['name'], 'Test #1 - page 1.png');
@@ -1477,8 +1461,7 @@ void main() {
         expect(saved, ImageKomga.png);
 
         await tester.tap(find.widgetWithText(OutlinedButton, 'Copy page'));
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
-        await tester.pump();
+        await until(tester, () => shows(find.text('Page copied'))); // the page decoded for real, then handed over
         final c = named('copyPicture').single.arguments as Map;
         final w = c['width'] as int, h = c['height'] as int;
         expect((w, h), (200, 300), reason: "the page's own size");
@@ -1493,8 +1476,7 @@ void main() {
         answer = (c) => c.method == 'savePicture' ? throw PlatformException(code: 'save', message: 'disk full') : null;
         await openPanel(tester);
         await tester.tap(find.widgetWithText(OutlinedButton, 'Save page'));
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-        await tester.pump();
+        await until(tester, () => shows(find.textContaining("Couldn't save")));
         expect(find.textContaining("Couldn't save the page"), findsOneWidget);
         await clearMessages(tester);
 
@@ -1527,16 +1509,34 @@ void main() {
         s.setDisplay(s.display.copyWith(pageStrip: false));
       });
 
-      testWidgets('once opened it stays: the controls hidden and shown again after reading on, it is there, on the '
-          'page being read; closing the book and opening another, still there - until the button closes it '
-          '(user, 2026-10-02)', (tester) async {
+      // (two tests, the first half of each the same - merged, test audit 2026-10-07)
+      testWidgets('the Pages button opens it at the page shown, asking only for thumbnails near it; a page tapped is '
+          'gone to and the strip stays, the way back marked. Once opened it stays: the controls hidden and shown '
+          'again after reading on, it is there, on the page being read; closing the book and opening another, still '
+          'there - until the button closes it (user, 2026-10-02)', (tester) async {
         await openLoaded(tester, pages: 40);
         await key(tester, LogicalKeyboardKey.enter); // controls
+        expect(find.byKey(strip), findsNothing, reason: 'closed until asked for');
         await tester.tap(find.byTooltip('Show pages'));
         await tester.pump();
+        await tester.pump();
+        expect(find.byKey(strip), findsOneWidget);
+        expect(tile(0), findsOneWidget, reason: 'opened at page 1, the page shown');
+        await until(tester, () => (api as ImageKomga).thumbsAsked.isNotEmpty);
+        final asked = (api as ImageKomga).thumbsAsked;
+        // ~11 tiles on an 800-wide screen, plus the few the list builds just past its edge; pages 1-3 are loaded
+        // already (no thumbnail needed) - not the whole book
+        expect(asked.every((n) => n <= 16), isTrue, reason: 'only pages on or near the strip are asked for: $asked');
+        expect(asked.toSet().length, asked.length, reason: 'none twice');
+
         await tester.tap(tile(5)); // browsed there, and stays
         await tester.pump(const Duration(milliseconds: 400));
-        expect(page(tester), 5.0);
+        expect(page(tester), 5.0, reason: 'page 6');
+        expect(find.byKey(strip), findsOneWidget, reason: 'the strip stays');
+        expect(find.byTooltip('Hide pages'), findsOneWidget, reason: 'and the controls');
+        final mark = tester.getRect(find.byKey(const ValueKey('strip-way-back')));
+        expect(mark.center.dx, closeTo(tester.getRect(tile(0)).center.dx, 1), reason: 'the way back: under page 1');
+
         await key(tester, LogicalKeyboardKey.escape); // controls away
         await tester.pump();
         expect(find.byKey(strip), findsNothing, reason: 'not over the page while reading');
@@ -1590,37 +1590,6 @@ void main() {
         final picked = tester.getRect(tile(99));
         final screen = tester.getRect(find.byKey(strip));
         expect(picked.center.dx, closeTo(screen.center.dx, 2), reason: 'page 100 in the middle: $picked in $screen');
-        await tester.pump(const Duration(seconds: 2));
-      });
-
-      testWidgets('the Pages button opens it at the page shown; a page tapped is gone to and the strip stays, the way '
-          'back marked; the button closes it', (tester) async {
-        await openLoaded(tester, pages: 40);
-        await key(tester, LogicalKeyboardKey.enter); // controls
-        expect(find.byKey(strip), findsNothing, reason: 'closed until asked for');
-        await tester.tap(find.byTooltip('Show pages'));
-        await tester.pump();
-        await tester.pump();
-        expect(find.byKey(strip), findsOneWidget);
-        expect(tile(0), findsOneWidget, reason: 'opened at page 1, the page shown');
-        await until(tester, () => (api as ImageKomga).thumbsAsked.isNotEmpty);
-        final asked = (api as ImageKomga).thumbsAsked;
-        // ~11 tiles on an 800-wide screen, plus the few the list builds just past its edge; pages 1-3 are loaded
-        // already (no thumbnail needed) - not the whole book
-        expect(asked.every((n) => n <= 16), isTrue, reason: 'only pages on or near the strip are asked for: $asked');
-        expect(asked.toSet().length, asked.length, reason: 'none twice');
-
-        await tester.tap(tile(5));
-        await tester.pump(const Duration(milliseconds: 400));
-        expect(page(tester), 5.0, reason: 'page 6');
-        expect(find.byKey(strip), findsOneWidget, reason: 'the strip stays');
-        expect(find.byTooltip('Hide pages'), findsOneWidget, reason: 'and the controls');
-        final mark = tester.getRect(find.byKey(const ValueKey('strip-way-back')));
-        expect(mark.center.dx, closeTo(tester.getRect(tile(0)).center.dx, 1), reason: 'the way back: under page 1');
-
-        await tester.tap(find.byTooltip('Hide pages'));
-        await tester.pump();
-        expect(find.byKey(strip), findsNothing);
         await tester.pump(const Duration(seconds: 2));
       });
 
@@ -1850,7 +1819,7 @@ void main() {
     });
   });
 
-  testWidgets('background: the reading defaults\' White makes the reader white, with dark text on the end card; a '
+  testWidgets('background: the comic defaults\' White makes the reader white, with dark text on the end card; a '
       "series' own background overrides it (user, 2026-10-05)", (tester) async {
     final s = AppSettings.instance;
     final defaults = s.defaults;
@@ -1953,7 +1922,9 @@ void main() {
       return wayUp();
     });
     final s = AppSettings.instance;
-    addTearDown(() {
+    addTearDown(() async {
+      // a test that fails with a book open leaves the lock held (app-wide): let it go here (test audit, 2026-10-07)
+      await OrientationLock.instance.release();
       s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.auto)));
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
