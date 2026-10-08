@@ -16,28 +16,8 @@ void main() {
     return texts.evaluate().isEmpty ? null : (texts.evaluate().first.widget as Text).data;
   }
 
-  testWidgets('a page taller than the screen: Down keeps the focused row on screen, scrolling as it goes (test audit)',
-      (tester) async {
-    setView(tester, const Size(900, 500));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
-      SettingsGroup(title: 'G', children: [
-        for (var i = 0; i < 20; i++) SwitchRow(title: 'Row $i', value: false, onChanged: (_) {}),
-      ]),
-    ]))));
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.tab); // the first row
-    await tester.pump();
-    final screen = tester.getRect(find.byType(ListView));
-    for (var i = 1; i < 15; i++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
-      final focused = FocusManager.instance.primaryFocus!.context!;
-      final r = tester.getRect(find.byWidget(focused.widget).first);
-      expect(r.top >= screen.top - 0.5 && r.bottom <= screen.bottom + 0.5, isTrue,
-          reason: 'after $i Downs the focused row ($r) is inside the screen ($screen)');
-    }
-  });
-
+  // (a page taller than the screen, Down keeping the focused row on screen: settings_remote_test's walk of every
+  // page, and row_nav_keys_test's with Android's navigation bar)
   testWidgets('Down from a wide choice goes to the next row even when its only control is off to the side; '
       'then the one after; Up comes back', (tester) async {
     // The case the rows are for: the wide row's left segment sits straight over the row after next (the page's
