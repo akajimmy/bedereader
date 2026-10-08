@@ -40,8 +40,8 @@ void main() {
       waitUntil(done, tester: tester, timeout: const Duration(seconds: 1), step: const Duration(milliseconds: 10),
           reason: reason);
 
-  testWidgets('book menu: Download queues the book; the Downloads screen shows it, then Remove download frees it',
-      (tester) async {
+  testWidgets('book menu: Download queues the book; the Downloads screen shows it, and hands it to Manage once '
+      'downloaded', (tester) async {
     final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() => d.attach(api, root: dir));
     d.pauseAll(); // keep it in the queue so the queue view can be checked
@@ -51,9 +51,8 @@ void main() {
     await tester.tap(find.text('menu'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Download'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await until(tester, () => d.jobFor('B1') != null, 'B1 queued');
     await tester.pumpAndSettle();
-    expect(d.jobFor('B1'), isNotNull);
 
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     // something queued: it opens on the Queue tab
@@ -72,66 +71,43 @@ void main() {
     expect(find.text('Manage · 1'), findsOneWidget);
     expect(find.text('Silver Surfer #1'), findsNothing, reason: 'no "finished this session" list on Queue (user, 2026-10-07)');
     expect(find.textContaining('Nothing downloading'), findsOneWidget);
-    await tester.tap(find.text('Manage · 1'));
-    await tester.pumpAndSettle();
-    expect(find.text('3 pages · 0.0 MB · in progress'), findsOneWidget); // (the fake Komga has B1 started)
-
-    // the button itself, not d.remove() (test audit, 2026-09-30)
-    await tester.tap(find.byTooltip('Remove download'));
-    // (the store forgets it before the save and the screen update finish: wait for the screen)
-    await until(tester, () => find.text('Manage · 0').evaluate().isNotEmpty, 'the screen to show it gone');
-    expect(d.isDownloaded('B1'), isFalse);
-    expect(await tester.runAsync(() => Directory(d.store!.file('B1').path).exists()), isFalse, reason: 'files gone');
-    expect(find.byTooltip('Remove download'), findsNothing);
     await quiet(tester);
+    final saving = File('${dir.path}${Platform.pathSeparator}queue.json.tmp');
+    await until(tester, () => !saving.existsSync(), 'the last queue save done (its file would hold the folder)');
   });
 
-  testWidgets('a failed download says why and offers Retry; Retry tries it again', (tester) async {
+  testWidgets('failed downloads say why and offer Retry: Retry tries that book again (the other stays failed), Retry '
+      'all in the top bar the rest - and they download', (tester) async {
     final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() async {
       await d.attach(api, root: dir);
       await d.setCap(100); // smaller than any book
-      await d.add([{'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}}]);
-      await waitUntil(() => d.jobFor('B2')?.state == JobState.failed, timeout: const Duration(seconds: 1),
-          reason: 'B2 stopped for lack of room');
-    });
-    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    expect(find.textContaining('Failed: not enough room'), findsOneWidget);
-    expect(find.byTooltip('Retry'), findsOneWidget);
-    expect(find.text('Retry 1'), findsOneWidget); // retry-all in the top bar
-    expect(api.pageRequests, 0);
-
-    // the limit lifted in memory only - setCap() would put the book back in the queue by itself, and Retry would
-    // never be needed (test audit, 2026-09-30: Retry was found but never tapped)
-    d.capBytes = null;
-    await tester.tap(find.byTooltip('Retry'));
-    expect(d.jobFor('B2')?.state, isNot(JobState.failed), reason: 'back in the queue');
-    await until(tester, () => d.isDownloaded('B2') && !d.busy, 'B2 downloaded after Retry');
-    expect(d.isDownloaded('B2'), isTrue);
-    expect(find.textContaining('Failed:'), findsNothing);
-    expect(find.text('Manage · 1'), findsOneWidget);
-    await quiet(tester);
-  });
-
-  testWidgets("Retry all in the top bar: every failed book goes back in the queue and downloads", (tester) async {
-    final api = noNetwork(LibraryServer.new)..booksFail = true;
-    await tester.runAsync(() async {
-      await d.attach(api, root: dir);
       await d.add([
         {'id': 'B1', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '1'}},
         {'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}},
       ]);
       await waitUntil(() => d.queue.every((j) => j.state == JobState.failed) && !d.busy,
-          timeout: const Duration(seconds: 1), reason: 'both failed');
+          timeout: const Duration(seconds: 1), reason: 'both stopped for lack of room');
     });
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    expect(find.textContaining('Failed: '), findsNWidgets(2));
+    expect(find.textContaining('Failed: not enough room'), findsNWidgets(2), reason: 'says why');
+    expect(find.byTooltip('Retry'), findsNWidgets(2));
+    expect(find.text('Retry 2'), findsOneWidget); // retry-all in the top bar, with the count
+    expect(api.pageRequests, 0);
 
-    api.booksFail = false; // Komga fixed
-    await tester.tap(find.text('Retry 2'));
-    expect(d.queue.map((j) => j.state), isNot(contains(JobState.failed)), reason: 'both back in the queue');
-    await waitUntil(() => d.isDownloaded('B1') && d.isDownloaded('B2') && !d.busy, tester: tester,
-        timeout: const Duration(seconds: 3), step: const Duration(milliseconds: 10), reason: 'both downloaded');
+    // the limit lifted in memory only - setCap() would put the books back in the queue by itself, and Retry would
+    // never be needed (test audit, 2026-09-30: Retry was found but never tapped)
+    d.capBytes = null;
+    await tester.tap(find.byTooltip('Retry').first); // B1's row, first in the queue
+    expect(d.jobFor('B1')?.state, isNot(JobState.failed), reason: 'back in the queue');
+    await until(tester, () => d.isDownloaded('B1') && !d.busy, 'B1 downloaded after Retry');
+    expect(d.jobFor('B2')!.state, JobState.failed, reason: 'Retry is for that book only');
+    expect(find.textContaining('Failed: '), findsOneWidget);
+    expect(find.text('Retry 1'), findsOneWidget);
+
+    await tester.tap(find.text('Retry 1'));
+    expect(d.queue.map((j) => j.state), isNot(contains(JobState.failed)), reason: 'back in the queue');
+    await until(tester, () => d.isDownloaded('B2') && !d.busy && d.queue.isEmpty, 'B2 downloaded after Retry all');
     expect(find.textContaining('Failed:'), findsNothing);
     expect(find.text('Manage · 2'), findsOneWidget);
     await quiet(tester);
@@ -305,8 +281,7 @@ void main() {
     expect((await tester.runAsync(SharedPreferences.getInstance))!.getBool('downloads.groupBySeries'), isTrue);
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-    await tester.pump();
+    await until(tester, () => !shows(find.text('Flash #1')), 'the saved grouping read');
     expect(titles(), ['Flash', 'Saga'], reason: 'opened again: still grouped (groups closed again)');
   });
 
@@ -346,13 +321,19 @@ void main() {
   testWidgets('Manage: each book has one trash button, not a menu (user, 2026-10-07) - it removes that book at once',
       (tester) async {
     await library(tester);
+    final page = File(d.store!.file('B1/pages/0001.jpg').path); // Saga #1's page on disk
+    await tester.runAsync(() => page.create(recursive: true));
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     expect(find.byIcon(Icons.more_vert), findsNothing);
     expect(find.byTooltip('Remove download'), findsNWidgets(3));
+    // the button itself, not d.remove() (test audit, 2026-09-30)
     await tester.tap(find.descendant(of: find.widgetWithText(ListTile, 'Saga #1'),
         matching: find.byTooltip('Remove download')));
+    // (the store forgets it before the save and the screen update finish: wait for the screen)
     await until(tester, () => find.text('Manage · 2').evaluate().isNotEmpty, 'Saga #1 gone');
     expect(titles(), ['Flash #1', 'Saga #2']);
+    expect(d.isDownloaded('B1'), isFalse);
+    expect(await tester.runAsync(() => Directory(d.store!.file('B1').path).exists()), isFalse, reason: 'files gone');
   });
 }
 
