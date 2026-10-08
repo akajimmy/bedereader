@@ -8,36 +8,24 @@ import 'package:komga_reader/widgets/poster.dart';
 import 'package:komga_reader/widgets/readlist_tile.dart';
 
 import 'support/no_network.dart';
+import 'support/readlist_server.dart';
 
-/// A 5-book read list: 2 unread, 1 in progress, 2 read.
-class FakeKomga extends TestKomga {
-  final status = {'a': 'UNREAD', 'b': 'READ', 'c': 'IN_PROGRESS', 'd': 'UNREAD', 'e': 'READ'};
-  final readCalls = <String>[], unreadCalls = <String>[];
+/// A 5-book read list: 2 unread (a, d), 1 in progress (c), 2 read (b, e).
+ReadListServer fiveBooks() => noNetwork(() => ReadListServer(
+    [listBook('a'), listBook('b', read: true), listBook('c', page: 5), listBook('d'), listBook('e', read: true)]));
 
-  @override
-  Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async {
-    final ids = status.entries.where((e) => readStatus == null || readStatus.contains(e.value)).map((e) => e.key).toList();
-    return {
-      'content': [
-        for (final id in ids.take(size)) {'id': id, 'name': id, 'seriesTitle': 'S', 'metadata': {'number': id, 'title': 'T'}},
-      ],
-      'totalElements': ids.length,
-      'last': true,
-    };
-  }
-
-  @override
-  Future<void> markRead(String bookId) async => readCalls.add(bookId);
-  @override
-  Future<void> markUnread(String bookId) async => unreadCalls.add(bookId);
-}
+/// A read list longer than one page: [unread] unread books (u0, u1...) then [read] read ones (r0...).
+ReadListServer longList({required int unread, required int read}) => noNetwork(() => ReadListServer([
+      for (var i = 0; i < unread; i++) listBook('u$i'),
+      for (var i = 0; i < read; i++) listBook('r$i', read: true),
+    ]));
 
 void main() {
   final rl = {'id': 'RL', 'name': 'Civil War', 'bookIds': ['a', 'b', 'c', 'd', 'e']};
 
   Future<void> run(WidgetTester tester, Komga api, String action, {required bool confirm}) async {
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => TextButton(
-        onPressed: () => showReadListActions(context, api, rl, onChanged: () {}), child: const Text('go'))))));
+    await tester.pumpWidget(MaterialApp(key: UniqueKey(), home: Scaffold(body: Builder(builder: (context) =>
+        TextButton(onPressed: () => showReadListActions(context, api, rl, onChanged: () {}), child: const Text('go'))))));
     await tester.tap(find.text('go'));
     await tester.pumpAndSettle();
     await tester.tap(find.text(action));
@@ -47,24 +35,20 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
   }
 
-  testWidgets('mark all read touches only the unfinished books', (tester) async {
-    final api = noNetwork(FakeKomga.new);
-    await run(tester, api, 'Mark all as read', confirm: true);
-    expect(api.readCalls..sort(), ['a', 'c', 'd']);
-    expect(find.text('3 books marked read'), findsOneWidget);
-  });
-
-  testWidgets('mark all unread touches only books with progress', (tester) async {
-    final api = noNetwork(FakeKomga.new);
-    await run(tester, api, 'Mark all as unread', confirm: true);
-    expect(api.unreadCalls..sort(), ['b', 'c', 'e']);
-  });
-
-  testWidgets('cancel changes nothing', (tester) async {
-    final api = noNetwork(FakeKomga.new);
-    await run(tester, api, 'Mark all as unread', confirm: false);
-    expect(api.unreadCalls, isEmpty);
-    expect(api.readCalls, isEmpty);
+  testWidgets('mark all read touches only the unfinished books, mark all unread only books with progress; cancel '
+      'changes nothing', (tester) async {
+    for (final (action, confirm, read, unread, says) in [
+      ('Mark all as read', true, ['a', 'c', 'd'], <String>[], '3 books marked read'),
+      ('Mark all as unread', true, <String>[], ['b', 'c', 'e'], '3 books marked unread'),
+      ('Mark all as unread', false, <String>[], <String>[], null),
+    ]) {
+      final api = fiveBooks();
+      await run(tester, api, action, confirm: confirm);
+      final why = '$action, ${confirm ? 'confirmed' : 'cancelled'}';
+      expect(api.readCalls..sort(), read, reason: why);
+      expect(api.unreadCalls..sort(), unread, reason: why);
+      if (says != null) expect(find.text(says), findsOneWidget, reason: why);
+    }
   });
 
   testWidgets('read-list tile: books still to read - unread and in progress - from the lookup', (tester) async {
@@ -72,7 +56,7 @@ void main() {
     // in progress showed as read)
     ReadListTile.invalidate();
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 150, height: 290,
-        child: ReadListTile(api: noNetwork(FakeKomga.new), readList: rl, onOpen: () {})))));
+        child: ReadListTile(api: fiveBooks(), readList: rl, onOpen: () {})))));
     await tester.pump();
     expect(find.text('3 of 5 unread'), findsOneWidget); // a and d unread, c in progress
   });
@@ -80,7 +64,7 @@ void main() {
   testWidgets('header count shows the total for the current filter, in a box left of Hide read',
       (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: noNetwork(FakeKomga.new), readList: rl)));
+    await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: fiveBooks(), readList: rl)));
     await tester.pump();
     await tester.pump();
     // the count read from the badge itself, not any "5" on screen (test audit, 2026-09-30)
@@ -95,7 +79,7 @@ void main() {
 
   // test audit, 2026-09-30: every fake answered in one page, so paging was never exercised
   testWidgets('mark all read reaches the books on every page of the list, not just the first', (tester) async {
-    final api = noNetwork(() => _LongListKomga(unread: 520, read: 3)); // the action asks 500 at a time: two pages of unread
+    final api = longList(unread: 520, read: 3); // the action asks 500 at a time: two pages of unread
     await run(tester, api, 'Mark all as read', confirm: true);
     expect(api.asked, containsAll(['UNREAD p0', 'UNREAD p1']));
     expect(api.readCalls.toSet(), {for (var i = 0; i < 520; i++) 'u$i'});
@@ -105,7 +89,7 @@ void main() {
 
   testWidgets('the read list grid loads the next page when scrolled to the end', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    final api = noNetwork(() => _LongListKomga(unread: 150, read: 0)); // the grid asks 100 at a time (Paged.pageSize)
+    final api = longList(unread: 150, read: 0); // the grid asks 100 at a time (Paged.pageSize)
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api,
         readList: {'id': 'RL', 'name': 'Long', 'bookIds': [for (var i = 0; i < 150; i++) 'u$i']})));
     await tester.pump();
@@ -122,36 +106,3 @@ void main() {
     expect(find.text('S #u149'), findsOneWidget); // the last book, from the second page
   });
 }
-
-/// A read list longer than one page: `unread` unread books (u0, u1...) then `read` read ones (r0...). Answers each
-/// page as Komga does - `size` books from `page * size`, last only on the final page - and records what was asked.
-class _LongListKomga extends TestKomga {
-  _LongListKomga({required int unread, required int read}) {
-    entries = [
-      for (var i = 0; i < unread; i++) {'id': 'u$i', 'status': 'UNREAD'},
-      for (var i = 0; i < read; i++) {'id': 'r$i', 'status': 'READ'},
-    ];
-  }
-  late final List<Map<String, String>> entries;
-  final asked = <String>[], readCalls = <String>[];
-
-  @override
-  Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async {
-    asked.add('${readStatus?.join('+') ?? 'all'} p$page');
-    final match = entries.where((b) => readStatus == null || readStatus.contains(b['status'])).toList();
-    final from = page * size, to = (from + size).clamp(0, match.length);
-    return {
-      'content': [
-        for (final b in match.sublist(from.clamp(0, match.length), to))
-          {'id': b['id'], 'name': b['id'], 'seriesTitle': 'S', 'metadata': {'number': b['id'], 'title': 'T'},
-            'media': {'pagesCount': 20}, 'readProgress': b['status'] == 'READ' ? {'completed': true, 'page': 20} : null},
-      ],
-      'totalElements': match.length,
-      'last': to >= match.length,
-    };
-  }
-
-  @override
-  Future<void> markRead(String bookId) async => readCalls.add(bookId);
-}
-

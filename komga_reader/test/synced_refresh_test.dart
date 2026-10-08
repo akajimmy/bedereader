@@ -12,7 +12,7 @@ import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'ondeck_hidden_test.dart' show DeckKomga;
+import 'support/deck_server.dart';
 import 'support/client_settings.dart';
 import 'support/no_network.dart';
 

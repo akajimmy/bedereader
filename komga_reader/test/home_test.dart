@@ -37,16 +37,13 @@ void main() {
     expect((await SharedPreferences.getInstance()).getStringList('home.order')!.take(2), ['continue', 'libraries']);
   });
 
-  testWidgets('Home draws the sections in the chosen order; a switched-on new row loads and shows', (tester) async {
-    SharedPreferences.setMockInitialValues({'home.order': ['libraries', 'continue'], 'home.show.recentBooks': true});
-    final api = noNetwork(HomeServer.new);
-    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
+  // (a switched-on row loading its own books: home_rows_test)
+  testWidgets('Home draws the sections in the chosen order', (tester) async {
+    SharedPreferences.setMockInitialValues({'home.order': ['libraries', 'continue']});
+    await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();
     expect(tester.getTopLeft(find.text('Libraries')).dy < tester.getTopLeft(find.text('Continue reading')).dy, isTrue);
-    expect(find.text('Recently added books'), findsOneWidget);
-    expect(find.text('New Series #1'), findsOneWidget);
-    expect(api.booksSorts, contains('createdDate,desc'));
   });
 }
 

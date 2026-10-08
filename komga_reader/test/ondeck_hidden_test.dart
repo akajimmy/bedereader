@@ -1,20 +1,14 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'support/client_settings.dart';
-import 'support/home_server.dart';
+import 'support/deck_server.dart';
 import 'support/no_network.dart';
-
-/// On deck with two books (series S1 and S2); Komga's client settings kept in memory, or unreachable.
-class DeckKomga extends HomeServer with ClientSettingsStore {
-  DeckKomga() : super(onDeckBooks: [
-          {'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Hidden Series', 'name': 'b1', 'metadata': {'number': '4'}},
-          {'id': 'B2', 'seriesId': 'S2', 'seriesTitle': 'Shown Series', 'name': 'b2', 'metadata': {'number': '7'}},
-        ]);
-}
 
 void main() {
   final h = OnDeckHidden.instance;
@@ -37,7 +31,7 @@ void main() {
     final api = noNetwork(DeckKomga.new);
     await h.load(api);
     h.setSeries('S1', true);
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await pumpEventQueue();
     expect(api.written[OnDeckHidden.komgaKey], contains('S1'));
 
     SharedPreferences.setMockInitialValues({}); // a second device
@@ -52,7 +46,7 @@ void main() {
     await h.load(api);
     api.down = true;
     h.setBook('B1', true);
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await pumpEventQueue();
     api.down = false;
     h.reset(); // restart
     await h.load(api);
@@ -66,11 +60,11 @@ void main() {
     await h.load(api);
     api.down = true;
     h.setSeries('S2', true); // offline: can't be sent
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await pumpEventQueue();
     expect(api.written[OnDeckHidden.komgaKey], isNot(contains('S2')));
     api.down = false;
     h.useApi(api); // back online (what Connection does)
-    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await pumpEventQueue();
     expect(api.written[OnDeckHidden.komgaKey], contains('S2'));
   });
 
@@ -86,5 +80,24 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Hidden Series #4'), findsOneWidget);
+  });
+
+  // (moved from pins_test, test audit 2026-10-07)
+  test('refreshed: something hidden here while the list from Komga was on its way is kept, and reaches Komga',
+      () async {
+    final api = noNetwork(DeckKomga.new)
+      ..written[OnDeckHidden.komgaKey] = jsonEncode({'series': <String>[], 'books': <String>[]});
+    await h.load(api);
+    addTearDown(h.clearAccount);
+    api.holdGet = Completer<void>();
+    final refreshing = h.refresh(); // an empty list on its way
+    await pumpEventQueue();
+    h.setSeries('S1', true); // hidden here meanwhile
+    await pumpEventQueue();
+    api.holdGet!.complete();
+    await refreshing;
+    await pumpEventQueue();
+    expect(h.seriesHidden('S1'), isTrue, reason: 'not replaced by the list asked for before');
+    expect(api.written[OnDeckHidden.komgaKey], contains('S1'));
   });
 }
