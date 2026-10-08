@@ -928,21 +928,72 @@ class EpubRenderer extends Renderer {
       );
 }
 
-/// The picture full screen: fitted to the screen (enlarged if small), pinch or wheel to zoom; a tap, Back, Esc or OK
-/// closes it.
+/// The picture over the book: fitted to 95% of the screen (enlarged if small), pinch or wheel to zoom; a tap, Back,
+/// Esc or OK closes it. A button in each top corner of the picture turns it a quarter - left: counterclockwise,
+/// right: clockwise (user, 2026-10-08; buttons only, no key, not kept). The remote reaches them with Left / Right.
 class _PictureView extends StatefulWidget {
   const _PictureView({required this.image});
   final ui.Image image; // its own handle: let go of with the view
+
+  /// The share of the screen the picture's area takes (user: "instead of going full screen, go like 95%").
+  static const share = 0.95;
 
   @override
   State<_PictureView> createState() => _PictureViewState();
 }
 
 class _PictureViewState extends State<_PictureView> {
+  int _turns = 0; // quarter turns clockwise, 0..3
+  final _ccw = FocusNode(), _cw = FocusNode(); // the remote: Left / Right go to them, OK presses the one focused
+
+  void _turn(int by) => setState(() => _turns = (_turns + by) % 4);
+
   @override
   void dispose() {
+    _ccw.dispose();
+    _cw.dispose();
     widget.image.dispose();
     super.dispose();
+  }
+
+  /// The picture at [area], turned: fitted in it, centred, and its two rotate buttons in its top corners.
+  Widget _picture(Size area) {
+    final w = widget.image.width.toDouble(), h = widget.image.height.toDouble();
+    final (iw, ih) = _turns.isOdd ? (h, w) : (w, h);
+    final scale = math.min(area.width / iw, area.height / ih);
+    final shown = Size(iw * scale, ih * scale);
+    final left = (area.width - shown.width) / 2, top = (area.height - shown.height) / 2;
+    Widget button(String key, FocusNode node, IconData icon, String tip, int by) => Material(
+          key: ValueKey(key),
+          color: Colors.black.withValues(alpha: 0.55),
+          shape: const CircleBorder(),
+          child: IconButton(focusNode: node, tooltip: tip, color: Colors.white, icon: Icon(icon),
+              onPressed: () => _turn(by)),
+        );
+    return SizedBox.fromSize(
+      size: area,
+      child: Stack(children: [
+        Positioned.fill(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(
+              child: SizedBox.fromSize(
+                size: shown,
+                child: RotatedBox(
+                  key: const ValueKey('picture.turned'),
+                  quarterTurns: _turns,
+                  child: RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(left: left + 8, top: top + 8,
+            child: button('picture.rotate.ccw', _ccw, Icons.rotate_90_degrees_ccw, 'Rotate left', 3)),
+        Positioned(right: left + 8, top: top + 8,
+            child: button('picture.rotate.cw', _cw, Icons.rotate_90_degrees_cw, 'Rotate right', 1)),
+      ]),
+    );
   }
 
   @override
@@ -951,8 +1002,17 @@ class _PictureViewState extends State<_PictureView> {
         onKeyEvent: (_, e) {
           if (e is! KeyDownEvent) return KeyEventResult.ignored;
           final k = e.logicalKey;
-          if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select ||
-              k == LogicalKeyboardKey.numpadEnter) {
+          if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.arrowRight) {
+            (k == LogicalKeyboardKey.arrowLeft ? _ccw : _cw).requestFocus();
+            return KeyEventResult.handled;
+          }
+          final ok = k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.select ||
+              k == LogicalKeyboardKey.numpadEnter;
+          if (ok && (_ccw.hasFocus || _cw.hasFocus)) {
+            _turn(_ccw.hasFocus ? 3 : 1); // OK on a rotate button presses it
+            return KeyEventResult.handled;
+          }
+          if (ok || k == LogicalKeyboardKey.escape) {
             Navigator.of(context).pop();
             return KeyEventResult.handled;
           }
@@ -962,12 +1022,8 @@ class _PictureViewState extends State<_PictureView> {
           behavior: HitTestBehavior.opaque,
           onTap: () => Navigator.of(context).pop(),
           child: SafeArea(
-            child: InteractiveViewer(
-              maxScale: 6,
-              child: SizedBox.expand(
-                child: RawImage(image: widget.image, fit: BoxFit.contain, filterQuality: FilterQuality.medium),
-              ),
-            ),
+            child: LayoutBuilder(builder: (context, box) => Center(child: _picture(
+                Size(box.maxWidth * _PictureView.share, box.maxHeight * _PictureView.share)))),
           ),
         ),
       );

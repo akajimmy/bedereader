@@ -469,6 +469,60 @@ void main() {
     expect(find.text('Close'), findsOneWidget, reason: 'the controls instead');
   });
 
+  testWidgets('the picture takes 95% of the screen; a button in each of its top corners turns it a quarter, left '
+      'counterclockwise, right clockwise, without closing it (user, 2026-10-08)', (tester) async {
+    final map = (await tester.runAsync(() async {
+      final rec = ui.PictureRecorder();
+      Canvas(rec).drawRect(const Rect.fromLTWH(0, 0, 300, 500), Paint()..color = const Color(0xFF808080));
+      final img = await rec.endRecording().toImage(300, 500);
+      return (await img.toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    }))!;
+    await open(tester, MemorySource({'c1.xhtml': '<html><body><p><img src="map.png"/></p></body></html>'},
+        const EpubInfo(spine: ['c1.xhtml'], toc: []), binary: {'map.png': map}));
+    await tester.tapAt(const Offset(400, 600));
+    await settle(tester);
+
+    int turns() => tester.widget<RotatedBox>(find.byKey(const ValueKey('picture.turned'))).quarterTurns;
+    Rect picture() => tester.getRect(find.byType(RawImage));
+    // 300 x 500 in 95% of the 800 x 1200 screen (760 x 1140): as tall as that, 684 wide, centred
+    expect(picture().height, closeTo(1140, 0.5));
+    expect(picture().center.dx, closeTo(400, 0.5));
+    expect(picture().center.dy, closeTo(600, 0.5));
+    bool inTopCorner(String key, {required bool left}) {
+      final b = tester.getRect(find.byKey(ValueKey(key))), p = picture();
+      return p.contains(b.topLeft) && p.contains(b.bottomRight - const Offset(1, 1)) && b.top - p.top < 24 &&
+          (left ? b.left - p.left < 24 : p.right - b.right < 24);
+    }
+    expect(inTopCorner('picture.rotate.ccw', left: true), isTrue);
+    expect(inTopCorner('picture.rotate.cw', left: false), isTrue);
+
+    await tester.tap(find.byKey(const ValueKey('picture.rotate.cw')));
+    await settle(tester);
+    expect(turns(), 1, reason: 'clockwise');
+    expect(find.byType(RawImage), findsOneWidget, reason: 'still open');
+    // turned: 500 x 300, as wide as the area (760), 456 tall
+    expect(picture().width, closeTo(760, 0.5));
+    expect(picture().height, closeTo(456, 0.5));
+    expect(inTopCorner('picture.rotate.cw', left: false), isTrue, reason: 'the buttons follow its corners');
+
+    await tester.tap(find.byKey(const ValueKey('picture.rotate.ccw')));
+    await tester.tap(find.byKey(const ValueKey('picture.rotate.ccw')));
+    await settle(tester);
+    expect(turns(), 3, reason: 'counterclockwise twice from a quarter: three quarters');
+
+    // the remote: Right goes to a button, OK presses it (and doesn't close the picture)
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await settle(tester);
+    expect(find.byType(RawImage), findsOneWidget, reason: 'OK on a button turns, not closes');
+    expect(turns(), 0, reason: 'Right: the clockwise one - three quarters and one');
+
+    await tester.tapAt(const Offset(400, 600));
+    await settle(tester);
+    expect(find.byType(RawImage), findsNothing, reason: 'a tap on the picture still closes it');
+  });
+
   testWidgets("where you are (user's options F + H): the bar has the chapter's name with the book's page and % at "
       "the left and the chapter's page at the right; the page's corner has the book's page of its pages (\"1 / 342\", "
       "as comics' - user 2026-10-07) - always, for a moment after a turn, or not at all", (tester) async {
