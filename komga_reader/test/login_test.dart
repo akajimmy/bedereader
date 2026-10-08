@@ -104,6 +104,7 @@ void main() {
     await tester.showKeyboard(key);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
+    await tester.showKeyboard(key); // (the first Enter put the keyboard away)
     await tester.testTextInput.receiveAction(TextInputAction.done); // again, while the first is still connecting
     await tester.pump();
     expect(built, hasLength(1), reason: 'one client, one question to Komga');
