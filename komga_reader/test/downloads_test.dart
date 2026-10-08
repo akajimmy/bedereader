@@ -61,6 +61,24 @@ void main() {
     expect(() => offline.nextBook('B1'), throwsA(isA<NotAvailableOffline>())); // B2 not downloaded
   });
 
+  test('queueing several books of one series asks for the series, the library list and the collections once, not '
+      'once per book (code review 2026-10-05, #42) - each book still gets them', () async {
+    final api = server();
+    await d.attach(api, root: dir);
+    await d.add([book('B1', 1), book('B2', 2), book('B3', 3), book('B4', 4)]); // one run of the queue
+    await settle(d);
+    for (final id in ['B1', 'B2', 'B3', 'B4']) {
+      expect(d.isDownloaded(id), isTrue, reason: id);
+      final e = d.store!.books[id]!;
+      expect((e['series'] as Map)['name'], 'Silver Surfer', reason: id);
+      expect((e['library'] as Map)['name'], 'Archive', reason: id);
+      expect(((e['collections'] as List).single as Map)['name'], 'Marvel cosmic', reason: id);
+    }
+    expect(api.seriesRequests, 1);
+    expect(api.librariesRequests, 1);
+    expect(api.collectionsRequests, 1);
+  });
+
   test('signing in again to the same server keeps the one store for its folder: a second one, while a download from '
       'before was still writing through the first, had two writing index.json (code review 2026-10-05, #27)',
       () async {
