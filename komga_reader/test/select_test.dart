@@ -5,39 +5,22 @@ import 'package:komga_reader/screens/readlist.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/no_network.dart';
-
-Map<String, dynamic> book(String id, {bool read = false, int? page}) => {
-      'id': id, 'seriesTitle': 'S', 'name': id, 'metadata': {'number': id, 'title': 'T$id'},
-      'media': {'pagesCount': 20},
-      'readProgress': read ? {'completed': true, 'page': 20} : page != null ? {'completed': false, 'page': page} : null,
-    };
-
-/// Read list of three: A unread, B read, C in progress.
-class FakeKomga extends TestKomga {
-  final list = [book('A'), book('B', read: true), book('C', page: 5)];
-  final marked = <String>[], unmarked = <String>[];
-  @override
-  Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
-      {'content': list, 'totalElements': list.length, 'last': true};
-  @override
-  Future<void> markRead(String bookId) async => marked.add(bookId);
-  @override
-  Future<void> markUnread(String bookId) async => unmarked.add(bookId);
-}
+import 'support/readlist_server.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   test('"already in that state" rules: in progress counts as not read, and as not unread', () {
-    expect(needsChange(book('A'), read: true), isTrue);
-    expect(needsChange(book('A'), read: false), isFalse); // unread already
-    expect(needsChange(book('B', read: true), read: true), isFalse); // read already
-    expect(needsChange(book('C', page: 5), read: true), isTrue);
-    expect(needsChange(book('C', page: 5), read: false), isTrue); // clears its page
+    expect(needsChange(listBook('A'), read: true), isTrue);
+    expect(needsChange(listBook('A'), read: false), isFalse); // unread already
+    expect(needsChange(listBook('B', read: true), read: true), isFalse); // read already
+    expect(needsChange(listBook('C', page: 5), read: true), isTrue);
+    expect(needsChange(listBook('C', page: 5), read: false), isTrue); // clears its page
   });
 
-  Future<FakeKomga> open(WidgetTester tester) async {
-    final api = noNetwork(FakeKomga.new);
+  /// Read list of three: A unread, B read, C in progress.
+  Future<ReadListServer> open(WidgetTester tester) async {
+    final api = noNetwork(() => ReadListServer([listBook('A'), listBook('B', read: true), listBook('C', page: 5)]));
     await tester.pumpWidget(MaterialApp(home: ReadListScreen(api: api, readList: const {'id': 'RL', 'name': 'List', 'bookIds': []})));
     await tester.pump();
     await tester.pump();
@@ -73,7 +56,7 @@ void main() {
     await tester.tap(find.byTooltip('Mark as read')); // B (read) and C (in progress)
     await tester.pump();
     await tester.pump();
-    expect(api.marked, ['C']); // B already read: skipped
+    expect(api.readCalls, ['C']); // B already read: skipped
     expect(find.text('1 marked read (1 already read)'), findsOneWidget);
     expect(find.byTooltip('Select multiple'), findsOneWidget); // back to the normal top bar
     await tester.pump(const Duration(seconds: 5));
