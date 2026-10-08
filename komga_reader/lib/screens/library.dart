@@ -7,10 +7,12 @@ import '../book_title.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
+import '../view_filter.dart';
 import '../view_prefs.dart';
 import '../view_sort.dart';
 import '../widgets/download_badge.dart';
 import '../widgets/drawer.dart';
+import '../widgets/filter_panel.dart';
 import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
@@ -55,7 +57,7 @@ class LibraryScreen extends StatefulWidget {
   }
 }
 
-class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
+class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, ViewFilters {
   static final List<_LibraryScreenState> _open = []; // library screens in the app now, oldest first
 
   /// Shows [m] (a breadcrumb back to this screen), as picking its chip would.
@@ -109,8 +111,26 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   static ViewSort _defaultSort(BrowseMode m) =>
       m == BrowseMode.books ? const ViewSort('added', true) : ViewSort.first(_fieldsOf(m));
   String get _viewKey => 'view.library.${_libraryId ?? 'all'}';
-  bool get _filtered => _filter != ReadFilter.all || _sort != _defaultSort(_mode);
+  bool get _filtered =>
+      _filter != ReadFilter.all || _sort != _defaultSort(_mode) || (!_listMode && activeFilters.isNotEmpty);
   bool get _listMode => _mode == BrowseMode.collections || _mode == BrowseMode.readLists;
+
+  // ---- the filter panel (Series and Books modes; collections / read lists have the eye only)
+  @override
+  bool get filtersSeriesView => _mode == BrowseMode.series;
+
+  @override
+  Future<ViewKind> askFilterKind() => api.viewKind(libraryId: _libraryId);
+
+  @override
+  FilterScope filterScope(Future<ViewKind> kind) => FilterScope(api: api, seriesView: filtersSeriesView,
+      libraryId: _libraryId, kind: kind, count: (draft) => countOf((page, size) => _fetchWith(draft, page, size)));
+
+  @override
+  void applyFilters(ViewFilter f) {
+    filters = f;
+    _load();
+  }
 
   /// A saved or pinned sort in this mode: an unknown key is the mode's default field; no direction, the field's
   /// natural one.
@@ -126,6 +146,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     _mode = BrowseMode.values.firstWhere((m) => m.name == v['mode'], orElse: () => BrowseMode.series);
     _filter = ReadFilterApi.fromName(v['filter']);
     _sort = _sortOf(v['sort'], v['desc']);
+    filters = ViewPrefs.filtersOf(v);
   }
 
   Future<void> _init() async {
@@ -136,6 +157,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
       // pin.sort is "key:asc" / "key:desc" (just "key": the sort's natural direction; none: the mode's default)
       final parts = (pin.sort ?? '').split(':');
       _sort = _sortOf(parts.first, parts.length > 1 ? parts[1] == 'desc' : null);
+      filters = pin.filters;
     } else {
       await _restoreView();
       final m = widget.startMode;
@@ -152,10 +174,13 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
     }
   }
 
-  Future<Map<String, dynamic>> _fetch(int page, int size) => switch (_mode) {
-        BrowseMode.series => api.series(libraryId: _libraryId, readStatus: _filter.api,
+  Future<Map<String, dynamic>> _fetch(int page, int size) => _fetchWith(filters, page, size);
+
+  /// The listing with [filter] (the view's own, or the panel's draft for its count).
+  Future<Map<String, dynamic>> _fetchWith(ViewFilter filter, int page, int size) => switch (_mode) {
+        BrowseMode.series => api.filteredSeries(libraryId: _libraryId, read: _filter, filter: filter,
             sort: _sortParam, page: page, size: size),
-        BrowseMode.books => api.books(libraryId: _libraryId, readStatus: _filter.api,
+        BrowseMode.books => api.filteredBooks(libraryId: _libraryId, read: _filter, filter: filter,
             sort: _sortParam, page: page, size: size),
         BrowseMode.collections || BrowseMode.readLists when _filter != ReadFilter.all || _sort != _defaultSort(_mode) =>
           page > 0
@@ -170,11 +195,13 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   void _load() {
     setState(() {});
     _paged.reset();
-    ViewPrefs.save(_viewKey, {'mode': _mode.name, 'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc});
+    ViewPrefs.save(_viewKey, ViewPrefs.withFilters(
+        {'mode': _mode.name, 'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc}, filters));
   }
 
   Future<void> _switchLibrary(String? id) async {
     _libraryId = id;
+    forgetFilterKind();
     await _restoreView();
     if (!mounted) return;
     setState(() {});
@@ -184,6 +211,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   void _clearFilters() {
     _filter = ReadFilter.all;
     _sort = _defaultSort(_mode);
+    if (!_listMode) filters = ViewFilter.none; // (collections / read lists: the panel's filters aren't theirs)
     _load();
   }
 
@@ -200,6 +228,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   @override
   Widget build(BuildContext context) {
     // the eye and Sort in every mode (user, 2026-10-07 / 2026-10-08)
+    final chips = _listMode ? null : filterChips();
     return SideMenuFrame(api: api, onSignOut: widget.onSignOut, page: (context, docked) =>
         selectionScope(_sel, (context) => Scaffold(
       key: _scaffold,
@@ -223,13 +252,16 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
         actions: viewBarActions(
           paged: _paged,
           filter: _filter, onFilter: (f) { _filter = f; _load(); },
+          filters: _listMode ? null : filterButton(),
           sort: SortMenuButton(fields: _fields, value: _sort, onChanged: (s) { _sort = s; _load(); }),
           onClear: _filtered ? _clearFilters : null,
           select: _mode == BrowseMode.books || _mode == BrowseMode.series ? _sel : null,
           pin: Pin(
-            name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!].join(' · '),
+            name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!,
+                if (!_listMode) ...filterWords()].join(' · '),
             kind: 'library', id: _libraryId, title: _libraryName,
             filter: _filter.name, mode: _mode.name,
+            filters: _listMode ? ViewFilter.none : activeFilters,
             // collections / read lists: none for the default, as pins made before they could be sorted
             sort: _listMode && _sort == _defaultSort(_mode) ? null : _sort.pinValue,
           ),
@@ -238,24 +270,28 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
           onRefresh: _refresh,
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(44),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(children: [
-              for (final m in BrowseMode.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8, bottom: 6),
-                  child: ChoiceChip(
-                    label: Text(_modeLabel(m)),
-                    selected: _mode == m,
-                    onSelected: (_) {
-                      _sel.end(); _mode = m; _sort = _defaultSort(m); _load();
-                    },
+          // the mode chips, then the active filters' chips (Series / Books modes)
+          preferredSize: Size.fromHeight(44 + (chips == null ? 0 : ActiveFilters.height)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(children: [
+                for (final m in BrowseMode.values)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, bottom: 6),
+                    child: ChoiceChip(
+                      label: Text(_modeLabel(m)),
+                      selected: _mode == m,
+                      onSelected: (_) {
+                        _sel.end(); _mode = m; _sort = _defaultSort(m); _load();
+                      },
+                    ),
                   ),
-                ),
-            ]),
-          ),
+              ]),
+            ),
+            if (chips != null) Align(alignment: Alignment.centerLeft, child: chips),
+          ]),
         ),
       ),
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an

@@ -18,6 +18,35 @@ enum FilterField {
   bool appliesTo({required bool seriesView}) => seriesView || !seriesOnly;
 }
 
+/// What a view lists, for the filter panel's words: comics, eBooks (EPUBs), or both / not known.
+enum ViewKind {
+  comics,
+  ebooks,
+  mixed;
+
+  /// Writer / Author is one filter (Komga stores EPUB authors as writers); its name follows the books.
+  String get writerLabel => switch (this) { comics => 'Writer', ebooks => 'Author', mixed => 'Writer / author' };
+
+  /// eBooks have no artists: the Artist filter is left out of an eBook view.
+  bool get hasArtists => this != ebooks;
+
+  /// From the books' media profiles ('EPUB' = an eBook; anything else, a comic); none known = [mixed].
+  static ViewKind ofProfiles(Iterable<Object?> profiles) {
+    var epub = false, other = false;
+    for (final p in profiles) {
+      if (p == null) continue;
+      p == 'EPUB' ? epub = true : other = true;
+    }
+    return epub == other ? mixed : (epub ? ebooks : comics);
+  }
+
+  /// Several parts of a view together: one kind if they agree, else [mixed].
+  static ViewKind combine(Iterable<ViewKind> kinds) {
+    final set = kinds.toSet();
+    return set.length == 1 ? set.single : mixed;
+  }
+}
+
 /// Komga's author role for Writer / Author (EPUB authors are stored as writer too).
 const writerRoles = ['writer'];
 

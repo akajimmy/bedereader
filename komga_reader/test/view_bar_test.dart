@@ -67,16 +67,16 @@ void main() {
     for (final (mode, select) in [('series', true), ('books', true), ('collections', false), ('readLists', false)]) {
       SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': mode})});
       await library(tester);
-      expect(bar(tester), ['count', 'eye', 'sort', if (select) 'select', 'size', 'pin', 'search', 'refresh',
-          'fullscreen'], reason: 'library, $mode');
+      expect(bar(tester), ['count', 'eye', if (mode == 'series' || mode == 'books') 'filter', 'sort',
+          if (select) 'select', 'size', 'pin', 'search', 'refresh', 'fullscreen'], reason: 'library, $mode');
     }
     SharedPreferences.setMockInitialValues({});
     await seriesView(tester);
-    expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
+    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
     await collection(tester);
-    expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'fullscreen']);
+    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'fullscreen']);
     await list(tester);
-    expect(bar(tester), ['count', 'eye', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
+    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
   });
 
   testWidgets('Refresh asks Komga again on a series, a collection and a read list', (tester) async {

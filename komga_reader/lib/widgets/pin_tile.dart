@@ -9,29 +9,27 @@ import 'readlist_tile.dart';
 /// The pinned view's own query (its filter, mode and sort) - [size] items of it. Used for the pin's poster and
 /// count, and offline to hide pins with nothing downloaded.
 Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
-  final status = p.readFilter.api;
+  final read = p.readFilter;
   final parts = (p.fullSort ?? '').split(':');
   final desc = parts.length > 1 && parts[1] == 'desc';
   String? sortParam(Map<String, String> fields) =>
       fields[parts.first] == null ? null : '${fields[parts.first]},${desc ? 'desc' : 'asc'}';
-  // the same requests as the screens (lib/view_sort.dart), in the pin's sort
+  // the same requests as the screens (lib/view_sort.dart), in the pin's sort, with its filters
   switch (p.kind) {
     case 'series':
-      return seriesBooksPage(api, p.id!, ViewSort.fromPin(seriesBookSorts, p.sort), readStatus: status, page: 0,
-          size: size);
-    case 'readlist':
-      return readListBooksPage(api, p.id!, ViewSort.fromPin(readListBookSorts, p.sort), readStatus: status, page: 0,
-          size: size);
-    case 'collection':
-      return collectionSeriesPage(api, p.id!, ViewSort.fromPin(collectionSeriesSorts, p.sort), readStatus: status,
+      return seriesBooksPage(api, p.id!, ViewSort.fromPin(seriesBookSorts, p.sort), read: read, filter: p.filters,
           page: 0, size: size);
+    case 'readlist':
+      return readListBooksPage(api, p.id!, ViewSort.fromPin(readListBookSorts, p.sort), read: read,
+          filter: p.filters, page: 0, size: size);
+    case 'collection':
+      return collectionSeriesPage(api, p.id!, ViewSort.fromPin(collectionSeriesSorts, p.sort), read: read,
+          filter: p.filters, page: 0, size: size);
   }
   switch (p.mode) {
     case 'books':
-      final s = sortParam(bookSortFields);
-      return s == null
-          ? api.books(libraryId: p.id, readStatus: status, size: size)
-          : api.books(libraryId: p.id, readStatus: status, sort: s, size: size);
+      return api.filteredBooks(libraryId: p.id, read: read, filter: p.filters, sort: sortParam(bookSortFields),
+          size: size);
     case 'collections' || 'readLists' when p.readFilter != ReadFilter.all || p.sort != null:
       // the lists with something matching, as the library screen shows them (Komga can't filter lists itself), in
       // the pin's sort
@@ -45,8 +43,8 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
   }
   final s = sortParam(seriesSortFields);
   return s == null
-      ? api.series(libraryId: p.id, readStatus: status, size: size)
-      : api.series(libraryId: p.id, readStatus: status, sort: s, size: size);
+      ? api.filteredSeries(libraryId: p.id, read: read, filter: p.filters, size: size)
+      : api.filteredSeries(libraryId: p.id, read: read, filter: p.filters, sort: s, size: size);
 }
 
 /// What a pinned view lists, for its count: "12 books", "3 series", ...

@@ -390,6 +390,13 @@ class OfflineKomga extends Komga {
     ]);
   }
 
+  /// The downloaded books' kinds (their media profiles), in the view's scope.
+  @override
+  Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) async => ViewKind.ofProfiles([
+        for (final v in _scoped(libraryId: libraryId, seriesId: seriesId, readListId: readListId))
+          ((v['book'] as Map)['media'] as Map?)?['mediaProfile'] ?? 'DIVINA', // (no profile: a comic, as Komga's default)
+      ]);
+
   @override
   Future<Map<String, dynamic>?> oneSeries(String id) async => _booksOfSeries(id).isEmpty ? null : _series(id);
 

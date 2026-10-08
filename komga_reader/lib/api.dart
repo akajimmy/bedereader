@@ -393,6 +393,42 @@ class Komga {
     return yearsOf(r is List ? r : const []);
   }
 
+  /// Whether a library ([libraryId]; null = all shown), a series or a read list holds comics, eBooks or both - for the
+  /// filter panel's words (Writer / Author) and whether it offers Artist. Komga keeps no kind per library, so it's
+  /// asked once per view and kept while this connection lasts: two one-book searches (EPUB, and not EPUB), whose
+  /// totals say which there are. Can't be had: [ViewKind.mixed] (asked again next time).
+  Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) {
+    final key = '$libraryId|$seriesId|$readListId';
+    final kept = _kinds[key];
+    if (kept != null) return kept;
+    Future<ViewKind> ask() async {
+      final scope = seriesId != null
+          ? _is('seriesId', seriesId)
+          : readListId != null
+              ? _is('readListId', readListId)
+              : await _scopeCondition(libraryId);
+      Future<int> count(String operator) async {
+        final r = await _post('/api/v1/books/list', {'page': 0, 'size': 1}, {
+          'condition': ViewFilter.allOf([
+            if (scope != null) scope,
+            {'mediaProfile': {'operator': operator, 'value': 'EPUB'}},
+          ]),
+        }) as Map<String, dynamic>;
+        return (r['totalElements'] as int?) ?? (r['content'] as List?)?.length ?? 0;
+      }
+      final counts = await Future.wait([count('is'), count('isNot')]);
+      final epub = counts[0] > 0, other = counts[1] > 0;
+      return epub == other ? ViewKind.mixed : (epub ? ViewKind.ebooks : ViewKind.comics);
+    }
+    final f = ask().catchError((Object _) {
+      _kinds.remove(key);
+      return ViewKind.mixed;
+    });
+    return _kinds[key] = f;
+  }
+
+  final _kinds = <String, Future<ViewKind>>{};
+
   static List<String> _strings(Object? r) =>
       sortedValues([if (r is List) for (final v in r) if (v is String && v.trim().isNotEmpty) v]);
 

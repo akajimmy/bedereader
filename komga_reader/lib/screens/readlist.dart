@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
+import '../view_filter.dart';
 import '../view_prefs.dart';
 import '../view_sort.dart';
 import '../widgets/breadcrumb.dart';
 import '../widgets/drawer.dart';
+import '../widgets/filter_panel.dart';
 import '../widgets/poster.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
@@ -26,16 +28,38 @@ class ReadListScreen extends StatefulWidget {
   State<ReadListScreen> createState() => _ReadListScreenState();
 }
 
-class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, RefreshOnReturn {
+class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, RefreshOnReturn, ViewFilters {
   @override
   void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
 
   ReadFilter _filter = ReadFilter.all;
   ViewSort _sort = ViewSort.first(readListBookSorts);
-  late final Paged _paged = Paged((page, size) => readListBooksPage(widget.api, widget.readList['id'] as String, _sort,
-      readStatus: _filter.api, page: page, size: size));
+  late final Paged _paged = Paged((page, size) => readListBooksPage(widget.api, _id, _sort,
+      read: _filter, filter: filters, page: page, size: size));
+  String get _id => widget.readList['id'] as String;
   String get _viewKey => 'view.readlist.${widget.readList['id']}';
   final _sel = Selection();
+
+  // ---- the filter panel: book filters
+  @override
+  bool get filtersSeriesView => false;
+
+  @override
+  Future<ViewKind> askFilterKind() => widget.api.viewKind(readListId: _id);
+
+  @override
+  FilterScope filterScope(Future<ViewKind> kind) => FilterScope(api: widget.api, seriesView: false, readListId: _id,
+      kind: kind, count: (draft) => countOf((page, size) =>
+          // counted in list order, first to last: one page, never the whole list turned round
+          readListBooksPage(widget.api, _id, ViewSort.first(readListBookSorts), read: _filter, filter: draft,
+              page: page, size: size)));
+
+  @override
+  void applyFilters(ViewFilter f) {
+    setState(() => filters = f);
+    _save();
+    _paged.reset();
+  }
 
   @override
   void initState() {
@@ -49,14 +73,17 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
     if (pin != null) {
       _filter = pin.readFilter;
       _sort = ViewSort.fromPin(readListBookSorts, pin.sort);
+      filters = pin.filters;
     } else {
       final v = await ViewPrefs.load(_viewKey);
       _filter = ReadFilterApi.fromName(v['filter']);
       _sort = ViewSort.of(readListBookSorts, v['sort'], v['desc']);
+      filters = ViewPrefs.filtersOf(v);
     }
   }
 
-  void _save() => ViewPrefs.save(_viewKey, {'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc});
+  void _save() => ViewPrefs.save(_viewKey,
+      ViewPrefs.withFilters({'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc}, filters));
 
   void _setFilter(ReadFilter f) {
     setState(() => _filter = f);
@@ -92,15 +119,18 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
         title: Breadcrumb(parent: 'Read lists', title: name,
             onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
                 mode: BrowseMode.readLists)),
+        bottom: filterChips(),
         actions: viewBarActions(
           paged: _paged,
           filter: _filter, onFilter: _setFilter,
+          filters: filterButton(),
           sort: SortMenuButton(fields: readListBookSorts, value: _sort, onChanged: _setSort),
           select: _sel,
           pin: Pin(
             name: [name, if (_filter.shows != null) _filter.shows!,
-                if (_sort.words(readListBookSorts) != null) _sort.words(readListBookSorts)!].join(' · '),
-            kind: 'readlist', id: rlId, title: name, filter: _filter.name,
+                if (_sort.words(readListBookSorts) != null) _sort.words(readListBookSorts)!,
+                ...filterWords()].join(' · '),
+            kind: 'readlist', id: rlId, title: name, filter: _filter.name, filters: activeFilters,
             sort: _sort.isDefault(readListBookSorts) ? null : _sort.pinValue, // null: as pins made before sorts
           ),
           onRefresh: _paged.refresh,
