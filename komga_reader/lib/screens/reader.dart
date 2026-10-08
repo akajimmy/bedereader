@@ -784,8 +784,8 @@ class _ReaderScreenState extends State<ReaderScreen>
                 ])
               : Stack(children: [
                   ...r.buildPages(context),
-                  // the page note, "12 / 36": always, or for a moment after a turn (Page corner - one setting with
-                  // the EPUBs', and their corner: bottom right, user 2026-10-07) - not over the controls (they have
+                  // the page note, "12 / 36": always, or for a moment after a turn (Page corner - each kind its
+                  // own setting, the same corner: bottom right, user 2026-10-07) - not over the controls (they have
                   // the count) or the end card
                   if (_kindPrefs.pageNote != PageNote.off)
                   Positioned(

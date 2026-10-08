@@ -569,7 +569,7 @@ void main() {
       'and % on the left; a spot tapped hides it - its place stays, tapped to show it again - kept on this device; '
       'picking a page shows it, in the accent colour', (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.copyWith(hiddenSpots: const [], pagePreviews: true)));
+    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(hiddenSpots: const [])).copyWith(pagePreviews: true)));
     s.setDisplay(s.display.copyWith(pagePreviews: false)); // no page pictures to ask for while picking
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.enter); // the controls
@@ -632,8 +632,8 @@ void main() {
   testWidgets('page corner, one setting with EPUBs (user, 2026-10-07): After a turn shows "2 / 3" for a moment, '
       "bottom right, then it fades; Always keeps it there; Off, it isn't there", (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.copyWith(pageNote: PageNote.always)));
-    s.setDisplay(s.display.copyWith(pageNote: PageNote.afterTurn));
+    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.always))));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.afterTurn)));
     await openReader(tester);
     expect(flashOpacity(tester, '1 / 3'), 0.0, reason: 'After a turn: not before one');
     await key(tester, LogicalKeyboardKey.arrowRight);
@@ -645,13 +645,13 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 0.0);
 
-    s.setDisplay(s.display.copyWith(pageNote: PageNote.always));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.always)));
     await tester.pump(const Duration(milliseconds: 300));
     expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'Always: there with no turn');
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'and stays');
 
-    s.setDisplay(s.display.copyWith(pageNote: PageNote.off));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.off)));
     await tester.pump();
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 300));
@@ -1911,9 +1911,9 @@ void main() {
   testWidgets('clock and battery: Always shows it over the page; With the controls only on the top bar; Off never',
       (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.copyWith(clock: ShowWhen.withControls)));
+    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(clock: ShowWhen.withControls))));
     for (final when in ShowWhen.values) {
-      s.setDisplay(s.display.copyWith(clock: when));
+      s.setDisplay(s.display.bothKinds((k) => k.copyWith(clock: when)));
       await openReader(tester);
       expect(find.byType(ReaderClock), when == ShowWhen.always ? findsOneWidget : findsNothing, reason: '${when.name}, hidden');
       await key(tester, LogicalKeyboardKey.enter); // the controls
@@ -1925,8 +1925,8 @@ void main() {
   testWidgets('progress bar: a line along the bottom while the controls are hidden; the slider takes over with them',
       (tester) async {
     final s = AppSettings.instance;
-    s.setDisplay(s.display.copyWith(progressBar: true));
-    addTearDown(() => s.setDisplay(s.display.copyWith(progressBar: false)));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(progressBar: true)));
+    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(progressBar: false))));
     await openReader(tester);
     const bar = ValueKey('reading-progress');
     expect(tester.widget<LinearProgressIndicator>(find.byKey(bar)).value, closeTo(1 / 3, 1e-9)); // page 1 of 3
@@ -1954,7 +1954,7 @@ void main() {
     });
     final s = AppSettings.instance;
     addTearDown(() {
-      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
+      s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.auto)));
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
@@ -1967,7 +1967,7 @@ void main() {
     var wayUp = 'reversePortrait'; // the tablet held upside down as the book opens
     final (requests, _) = recordOrientation(tester, () => wayUp);
     final s = AppSettings.instance;
-    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
     await openReader(tester);
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'held as it was held: upside down');
@@ -1976,7 +1976,7 @@ void main() {
     expect(requests.last, ['DeviceOrientation.portraitUp']);
 
     wayUp = 'landscape';
-    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape)); // changed mid-book (the Reader panel)
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.landscape))); // changed mid-book (the Comic settings panel)
     await tester.pump();
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.landscapeLeft']);
@@ -1993,7 +1993,7 @@ void main() {
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final (requests, asked) = recordOrientation(tester, () => 'reversePortrait');
     final s = AppSettings.instance;
-    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
     await openReader(tester);
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitUp']);
@@ -2010,7 +2010,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
         listenable: s, builder: (context, _) => rotationRow(s, BookKind.comics)))));
     final unmarked = tester.getSize(find.byType(SegmentedButton<Rotation>));
-    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
     await OrientationLock.instance.hold(portrait: true, landscape: false); // as a book does
     addTearDown(OrientationLock.instance.release);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(

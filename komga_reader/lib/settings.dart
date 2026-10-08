@@ -306,17 +306,14 @@ class DisplayPrefs {
     return (dimZone - b) / dimZone * 0.75;
   }
 
-  /// [pageNote], [rotation], [clock], [progressBar], [hiddenSpots]: for both kinds at once ([withKind] sets one).
+  /// Each kind's own reading settings are changed with [withKind] (one kind) or [bothKinds].
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
-          PageNote? pageNote, bool? doubleTapZoom, MidBook? midBook,
-          int? screenOn, PosterSize? posterSize, Rotation? rotation, ShowWhen? clock,
-          bool? progressBar, bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
+          bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
+          bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
-          List<String>? hiddenSpots, KindPrefs? comics, KindPrefs? ebooks}) {
-    KindPrefs both(KindPrefs k) => k.copyWith(pageNote: pageNote, rotation: rotation, clock: clock,
-        progressBar: progressBar, hiddenSpots: hiddenSpots);
-    return DisplayPrefs(
-        comics: both(comics ?? this.comics), ebooks: both(ebooks ?? this.ebooks),
+          KindPrefs? comics, KindPrefs? ebooks}) =>
+      DisplayPrefs(
+        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks,
         pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         posterDate: posterDate ?? this.posterDate,
@@ -326,11 +323,14 @@ class DisplayPrefs {
         brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
         doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom, midBook: midBook ?? this.midBook,
         screenOn: screenOn ?? this.screenOn, posterSize: posterSize ?? this.posterSize);
-  }
 
   /// Kind [k]'s reading settings changed.
   DisplayPrefs withKind(BookKind k, KindPrefs p) =>
       k == BookKind.comics ? copyWith(comics: p) : copyWith(ebooks: p);
+
+  /// Both kinds' reading settings changed the same way (an old save's one value taken over for both).
+  DisplayPrefs bothKinds(KindPrefs Function(KindPrefs k) change) =>
+      copyWith(comics: change(comics), ebooks: change(ebooks));
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'doubleTapZoom': doubleTapZoom,
@@ -533,7 +533,7 @@ class AppSettings extends ChangeNotifier {
   void _posterLookFollows() =>
       posterLook.value = (display.posterSize, display.posterSeries, display.posterTitle, display.posterDate);
   EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
-  String? syncError; // last Komga sync problem, shown in the Display panel
+  String? syncError; // last Komga sync problem, shown at the bottom of the reader's panels
 
   /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
   void _syncNote(String note, Object error) {
@@ -663,7 +663,7 @@ class AppSettings extends ChangeNotifier {
     if (!(savedDisplay?.containsKey('pageNote') ?? false) && !(savedDisplay?.containsKey('comics') ?? false) &&
         corner is String) {
       final note = PageNote.values.where((v) => v.name == corner).firstOrNull;
-      if (note != null) setDisplay(display.copyWith(pageNote: note));
+      if (note != null) setDisplay(display.bothKinds((k) => k.copyWith(pageNote: note)));
     }
     applyBacklight();
     notifyListeners();

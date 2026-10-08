@@ -339,15 +339,15 @@ void main() {
         (call) async => call.method == 'currentWayUp' ? wayUp : null);
     final s = AppSettings.instance;
     addTearDown(() {
-      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
+      s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.auto)));
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
-    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape));
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.landscape)));
     await open(tester, twoChapters());
     expect(requests, anyElement(equals(['DeviceOrientation.landscapeRight'])), reason: 'held the way it was held');
     wayUp = 'portrait';
-    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait)); // changed in the panel
+    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait))); // changed in the panel
     await tester.pump();
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitUp']);
@@ -504,7 +504,7 @@ void main() {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     // After a turn: hidden until a page turns, then for a moment
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.afterTurn));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.bothKinds((k) => k.copyWith(pageNote: PageNote.afterTurn)));
     await tester.pump();
     expect(cornerOpacity(), 0);
     await tester.tapAt(const Offset(750, 600));
@@ -514,7 +514,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(cornerOpacity(), 0, reason: 'a moment later');
     // Off: no corner
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.off));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.bothKinds((k) => k.copyWith(pageNote: PageNote.off)));
     await tester.pump();
     expect(find.byKey(const ValueKey('page-corner')), findsNothing);
     AppSettings.instance.setEpub(const EpubPrefs());
