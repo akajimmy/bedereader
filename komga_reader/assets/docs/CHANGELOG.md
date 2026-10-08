@@ -9,12 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 100 - 2026-10-08
+
 **Fixed**
 - **An eBook could forget where you were and open at its start**: closing it as the screen changed size (on the
   tablet: going back to Search, whose keyboard comes up) saved the book's start over the page you'd reached. The
   place reached is saved now, and the reader no longer lays the book out again for a keyboard.
-
-## 1.3.0
 
 ### Build 99 - 2026-10-08
 
