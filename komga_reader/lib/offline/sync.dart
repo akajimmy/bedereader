@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../epub/progress.dart' show komgaEpubPage;
 import 'connection.dart';
 import 'downloads.dart';
@@ -310,10 +311,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   static String _describe(Map p) =>
       p['none'] == true ? 'unread' : p['completed'] == true ? 'read' : 'page ${p['page']}';
 
-  static String _title(Map book) {
-    final number = (book['metadata'] as Map?)?['number'] ?? book['number'];
-    return '${book['seriesTitle'] ?? ''} #$number'.trim();
-  }
+  static String _title(Map book) => bookTitle(book, trim: true, bookNumber: true);
 
   /// Tests: back to a clean state.
   @visibleForTesting

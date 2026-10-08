@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'book_title.dart';
 import 'app_identity.dart';
 import 'errors.dart';
 import 'hidden_libraries.dart';
@@ -205,7 +206,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (ids.isEmpty) return;
     String title(String id) {
       final b = (d.store?.books[id]?['book'] as Map?) ?? const {};
-      return '${b['seriesTitle'] ?? ''} #${(b['metadata'] as Map?)?['number'] ?? ''}'.trim();
+      return bookTitle(b, trim: true);
     }
 
     _asking = true;

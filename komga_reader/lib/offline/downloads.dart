@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
 import 'store.dart';
@@ -372,7 +373,7 @@ class Downloads extends ChangeNotifier {
     for (final b in books) {
       final id = b['id'] as String;
       if (isDownloaded(id) || jobFor(id) != null) continue;
-      queue.add(DownloadJob(bookId: id, title: '${b['seriesTitle'] ?? ''} #${b['metadata']?['number'] ?? ''}'));
+      queue.add(DownloadJob(bookId: id, title: bookTitle(b)));
       added++;
     }
     if (added > 0) {

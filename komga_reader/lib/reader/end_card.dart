@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../book_title.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../widgets/native_poster.dart';
 import '../widgets/focus_style.dart';
@@ -64,7 +65,7 @@ class ReaderEndCard extends StatelessWidget {
               } else {
                 final number = book['metadata']?['number'] ?? book['number'];
                 final title = (book['metadata']?['title'] ?? book['name']) as String?;
-                final heading = '${book['seriesTitle'] ?? ''} #$number'.trim();
+                final heading = bookTitle(book, trim: true, bookNumber: true);
                 body = [
                   Text(skipRead ? 'Next unread in $where' : 'Up next in $where', style: dim),
                   const SizedBox(height: 12),
