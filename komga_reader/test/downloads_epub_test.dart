@@ -139,12 +139,4 @@ void main() {
     expect(at!.path, 'OEBPS/Text/ch2.xhtml');
     expect(at.progression, 0.75);
   });
-
-  test("with only the read progress page to go by: that far through the book (page 5 of Komga's 10: halfway), not "
-      'the position with that number', () async {
-    final api = noNetwork(EpubLibrary.new);
-    final b = {...(await api.book('B1'))!, 'readProgress': {'page': 5, 'completed': false}};
-    final at = await EpubProgress(api, 'B1').load(b);
-    expect(at!.progression, 0.5, reason: 'the position halfway through the four (2 of 4: progression 2/4)');
-  });
 }

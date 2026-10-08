@@ -118,14 +118,20 @@ void main() {
     expect(at.progression, 0.4);
   });
 
-  test('no progression saved (read to a page elsewhere): the read progress page through the positions; not started: '
-      'nothing', () async {
-    final api = noNetwork(EpubKomga.new);
-    final p = EpubProgress(api, 'B1');
-    final at = await p.load({'id': 'B1', 'readProgress': {'page': 5}}); // position 5: c2, a third in
-    expect(at!.path, 'OEBPS/c2.xhtml');
-    expect(at.progression, closeTo(1 / 3, 1e-9));
-    expect(await p.load({'id': 'B1'}), isNull);
+  test('no progression saved (read to a page elsewhere): with a page count, that far through the book - not the '
+      'position with that number; without one, the page as a position; not started: nothing', () async {
+    final p = EpubProgress(noNetwork(EpubKomga.new), 'B1');
+    // the six positions: c1 and c2, each at 0, 1/3 and 2/3
+    for (final (book, path, progression) in <(Map<String, dynamic>, String?, double?)>[
+      // page 5 of Komga's 10: halfway - position 4 of 6 (c2's start), not position 5
+      ({'id': 'B1', 'media': {'pagesCount': 10}, 'readProgress': {'page': 5}}, 'OEBPS/c2.xhtml', 0),
+      ({'id': 'B1', 'readProgress': {'page': 5}}, 'OEBPS/c2.xhtml', 1 / 3), // position 5: c2, a third in
+      ({'id': 'B1'}, null, null),
+    ]) {
+      final at = await p.load(book);
+      expect(at?.path, path, reason: '$book');
+      if (progression != null) expect(at!.progression, closeTo(progression, 1e-9), reason: '$book');
+    }
   });
 
   test("a save: Komga's own href for the chapter, the position at or just before the place, both progressions, this "
