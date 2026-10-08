@@ -106,11 +106,9 @@ void main() {
 
   testWidgets('the real library screen browses the offline tree unchanged', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await tester.runAsync(() async {
-      await tester.pumpWidget(MaterialApp(home: LibraryScreen(api: api, onSignOut: () {}, libraryId: 'L1')));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    await tester.pump();
+    await tester.runAsync(
+        () => tester.pumpWidget(MaterialApp(home: LibraryScreen(api: api, onSignOut: () {}, libraryId: 'L1'))));
+    await waitUntil(() => shows(find.text('Spider-Man')), tester: tester, reason: 'the series loaded');
     expect(find.text('Silver Surfer'), findsOneWidget);
     expect(find.text('Spider-Man'), findsOneWidget);
     expect(find.text('2'), findsOneWidget); // header count: 2 series downloaded
