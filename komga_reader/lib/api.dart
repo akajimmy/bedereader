@@ -380,19 +380,6 @@ class Komga {
   Future<List<String>> genres({String? libraryId, String? collectionId}) async =>
       _strings(await _get('/api/v1/genres', await _valueScope(libraryId: libraryId, collectionId: collectionId)));
 
-  /// The release years in the view, oldest first. A library or collection: Komga's series release dates (a series'
-  /// is its first book's); a series or a read list: its books' release dates.
-  Future<List<int>> releaseYears({String? libraryId, String? collectionId, String? seriesId, String? readListId}) async {
-    if (seriesId != null || readListId != null) {
-      final page = seriesId != null
-          ? await seriesBooks(seriesId, size: 2000)
-          : await readListBooks(readListId!, size: 2000);
-      return yearsOf([for (final b in page['content'] as List) ((b as Map)['metadata'] as Map?)?['releaseDate']]);
-    }
-    final r = await _get('/api/v1/series/release-dates', await _valueScope(libraryId: libraryId, collectionId: collectionId));
-    return yearsOf(r is List ? r : const []);
-  }
-
   /// Whether a library ([libraryId]; null = all shown), a series or a read list holds comics, eBooks or both - for the
   /// filter panel's words (Writer / Author) and whether it offers Artist. Komga keeps no kind per library, so it's
   /// asked once per view and kept while this connection lasts: two one-book searches (EPUB, and not EPUB), whose
@@ -435,13 +422,6 @@ class Komga {
   /// Each value once, A -> Z (case aside).
   static List<String> sortedValues(Iterable<String> values) =>
       values.toSet().toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-  /// The years of release dates ('2015', '2015-03-01', null), each once, oldest first.
-  static List<int> yearsOf(Iterable<Object?> dates) => {
-        for (final d in dates)
-          if (d is String && d.length >= 4 && int.tryParse(d.substring(0, 4)) != null) int.parse(d.substring(0, 4)),
-      }.toList()
-        ..sort();
 
   Future<Map<String, dynamic>?> oneSeries(String id) async => await _get('/api/v1/series/$id') as Map<String, dynamic>?;
   Future<Map<String, dynamic>?> readList(String id) async => await _get('/api/v1/readlists/$id') as Map<String, dynamic>?;

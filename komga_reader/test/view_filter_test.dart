@@ -189,25 +189,15 @@ void main() {
       expect(asked.last.url.queryParametersAll['library_id'], ['L1', 'L3']);
     });
 
-    test('publishers, genres, release years', () async {
+    test('publishers, genres', () async {
       final (api, asked) = recorded(answers: {
         '/api/v1/publishers': ['Marvel', 'DC', 'boom'],
         '/api/v1/genres': ['Horror'],
-        '/api/v1/series/release-dates': ['2015', '1999', '2015'],
-        '/api/v1/series/S1/books': {
-          'content': [
-            {'metadata': {'releaseDate': '2021-03-01'}},
-            {'metadata': {'releaseDate': null}},
-            {'metadata': {'releaseDate': '2019-11-20'}},
-          ],
-        },
       });
       expect(await api.publishers(libraryId: 'L1'), ['boom', 'DC', 'Marvel']);
       expect(asked.last.url.queryParametersAll['library_id'], ['L1']);
       expect(await api.genres(collectionId: 'C1'), ['Horror']);
       expect(asked.last.url.queryParameters, {'collection_id': 'C1'});
-      expect(await api.releaseYears(libraryId: 'L1'), [1999, 2015]);
-      expect(await api.releaseYears(seriesId: 'S1'), [2019, 2021]);
     });
   });
 

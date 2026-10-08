@@ -77,7 +77,6 @@ Future<ViewFilter?> showFilterPanel(BuildContext context, FilterScope scope, Vie
 class _Values {
   ViewKind kind = ViewKind.mixed;
   bool writers = false, artists = false; // any at all
-  List<int> years = const [];
   List<String> publishers = const [], genres = const [], statuses = const [];
 }
 
@@ -86,8 +85,6 @@ Future<_Values> _loadValues(FilterScope s) async {
   final v = _Values();
   final kind = safe(s.kind, ViewKind.mixed);
   final writers = safe(s.names(writerRoles, size: 1), const <String>[]);
-  final years = safe(s.api.releaseYears(libraryId: s.libraryId, collectionId: s.collectionId, seriesId: s.seriesId,
-      readListId: s.readListId), const <int>[]);
   Future<List<String>>? publishers, genres, statuses;
   if (s.seriesView) {
     publishers = safe(s.api.publishers(libraryId: s.libraryId, collectionId: s.collectionId), const <String>[]);
@@ -104,7 +101,6 @@ Future<_Values> _loadValues(FilterScope s) async {
   final artists = v.kind.hasArtists ? safe(s.names(artistRoles, size: 1), const <String>[]) : null;
   v.writers = (await writers).isNotEmpty;
   v.artists = artists != null && (await artists).isNotEmpty;
-  v.years = await years;
   if (publishers != null) v.publishers = await publishers;
   if (genres != null) v.genres = await genres;
   if (statuses != null) v.statuses = await statuses;
@@ -228,9 +224,7 @@ class _FilterPanelState extends State<FilterPanel> {
       out.add(_namesSection(FilterField.artist, 'Artist', artistRoles, d.artists,
           (l) => _set(d.copyWith(artists: l)), autofocus: first()));
     }
-    if (v.years.length >= 2 || d.fromYear != null || d.toYear != null) {
-      out.add(_yearsSection(v.years, autofocus: first()));
-    }
+    out.add(_yearsSection(autofocus: first())); // always: any year can be asked for
     if (FilterField.publisher.appliesTo(seriesView: seriesView) &&
         (v.publishers.length >= 2 || d.publishers.isNotEmpty)) {
       out.add(_checkSection(FilterField.publisher, 'Publisher', v.publishers, d.publishers,
@@ -283,14 +277,15 @@ class _FilterPanelState extends State<FilterPanel> {
         ],
       );
 
-  /// Release years: from / to (either may be Any), bounded by the view's years, and quick picks from them.
-  Widget _yearsSection(List<int> years, {required bool autofocus}) {
+  /// Release years: from / to, each Any or a year from this year back to [firstYear] - the same list in every view,
+  /// whatever its books' dates (user, 2026-10-08: "just let me pick"). Picking From sets To to the same year, so one
+  /// pick is that year only; To can then be moved later, or to Any for "and later".
+  Widget _yearsSection({required bool autofocus}) {
     final d = _draft;
-    final lo = years.isEmpty ? (d.fromYear ?? d.toYear!) : years.first;
-    final hi = years.isEmpty ? (d.toYear ?? d.fromYear!) : years.last;
-    final all = [for (var y = lo; y <= hi; y++) y];
-    // a saved year outside today's range still shows as itself
-    List<int> range(int? keep) => {...all, if (keep != null) keep}.toList()..sort();
+    final all = [for (var y = DateTime.now().year; y >= firstYear; y--) y];
+    // a saved year outside the list still shows as itself
+    List<int> range(int? keep) =>
+        ({...all, if (keep != null) keep}.toList()..sort()).reversed.toList();
     DropdownButton<int?> pick(String key, int? value, int? keep, ValueChanged<int?> onChanged, {bool focus = false}) =>
         DropdownButton<int?>(
           key: ValueKey(key),
@@ -303,7 +298,6 @@ class _FilterPanelState extends State<FilterPanel> {
           ],
           onChanged: onChanged,
         );
-    final picks = quickYearPicks(years);
     return SettingsGroup(
       key: const ValueKey('filter.section.years'),
       title: 'Release years',
@@ -315,7 +309,8 @@ class _FilterPanelState extends State<FilterPanel> {
             const SizedBox(width: 10),
             Expanded(child: pick('filter.from', d.fromYear, d.fromYear, (y) {
               final to = d.toYear;
-              _set(d.copyWith(years: (y, y != null && to != null && to < y ? y : to)));
+              // From fills To: one pick = that year; a To already at or after it stays (a range)
+              _set(d.copyWith(years: (y, y != null && (to == null || to < y) ? y : to)));
             }, focus: autofocus)),
             const SizedBox(width: 16),
             const Text('to'),
@@ -326,19 +321,6 @@ class _FilterPanelState extends State<FilterPanel> {
             })),
           ]),
         ),
-        if (picks.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final (label, from, to) in picks)
-                ChoiceChip(
-                  key: ValueKey('filter.years.$from-$to'),
-                  label: Text(label),
-                  selected: d.fromYear == from && d.toYear == to,
-                  onSelected: (on) => _set(d.copyWith(years: on ? (from, to) : (null, null))),
-                ),
-            ]),
-          ),
       ],
     );
   }
@@ -408,22 +390,8 @@ class _FilterPanelState extends State<FilterPanel> {
   }
 }
 
-/// Quick picks for the release years, from the years the view has ([years], oldest first): its latest five years
-/// (when it spans more), then each decade it reaches into, newest first (four at most) - each bounded by the view's
-/// first and last year. (label, from, to).
-List<(String, int, int)> quickYearPicks(List<int> years) {
-  if (years.length < 2) return const [];
-  final lo = years.first, hi = years.last;
-  final out = <(String, int, int)>[];
-  if (hi - lo >= 5) out.add(('Latest 5 years', hi - 4, hi));
-  final decades = <int>[for (var d = hi ~/ 10 * 10; d >= lo ~/ 10 * 10; d -= 10) d];
-  if (decades.length > 1) {
-    for (final d in decades.take(4)) {
-      out.add(('${d}s', d < lo ? lo : d, d + 9 > hi ? hi : d + 9));
-    }
-  }
-  return out;
-}
+/// The oldest year the release-year lists offer (the eBooks reach back to 1818).
+const firstYear = 1800;
 
 /// Type to search Komga's names (debounced), tick several; Done gives back the chosen ones (Cancel / Back: null).
 class NamePicker extends StatefulWidget {
