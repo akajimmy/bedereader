@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -16,11 +17,17 @@ import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // the book counted afresh, never on disk
   });
-  tearDown(() => AppSettings.instance.clearAccount());
+  tearDown(() {
+    AppSettings.instance.clearAccount();
+    EpubCountStore.instance = counts;
+  });
 
   test("saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, justified, "
       "the reader's paragraphs, slide; a size out of range gets the default", () {

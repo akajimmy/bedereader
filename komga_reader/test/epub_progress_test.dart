@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/progress.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -105,11 +106,15 @@ Map<String, dynamic> _saved(String href, double progression) =>
     {'locator': {'href': href, 'type': 'application/xhtml+xml', 'locations': {'progression': progression}}};
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
     ReaderScreen.forgetClosingSaves(); // (a test that closed with a question up leaves its save waiting)
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // each test's book counted afresh, never on disk
   });
+  tearDown(() => EpubCountStore.instance = counts);
 
   test("where to open: the saved progression (Komga's full-URL href made a path in the book)", () async {
     final api = noNetwork(() => EpubKomga(saved: _saved('${_base}OEBPS/c2.xhtml', 0.4)));
@@ -341,7 +346,3 @@ void main() {
     expect(find.text('Read on another device'), findsNothing);
   });
 }
-
-// keeps the analyzer quiet about the unused Komga import in some setups
-// ignore: unused_element
-typedef _K = Komga;
