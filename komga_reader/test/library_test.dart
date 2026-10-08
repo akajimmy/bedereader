@@ -145,7 +145,10 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Marvel cosmic'), findsOneWidget, reason: 'its series are unread');
-    expect(find.textContaining('series unread'), findsOneWidget);
+    final tile = find.ancestor(of: find.text('Marvel cosmic'), matching: find.byType(PosterTile));
+    expect(find.descendant(of: tile, matching: find.byType(PosterMosaic)), findsOneWidget,
+        reason: 'a poster of its matching series');
+    expect(find.descendant(of: tile, matching: find.text('1 of 1 series unread')), findsOneWidget);
     await tester.tap(find.byTooltip('Read hidden (hide unread)'));
     await tester.pump();
     await tester.pump();

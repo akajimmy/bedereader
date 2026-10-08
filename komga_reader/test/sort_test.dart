@@ -6,25 +6,13 @@ import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/browse_server.dart';
 import 'support/helpers.dart';
 import 'support/no_network.dart';
 
-/// Records the sort each series request asks Komga for.
-class FakeKomga extends TestKomga {
-  final sorts = <String>[];
-  @override
-  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}];
-  @override
-  Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
-      String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
-    sorts.add(sort);
-    return {'content': [], 'totalElements': 0, 'last': true};
-  }
-}
-
 void main() {
-  Future<FakeKomga> open(WidgetTester tester, {Pin? pin}) async {
-    final api = noNetwork(FakeKomga.new);
+  Future<BrowseServer> open(WidgetTester tester, {Pin? pin}) async {
+    final api = noNetwork(BrowseServer.new);
     setView(tester, const Size(1280, 900));
     await tester.pumpWidget(MaterialApp(home: LibraryScreen(key: UniqueKey(), api: api, onSignOut: () {}, libraryId: 'L1', pin: pin)));
     await tester.pump();
