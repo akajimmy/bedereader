@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'api.dart';
+import 'view_filter.dart';
 
 /// One way a browsing view can be sorted: its [key] (saved per view and in pins), its name in the Sort menu, and the
 /// direction it starts in when picked ([desc]: titles A -> Z and issue / list order ascending, dates newest first).
@@ -113,43 +114,82 @@ const listSorts = [
 
 // ---- the requests (one definition for each screen and its pin's poster) --------------------------------------------
 
-/// A page of a series' books in [s].
+/// A page of a series' books in [s], with the eye ([read]) and the filter panel's [filter] (none: the request it
+/// always was).
 Future<Map<String, dynamic>> seriesBooksPage(Komga api, String seriesId, ViewSort s,
-    {List<String>? readStatus, required int page, required int size}) {
+    {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
   final field = switch (s.key) { 'release' => 'metadata.releaseDate', 'added' => 'createdDate', _ => 'metadata.numberSort' };
-  return api.seriesBooks(seriesId, readStatus: readStatus, sort: '$field,${s.dir}', page: page, size: size);
+  return api.filteredBooks(seriesId: seriesId, read: read, filter: filter, sort: '$field,${s.dir}', page: page,
+      size: size);
 }
 
-/// A page of a collection's series in [s].
+/// A page of a collection's series in [s], with [read] and [filter].
 Future<Map<String, dynamic>> collectionSeriesPage(Komga api, String collectionId, ViewSort s,
-    {List<String>? readStatus, required int page, required int size}) {
+    {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
   if (s.key == 'order') {
+    if (filter.forView(seriesView: true).isNotEmpty) return _filteredInOrder(api, collectionId, s, read, filter, page);
     Future<Map<String, dynamic>> fetch(int p, int n) =>
-        api.collectionSeries(collectionId, readStatus: readStatus, page: p, size: n);
+        api.collectionSeries(collectionId, readStatus: read.api, page: p, size: n);
     return s.desc ? _reversed(fetch, page) : fetch(page, size);
   }
   final field = switch (s.key) {
     'release' => 'booksMetadata.releaseDate', 'added' => 'createdDate', _ => 'metadata.titleSort',
   };
-  return api.series(collectionId: collectionId, readStatus: readStatus, sort: '$field,${s.dir}', page: page,
-      size: size);
+  return api.filteredSeries(collectionId: collectionId, read: read, filter: filter, sort: '$field,${s.dir}',
+      page: page, size: size);
 }
 
-/// A page of a read list's books in [s].
+/// A filtered collection in its own order: Komga's search can't sort by a collection's order, so the series that
+/// match (one search) are kept in the order of the whole collection (its own listing) - all of it as the first page.
+Future<Map<String, dynamic>> _filteredInOrder(Komga api, String collectionId, ViewSort s, ReadFilter read,
+    ViewFilter filter, int page) async {
+  if (page > 0) return const {'content': [], 'last': true};
+  final matching = <Object?>{};
+  for (var p = 0;; p++) {
+    final r = await api.filteredSeries(collectionId: collectionId, read: read, filter: filter, page: p, size: 500);
+    final content = (r['content'] as List?) ?? const [];
+    matching.addAll([for (final x in content) (x as Map)['id']]);
+    if (r['last'] != false || content.isEmpty) break;
+  }
+  final inOrder = await _whole((p, n) => api.collectionSeries(collectionId, page: p, size: n));
+  final kept = [for (final x in inOrder) if (matching.contains((x as Map)['id'])) x];
+  final list = s.desc ? kept.reversed.toList() : kept;
+  return {'content': list, 'totalElements': list.length, 'last': true};
+}
+
+/// A page of a read list's books in [s], with [read] and [filter].
 Future<Map<String, dynamic>> readListBooksPage(Komga api, String readListId, ViewSort s,
-    {List<String>? readStatus, required int page, required int size}) {
-  if (s.key == 'release') {
-    return api.readListBooksSorted(readListId, 'metadata.releaseDate,${s.dir}', readStatus: readStatus, page: page,
+    {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
+  if (filter.forView(seriesView: false).isNotEmpty) {
+    // Komga's book search, in the list's order ("readList.number") or by release date
+    final field = s.key == 'release' ? 'metadata.releaseDate' : 'readList.number';
+    return api.filteredBooks(readListId: readListId, read: read, filter: filter, sort: '$field,${s.dir}', page: page,
         size: size);
   }
-  Future<Map<String, dynamic>> fetch(int p, int n) => api.readListBooks(readListId, readStatus: readStatus, page: p, size: n);
+  if (s.key == 'release') {
+    return api.readListBooksSorted(readListId, 'metadata.releaseDate,${s.dir}', readStatus: read.api, page: page,
+        size: size);
+  }
+  Future<Map<String, dynamic>> fetch(int p, int n) => api.readListBooks(readListId, readStatus: read.api, page: p, size: n);
   return s.desc ? _reversed(fetch, page) : fetch(page, size);
+}
+
+/// How many a view's listing holds with [filter] (the filter panel's live count): one item asked for, its total.
+Future<int> countOf(Future<Map<String, dynamic>> Function(int page, int size) fetch) async {
+  final r = await fetch(0, 1);
+  return (r['totalElements'] as int?) ?? ((r['content'] as List?)?.length ?? 0);
 }
 
 /// A list Komga only gives in its own order, last to first: all of it as the first page (Komga can't reverse it, and
 /// a page from the end needs the whole list anyway).
 Future<Map<String, dynamic>> _reversed(Future<Map<String, dynamic>> Function(int page, int size) fetch, int page) async {
   if (page > 0) return const {'content': [], 'last': true};
+  final all = await _whole(fetch);
+  return {'content': all.reversed.toList(), 'totalElements': all.length, 'last': true};
+}
+
+/// Every page of a listing, in order.
+Future<List<dynamic>> _whole(Future<Map<String, dynamic>> Function(int page, int size) fetch) async {
   final all = <dynamic>[];
   for (var p = 0;; p++) {
     final r = await fetch(p, 500);
@@ -157,7 +197,7 @@ Future<Map<String, dynamic>> _reversed(Future<Map<String, dynamic>> Function(int
     all.addAll(content);
     if (r['last'] != false || content.isEmpty) break;
   }
-  return {'content': all.reversed.toList(), 'totalElements': all.length, 'last': true};
+  return all;
 }
 
 /// Collections or read lists (Komga's answers, all of them) in [s] - sorted here, so it doesn't depend on which
