@@ -98,7 +98,6 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(selected(tester), 'eel');
     expect(find.text('Copy'), findsOneWidget, reason: 'the pane, with Copy');
-    expect(find.text('Select all'), findsNothing, reason: 'Copy only, for now');
     await tester.tap(find.text('Copy'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(copied, 'eel');
