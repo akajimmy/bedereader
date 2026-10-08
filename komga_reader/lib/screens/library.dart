@@ -111,8 +111,6 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
   static ViewSort _defaultSort(BrowseMode m) =>
       m == BrowseMode.books ? const ViewSort('added', true) : ViewSort.first(_fieldsOf(m));
   String get _viewKey => 'view.library.${_libraryId ?? 'all'}';
-  bool get _filtered =>
-      _filter != ReadFilter.all || _sort != _defaultSort(_mode) || (!_listMode && activeFilters.isNotEmpty);
   bool get _listMode => _mode == BrowseMode.collections || _mode == BrowseMode.readLists;
 
   // ---- the filter panel (Series and Books modes; collections / read lists have the eye only)
@@ -208,13 +206,6 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
     unawaited(_paged.reset()); // Paged shows its own errors
   }
 
-  void _clearFilters() {
-    _filter = ReadFilter.all;
-    _sort = _defaultSort(_mode);
-    if (!_listMode) filters = ViewFilter.none; // (collections / read lists: the panel's filters aren't theirs)
-    _load();
-  }
-
   /// Read state may have changed: reload what is loaded, keeping the scroll position.
   void _refresh() {
     ReadListTile.invalidate(); // unread books behind the read-list posters may have changed
@@ -254,7 +245,6 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           filter: _filter, onFilter: (f) { _filter = f; _load(); },
           filters: _listMode ? null : filterButton(),
           sort: SortMenuButton(fields: _fields, value: _sort, onChanged: (s) { _sort = s; _load(); }),
-          onClear: _filtered ? _clearFilters : null,
           select: _mode == BrowseMode.books || _mode == BrowseMode.series ? _sel : null,
           pin: Pin(
             name: [_libraryName, _modeLabel(_mode), if (_filter.shows != null) _filter.shows!,

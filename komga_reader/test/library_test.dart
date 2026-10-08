@@ -90,7 +90,6 @@ void main() {
     expect(find.text('Saga #2'), findsOneWidget);
     expect(find.text('Saga #3'), findsOneWidget, reason: 'in progress is not read');
     expect(find.text('2'), findsOneWidget);
-    expect(find.byTooltip('Clear filters'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Read hidden (hide unread)'));
     await tester.pump();

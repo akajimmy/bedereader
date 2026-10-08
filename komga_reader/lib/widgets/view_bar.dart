@@ -18,7 +18,6 @@ List<Widget> viewBarActions({
   required ValueChanged<ReadFilter> onFilter,
   Widget? filters, // the funnel (filter panel) - not built yet
   Widget? sort,
-  VoidCallback? onClear, // shown while the view isn't the default (the library)
   Selection? select,
   required Pin pin,
   VoidCallback? onSearch,
@@ -32,7 +31,6 @@ List<Widget> viewBarActions({
     k('eye', ReadFilterButton(value: filter, onChanged: onFilter)),
     if (filters != null) k('filter', filters),
     if (sort != null) k('sort', sort),
-    if (onClear != null) k('clear', ClearFiltersButton(onPressed: onClear)),
     if (select != null) k('select', SelectButton(selection: select)),
     k('size', const PosterSizeButton()),
     k('pin', PinButton(current: pin)),
@@ -80,15 +78,6 @@ class SortMenuButton extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Shown next to the filter/sort buttons only while something other than the default is active.
-class ClearFiltersButton extends StatelessWidget {
-  const ClearFiltersButton({super.key, required this.onPressed});
-  final VoidCallback onPressed;
-  @override
-  Widget build(BuildContext context) =>
-      IconButton(tooltip: 'Clear filters', icon: const Icon(Icons.filter_alt_off), onPressed: onPressed);
 }
 
 /// The eye in the app bar, three-way (user, 2026-10-07): each tap goes All -> Hide read -> Hide unread -> All.

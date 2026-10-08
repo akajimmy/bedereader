@@ -502,7 +502,9 @@ class _NamePickerState extends State<NamePicker> {
 
 // ---- in the view: the funnel, the chips -------------------------------------------------------------------------
 
-/// The funnel in the top bar; a small badge counts the filters that are on.
+/// The funnel in the top bar: filled with the accent while filters are on (user, 2026-10-08: "when there are active
+/// filters, the filter button should be highlighted" - the faint tint the eye has wasn't enough), a small badge
+/// counting them.
 class FilterButton extends StatelessWidget {
   const FilterButton({super.key, required this.active, required this.onPressed});
   final int active;
@@ -510,12 +512,12 @@ class FilterButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final on = active > 0;
-    final accent = Theme.of(context).colorScheme.primary;
+    final scheme = Theme.of(context).colorScheme;
     return IconButton(
       tooltip: on ? 'Filter ($active on)' : 'Filter',
       isSelected: on,
-      color: on ? accent : null,
-      style: on ? IconButton.styleFrom(backgroundColor: accent.withValues(alpha: 0.16)) : null,
+      color: on ? scheme.onPrimary : null,
+      style: on ? IconButton.styleFrom(backgroundColor: scheme.primary) : null,
       icon: Badge(
         key: const ValueKey('filter.badge'),
         isLabelVisible: on,
