@@ -1,10 +1,12 @@
-// The EPUB reader turned back and forth quickly across chapters while the book is still being counted (user, build
-// 65 on the PC: "flipping back and forth a bit caused it to get stuck" - a spinner where the page was, for good).
+// The EPUB reader turned back and forth quickly across chapters that are slow to load (user, build 65 on the PC:
+// "flipping back and forth a bit caused it to get stuck" - a spinner where the page was, for good). The book shows
+// once it is counted (2026-10-07): the turns go over chapters let go of and loading again.
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -42,20 +44,29 @@ class FlakyBook extends SlowBook {
 }
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
     // instant turns: the slide's animation doesn't advance on these tests' clock (taps every 50 ms restarted it)
     AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.none));
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // each test's books counted afresh, never on disk
   });
-  tearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+  tearDown(() {
+    AppSettings.instance.setEpub(const EpubPrefs());
+    EpubCountStore.instance = counts;
+  });
 
   Future<void> step(WidgetTester tester, int ms) async {
     await tester.runAsync(() => Future<void>.delayed(Duration(milliseconds: ms)));
     await tester.pump(const Duration(milliseconds: 50));
   }
 
-  bool stuck() => find.byType(PageView).evaluate().isEmpty;
+  // no page view yet, or a spinner on screen - the page on a spinner inside the page view is the build-65 bug (a page
+  // built ahead off screen may show one: only what's on screen counts)
+  bool stuck() =>
+      find.byType(PageView).evaluate().isEmpty || find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
 
   testWidgets("a chapter that fails to load shows why, with Retry - not a spinner for good (it used to stay stuck: "
       'the failed try was kept); Retry brings it', (tester) async {
@@ -86,11 +97,11 @@ void main() {
     expect(find.byType(ErrorText), findsOneWidget, reason: 'why, in plain words');
     source.down = false; // Komga answers again
     await tester.tap(find.text('Retry'));
-    for (var i = 0; i < 20 && find.text('Retry').evaluate().isNotEmpty; i++) {
+    for (var i = 0; i < 20 && (find.text('Retry').evaluate().isNotEmpty || stuck()); i++) {
       await step(tester, 20);
     }
     expect(find.text('Retry'), findsNothing, reason: 'the chapter shows after Retry');
-    expect(stuck(), isFalse);
+    expect(stuck(), isFalse, reason: 'its page, not a spinner');
     await tester.pumpWidget(const SizedBox());
     for (var i = 0; i < 20; i++) {
       await step(tester, 10);
@@ -98,8 +109,8 @@ void main() {
   });
 
   for (final pattern in ['forward then back', 'back and forth']) {
-    testWidgets('turning quickly ($pattern) across chapters while the book is still being counted never leaves the '
-        'reader on a spinner', (tester) async {
+    testWidgets('turning quickly ($pattern) across slow-loading chapters never leaves the reader on a spinner',
+        (tester) async {
       tester.view.physicalSize = const Size(1600, 900); // a PC window
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);

@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -16,14 +17,20 @@ import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // the book counted afresh, never on disk
   });
-  tearDown(() => AppSettings.instance.clearAccount());
+  tearDown(() {
+    AppSettings.instance.clearAccount();
+    EpubCountStore.instance = counts;
+  });
 
-  test('saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, my own '
-      'formatting, slide; a size out of range gets the default', () {
+  test("saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, justified, "
+      "the reader's paragraphs, slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
         turn: EpubTurn.none, paragraphGap: EpubParagraphGap.large);
@@ -53,7 +60,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(
         width: 380,
         child: Builder(builder: (c) => SingleChildScrollView(
-            child: Column(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))))));
+            child: Column(children: epubPanelRows(c, AppSettings.instance)))))))));
     await tester.pump();
     for (final f in EpubFont.values) {
       // on screen (getRect takes in any scaling round it; getSize wouldn't)

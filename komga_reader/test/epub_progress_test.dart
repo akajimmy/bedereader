@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/progress.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -19,9 +20,8 @@ String _para(String w, int n) => '<p>${List.filled(n, w).join(' ')}</p>';
 
 /// A Komga with one EPUB (two chapters), its positions, and a progression that can be read and saved.
 class EpubKomga extends TestKomga {
-  EpubKomga({this.saved, this.slow = Duration.zero});
+  EpubKomga({this.saved});
   Map<String, dynamic>? saved;
-  final Duration slow; // each chapter file takes this long to come (as over the network)
   final puts = <Map<String, dynamic>>[];
   final marked = <String>[];
 
@@ -37,10 +37,7 @@ class EpubKomga extends TestKomga {
       };
 
   @override
-  Future<Uint8List> epubResource(String bookId, String path) async {
-    if (slow > Duration.zero) await Future<void>.delayed(slow);
-    return Uint8List.fromList(utf8.encode(files[path]!));
-  }
+  Future<Uint8List> epubResource(String bookId, String path) async => Uint8List.fromList(utf8.encode(files[path]!));
 
   // Komga's positions: hrefs as it writes them (full URLs), 3 per chapter
   @override
@@ -109,11 +106,15 @@ Map<String, dynamic> _saved(String href, double progression) =>
     {'locator': {'href': href, 'type': 'application/xhtml+xml', 'locations': {'progression': progression}}};
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
     ReaderScreen.forgetClosingSaves(); // (a test that closed with a question up leaves its save waiting)
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // each test's book counted afresh, never on disk
   });
+  tearDown(() => EpubCountStore.instance = counts);
 
   test("where to open: the saved progression (Komga's full-URL href made a path in the book)", () async {
     final api = noNetwork(() => EpubKomga(saved: _saved('${_base}OEBPS/c2.xhtml', 0.4)));
@@ -122,14 +123,20 @@ void main() {
     expect(at.progression, 0.4);
   });
 
-  test('no progression saved (read to a page elsewhere): the read progress page through the positions; not started: '
-      'nothing', () async {
-    final api = noNetwork(EpubKomga.new);
-    final p = EpubProgress(api, 'B1');
-    final at = await p.load({'id': 'B1', 'readProgress': {'page': 5}}); // position 5: c2, a third in
-    expect(at!.path, 'OEBPS/c2.xhtml');
-    expect(at.progression, closeTo(1 / 3, 1e-9));
-    expect(await p.load({'id': 'B1'}), isNull);
+  test('no progression saved (read to a page elsewhere): with a page count, that far through the book - not the '
+      'position with that number; without one, the page as a position; not started: nothing', () async {
+    final p = EpubProgress(noNetwork(EpubKomga.new), 'B1');
+    // the six positions: c1 and c2, each at 0, 1/3 and 2/3
+    for (final (book, path, progression) in <(Map<String, dynamic>, String?, double?)>[
+      // page 5 of Komga's 10: halfway - position 4 of 6 (c2's start), not position 5
+      ({'id': 'B1', 'media': {'pagesCount': 10}, 'readProgress': {'page': 5}}, 'OEBPS/c2.xhtml', 0),
+      ({'id': 'B1', 'readProgress': {'page': 5}}, 'OEBPS/c2.xhtml', 1 / 3), // position 5: c2, a third in
+      ({'id': 'B1'}, null, null),
+    ]) {
+      final at = await p.load(book);
+      expect(at?.path, path, reason: '$book');
+      if (progression != null) expect(at!.progression, closeTo(progression, 1e-9), reason: '$book');
+    }
   });
 
   test("a save: Komga's own href for the chapter, the position at or just before the place, both progressions, this "
@@ -190,39 +197,6 @@ void main() {
     await run(tester, const Duration(milliseconds: 300));
     expect(api.puts, isEmpty, reason: 'nothing turned: nothing saved, not even on closing (another device\'s place '
         'stays)');
-  });
-
-  // NB: this passes on the code before the fix too - the test's timing doesn't reproduce the tablet's (where the
-  // book opened at the chapter's start: checked on the tablet, 2026-10-06, before and after). Kept for the case.
-  testWidgets('the screen changing size while the book opens (the system bars hiding, as on the tablet) still opens '
-      'at the saved place', (tester) async {
-    tester.view.physicalSize = const Size(800, 1100);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final api = noNetwork(() => EpubKomga(saved: _saved('${_base}OEBPS/c2.xhtml', 0.5),
-        slow: const Duration(milliseconds: 300)));
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api,
-        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}})));
-    // the book opens and is laid out once; its chapter is still on its way when the bars go
-    final laidOut = find.descendant(of: find.byType(ReaderScreen), matching: find.byType(LayoutBuilder));
-    for (var i = 0; i < 40 && laidOut.evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
-      await tester.pump();
-    }
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await tester.pump();
-    tester.view.physicalSize = const Size(800, 1200); // the bars go
-    await tester.pump();
-    await run(tester, const Duration(seconds: 1));
-    for (var i = 0; i < 40 && find.byType(PageView).evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
-      await tester.pump();
-    }
-    await run(tester, const Duration(seconds: 2));
-    final l = await label(tester);
-    final page = int.parse(RegExp(r'Pg\. (\d+)/').firstMatch(l)!.group(1)!);
-    final total = int.parse(RegExp(r'/(\d+) ·').firstMatch(l)!.group(1)!);
-    expect(page, greaterThan(total * 0.6), reason: 'halfway through the second of two chapters: $l');
   });
 
   testWidgets('a turn is saved once the page has been on screen 1.5 s (quick turns: only the last); the end card '
@@ -372,7 +346,3 @@ void main() {
     expect(find.text('Read on another device'), findsNothing);
   });
 }
-
-// keeps the analyzer quiet about the unused Komga import in some setups
-// ignore: unused_element
-typedef _K = Komga;

@@ -9,22 +9,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/helpers.dart';
 import 'support/library_server.dart';
 import 'support/no_network.dart';
+import 'support/settle.dart';
 
 LibraryServer server() => noNetwork(LibraryServer.new);
 
 Map<String, dynamic> book(String id, int n) =>
     {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
-
-/// Waits (on the real clock, 2 s at most) until nothing is queued or downloading. Fails the test if that never happens:
-/// it used to return quietly, so the next expectation failed for the wrong reason (test audit, 2026-09-30).
-Future<void> settle(Downloads d) async {
-  bool working() => d.queue.any((j) => j.state == JobState.queued || j.state == JobState.downloading);
-  try {
-    await waitUntil(() => !working());
-  } on TestFailure {
-    fail('the queue never settled: ${[for (final j in d.queue) '${j.bookId} ${j.state.name}']}');
-  }
-}
 
 void main() {
   late Directory dir;

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/count_store.dart';
+import 'package:komga_reader/epub/layout.dart' show EpubPage;
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
@@ -51,10 +52,14 @@ class ReadListKomga extends TestKomga {
 }
 
 void main() {
+  late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    counts = EpubCountStore.instance;
+    EpubCountStore.instance = MemoryCountStore(); // each test's books counted afresh, never on disk
   });
+  tearDown(() => EpubCountStore.instance = counts);
 
   Future<void> open(WidgetTester tester, MemorySource source, {Komga? api}) async {
     tester.view.physicalSize = const Size(800, 1200);
@@ -89,24 +94,35 @@ void main() {
     }
   }
 
-  testWidgets('EPUBs and comics open in the one Reader (user, 2026-10-07), each with its renderer', (tester) async {
-    final api = plainKomga();
-    expect(readerFor(api, {'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isA<ReaderScreen>());
-    expect(readerFor(api, {'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isA<ReaderScreen>());
+  test("an EPUB is told from a comic by its media profile (the one Reader picks its renderer by it)", () {
     expect(isEpub({'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isTrue);
     expect(isEpub({'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isFalse);
   });
 
-  testWidgets('opens on the first page; once every chapter is counted the position reads "page X of Y"; a tap on '
-      'the right turns forward, on the left back', (tester) async {
+  testWidgets('opens on the first page, "page X of Y"; forward and back turn a page each way - a tap on the right / '
+      'left, the mouse wheel down / up (as with comics: it did nothing in the Windows app - build 79), the remote\'s '
+      'Right / Left', (tester) async {
     await open(tester, twoChapters());
     expect(await label(tester), startsWith('Book · Pg. 1/'));
-    await tester.tapAt(const Offset(750, 600));
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.tapAt(const Offset(50, 600));
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
+    Future<void> wheel(double dy) async {
+      // a turn at most every 250 ms
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+      await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
+    }
+    for (final (input, forward, back) in <(String, Future<void> Function(), Future<void> Function())>[
+      ('tap', () => tester.tapAt(const Offset(750, 600)), () => tester.tapAt(const Offset(50, 600))),
+      ('wheel', () => wheel(120), () => wheel(-120)), // a notch down, a notch up
+      ('remote', () => tester.sendKeyEvent(LogicalKeyboardKey.arrowRight),
+          () => tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft)),
+    ]) {
+      await forward();
+      await settle(tester);
+      expect(await label(tester), startsWith('Book · Pg. 2/'), reason: '$input: forward');
+      await back();
+      await settle(tester);
+      expect(await label(tester), startsWith('Book · Pg. 1/'), reason: '$input: back');
+    }
   });
 
   testWidgets("an EPUB follows the eBooks' own reading settings, not the comics' (user, 2026-10-07: set apart per "
@@ -151,22 +167,6 @@ void main() {
       await settle(tester);
     }
     expect(await label(tester), before, reason: 'back at the first size: the same page');
-  });
-
-  testWidgets('the mouse wheel turns pages, as with comics (it did nothing in the Windows app - build 79)',
-      (tester) async {
-    await open(tester, twoChapters());
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
-    Future<void> wheel(double dy) async {
-      final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
-      await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
-      await settle(tester);
-    }
-    await wheel(120); // one notch down
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300))); // a turn at most every 250 ms
-    await wheel(-120); // and up
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
@@ -245,6 +245,7 @@ void main() {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
     }
+    expect(find.byType(PageView), findsOneWidget, reason: 'opened, the failing chapter counted as one page');
     // into chapter 2 (it fails), with the controls
     await contentsTo(tester, 'Chapter 2');
     await settle(tester);
@@ -274,9 +275,7 @@ void main() {
     tester.view.physicalSize = const Size(800, 1200);
     await tester.pump();
     await settle(tester);
-    // (the place, not the wording: counting may finish meanwhile - "16%" becomes "Pg. 5/27 · 16%")
-    String pct(String l) => RegExp(r'(\d+)%').firstMatch(l)!.group(1)!;
-    expect(pct(await label(tester)), pct(before));
+    expect(await label(tester), before, reason: 'the same page of the same count');
   });
 
   testWidgets("R3: a swipe past a chapter's last page goes on into the next (the whole book is one page view)",
@@ -314,16 +313,6 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
     }
-  });
-
-  testWidgets('the remote: Right turns forward, Left back, OK shows the controls', (tester) async {
-    await open(tester, twoChapters());
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 2/'));
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    await settle(tester);
-    expect(await label(tester), startsWith('Book · Pg. 1/'));
   });
 
   testWidgets('the rotation lock holds in EPUBs too (it was offered in the panel but never applied): one way up, the '
@@ -428,13 +417,9 @@ void main() {
     final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
     final source = SlowSource({for (final c in spine) c: '<html><body>${List.filled(6, para('gamma', 40)).join()}'
         '</body></html>'}, EpubInfo(spine: spine, toc: const []));
-    await open(tester, source);
+    await open(tester, source); // (shown once counted: "Book · Pg. X/Y · n%")
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    for (var i = 0; i < 100 && find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · ')).evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20))); // counted: "Book · Pg. X/Y - n%"
-      await tester.pump(const Duration(milliseconds: 50)); // (counting pauses between chapters on the test's clock)
-    }
     source.slow = true;
     final slider = find.byType(Slider);
     final r = tester.getRect(slider);
@@ -517,7 +502,6 @@ void main() {
     AppSettings.instance.setDisplay(AppSettings.instance.display.bothKinds((k) => k.copyWith(pageNote: PageNote.off)));
     await tester.pump();
     expect(find.byKey(const ValueKey('page-corner')), findsNothing);
-    AppSettings.instance.setEpub(const EpubPrefs());
   });
 
   testWidgets("the end card: the next book's poster and title (as in the comic reader); the remote on Next book, "
@@ -688,12 +672,8 @@ void main() {
 
   testWidgets('counts are remembered per book and layout: opened again the same way, the book shows at once - even '
       'with a chapter that would never come; at another text size it is counted again', (tester) async {
-    final store = MemoryCountStore();
-    EpubCountStore.instance = store;
-    addTearDown(() {
-      EpubCountStore.instance = FileCountStore();
-      AppSettings.instance.setEpub(const EpubPrefs());
-    });
+    final store = EpubCountStore.instance as MemoryCountStore;
+    addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
     final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
     final files = {for (final c in spine) c: '<html><body>${List.filled(4, para('delta', 40)).join()}</body></html>'};
     final info = EpubInfo(spine: spine, toc: const []);
@@ -718,18 +698,14 @@ void main() {
       'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',
       'notes.xhtml': '<html><body><p id="n1"><a href="c1.xhtml">*</a>The note itself.</p></body></html>',
     }, const EpubInfo(spine: ['c1.xhtml', 'notes.xhtml'], toc: [])));
-    // the marker sits right after "Here" on the first line: find it through the page's links
-    final state = tester.state(find.byType(ReaderScreen));
-    expect(state, isNotNull);
-    // tap along the first line until the note opens (the marker's exact x depends on the font)
-    var opened = false;
-    for (var x = 36.0; x < 400 && !opened; x += 6) {
-      await tester.tapAt(Offset(x, 55));
-      await settle(tester);
-      opened = find.textContaining('The note itself.').evaluate().isNotEmpty;
-    }
-    expect(opened, isTrue);
-    expect(find.text('The note itself.'), findsOneWidget, reason: "the note's own marker (its link back) left out");
+    // the marker, from the page on screen as drawn (its links in page coordinates)
+    final drawn = tester.widget<CustomPaint>(find.descendant(of: find.byType(PageView), matching: find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter')));
+    final marker = ((drawn.painter as dynamic).page as EpubPage).links.single;
+    expect(marker.text, '*');
+    await tester.tapAt(tester.getTopLeft(find.byType(PageView)) + marker.rect.center);
+    await settle(tester);
+    expect(find.text('The note itself.'), findsOneWidget, reason: "the note, its own marker (its link back) left out");
     await tester.tap(find.text('Close'));
     await settle(tester);
     expect(find.text('The note itself.'), findsNothing);

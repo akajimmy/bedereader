@@ -98,19 +98,19 @@ void main() {
     return Paginator(theme, size, hy.forLang('en')).run(blocks);
   }
 
-  test("own formatting keeps the book's gap between a picture and the paragraph under it (user, build 82, Small Gods' "
+  test("the reader's paragraphs keep the book's gap between a picture and the paragraph under it (user, build 82, Small Gods' "
       'turtle: the text touched it; the gap that goes is the one between two paragraphs)', () async {
     Future<double> gapUnder({required bool own}) async {
       final blocks = ChapterReader(StyleSheet(), (h) => h)
           .read(parseXhtml('<body><center><img src="t.png"/></center><p>After the picture.</p><p>And on.</p></body>'));
       (blocks.first as ImageBlock).image = await _image(200, 200);
-      final page = Paginator(EpubTheme(bookFormatting: !own), const Size(600, 900), null).run(blocks).single;
+      final page = Paginator(EpubTheme(ownParagraphs: own), const Size(600, 900), null).run(blocks).single;
       return page.textOrigins.first.dy - page.pictures.single.$1.bottom;
     }
 
     final book = await gapUnder(own: false), own = await gapUnder(own: true);
     expect(book, greaterThan(10), reason: "the book's 1em");
-    expect(own, closeTo(book, 0.5), reason: 'kept with own formatting');
+    expect(own, closeTo(book, 0.5), reason: "kept with the reader's paragraphs");
   });
 
   test("a page never ends in a word broken by a hyphen when its paragraph goes on (user, build 82, Small Gods: "
@@ -135,19 +135,15 @@ void main() {
     expect(broken, 0, reason: 'pages ending "ea-"');
   });
 
-  test('paginator: long text runs over several pages, none of them empty', () {
-    final pages = paginate(chapter(40, 60));
-    expect(pages.length, greaterThan(5));
-    expect(pages.every((p) => p.pieces.isNotEmpty), isTrue);
-  });
-
-  test("pages know the chapter position they start at: rising, the first at 0; a position finds its page, at any "
-      'text size', () {
+  test("paginator: long text runs over several pages, none of them empty; pages know the chapter position they start "
+      'at: rising, the first at 0; a position finds its page, at any text size', () {
     final src = chapter(30, 50);
     final blocks = ChapterReader(StyleSheet(), (h) => h)..read(parseXhtml(src));
     final total = blocks.length;
     for (final size in [16.0, 24.0]) {
       final pages = paginate(src, theme: EpubTheme(fontSize: size));
+      expect(pages.length, greaterThan(5), reason: 'at $size px');
+      expect(pages.every((p) => p.pieces.isNotEmpty), isTrue, reason: 'none empty at $size px');
       expect(pages.first.start, 0);
       for (var i = 1; i < pages.length; i++) {
         expect(pages[i].start, greaterThan(pages[i - 1].start), reason: 'page ${i + 1} at $size px');
@@ -186,13 +182,18 @@ void main() {
     for (final m in ['INDEX', 'MAPS', 'TH', 'a', '1234', 'Chapter 1']) {
       expect(Paginator.noteMarker.hasMatch(m), isFalse, reason: m);
     }
-    List<double> lines(String a) {
-      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>Shed by the deserving$a, and '
-          'then wondered where the stories went, and why, and where to.</p><p>Next.</p></body>'));
-      return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.textOrigins.map((o) => o.dy).toList()
-        ..add(blocks.length.toDouble());
-    }
-    expect(lines('<a href="n.html#f1">*</a>'), lines('*'));
+    EpubPage page(String a) => Paginator(const EpubTheme(), const Size(400, 600), null).run(ChapterReader(StyleSheet(),
+            (h) => h).read(parseXhtml('<body><p>Shed by the deserving$a, and then wondered where the stories went, and '
+            'why, and where to.</p><p>Next.</p></body>'))).single;
+    List<double> lines(EpubPage p) => p.textOrigins.map((o) => o.dy).toList();
+    final marked = page('<a href="n.html#f1">*</a>');
+    expect(lines(marked), lines(page('*')), reason: 'no line taller');
+    final glyph = TextPainter(text: TextSpan(text: '*', style: TextStyle(fontSize: const EpubTheme().fontSize)),
+        textDirection: TextDirection.ltr)..layout();
+    final marker = marked.links.single.rect;
+    expect(marker.width, greaterThan(glyph.width * 1.2), reason: 'drawn bigger than the same "*" in the text: $marker, '
+        '${glyph.width} wide');
+    glyph.dispose();
   });
 
   test('superscripts: digits become superscript characters (footnote numbers); other text stays itself', () {
@@ -394,7 +395,7 @@ void main() {
   });
 
   test("Mistborn's epigraph (a wrapper with a right margin and space after): its paragraphs inset on the right, and "
-      'the space after it kept with the reader\'s own formatting on (only the gaps between paragraphs go)', () {
+      'the space after it kept with the reader\'s paragraphs (only the gaps between paragraphs go)', () {
     const css = '.chapterEpigraph { display: block; margin-top: 0%; margin-bottom: 10%; margin-right: 5% } '
         '.chapterTitle { text-align: center }';
     final src = '<body><div class="chapterEpigraph"><p><i>Sometimes, I worry.</i></p><p><i>When they see me.</i></p>'
@@ -403,25 +404,25 @@ void main() {
     final epi = bs.whereType<TextBlock>().take(2).toList();
     expect(epi.map((b) => b.right), [1.5, 1.5], reason: '5% of the page, as about 30 em wide');
     expect(epi.last.wrapBottom, 3, reason: '10%: the space after the epigraph');
-    double headingY(bool bookFormatting) {
-      final page = Paginator(EpubTheme(bookFormatting: bookFormatting), const Size(600, 900), null).run(
+    double headingY() {
+      final page = Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null).run(
           ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
       return page.textOrigins[2].dy; // the third run of lines: PROLOGUE
     }
     final plainSrc = src.replaceAll(' class="chapterEpigraph"', '');
-    final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+    final page = Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(plainSrc))).single;
     // the gap before PROLOGUE: the larger of the epigraph's space after (3 em = 57 px) and the heading's own top margin
     // (~22 px, there in both) - so 35 px more than with no wrapper
-    expect(headingY(false) - page.textOrigins[2].dy, closeTo(57 - 0.83 * 1.4 * 19, 1),
-        reason: "own formatting keeps the epigraph's space after, not just the heading's own");
+    expect(headingY() - page.textOrigins[2].dy, closeTo(57 - 0.83 * 1.4 * 19, 1),
+        reason: "the reader's paragraphs keep the epigraph's space after, not just the heading's own");
   });
 
-  test("own formatting takes out only the book's usual gap between paragraphs: a paragraph that asks for its own "
+  test("the reader's paragraphs take out only the book's usual gap between paragraphs: a paragraph that asks for its own "
       'spacing (a scene break) keeps it, and starts without an indent', () {
     const css = 'p { margin: 1em 0; text-indent: 1.5em } p.break { margin-top: 3em }';
     final src = '<body><p>One.</p><p>Two.</p><p>Three.</p><p class="break">After the break.</p><p>Five.</p></body>';
-    final page = Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+    final page = Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src))).single;
     final o = page.textOrigins;
     final line = o[1].dy - o[0].dy; // ordinary paragraphs: one line apart, no gap
@@ -449,21 +450,10 @@ void main() {
     expect(const EpubTheme(bookFormatting: false).ownParagraphs, isTrue);
   });
 
-  test("the reader's own formatting: paragraphs justified, indented after another paragraph, no gaps - fewer pages "
-      "than the book's browser-default gaps; headings keep theirs", () {
-    final src = '<body><h1>Title</h1>${chapter(30, 20).replaceAll(RegExp('</?body>'), '')}</body>';
-    // a book that indents its paragraphs (and leaves the browser's gap between them)
-    List<EpubPage> lay(EpubTheme theme) => Paginator(theme, const Size(400, 600), hy.forLang('en'))
-        .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h).read(parseXhtml(src)));
-    final book = lay(const EpubTheme());
-    final mine = lay(const EpubTheme(bookFormatting: false));
-    expect(mine.length, lessThan(book.length), reason: 'no gap between paragraphs');
-  });
-
-  test("own formatting invents no indent (user, 2026-10-07: only where the book calls for one): a book that doesn't "
+  test("the reader's paragraphs invent no indent (user, 2026-10-07: only where the book calls for one): a book that doesn't "
       "indent its paragraphs keeps them unindented, with its gap between them - without either they ran together; "
       "one that indents keeps its own amount, not the reader's", () {
-    EpubPage page(String css) => Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+    EpubPage page(String css) => Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h)
             .read(parseXhtml('<body><p>One.</p><p>Two.</p><p>Three.</p></body>')))
         .single;
@@ -647,9 +637,9 @@ void main() {
   });
 
   test('E4: a scene break written as <hr/> keeps a gap, and the paragraph after it starts without an indent (with '
-      "the reader's own formatting)", () {
+      "the reader's paragraphs)", () {
     // (a book whose paragraphs are indented: the indent is the book's, never the reader's - user, 2026-10-07)
-    EpubPage page(String body) => Paginator(const EpubTheme(bookFormatting: false), const Size(600, 900), null)
+    EpubPage page(String body) => Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h)
             .read(parseXhtml('<body>$body</body>')))
         .single;
@@ -659,7 +649,7 @@ void main() {
     expect(broken[2].dy - broken[1].dy, greaterThan(plain[2].dy - plain[1].dy + 10), reason: 'a gap at the break');
     expect(page(plainSrc).textIndents[2], greaterThan(10), reason: 'an ordinary paragraph is indented');
     expect(page(brokenSrc).textIndents[2], lessThan(1), reason: 'no indent after the break');
-    // blank paragraphs between EVERY paragraph are a converted book's spacing, not breaks: own formatting evens them
+    // blank paragraphs between EVERY paragraph are a converted book's spacing, not breaks: the reader's paragraphs even them
     final spaced = lay(List.generate(8, (i) => '<p>P$i.</p><p>&nbsp;</p>').join());
     expect(spaced[2].dy - spaced[1].dy, closeTo(spaced[1].dy - spaced[0].dy, 0.5));
   });
