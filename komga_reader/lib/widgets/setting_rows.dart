@@ -383,19 +383,19 @@ class SegmentRow<T> extends StatelessWidget {
         return SettingRow(title: title, enabled: enabled, subtitle: subtitle, trailingWidth: w,
             trailing: SizedBox(width: w, child: _buttons(context)));
       }
-      // under the label: the full width of the row (shrunk to fit if even that's too narrow)
+      // under the label: the full width of the row. Too narrow even for that, only the labels shrink - the buttons
+      // keep their height (user, 2026-10-08: shrinking the whole control "just makes it harder to tap")
       return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         SettingRow(title: title, enabled: enabled, subtitle: subtitle),
         Padding(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft,
-              child: SizedBox(width: own > inner ? own : inner, child: _buttons(context))),
+          child: _buttons(context, shrinkLabels: own > inner),
         ),
       ]);
     });
   }
 
-  Widget _buttons(BuildContext context) {
+  Widget _buttons(BuildContext context, {bool shrinkLabels = false}) {
     final scheme = Theme.of(context).colorScheme;
     return SegmentedButton<T>(
           expandedInsets: EdgeInsets.zero, // fills its width: every segment as wide as the others
@@ -418,7 +418,13 @@ class SegmentRow<T> extends StatelessWidget {
             for (final c in choices)
               ButtonSegment(
                 value: c.value,
-                label: c.icon == null && c.iconWidget == null ? Text(c.label) : null,
+                label: c.icon == null && c.iconWidget == null
+                    // one line, shrunk: a label free to wrap tells the bar it's several lines tall, and the buttons
+                    // grow to that
+                    ? (shrinkLabels
+                        ? FittedBox(fit: BoxFit.scaleDown, child: Text(c.label, maxLines: 1, softWrap: false))
+                        : Text(c.label))
+                    : null,
                 icon: c.iconWidget ?? (c.icon != null ? Icon(c.icon, size: 20) : c.mark != null ? Icon(c.mark, size: 16) : null),
                 tooltip: c.icon == null && c.iconWidget == null ? null : c.label,
               ),
