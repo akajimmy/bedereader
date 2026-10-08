@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -122,13 +123,59 @@ void main() {
       s.setDefault(const ReaderPrefs());
       s.series.remove('S7');
     });
-    const away = DisplayPrefs(screenOn: 5, midBook: MidBook.keep, night: true, accent: Accent.teal,
-        pageTurn: PageTurn.curl, pageStrip: true, comics: KindPrefs(progressBar: true),
-        ebooks: KindPrefs(progressBar: true));
+    // every one of this device's settings away from its default (test audit, 2026-10-07: a field left at its default
+    // could be dropped from a reset and nothing failed)
+    const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
+        midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
+        posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.teal,
+        pagePreviews: false, pageStrip: true,
+        comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
+            progressBar: true, hiddenSpots: ['left']),
+        ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
+            hiddenSpots: ['right']));
+    const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
+        colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small);
+    const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
+        autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white);
+    // which page's reset puts back each of this device's settings (by its saved name); null: no page's
+    const resetBy = <String, String?>{
+      'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',
+      'pageTurn': 'Comics', 'doubleTapZoom': 'Comics', 'pagePreviews': 'Comics', 'pageStrip': 'Comics',
+      'comics': 'Comics',
+      'ebooks': 'eBooks',
+      'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
+      'textScale': 'Look', 'accent': 'Look',
+      'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,
+    };
+    final none = const DisplayPrefs().toJson(), moved = away.toJson();
+    expect(resetBy.keys.toSet(), moved.keys.toSet(), reason: 'every setting placed in the table');
+    for (final k in moved.keys) {
+      expect(jsonEncode(moved[k]), isNot(jsonEncode(none[k])), reason: '$k: away from its default');
+    }
+    for (final e in const EpubPrefs().toJson().entries) {
+      expect(jsonEncode(awayEpub.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'epub ${e.key}: away');
+    }
+    for (final e in const ReaderPrefs().toJson().entries) {
+      expect(jsonEncode(awayDefaults.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'defaults ${e.key}: away');
+    }
     s.setDisplay(away);
-    s.setEpub(const EpubPrefs(font: EpubFont.lora, size: 24));
-    s.setDefault(const ReaderPrefs(fit: FitMode.width));
+    s.setEpub(awayEpub);
+    s.setDefault(awayDefaults);
     s.setSeries('S7', const ReaderPrefs(fit: FitMode.height));
+    final done = <String>{};
+    /// After the resets of [done]: their settings at the defaults, every other one as it was set.
+    void checkAll() {
+      final now = s.display.toJson();
+      for (final k in resetBy.keys) {
+        final back = done.contains(resetBy[k]);
+        expect(jsonEncode(now[k]), jsonEncode(back ? none[k] : moved[k]),
+            reason: '$k: ${back ? 'put back by Reset ${resetBy[k]}' : 'untouched by Reset ${done.join(', ')}'}');
+      }
+      expect(s.defaults, done.contains('Comics') ? const ReaderPrefs() : awayDefaults, reason: 'the comic defaults');
+      expect(s.epub, done.contains('eBooks') ? const EpubPrefs() : awayEpub, reason: 'the EPUB settings');
+      expect(s.series['S7']?.fit, FitMode.height, reason: "a series' own settings stay");
+    }
     Future<void> reset(String page, {bool confirm = true}) async {
       await tester.tap(find.widgetWithText(ListTile, page));
       await tester.pumpAndSettle();
@@ -143,25 +190,12 @@ void main() {
 
     await open(tester, page: SettingsPage.reading);
     await reset('Reading', confirm: false);
-    expect(s.display.screenOn, 5, reason: 'cancelled');
-    await reset('Reading');
-    expect((s.display.screenOn, s.display.midBook), (0, MidBook.ask));
-    expect((s.display.night, s.display.pageTurn), (true, PageTurn.curl), reason: "other pages' settings stay");
-
-    await reset('Comics');
-    expect((s.display.pageTurn, s.display.pageStrip, s.display.comics.progressBar), (PageTurn.swipe, false, false));
-    expect(s.defaults.fit, FitMode.screen);
-    expect(s.series['S7']?.fit, FitMode.height, reason: "a series' own settings stay");
-    expect(s.display.ebooks.progressBar, isTrue);
-    expect(s.epub.font, EpubFont.lora);
-
-    await reset('eBooks');
-    expect((s.epub.font, s.epub.size), (EpubFont.literata, 19.0));
-    expect(s.display.ebooks.progressBar, isFalse);
-    expect(s.display.night, isTrue);
-
-    await reset('Look');
-    expect((s.display.night, s.display.accent), (false, Accent.blue));
+    checkAll(); // cancelled: nothing changed
+    for (final page in ['Reading', 'Comics', 'eBooks', 'Look']) {
+      await reset(page);
+      done.add(page);
+      checkAll();
+    }
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
 
