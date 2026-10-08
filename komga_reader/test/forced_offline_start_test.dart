@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
@@ -20,7 +21,8 @@ void main() {
   /// The app as last left: signed in, offline by hand, books downloaded and one still in the queue.
   Future<ShellKomga> start(WidgetTester tester) async {
     final dir = appStorage(tester);
-    SharedPreferences.setMockInitialValues({'server': url, 'apiKey': 'k', 'offline.forced': true});
+    SharedPreferences.setMockInitialValues({'server': url, 'offline.forced': true});
+    FlutterSecureStorage.setMockInitialValues({'apiKey': 'k'});
     await tester.runAsync(() async {
       final downloads = Directory('${dir.path}${Platform.pathSeparator}downloads');
       await buildStore(downloads);
