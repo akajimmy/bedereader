@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SelectionRegistrar;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -25,6 +26,7 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
+import 'epub_selection.dart';
 import 'position_row.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
@@ -230,6 +232,8 @@ class EpubRenderer extends Renderer {
     _pc.dispose();
     _contentsNode.dispose();
     _settingsNode.dispose();
+    _selectionFocus.dispose();
+    _selected.dispose();
     super.dispose();
   }
 
@@ -273,6 +277,7 @@ class EpubRenderer extends Renderer {
     _settled = false;
     _settle?.cancel();
     _settle = null;
+    if (_selected.value) WidgetsBinding.instance.addPostFrameCallback((_) => _clearSelection()); // other pages now
     // the place being read: the anchor from the layout before, if nothing has moved since - not the start of the page
     // now on screen, which is earlier than the place, so each new size or setting walked back a little more
     // (Windows, build 79: two resizes and back, a page back). Still opening (the saved place not shown yet): the
@@ -425,6 +430,7 @@ class EpubRenderer extends Renderer {
   }
 
   void _pageChanged(int i) {
+    _clearSelection(); // a selection is the page's: turned (any way), it goes
     if (!_ownJump) _anchor = null; // a turn: the page shown is the place now
     EpubTrace.instance.log('page $i${_ownJump ? ' by the reader' : ''}');
     _setPlace(i);
@@ -539,6 +545,11 @@ class EpubRenderer extends Renderer {
   bool _sliding = false;
 
   void _tap(TapUpDetails d, Size size, EpubPage? page) {
+    // text selected: a tap lets go of it - and does nothing else (no turn, no controls)
+    if (_selected.value) {
+      _clearSelection();
+      return;
+    }
     // a link under the finger first (footnotes)
     for (final l in page?.links ?? const <EpubLink>[]) {
       if (l.rect.inflate(10).contains(d.localPosition)) {
@@ -851,8 +862,19 @@ class EpubRenderer extends Renderer {
           if (!_ready) return ColoredBox(color: _drawn.background); // laid out again: the spinner next frame
           final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
           final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
-          return Stack(children: [
-            PageView.builder(
+          final here = _end ? -1 : place;
+          // text selection (user, 2026-10-08): the page on screen is selectable; Flutter's selection area gives the
+          // long press / mouse drag, the handles, the menu (Copy only, for now), Select all and Ctrl+C
+          return SelectionArea(
+            key: _selectionArea,
+            focusNode: _selectionFocus,
+            contextMenuBuilder: _selectionMenu,
+            onSelectionChanged: (c) => _selected.value = c != null && c.plainText.isNotEmpty,
+            child: Builder(builder: (context) {
+              final registrar = SelectionContainer.maybeOf(context);
+              return Stack(children: [
+            // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
+            SelectionContainer.disabled(child: PageView.builder(
               controller: _pc,
               itemCount: b.totalPages! + 1, // + the end card
               onPageChanged: _onPageChanged,
@@ -862,8 +884,8 @@ class EpubRenderer extends Renderer {
               allowImplicitScrolling: true,
               // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
               // of both pages again each frame
-              itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size)),
-            ),
+              itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size, i == here ? registrar : null)),
+            )),
             // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
             // by - Windows check, build 79)
             Positioned.fill(child: Listener(
@@ -876,16 +898,55 @@ class EpubRenderer extends Renderer {
               },
               child: const SizedBox.expand(),
             )),
-            Positioned.fill(child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTapUp: (d) => _tap(d, size, shown),
-              onSecondaryTap: host.toggleControls, // right-click, as with comics
-            )),
+            ValueListenableBuilder<bool>(
+              valueListenable: _selected,
+              // the page's taps win every tap over the selection area's (they're first in the arena), so a tap
+              // never starts a double tap that selects - quick taps turn pages as before
+              builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTapUp: (d) => _tap(d, size, shown),
+                // right-click, as with comics - with text selected it's the selection's (its menu)
+                onSecondaryTap: selected ? null : host.toggleControls,
+              )),
+            ),
           ]);
+            }),
+          );
         })),
       ];
 
-  Widget _pageAt(int i, Size size) {
+  // ---- selecting text
+
+  final _selectionArea = GlobalKey<SelectionAreaState>();
+  final _selected = ValueNotifier<bool>(false); // text is selected on the page
+
+  /// The selection area's focus: Esc lets go of the selection first (then it closes the book, as before).
+  late final _selectionFocus = FocusNode(debugLabel: 'epub-selection', onKeyEvent: (_, e) {
+    if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape && _selected.value) {
+      _clearSelection();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  });
+
+  /// Lets go of the selection (and its handles and menu).
+  void _clearSelection() {
+    if (!_selected.value) return;
+    _selected.value = false;
+    _selectionArea.currentState?.selectableRegion.clearSelection();
+  }
+
+  /// The selection's pane of actions: Copy (the first; more to come - user, 2026-10-08).
+  Widget _selectionMenu(BuildContext context, SelectableRegionState state) {
+    final items = [for (final i in state.contextMenuButtonItems) if (i.type == ContextMenuButtonType.copy) i];
+    if (items.isEmpty) return const SizedBox.shrink();
+    return AdaptiveTextSelectionToolbar.buttonItems(anchors: state.contextMenuAnchors, buttonItems: items);
+  }
+
+  @override
+  void controlsShown() => _clearSelection();
+
+  Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar]) {
     final b = _book!;
     final theme = _drawn;
     if (i >= b.totalPages!) return host.endCard();
@@ -903,7 +964,13 @@ class EpubRenderer extends Renderer {
       }
       return ColoredBox(color: theme.background, child: const Center(child: CircularProgressIndicator()));
     }
-    return CustomPaint(size: size, painter: _PagePainter(pages[p.clamp(0, pages.length - 1)], theme.background));
+    final page = pages[p.clamp(0, pages.length - 1)];
+    return SelectablePage(
+      page: page,
+      registrar: registrar,
+      colour: theme.accent.withValues(alpha: 0.35),
+      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background)),
+    );
   }
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
