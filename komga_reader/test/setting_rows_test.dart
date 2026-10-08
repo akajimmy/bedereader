@@ -32,7 +32,7 @@ void main() {
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
         SettingsGroup(children: [SegmentRow<int>(title: 'Keep it', value: 1, onChanged: (_) {}, choices: long)]),
       ]))));
-      return tester.getSize(find.byType(SegmentedButton<int>));
+      return tester.getRect(find.byType(SegmentedButton<int>)).size; // as drawn: a scaled-down control is smaller
     }
 
     final roomy = await buttons(3000); // all of it fits
