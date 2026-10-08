@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/painting.dart' show FileImage, ImageProvider;
+import 'package:http/http.dart' as http;
 
 import '../api.dart';
 import '../hidden_libraries.dart';
@@ -22,7 +23,9 @@ class NotAvailableOffline implements Exception {
 /// part of the tree. Reading progress goes to the store's queue; server-only actions throw [NotAvailableOffline];
 /// settings sync throws [KomgaUnreachable] so it retries once back online.
 class OfflineKomga extends Komga {
-  OfflineKomga(this.store, {String baseUrl = 'offline'}) : super(baseUrl, '');
+  // no HTTP client of its own: it answers from the device (one was made per offline source and never used or closed -
+  // code review 2026-10-05, #50)
+  OfflineKomga(this.store, {String baseUrl = 'offline'}) : super(baseUrl, '', client: _NoNetwork());
   final OfflineStore store;
 
   // ---- helpers ------------------------------------------------------------------------------------------------------
@@ -119,6 +122,9 @@ class OfflineKomga extends Komga {
     }
     return libs.values.toList()..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
   }
+
+  @override
+  Future<List<dynamic>> keptLibraries() => libraries(); // read from the device each time: nothing to keep
 
   // ---- browsing ------------------------------------------------------------------------------------------------------
   @override
@@ -429,4 +435,11 @@ class OfflineKomga extends Komga {
   Future<void> deleteBookFile(String bookId) async => throw NotAvailableOffline('Deleting a book');
   @override
   Future<void> deleteSeriesFiles(String seriesId) async => throw NotAvailableOffline('Deleting a series');
+}
+
+/// The offline source's HTTP client: holds no sockets, and anything that would go to the server fails as unreachable.
+class _NoNetwork extends http.BaseClient {
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
+      throw http.ClientException('offline: nothing goes to the server', request.url);
 }

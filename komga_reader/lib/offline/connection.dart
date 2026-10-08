@@ -194,7 +194,9 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !forcedOffline) unawaited(check()); // back in the app: look again
+    if (state != AppLifecycleState.resumed) return;
+    online?.forgetLibraries(); // the side menu's kept library list is fetched again (code review 2026-10-05, #43)
+    if (!forcedOffline) unawaited(check()); // back in the app: look again
   }
 
   /// Point the background users of the server at the current connection, and poll while offline by the prompt.

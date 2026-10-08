@@ -36,8 +36,9 @@ class _AppDrawerState extends State<AppDrawer> {
     _loadLibraries();
   }
 
+  // the kept list (fetched again when the app comes back to the foreground - Connection), hidden ones left out
   void _loadLibraries() =>
-      widget.api.visibleLibraries().then((l) { if (mounted) setState(() => _libraries = l); }).catchError((_) {});
+      widget.api.visibleLibraries(kept: true).then((l) { if (mounted) setState(() => _libraries = l); }).catchError((_) {});
 
   @override
   void dispose() {
