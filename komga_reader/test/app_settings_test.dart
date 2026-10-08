@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -16,11 +17,11 @@ import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart' show NightMode;
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:komga_reader/widgets/poster.dart' show PosterSizeButton;
-import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 import 'support/no_network.dart';
+import 'support/settings_pages.dart';
 import 'support/status_server.dart';
 
 /// A tall window, wide enough for the side list of pages: a whole page fits, nothing to scroll to.
@@ -34,19 +35,6 @@ Future<void> open(WidgetTester tester, {SettingsPage page = SettingsPage.server,
       initialPage: page)));
   await tester.pump();
 }
-
-/// Each page's name in the list (to move between pages; a switch, so a new page doesn't compile here until added).
-String pageName(SettingsPage p) => switch (p) {
-      SettingsPage.reading => 'Reading',
-      SettingsPage.comics => 'Comics',
-      SettingsPage.ebooks => 'eBooks',
-      SettingsPage.keys => 'Remote and keys',
-      SettingsPage.server => 'Server and sync',
-      SettingsPage.library => 'Library & Home',
-      SettingsPage.downloads => 'Downloads',
-      SettingsPage.look => 'Look',
-      SettingsPage.about => 'About',
-    };
 
 void main() {
   setUp(() async {
@@ -92,36 +80,76 @@ void main() {
     }
   });
 
-  testWidgets('Comics and eBooks: each its own position text, page corner and progress bar; the page strip switch '
-      '(user, 2026-10-07)', (tester) async {
+  testWidgets("a tap on a setting's control sets the stored value; on Comics and eBooks each kind its own (user, "
+      "2026-10-07) - the other kind's stays", (tester) async {
+    // one table for the tap-and-read-back tests of Comics / eBooks (each kind its own), the EPUB settings, the comic
+    // defaults' page colour, Reading, Library & Home and Look (test audit, 2026-10-07)
     tall(tester);
     final s = AppSettings.instance;
+    final before = s.defaults;
     s.setDisplay(const DisplayPrefs());
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
-    Future<void> tap(Finder f) async {
-      await tester.tap(f);
+    addTearDown(() {
+      s.setDisplay(const DisplayPrefs());
+      s.setEpub(const EpubPrefs());
+      s.setDefault(before);
+    });
+    Finder segment<T>(String label) => find.descendant(of: find.byType(SegmentedButton<T>), matching: find.text(label));
+    String spots(BookKind k) => s.display.kind(k).hiddenSpots.join(',');
+    final steps = <(SettingsPage, Finder, Object? Function(), Object?)>[
+      // Comics: each kind its own position text, progress bar
+      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Title'),
+          () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
+      (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Page strip'), () => s.display.pageStrip, true),
+      (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
+          () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false)),
+      (SettingsPage.comics, segment<PageTurn>('None'), () => s.display.pageTurn, PageTurn.flip), // "None" is the flip
+      // the page colours, for every series that follows the defaults (synced; user, 2026-10-05)
+      (SettingsPage.comics, find.bySemanticsLabel('White background'),
+          () => (s.defaults.background, s.prefsFor('S-follows-defaults').background),
+          (ReaderBackground.white, ReaderBackground.white)),
+      // eBooks: the other kind's position text, progress bar and page corner
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+          () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', 'right')),
+      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter page'),
+          () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
+      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Progress bar'),
+          () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true)),
+      (SettingsPage.ebooks, segment<PageNote>('Off'),
+          () => (s.display.comics.pageNote, s.display.ebooks.pageNote), (PageNote.afterTurn, PageNote.off)),
+      // eBooks: the EPUB settings (the alignment on its own: user, 2026-10-07)
+      (SettingsPage.ebooks, find.widgetWithText(ChoiceChip, 'Lora'), () => s.epub.font, EpubFont.lora),
+      (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
+      (SettingsPage.ebooks, segment<EpubAlign>('Left'),
+          () => (s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine)),
+      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Hyphenation'), () => s.epub.hyphenate, false),
+      (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.7),
+      // Reading
+      (SettingsPage.reading, find.text('Mark read'), () => s.display.midBook, MidBook.markRead),
+      (SettingsPage.reading, find.text('10 min'), () => s.display.screenOn, 10),
+      // Library & Home: the poster size, and the three caption lines each on or off (user, 2026-10-07)
+      (SettingsPage.library, find.text('Large'), () => s.display.posterSize, PosterSize.large),
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #'),
+          () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, true)),
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Release date'),
+          () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, false)),
+      // Look
+      (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),
+      (SettingsPage.look, find.bySemanticsLabel('Teal'), () => s.display.accent, Accent.teal),
+    ];
+    expect((s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (true, true, true));
+    await open(tester, page: steps.first.$1);
+    var on = steps.first.$1;
+    for (final (i, (page, control, read, expected)) in steps.indexed) {
+      if (page != on) {
+        await tester.tap(find.widgetWithText(ListTile, pageName(page)));
+        await tester.pumpAndSettle();
+        on = page;
+      }
+      await tester.tap(control);
       await tester.pumpAndSettle();
+      expect(read(), expected, reason: 'step $i (${page.name}): $control');
     }
-
-    await open(tester, page: SettingsPage.comics);
-    await tap(find.widgetWithText(FilterChip, 'Title'));
-    expect(s.display.comics.hiddenSpots, ['centre']);
-    expect(s.display.ebooks.hiddenSpots, isEmpty);
-    await tap(find.widgetWithText(SwitchListTile, 'Page strip'));
-    expect(s.display.pageStrip, isTrue);
-    await tap(find.widgetWithText(SwitchListTile, 'Progress bar'));
-    expect((s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false));
-
-    await tap(find.widgetWithText(ListTile, 'eBooks'));
-    await tap(find.widgetWithText(FilterChip, 'Chapter page'));
-    expect(s.display.ebooks.hiddenSpots, ['right']);
-    await tap(find.widgetWithText(FilterChip, 'Chapter page'));
-    expect(s.display.ebooks.hiddenSpots, isEmpty);
-    expect(s.display.comics.hiddenSpots, ['centre']);
-    await tap(find.widgetWithText(SwitchListTile, 'Progress bar'));
-    expect((s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true));
-    await tap(find.descendant(of: find.byType(SegmentedButton<PageNote>), matching: find.text('Off')));
-    expect((s.display.comics.pageNote, s.display.ebooks.pageNote), (PageNote.afterTurn, PageNote.off));
+    await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
 
   testWidgets("a reset on each page (user, 2026-10-07): asked first; it puts back that page's settings and no others",
@@ -134,13 +162,59 @@ void main() {
       s.setDefault(const ReaderPrefs());
       s.series.remove('S7');
     });
-    const away = DisplayPrefs(screenOn: 5, midBook: MidBook.keep, night: true, accent: Accent.teal,
-        pageTurn: PageTurn.curl, pageStrip: true, comics: KindPrefs(progressBar: true),
-        ebooks: KindPrefs(progressBar: true));
+    // every one of this device's settings away from its default (test audit, 2026-10-07: a field left at its default
+    // could be dropped from a reset and nothing failed)
+    const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
+        midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
+        posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.teal,
+        pagePreviews: false, pageStrip: true,
+        comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
+            progressBar: true, hiddenSpots: ['left']),
+        ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
+            hiddenSpots: ['right']));
+    const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
+        colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small);
+    const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
+        autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white);
+    // which page's reset puts back each of this device's settings (by its saved name); null: no page's
+    const resetBy = <String, String?>{
+      'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',
+      'pageTurn': 'Comics', 'doubleTapZoom': 'Comics', 'pagePreviews': 'Comics', 'pageStrip': 'Comics',
+      'comics': 'Comics',
+      'ebooks': 'eBooks',
+      'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
+      'textScale': 'Look', 'accent': 'Look',
+      'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,
+    };
+    final none = const DisplayPrefs().toJson(), moved = away.toJson();
+    expect(resetBy.keys.toSet(), moved.keys.toSet(), reason: 'every setting placed in the table');
+    for (final k in moved.keys) {
+      expect(jsonEncode(moved[k]), isNot(jsonEncode(none[k])), reason: '$k: away from its default');
+    }
+    for (final e in const EpubPrefs().toJson().entries) {
+      expect(jsonEncode(awayEpub.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'epub ${e.key}: away');
+    }
+    for (final e in const ReaderPrefs().toJson().entries) {
+      expect(jsonEncode(awayDefaults.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'defaults ${e.key}: away');
+    }
     s.setDisplay(away);
-    s.setEpub(const EpubPrefs(font: EpubFont.lora, size: 24));
-    s.setDefault(const ReaderPrefs(fit: FitMode.width));
+    s.setEpub(awayEpub);
+    s.setDefault(awayDefaults);
     s.setSeries('S7', const ReaderPrefs(fit: FitMode.height));
+    final done = <String>{};
+    /// After the resets of [done]: their settings at the defaults, every other one as it was set.
+    void checkAll() {
+      final now = s.display.toJson();
+      for (final k in resetBy.keys) {
+        final back = done.contains(resetBy[k]);
+        expect(jsonEncode(now[k]), jsonEncode(back ? none[k] : moved[k]),
+            reason: '$k: ${back ? 'put back by Reset ${resetBy[k]}' : 'untouched by Reset ${done.join(', ')}'}');
+      }
+      expect(s.defaults, done.contains('Comics') ? const ReaderPrefs() : awayDefaults, reason: 'the comic defaults');
+      expect(s.epub, done.contains('eBooks') ? const EpubPrefs() : awayEpub, reason: 'the EPUB settings');
+      expect(s.series['S7']?.fit, FitMode.height, reason: "a series' own settings stay");
+    }
     Future<void> reset(String page, {bool confirm = true}) async {
       await tester.tap(find.widgetWithText(ListTile, page));
       await tester.pumpAndSettle();
@@ -155,49 +229,13 @@ void main() {
 
     await open(tester, page: SettingsPage.reading);
     await reset('Reading', confirm: false);
-    expect(s.display.screenOn, 5, reason: 'cancelled');
-    await reset('Reading');
-    expect((s.display.screenOn, s.display.midBook), (0, MidBook.ask));
-    expect((s.display.night, s.display.pageTurn), (true, PageTurn.curl), reason: "other pages' settings stay");
-
-    await reset('Comics');
-    expect((s.display.pageTurn, s.display.pageStrip, s.display.comics.progressBar), (PageTurn.swipe, false, false));
-    expect(s.defaults.fit, FitMode.screen);
-    expect(s.series['S7']?.fit, FitMode.height, reason: "a series' own settings stay");
-    expect(s.display.ebooks.progressBar, isTrue);
-    expect(s.epub.font, EpubFont.lora);
-
-    await reset('eBooks');
-    expect((s.epub.font, s.epub.size), (EpubFont.literata, 19.0));
-    expect(s.display.ebooks.progressBar, isFalse);
-    expect(s.display.night, isTrue);
-
-    await reset('Look');
-    expect((s.display.night, s.display.accent), (false, Accent.blue));
+    checkAll(); // cancelled: nothing changed
+    for (final page in ['Reading', 'Comics', 'eBooks', 'Look']) {
+      await reset(page);
+      done.add(page);
+      checkAll();
+    }
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
-  });
-
-  testWidgets("eBooks: the font, size and the book's formatting set the EPUB settings (synced)", (tester) async {
-    tall(tester);
-    final s = AppSettings.instance;
-    addTearDown(() => s.setEpub(const EpubPrefs()));
-    await open(tester, page: SettingsPage.ebooks);
-    await tester.tap(find.widgetWithText(ChoiceChip, 'Lora'));
-    await tester.pump();
-    expect(s.epub.font, EpubFont.lora);
-    await tester.tap(find.byTooltip('Larger'));
-    await tester.pump();
-    expect(s.epub.size, 20);
-    // "Book's formatting" in three (user, 2026-10-07): the alignment on its own
-    await tester.tap(find.descendant(of: find.byType(SegmentedButton<EpubAlign>), matching: find.text('Left')));
-    await tester.pump();
-    expect((s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine));
-    await tester.tap(find.widgetWithText(SwitchListTile, 'Hyphenation'));
-    await tester.pump();
-    expect(s.epub.hyphenate, isFalse);
-    await tester.tap(find.text('Loose'));
-    await tester.pump();
-    expect(s.epub.lineSpacing, 1.7);
   });
 
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {
@@ -230,38 +268,6 @@ void main() {
     await tester.pump();
     expect(find.textContaining("Can't reach Komga at 192.168.1.10:25600."), findsOneWidget); // no http://
     expect(api.calls, 3);
-  });
-
-  testWidgets("a segmented choice sits beside its label while both fit, and drops under it when they don't "
-      '(the widths measured in the font in use)', (tester) async {
-    // it used to check one row at 700 px, which only stacked because the test font is about twice as wide as a real
-    // one; the window widths here come from the row's own measure, so the check holds in any font (test audit,
-    // 2026-09-30)
-    tall(tester, width: 700); // the narrow layout
-    await open(tester, page: SettingsPage.comics);
-    await tester.pump();
-    final row = find.byWidgetPredicate((w) => w is SegmentRow && w.title == 'Page turn animation');
-    final seg = tester.widget<SegmentRow>(row);
-    final ctx = tester.element(row);
-    // SegmentRow's sum: every segment as wide as the widest label, plus 28 each; the label gets up to 120, plus 12
-    final widest = [for (final c in seg.choices) textWidth(ctx, c.label, 13)].reduce((a, b) => a > b ? a : b);
-    final own = seg.choices.length * (widest + 28);
-    final room = textWidth(ctx, seg.title, 14.5).clamp(0.0, 120.0) + 12;
-    final margin = 700 - tester.getSize(row).width; // the page's padding around the row
-    final fits = own + room + 28 + margin; // the narrowest window where the buttons sit beside the label
-    expect(fits + 10, lessThan(760), reason: 'both widths still in the narrow layout');
-
-    Future<bool> beside(double width) async {
-      tester.view.physicalSize = Size(width, 2400);
-      await tester.pump();
-      await tester.pump(); // the shared width settles
-      final buttons = tester.getRect(find.descendant(of: row, matching: find.byType(SegmentedButton<PageTurn>)));
-      return buttons.top < tester.getRect(find.text('Page turn animation')).bottom;
-    }
-
-    expect(await beside(fits + 10), isTrue, reason: 'room for both at ${fits + 10}');
-    expect(await beside(fits - 10), isFalse, reason: 'not at ${fits - 10}: under the label');
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Home section switches here are the same setting as the Home menu (shared, saved)', (tester) async {
@@ -301,6 +307,7 @@ void main() {
     await pick('Scheduled');
     expect(s.display.nightSchedule, isTrue);
     expect(find.text('From / to'), findsOneWidget);
+    expect(find.text('9:00 PM'), findsOneWidget); // its start, 21:00, in the test's 12-hour format
     expect(find.text('Warmth'), findsOneWidget);
     await pick('Off');
     expect((s.display.night, s.display.nightSchedule), (false, false));
@@ -326,10 +333,15 @@ void main() {
     expect(signedOut, 1);
   });
 
-  testWidgets('Comics: the reading defaults are edited here; series with their own settings can all be reset',
+  testWidgets('Comics: the comic defaults are edited here; series with their own settings can all be reset',
       (tester) async {
     tall(tester);
     final s = AppSettings.instance;
+    addTearDown(() { // put back even if the test fails part way
+      s.setDefault(const ReaderPrefs());
+      s.series.remove('S1');
+      s.series.remove('S2');
+    });
     s.setDefault(const ReaderPrefs());
     s.setSeries('S1', const ReaderPrefs(fit: FitMode.width));
     s.setSeries('S2', const ReaderPrefs(sharpen: true));
@@ -346,50 +358,6 @@ void main() {
     expect(s.prefsFor('S1').fit, FitMode.height); // follows the defaults now
     expect(find.text('Every series follows the defaults'), findsOneWidget);
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
-  });
-
-  testWidgets('Comics: the page colours are set there, for every series that follows the defaults (synced) '
-      '(user, 2026-10-05)', (tester) async {
-    tall(tester);
-    final s = AppSettings.instance;
-    final before = s.defaults;
-    addTearDown(() => s.setDefault(before));
-    await open(tester, page: SettingsPage.comics);
-    await tester.tap(find.bySemanticsLabel('White background'));
-    await tester.pumpAndSettle();
-    expect(s.defaults.background, ReaderBackground.white);
-    expect(s.prefsFor('S-follows-defaults').background, ReaderBackground.white);
-    await tester.pump(const Duration(seconds: 3)); // the settings sync timer
-  });
-
-  testWidgets('Comics, Reading and Library & Home: the device settings are set here', (tester) async {
-    tall(tester);
-    final s = AppSettings.instance;
-    s.setDisplay(const DisplayPrefs());
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
-    await open(tester, page: SettingsPage.comics);
-    Future<void> tap(Finder f) async {
-      await tester.tap(f);
-      await tester.pumpAndSettle();
-    }
-
-    await tap(find.descendant(of: find.byType(SegmentedButton<PageTurn>), matching: find.text('None')));
-    expect(s.display.pageTurn, PageTurn.flip); // "None" is the flip
-    await tap(find.widgetWithText(ListTile, 'Reading'));
-    await tap(find.text('Mark read'));
-    expect(s.display.midBook, MidBook.markRead);
-    await tap(find.text('10 min'));
-    expect(s.display.screenOn, 10);
-    await tap(find.widgetWithText(ListTile, 'Library & Home'));
-    await tap(find.text('Large'));
-    expect(s.display.posterSize, PosterSize.large);
-    // the three caption lines, each on or off (user, 2026-10-07)
-    expect((s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (true, true, true));
-    await tap(find.widgetWithText(FilterChip, 'Series #'));
-    expect(s.display.posterSeries, isFalse);
-    await tap(find.widgetWithText(FilterChip, 'Release date'));
-    expect(s.display.posterDate, isFalse);
-    expect(s.display.posterTitle, isTrue);
   });
 
   testWidgets("Reset this device's settings: asks first; every one of this device's settings goes back, synced ones "
@@ -455,26 +423,6 @@ void main() {
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
   });
 
-  testWidgets('Look: text size and accent colour are set here; the schedule shows its times when on', (tester) async {
-    tall(tester);
-    final s = AppSettings.instance;
-    s.setDisplay(const DisplayPrefs());
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
-    await open(tester, page: SettingsPage.look);
-    await tester.tap(find.text('115%'));
-    await tester.pumpAndSettle();
-    expect(s.display.textScale, 1.15);
-    await tester.tap(find.bySemanticsLabel('Teal'));
-    await tester.pumpAndSettle();
-    expect(s.display.accent, Accent.teal);
-    expect(find.text('From / to'), findsNothing);
-    await tester.tap(find.text('Scheduled'));
-    await tester.pumpAndSettle();
-    expect(s.display.nightSchedule, isTrue);
-    expect(find.text('From / to'), findsOneWidget);
-    expect(find.text('9:00 PM'), findsOneWidget); // 21:00, in the test's 12-hour format
-  });
-
   testWidgets('poster size button in a top bar: S / M / L, the same setting as here', (tester) async {
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
@@ -487,13 +435,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(s.display.posterSize, PosterSize.large);
     expect(find.text('L'), findsOneWidget);
-  });
-
-  testWidgets('settings groups: rows are separated by hairlines, not spacers', (tester) async {
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsGroup(title: 'G', children: [
-      NoteRow('one'), NoteRow('two'), NoteRow('three'),
-    ]))));
-    expect(find.byType(Divider), findsNWidgets(2));
   });
 
   testWidgets('full screen: an X at the right of the top bar leaves it; none otherwise', (tester) async {

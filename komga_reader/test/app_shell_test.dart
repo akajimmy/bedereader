@@ -38,7 +38,7 @@ void main() {
     expect(find.ancestor(of: find.byType(LoginScreen), matching: find.byType(HoldOkGuard)), findsOneWidget);
   });
 
-  testWidgets("Settings > Display text size: this app's size, on top of the device's own", (tester) async {
+  testWidgets("Settings > Look text size: this app's size, on top of the device's own", (tester) async {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final ctx = await app(tester);
     expect(MediaQuery.textScalerOf(ctx).scale(10), closeTo(10, 0.001)); // 100%: as the device has it
@@ -50,7 +50,7 @@ void main() {
     expect(MediaQuery.textScalerOf(tester.element(find.byType(LoginScreen))).scale(10), closeTo(15.6, 0.001));
   });
 
-  testWidgets('Settings > Display accent colour: the theme follows it', (tester) async {
+  testWidgets('Settings > Look accent colour: the theme follows it', (tester) async {
     final ctx = await app(tester);
     expect(Theme.of(ctx).colorScheme.primary, Accent.blue.colour); // the default
     s.setDisplay(s.display.copyWith(accent: Accent.teal));
