@@ -10,15 +10,29 @@ void focusHighlightFollowsInput() {
   FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTouch; // start plain, on every platform
   if (_following) return;
   _following = true;
-  HardwareKeyboard.instance.addHandler((e) {
-    if (e is KeyDownEvent && _navigationKeys.contains(e.logicalKey)) {
-      FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
-    }
-    return false; // only watching: the key still goes where it was going
-  });
-  GestureBinding.instance.pointerRouter.addGlobalRoute((e) {
-    if (e is PointerDownEvent) FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTouch;
-  });
+  HardwareKeyboard.instance.addHandler(_onKey);
+  GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointer);
+}
+
+bool _onKey(KeyEvent e) {
+  if (e is KeyDownEvent && _navigationKeys.contains(e.logicalKey)) {
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+  }
+  return false; // only watching: the key still goes where it was going
+}
+
+void _onPointer(PointerEvent e) {
+  if (e is PointerDownEvent) FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTouch;
+}
+
+/// Undoes [focusHighlightFollowsInput] (tests: so one test's watchers don't stay on for the next).
+@visibleForTesting
+void stopFollowingInput() {
+  if (!_following) return;
+  _following = false;
+  HardwareKeyboard.instance.removeHandler(_onKey);
+  GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
+  FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic;
 }
 
 bool _following = false;
