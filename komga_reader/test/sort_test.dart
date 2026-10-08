@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/library.dart';
+import 'package:komga_reader/widgets/pin_tile.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/browse_server.dart';
@@ -61,5 +62,24 @@ void main() {
     api = await open(tester, pin: const Pin(name: 'x', kind: 'library', id: 'L1', title: 'Events', mode: 'series',
         sort: 'title'));
     expect(api.sorts.last, 'metadata.titleSort,asc');
+  });
+
+  // A guard (code review 2026-10-05, #52): the screen and a pin's poster read one sort map; a key that sorts on one
+  // field in the screen and another (or none) on the poster fails here.
+  testWidgets("a pinned library view's poster asks Komga for the same sort as the screen, for every sort key",
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    for (final (mode, keys) in [('series', seriesSortFields.keys), ('books', bookSortFields.keys)]) {
+      for (final key in keys) {
+        for (final dir in const ['asc', 'desc']) {
+          final pin = Pin(name: 'x', kind: 'library', id: 'L1', title: 'Events', mode: mode, sort: '$key:$dir');
+          final api = await open(tester, pin: pin);
+          final screen = api.sorts.last;
+          api.sorts.clear();
+          await tester.runAsync(() => pinView(api, pin));
+          expect(api.sorts, [screen], reason: '$mode $key:$dir');
+        }
+      }
+    }
   });
 }

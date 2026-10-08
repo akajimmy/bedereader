@@ -75,14 +75,11 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn {
   late final Paged _paged = Paged(_fetch);
   final _sel = Selection(); // multi-select, in Books mode
 
-  // sort key -> Komga field; the direction is separate (_desc)
-  static const _seriesSorts = {'title': 'metadata.titleSort', 'added': 'createdDate', 'updated': 'lastModifiedDate'};
-  static const _bookSorts = {'title': 'metadata.title', 'added': 'createdDate', 'release': 'metadata.releaseDate'};
-
   /// The natural direction when a field is picked: titles A -> Z, dates newest first (one rule with pins').
   static bool _defaultDesc(String key) => naturalDesc(key);
 
-  Map<String, String> get _sorts => _mode == BrowseMode.series ? _seriesSorts : _bookSorts;
+  // sort key -> Komga field (shared with pins, pins.dart); the direction is separate (_desc)
+  Map<String, String> get _sorts => _mode == BrowseMode.series ? seriesSortFields : bookSortFields;
   String get _sortParam => '${_sorts[_sortKey] ?? _sorts.values.first},${_desc ? 'desc' : 'asc'}';
 
   /// Direction wording that suits the field.
