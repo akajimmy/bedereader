@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 92 - 2026-10-07
+
 **Fixed**
 - **The remote lost its place** after removing a key in Settings > Remote and keys, or moving a Home section to the
   top or bottom with its arrows. The focus now goes to the row's Add, or stays on the arrow (dimmed at the ends).
@@ -50,8 +54,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   *eBook settings* (was Text and page): size, font, spacing and margins, alignment, paragraphs, hyphenation, then page
   colours, position text, brightness, rotation and keeping the screen on. Night mode is the top bar's moon; the rest
   is in Settings.
-
-## 1.3.0
 
 ### Build 91 - 2026-10-07
 
