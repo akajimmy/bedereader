@@ -359,7 +359,7 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   // Settings > Library & Home: any of the three lines, always in this order (user, 2026-10-07) - the first is the
   // tile's title, the next its subtitle, the third its caption ('' keeps a book's date line when it has none)
   final lines = [
-    if (display.posterSeries) bookTitle(b, bookNumber: true),
+    if (display.posterSeries) bookTitle(b),
     if (display.posterTitle) title,
     if (display.posterDate) posterDate(b['metadata']?['releaseDate'] as String?) ?? '',
   ];

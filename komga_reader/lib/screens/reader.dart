@@ -222,7 +222,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
 
-  static String _titleOf(dynamic b) => bookTitle(b, trim: true);
+  static String _titleOf(dynamic b) => bookTitle(b);
 
   int _openRun = 0; // each _open's number: an older one still loading doesn't take over
 
