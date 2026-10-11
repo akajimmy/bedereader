@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Remote: you couldn't see when you were on the Filter button while filters were on** - its focus outline was the
+  same colour as its fill. It now shows the same focus look as every other button.
+- **The writer / author and artist pickers say when they don't list every name**: with nothing typed they list the
+  first 50, and now say so at the end of the list - type a name to find the others.
+
 ## 1.3.0
 
 ### Build 101 - 2026-10-11
