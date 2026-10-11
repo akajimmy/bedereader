@@ -98,6 +98,35 @@ void main() {
     }
   }
 
+  testWidgets("the slider's thumb, dragged, shows a small drawing of the page picked, its number and chapter, over "
+      'the thumb; letting go goes there (user, 2026-10-11: as comics have)', (tester) async {
+    await open(tester, twoChapters());
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    final r = tester.getRect(find.byType(Slider));
+    final g = await tester.startGesture(Offset(r.left + 20, r.center.dy)); // the thumb, on page 1
+    await g.moveTo(Offset(r.left + 60, r.center.dy));
+    await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last page
+    await tester.pump();
+    for (var i = 0; i < 20 && find.byKey(const ValueKey('preview-loading')).evaluate().isNotEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    const preview = ValueKey('page-preview');
+    expect(find.byKey(preview), findsOneWidget);
+    expect(find.byKey(const ValueKey('preview-loading')), findsNothing, reason: 'the page drawn, not a spinner');
+    expect(find.descendant(of: find.byKey(preview), matching: find.byType(CustomPaint)), findsWidgets);
+    expect(find.descendant(of: find.byKey(preview), matching: find.text('Two')), findsOneWidget,
+        reason: "the last page's chapter");
+    final p = tester.getRect(find.byKey(preview));
+    expect(p.center.dx, closeTo(r.right - 20, 1), reason: 'over the thumb');
+    expect(p.bottom, lessThan(r.top));
+    await g.up();
+    await tester.pump();
+    expect(find.byKey(preview), findsNothing);
+    await settle(tester);
+  });
+
   group('Page turn: Curl (user, 2026-10-11: the comics\' 3D curl for eBooks)', () {
     setUpAll(preloadShaders);
     setUp(() => AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(turn: EpubTurn.curl)));

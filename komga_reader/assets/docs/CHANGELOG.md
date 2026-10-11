@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
+  you'd go to, with its page number and chapter.
+
 **Fixed**
 - **eBooks, Paragraphs: Auto - the first-paragraph fix of build 103 went too far** in books whose ordinary
   paragraphs are set flush and only special passages are indented (a letter, verse, an epigraph - the Brian Herbert
