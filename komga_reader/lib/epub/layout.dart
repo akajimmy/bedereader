@@ -956,7 +956,8 @@ class Paginator {
       }
     }
     Block? prev;
-    for (final b in blocks) {
+    for (final (i, b) in blocks.indexed) {
+      final next = i + 1 < blocks.length ? blocks[i + 1] : null;
       if (b.breakBefore && !_pageEmpty) _newPage();
       var mt = b.marginTop, mb = b.marginBottom;
       if (b is TextBlock) {
@@ -988,7 +989,11 @@ class Paginator {
           // indent - its gap is what tells it from the one before (without either, paragraphs ran together)
           final afterBlock = prev is ImageBlock || prev is TableBlock;
           mt = ownTop || afterBlock || !booksIndent ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
-          mb = ownBottom || !booksIndent ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
+          // ... but not when the next one is indented: its indent marks the new paragraph (Foundation's chapters open
+          // with a flush paragraph, then indented ones - the gap under the first was twice the others, user 2026-10-08)
+          final indentedNext = next is TextBlock && next.paragraph && next.indent > 0 && !next.breakBefore &&
+              (next.breakGap == 0 || _breaksAreSpacing);
+          mb = ownBottom || (!booksIndent && !indentedNext) ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
         if (b.breakGap > 0 && !(_breaksAreSpacing && theme.ownParagraphs)) mt = math.max(mt, b.breakGap);

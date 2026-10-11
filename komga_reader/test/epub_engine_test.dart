@@ -467,6 +467,19 @@ void main() {
     expect(indented.textIndents[0], lessThan(1), reason: 'not the first paragraph, after nothing');
   });
 
+  test("a flush first paragraph followed by indented ones (Foundation's cotx1 then tx) has no more gap under it than "
+      'the others have between them (it had the old 1em gap on top of Paragraph spacing - twice the rest)', () {
+    const css = 'p { margin: 1em 0 } .first { text-indent: 0 } .tx { text-indent: 1em }';
+    const src = '<body><p class="first">One.</p><p class="tx">Two.</p><p class="tx">Three.</p></body>';
+    for (final gap in [0.0, 1.0]) {
+      final o = Paginator(EpubTheme(ownParagraphs: true, paragraphGap: gap), const Size(600, 900), null)
+          .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src)))
+          .single
+          .textOrigins;
+      expect(o[1].dy - o[0].dy, closeTo(o[2].dy - o[1].dy, 0.5), reason: 'Paragraph spacing $gap em');
+    }
+  });
+
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
 
   test("a div holding only text is a paragraph (Codex Alera's and Dune's every paragraph is a div.tx): Paragraph "
