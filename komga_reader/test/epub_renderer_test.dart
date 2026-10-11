@@ -56,6 +56,9 @@ class ReadListKomga extends TestKomga with EmptyClientSettings {
 }
 
 void main() {
+  // the curl's shader, before any test: loaded inside a group after a widget test, it never finished (the whole file
+  // hung - 2026-10-11)
+  setUpAll(preloadShaders);
   late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -128,7 +131,6 @@ void main() {
   });
 
   group('Page turn: Curl (user, 2026-10-11: the comics\' 3D curl for eBooks)', () {
-    setUpAll(preloadShaders);
     setUp(() => AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(turn: EpubTurn.curl)));
     tearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
 
