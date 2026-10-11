@@ -10,6 +10,7 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/layout.dart' show EpubPage;
 import 'package:komga_reader/epub/source.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -61,8 +62,8 @@ void main() {
   });
   tearDown(() => EpubCountStore.instance = counts);
 
-  Future<void> open(WidgetTester tester, MemorySource source, {Komga? api}) async {
-    tester.view.physicalSize = const Size(800, 1200);
+  Future<void> open(WidgetTester tester, MemorySource source, {Komga? api, Size size = const Size(800, 1200)}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api ?? noNetwork(() => EndKomga(null)),
@@ -93,6 +94,26 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
   }
+
+  testWidgets('on a wide screen the surround is one still layer under the pages: a page dragged halfway moves its '
+      'sheet, not the surround (user, 2026-10-11: the whole sheet slides); a portrait screen has none', (tester) async {
+    final round = EpubRenderer.surround(AppSettings.instance.epub.colours.background);
+    Finder surroundBox() => find.byWidgetPredicate((w) => w is ColoredBox && w.color == round);
+    await open(tester, twoChapters(), size: const Size(1600, 1000));
+    expect(surroundBox(), findsOneWidget);
+    expect(find.descendant(of: find.byType(PageView), matching: surroundBox()), findsNothing,
+        reason: 'not drawn with each page (it would slide with them)');
+    final before = tester.getRect(surroundBox());
+    final drag = await tester.startGesture(const Offset(1200, 500));
+    await drag.moveBy(const Offset(-500, 0));
+    await tester.pump();
+    expect(tester.getRect(surroundBox()), before, reason: 'mid-slide: still');
+    await drag.up();
+    await settle(tester);
+
+    await open(tester, twoChapters());
+    expect(surroundBox(), findsNothing, reason: '800 wide: the page fills the screen');
+  });
 
   test("an EPUB is told from a comic by its media profile (the one Reader picks its renderer by it)", () {
     expect(isEpub({'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isTrue);

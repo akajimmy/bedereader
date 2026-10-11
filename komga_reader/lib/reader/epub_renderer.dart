@@ -67,6 +67,28 @@ class EpubRenderer extends Renderer {
   static double sideMargin(EpubPrefs e, double width) =>
       math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
 
+  /// The page drawn as a sheet on a wide screen (user, 2026-10-11): where the lines stop at their length
+  /// ([sideMargin]'s second case) with room to spare, the text column with the margins a page just that wide would
+  /// have, the full height, centred - the rest is the surround ([surround]). Null where the page fills the screen (a
+  /// portrait tablet, a narrow window). The text doesn't move: it's in the middle either way.
+  static Rect? sheetRect(EpubPrefs e, Size size) {
+    final share = e.margins.share;
+    final width = e.size * e.margins.lineEms / (1 - 2 * share); // the column and a page's margins round it
+    if ((size.width - width) / 2 < minSurround) return null;
+    return Rect.fromLTWH((size.width - width) / 2, 0, width, size.height);
+  }
+
+  /// The least surround beside a sheet: less, and the page fills the screen.
+  static const minSurround = 16.0;
+
+  /// The colour round the sheet: the page's own, a shade darker (a white page on light grey, the dark page on near
+  /// black); black, a shade lighter (user, 2026-10-11: derived, no setting).
+  static Color surround(Color page) {
+    final l = page.computeLuminance();
+    if (l < 0.005) return Color.lerp(page, const Color(0xFFFFFFFF), 0.07)!;
+    return Color.lerp(page, const Color(0xFF000000), l < 0.3 ? 0.45 : 0.1)!;
+  }
+
   /// Where book [id]'s files come from: offline, a downloaded EPUB's file (its progress kept on the device, sent to
   /// Komga later); else Komga.
   static EpubSource sourceFor(Komga api, String id) {
@@ -843,8 +865,7 @@ class EpubRenderer extends Renderer {
         final b = _book!;
         final n = b.chapterCount, done = b.countedChapters;
         final ink = _drawn.text;
-        return ColoredBox(
-          color: _drawn.background,
+        return _paper(_drawn.background, surround: true,
           child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
             const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3)),
             const SizedBox(height: 20),
@@ -870,7 +891,7 @@ class EpubRenderer extends Renderer {
           final size = box.biggest;
           _layout(size);
           final b = _book!;
-          if (!_ready) return ColoredBox(color: _drawn.background); // laid out again: the spinner next frame
+          if (!_ready) return _paper(_drawn.background, surround: true); // laid out again: the spinner next frame
           final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
           final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
           final here = _end ? -1 : place;
@@ -884,6 +905,8 @@ class EpubRenderer extends Renderer {
             child: Builder(builder: (context) {
               final registrar = SelectionContainer.maybeOf(context);
               return Stack(children: [
+            // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
+            if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
             // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
             SelectionContainer.disabled(child: PageView.builder(
               controller: _pc,
@@ -957,6 +980,17 @@ class EpubRenderer extends Renderer {
   @override
   void controlsShown() => _clearSelection();
 
+  /// The page's sheet now (null: the page fills the screen).
+  Rect? get _sheet => sheetRect(AppSettings.instance.epub, _size);
+
+  /// A page's paper with [child] on it: the whole area, or the sheet - with the surround round it when [surround] (a
+  /// page in the page view leaves that to the one still surround under them all).
+  Widget _paper(Color background, {Widget? child, bool surround = false}) => Stack(fit: StackFit.expand, children: [
+        if (surround && _sheet != null) ColoredBox(color: EpubRenderer.surround(background)),
+        CustomPaint(painter: _PagePainter(null, background, _sheet)),
+        if (child != null) child,
+      ]);
+
   Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar]) {
     final b = _book!;
     final theme = _drawn;
@@ -973,20 +1007,20 @@ class EpubRenderer extends Renderer {
       } else {
         _prefetch(c);
       }
-      return ColoredBox(color: theme.background, child: const Center(child: CircularProgressIndicator()));
+      return _paper(theme.background, child: const Center(child: CircularProgressIndicator()));
     }
     final page = pages[p.clamp(0, pages.length - 1)];
     return SelectablePage(
       page: page,
       registrar: registrar,
       colour: theme.accent.withValues(alpha: 0.35),
-      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background)),
+      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, _sheet)),
     );
   }
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
-  Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) => ColoredBox(
-        color: theme.background,
+  Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) => _paper(
+        theme.background,
         child: Center(child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -1107,18 +1141,33 @@ class _PictureViewState extends State<_PictureView> {
       );
 }
 
+/// A page: its paper - the whole area, or a [sheet] with a soft shadow each side (the surround behind is the reader's,
+/// still while sheets slide over it) - and its text and pictures ([page]; none: paper only, under a spinner or such).
 class _PagePainter extends CustomPainter {
-  _PagePainter(this.page, this.background);
-  final EpubPage page;
+  _PagePainter(this.page, this.background, this.sheet);
+  final EpubPage? page;
   final Color background;
+  final Rect? sheet;
   @override
   void paint(Canvas c, Size size) {
-    c.drawRect(Offset.zero & size, Paint()..color = background);
-    for (final p in page.pieces) {
-      p.paint(c);
+    final s = sheet;
+    if (s == null) {
+      c.drawRect(Offset.zero & size, Paint()..color = background);
+    } else {
+      final light = background.computeLuminance() > 0.3;
+      c.drawRect(s.inflate(2), Paint()
+        ..color = Color.fromRGBO(0, 0, 0, light ? 0.22 : 0.5)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+      c.drawRect(s, Paint()..color = background);
+    }
+    final pieces = page?.pieces;
+    if (pieces != null) {
+      for (final p in pieces) {
+        p.paint(c);
+      }
     }
   }
 
   @override
-  bool shouldRepaint(_PagePainter old) => old.page != page || old.background != background;
+  bool shouldRepaint(_PagePainter old) => old.page != page || old.background != background || old.sheet != sheet;
 }
