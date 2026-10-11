@@ -64,6 +64,29 @@ void main() {
     expect(side(EpubMargins.widest) / 800, greaterThanOrEqualTo(0.25));
   });
 
+  test('a wide screen shows the page as a sheet (user, 2026-10-11): the text column with the margins a page that wide '
+      'would have, centred, full height; none where the page fills the screen; the surround a shade off the page',
+      () {
+    for (final m in EpubMargins.values) {
+      final e = EpubPrefs(margins: m, size: 24);
+      const wide = Size(1920, 1080);
+      final s = EpubRenderer.sheetRect(e, wide)!;
+      expect(s.center.dx, closeTo(wide.width / 2, 0.01), reason: '${m.name}: centred');
+      expect(s.height, wide.height);
+      // the text sits in the sheet as on a page just that wide
+      expect(EpubRenderer.sideMargin(e, wide.width) - s.left, closeTo(EpubRenderer.sideMargin(e, s.width), 0.01),
+          reason: '${m.name}: the margins inside the sheet');
+      expect(EpubRenderer.sheetRect(e, Size(s.width + 10, 1080)), isNull, reason: '${m.name}: no room, no sheet');
+    }
+    expect(EpubRenderer.sheetRect(const EpubPrefs(margins: EpubMargins.wide, size: 24), const Size(800, 1230)), isNull,
+        reason: 'the tablet in portrait: the page fills the screen');
+    for (final c in EpubColours.values) {
+      final page = c.background, round = EpubRenderer.surround(page);
+      expect((round.computeLuminance() - page.computeLuminance()).abs(), greaterThan(0.002), reason: c.name);
+      if (c != EpubColours.black) expect(round.computeLuminance(), lessThan(page.computeLuminance()), reason: c.name);
+    }
+  });
+
   test('the margins setting leaves the top and bottom alone (user, 2026-10-08)', () {
     expect(EpubMargins.topBottom, 40);
   });
