@@ -207,6 +207,14 @@ class RenderSelectablePage extends RenderProxyBox with Selectable, SelectionRegi
   SelectedContent? getSelectedContent() =>
       _uncollapsed ? SelectedContent(plainText: _page.text.textOf(_start!, _end!)) : null;
 
+  /// The selection as chapter positions (start, end) - what a highlight keeps; null with nothing selected.
+  (int, int)? get selectedPositions {
+    if (!_uncollapsed) return null;
+    var a = _start!, b = _end!;
+    if (b < a) (a, b) = (b, a);
+    return (_page.text.chapterPosition(a), _page.text.chapterPosition(b));
+  }
+
   @override
   SelectedContentRange? getSelection() {
     final s = _start, e = _end;

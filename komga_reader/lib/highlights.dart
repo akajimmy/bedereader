@@ -154,6 +154,7 @@ class BookHighlights extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_disposed) return; // (once)
     _disposed = true;
     _retry?.cancel();
     super.dispose();

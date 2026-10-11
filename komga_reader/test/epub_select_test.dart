@@ -1,5 +1,7 @@
 // Selecting text on an EPUB page and copying it (user, 2026-10-08): the page is a Selectable under a SelectionArea
 // (lib/reader/epub_selection.dart); taps, swipes and keys go on as before.
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +15,7 @@ import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/client_settings.dart';
 import 'support/epub_books.dart';
 import 'support/no_network.dart';
 
@@ -25,7 +28,7 @@ MemorySource _book() => MemorySource({
     }, const EpubInfo(spine: ['c1.xhtml'], toc: []));
 
 /// A Komga where the book is the series' last (the end card asks).
-class _LastKomga extends TestKomga {
+class _LastKomga extends TestKomga with ClientSettingsStore {
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async => null;
   @override
@@ -34,6 +37,7 @@ class _LastKomga extends TestKomga {
 
 void main() {
   late EpubCountStore counts;
+  late _LastKomga server;
   String? copied;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -54,7 +58,7 @@ void main() {
       return null;
     });
     addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(() => _LastKomga()),
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: server = noNetwork(() => _LastKomga()),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: _book(),
         saveProgress: false)));
     for (var i = 0; i < 200; i++) {
@@ -136,6 +140,44 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(selected(tester), contains('fox'));
     expect(find.text('Define'), findsNothing);
+  });
+
+  testWidgets("the pane's Highlight keeps the selection on Komga under the book (chapter positions); a tap on it "
+      'offers Remove, which takes it away; the Contents panel lists it (user, 2026-10-11)', (tester) async {
+    await open(tester);
+    await tester.longPressAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Highlight'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    final saved = jsonDecode(server.written['komgareader.highlights.B1']!) as List;
+    expect(saved.single['t'], 'eel');
+    expect(saved.single['e'] - saved.single['s'], 3, reason: 'three characters of the chapter');
+    expect(selected(tester), isNull, reason: 'the selection let go of');
+
+    // in Contents
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.tap(find.byTooltip('Contents'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('contents.highlights')), findsOneWidget);
+    expect(find.text('eel'), findsOneWidget);
+    await tester.tap(find.text('eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    expect(onFirstPage(tester), isTrue, reason: 'its page');
+
+    // a tap on it: Remove
+    await tester.tapAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(onFirstPage(tester), isTrue, reason: 'not a page turn');
+    await tester.tap(find.text('Remove highlight'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    expect(jsonDecode(server.written['komgareader.highlights.B1']!), isEmpty);
+    await tester.tapAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.text('Remove highlight'), findsNothing, reason: 'gone: a tap is a tap again');
   });
 
   testWidgets('a long press dragged on extends the selection, word by word, across a paragraph boundary', (tester) async {
