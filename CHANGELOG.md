@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 101 - 2026-10-11
+
 **Changed**
 - **eBook pictures: the rotate buttons sit in the screen's top corners** now, and stay there as the picture turns
   (on the picture's own corners they moved with it).
@@ -16,8 +20,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 - **Windows: a right-click showed the reader's controls but didn't hide them again.** It does now, in comics and
   eBooks.
-
-## 1.3.0
 
 ### Build 100 - 2026-10-08
 
