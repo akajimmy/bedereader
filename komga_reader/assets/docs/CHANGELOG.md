@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 103 - 2026-10-11
+
 **New**
 - **eBooks on a wide screen read like a sheet of paper**: when the window (or the tablet in landscape) is wider than
   the page needs, the page is drawn as a sheet in the middle, with a soft shadow at its edges, on a surround a shade
@@ -28,8 +32,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **eBooks, Paragraphs: Auto - a double gap under a chapter's first paragraph** in books that start chapters with
   an unindented paragraph and indent the rest (Foundation): the gap under it is now the same as between the others.
   The book is laid out again the first time you open it.
-
-## 1.3.0
 
 ### Build 102 - 2026-10-11
 
