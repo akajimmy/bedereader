@@ -480,6 +480,30 @@ void main() {
     }
   });
 
+  test('where most paragraphs are flush, an indented one is set apart (a letter, verse, an epigraph - the Herbert / '
+      'Anderson Dune books): the gap above it stays, like the others (library check 2026-10-11)', () {
+    const css = 'p { margin: 1em 0; text-indent: 0 } .set { text-indent: 2em }';
+    const src = '<body><p>One.</p><p>Two.</p><p>Three.</p><p class="set">A letter.</p><p>Four.</p></body>';
+    final o = Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src)))
+        .single
+        .textOrigins;
+    expect(o[3].dy - o[2].dy, closeTo(o[2].dy - o[1].dy, 0.5), reason: 'above the letter: the usual gap');
+  });
+
+  test("hanging indents count as indented (Foundation's trial transcript: mostly hanging-indent dialogue): a flush "
+      'paragraph there followed by an indented one loses its extra gap, as elsewhere in the book', () {
+    const css = 'p { margin: 1em 0 } .first { text-indent: 0 } .tx { text-indent: 1em } '
+        '.dia { text-indent: -2em; margin-left: 2em }';
+    final src = '<body>${List.filled(6, '<p class="dia">Q. A question.</p>').join()}'
+        '<p class="first">Flush.</p><p class="tx">Two.</p><p class="tx">Three.</p></body>';
+    final o = Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src)))
+        .single
+        .textOrigins;
+    expect(o[7].dy - o[6].dy, closeTo(o[8].dy - o[7].dy, 0.5), reason: 'under the flush one: the usual gap');
+  });
+
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
 
   test("a div holding only text is a paragraph (Codex Alera's and Dune's every paragraph is a div.tx): Paragraph "
