@@ -534,6 +534,14 @@ void main() {
     expect(fixC1('plain — text'), 'plain — text');
   });
 
+  test("a typewriter's dashes (Xanth: \"brutally---or\", \"them--I'm\") read as em dashes; a drawn line of hyphens and "
+      'a single hyphen stay', () {
+    final b = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml("<body><p>brutally---or them--I'm a well-known -------- line--.</p></body>"))
+        .single as TextBlock;
+    expect(b.runs.map((r) => r.text).join(), "brutally—or them—I'm a well-known -------- line—.");
+  });
+
   test('headings are not hyphenated ("DEMOS-THENES" - Ender\'s Game), the text under them is; bold divs count as '
       "headings (the Belgariad's chapter titles)", () {
     const word = 'Demosthenes extraordinary recriminations';

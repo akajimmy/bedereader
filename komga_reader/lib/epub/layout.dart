@@ -259,7 +259,7 @@ class ChapterReader {
     for (final n in e.children) {
       switch (n) {
         case XText(:final text):
-          var t = fixC1(text).replaceAll(RegExp(r'[\s ]+'), ' ');
+          var t = typewriterDashes(fixC1(text)).replaceAll(RegExp(r'[\s ]+'), ' ');
           if (t.trim().isEmpty && _cur == null) break; // whitespace between blocks
           var style = inh;
           if (inh.sup) {
@@ -508,6 +508,14 @@ class ChapterReader {
 
   static String _textOf(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
+}
+
+/// A typewriter's dashes, as some conversions keep them (the first Xanth books: "die brutally---or was some enemy",
+/// "one of them--I'm sure"): "---" and "--" shown as the em dash they stand for. Longer runs of hyphens (a drawn
+/// line) are left alone (survey 2026-10-06; done 2026-10-11).
+String typewriterDashes(String t) {
+  if (!t.contains('--')) return t;
+  return t.replaceAllMapped(RegExp(r'(?<!-)-{2,3}(?!-)'), (_) => '—');
 }
 
 /// Text from a book converted badly - Windows-1252 read as Latin-1 - has control characters (U+0080-U+009F, never
