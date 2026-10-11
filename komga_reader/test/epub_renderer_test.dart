@@ -16,12 +16,13 @@ import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/client_settings.dart';
 import 'support/epub_books.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
 /// A Komga that knows the book after this one ([next]; null: the series' last) and serves a 1-pixel poster.
-class EndKomga extends TestKomga {
+class EndKomga extends TestKomga with EmptyClientSettings {
   EndKomga(this.next);
   final Map<String, dynamic>? next;
   @override
@@ -32,7 +33,7 @@ class EndKomga extends TestKomga {
 
 /// A book in a series and in a read list RL1: next in the series is [series], next in the read list [inList]; what
 /// was asked is kept.
-class ReadListKomga extends TestKomga {
+class ReadListKomga extends TestKomga with EmptyClientSettings {
   static const inSeries = {'id': 'S2', 'seriesTitle': 'Hitchhiker', 'metadata': {'number': '2', 'title': 'Restaurant'}};
   static const inList = {'id': 'E1', 'seriesTitle': 'Ender', 'metadata': {'number': '1', 'title': "Ender's Game"}};
   final listNextAsked = <String?>[], listPrevAsked = <String?>[];

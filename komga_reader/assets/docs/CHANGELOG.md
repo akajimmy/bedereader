@@ -17,6 +17,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Define a word in an eBook**: select a word (or a short phrase) and press Define in the pane - its meanings,
   with examples, from an English dictionary built into the app (Open English WordNet), so it works offline. A word
   that's a form of another ("running", "mice") shows that one's meanings too. English only for now.
+- **Highlight text in an eBook**: select and press Highlight. Highlights are kept on Komga with your account, so
+  the tablet and the PC share them (made offline, they go up once Komga can be reached). Tap one to copy it or
+  remove it; the Contents panel lists the book's highlights - tap one to go to it.
 
 **Fixed**
 - **eBooks, Paragraphs: Auto - a double gap under a chapter's first paragraph** in books that start chapters with
