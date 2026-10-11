@@ -220,6 +220,27 @@ void main() {
     expect(pages.length, 1);
   });
 
+  test('pictures as a browser draws them (user, 2026-10-11): a size the book gives wins (Thud\'s chapter ornament, '
+      'width="100"; em, %); a small picture with none at its own pixels as CSS pixels (the 30 x 45 star); a big one '
+      'never drawn bigger than pixel for pixel, whatever the book says', () async {
+    final star = await _image(30, 45), ornament = await _image(150, 185), plate = await _image(600, 400);
+    const theme = EpubTheme(pixelRatio: 1.5);
+    Size drawn(ui.Image img, String attrs) {
+      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p><img src="i.jpg" $attrs/></p></body>'));
+      (blocks.whereType<ImageBlock>().single).image = img;
+      return Paginator(theme, const Size(1400, 2000), null).run(blocks).first.imageRects.single.size;
+    }
+
+    expect(drawn(star, ''), const Size(30, 45), reason: 'a small one: CSS pixels, not 20 x 30');
+    final o = drawn(ornament, 'width="100"');
+    expect(o.width, closeTo(100, 0.01), reason: 'the size the book gives');
+    expect(o.height, closeTo(100 * 185 / 150, 0.01), reason: 'in proportion');
+    expect(drawn(star, 'style="width: 2em"').width, closeTo(2 * 19, 0.01), reason: "em: the reader's text size");
+    expect(drawn(plate, 'style="width: 100%"').width, closeTo(400, 0.01),
+        reason: '600 pixels at 1.5 a layout pixel: 400 - not stretched to the text width');
+    expect(drawn(plate, 'width="200"').width, closeTo(200, 0.01), reason: 'smaller than its own size: as given');
+  });
+
   test('pictures at their own size, one picture pixel to one screen pixel (user, 2026-10-06): a chapter that is only '
       'a picture centred, never enlarged; one in the text centred on its line; too big for the page: shrunk to fit; '
       'only big ones open full screen', () async {
