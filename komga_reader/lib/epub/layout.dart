@@ -917,12 +917,14 @@ class Paginator {
   // the chapter's usual paragraph spacing (the most common), which the reader's own formatting takes out
   double _usualTop = 0, _usualBottom = 0;
   bool _breaksAreSpacing = false; // blank-paragraph "breaks" before most paragraphs: spacing, not breaks (E4)
+  bool _indentsUsual = false; // most of the chapter's paragraphs are indented
 
   void _findUsual(List<Block> blocks) {
     final count = <(double, double), int>{};
-    var paragraphs = 0, afterBreaks = 0;
+    var paragraphs = 0, afterBreaks = 0, indented = 0;
     for (final b in blocks) {
       if (b is TextBlock && b.paragraph) {
+        if (b.indent > 0) indented++;
         final k = ((b.paraTop * 100).roundToDouble() / 100, (b.paraBottom * 100).roundToDouble() / 100);
         count[k] = (count[k] ?? 0) + 1;
         paragraphs++;
@@ -932,6 +934,7 @@ class Paginator {
     // blank paragraphs between most paragraphs are a badly converted book's spacing, not scene breaks: the reader's
     // own formatting takes them out like any usual gap (E4)
     _breaksAreSpacing = paragraphs > 4 && afterBreaks > paragraphs * 0.3;
+    _indentsUsual = indented * 2 > paragraphs;
     if (count.isEmpty) return;
     final usual = count.entries.reduce((a, b) => b.value > a.value ? b : a).key;
     _usualTop = usual.$1;
@@ -989,9 +992,12 @@ class Paginator {
           // indent - its gap is what tells it from the one before (without either, paragraphs ran together)
           final afterBlock = prev is ImageBlock || prev is TableBlock;
           mt = ownTop || afterBlock || !booksIndent ? math.max(b.wrapTop, b.paraTop) : b.wrapTop;
-          // ... but not when the next one is indented: its indent marks the new paragraph (Foundation's chapters open
-          // with a flush paragraph, then indented ones - the gap under the first was twice the others, user 2026-10-08)
-          final indentedNext = next is TextBlock && next.paragraph && next.indent > 0 && !next.breakBefore &&
+          // ... but not when the next one is indented, as most of the chapter's are: its indent marks the new paragraph
+          // (Foundation's chapters open with a flush paragraph, then indented ones - the gap under the first was twice
+          // the others, user 2026-10-08). Where most are flush, an indented one is something set apart (a letter,
+          // verse, an epigraph - the Herbert / Anderson Dune books): the gap above it stays (library check 2026-10-11)
+          final indentedNext = _indentsUsual && next is TextBlock && next.paragraph && next.indent > 0 &&
+              !next.breakBefore &&
               (next.breakGap == 0 || _breaksAreSpacing);
           mb = ownBottom || (!booksIndent && !indentedNext) ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
         }
