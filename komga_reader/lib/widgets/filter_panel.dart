@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../view_filter.dart';
+import 'focus_style.dart';
 import 'setting_rows.dart';
 
 /// The filter panel (user, 2026-10-08; mockups reports\10-08-filter-mockups.html, section 3): the funnel in a view's
@@ -267,7 +268,7 @@ class _FilterPanelState extends State<FilterPanel> {
                   final picked = await showDialog<List<String>>(
                     context: context,
                     builder: (_) => NamePicker(title: label, chosen: chosen,
-                        search: (q) => _scope.names(roles, search: q)),
+                        search: (q) => _scope.names(roles, search: q, size: NamePicker.limit + 1)),
                   );
                   if (picked != null) onChanged(picked);
                 },
@@ -400,6 +401,10 @@ class NamePicker extends StatefulWidget {
   final List<String> chosen;
   final Future<List<String>> Function(String query) search;
 
+  /// The most names listed; [search] is asked for one more, so a list that was cut can say so (with nothing typed,
+  /// a big library's first 50 used to look like all of them - tablet, build 101).
+  static const limit = 50;
+
   @override
   State<NamePicker> createState() => _NamePickerState();
 }
@@ -407,6 +412,7 @@ class NamePicker extends StatefulWidget {
 class _NamePickerState extends State<NamePicker> {
   late final List<String> _chosen = [...widget.chosen];
   List<String>? _found;
+  bool _more = false; // the search found more than [NamePicker.limit]
   int _asked = 0;
   Timer? _soon;
   final _query = TextEditingController();
@@ -437,7 +443,12 @@ class _NamePickerState extends State<NamePicker> {
     } catch (_) {
       found = const [];
     }
-    if (mounted && asked == _asked) setState(() => _found = found);
+    if (mounted && asked == _asked) {
+      setState(() {
+        _more = found.length > NamePicker.limit;
+        _found = found.take(NamePicker.limit).toList();
+      });
+    }
   }
 
   @override
@@ -487,6 +498,15 @@ class _NamePickerState extends State<NamePicker> {
                             ? _chosen.add(n)
                             : _chosen.removeWhere((c) => c.toLowerCase() == n.toLowerCase())),
                       ),
+                    if (_more)
+                      Padding(
+                        key: const ValueKey('filter.pickMore'),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                        child: Text(
+                          'Only the first ${NamePicker.limit} are listed - type a name to find the others.',
+                          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ),
                   ]),
           ),
         ]),
@@ -513,11 +533,19 @@ class FilterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final on = active > 0;
     final scheme = Theme.of(context).colorScheme;
+    // filled while filters are on - except under the remote's focus, whose outline (the accent too) would vanish
+    // into the fill: the theme's focus look shows instead (tablet, build 101)
+    WidgetStateProperty<Color?> unlessFocused(Color c) =>
+        WidgetStateProperty.resolveWith((s) => remoteFocused(s) ? null : c);
     return IconButton(
       tooltip: on ? 'Filter ($active on)' : 'Filter',
       isSelected: on,
-      color: on ? scheme.onPrimary : null,
-      style: on ? IconButton.styleFrom(backgroundColor: scheme.primary) : null,
+      style: on
+          ? ButtonStyle(
+              backgroundColor: unlessFocused(scheme.primary),
+              foregroundColor: unlessFocused(scheme.onPrimary),
+              iconColor: unlessFocused(scheme.onPrimary))
+          : null,
       icon: Badge(
         key: const ValueKey('filter.badge'),
         isLabelVisible: on,
