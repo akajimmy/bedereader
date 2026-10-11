@@ -139,10 +139,12 @@ class ReaderBottomBar extends StatelessWidget {
 }
 
 /// The bars over the page, for the reader's Stack: [top] at the top, [bottom] at the bottom, and - given
-/// [onTapOutside] - a tap anywhere else hides them.
+/// [onTapOutside] - a tap anywhere else hides them; so does a right-click, which showed them (it fell on this layer,
+/// which took it and did nothing: the page's own right-click is under it - Windows, 2026-10-11).
 List<Widget> readerBars({required Widget top, required Widget bottom, VoidCallback? onTapOutside}) => [
       if (onTapOutside != null)
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTapOutside)),
+        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTapOutside,
+            onSecondaryTap: onTapOutside)),
       Positioned(left: 0, right: 0, top: 0, child: top),
       Positioned(left: 0, right: 0, bottom: 0, child: bottom),
     ];

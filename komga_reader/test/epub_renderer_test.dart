@@ -469,6 +469,18 @@ void main() {
     expect(find.text('Close'), findsOneWidget, reason: 'the controls instead');
   });
 
+  testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
+      'them)', (tester) async {
+    await open(tester, MemorySource({'c1.xhtml': '<html><body>${para('word', 40)}</body></html>'},
+        const EpubInfo(spine: ['c1.xhtml'], toc: [])));
+    await tester.tapAt(const Offset(400, 600), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.text('Close'), findsOneWidget, reason: 'shown');
+    await tester.tapAt(const Offset(400, 600), buttons: kSecondaryButton);
+    await settle(tester);
+    expect(find.text('Close'), findsNothing, reason: 'hidden again');
+  });
+
   testWidgets('the picture takes 95% of the screen; a button in each top corner of the screen turns it a quarter, '
       'left counterclockwise, right clockwise, without closing it - and stays put as it turns (user, 2026-10-08)',
       (tester) async {
