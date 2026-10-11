@@ -4,6 +4,11 @@
 #   win.ps1 click <x> <y>             - left click at window-relative pixel x,y (as in the screenshot)
 #   win.ps1 rclick <x> <y>            - right click
 #   win.ps1 key <keys>                - SendKeys string to the app (e.g. "{RIGHT}", "{ESC}", "{PGDN}")
+#   win.ps1 press <keys>              - keys as a real keyboard sends them (scan codes), held together: "ctrl c",
+#                                       "ctrl a", "f11", "right", "esc" - SendKeys' Ctrl+C never reached the
+#                                       selection (2026-10-11); this does
+#   win.ps1 drag <x1> <y1> "<x2>,<y2>"   - left-button drag (mouse selection)
+#   win.ps1 unpin                     - the window no longer kept on top (Front pins it)
 #   win.ps1 size <w> <h>              - move the window to 40,40 and size it w x h
 #   win.ps1 wheel <x> <y> <clicks>    - mouse wheel at x,y (negative = down)
 #   win.ps1 info                      - window position and size, process id
@@ -30,6 +35,15 @@ public static class W {
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
   public struct RECT { public int Left, Top, Right, Bottom; }
   public struct POINT { public int X, Y; public POINT(int x, int y) { X = x; Y = y; } }
+  [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+  [StructLayout(LayoutKind.Explicit, Size = 40)] public struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KEYBDINPUT ki; }
+  [DllImport("user32.dll")] public static extern uint SendInput(uint n, INPUT[] inputs, int size);
+  [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint type);
+  public static INPUT Key(ushort vk, bool up) {
+    var i = new INPUT(); i.type = 1;
+    i.ki.wVk = vk; i.ki.wScan = (ushort)MapVirtualKey(vk, 0); i.ki.dwFlags = up ? 2u : 0u;
+    return i;
+  }
 }
 '@
 [void][W]::SetProcessDPIAware()
@@ -129,7 +143,18 @@ switch ($cmd) {
         [W]::mouse_event(4, 0, 0, 0, 0)
         "drag $a,$b -> $c"
     }
+    'press' {
+        $p = App; Front $p
+        if ([W]::GetForegroundWindow() -ne $p.MainWindowHandle) { throw 'not pressing keys: BeDeReader is not the active window' }
+        $vk = @{ ctrl = 0x11; shift = 0x10; alt = 0x12; a = 0x41; c = 0x43; f11 = 0x7A; esc = 0x1B; enter = 0x0D;
+                 space = 0x20; left = 0x25; up = 0x26; right = 0x27; down = 0x28; pgup = 0x21; pgdn = 0x22 }
+        $names = $a -split '\s+' | Where-Object { $_ }
+        $codes = foreach ($n in $names) { if (-not $vk.ContainsKey($n.ToLower())) { throw "unknown key $n" }; [uint16]$vk[$n.ToLower()] }
+        $inputs = @(foreach ($k in $codes) { [W]::Key($k, $false) }) + @(foreach ($k in $codes[($codes.Count - 1)..0]) { [W]::Key($k, $true) })
+        $sent = [W]::SendInput([uint32]$inputs.Count, $inputs, [Runtime.InteropServices.Marshal]::SizeOf([type][W+INPUT]))
+        "pressed $($names -join '+') ($sent events)"
+    }
     'unpin' { $p = App; [void][W]::SetWindowPos($p.MainWindowHandle, [IntPtr](-2), 0, 0, 0, 0, 0x0003); 'no longer on top' }  # HWND_NOTOPMOST
     'size' { $p = App; [void][W]::ShowWindow($p.MainWindowHandle, 9); [void][W]::MoveWindow($p.MainWindowHandle, 40, 40, [int]$a, [int]$b, $true); Start-Sleep -Milliseconds 400; "sized $a x $b" }
-    default { 'usage: start | shot f | click x y | rclick x y | drag x1 y1 "x2,y2" | key k | size w h | wheel x y n | unpin | info' }
+    default { 'usage: start | shot f | click x y | rclick x y | drag x1 y1 "x2,y2" | key k | press "ctrl c" | size w h | wheel x y n | unpin | info' }
 }
