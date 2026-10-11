@@ -129,8 +129,12 @@ class TextBlock extends Block {
 }
 
 class ImageBlock extends Block {
-  ImageBlock(this.src);
+  ImageBlock(this.src, {this.width, this.height});
   final String src; // path inside the book, resolved
+
+  /// The size the book gives it, as written (its width / height attributes, or CSS): "100", "30%", "2em"; null
+  /// where it gives none.
+  final String? width, height;
   ui.Image? image;
   bool inkOnLight = false; // a small black-and-white picture on a light ground: drawn in the page's colours
 }
@@ -329,7 +333,7 @@ class ChapterReader {
     if (e.name == 'img' || e.name == 'image') {
       final src = e.attr('src') ?? e.attr('href');
       if (src == null) return;
-      final img = ImageBlock(resolve(src));
+      final img = ImageBlock(resolve(src), width: d['width'] ?? e.attr('width'), height: d['height'] ?? e.attr('height'));
       images.add(img);
       if (d['float'] == 'left' || d['float'] == 'right') {
         // beside the paragraph it's in (the text wraps round it)
@@ -370,7 +374,7 @@ class ChapterReader {
     if (floatImg != null && _textOf(e).trim().length <= 3) {
       final src = floatImg.attr('src') ?? floatImg.attr('href');
       if (src != null) {
-        final img = ImageBlock(resolve(src));
+        final img = ImageBlock(resolve(src), width: d['width'] ?? e.attr('width'), height: d['height'] ?? e.attr('height'));
         images.add(img);
         final cur = _cur;
         if (cur == null) {
@@ -547,6 +551,19 @@ Set<int> verseLines(List<Block> blocks) {
   close();
   return out;
 }
+
+/// A picture's size on the page, in layout pixels: a big one at one picture pixel to one screen pixel (user,
+/// 2026-10-06: "images ... at their native resolution"); a small one - under [smallPicture] pixels both ways: an
+/// ornament, a scene-break star - at its size in CSS pixels, as a browser draws it (user, 2026-10-11: Thud's 30 x 45
+/// star came out a third smaller than in print - on the tablet, 1.5 screen pixels a layout pixel).
+(double, double) pictureSize(ui.Image img, double pixelRatio) {
+  final small = img.width < smallPicture && img.height < smallPicture;
+  final per = small ? 1.0 : pixelRatio;
+  return (img.width / per, img.height / per);
+}
+
+/// Pictures smaller than this both ways are drawn at their CSS size ([pictureSize]).
+const smallPicture = 200;
 
 /// A typewriter's dashes, as some conversions keep them (the first Xanth books: "die brutally---or was some enemy",
 /// "one of them--I'm sure"): "---" and "--" shown as the em dash they stand for. Longer runs of hyphens (a drawn
@@ -996,7 +1013,7 @@ class Paginator {
       final img = b.image;
       if (img != null) {
         final area = Rect.fromLTRB(theme.margins.left, theme.margins.top, size.width - theme.margins.right, _bottom);
-        final w0 = img.width / theme.pixelRatio, h0 = img.height / theme.pixelRatio;
+        final (w0, h0) = _pictureSize(b, img);
         final s = math.min(1.0, math.min(area.width / w0, area.height / h0));
         pages.single._at(b.start);
         pages.single.pieces.add(_ImagePiece(img, Rect.fromCenter(center: area.center, width: w0 * s, height: h0 * s),
@@ -1506,6 +1523,27 @@ class Paginator {
   late final ColorFilter _pageColours = pageColours(theme.background, theme.text);
   ColorFilter? _filterFor(ImageBlock b) => b.inkOnLight ? _pageColours : null;
 
+  /// [b]'s size on the page: the book's (its width / height - CSS pixels taken as layout pixels, as a browser at 100%
+  /// does; em the reader's text size; % of the text's width), the other side kept in proportion; or none given, its
+  /// own ([pictureSize]) - as a browser draws pictures (user, 2026-10-11). A big picture is never drawn bigger than
+  /// one picture pixel to a screen pixel (\"width: 100%\" on a cover smaller than the page doesn't blow it up).
+  (double, double) _pictureSize(ImageBlock b, ui.Image img) {
+    final w = cssLength(b.width, em: theme.fontSize, percentOf: _width),
+        h = cssLength(b.height, em: theme.fontSize);
+    final aspect = img.height / img.width;
+    final (double, double)? stated = w != null && w > 0
+        ? (w, h != null && h > 0 ? h : w * aspect)
+        : h != null && h > 0
+            ? (h / aspect, h)
+            : null;
+    final own = pictureSize(img, theme.pixelRatio);
+    if (stated == null) return own;
+    final small = img.width < smallPicture && img.height < smallPicture;
+    if (small) return stated;
+    final shrink = math.min(1.0, math.min(own.$1 / stated.$1, own.$2 / stated.$2));
+    return (stated.$1 * shrink, stated.$2 * shrink);
+  }
+
   void _image(ImageBlock b) {
     final img = b.image;
     if (img == null) return;
@@ -1516,8 +1554,8 @@ class Paginator {
       _newPage();
       maxH = _bottom - _y;
     }
-    // at its own size, one picture pixel to one screen pixel (shrunk to fit, never enlarged), centred
-    final w0 = img.width / theme.pixelRatio, h0 = img.height / theme.pixelRatio;
+    // at the size the book gives it, or its own (shrunk to fit), centred
+    final (w0, h0) = _pictureSize(b, img);
     final scale = math.min(1.0, math.min(maxW / w0, maxH / h0));
     final w = w0 * scale, h = h0 * scale;
     pages.last._at(b.start);
