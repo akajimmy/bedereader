@@ -267,6 +267,18 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
+      'them)', (tester) async {
+    await openReader(tester);
+    final middle = tester.getCenter(find.byType(ReaderScreen));
+    await tester.tapAt(middle, buttons: kSecondaryButton);
+    await tester.pump();
+    expect(find.byTooltip('Next book'), findsOneWidget, reason: 'shown');
+    await tester.tapAt(middle, buttons: kSecondaryButton);
+    await tester.pump();
+    expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
+  });
+
   testWidgets('back with controls up only hides them; back again closes the book', (tester) async {
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.enter);
