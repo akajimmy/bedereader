@@ -446,7 +446,7 @@ enum EpubParagraphGap {
   final String label;
 }
 
-enum EpubTurn { slide, none }
+enum EpubTurn { slide, none, curl } // curl: 3D page curl, as the comics' (2026-10-11)
 
 /// The text's alignment (user, 2026-10-07: "Book's formatting" split in three): the book's own, or every paragraph
 /// justified or ragged-right.
