@@ -535,11 +535,14 @@ void main() {
   });
 
   test("verse set a line to a paragraph, marked like the prose (The Crystal Cave's opening poem): no gaps between its "
-      'lines with the reader\'s own paragraphs; short dialogue keeps its gaps', () {
+      'lines with the reader\'s own paragraphs, a gap between stanzas; short dialogue keeps its gaps', () {
     const css = 'p { margin: 1em 0 0 0 }';
     const src = '<body><p>O Merlin in your crystal cave</p><p>Deep in the diamond of the day,</p>'
         '<p>Will there ever be a singer</p><p>Across the meadow and the wave?</p>'
-        '<p>"You may need it yet," said the Cornishman.</p><p>"I may."</p><p>"And the boy?"</p></body>';
+        '<p>"You may need it yet," said the Cornishman.</p><p>"I may."</p><p>"And the boy?"</p>'
+        '<p>Or a runner who will outrun</p><p>Man\'s long shadow driving on,</p><p>And hang the apple on the tree?</p>'
+        '<p>Will your sorcery ever show</p><p>The sleeping bride shut in her bower,</p><p>And Time in his tower?</p>'
+        '</body>';
     // wide enough that each line is one (the test font's letters are square)
     final o = Paginator(const EpubTheme(ownParagraphs: true, paragraphGap: 1), const Size(1400, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src)))
@@ -550,6 +553,9 @@ void main() {
     expect(o[3].dy - o[2].dy, closeTo(line, 0.5), reason: 'the verse: one line under another');
     expect(o[5].dy - o[4].dy, greaterThan(line + 10), reason: 'dialogue: its paragraph gap');
     expect(o[6].dy - o[5].dy, greaterThan(line + 10));
+    expect(o[8].dy - o[7].dy, closeTo(line, 0.5), reason: 'the next stanza: tight');
+    expect(o[10].dy - o[9].dy, greaterThan(line + 10), reason: 'between two stanzas: a gap');
+    expect(o[11].dy - o[10].dy, closeTo(line, 0.5));
   });
 
   test("a typewriter's dashes (Xanth: \"brutally---or\", \"them--I'm\") read as em dashes; a drawn line of hyphens and "

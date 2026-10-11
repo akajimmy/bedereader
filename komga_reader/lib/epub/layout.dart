@@ -514,12 +514,13 @@ class ChapterReader {
 /// paragraph, marked like the prose - spaced like six paragraphs): runs of three or more short paragraphs (under 60
 /// characters, one line) in which every line but the last ends open - on a letter, a comma, a semicolon, a colon or a
 /// dash. Short dialogue ("I may." / "And the boy?") ends its lines and isn't taken for verse (survey 2026-10-06;
-/// done 2026-10-11).
+/// done 2026-10-11). What's given: the lines that go on from the one above - each run's first line isn't one, so a
+/// stanza (a run ending on a closed line) keeps its gap before the next.
 Set<int> verseLines(List<Block> blocks) {
   final out = <int>{};
   var run = <int>[];
   void close() {
-    if (run.length >= 3) out.addAll(run);
+    if (run.length >= 3) out.addAll(run.skip(1));
     run = [];
   }
 
@@ -998,7 +999,7 @@ class Paginator {
     for (final (i, b) in blocks.indexed) {
       final next = i + 1 < blocks.length ? blocks[i + 1] : null;
       // a line of verse after another: no gap between them, as printed (the reader's own paragraphs)
-      final inVerse = verse.contains(i) && verse.contains(i - 1), verseGoesOn = verse.contains(i) && verse.contains(i + 1);
+      final inVerse = verse.contains(i), verseGoesOn = verse.contains(i + 1);
       if (b.breakBefore && !_pageEmpty) _newPage();
       var mt = b.marginTop, mb = b.marginBottom;
       if (b is TextBlock) {
