@@ -12,6 +12,7 @@ import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 const _base = 'http://test/api/v1/books/B1/resource/';
@@ -19,7 +20,7 @@ const _base = 'http://test/api/v1/books/B1/resource/';
 String _para(String w, int n) => '<p>${List.filled(n, w).join(' ')}</p>';
 
 /// A Komga with one EPUB (two chapters), its positions, and a progression that can be read and saved.
-class EpubKomga extends TestKomga {
+class EpubKomga extends TestKomga with EmptyClientSettings {
   EpubKomga({this.saved});
   Map<String, dynamic>? saved;
   final puts = <Map<String, dynamic>>[];

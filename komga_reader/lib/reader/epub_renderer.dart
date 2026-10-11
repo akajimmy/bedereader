@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectionRegistrar;
@@ -20,13 +20,16 @@ import '../epub/source.dart';
 import '../epub/trace.dart';
 import '../epub/xhtml.dart';
 import '../errors.dart';
+import '../highlights.dart';
 import '../offline/offline_komga.dart';
+import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/define_sheet.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
+import 'curl_turns.dart';
 import 'epub_selection.dart';
 import 'position_row.dart';
 import 'reader_bars.dart';
@@ -183,6 +186,11 @@ class EpubRenderer extends Renderer {
   @override
   Future<Object> prepare(Map book) async {
     final id = book['id'] as String;
+    PageCurl.program().ignore(); // the curl's shader, ahead of the first turn
+    _highlights?.removeListener(_changed);
+    _highlights?.dispose();
+    _highlights = BookHighlights(api, id)..addListener(_changed);
+    unawaited(_highlights!.load());
     EpubTrace.instance.log('open $id "${book['metadata']?['title'] ?? book['name']}"');
     final hy = _hyphenators ??= await Hyphenators.load(rootBundle.loadString);
     final from = source ?? sourceFor(api, id);
@@ -241,6 +249,9 @@ class EpubRenderer extends Renderer {
   void dispose() {
     _disposed = true;
     _settle?.cancel();
+    _curlMade?.dispose();
+    _highlights?.removeListener(_changed);
+    _highlights?.dispose();
     if (readerTiming) {
       SchedulerBinding.instance.removeTimingsCallback(_onFrames);
       final last = _frameStats.flush();
@@ -483,8 +494,23 @@ class EpubRenderer extends Renderer {
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
   // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
   // that comics are"); this one peaks near 100 px.
-  Duration get _turnTime =>
-      AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 320);
+  Duration get _turnTime => AppSettings.instance.epub.turn == EpubTurn.slide
+      ? const Duration(milliseconds: 320)
+      : Duration.zero; // none - or curl, when it couldn't be drawn: at once
+
+  /// 3D page curl (user, 2026-10-11: as the comics'): the page turns over from a snapshot (lib/reader/curl_turns.dart).
+  bool get _curlMode => AppSettings.instance.epub.turn == EpubTurn.curl && CurlTurns.available;
+  CurlTurns? _curlMade;
+  CurlTurns get _curl => _curlMade ??= CurlTurns(
+    vsync: host.vsync,
+    current: () => _pc.hasClients ? (_pc.page ?? 0).round() : 0,
+    jump: (p) {
+      if (_pc.hasClients) _pc.jumpToPage(p);
+    },
+    pageRect: () => _sheet ?? Offset.zero & _size,
+    done: ({required turned}) {},
+    pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
+  );
   static const _turnCurve = Curves.easeInOut;
 
   @override
@@ -541,6 +567,7 @@ class EpubRenderer extends Renderer {
         : (_pc.page ?? 0).round();
     final target = from + by;
     if (target < 0 || target > last + 1) return;
+    if (_curlMode && _curl.turn(next: by > 0, target: target)) return;
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
       return;
@@ -571,6 +598,12 @@ class EpubRenderer extends Renderer {
     // text selected: a tap lets go of it - and does nothing else (no turn, no controls)
     if (_selected.value) {
       _clearSelection();
+      return;
+    }
+    // a highlight tapped: what to do with it (not a turn)
+    final hit = page == null ? null : _highlightAt(page, d.localPosition);
+    if (hit != null) {
+      unawaited(_highlightMenu(hit, d.globalPosition));
       return;
     }
     // a link under the finger first (footnotes)
@@ -691,6 +724,8 @@ class EpubRenderer extends Renderer {
     final b = _book!;
     final toc = b.info.toc;
     TocEntry? picked;
+    Highlight? pickedMark;
+    final marks = _highlights?.items ?? const <Highlight>[];
     // the comic reader's panel look (user, 2026-10-06): a side sheet on a wide screen, a bottom sheet on a narrow one
     await showReaderPanelFrame(host.context, title: 'Contents', children: (c, _) => [
           if (toc.isEmpty) const Padding(padding: EdgeInsets.all(14), child: Text('This book has no table of contents')),
@@ -707,7 +742,35 @@ class EpubRenderer extends Renderer {
                 Navigator.of(c).pop();
               },
             ),
+          // the book's highlights, in reading order: one opens its page
+          if (marks.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(4, 18, 4, 4),
+              child: Text('Highlights', key: ValueKey('contents.highlights'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+            for (final m in marks)
+              ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                title: Text(m.text, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14, fontStyle: FontStyle.italic)),
+                onTap: () {
+                  pickedMark = m;
+                  Navigator.of(c).pop();
+                },
+              ),
+          ],
         ]);
+    final mark = pickedMark;
+    if (mark != null && !_disposed && _book == b) {
+      final ch = b.info.spine.indexOf(mark.chapter);
+      if (ch >= 0) {
+        host.hideControls();
+        _goTo(ch, mark.start);
+      }
+      return;
+    }
     final chosen = picked;
     if (chosen == null || _disposed || _book != b) return;
     final ch = b.chapterOf(chosen.path);
@@ -912,8 +975,10 @@ class EpubRenderer extends Renderer {
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
             if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
             // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
-            SelectionContainer.disabled(child: PageView.builder(
+            SelectionContainer.disabled(child: RepaintBoundary(key: _curl.boundary, child: PageView.builder(
               controller: _pc,
+              // Curl: a drag curls the page instead of sliding it (below)
+              physics: _curlMode ? const NeverScrollableScrollPhysics() : null,
               itemCount: b.totalPages! + 1, // + the end card
               onPageChanged: _onPageChanged,
               // the pages either side built ahead, as the comic reader's are: a tap's turn no longer builds the
@@ -923,7 +988,9 @@ class EpubRenderer extends Renderer {
               // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
               // of both pages again each frame
               itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size, i == here ? registrar : null)),
-            )),
+            ))),
+            // the page turning over (Curl)
+            if (_curlMode) Positioned.fill(child: _curl.overlay()),
             // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
             // by - Windows check, build 79)
             Positioned.fill(child: Listener(
@@ -943,6 +1010,9 @@ class EpubRenderer extends Renderer {
               builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTapUp: (d) => _tap(d, size, shown),
+                onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: b.totalPages! + 1) : null,
+                onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
+                onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,
                 // right-click, as with comics - with text selected it's the selection's (its menu)
                 onSecondaryTap: selected ? null : host.toggleControls,
               )),
@@ -981,6 +1051,10 @@ class EpubRenderer extends Renderer {
     final selected = _selectedText;
     final items = [
       for (final i in state.contextMenuButtonItems) if (i.type == ContextMenuButtonType.copy) i,
+      ContextMenuButtonItem(label: 'Highlight', onPressed: () {
+        _highlightSelection();
+        state.hideToolbar();
+      }),
       if (definable(selected))
         ContextMenuButtonItem(label: 'Define', onPressed: () {
           state.hideToolbar();
@@ -993,6 +1067,67 @@ class EpubRenderer extends Renderer {
 
   @override
   void controlsShown() => _clearSelection();
+
+  // ---- highlights (user, 2026-10-11: one colour, synced through Komga, no notes)
+
+  BookHighlights? _highlights;
+  final _shownPage = GlobalKey(debugLabel: 'epub-page-on-screen');
+
+  /// The chapter file [chapter] is, in the book (what a highlight is kept against).
+  String _chapterFile(int chapter) => _book!.info.spine[chapter];
+
+  /// The highlights on [page] of [chapter], as boxes to draw.
+  List<Rect> _marksOn(EpubPage page, int chapter) {
+    final h = _highlights;
+    if (h == null || h.items.isEmpty) return const [];
+    final file = _chapterFile(chapter);
+    return [
+      for (final m in h.items)
+        if (m.chapter == file) ...page.text.boxesOfPositions(m.start, m.end),
+    ];
+  }
+
+  /// The one highlight colour: a marker yellow, stronger on a light page than on a dark one.
+  static Color _markColour(Color page) =>
+      const Color(0xFFFFC928).withValues(alpha: page.computeLuminance() > 0.3 ? 0.45 : 0.3);
+
+  /// The highlight under [at] on [page] (on screen), if any.
+  Highlight? _highlightAt(EpubPage page, Offset at) {
+    final h = _highlights;
+    if (h == null || h.items.isEmpty) return null;
+    final file = _chapterFile(_chapter);
+    for (final m in h.items) {
+      if (m.chapter != file) continue;
+      if (page.text.boxesOfPositions(m.start, m.end).any((r) => r.inflate(4).contains(at))) return m;
+    }
+    return null;
+  }
+
+  /// The selection, highlighted (one taken in with any it overlaps); the selection let go of.
+  void _highlightSelection() {
+    final render = _shownPage.currentContext?.findRenderObject();
+    final range = render is RenderSelectablePage ? render.selectedPositions : null;
+    if (range != null && _highlights != null) {
+      unawaited(_highlights!.add(Highlight(_chapterFile(_chapter), range.$1, range.$2, _selectedText.trim())));
+    }
+    _clearSelection();
+  }
+
+  /// A tapped highlight's menu: Copy its words, or Remove it.
+  Future<void> _highlightMenu(Highlight h, Offset at) async {
+    final context = host.context;
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx, at.dy),
+      items: const [
+        PopupMenuItem(value: 'copy', child: Text('Copy')),
+        PopupMenuItem(value: 'remove', child: Text('Remove highlight')),
+      ],
+    );
+    if (_disposed) return;
+    if (choice == 'copy') await Clipboard.setData(ClipboardData(text: h.text));
+    if (choice == 'remove') await _highlights?.remove(h);
+  }
 
   /// The page's sheet now (null: the page fills the screen).
   Rect? get _sheet => sheetRect(AppSettings.instance.epub, _size);
@@ -1025,10 +1160,12 @@ class EpubRenderer extends Renderer {
     }
     final page = pages[p.clamp(0, pages.length - 1)];
     return SelectablePage(
+      key: registrar != null ? _shownPage : null,
       page: page,
       registrar: registrar,
       colour: theme.accent.withValues(alpha: 0.35),
-      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, _sheet)),
+      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, _sheet,
+          marks: _marksOn(page, c), markColour: _markColour(theme.background))),
     );
   }
 
@@ -1158,10 +1295,14 @@ class _PictureViewState extends State<_PictureView> {
 /// A page: its paper - the whole area, or a [sheet] with a soft shadow each side (the surround behind is the reader's,
 /// still while sheets slide over it) - and its text and pictures ([page]; none: paper only, under a spinner or such).
 class _PagePainter extends CustomPainter {
-  _PagePainter(this.page, this.background, this.sheet);
+  _PagePainter(this.page, this.background, this.sheet, {this.marks = const [], this.markColour});
   final EpubPage? page;
   final Color background;
   final Rect? sheet;
+
+  /// Highlights on the page: drawn under the text, like a marker's ink.
+  final List<Rect> marks;
+  final Color? markColour;
   @override
   void paint(Canvas c, Size size) {
     final s = sheet;
@@ -1174,6 +1315,12 @@ class _PagePainter extends CustomPainter {
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
       c.drawRect(s, Paint()..color = background);
     }
+    if (marks.isNotEmpty && markColour != null) {
+      final ink = Paint()..color = markColour!;
+      for (final r in marks) {
+        c.drawRect(r, ink);
+      }
+    }
     final pieces = page?.pieces;
     if (pieces != null) {
       for (final p in pieces) {
@@ -1183,5 +1330,6 @@ class _PagePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_PagePainter old) => old.page != page || old.background != background || old.sheet != sheet;
+  bool shouldRepaint(_PagePainter old) => old.page != page || old.background != background || old.sheet != sheet ||
+      !listEquals(old.marks, marks) || old.markColour != markColour;
 }

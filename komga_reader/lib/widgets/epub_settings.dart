@@ -20,7 +20,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         _coloursRow(e, set),
         SegmentRow<EpubTurn>(
           title: 'Page turn',
-          choices: const [Choice(EpubTurn.none, 'None'), Choice(EpubTurn.slide, 'Slide')],
+          choices: const [Choice(EpubTurn.none, 'None'), Choice(EpubTurn.slide, 'Slide'), Choice(EpubTurn.curl, 'Curl')],
           value: e.turn,
           onChanged: (v) => set(e.copyWith(turn: v)),
         ),

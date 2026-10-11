@@ -279,6 +279,43 @@ class PageText {
     return out;
   }
 
+  /// [s] as a place in the chapter - the position pages and reading progress count in (soft hyphens and the
+  /// indent's placeholder not counted), the same whatever the layout: what a highlight is kept as.
+  int chapterPosition(TextSpot s) {
+    final l = _segs[s.seg].laid, plain = l.tp.plainText;
+    var n = 0;
+    for (var i = 0; i < s.offset && i < plain.length; i++) {
+      final c = plain.codeUnitAt(i);
+      if (c == 0xAD || c == 0xFFFC) n++;
+    }
+    return l.base + s.offset - n;
+  }
+
+  /// The chapter positions [from]..[to] as boxes on this page (none if they're not on it) - a highlight, drawn.
+  List<Rect> boxesOfPositions(int from, int to) {
+    if (to <= from || _segs.isEmpty) return const [];
+    TextSpot? a, b;
+    for (var i = 0; i < _segs.length; i++) {
+      final s = _segs[i];
+      final first = chapterPosition(TextSpot(i, s.start)), last = chapterPosition(TextSpot(i, s.end));
+      if (last <= from || first >= to) continue;
+      a ??= TextSpot(i, from <= first ? s.start : _offsetOf(s, from));
+      b = TextSpot(i, to >= last ? s.end : _offsetOf(s, to));
+    }
+    return a == null || b == null ? const [] : boxes(a, b);
+  }
+
+  /// The painter offset of chapter position [position] in [s]'s paragraph.
+  int _offsetOf(_Seg s, int position) {
+    final plain = s.laid.tp.plainText;
+    var counted = s.laid.base, i = 0;
+    for (; i < plain.length && counted < position; i++) {
+      final c = plain.codeUnitAt(i);
+      if (c != 0xAD && c != 0xFFFC) counted++;
+    }
+    return i;
+  }
+
   /// The plain text from [a] to [b] (either way round): soft hyphens and the indent's placeholder taken out (a word
   /// broken over two lines is one word again), a drop cap's letter put back, paragraphs a line each.
   String textOf(TextSpot a, TextSpot b) {

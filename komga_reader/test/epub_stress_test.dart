@@ -13,6 +13,7 @@ import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 /// [n] short chapters (two or three pages each), each file taking [slow] to come.
@@ -74,7 +75,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final source = FlakyBook();
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
         book: const {'id': 'B', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source,
         saveProgress: false)));
     for (var i = 0; i < 40 && stuck(); i++) {
@@ -114,7 +115,7 @@ void main() {
       tester.view.physicalSize = const Size(1600, 900); // a PC window
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
           book: const {'id': 'B', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
           epubSource: SlowBook(12, const Duration(milliseconds: 15)), saveProgress: false)));
       for (var i = 0; i < 40 && stuck(); i++) {

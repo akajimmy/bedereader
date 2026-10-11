@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 103 - 2026-10-11
+
 **New**
 - **eBooks on a wide screen read like a sheet of paper**: when the window (or the tablet in landscape) is wider than
   the page needs, the page is drawn as a sheet in the middle, with a soft shadow at its edges, on a surround a shade
@@ -17,13 +21,17 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Define a word in an eBook**: select a word (or a short phrase) and press Define in the pane - its meanings,
   with examples, from an English dictionary built into the app (Open English WordNet), so it works offline. A word
   that's a form of another ("running", "mice") shows that one's meanings too. English only for now.
+- **Highlight text in an eBook**: select and press Highlight. Highlights are kept on Komga with your account, so
+  the tablet and the PC share them (made offline, they go up once Komga can be reached). Tap one to copy it or
+  remove it; the Contents panel lists the book's highlights - tap one to go to it.
+- **Page curl for eBooks**: eBook settings > Page turn has Curl, the 3D page turn comics have - a tap, a key or the
+  remote plays the whole turn; a drag lifts the page with your finger (let go early and it falls back). On a wide
+  screen the sheet turns over the surround.
 
 **Fixed**
 - **eBooks, Paragraphs: Auto - a double gap under a chapter's first paragraph** in books that start chapters with
   an unindented paragraph and indent the rest (Foundation): the gap under it is now the same as between the others.
   The book is laid out again the first time you open it.
-
-## 1.3.0
 
 ### Build 102 - 2026-10-11
 
