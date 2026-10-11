@@ -250,6 +250,8 @@ class EpubRenderer extends Renderer {
     _disposed = true;
     _settle?.cancel();
     _curlMade?.dispose();
+    _previewWait?.cancel();
+    _previewLaid.dispose();
     _highlights?.removeListener(_changed);
     _highlights?.dispose();
     if (readerTiming) {
@@ -801,6 +803,79 @@ class EpubRenderer extends Renderer {
         BarButton(_settingsNode, barIcon(node: _settingsNode, icon: Icons.text_fields,
             label: 'eBook settings', onPressed: _settingsPanel)),
       ];
+
+  // ---- the slider's page pictures (user, 2026-10-11: as the comics' have)
+
+  final _previewLaid = ValueNotifier<int>(0); // a chapter the preview waited for has been laid out
+  Timer? _previewWait;
+  int? _previewChapter; // the chapter the thumb rests on, to lay out
+
+  /// While a page is being picked on the slider: a small drawing of it (the sheet on a wide screen), its page and
+  /// chapter under it. A chapter not laid out yet is laid out once the thumb rests on it a moment (scrubbing across
+  /// a dozen chapters doesn't lay them all out); a spinner meanwhile.
+  @override
+  Widget preview(BuildContext context, int shown, double x) {
+    final b = _book!;
+    final at = shown.clamp(0, last);
+    final (c, p) = b.chapterPage(at);
+    final area = _sheet ?? Offset.zero & _size;
+    const w = 132.0;
+    final h = area.isEmpty ? 196.0 : (w * area.height / area.width).clamp(120.0, 240.0);
+    if (b.pagesNow(c) == null && _previewChapter != c) {
+      _previewChapter = c;
+      _previewWait?.cancel();
+      _previewWait = Timer(const Duration(milliseconds: 180), () {
+        if (_disposed || _book != b) return;
+        unawaited(b.pages(c).then<void>((_) {
+          if (!_disposed) _previewLaid.value++;
+        }, onError: (Object _) {}));
+      });
+    }
+    return Positioned(
+      left: x - w / 2,
+      top: -h - 60,
+      width: w,
+      child: IgnorePointer(
+        child: Container(
+          key: const ValueKey('page-preview'),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white24)),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(
+              width: w - 8,
+              height: h,
+              child: ValueListenableBuilder<int>(
+                valueListenable: _previewLaid,
+                builder: (_, __, ___) {
+                  final pages = b.pagesNow(c);
+                  if (pages == null || pages.isEmpty || area.isEmpty) {
+                    return const Center(key: ValueKey('preview-loading'),
+                        child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
+                  }
+                  final page = pages[p.clamp(0, pages.length - 1)];
+                  return ClipRect(child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox.fromSize(
+                      size: area.size,
+                      child: Transform.translate(
+                        offset: -area.topLeft,
+                        child: CustomPaint(size: _size, painter: _PagePainter(page, _drawn.background, null)),
+                      ),
+                    ),
+                  ));
+                },
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('Page ${at + 1}', style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Text(_chapterNameOf(c), maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white70, fontSize: 11)),
+          ]),
+        ),
+      ),
+    );
+  }
 
   // ---- what's said
 
