@@ -199,7 +199,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final MemorySource source = twoChapters();
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source, saveProgress: false)));
     Future<void> settle() async {
       for (var i = 0; i < 40; i++) {
@@ -236,7 +236,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final store = EpubCountStore.instance as MemoryCountStore;
-    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: plainKomga(),
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: twoChapters(),
         saveProgress: false)));
     Future<void> settle() async {

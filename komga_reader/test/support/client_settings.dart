@@ -39,3 +39,15 @@ class SettingsServer extends TestKomga with ClientSettingsStore {
     if (start != null) written.addAll(start);
   }
 }
+
+/// A Komga whose client-settings store is empty and takes writes (dropped): for reader tests, where an eBook opening
+/// asks for its highlights (lib/highlights.dart) - nothing else in it reaches the network. Mix into a fake, or build
+/// [EmptySettingsKomga] with noNetwork.
+mixin EmptyClientSettings on Komga {
+  @override
+  Future<Map<String, dynamic>> clientSettings() async => {};
+  @override
+  Future<void> putClientSetting(String key, String value) async {}
+}
+
+class EmptySettingsKomga extends TestKomga with EmptyClientSettings {}
