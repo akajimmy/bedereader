@@ -917,14 +917,14 @@ class Paginator {
   // the chapter's usual paragraph spacing (the most common), which the reader's own formatting takes out
   double _usualTop = 0, _usualBottom = 0;
   bool _breaksAreSpacing = false; // blank-paragraph "breaks" before most paragraphs: spacing, not breaks (E4)
-  bool _indentsUsual = false; // most of the chapter's paragraphs are indented
+  bool _indentsUsual = false; // most of the chapter's paragraphs are indented (first line in, or hanging)
 
   void _findUsual(List<Block> blocks) {
     final count = <(double, double), int>{};
     var paragraphs = 0, afterBreaks = 0, indented = 0;
     for (final b in blocks) {
       if (b is TextBlock && b.paragraph) {
-        if (b.indent > 0) indented++;
+        if (b.indent != 0) indented++; // a hanging indent marks paragraphs too (Foundation's transcript chapter)
         final k = ((b.paraTop * 100).roundToDouble() / 100, (b.paraBottom * 100).roundToDouble() / 100);
         count[k] = (count[k] ?? 0) + 1;
         paragraphs++;
