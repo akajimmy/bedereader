@@ -23,6 +23,7 @@ import '../errors.dart';
 import '../offline/offline_komga.dart';
 import '../screen.dart';
 import '../settings.dart';
+import '../widgets/define_sheet.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
@@ -901,7 +902,10 @@ class EpubRenderer extends Renderer {
             key: _selectionArea,
             focusNode: _selectionFocus,
             contextMenuBuilder: _selectionMenu,
-            onSelectionChanged: (c) => _selected.value = c != null && c.plainText.isNotEmpty,
+            onSelectionChanged: (c) {
+              _selectedText = c?.plainText ?? '';
+              _selected.value = _selectedText.isNotEmpty;
+            },
             child: Builder(builder: (context) {
               final registrar = SelectionContainer.maybeOf(context);
               return Stack(children: [
@@ -953,6 +957,7 @@ class EpubRenderer extends Renderer {
 
   final _selectionArea = GlobalKey<SelectionAreaState>();
   final _selected = ValueNotifier<bool>(false); // text is selected on the page
+  String _selectedText = '';
 
   /// The selection area's focus: Esc lets go of the selection first (then it closes the book, as before).
   late final _selectionFocus = FocusNode(debugLabel: 'epub-selection', onKeyEvent: (_, e) {
@@ -970,9 +975,18 @@ class EpubRenderer extends Renderer {
     _selectionArea.currentState?.selectableRegion.clearSelection();
   }
 
-  /// The selection's pane of actions: Copy (the first; more to come - user, 2026-10-08).
+  /// The selection's pane of actions: Copy (user, 2026-10-08), and Define for a word or a short phrase (2026-10-11:
+  /// the offline English dictionary).
   Widget _selectionMenu(BuildContext context, SelectableRegionState state) {
-    final items = [for (final i in state.contextMenuButtonItems) if (i.type == ContextMenuButtonType.copy) i];
+    final selected = _selectedText;
+    final items = [
+      for (final i in state.contextMenuButtonItems) if (i.type == ContextMenuButtonType.copy) i,
+      if (definable(selected))
+        ContextMenuButtonItem(label: 'Define', onPressed: () {
+          state.hideToolbar();
+          unawaited(showDefinition(context, selected));
+        }),
+    ];
     if (items.isEmpty) return const SizedBox.shrink();
     return AdaptiveTextSelectionToolbar.buttonItems(anchors: state.contextMenuAnchors, buttonItems: items);
   }

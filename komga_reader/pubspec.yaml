@@ -38,6 +38,9 @@ flutter:
     - assets/hyphenation/hyph-en-us.hyp.txt
     - assets/hyphenation/hyph-fr.pat.txt
     - assets/hyphenation/LICENSE.txt
+    # the offline English dictionary behind Define (Open English WordNet; tools\dictionary\build_dictionary.py)
+    - assets/dictionary/en.txt.gz
+    - assets/dictionary/LICENSE.txt
     - assets/fonts/Literata-OFL.txt
     - assets/fonts/Lora-OFL.txt
     - assets/fonts/AtkinsonHyperlegibleNext-OFL.txt

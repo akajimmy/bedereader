@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/dictionary.dart';
 import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/reader/epub_selection.dart';
@@ -102,6 +103,39 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(copied, 'eel');
     expect(onFirstPage(tester), isTrue);
+  });
+
+  testWidgets("a selected word's pane has Define: the word's meanings from the dictionary in a sheet over the page; "
+      'a long selection has no Define (user, 2026-10-11)', (tester) async {
+    final real = EnglishDictionary.loader;
+    addTearDown(() {
+      EnglishDictionary.loader = real;
+      EnglishDictionary.reset();
+    });
+    EnglishDictionary.reset();
+    EnglishDictionary.loader =
+        () async => EnglishDictionary.parse('n\ta long snakelike fish\teels slid in the mud\n\neel\t0\n');
+    await open(tester);
+    await tester.longPressAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Define'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('define.word.eel')), findsOneWidget);
+    expect(find.textContaining('snakelike fish', findRichText: true), findsOneWidget);
+    expect(find.text('Copy'), findsNothing, reason: 'the pane gave way to the sheet');
+    await tester.tapAt(const Offset(400, 40)); // outside the sheet: closed
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('define.list')), findsNothing);
+
+    // a long selection: copy only
+    final g = await tester.startGesture(at(tester, 'Ant'));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    await g.moveTo(at(tester, 'fox'));
+    await tester.pump();
+    await g.up();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(selected(tester), contains('fox'));
+    expect(find.text('Define'), findsNothing);
   });
 
   testWidgets('a long press dragged on extends the selection, word by word, across a paragraph boundary', (tester) async {
