@@ -514,6 +514,44 @@ class ChapterReader {
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
 }
 
+/// Which of [blocks] are lines of verse set as paragraphs of their own (The Crystal Cave's opening poem: each line a
+/// paragraph, marked like the prose - spaced like six paragraphs). Taken a block at a time - three or more short
+/// paragraphs in a row (under 60 characters, one line): it's verse when at least half its lines end open (on a
+/// letter, a comma, a semicolon, a colon or a dash: verse runs on from line to line) and at least one ends on a comma
+/// or a semicolon. A list doesn't (contents, "Also by" lists: no commas - the library check of 2026-10-11 found a
+/// rule without that squeezing them in 226 books); short dialogue ("I may." / "And the boy?") ends its lines. A whole
+/// poem is one block, so it's set alike all through (a stanza at a time, half of The Hollow Hills' poem was missed).
+/// In verse, a stanza ends at a closed line. What's given: the lines that go on from the one above - a stanza's first
+/// line isn't one, so it keeps its gap (survey 2026-10-06; done 2026-10-11).
+Set<int> verseLines(List<Block> blocks) {
+  final out = <int>{};
+  var block = <(int, String)>[];
+  // an attribution ("— Edwin Muir") closes the verse: what follows keeps its gap (The Crystal Cave's prologue heading)
+  bool open(String t) =>
+      !RegExp(r'^[—–-]').hasMatch(t) && RegExp(r'[\p{L},;:—–-]$', unicode: true).hasMatch(t);
+  void close() {
+    final opens = block.where((l) => open(l.$2)).length;
+    final commas = block.where((l) => l.$2.endsWith(',') || l.$2.endsWith(';')).length;
+    if (block.length >= 3 && opens * 2 >= block.length && commas > 0) {
+      for (var k = 1; k < block.length; k++) {
+        if (open(block[k - 1].$2)) out.add(block[k].$1); // the line above runs on to this one: no gap
+      }
+    }
+    block = [];
+  }
+
+  for (final (i, b) in blocks.indexed) {
+    final text = b is TextBlock && b.paragraph ? b.runs.map((r) => r.text).join().trim() : null;
+    if (text == null || text.isEmpty || text.length >= 60 || text.contains('\n')) {
+      close();
+      continue;
+    }
+    block.add((i, text));
+  }
+  close();
+  return out;
+}
+
 /// A picture's size on the page, in layout pixels: a big one at one picture pixel to one screen pixel (user,
 /// 2026-10-06: "images ... at their native resolution"); a small one - under [smallPicture] pixels both ways: an
 /// ornament, a scene-break star - at its size in CSS pixels, as a browser draws it (user, 2026-10-11: Thud's 30 x 45
@@ -983,9 +1021,12 @@ class Paginator {
         return pages;
       }
     }
+    final verse = theme.ownParagraphs ? verseLines(blocks) : const <int>{};
     Block? prev;
     for (final (i, b) in blocks.indexed) {
       final next = i + 1 < blocks.length ? blocks[i + 1] : null;
+      // a line of verse after another: no gap between them, as printed (the reader's own paragraphs)
+      final inVerse = verse.contains(i), verseGoesOn = verse.contains(i + 1);
       if (b.breakBefore && !_pageEmpty) _newPage();
       var mt = b.marginTop, mb = b.marginBottom;
       if (b is TextBlock) {
@@ -1025,12 +1066,14 @@ class Paginator {
               !next.breakBefore &&
               (next.breakGap == 0 || _breaksAreSpacing);
           mb = ownBottom || (!booksIndent && !indentedNext) ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
+          if (inVerse) mt = b.wrapTop;
+          if (verseGoesOn) mb = b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
         if (b.breakGap > 0 && !(_breaksAreSpacing && theme.ownParagraphs)) mt = math.max(mt, b.breakGap);
       }
       // the reader's own extra space between paragraphs (Paragraph spacing), on top of the book's
-      final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
+      final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore && !inVerse
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
       var gap = math.max(_pendingGap, mt * _bookEm) + extra;
