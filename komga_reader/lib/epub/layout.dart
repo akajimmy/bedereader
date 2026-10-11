@@ -511,17 +511,29 @@ class ChapterReader {
 }
 
 /// Which of [blocks] are lines of verse set as paragraphs of their own (The Crystal Cave's opening poem: each line a
-/// paragraph, marked like the prose - spaced like six paragraphs): runs of three or more short paragraphs (under 60
-/// characters, one line) in which every line but the last ends open - on a letter, a comma, a semicolon, a colon or a
-/// dash. Short dialogue ("I may." / "And the boy?") ends its lines and isn't taken for verse (survey 2026-10-06;
-/// done 2026-10-11). What's given: the lines that go on from the one above - each run's first line isn't one, so a
-/// stanza (a run ending on a closed line) keeps its gap before the next.
+/// paragraph, marked like the prose - spaced like six paragraphs). Taken a block at a time - three or more short
+/// paragraphs in a row (under 60 characters, one line): it's verse when at least half its lines end open (on a
+/// letter, a comma, a semicolon, a colon or a dash: verse runs on from line to line) and at least one ends on a comma
+/// or a semicolon. A list doesn't (contents, "Also by" lists: no commas - the library check of 2026-10-11 found a
+/// rule without that squeezing them in 226 books); short dialogue ("I may." / "And the boy?") ends its lines. A whole
+/// poem is one block, so it's set alike all through (a stanza at a time, half of The Hollow Hills' poem was missed).
+/// In verse, a stanza ends at a closed line. What's given: the lines that go on from the one above - a stanza's first
+/// line isn't one, so it keeps its gap (survey 2026-10-06; done 2026-10-11).
 Set<int> verseLines(List<Block> blocks) {
   final out = <int>{};
-  var run = <int>[];
+  var block = <(int, String)>[];
+  // an attribution ("— Edwin Muir") closes the verse: what follows keeps its gap (The Crystal Cave's prologue heading)
+  bool open(String t) =>
+      !RegExp(r'^[—–-]').hasMatch(t) && RegExp(r'[\p{L},;:—–-]$', unicode: true).hasMatch(t);
   void close() {
-    if (run.length >= 3) out.addAll(run.skip(1));
-    run = [];
+    final opens = block.where((l) => open(l.$2)).length;
+    final commas = block.where((l) => l.$2.endsWith(',') || l.$2.endsWith(';')).length;
+    if (block.length >= 3 && opens * 2 >= block.length && commas > 0) {
+      for (var k = 1; k < block.length; k++) {
+        if (open(block[k - 1].$2)) out.add(block[k].$1); // the line above runs on to this one: no gap
+      }
+    }
+    block = [];
   }
 
   for (final (i, b) in blocks.indexed) {
@@ -530,9 +542,7 @@ Set<int> verseLines(List<Block> blocks) {
       close();
       continue;
     }
-    run.add(i);
-    // a closed line ends the run - it may be its last line
-    if (!RegExp(r'[\p{L},;:—–-]$', unicode: true).hasMatch(text)) close();
+    block.add((i, text));
   }
   close();
   return out;

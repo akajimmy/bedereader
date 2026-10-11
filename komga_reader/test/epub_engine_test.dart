@@ -556,6 +556,14 @@ void main() {
     expect(o[8].dy - o[7].dy, closeTo(line, 0.5), reason: 'the next stanza: tight');
     expect(o[10].dy - o[9].dy, greaterThan(line + 10), reason: 'between two stanzas: a gap');
     expect(o[11].dy - o[10].dy, closeTo(line, 0.5));
+
+    // a list - contents, "Also by" - is short lines too, but no line ends on a comma: its gaps stay (library check)
+    const list = '<body><p>Prologue</p><p>Bran</p><p>Catelyn</p><p>Daenerys</p><p>Eddard</p></body>';
+    final l = Paginator(const EpubTheme(ownParagraphs: true), const Size(1400, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(list)))
+        .single
+        .textOrigins;
+    expect(l[2].dy - l[1].dy, greaterThan(line + 10), reason: 'a list keeps its gaps');
   });
 
   test("a typewriter's dashes (Xanth: \"brutally---or\", \"them--I'm\") read as em dashes; a drawn line of hyphens and "
