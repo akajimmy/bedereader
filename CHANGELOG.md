@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **eBooks, Paragraphs: Auto - the first-paragraph fix of build 103 went too far** in books whose ordinary
+  paragraphs are set flush and only special passages are indented (a letter, verse, an epigraph - the Brian Herbert
+  and Kevin J. Anderson Dune books): those passages had lost the space above them. They keep it again; Foundation
+  and the like keep the fix.
+
 ## 1.3.0
 
 ### Build 103 - 2026-10-11
