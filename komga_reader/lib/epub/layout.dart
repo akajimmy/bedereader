@@ -510,6 +510,33 @@ class ChapterReader {
       e.children.map((n) => n is XText ? n.text : _textOf(n as XElement)).join();
 }
 
+/// Which of [blocks] are lines of verse set as paragraphs of their own (The Crystal Cave's opening poem: each line a
+/// paragraph, marked like the prose - spaced like six paragraphs): runs of three or more short paragraphs (under 60
+/// characters, one line) in which every line but the last ends open - on a letter, a comma, a semicolon, a colon or a
+/// dash. Short dialogue ("I may." / "And the boy?") ends its lines and isn't taken for verse (survey 2026-10-06;
+/// done 2026-10-11).
+Set<int> verseLines(List<Block> blocks) {
+  final out = <int>{};
+  var run = <int>[];
+  void close() {
+    if (run.length >= 3) out.addAll(run);
+    run = [];
+  }
+
+  for (final (i, b) in blocks.indexed) {
+    final text = b is TextBlock && b.paragraph ? b.runs.map((r) => r.text).join().trim() : null;
+    if (text == null || text.isEmpty || text.length >= 60 || text.contains('\n')) {
+      close();
+      continue;
+    }
+    run.add(i);
+    // a closed line ends the run - it may be its last line
+    if (!RegExp(r'[\p{L},;:—–-]$', unicode: true).hasMatch(text)) close();
+  }
+  close();
+  return out;
+}
+
 /// A typewriter's dashes, as some conversions keep them (the first Xanth books: "die brutally---or was some enemy",
 /// "one of them--I'm sure"): "---" and "--" shown as the em dash they stand for. Longer runs of hyphens (a drawn
 /// line) are left alone (survey 2026-10-06; done 2026-10-11).
@@ -966,9 +993,12 @@ class Paginator {
         return pages;
       }
     }
+    final verse = theme.ownParagraphs ? verseLines(blocks) : const <int>{};
     Block? prev;
     for (final (i, b) in blocks.indexed) {
       final next = i + 1 < blocks.length ? blocks[i + 1] : null;
+      // a line of verse after another: no gap between them, as printed (the reader's own paragraphs)
+      final inVerse = verse.contains(i) && verse.contains(i - 1), verseGoesOn = verse.contains(i) && verse.contains(i + 1);
       if (b.breakBefore && !_pageEmpty) _newPage();
       var mt = b.marginTop, mb = b.marginBottom;
       if (b is TextBlock) {
@@ -1008,12 +1038,14 @@ class Paginator {
               !next.breakBefore &&
               (next.breakGap == 0 || _breaksAreSpacing);
           mb = ownBottom || (!booksIndent && !indentedNext) ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
+          if (inVerse) mt = b.wrapTop;
+          if (verseGoesOn) mb = b.wrapBottom;
         }
         // a scene break before it (E4) - unless they are the book's spacing and the reader's own formatting is on
         if (b.breakGap > 0 && !(_breaksAreSpacing && theme.ownParagraphs)) mt = math.max(mt, b.breakGap);
       }
       // the reader's own extra space between paragraphs (Paragraph spacing), on top of the book's
-      final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
+      final extra = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore && !inVerse
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
       var gap = math.max(_pendingGap, mt * _bookEm) + extra;
