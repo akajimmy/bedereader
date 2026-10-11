@@ -287,6 +287,47 @@ void main() {
     expect(fill(), isNot(accent), reason: 'none on');
   });
 
+  testWidgets("the filled funnel gives way to the remote's focus look (its outline vanished into the fill, build 101)",
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({
+      'mode': 'series', 'filters': const ViewFilter(publishers: ['Marvel']).toJson(),
+    })});
+    await library(tester);
+    addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional; // the remote in use
+    final funnel = tester.widget<IconButton>(find.descendant(
+        of: find.byKey(const ValueKey('bar.filter')), matching: find.byType(IconButton)));
+    final accent = Theme.of(tester.element(find.byKey(const ValueKey('bar.filter')))).colorScheme.primary;
+    expect(funnel.style?.backgroundColor?.resolve({}), accent, reason: 'filled, not focused');
+    expect(funnel.style?.backgroundColor?.resolve({WidgetState.focused}), isNull,
+        reason: "focused: the theme's focus fill and outline");
+    expect(funnel.style?.iconColor?.resolve({WidgetState.focused}), isNull);
+  });
+
+  testWidgets('the name picker says when its list was cut (more than 50 names), not when it holds them all',
+      (tester) async {
+    Future<void> openPicker(int names) async {
+      await tester.pumpWidget(const SizedBox()); // the last one's panel and picker gone
+      await library(tester, api: server((s) => s.writers = [
+            for (var i = 0; i < names; i++) 'Writer ${i.toString().padLeft(2, '0')}',
+          ]));
+      await openPanel(tester);
+      await tapKey(tester, 'filter.add.writer');
+    }
+
+    final list = find.descendant(of: find.byType(AlertDialog), matching: find.byType(Scrollable)).last; // (first: the search field's)
+
+    await openPicker(51);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('filter.pickMore')), 300, scrollable: list);
+    expect(find.byKey(const ValueKey('filter.pick.Writer 49')), findsOneWidget, reason: 'the 50th is listed');
+    expect(find.byKey(const ValueKey('filter.pick.Writer 50')), findsNothing, reason: 'the 51st is not');
+
+    await openPicker(50);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('filter.pick.Writer 49')), 300, scrollable: list);
+    await tester.pump();
+    expect(find.byKey(const ValueKey('filter.pickMore')), findsNothing, reason: 'all 50 are there');
+  });
+
   // ---- which sections ----------------------------------------------------------------------------------------------
 
   testWidgets('series filters (publisher, status, genre) only in series views', (tester) async {

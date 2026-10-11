@@ -46,9 +46,7 @@ final _navigationKeys = {
 /// keyboard/remote focus: a button that merely starts with focus (autofocus - Retry, Read, a dialog's Cancel) stays
 /// plain until an arrow key has been pressed (Flutter's "traditional" highlight mode), like the poster tiles.
 ButtonStyle strongFocusStyle(Color accent) {
-  bool remote() => FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
-  WidgetStateProperty<T?> onFocus<T>(T v) =>
-      WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.focused) && remote() ? v : null);
+  WidgetStateProperty<T?> onFocus<T>(T v) => WidgetStateProperty.resolveWith((s) => remoteFocused(s) ? v : null);
   return ButtonStyle(
     backgroundColor: onFocus(accent.withValues(alpha: 0.45)),
     foregroundColor: onFocus(Colors.white),
@@ -57,6 +55,11 @@ ButtonStyle strongFocusStyle(Color accent) {
     overlayColor: onFocus(Colors.transparent),
   );
 }
+
+/// Whether a button in [states] shows [strongFocusStyle]'s look: focused while the keyboard / remote is in use. A
+/// button with colours of its own gives them up then (null), so the focus look isn't hidden under them.
+bool remoteFocused(Set<WidgetState> states) =>
+    states.contains(WidgetState.focused) && FocusManager.instance.highlightMode == FocusHighlightMode.traditional;
 
 /// The readers' control bars (comics and EPUB): the control the remote is on gets a thick accent outline and a strong
 /// accent fill, so it can be seen from the sofa. Touch never focuses these buttons, so this only ever shows while
