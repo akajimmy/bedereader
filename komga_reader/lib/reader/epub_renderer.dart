@@ -22,12 +22,14 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../highlights.dart';
 import '../offline/offline_komga.dart';
+import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/define_sheet.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
+import 'curl_turns.dart';
 import 'epub_selection.dart';
 import 'position_row.dart';
 import 'reader_bars.dart';
@@ -184,6 +186,7 @@ class EpubRenderer extends Renderer {
   @override
   Future<Object> prepare(Map book) async {
     final id = book['id'] as String;
+    PageCurl.program().ignore(); // the curl's shader, ahead of the first turn
     _highlights?.removeListener(_changed);
     _highlights?.dispose();
     _highlights = BookHighlights(api, id)..addListener(_changed);
@@ -246,6 +249,7 @@ class EpubRenderer extends Renderer {
   void dispose() {
     _disposed = true;
     _settle?.cancel();
+    _curlMade?.dispose();
     _highlights?.removeListener(_changed);
     _highlights?.dispose();
     if (readerTiming) {
@@ -490,8 +494,23 @@ class EpubRenderer extends Renderer {
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
   // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
   // that comics are"); this one peaks near 100 px.
-  Duration get _turnTime =>
-      AppSettings.instance.epub.turn == EpubTurn.none ? Duration.zero : const Duration(milliseconds: 320);
+  Duration get _turnTime => AppSettings.instance.epub.turn == EpubTurn.slide
+      ? const Duration(milliseconds: 320)
+      : Duration.zero; // none - or curl, when it couldn't be drawn: at once
+
+  /// 3D page curl (user, 2026-10-11: as the comics'): the page turns over from a snapshot (lib/reader/curl_turns.dart).
+  bool get _curlMode => AppSettings.instance.epub.turn == EpubTurn.curl && CurlTurns.available;
+  CurlTurns? _curlMade;
+  CurlTurns get _curl => _curlMade ??= CurlTurns(
+    vsync: host.vsync,
+    current: () => _pc.hasClients ? (_pc.page ?? 0).round() : 0,
+    jump: (p) {
+      if (_pc.hasClients) _pc.jumpToPage(p);
+    },
+    pageRect: () => _sheet ?? Offset.zero & _size,
+    done: ({required turned}) {},
+    pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
+  );
   static const _turnCurve = Curves.easeInOut;
 
   @override
@@ -548,6 +567,7 @@ class EpubRenderer extends Renderer {
         : (_pc.page ?? 0).round();
     final target = from + by;
     if (target < 0 || target > last + 1) return;
+    if (_curlMode && _curl.turn(next: by > 0, target: target)) return;
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
       return;
@@ -955,8 +975,10 @@ class EpubRenderer extends Renderer {
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
             if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
             // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
-            SelectionContainer.disabled(child: PageView.builder(
+            SelectionContainer.disabled(child: RepaintBoundary(key: _curl.boundary, child: PageView.builder(
               controller: _pc,
+              // Curl: a drag curls the page instead of sliding it (below)
+              physics: _curlMode ? const NeverScrollableScrollPhysics() : null,
               itemCount: b.totalPages! + 1, // + the end card
               onPageChanged: _onPageChanged,
               // the pages either side built ahead, as the comic reader's are: a tap's turn no longer builds the
@@ -966,7 +988,9 @@ class EpubRenderer extends Renderer {
               // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
               // of both pages again each frame
               itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size, i == here ? registrar : null)),
-            )),
+            ))),
+            // the page turning over (Curl)
+            if (_curlMode) Positioned.fill(child: _curl.overlay()),
             // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
             // by - Windows check, build 79)
             Positioned.fill(child: Listener(
@@ -986,6 +1010,9 @@ class EpubRenderer extends Renderer {
               builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTapUp: (d) => _tap(d, size, shown),
+                onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: b.totalPages! + 1) : null,
+                onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
+                onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,
                 // right-click, as with comics - with text selected it's the selection's (its menu)
                 onSecondaryTap: selected ? null : host.toggleControls,
               )),

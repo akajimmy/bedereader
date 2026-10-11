@@ -10,6 +10,7 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/layout.dart' show EpubPage;
 import 'package:komga_reader/epub/source.dart';
+import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
@@ -18,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/client_settings.dart';
 import 'support/epub_books.dart';
+import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
@@ -95,6 +97,58 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
   }
+
+  group('Page turn: Curl (user, 2026-10-11: the comics\' 3D curl for eBooks)', () {
+    setUpAll(preloadShaders);
+    setUp(() => AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(turn: EpubTurn.curl)));
+    tearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+
+    Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter);
+    double page(WidgetTester tester) => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+
+    testWidgets('a tap on the right curls the page over the next and lands there; a key does the same', (tester) async {
+      expect(PageCurl.loaded, isNotNull);
+      await open(tester, twoChapters());
+      await tester.tapAt(const Offset(760, 600));
+      await tester.pump();
+      expect(curling(), findsOneWidget, reason: 'this page curling away');
+      expect(page(tester), 1.0, reason: 'the next page already underneath');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(curling(), findsNothing);
+      expect(page(tester), 1.0);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      expect(curling(), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 2.0);
+      await settle(tester);
+    });
+
+    testWidgets('a drag curls the page with the finger: let go early, it springs back to where it was; dragged '
+        'past a third, it turns', (tester) async {
+      await open(tester, twoChapters());
+      Future<void> drag(double to) async {
+        final g = await tester.startGesture(const Offset(700, 600));
+        for (var i = 1; i <= 10; i++) {
+          await g.moveTo(Offset(700 - (700 - to) * i / 10, 600));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(curling(), findsOneWidget, reason: 'the page follows the finger');
+        await g.up();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump();
+      }
+
+      await drag(640);
+      expect(page(tester), 0.0, reason: 'sprang back');
+      await drag(150);
+      expect(page(tester), 1.0, reason: 'turned');
+      await settle(tester);
+    });
+  });
 
   testWidgets('on a wide screen the surround is one still layer under the pages: a page dragged halfway moves its '
       'sheet, not the surround (user, 2026-10-11: the whole sheet slides); a portrait screen has none', (tester) async {
