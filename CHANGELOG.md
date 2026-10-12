@@ -10,6 +10,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **Fixed**
+- **Windows: mouse clicks went missing** - on Home's posters, and on an eBook's page (it took a couple of clicks to
+  bring up the controls). A mouse moved by even a pixel while clicking was taken for a drag: on Home for the side
+  menu's swipe (now a finger's only - the mouse has the menu button), on a page for selecting text. And a second click
+  made in doubt cancelled the controls; a double click where there's no word now brings them up.
 - **eBooks: highlights never reached Komga** (since they came in build 103) - Komga turned every save down (the
   name they're kept under had capital letters, which it doesn't take), so they stayed on the device they were made
   on. They're sent now - each book's the next time it's opened.
