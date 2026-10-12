@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// What a key does in the reader, with the controls hidden (Settings > Remote and keys; user, 2026-09-30).
-enum ReaderAction { next, previous, controls, close, zoomIn, zoomOut }
+/// [openMenu]: not the reader's - the side menu, on the screens that have one (user, 2026-10-12: a key for it on
+/// Windows; no key by default).
+enum ReaderAction { next, previous, controls, close, zoomIn, zoomOut, openMenu }
 
 extension ReaderActionLabel on ReaderAction {
   String get label => switch (this) {
@@ -15,6 +17,7 @@ extension ReaderActionLabel on ReaderAction {
         ReaderAction.close => 'Close the book',
         ReaderAction.zoomIn => 'Zoom in',
         ReaderAction.zoomOut => 'Zoom out',
+        ReaderAction.openMenu => 'Open the side menu',
       };
 }
 
@@ -37,6 +40,7 @@ class ReaderKeys extends ChangeNotifier {
     // in fit screen: a step in or out (x1.5), like pinching
     ReaderAction.zoomIn: [LogicalKeyboardKey.equal, LogicalKeyboardKey.add, LogicalKeyboardKey.numpadAdd],
     ReaderAction.zoomOut: [LogicalKeyboardKey.minus, LogicalKeyboardKey.numpadSubtract],
+    ReaderAction.openMenu: [], // none: given one by hand (Settings > Remote and keys)
   };
 
   Map<ReaderAction, List<LogicalKeyboardKey>> keys = {for (final e in defaults.entries) e.key: List.of(e.value)};

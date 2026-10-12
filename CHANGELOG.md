@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **A key for the side menu**: Settings > Remote and keys > Anywhere else > Open the side menu - no key until you give
+  it one. It opens the side menu on Home, a library, a series and the like (and closes it again); not while you're
+  typing in a box. Kept on each device, like the reader's keys.
+
 **Fixed**
 - **Windows: mouse clicks went missing** - on Home's posters, and on an eBook's page (it took a couple of clicks to
   bring up the controls). A mouse moved by even a pixel while clicking was taken for a drag: on Home for the side

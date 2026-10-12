@@ -95,6 +95,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time
     if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
+    HardwareKeyboard.instance.addHandler(_onMenuKey);
     Connection.instance.addListener(_onConnection);
     ProgressSync.instance.addListener(_onSync);
     Downloads.instance.addListener(_onDownloads); // Delete once read, Ask: the question
@@ -107,6 +108,13 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.f11) return false;
     toggleFullscreen();
     return true;
+  }
+
+  /// The "Open the side menu" key (Settings > Remote and keys; none by default - user, 2026-10-12): from the keyboard
+  /// itself, as F11, so it works whether or not anything has the focus (with the mouse on Windows, often nothing).
+  bool _onMenuKey(KeyEvent e) {
+    if (e is! KeyDownEvent || ReaderKeys.instance.actionFor(e.logicalKey) != ReaderAction.openMenu) return false;
+    return DrawerEdgeState.toggleOnTop();
   }
 
   /// Esc on a full screen goes back one, like the remote's Back (user, 2026-09-30) - when nothing on the screen took
@@ -127,6 +135,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onF11);
+    HardwareKeyboard.instance.removeHandler(_onMenuKey);
     Connection.instance.removeListener(_onConnection);
     ProgressSync.instance.removeListener(_onSync);
     Downloads.instance.removeListener(_onDownloads);
