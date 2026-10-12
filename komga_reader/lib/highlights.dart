@@ -33,6 +33,13 @@ class Highlight {
   int get hashCode => Object.hash(chapter, start, end);
 }
 
+/// [marks] in reading order: by their chapter's place in the book ([spine]), then where in it - not by file name
+/// (ch10 came before ch2 in the Contents list - audit, 2026-10-11).
+List<Highlight> inReadingOrder(List<Highlight> marks, List<String> spine) => [...marks]..sort((x, y) {
+    final cx = spine.indexOf(x.chapter), cy = spine.indexOf(y.chapter);
+    return cx != cy ? cx - cy : x.start - y.start;
+  });
+
 /// One book's highlights (user, 2026-10-11: one colour, synced through Komga - no notes yet). Kept in the user's
 /// Komga client-settings store, a key per book, so the tablet and the PC share them; a copy on the device, so they
 /// show at once and offline. A change made here wins: it's saved on the device and sent, and sent again every minute
@@ -120,7 +127,8 @@ class BookHighlights extends ChangeNotifier {
   }
 
   void _set(List<Highlight> next) {
-    items = List.unmodifiable(next..sort((a, b) =>
+    // (a copy sorted: [_decode]'s empty list can't be - a damaged saved value threw - audit, 2026-10-11)
+    items = List.unmodifiable([...next]..sort((a, b) =>
         a.chapter != b.chapter ? a.chapter.compareTo(b.chapter) : a.start - b.start));
     if (!_disposed) notifyListeners();
   }

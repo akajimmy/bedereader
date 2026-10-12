@@ -155,7 +155,11 @@ void main() {
     expect(saved.single['e'] - saved.single['s'], 3, reason: 'three characters of the chapter');
     expect(selected(tester), isNull, reason: 'the selection let go of');
 
-    // in Contents
+    // in Contents - from another page, so going to the highlight is seen (from its own page the check couldn't fail -
+    // audit, 2026-10-11)
+    await tester.tapAt(const Offset(760, 600)); // a page on
+    await settle(tester);
+    expect(onFirstPage(tester), isFalse);
     await tester.tapAt(const Offset(400, 600)); // the controls
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await tester.tap(find.byTooltip('Contents'));

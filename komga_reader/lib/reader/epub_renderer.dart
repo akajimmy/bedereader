@@ -340,6 +340,7 @@ class EpubRenderer extends Renderer {
     // shown (found on the tablet). Laid out again before the last layout was counted: its anchor still stands.
     if (_ready && !_end) _anchor ??= b.positionOf(_chapter, _page);
     b.setLayout(theme, size);
+    _laidIn = AppSettings.instance.epub;
     _ready = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _count());
   }
@@ -750,7 +751,7 @@ class EpubRenderer extends Renderer {
     final toc = b.info.toc;
     TocEntry? picked;
     Highlight? pickedMark;
-    final marks = _highlights?.items ?? const <Highlight>[];
+    final marks = inReadingOrder(_highlights?.items ?? const [], b.info.spine);
     // the comic reader's panel look (user, 2026-10-06): a side sheet on a wide screen, a bottom sheet on a narrow one
     await showReaderPanelFrame(host.context, title: 'Contents', children: (c, _) => [
           if (toc.isEmpty) const Padding(padding: EdgeInsets.all(14), child: Text('This book has no table of contents')),
@@ -1246,7 +1247,10 @@ class EpubRenderer extends Renderer {
   }
 
   /// The page's sheet now (null: the page fills the screen).
-  Rect? get _sheet => sheetRect(AppSettings.instance.epub, _size);
+  // the sheet of the settings the book is laid out in: while new ones settle ([settleDelay]) the page is drawn as it
+  // was, and the sheet with it (it took the new margins at once, the text running over its edge - audit, 2026-10-11)
+  Rect? get _sheet => sheetRect(_laidIn ?? AppSettings.instance.epub, _size);
+  EpubPrefs? _laidIn;
 
   /// A page's paper with [child] on it: the whole area, or the sheet - with the surround round it when [surround] (a
   /// page in the page view leaves that to the one still surround under them all).
