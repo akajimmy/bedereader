@@ -994,6 +994,26 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets("a note whose id is on an empty anchor before it, every note in one div (calibre's - Hogfather): only "
+      'that note shows, not them all (tablet test, 2026-10-11)', (tester) async {
+    await open(tester, MemorySource({
+      'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#f2">*</a> is a note.</p></body></html>',
+      'notes.xhtml': '<html><body><div><p>Footnotes</p>'
+          '<a id="f1"></a><p><a href="c1.xhtml"><sup>*</sup></a><span>The first note.</span></p>'
+          '<a id="f2"></a><p><a href="c1.xhtml"><sup>*</sup></a><span>The second note.</span></p>'
+          '<a id="f3"></a><p><a href="c1.xhtml"><sup>*</sup></a><span>The third note.</span></p>'
+          '</div></body></html>',
+    }, const EpubInfo(spine: ['c1.xhtml', 'notes.xhtml'], toc: [])));
+    final drawn = tester.widget<CustomPaint>(find.descendant(of: find.byType(PageView), matching: find.byWidgetPredicate(
+        (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter')));
+    final marker = ((drawn.painter as dynamic).page as EpubPage).links.single;
+    await tester.tapAt(tester.getTopLeft(find.byType(PageView)) + marker.rect.center);
+    await settle(tester);
+    expect(find.text('The second note.'), findsOneWidget, reason: 'that note, alone');
+    await tester.tap(find.text('Close'));
+    await settle(tester);
+  });
+
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
     await open(tester, MemorySource({
       'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',

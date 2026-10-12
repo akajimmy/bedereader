@@ -730,6 +730,12 @@ class EpubRenderer extends Renderer {
       }
       var el = find(root);
       if (el == null) return null;
+      // an empty anchor before the note (calibre's <a id="filepos..."></a><p>the note</p>, every note in one div -
+      // Hogfather showed all its notes for any marker - tablet test, 2026-10-11): the note is the paragraph after it
+      if (text0(el).trim().isEmpty && el.parent != null) {
+        final sibs = el.parent!.elements.toList();
+        el = sibs.skip(sibs.indexOf(el) + 1).firstWhere((s) => text0(s).trim().isNotEmpty, orElse: () => el!);
+      }
       // an anchor inside the note: the paragraph around it
       while (el!.parent != null && const {'a', 'span', 'sup'}.contains(el.name)) {
         el = el.parent;
