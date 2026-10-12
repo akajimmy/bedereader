@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBooks open sooner**: the book's own text size is measured on its first open and remembered, instead of
+  loading five chapters to measure it every time the book is opened.
+
 **New**
 - **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
   you'd go to, with its page number and chapter.

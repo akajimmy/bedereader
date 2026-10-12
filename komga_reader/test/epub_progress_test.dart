@@ -109,6 +109,10 @@ class _NeverCounted implements EpubCountStore {
   Future<EpubCounts?> load(String bookId, String layout) => Completer<EpubCounts?>().future;
   @override
   Future<void> save(String bookId, String layout, EpubCounts counts) async {}
+  @override
+  Future<(double, bool)?> loadTextSize(String bookId, String version) async => null;
+  @override
+  Future<void> saveTextSize(String bookId, String version, double size, bool bold) async {}
 }
 
 Map<String, dynamic> _saved(String href, double progression) =>
