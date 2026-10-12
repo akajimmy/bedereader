@@ -11,48 +11,52 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 - **eBook settings: Margins has a Book's step** - the book's own page margins, as a web browser shows them (a small
-  edge where the book sets none). Lines then run as long as the screen allows, and there's no sheet on a wide screen.
+  edge where the book sets none, and always room at the edge for a line-end hyphen). Lines then run as long as the
+  screen allows, and there's no sheet on a wide screen.
+- **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
+  you'd go to, with its page number and chapter.
 
 **Changed**
 - **eBooks open sooner**: the book's own text size is measured on its first open and remembered, instead of
-  loading five chapters to measure it every time the book is opened.
+  loading five chapters to measure it every time the book is opened. It's now judged from all of the book's body
+  text, not only its paragraphs.
 - **eBook settings: Paragraph spacing now decides the gaps between paragraphs, and the Paragraphs setting is
   gone.** Its choices are Book's (the book's own gaps), Default (no gap, as before), Small, Medium, Large and
   Extra large. A step sets the gap between paragraphs rather than adding to the book's; where the book keeps a
   gap (paragraphs it doesn't indent, under a picture, scene breaks), it's never made smaller. Indents are always the
   book's own - a chapter's first paragraph and the one after a scene break are indented when the book indents them.
-  (The old Paragraphs choice isn't carried over: everyone starts on Default.)
+  Paragraphs with a hanging indent count as indented, as first-line ones do. (The old Paragraphs choice isn't
+  carried over: everyone starts on Default.)
+- **eBooks: bold text is no longer taken for a title.** In books that write their paragraphs as plain blocks of
+  text (the Belgariad among them), a bold line opening a block used to be treated as a title; it's now a paragraph
+  like the others - only text set larger than the text around it counts as a title, a short bold list item or
+  quotation included. (The Belgariad's chapter titles now read as ordinary lines.)
 - **eBooks: pictures.** A picture drop cap is drawn at its own size (it used to be enlarged to two lines of text). A
   picture that doesn't fit in the space left on a page goes to the next page at its size instead of being shrunk into
   the gap; only one taller than a whole page is shrunk. Black-and-white ornaments on a white ground are drawn in the
   page's colours more often (Hitchhiker's and Homeland's drop caps, The Dispossessed's chapter numbers, A Dance with
-  Dragons' chapter bands were white boxes on a dark page); maps and illustrations are left as they are.
+  Dragons' chapter bands were white boxes on a dark page), and those don't open full screen with a tap; maps and
+  illustrations are left as they are.
 - **eBooks: superscript is raised small text**, as a web browser draws it: footnote numbers, the "st" of 1st and
   note letters keep their own characters (they used to become superscript digits, and letters only got smaller).
   Note markers are raised small text too, still bold in the accent colour, instead of text-sized on the line; an
-  asterisk marker stays at its usual height. Copied text has the characters as written.
-
-**New**
-- **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
-  you'd go to, with its page number and chapter.
+  asterisk marker stays at its usual height. Copied text has the characters as written, and a selection or a
+  highlight on them is drawn where they are.
 
 **Fixed**
 - **eBooks, Page turn: Curl - a curl let go before it turned still counted as a page turn**: the page sprang back,
   but the place was saved as if it had turned, and on the last page the book could be marked read. A turn now counts
   only when it completes.
-- **eBooks, Paragraphs: Auto - the first-paragraph fix of build 103 went too far** in books whose ordinary
+- **eBooks: build 103's first-paragraph fix (Foundation's double gap) went too far** in books whose ordinary
   paragraphs are set flush and only special passages are indented (a letter, verse, an epigraph - the Brian Herbert
   and Kevin J. Anderson Dune books): those passages had lost the space above them. They keep it again; Foundation
-  and the like keep the fix.
+  and the like keep the fix. (It now applies with any Paragraph spacing step; the Paragraphs setting it was under is
+  gone, above.)
 - **eBooks: small pictures were tiny** (scene-break stars, chapter ornaments): pictures are now sized as a web browser
   sizes them - at the size the book gives, or a small one at its own size in points; big pictures still never get
   bigger than their own pixels.
-
-**Changed**
-- **eBooks: bold text is no longer taken for a title.** In books that write their paragraphs as plain blocks of
-  text (the Belgariad among them), a bold line opening a block used to be treated as a title; it's now a paragraph
-  like the others - only text set larger than the text around it counts as a title. (The Belgariad's chapter titles
-  now read as ordinary lines.)
+- **eBooks, highlights: the list in Contents is in reading order** (chapter 10's came before chapter 2's), and damaged
+  saved highlights no longer stop a book's highlights loading.
 
 ## 1.3.0
 

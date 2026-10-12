@@ -365,13 +365,19 @@ void main() {
     expect(lay(small, 1), isNot(lay(plain, 1)), reason: 'without it, the small text lays out differently');
   });
 
-  test('Paragraph spacing: the space added between one paragraph and the next, in ems of the text', () {
+  test("Paragraph spacing's step: the gap between one paragraph and the next, in ems of the text; Book's: the book's "
+      'gaps alone', () {
     final blocks = ChapterReader(StyleSheet()..add('p { margin: 0 }'), (h) => h)
         .read(parseXhtml('<body><p>One.</p><p>Two.</p></body>'));
-    double second(double gap) =>
-        Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(blocks).single.textOrigins[1].dy;
+    double second(double gap, {bool step = true}) =>
+        Paginator(EpubTheme(paragraphGap: gap, ownParagraphs: step), const Size(400, 600), null)
+            .run(blocks)
+            .single
+            .textOrigins[1]
+            .dy;
     expect(second(1) - second(0), closeTo(19, 0.01), reason: '1 em at 19 px');
     expect(second(0.5) - second(0), closeTo(9.5, 0.01));
+    expect(second(1, step: false), second(0), reason: "Book's: no step");
   });
 
   test("Exile's page (user, build 73): a text-indent in pt is a small indent, not a third of the line; a border with "
@@ -516,8 +522,8 @@ void main() {
     expect((book[1].dy - book[0].dy) - (none[1].dy - none[0].dy), closeTo(19, 0.5));
   });
 
-  test("alignment and paragraphs set apart (user, 2026-10-07: \"Book's formatting\" in three): the reader's own "
-      "alignment keeps the book's paragraph gaps; the reader's paragraphs take them out whatever the alignment", () {
+  test("alignment and Paragraph spacing are apart: the reader's own alignment keeps the book's paragraph gaps; a "
+      'spacing step takes the usual one out whatever the alignment', () {
     const css = 'p { margin: 1em 0; text-indent: 1.5em }';
     List<Offset> lay(EpubTheme theme) => Paginator(theme, const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h)
@@ -529,15 +535,15 @@ void main() {
     final leftOnly = gap(lay(const EpubTheme(ownAlign: TextAlign.left)));
     final mineOnly = gap(lay(const EpubTheme(ownParagraphs: true)));
     expect(leftOnly, closeTo(book, 0.5), reason: "the alignment alone leaves the book's gaps");
-    expect(mineOnly, lessThan(book - 10), reason: "the reader's paragraphs take the usual gap out");
+    expect(mineOnly, lessThan(book - 10), reason: 'a spacing step takes the usual gap out');
     expect(const EpubTheme(ownAlign: TextAlign.left).bookFormatting, isFalse);
     expect(const EpubTheme(bookFormatting: false).ownAlign, TextAlign.justify, reason: 'the old switch: both');
     expect(const EpubTheme(bookFormatting: false).ownParagraphs, isTrue);
   });
 
-  test("the reader's paragraphs invent no indent (user, 2026-10-07: only where the book calls for one): a book that doesn't "
-      "indent its paragraphs keeps them unindented, with its gap between them - without either they ran together; "
-      "one that indents keeps its own amount, not the reader's", () {
+  test("with a spacing step no indent is invented (user, 2026-10-07: only where the book calls for one): a book that "
+      "doesn't indent its paragraphs keeps them unindented, with its gap between them - without either they ran "
+      "together; one that indents keeps its own amount", () {
     EpubPage page(String css) => Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add(css), (h) => h)
             .read(parseXhtml('<body><p>One.</p><p>Two.</p><p>Three.</p></body>')))
@@ -554,7 +560,7 @@ void main() {
   });
 
   test("a flush first paragraph followed by indented ones (Foundation's cotx1 then tx) has no more gap under it than "
-      'the others have between them (it had the old 1em gap on top of Paragraph spacing - twice the rest)', () {
+      'the others have between them (build 103 and before: its 1em gap kept as well - twice the rest)', () {
     const css = 'p { margin: 1em 0 } .first { text-indent: 0 } .tx { text-indent: 1em }';
     const src = '<body><p class="first">One.</p><p class="tx">Two.</p><p class="tx">Three.</p></body>';
     for (final gap in [0.0, 1.0]) {
@@ -653,8 +659,12 @@ void main() {
     expect(dune.cast<TextBlock>().every((b) => b.paragraph), isTrue);
     expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: shown at the reader's size");
     double second(double gap) =>
-        Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(dune).single.textOrigins[1].dy;
-    expect(second(1) - second(0), closeTo(19, 0.01), reason: 'Paragraph spacing: 1 em more');
+        Paginator(EpubTheme(paragraphGap: gap, ownParagraphs: true), const Size(400, 600), null)
+            .run(dune)
+            .single
+            .textOrigins[1]
+            .dy;
+    expect(second(1) - second(0), closeTo(19, 0.01), reason: "Paragraph spacing's step reaches it: 1 em");
     final others = read('.big { font-size: x-large } .b { font-weight: bold }',
         '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div>'
         '<div>They were nine days <p>a block</p></div></body>');

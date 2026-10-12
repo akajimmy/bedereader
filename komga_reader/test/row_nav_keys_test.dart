@@ -68,18 +68,26 @@ void main() {
         ListView(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))));
     await tester.pumpAndSettle();
     asInRelease();
-    final seen = <String>[];
-    Focus.of(tester.element(find.text('Literata'))).requestFocus();
+    // the rows by where their controls are on screen (not by what they're called: rows and steps get renamed and
+    // moved - audit, 2026-10-11: this test was edited twice in a day only for that)
+    final list = tester.getRect(find.byType(ListView));
+    final rows = {
+      for (final n in FocusManager.instance.rootScope.descendants)
+        if (n.canRequestFocus && list.contains(n.rect.center)) n.rect.top.roundToDouble(),
+    }.toList()
+      ..sort();
+    final seen = <double>[];
+    final first = rows.first;
+    FocusManager.instance.rootScope.descendants
+        .firstWhere((n) => n.canRequestFocus && n.rect.top.roundToDouble() == first && list.contains(n.rect.center))
+        .requestFocus();
     await tester.pumpAndSettle();
     for (var i = 0; i < 6; i++) {
-      seen.add(name(focus()));
+      seen.add(focus().rect.top.roundToDouble());
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
       await tester.pumpAndSettle();
     }
-    // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment opens on Book's)
-    // (each row named by its first button: Line spacing's is Compact since its five steps, 2026-10-08; Paragraph
-    // spacing's Book's since 2026-10-11, when the Paragraphs row went)
-    expect(seen, ['Literata', 'Smaller', 'Compact', "Book's", "Book's", "Book's"]); // Margins' too, since 2026-10-11
+    expect(seen, rows.take(6), reason: 'each Down the next row, none skipped');
   });
 
   // (the rows' order by screen position, not the focus tree's, is checked by settings_remote_test's walk of Library &
