@@ -27,6 +27,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   the gap; only one taller than a whole page is shrunk. Black-and-white ornaments on a white ground are drawn in the
   page's colours more often (Hitchhiker's and Homeland's drop caps, The Dispossessed's chapter numbers, A Dance with
   Dragons' chapter bands were white boxes on a dark page); maps and illustrations are left as they are.
+- **eBooks: superscript is raised small text**, as a web browser draws it: footnote numbers, the "st" of 1st and
+  note letters keep their own characters (they used to become superscript digits, and letters only got smaller).
+  Note markers are raised small text too, still bold in the accent colour, instead of text-sized on the line; an
+  asterisk marker stays at its usual height. Copied text has the characters as written.
 
 **New**
 - **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
