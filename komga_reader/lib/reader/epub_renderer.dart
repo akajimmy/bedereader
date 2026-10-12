@@ -235,8 +235,10 @@ class EpubRenderer extends Renderer {
         ..textSize = kept.$1
         ..textBold = kept.$2;
     } else {
-      await b.measureTextSize();
-      unawaited(EpubCountStore.instance.saveTextSize(id, version, b.textSize, b.textBold));
+      // kept only when every sampled chapter was read (one that failed - the network - is measured again next time)
+      if (await b.measureTextSize()) {
+        unawaited(EpubCountStore.instance.saveTextSize(id, version, b.textSize, b.textBold));
+      }
     }
     _progress = progress;
     return _Prepared(b, chapter, fraction, known);

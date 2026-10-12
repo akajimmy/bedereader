@@ -24,6 +24,21 @@ import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
 /// A Komga that knows the book after this one ([next]; null: the series' last) and serves a 1-pixel poster.
+/// A book whose chapter [fails] can't be read the first time it's asked for (the network, for a moment).
+class _FailsOnce extends MemorySource {
+  _FailsOnce(super.files, super.infoValue, {required this.fails});
+  final String fails;
+  bool _failed = false;
+  @override
+  Future<Uint8List> resource(String path) {
+    if (path == fails && !_failed) {
+      _failed = true;
+      return Future.error(StateError('offline'));
+    }
+    return super.resource(path);
+  }
+}
+
 class EndKomga extends TestKomga with EmptyClientSettings {
   EndKomga(this.next);
   final Map<String, dynamic>? next;
@@ -884,6 +899,19 @@ void main() {
     await open(tester, twoChapters());
     expect(store.kept.keys.single, contains('/0.5/'), reason: 'laid out with the kept size, not a fresh measurement');
     expect(store.textSizes[key], (0.5, false), reason: 'not measured again');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets("a text size measured with a chapter that couldn't be read (the network, for a moment) isn't kept: the "
+      'next open measures again (audit, 2026-10-11: the fallback size was kept until the next app build)',
+      (tester) async {
+    final store = EpubCountStore.instance as MemoryCountStore;
+    final book = twoChapters();
+    await open(tester, _FailsOnce(book.files, book.infoValue, fails: 'c2.xhtml'));
+    expect(store.textSizes, isEmpty, reason: 'measured from fewer chapters: not kept');
+    await tester.pumpWidget(const SizedBox());
+    await open(tester, twoChapters());
+    expect(store.textSizes, hasLength(1), reason: 'every chapter read this time: kept');
     await tester.pumpWidget(const SizedBox());
   });
 

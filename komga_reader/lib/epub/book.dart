@@ -84,8 +84,9 @@ class EpubBook extends ChangeNotifier {
   bool textBold = false;
 
   /// Finds [textSize] from up to [samples] chapters spread through the book (the front and back matter left out where
-  /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped.
-  Future<void> measureTextSize({int samples = 5}) async {
+  /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped; false then (the
+  /// size is from fewer chapters, or none: not to be kept - audit, 2026-10-11).
+  Future<bool> measureTextSize({int samples = 5}) async {
     final n = _chapters.length;
     final picks = n <= samples
         ? [for (var i = 0; i < n; i++) i]
@@ -104,6 +105,7 @@ class EpubBook extends ChangeNotifier {
     textSize = bookTextSize(sampled);
     textBold = bookTextBold(sampled);
     EpubTrace.instance.log('book text size $textSize (from chapters $picks)');
+    return sampled.length == picks.length;
   }
 
   int get chapterCount => _chapters.length;
