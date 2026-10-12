@@ -267,6 +267,35 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets("Windows: a page turned with a key hides the mouse pointer; it's back as soon as the mouse moves; a turn "
+      'with the mouse leaves it (user, 2026-10-12)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await openReader(tester);
+      bool hidden() => tester.widget<MouseRegion>(find.byKey(const ValueKey('reader-cursor'))).cursor ==
+          SystemMouseCursors.none;
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(300, 300));
+      await mouse.moveTo(const Offset(310, 300));
+      await tester.pump();
+      expect(hidden(), isFalse);
+      await key(tester, LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(hidden(), isTrue, reason: 'turned with a key: the pointer out of the way');
+      await mouse.moveTo(const Offset(320, 310));
+      await tester.pump();
+      expect(hidden(), isFalse, reason: 'the mouse moved: back');
+      // a turn with the mouse (a click on the right) leaves it
+      final w = tester.getSize(find.byType(ReaderScreen)).width;
+      await tester.tapAt(Offset(w - 20, 300), kind: PointerDeviceKind.mouse);
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(hidden(), isFalse);
+      await mouse.removePointer();
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('a right-click shows and hides the controls however far the mouse moves while the button is down (past '
       '18 px the click was lost - user, build 108)', (tester) async {
     await openReader(tester);
