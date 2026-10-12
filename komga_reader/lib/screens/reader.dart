@@ -700,6 +700,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       // Shift+Space goes back, whatever Space is set to do
       if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
         if (!repeatWhileSliding) _r.back();
+        _keyTurned();
         return KeyEventResult.handled;
       }
       // on the end card: Up / Down move between Next book and Close, OK presses the one the remote is on (the EPUB
@@ -720,8 +721,10 @@ class _ReaderScreenState extends State<ReaderScreen>
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
           if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward();
+          _keyTurned();
         case ReaderAction.previous:
           if (!repeatWhileSliding) _r.back();
+          _keyTurned();
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
@@ -756,102 +759,121 @@ class _ReaderScreenState extends State<ReaderScreen>
         // the reader has no text box: a keyboard coming up (Search's, under it, as Back closes the book) leaves the
         // page alone - it laid the book out again for the smaller space (tablet, build 99)
         resizeToAvoidBottomInset: false,
-        body: Focus(
-          focusNode: _keys,
-          autofocus: true,
-          onKeyEvent: _onKey,
-          child: _openError != null && (r == null || !r.opened)
-              ? Center(child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
-                      style: TextStyle(color: r?.ink(0.7) ?? Colors.white70),
-                      action: Row(mainAxisSize: MainAxisSize.min, children: [
-                        // a book with no pages: retrying won't help - on to the next book instead
-                        if (_openError!.$2 is NoPages)
-                          TextButton(autofocus: true, onPressed: () => _skipPast(_book), child: const Text('Next book'))
-                        else
-                          TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
-                        TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
-                      ])),
-                ))
-              : r == null || !r.opened
-              ? const Center(child: CircularProgressIndicator())
-              : !r.ready
-              // being made ready (an EPUB laid out and counted): its own screen, with Close
-              ? Stack(children: [
-                  Positioned.fill(child: r.waiting(context)),
-                  if (_loading)
-                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
-                        child: const Center(child: CircularProgressIndicator())))),
-                ])
-              : Stack(children: [
-                  ...r.buildPages(context),
-                  // the page note, "12 / 36": always, or for a moment after a turn (Page corner - each kind its
-                  // own setting, the same corner: bottom right, user 2026-10-07) - not over the controls (they have
-                  // the count) or the end card
-                  if (_kindPrefs.pageNote != PageNote.off)
-                  Positioned(
-                    right: 14,
-                    bottom: 14,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: (_flash || _kindPrefs.pageNote == PageNote.always) && !_menu && _index <= _last
-                            ? 1 : 0,
-                        duration: const Duration(milliseconds: 250),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65),
-                              borderRadius: BorderRadius.circular(12)),
-                          child: Text(r.corner(_index.clamp(0, _last)), key: const ValueKey('page-corner'),
-                              style: const TextStyle(color: Colors.white, fontSize: 13)),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top bar)
-                  if (!_menu && _kindPrefs.clock == ShowWhen.always)
+        // the mouse pointer hidden after a page turned with a key (or the remote) - back as soon as the mouse moves
+        // (user, 2026-10-12)
+        body: MouseRegion(
+          key: const ValueKey('reader-cursor'),
+          cursor: _cursorHidden ? SystemMouseCursors.none : MouseCursor.defer,
+          onHover: (_) {
+            if (_cursorHidden) setState(() => _cursorHidden = false);
+          },
+          child: Focus(
+            focusNode: _keys,
+            autofocus: true,
+            onKeyEvent: _onKey,
+            child: _openError != null && (r == null || !r.opened)
+                ? Center(child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
+                    child: ErrorText(_openError!.$1, _openError!.$2, stack: _openError!.$3, centre: true,
+                        style: TextStyle(color: r?.ink(0.7) ?? Colors.white70),
+                        action: Row(mainAxisSize: MainAxisSize.min, children: [
+                          // a book with no pages: retrying won't help - on to the next book instead
+                          if (_openError!.$2 is NoPages)
+                            TextButton(autofocus: true, onPressed: () => _skipPast(_book),
+                                child: const Text('Next book'))
+                          else
+                            TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
+                          TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+                        ])),
+                  ))
+                : r == null || !r.opened
+                ? const Center(child: CircularProgressIndicator())
+                : !r.ready
+                // being made ready (an EPUB laid out and counted): its own screen, with Close
+                ? Stack(children: [
+                    Positioned.fill(child: r.waiting(context)),
+                    if (_loading)
+                      Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
+                          child: const Center(child: CircularProgressIndicator())))),
+                  ])
+                : Stack(children: [
+                    ...r.buildPages(context),
+                    // the page note, "12 / 36": always, or for a moment after a turn (Page corner - each kind its
+                    // own setting, the same corner: bottom right, user 2026-10-07) - not over the controls (they have
+                    // the count) or the end card
+                    if (_kindPrefs.pageNote != PageNote.off)
                     Positioned(
-                      top: 8,
-                      right: 10,
+                      right: 14,
+                      bottom: 14,
                       child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55),
-                              borderRadius: BorderRadius.circular(10)),
-                          child: const ReaderClock(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
-                  if (!_menu && _kindPrefs.progressBar && _index <= _last)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: 3,
-                      child: IgnorePointer(
-                        child: Directionality(
-                          textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, // fills from the reading side
-                          child: LinearProgressIndicator(
-                            key: const ValueKey('reading-progress'),
-                            value: (_index + 1) / _count,
-                            minHeight: 3,
-                            backgroundColor: r.ink(0.12),
-                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                        child: AnimatedOpacity(
+                          opacity: (_flash || _kindPrefs.pageNote == PageNote.always) && !_menu && _index <= _last
+                              ? 1 : 0,
+                          duration: const Duration(milliseconds: 250),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65),
+                                borderRadius: BorderRadius.circular(12)),
+                            child: Text(r.corner(_index.clamp(0, _last)), key: const ValueKey('page-corner'),
+                                style: const TextStyle(color: Colors.white, fontSize: 13)),
                           ),
                         ),
                       ),
                     ),
-                  if (_menu) ..._controls(),
-                  // another book loading: this one's pages stay underneath (it's still the current book until the new
-                  // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
-                  if (_loading)
-                    Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
-                        child: const Center(child: CircularProgressIndicator())))),
-                ]),
+                    // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top
+                    // bar)
+                    if (!_menu && _kindPrefs.clock == ShowWhen.always)
+                      Positioned(
+                        top: 8,
+                        right: 10,
+                        child: IgnorePointer(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(10)),
+                            child: const ReaderClock(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
+                    if (!_menu && _kindPrefs.progressBar && _index <= _last)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height: 3,
+                        child: IgnorePointer(
+                          child: Directionality(
+                            textDirection: _rtl ? TextDirection.rtl : TextDirection.ltr, // fills from the reading side
+                            child: LinearProgressIndicator(
+                              key: const ValueKey('reading-progress'),
+                              value: (_index + 1) / _count,
+                              minHeight: 3,
+                              backgroundColor: r.ink(0.12),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_menu) ..._controls(),
+                    // another book loading: this one's pages stay underneath (it's still the current book until the new
+                    // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
+                    if (_loading)
+                      Positioned.fill(child: AbsorbPointer(child: ColoredBox(color: bg,
+                          child: const Center(child: CircularProgressIndicator())))),
+                  ]),
+          ),
         ),
       ),
     );
+  }
+
+  bool _cursorHidden = false;
+
+  /// A page turned with a key (or the remote), not the mouse: on a desktop the mouse pointer goes out of the way
+  /// until the mouse moves (user, 2026-10-12).
+  void _keyTurned() {
+    if (isDesktop && !_cursorHidden && mounted) setState(() => _cursorHidden = true);
   }
 
   /// The book after this one (in the read list it was opened from, else the series) - looked up once per book, when
