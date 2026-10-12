@@ -490,7 +490,9 @@ class EpubRenderer extends Renderer {
     if (!_end) _prefetchAround();
     _changed();
     if (_ownJump) return; // the renderer moved the page itself (a layout, a count change): not a turn
-    host.pageChanged(i, curling: false);
+    // a curl moves the page view as it starts (and back, let go early): it counts once it completes ([CurlTurns.done])
+    // - counted at once, a curl let go on the last page marked the book read (audit, 2026-10-11)
+    host.pageChanged(i, curling: _curlMade?.active ?? false);
   }
 
   bool _ownJump = false;
@@ -527,7 +529,9 @@ class EpubRenderer extends Renderer {
       if (_pc.hasClients) _pc.jumpToPage(p);
     },
     pageRect: () => _sheet ?? Offset.zero & _size,
-    done: ({required turned}) {},
+    done: ({required turned}) {
+      if (turned && _pc.hasClients) host.turned((_pc.page ?? 0).round());
+    },
     pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
   );
   static const _turnCurve = Curves.easeInOut;
