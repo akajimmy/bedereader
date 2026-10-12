@@ -151,7 +151,7 @@ void main() {
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    final saved = jsonDecode(server.written['komgareader.highlights.B1']!) as List;
+    final saved = jsonDecode(server.written['komgareader.highlights.b1']!) as List;
     expect(saved.single['t'], 'eel');
     expect(saved.single['e'] - saved.single['s'], 3, reason: 'three characters of the chapter');
     expect(selected(tester), isNull, reason: 'the selection let go of');
@@ -179,7 +179,7 @@ void main() {
     await tester.tap(find.text('Remove highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    expect(jsonDecode(server.written['komgareader.highlights.B1']!), isEmpty);
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!), isEmpty);
     await tester.tapAt(at(tester, 'eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.text('Remove highlight'), findsNothing, reason: 'gone: a tap is a tap again');
@@ -305,8 +305,8 @@ void main() {
       expect(word, isNotNull);
       await press(tester, find.text('Highlight'), kind: PointerDeviceKind.mouse);
       await settle(tester);
-      expect(server.written['komgareader.highlights.B1'], isNotNull, reason: 'the click highlighted it');
-      expect((jsonDecode(server.written['komgareader.highlights.B1']!) as List).single['t'], word);
+      expect(server.written['komgareader.highlights.b1'], isNotNull, reason: 'the click highlighted it');
+      expect((jsonDecode(server.written['komgareader.highlights.b1']!) as List).single['t'], word);
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -350,7 +350,7 @@ void main() {
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    expect(jsonDecode(server.written['komgareader.highlights.B1']!) as List, hasLength(1));
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, hasLength(1));
     await tester.longPressAt(at(tester, 'eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.text('Remove highlight'), findsOneWidget);
@@ -358,7 +358,7 @@ void main() {
     await tester.tap(find.text('Remove highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    expect(jsonDecode(server.written['komgareader.highlights.B1']!) as List, isEmpty);
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, isEmpty);
   });
 
   testWidgets('a highlight is drawn in the app\'s accent colour (it was a fixed yellow)', (tester) async {

@@ -49,7 +49,10 @@ class BookHighlights extends ChangeNotifier {
   final Komga api;
   final String bookId;
 
-  String get komgaKey => 'komgareader.highlights.$bookId';
+  /// Komga takes only lowercase keys ("a valid lowercase namespace string") - a book's id has capitals: with them in
+  /// the key every save was turned down (error 400 - user's error log, build 106), so highlights never left the device
+  /// they were made on.
+  String get komgaKey => 'komgareader.highlights.${bookId.toLowerCase()}';
   String get _local => 'highlights.$bookId';
   String get _dirty => 'highlights.$bookId.unsent';
 
