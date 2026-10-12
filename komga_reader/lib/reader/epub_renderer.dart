@@ -655,9 +655,11 @@ class EpubRenderer extends Renderer {
         }
       }
     }
-    // the middle (the controls' third - the sides turn pages at once, as always): a double tap or double click
-    // selects the word (user, 2026-10-12) - so one tap there shows the controls once a double tap is ruled out
-    if (!host.controlsUp && x >= 0.33 && x <= 0.67) {
+    // the middle (the controls' third - the sides turn pages at once, as always): a double click selects the word
+    // (user, 2026-10-12) - so one click there shows the controls once a double click is ruled out. The mouse only: on
+    // a touch screen a word is a long press, and a tap there opens the controls at once (user, build 107: "the
+    // single-word shortcut on touch should be tap and hold")
+    if (!host.controlsUp && x >= 0.33 && x <= 0.67 && d.kind == PointerDeviceKind.mouse) {
       final first = _firstTap;
       _firstTapTimer?.cancel();
       _firstTap = null;
