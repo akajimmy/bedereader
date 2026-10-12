@@ -109,9 +109,6 @@ class EpubLink {
   final String text;
 }
 
-/// Superscript digits as their own characters (Flutter can't raise a baseline): footnote numbers, "1st".
-String superscript(String s) => s.replaceAllMapped(RegExp('[0-9]'), (m) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[int.parse(m[0]!)]);
-
 sealed class Block {
   double marginTop = 0, marginBottom = 0;
   double wrapTop = 0, wrapBottom = 0; // the part of those from wrappers round the block (kept by own formatting)
@@ -285,13 +282,7 @@ class ChapterReader {
         case XText(:final text):
           var t = fixC1(text).replaceAll(RegExp(r'[\s ]+'), ' ');
           if (t.trim().isEmpty && _cur == null) break; // whitespace between blocks
-          var style = inh;
-          if (inh.sup) {
-            // digits as superscript characters; anything else (the "st" of 1st) just smaller
-            t = superscript(t);
-            if (RegExp('[^⁰¹²³⁴⁵⁶⁷⁸⁹*†‡§ ]').hasMatch(t)) style = inh.copy(size: inh.size * 0.7);
-          }
-          _para(align, indent).runs.add(TextRun(t, style));
+          _para(align, indent).runs.add(TextRun(t, inh));
         case XElement():
           _element(n, inh, align, indent);
       }
@@ -327,7 +318,9 @@ class ChapterReader {
     }
     if (fw == 'normal' || (int.tryParse(fw ?? '') ?? 1000) < 600) st = st.copy(bold: false);
     if ((d['font-variant'] ?? '').contains('small-caps')) st = st.copy(smallCaps: true);
-    if (e.name == 'sup' || d['vertical-align'] == 'super') st = st.copy(sup: true);
+    // superscript: raised ([Paginator._painter]), and smaller unless the book sizes it (user, 2026-10-11: the
+    // original characters, smaller and raised - they were swapped for superscript digits)
+    if (e.name == 'sup' || d['vertical-align'] == 'super') st = st.copy(sup: true, size: fs == null ? st.size * 0.75 : null);
     if (e.name == 'sub' || d['vertical-align'] == 'sub') st = st.copy(size: st.size * 0.7);
     final href = e.name == 'a' ? e.attr('href') : null;
     if (href != null && href.isNotEmpty) {
@@ -572,9 +565,14 @@ sealed class Piece {
 /// the hyphen (found on the tablet, 2026-10-06), so they're drawn here - hanging just past the line's end, into the
 /// margin, as fine typesetting does.
 class _Laid {
-  _Laid(this.tp, this.hyphen, this.base);
+  _Laid(this.tp, this.hyphen, this.base, {this.raised, this.raise = 0});
   final TextPainter tp;
   final TextPainter hyphen;
+
+  /// Superscript and note markers: [tp] with only them showing (in [tp] they're clear), drawn [raise] higher -
+  /// Flutter can't raise text off the line, so the line keeps their room and this draws them.
+  final TextPainter? raised;
+  final double raise;
   final List<Offset> marks = []; // painter coordinates: the hyphen's top-left
   final int base; // the chapter position of the painter's first character
   final List<(Rect, String, String)> links = []; // painter coordinates, where to, the link's text
@@ -686,6 +684,13 @@ class _TextPiece extends Piece {
       if (shows(m)) laid.hyphen.paint(c, Offset(at.dx + m.dx, at.dy - from + m.dy));
     }
     c.restore();
+    final up = laid.raised;
+    if (up != null) {
+      c.save();
+      c.clipRect(Rect.fromLTWH(at.dx - 2, at.dy - laid.raise, tp.width + 4, to - from)); // this piece's lines, raised
+      up.paint(c, Offset(at.dx, at.dy - from - laid.raise));
+      c.restore();
+    }
   }
 }
 
@@ -781,6 +786,16 @@ class EpubPage {
   @visibleForTesting
   int get hyphensShown => [for (final p in pieces) if (p is _TextPiece) p.laid.marks.where(p.shows).length]
       .fold(0, (a, b) => a + b);
+
+  /// The raised text on the page (superscript, note markers): each run's text, its size, and how far above the
+  /// line it's drawn (tests).
+  @visibleForTesting
+  List<(String, double, double)> get raisedText => [
+        for (final p in pieces)
+          if (p is _TextPiece && p.laid.raised != null)
+            for (final s in (p.laid.raised!.text! as TextSpan).children!.whereType<TextSpan>())
+              if (s.style?.color?.a != 0 && s.text!.trim().isNotEmpty) (s.text!, s.style!.fontSize!, p.laid.raise),
+      ];
 
   /// Where each picture is drawn on the page (tests).
   @visibleForTesting
@@ -1201,15 +1216,26 @@ class Paginator {
   /// [base]: the chapter position of [runs]' first character (default: the block's start).
   _Laid _painter(TextBlock b, List<TextRun> runs, double width,
       {bool indent = true, bool prepared = false, bool hyphenate = true, int? base}) {
-    final spans = <InlineSpan>[];
+    // superscript (a <sup>, vertical-align: super) and note markers: raised small text, in any font, as a browser draws
+    // them (user, 2026-10-11: the original characters, not superscript digits; markers no longer text-sized on the
+    // line). In [spans] they're clear - keeping their room in the line, and its height - and [shadow], the same text
+    // with only them showing, is drawn a third of the text's size higher ([_Laid.raised]).
+    final spans = <InlineSpan>[], shadow = <InlineSpan>[];
+    var raised = false;
+    const clear = Color(0x00000000);
+    // the text's size here: the first plain run's (a marker in a <sup> is sized from the text, not the <sup>)
+    final plainRun = runs.where((r) => r.style.link == null && !r.style.sup && r.text.trim().isNotEmpty).firstOrNull;
+    final textSize = theme.fontSize * (plainRun?.style.size ?? 1) / baseSize;
     final ind = indent && _indent > 0 && _align != TextAlign.center;
     if (ind) {
-      spans.add(const WidgetSpan(child: SizedBox.shrink(), alignment: PlaceholderAlignment.baseline,
-          baseline: TextBaseline.alphabetic));
+      for (final list in [spans, shadow]) {
+        list.add(const WidgetSpan(child: SizedBox.shrink(), alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic));
+      }
     }
     var lead = true;
     var at = ind ? 1 : 0; // painter offset (the indent's placeholder is one character)
-    final linkRanges = <(int, int, String, String)>[];
+    final linkRanges = <(int, int, String, String, bool)>[];
     // headings aren't hyphenated ("DEMOS-THENES" - Ender's Game)
     final hyphens = hyphenate && !prepared && hyphenator != null && theme.hyphenate && !isHeading(b);
     // a note marker is a link in running text: a block that is all link (Ender's chapter number "8", a link back to
@@ -1224,48 +1250,58 @@ class Paginator {
       }
       if (hyphens) t = hyphenator!.apply(t);
       final link = r.style.link;
+      final TextStyle style;
+      final bool up;
       if (link != null && running && noteMarker.hasMatch(t)) {
-        // a note marker: raised, bold, in the link colour - a plain "*" in the text colour went unseen (user,
-        // 2026-10-06: "i didn't see any in hogfather or sourcery")
-        // Sizes from the text's, not the book's <sup> (superscript digits are small already - at a <sup>'s size
-        // they were specks); a lone * or † is a small glyph, drawn larger. The line no taller either way.
-        t = superscript(t);
-        final grow = RegExp(r'[0-9⁰¹²³⁴⁵⁶⁷⁸⁹\[]').hasMatch(t) ? 1.15 : 1.4;
-        final size = theme.fontSize * math.max(r.style.size / baseSize, 0.9) * grow;
-        spans.add(TextSpan(text: t, style: _style(r.style).copyWith(color: _linkColour, fontWeight: FontWeight.w700,
-            fontVariations: [const FontVariation('wght', 700)], fontSize: size,
-            height: theme.lineHeight * theme.fontSize / size)));
+        // a note marker: raised small text, bold, in the link colour - a plain "*" in the text colour went unseen
+        // (user, 2026-10-06: "i didn't see any in hogfather or sourcery"). A number at three quarters of the text's
+        // size, as a <sup>; a *, † or § a little bigger. Asterisks aren't raised: the glyph is a raised mark already,
+        // and lifted again it floated above the capitals (Small Gods, 2026-10-11).
+        final size = textSize * (RegExp(r'[0-9⁰¹²³⁴⁵⁶⁷⁸⁹]').hasMatch(t) ? 0.75 : 0.9);
+        style = _style(r.style).copyWith(color: _linkColour, fontWeight: FontWeight.w700,
+            fontVariations: [const FontVariation('wght', 700)], fontSize: size);
+        up = !RegExp(r'^[\s\[\]()*]+$').hasMatch(t);
       } else {
-        spans.add(TextSpan(text: t, style: _style(r.style)));
+        style = _style(r.style);
+        up = r.style.sup;
       }
+      spans.add(TextSpan(text: t, style: up ? style.copyWith(color: clear) : style));
+      shadow.add(TextSpan(text: t, style: up ? style : style.copyWith(color: clear)));
+      raised |= up && t.trim().isNotEmpty;
       if (link != null && t.trim().isNotEmpty) {
-        linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim()));
+        linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim(), up));
       }
       at += t.length;
     }
-    final tp = TextPainter(
-      text: TextSpan(children: spans, style: _style(const InlineStyle())),
-      textAlign: _align,
-      textDirection: TextDirection.ltr,
-    );
-    if (ind) {
-      tp.setPlaceholderDimensions([
-        PlaceholderDimensions(size: Size(_indent * _bookEm, 0), alignment: PlaceholderAlignment.baseline,
-            baseline: TextBaseline.alphabetic, baselineOffset: 0),
-      ]);
+    TextPainter lay(List<InlineSpan> spans) {
+      final tp = TextPainter(
+        text: TextSpan(children: spans, style: _style(const InlineStyle())),
+        textAlign: _align,
+        textDirection: TextDirection.ltr,
+      );
+      if (ind) {
+        tp.setPlaceholderDimensions([
+          PlaceholderDimensions(size: Size(_indent * _bookEm, 0), alignment: PlaceholderAlignment.baseline,
+              baseline: TextBaseline.alphabetic, baselineOffset: 0),
+        ]);
+      }
+      // the full width, not the longest line's: Flutter shrinks a painter to its longest line otherwise, and
+      // right-aligned or centred lines lined up on that, drawn from the left margin (Homeland's list of other books -
+      // user, build 70). (A table cell measured at no limit keeps its own width.)
+      tp.layout(minWidth: width.isFinite ? width : 0, maxWidth: width);
+      _made.add(tp);
+      return tp;
     }
-    // the full width, not the longest line's: Flutter shrinks a painter to its longest line otherwise, and right-aligned
-    // or centred lines lined up on that, drawn from the left margin (Homeland's list of other books - user, build 70).
-    // (A table cell measured at no limit keeps its own width.)
-    tp.layout(minWidth: width.isFinite ? width : 0, maxWidth: width);
-    _made.add(tp);
+
+    final tp = lay(spans);
     final hyphen = _hyphen;
-    final laid = _Laid(tp, hyphen, base ?? b.start)..block = b;
-    for (final (s, e, href, text) in linkRanges) {
+    final raise = textSize / 3;
+    final laid = _Laid(tp, hyphen, base ?? b.start, raised: raised ? lay(shadow) : null, raise: raise)..block = b;
+    for (final (s, e, href, text, up) in linkRanges) {
       // one tap area per line the link is on (justified lines give a box per word)
       final lines = <double, Rect>{};
       for (final box in tp.getBoxesForSelection(TextSelection(baseOffset: s, extentOffset: e))) {
-        final r = box.toRect();
+        final r = box.toRect().translate(0, up ? -raise : 0); // (where a raised marker is drawn)
         final key = r.top.roundToDouble();
         lines[key] = lines[key]?.expandToInclude(r) ?? r;
       }

@@ -175,7 +175,7 @@ void main() {
   });
 
   test("note markers (Hogfather's *, Snuff's [**], a number) are told from other links (a contents page's INDEX, "
-      'the "th" of 50th), and drawn bigger without making their line taller', () {
+      'the "th" of 50th), and drawn raised and small without making their line taller', () {
     for (final m in ['*', '**', '[**]', '†', '‡', '31', '³¹', '(7)', ' 12 ']) {
       expect(Paginator.noteMarker.hasMatch(m), isTrue, reason: m);
     }
@@ -188,21 +188,35 @@ void main() {
     List<double> lines(EpubPage p) => p.textOrigins.map((o) => o.dy).toList();
     final marked = page('<a href="n.html#f1">*</a>');
     expect(lines(marked), lines(page('*')), reason: 'no line taller');
-    final glyph = TextPainter(text: TextSpan(text: '*', style: TextStyle(fontSize: const EpubTheme().fontSize)),
-        textDirection: TextDirection.ltr)..layout();
-    final marker = marked.links.single.rect;
-    expect(marker.width, greaterThan(glyph.width * 1.2), reason: 'drawn bigger than the same "*" in the text: $marker, '
-        '${glyph.width} wide');
-    glyph.dispose();
+    expect(marked.raisedText, isEmpty, reason: 'an asterisk is a raised mark already: not lifted again');
+    final dagger = page('<a href="n.html#f1">†</a>');
+    final (text, size, raise) = dagger.raisedText.single;
+    expect(text, '†');
+    expect(size, lessThan(const EpubTheme().fontSize), reason: 'smaller than the text (it was drawn bigger)');
+    expect(raise, greaterThan(4), reason: 'raised off the line');
+    final numbered = page('<a href="n.html#f1"><sup>12</sup></a>');
+    expect(lines(numbered), lines(page('*')), reason: 'no line taller');
+    expect(numbered.raisedText.single.$1, '12', reason: 'its own digits, not superscript characters');
+    expect(numbered.raisedText.single.$2, closeTo(0.75 * const EpubTheme().fontSize, 0.01),
+        reason: "sized from the text, not the <sup> (it isn't made smaller twice)");
   });
 
-  test('superscripts: digits become superscript characters (footnote numbers); other text stays itself', () {
-    expect(superscript('12'), '¹²');
-    final b = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>x<sup>23</sup> 1<sup>st</sup></p></body>'))
+  test('superscript (user, 2026-10-11): the original characters, smaller and raised, in any font - a footnote '
+      'number and the "st" of 1st alike; a size the book gives its <sup> is kept', () {
+    final b = ChapterReader(StyleSheet()..add('.big { font-size: 0.9em }'), (h) => h)
+        .read(parseXhtml('<body><p>x<sup>23</sup> 1<sup>st</sup> y<sup class="big">4</sup></p></body>'))
         .single as TextBlock;
-    expect(b.runs.map((r) => r.text).join(), 'x²³ 1st');
-    expect(b.runs.firstWhere((r) => r.text == 'st').style.size, lessThan(1), reason: 'letters: smaller');
-    expect(b.runs.firstWhere((r) => r.text == '²³').style.size, 1, reason: 'superscript digits: no smaller still');
+    expect(b.runs.map((r) => r.text).join(), 'x23 1st y4', reason: 'the characters as written (copied as written)');
+    expect(b.runs.firstWhere((r) => r.text == '23').style.size, 0.75);
+    expect(b.runs.firstWhere((r) => r.text == '4').style.size, closeTo(0.9, 0.001));
+    final page = Paginator(const EpubTheme(), const Size(400, 600), null).run([b]).single;
+    expect(page.raisedText.map((r) => r.$1), ['23', 'st', '4']);
+    expect(page.raisedText.first.$3, closeTo(const EpubTheme().fontSize / 3, 0.01), reason: 'a third of the text size up');
+    final plain = Paginator(const EpubTheme(), const Size(400, 600), null)
+        .run(ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>x23 1st y4</p></body>')))
+        .single;
+    expect(plain.raisedText, isEmpty);
+    expect(page.textBottoms, plain.textBottoms, reason: 'no line taller');
   });
 
   test("tables: rows and cells (thead / tbody looked through), a cell's paragraphs become lines; laid out as a grid", () {
@@ -652,8 +666,8 @@ void main() {
         .single
         .links;
     expect(links('<body><h2><a href="contents.html#r10">8</a></h2></body>').single.text, '8');
-    expect(links('<body><p>The Watch<a href="notes.html#n8">8</a> arrived.</p></body>').single.text, '⁸',
-        reason: 'in running text: a marker, raised');
+    expect(links('<body><p>The Watch<a href="notes.html#n8">8</a> arrived.</p></body>').single.text, '8',
+        reason: 'in running text: a marker (raised as drawn, its text as written)');
   });
 
   test("a table's columns are never narrower than their longest word (the Three-Body Problem's list of characters "
