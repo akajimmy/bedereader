@@ -81,6 +81,9 @@ void main() {
     // signed in to another server: the app attaches downloads, loads the connection, starts the sync (main.dart)
     final b = noNetwork(OtherServer.new);
     await d.attach(b, root: root);
+    // (attaching asked B whether it has A's books - the same Komga moved? (Downloads.movedFrom) - it hasn't: A's
+    // downloads stay A's)
+    final askedOnAttach = b.asked.length;
     await conn.load(b);
     sync.start();
     await waitUntil(() => !sync.running, reason: "the sync on B's downloads");
@@ -93,7 +96,8 @@ void main() {
     expect(d.isDownloaded('B1'), isFalse, reason: "A's book isn't shown on B");
     expect(conn.hasDownloads, isFalse);
     expect(await OfflineKomga(d.store!).libraries(), isEmpty, reason: 'offline on B: nothing of A');
-    expect(b.asked, isEmpty, reason: "B's sync never saw A's unsent progress, so couldn't call it gone");
+    expect(b.asked, hasLength(askedOnAttach),
+        reason: "B's sync never saw A's unsent progress, so couldn't call it gone");
 
     await d.add([book('B2', 2)]); // B's own download
     await settle();
