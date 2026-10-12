@@ -730,6 +730,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           _r.zoomStep(true);
         case ReaderAction.zoomOut:
           _r.zoomStep(false);
+        case ReaderAction.openMenu: // not the reader's (no side menu here)
         case null:
           return KeyEventResult.ignored;
       }

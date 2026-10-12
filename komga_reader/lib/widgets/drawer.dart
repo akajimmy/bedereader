@@ -176,6 +176,44 @@ class DrawerEdge extends StatefulWidget {
 class DrawerEdgeState extends State<DrawerEdge> {
   FocusNode? _before;
 
+  // the screens with a side menu, as they're open (the last is the newest)
+  static final List<DrawerEdgeState> _open = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _open.add(this);
+  }
+
+  @override
+  void dispose() {
+    _open.remove(this);
+    super.dispose();
+  }
+
+  /// The "Open the side menu" key (Settings > Remote and keys - user, 2026-10-12): the side menu of the screen on top
+  /// opens, or closes if it's open. Nothing when no screen with one is on top (the reader, a dialog over it), when
+  /// the menu is pinned beside the page (it's there already), or while typing in a text box. True: done.
+  static bool toggleOnTop() {
+    final focus = FocusManager.instance.primaryFocus?.context;
+    if (focus != null && (focus.widget is EditableText || focus.findAncestorStateOfType<EditableTextState>() != null)) {
+      return false;
+    }
+    for (final s in _open.reversed) {
+      if (!s.mounted || !(ModalRoute.of(s.context)?.isCurrent ?? false)) continue;
+      final scaffold = s.widget.scaffoldKey.currentState;
+      if (scaffold == null || !scaffold.hasDrawer) return false;
+      if (scaffold.isDrawerOpen) {
+        scaffold.closeDrawer();
+      } else {
+        s._before = FocusManager.instance.primaryFocus; // focus goes back there when it closes ([restore])
+        scaffold.openDrawer();
+      }
+      return true;
+    }
+    return false;
+  }
+
   /// Call when the drawer closes.
   void restore() {
     final n = _before;
