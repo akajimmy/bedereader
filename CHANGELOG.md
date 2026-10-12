@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 110 - 2026-10-12
+
 **New**
 - **Windows: the mouse pointer hides while you read with the keyboard** - turning a page with a key (or a remote)
   hides it; it's back as soon as the mouse moves. Turning pages with the mouse leaves it where it is.
-
-## 1.3.0
 
 ### Build 109 - 2026-10-12
 
