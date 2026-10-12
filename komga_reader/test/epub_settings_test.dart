@@ -17,6 +17,7 @@ import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});

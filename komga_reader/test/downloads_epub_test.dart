@@ -58,6 +58,7 @@ class EpubLibrary extends LibraryServer {
 Map<String, dynamic> book(String id, int n) => {'id': id, 'seriesTitle': 'Discworld', 'metadata': {'number': '$n'}};
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   late Directory dir;
   final d = Downloads.instance;
 

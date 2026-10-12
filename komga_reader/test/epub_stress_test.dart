@@ -12,6 +12,7 @@ import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 
 import 'support/client_settings.dart';
 import 'support/no_network.dart';
@@ -45,6 +46,7 @@ class FlakyBook extends SlowBook {
 }
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});

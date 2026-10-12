@@ -6,7 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show SelectionRegistrar;
+import 'package:flutter/rendering.dart' show SelectWordSelectionEvent, SelectionRegistrar;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -290,6 +290,9 @@ class EpubRenderer extends Renderer {
     _settingsNode.dispose();
     _selectionFocus.dispose();
     _selected.dispose();
+    _firstTapTimer?.cancel();
+    _pressed.dispose();
+    _selectionMoved.dispose();
     super.dispose();
   }
 
@@ -652,8 +655,35 @@ class EpubRenderer extends Renderer {
         }
       }
     }
+    // the middle (the controls' third - the sides turn pages at once, as always): a double tap or double click
+    // selects the word (user, 2026-10-12) - so one tap there shows the controls once a double tap is ruled out
+    if (!host.controlsUp && x >= 0.33 && x <= 0.67) {
+      final first = _firstTap;
+      _firstTapTimer?.cancel();
+      _firstTap = null;
+      if (first != null && (first - d.globalPosition).distance < kDoubleTapSlop) {
+        _selectWordAt(d.globalPosition);
+        return;
+      }
+      if (doubleTapWait > Duration.zero) {
+        _firstTap = d.globalPosition;
+        _firstTapTimer = Timer(doubleTapWait, () {
+          _firstTap = null;
+          if (!_disposed) host.tap(x);
+        });
+        return;
+      }
+    }
     host.tap(x);
   }
+
+  Offset? _firstTap; // a tap in the middle, waiting to see whether a second makes it a double tap
+  Timer? _firstTapTimer;
+
+  /// How long a tap in the middle waits for a second (a double tap selects the word); zero: no double tap, the
+  /// controls at once (tests that aren't about it).
+  @visibleForTesting
+  static Duration doubleTapWait = kDoubleTapTimeout;
 
   // ---- links, footnotes, contents: a move there is a jump, as the slider's (the way back kept)
 
@@ -1086,14 +1116,22 @@ class EpubRenderer extends Renderer {
           return SelectionArea(
             key: _selectionArea,
             focusNode: _selectionFocus,
-            contextMenuBuilder: _selectionMenu,
+            // the selection's pane is the page's own ([_selectionPane]), the same everywhere - Flutter's menu was a
+            // right-click menu on Windows (user, 2026-10-12: "make it more like the tablet version")
+            contextMenuBuilder: (_, __) => const SizedBox.shrink(),
             onSelectionChanged: (c) {
               _selectedText = c?.plainText ?? '';
               _selected.value = _selectedText.isNotEmpty;
+              _selectionMoved.value++;
             },
             child: Builder(builder: (context) {
               final registrar = SelectionContainer.maybeOf(context);
-              return Stack(children: [
+              // fingers and mouse buttons down: the pane waits for them to let go (a selection being made)
+              return Listener(
+                onPointerDown: (_) => _pressed.value++,
+                onPointerUp: (_) => _pressed.value = math.max(0, _pressed.value - 1),
+                onPointerCancel: (_) => _pressed.value = math.max(0, _pressed.value - 1),
+                child: Stack(key: _pageStack, children: [
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
             if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
             // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
@@ -1139,7 +1177,14 @@ class EpubRenderer extends Renderer {
                 onSecondaryTap: selected ? null : host.toggleControls,
               )),
             ),
-          ]);
+            // the selection's pane, over all of it - kept out of the selection: its labels are text, and the area,
+            // seeing them come, set the selection's ends again letter by letter (a long press's word-by-word drag
+            // lost its last word)
+            Positioned.fill(child: SelectionContainer.disabled(child: ListenableBuilder(
+              listenable: Listenable.merge([_selected, _pressed, _selectionMoved]),
+              builder: (context, _) => _selectionPane(context),
+            ))),
+          ]));
             }),
           );
         })),
@@ -1167,24 +1212,72 @@ class EpubRenderer extends Renderer {
     _selectionArea.currentState?.selectableRegion.clearSelection();
   }
 
-  /// The selection's pane of actions: Copy (user, 2026-10-08), and Define for a word or a short phrase (2026-10-11:
-  /// the offline English dictionary).
-  Widget _selectionMenu(BuildContext context, SelectableRegionState state) {
+  final _pageStack = GlobalKey(debugLabel: 'epub-page-stack');
+  final _pressed = ValueNotifier<int>(0); // fingers / mouse buttons down on the page
+  final _selectionMoved = ValueNotifier<int>(0); // the selection changed (its pane goes with it)
+
+  /// The selection's pane of actions, over it once the finger or the mouse button lets go - the tablet's look on every
+  /// device (user, 2026-10-12: on Windows it took a right-click, and looked "ugly"): Copy (2026-10-08), Highlight, or
+  /// Remove highlight where the selection covers one (2026-10-12: there was no way to it from a selection), and
+  /// Define for a word or a short phrase (2026-10-11: the offline English dictionary).
+  Widget _selectionPane(BuildContext context) {
+    if (!_selected.value || _pressed.value > 0) return const SizedBox.shrink();
+    final render = _shownPage.currentContext?.findRenderObject();
+    final stack = _pageStack.currentContext?.findRenderObject();
+    if (render is! RenderSelectablePage || stack is! RenderBox || !render.attached) return const SizedBox.shrink();
+    final rects = render.value.selectionRects;
+    final range = render.selectedPositions;
+    if (rects.isEmpty || range == null) return const SizedBox.shrink();
+    final box = rects.reduce((a, b) => a.expandToInclude(b));
+    final topLeft = render.localToGlobal(box.topLeft, ancestor: stack);
+    final bottomRight = render.localToGlobal(box.bottomRight, ancestor: stack);
     final selected = _selectedText;
-    final items = [
-      for (final i in state.contextMenuButtonItems) if (i.type == ContextMenuButtonType.copy) i,
-      ContextMenuButtonItem(label: 'Highlight', onPressed: () {
-        _highlightSelection();
-        state.hideToolbar();
+    final covered = _highlights?.within(_chapterFile(_chapter), range.$1, range.$2) ?? const <Highlight>[];
+    final whole = covered.any((h) => h.start <= range.$1 && h.end >= range.$2); // all of it highlighted already
+    final items = <(String, VoidCallback)>[
+      ('Copy', () {
+        unawaited(Clipboard.setData(ClipboardData(text: selected)));
+        _clearSelection();
       }),
+      if (!whole) ('Highlight', _highlightSelection),
+      if (covered.isNotEmpty)
+        ('Remove highlight', () {
+          for (final h in covered) {
+            unawaited(_highlights?.remove(h));
+          }
+          _clearSelection();
+        }),
       if (definable(selected))
-        ContextMenuButtonItem(label: 'Define', onPressed: () {
-          state.hideToolbar();
+        ('Define', () {
+          _clearSelection();
           unawaited(showDefinition(context, selected));
         }),
     ];
-    if (items.isEmpty) return const SizedBox.shrink();
-    return AdaptiveTextSelectionToolbar.buttonItems(anchors: state.contextMenuAnchors, buttonItems: items);
+    final mid = (topLeft.dx + bottomRight.dx) / 2;
+    return TextSelectionToolbar(
+      key: const ValueKey('epub-selection-pane'),
+      anchorAbove: Offset(mid, topLeft.dy - 6),
+      anchorBelow: Offset(mid, bottomRight.dy + 30), // below the handles
+      children: [
+        for (final (i, (label, act)) in items.indexed)
+          TextSelectionToolbarTextButton(
+            padding: TextSelectionToolbarTextButton.getPadding(i, items.length),
+            onPressed: act,
+            child: Text(label),
+          ),
+      ],
+    );
+  }
+
+  /// The word at [global] (screen coordinates) selected - a double tap or double click (user, 2026-10-12).
+  void _selectWordAt(Offset global) {
+    final render = _shownPage.currentContext?.findRenderObject();
+    if (render is! RenderSelectablePage) return;
+    render.dispatchSelectionEvent(SelectWordSelectionEvent(globalPosition: global));
+    _selectedText = render.getSelectedContent()?.plainText ?? '';
+    _selected.value = _selectedText.isNotEmpty;
+    _selectionMoved.value++;
+    if (_selected.value) _selectionFocus.requestFocus(); // (Esc lets go of it)
   }
 
   @override
@@ -1209,9 +1302,10 @@ class EpubRenderer extends Renderer {
     ];
   }
 
-  /// The one highlight colour: a marker yellow, stronger on a light page than on a dark one.
-  static Color _markColour(Color page) =>
-      const Color(0xFFFFC928).withValues(alpha: page.computeLuminance() > 0.3 ? 0.45 : 0.3);
+  /// The one highlight colour: the app's accent (user, 2026-10-12: it was a fixed marker yellow), stronger on a light
+  /// page than on a dark one.
+  static Color _markColour(Color accent, Color page) =>
+      accent.withValues(alpha: page.computeLuminance() > 0.3 ? 0.45 : 0.3);
 
   /// The highlight under [at] on [page] (on screen), if any.
   Highlight? _highlightAt(EpubPage page, Offset at) {
@@ -1293,7 +1387,7 @@ class EpubRenderer extends Renderer {
       registrar: registrar,
       colour: theme.accent.withValues(alpha: 0.35),
       child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, _sheet,
-          marks: _marksOn(page, c), markColour: _markColour(theme.background))),
+          marks: _marksOn(page, c), markColour: _markColour(theme.accent, theme.background))),
     );
   }
 
