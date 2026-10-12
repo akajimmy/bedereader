@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 106 - 2026-10-12
+
 **Changed**
 - **eBooks, selecting text: the same pane everywhere** - Copy, Highlight, Define - shows above the selection by
   itself once it's made, with the mouse too (on Windows it took a right-click and looked different).
@@ -23,8 +27,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   downloads are kept per server address, so the new address started with none. Now, when the new address has no
   downloads and Komga there has the books downloaded at an old address, they carry over - with any reading progress
   not yet sent.
-
-## 1.3.0
 
 ### Build 105 - 2026-10-11
 
