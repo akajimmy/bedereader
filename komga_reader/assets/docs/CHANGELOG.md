@@ -32,6 +32,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   sizes them - at the size the book gives, or a small one at its own size in points; big pictures still never get
   bigger than their own pixels.
 
+**Changed**
+- **eBooks: bold text is no longer taken for a title.** In books that write their paragraphs as plain blocks of
+  text (the Belgariad among them), a bold line opening a block used to be treated as a title; it's now a paragraph
+  like the others - only text set larger than the text around it counts as a title. (The Belgariad's chapter titles
+  now read as ordinary lines.)
+
 ## 1.3.0
 
 ### Build 103 - 2026-10-11
