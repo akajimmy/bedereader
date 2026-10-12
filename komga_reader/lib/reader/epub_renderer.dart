@@ -1177,17 +1177,19 @@ class EpubRenderer extends Renderer {
                 onSecondaryTap: selected ? null : host.toggleControls,
               )),
             ),
-            // the selection's pane, over all of it - kept out of the selection: its labels are text, and the area,
-            // seeing them come, set the selection's ends again letter by letter (a long press's word-by-word drag
-            // lost its last word)
-            Positioned.fill(child: SelectionContainer.disabled(child: ListenableBuilder(
-              listenable: Listenable.merge([_selected, _pressed, _selectionMoved]),
-              builder: (context, _) => _selectionPane(context),
-            ))),
           ]));
             }),
           );
         })),
+        // the selection's pane, over the page - outside the selection area and the presses counted on the page: a
+        // click on one of its buttons hid it (a press on the page hides it) and, on Windows, let go of the selection,
+        // so the button never got its click (user, build 106: "whether i click highlight or define, nothing
+        // happens"); inside the area its labels were text too, and the area, seeing them come, set the selection's
+        // ends again letter by letter
+        Positioned.fill(child: ListenableBuilder(
+          listenable: Listenable.merge([_selected, _pressed, _selectionMoved]),
+          builder: (context, _) => _selectionPane(context),
+        )),
       ];
 
   // ---- selecting text

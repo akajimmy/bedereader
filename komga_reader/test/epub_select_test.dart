@@ -282,6 +282,42 @@ void main() {
 
   // ---- user, 2026-10-12 (bug reports, on Windows)
 
+  /// A press on [f] as a hand makes it: down, held over a few frames, up (a tap in one frame hid that the pane went
+  /// from under the button as it was pressed - build 106, Windows: Highlight and Define did nothing).
+  Future<void> press(WidgetTester tester, Finder f, {PointerDeviceKind kind = PointerDeviceKind.touch}) async {
+    final g = await tester.startGesture(tester.getCenter(f), kind: kind);
+    await tester.pump(const Duration(milliseconds: 40));
+    await tester.pump(const Duration(milliseconds: 40));
+    await g.up();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+  }
+
+  testWidgets("the pane's buttons take a press held over a few frames, as a hand presses them - a mouse click on "
+      'Windows (a double click selecting), a finger on the tablet (user, build 106: nothing happened)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      final spot = Offset(400, at(tester, 'weather').dy);
+      await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      final word = selected(tester);
+      expect(word, isNotNull);
+      await press(tester, find.text('Highlight'), kind: PointerDeviceKind.mouse);
+      await settle(tester);
+      expect(server.written['komgareader.highlights.B1'], isNotNull, reason: 'the click highlighted it');
+      expect((jsonDecode(server.written['komgareader.highlights.B1']!) as List).single['t'], word);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+    // a finger (Android)
+    await tester.longPressAt(at(tester, 'cow'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await press(tester, find.text('Copy'));
+    expect(copied, 'cow');
+  });
+
   testWidgets("Windows: the selection's pane shows by itself once a mouse drag lets go - no right-click - and its "
       'Copy copies', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
