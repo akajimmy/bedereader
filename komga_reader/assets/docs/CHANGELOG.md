@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **eBook settings: Margins has a Book's step** - the book's own page margins, as a web browser shows them (a small
+  edge where the book sets none). Lines then run as long as the screen allows, and there's no sheet on a wide screen.
+
 **Changed**
 - **eBooks open sooner**: the book's own text size is measured on its first open and remembered, instead of
   loading five chapters to measure it every time the book is opened.

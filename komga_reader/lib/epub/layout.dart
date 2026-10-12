@@ -29,6 +29,7 @@ class EpubTheme {
     this.accent = const Color(0xFF3D8BE0),
     this.pixelRatio = 1,
     this.paragraphGap = 0,
+    this.bookMargins = false,
   })  : ownAlign = ownAlign ?? (bookFormatting ? null : TextAlign.justify),
         ownParagraphs = ownParagraphs ?? !bookFormatting;
   final Color background, text;
@@ -42,6 +43,17 @@ class EpubTheme {
 
   /// Space added between one paragraph and the next, in ems of the reader's text (a setting).
   final double paragraphGap;
+
+  /// The page's sides are the book's own page margin (each chapter's body margin - [EpubTheme.withSides]), not
+  /// [margins]' (Margins: Book's - user, 2026-10-11).
+  final bool bookMargins;
+
+  /// This theme with [left] / [right] as the page's sides (a chapter's own, with [bookMargins]).
+  EpubTheme withSides(double left, double right) => EpubTheme(background: background, text: text,
+      fontFamily: fontFamily, fontSize: fontSize, lineHeight: lineHeight,
+      margins: EdgeInsets.fromLTRB(left, margins.top, right, margins.bottom), ownAlign: ownAlign,
+      ownParagraphs: ownParagraphs, hyphenate: hyphenate, accent: accent, pixelRatio: pixelRatio,
+      paragraphGap: paragraphGap, bookMargins: bookMargins);
   final String? fontFamily;
   final double fontSize, lineHeight;
   final EdgeInsets margins;
@@ -63,10 +75,11 @@ class EpubTheme {
       other.fontFamily == fontFamily && other.fontSize == fontSize && other.lineHeight == lineHeight &&
       other.margins == margins && other.ownAlign == ownAlign && other.ownParagraphs == ownParagraphs &&
       other.hyphenate == hyphenate &&
-      other.accent == accent && other.pixelRatio == pixelRatio && other.paragraphGap == paragraphGap;
+      other.accent == accent && other.pixelRatio == pixelRatio && other.paragraphGap == paragraphGap &&
+      other.bookMargins == bookMargins;
   @override
   int get hashCode => Object.hash(background, text, fontFamily, fontSize, lineHeight, margins, ownAlign, ownParagraphs,
-      hyphenate, accent, pixelRatio, paragraphGap);
+      hyphenate, accent, pixelRatio, paragraphGap, bookMargins);
 }
 
 // ---- blocks
@@ -176,10 +189,17 @@ class ChapterReader {
   /// E16.)
   final Map<String, int> ids = {};
 
+  /// The book's page margin: its body's left / right margins as written ("2em", "5%"), or a browser's 8px where it
+  /// sets none - the page's sides with Margins: Book's ([EpubTheme.bookMargins]).
+  String bodyLeft = '8px', bodyRight = '8px';
+
   List<Block> read(XElement root) {
     final html = root.find('html');
     final body = root.find('body') ?? root;
     lang = body.attr('lang') ?? html?.attr('lang');
+    final bd = sheet.declsFor(body);
+    bodyLeft = bd['margin-left'] ?? bodyLeft;
+    bodyRight = bd['margin-right'] ?? bodyRight;
     _walk(body, const InlineStyle(), TextAlign.start, 0);
     _flush();
     return blocks;

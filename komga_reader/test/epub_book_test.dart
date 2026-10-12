@@ -37,6 +37,29 @@ void main() {
     });
   });
 
+  testWidgets("Margins: Book's (user, 2026-10-11) - the page's sides are the chapter's own body margin, as a browser "
+      "has it (a browser's 8 px when it sets none); any other step uses the reader's sides and ignores the book's",
+      (tester) async {
+    await tester.runAsync(() async {
+      final hy = await Hyphenators.load((p) async => File(p).readAsStringSync());
+      const info = EpubInfo(spine: ['a.xhtml', 'b.xhtml'], toc: []);
+      final book = EpubBook(MemorySource({
+        'a.xhtml': '<html><head><style>body { margin: 0 3em }</style></head><body><p>Hello.</p></body></html>',
+        'b.xhtml': '<html><body><p>Hello.</p></body></html>',
+      }, info), info, hy);
+      double left(int chapter) => book.pagesNow(chapter)!.first.textOrigins.first.dx;
+      book.setLayout(const EpubTheme(fontSize: 20, bookMargins: true), const Size(400, 600));
+      await book.pages(0);
+      await book.pages(1);
+      expect(left(0), closeTo(3 * 20, 0.5), reason: "the book's 3 em, at the reader's text size");
+      expect(left(1), closeTo(8, 0.5), reason: "none set: a browser's 8 px");
+      book.setLayout(const EpubTheme(fontSize: 20, margins: EdgeInsets.fromLTRB(36, 40, 36, 40)), const Size(400, 600));
+      await book.pages(0);
+      expect(left(0), closeTo(36, 0.5), reason: "the reader's step: its own sides, the body margin ignored");
+      book.dispose();
+    });
+  });
+
   // outside frames (runAsync): counting's pause between chapters is a plain one
   Future<void> breath() => Future<void>.delayed(Duration.zero);
 
