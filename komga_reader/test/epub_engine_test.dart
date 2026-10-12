@@ -222,7 +222,7 @@ void main() {
 
   test("a picture that doesn't fit in the space left on a page goes to the next page at its size, not squeezed into "
       "what's left (user, 2026-10-11); one taller than a page is shrunk to a page", () async {
-    final img = await _image(200, 300);
+    final img = await _image(200, 450);
     List<EpubPage> lay(String before) {
       final blocks =
           ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$before<div><img src="i.jpg"/></div></body>'));
@@ -230,9 +230,9 @@ void main() {
       return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks);
     }
 
-    // about two thirds of the page taken by text first: 300 high doesn't fit in what's left (it used to be shrunk into it)
-    final pages = lay(List.filled(9, '<p>${List.filled(12, 'word').join(' ')}</p>').join());
-    expect(pages.last.imageRects.single.size, const Size(200, 300), reason: 'on the next page, at its size');
+    // some text first, over half the page left: 450 high doesn't fit in it (it used to be shrunk into it)
+    final pages = lay(List.filled(4, '<p>${List.filled(12, 'word').join(' ')}</p>').join());
+    expect(pages.last.imageRects.single.size, const Size(200, 450), reason: 'on the next page, at its size');
     expect(pages.first.imageRects, isEmpty);
     final tall = await _image(200, 2000);
     final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><div><img src="t.jpg"/></div></body>'));
