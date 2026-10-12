@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
@@ -106,6 +107,19 @@ void main() {
 
   Finder inRow(String row, String item) => find.descendant(
       of: find.ancestor(of: find.text(row), matching: find.byType(PosterRow)), matching: find.text(item));
+
+  testWidgets('a mouse click on a poster that moves a pixel or two while pressed still opens it - the side menu\'s '
+      'swipe took it for a drag, and the click went missing (user, build 107: "dropped clicks")', (tester) async {
+    await open(tester);
+    final poster = inRow('Recently added series', 'Brand New Series');
+    final g = await tester.startGesture(tester.getCenter(poster), kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 30));
+    await g.moveBy(const Offset(2, 0)); // a hand's wobble
+    await tester.pump(const Duration(milliseconds: 30));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.byType(SeriesScreen), findsOneWidget, reason: 'the click opened the series');
+  });
 
   testWidgets("each row shows its own books (or series), from the query that's its own", (tester) async {
     final api = await open(tester);

@@ -665,6 +665,9 @@ class EpubRenderer extends Renderer {
       _firstTap = null;
       if (first != null && (first - d.globalPosition).distance < kDoubleTapSlop) {
         _selectWordAt(d.globalPosition);
+        // no word there (between lines, a margin): the controls after all - a second click made in doubt cancelled
+        // them (user, build 107)
+        if (!_selected.value) host.tap(x);
         return;
       }
       if (doubleTapWait > Duration.zero) {
@@ -681,6 +684,23 @@ class EpubRenderer extends Renderer {
 
   Offset? _firstTap; // a tap in the middle, waiting to see whether a second makes it a double tap
   Timer? _firstTapTimer;
+
+  // a mouse click, told by hand (see buildPages): where the button went down, and whether text was selected then
+  Offset? _mouseDown;
+  bool _mouseDownSelected = false;
+  static const _clickSlop = 5.0; // logical px a mouse may move while clicking (Flutter's gestures allow it 1-2)
+
+  /// A mouse click on the page: as a tap - except that one made with text selected lets go of it and does nothing
+  /// else (the selection area has let go of it already, as the button went down), and a selection made by the click's
+  /// own wobble (a letter or two dragged over) is let go of first.
+  void _mouseClick(TapUpDetails d, Size size, EpubPage? page) {
+    if (_mouseDownSelected) {
+      _clearSelection();
+      return;
+    }
+    _clearSelection();
+    _tap(d, size, page);
+  }
 
   /// How long a tap in the middle waits for a second (a double tap selects the word); zero: no double tap, the
   /// controls at once (tests that aren't about it).
@@ -1129,10 +1149,30 @@ class EpubRenderer extends Renderer {
             child: Builder(builder: (context) {
               final registrar = SelectionContainer.maybeOf(context);
               // fingers and mouse buttons down: the pane waits for them to let go (a selection being made)
+              // - and a mouse click is told here, as the button down and up within a few pixels: in the gestures
+              // a mouse moved a pixel or two while pressed is a drag, and the selection's drag took it - clicks went
+              // missing (user, build 107: "having to click a couple times to get page controls up")
               return Listener(
-                onPointerDown: (_) => _pressed.value++,
-                onPointerUp: (_) => _pressed.value = math.max(0, _pressed.value - 1),
-                onPointerCancel: (_) => _pressed.value = math.max(0, _pressed.value - 1),
+                onPointerDown: (e) {
+                  _pressed.value++;
+                  if (e.kind == PointerDeviceKind.mouse && e.buttons == kPrimaryMouseButton) {
+                    _mouseDown = e.position;
+                    _mouseDownSelected = _selected.value;
+                  }
+                },
+                onPointerUp: (e) {
+                  _pressed.value = math.max(0, _pressed.value - 1);
+                  final from = _mouseDown;
+                  _mouseDown = null;
+                  if (e.kind == PointerDeviceKind.mouse && from != null && (e.position - from).distance < _clickSlop) {
+                    _mouseClick(TapUpDetails(kind: PointerDeviceKind.mouse, globalPosition: e.position,
+                        localPosition: e.localPosition), size, shown);
+                  }
+                },
+                onPointerCancel: (_) {
+                  _pressed.value = math.max(0, _pressed.value - 1);
+                  _mouseDown = null;
+                },
                 child: Stack(key: _pageStack, children: [
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
             if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
@@ -1171,7 +1211,8 @@ class EpubRenderer extends Renderer {
               // never starts a double tap that selects - quick taps turn pages as before
               builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onTapUp: (d) => _tap(d, size, shown),
+                // (a mouse's clicks are told by the Listener above)
+                onTapUp: (d) => d.kind == PointerDeviceKind.mouse ? null : _tap(d, size, shown),
                 onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: b.totalPages! + 1) : null,
                 onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
                 onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -198,9 +199,13 @@ class DrawerEdgeState extends State<DrawerEdge> {
         skipTraversal: true,
         onKeyEvent: _onKey,
         // a left-to-right swipe anywhere opens the side menu (not just from the edge); a swipe that starts on a
-        // sideways-scrolling row (Continue reading, On deck) still scrolls the row, which wins the gesture
+        // sideways-scrolling row (Continue reading, On deck) still scrolls the row, which wins the gesture.
+        // A finger's or a pen's swipe, not the mouse's: Flutter takes a mouse moved a pixel while pressed for a drag,
+        // so a click on a poster that wobbled went to this swipe instead - clicks went missing on Home (user, build 107;
+        // the mouse has the menu button)
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
+          supportedDevices: const {PointerDeviceKind.touch, PointerDeviceKind.stylus, PointerDeviceKind.invertedStylus},
           onHorizontalDragEnd: (d) {
             if ((d.primaryVelocity ?? 0) > 300) widget.scaffoldKey.currentState?.openDrawer();
           },
