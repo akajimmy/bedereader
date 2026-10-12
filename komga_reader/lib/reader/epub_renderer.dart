@@ -168,9 +168,10 @@ class EpubRenderer extends Renderer {
         EpubAlign.justified => TextAlign.justify,
         EpubAlign.left => TextAlign.left,
       },
-      ownParagraphs: e.paragraphs == EpubParagraphs.mine,
+      // the gaps between paragraphs are Paragraph spacing's: Book's leaves the book's, a step replaces them
+      ownParagraphs: e.paragraphGap != EpubParagraphGap.book,
       hyphenate: e.hyphenate,
-      paragraphGap: e.paragraphGap.ems,
+      paragraphGap: e.paragraphGap.ems ?? 0,
       accent: Theme.of(context).colorScheme.primary,
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
     );

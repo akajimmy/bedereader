@@ -30,18 +30,20 @@ void main() {
   });
 
   test("saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, justified, "
-      "the reader's paragraphs, slide; a size out of range gets the default", () {
+      "no paragraph spacing (Default), slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
-        colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.large);
+        colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     final d = EpubPrefs.fromJson(const {});
-    expect((d.font, d.colours, d.align, d.paragraphs, d.hyphenate, d.turn, d.size), (EpubFont.literata,
-        EpubColours.dark, EpubAlign.justified, EpubParagraphs.mine, true, EpubTurn.slide, 19.0));
+    expect((d.font, d.colours, d.align, d.paragraphGap, d.hyphenate, d.turn, d.size), (EpubFont.literata,
+        EpubColours.dark, EpubAlign.justified, EpubParagraphGap.none, true, EpubTurn.slide, 19.0));
     expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
     // the old "Book's formatting" switch isn't migrated (user, 2026-10-07): ignored, the defaults
     final was = EpubPrefs.fromJson(const {'bookFormatting': true});
-    expect((was.align, was.paragraphs), (EpubAlign.justified, EpubParagraphs.mine));
+    expect(was.align, EpubAlign.justified);
+    // nor the Paragraphs setting, gone 2026-10-11 (Paragraph spacing owns the gaps): an old save of it is ignored
+    expect(EpubPrefs.fromJson(const {'paragraphs': 'book'}).paragraphGap, EpubParagraphGap.none);
   });
 
   test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "
@@ -98,8 +100,8 @@ void main() {
     expect(EpubPrefs.fromJson(const {'lineSpacing': 1.45}).lineSpacing, 1.45, reason: 'kept as saved');
   });
 
-  test('paragraph spacing: five steps; a saved choice keeps its spacing', () {
-    expect([for (final g in EpubParagraphGap.values) g.ems], [0, 0.25, 0.5, 1, 1.5]);
+  test("paragraph spacing: the book's, then five steps (user, 2026-10-11); a saved choice keeps its spacing", () {
+    expect([for (final g in EpubParagraphGap.values) g.ems], [null, 0, 0.25, 0.5, 1, 1.5]);
     expect(EpubPrefs.fromJson(const {'paragraphGap': 'small'}).paragraphGap.ems, 0.5);
     expect(EpubPrefs.fromJson(const {'paragraphGap': 'large'}).paragraphGap.ems, 1);
   });

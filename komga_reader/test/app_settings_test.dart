@@ -119,8 +119,7 @@ void main() {
       // eBooks: the EPUB settings (the alignment on its own: user, 2026-10-07)
       (SettingsPage.ebooks, find.widgetWithText(ChoiceChip, 'Lora'), () => s.epub.font, EpubFont.lora),
       (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
-      (SettingsPage.ebooks, segment<EpubAlign>('Left'),
-          () => (s.epub.align, s.epub.paragraphs), (EpubAlign.left, EpubParagraphs.mine)),
+      (SettingsPage.ebooks, segment<EpubAlign>('Left'), () => s.epub.align, EpubAlign.left),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Auto-hyphenation'), () => s.epub.hyphenate, false),
       (SettingsPage.ebooks, find.text('Loose'), () => s.epub.lineSpacing, 1.75),
       // Reading
@@ -174,7 +173,7 @@ void main() {
         ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
             hiddenSpots: ['right']));
     const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
-        colours: EpubColours.sepia, align: EpubAlign.left, paragraphs: EpubParagraphs.book, hyphenate: false,
+        colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
         turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small);
     const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
         autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white);
