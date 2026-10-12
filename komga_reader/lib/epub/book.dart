@@ -205,8 +205,10 @@ class EpubBook extends ChangeNotifier {
     // that stutters at a chapter's start shows here - user, 2026-10-06, "not smooth in the way that comics are")
     final laying = Stopwatch()..start();
     // Margins: Book's - this chapter's own page margin, as a browser has it (px as layout px, em the text's, % of the
-    // page's width)
-    double side(String v) => math.max(0, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
+    // page's width) - never under an edge that holds a line-end hyphen (hung past the line) and a boxed passage's border
+    // (10 past the text): a book with no margin had them off the screen (user, 2026-10-11)
+    final least = math.max(10.0, 0.6 * _theme.fontSize);
+    double side(String v) => math.max(least, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
     final theme = _theme.bookMargins ? _theme.withSides(side(content.bodyLeft), side(content.bodyRight)) : _theme;
     final p = Paginator(theme, _size, theme.hyphenate ? hyphenators.forLang(content.lang) : null,
         baseSize: textSize, baseBold: textBold);
