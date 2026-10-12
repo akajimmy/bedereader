@@ -161,8 +161,7 @@ void main() {
     await tester.tapAt(const Offset(760, 600)); // a page on
     await settle(tester);
     expect(onFirstPage(tester), isFalse);
-    await tester.tapAt(const Offset(400, 600)); // the controls - once a double tap is ruled out
-    await tester.pump(EpubRenderer.doubleTapWait);
+    await tester.tapAt(const Offset(400, 600)); // the controls
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await tester.tap(find.byTooltip('Contents'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
@@ -379,25 +378,34 @@ void main() {
     expect((mark.r, mark.g, mark.b), (accent.r, accent.g, accent.b));
   });
 
-  testWidgets('a double tap on a word in the middle of the page selects it, with its pane; one tap there still opens '
-      'the controls (a moment later); the sides still turn at once', (tester) async {
+  testWidgets('a finger tap in the middle opens the controls at once - a word on a touch screen is a long press, not a '
+      'double tap (user, build 107)', (tester) async {
+    await open(tester);
+    await tester.tapAt(Offset(400, at(tester, 'weather').dy));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byTooltip('Contents'), findsOneWidget, reason: 'no wait for a second tap');
+  });
+
+  testWidgets('a double click on a word in the middle of the page selects it, with its pane; one click there still '
+      'opens the controls (a moment later); the sides still turn at once', (tester) async {
     await open(tester);
     final spot = Offset(400, at(tester, 'weather').dy); // the middle of a full line of the long paragraph
-    await tester.tapAt(spot);
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
     await tester.pump(const Duration(milliseconds: 80));
-    await tester.tapAt(spot);
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     final word = selected(tester);
     expect(word, isNotNull, reason: 'a word selected');
     expect(word, matches(RegExp(r'^[A-Za-z­]+[.,]?$')), reason: 'one whole word: "$word"');
     expect(find.byKey(const ValueKey('epub-selection-pane')), findsOneWidget);
     expect(find.byTooltip('Contents'), findsNothing, reason: 'no controls');
-    await tester.tapAt(const Offset(400, 40)); // a tap lets go of the selection
+    await tester.tapAt(const Offset(400, 40), kind: PointerDeviceKind.mouse); // a click lets go of the selection
     await settle(tester);
     expect(selected(tester), isNull);
-    await tester.tapAt(spot); // one tap
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse); // one click
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byTooltip('Contents'), findsNothing, reason: 'not yet: a second tap could come');
+    expect(find.byTooltip('Contents'), findsNothing, reason: 'not yet: a second click could come');
     await tester.pump(EpubRenderer.doubleTapWait);
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.byTooltip('Contents'), findsOneWidget, reason: 'the controls');
