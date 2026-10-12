@@ -84,8 +84,9 @@ class EpubBook extends ChangeNotifier {
   bool textBold = false;
 
   /// Finds [textSize] from up to [samples] chapters spread through the book (the front and back matter left out where
-  /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped.
-  Future<void> measureTextSize({int samples = 5}) async {
+  /// there's room) - loaded here, kept for laying out. A chapter that can't be loaded is skipped; false then (the
+  /// size is from fewer chapters, or none: not to be kept - audit, 2026-10-11).
+  Future<bool> measureTextSize({int samples = 5}) async {
     final n = _chapters.length;
     final picks = n <= samples
         ? [for (var i = 0; i < n; i++) i]
@@ -104,6 +105,7 @@ class EpubBook extends ChangeNotifier {
     textSize = bookTextSize(sampled);
     textBold = bookTextBold(sampled);
     EpubTrace.instance.log('book text size $textSize (from chapters $picks)');
+    return sampled.length == picks.length;
   }
 
   int get chapterCount => _chapters.length;
@@ -203,8 +205,10 @@ class EpubBook extends ChangeNotifier {
     // that stutters at a chapter's start shows here - user, 2026-10-06, "not smooth in the way that comics are")
     final laying = Stopwatch()..start();
     // Margins: Book's - this chapter's own page margin, as a browser has it (px as layout px, em the text's, % of the
-    // page's width)
-    double side(String v) => math.max(0, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
+    // page's width) - never under an edge that holds a line-end hyphen (hung past the line) and a boxed passage's border
+    // (10 past the text): a book with no margin had them off the screen (user, 2026-10-11)
+    final least = math.max(10.0, 0.6 * _theme.fontSize);
+    double side(String v) => math.max(least, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
     final theme = _theme.bookMargins ? _theme.withSides(side(content.bodyLeft), side(content.bodyRight)) : _theme;
     final p = Paginator(theme, _size, theme.hyphenate ? hyphenators.forLang(content.lang) : null,
         baseSize: textSize, baseBold: textBold);

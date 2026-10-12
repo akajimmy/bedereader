@@ -24,6 +24,21 @@ import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
 /// A Komga that knows the book after this one ([next]; null: the series' last) and serves a 1-pixel poster.
+/// A book whose chapter [fails] can't be read the first time it's asked for (the network, for a moment).
+class _FailsOnce extends MemorySource {
+  _FailsOnce(super.files, super.infoValue, {required this.fails});
+  final String fails;
+  bool _failed = false;
+  @override
+  Future<Uint8List> resource(String path) {
+    if (path == fails && !_failed) {
+      _failed = true;
+      return Future.error(StateError('offline'));
+    }
+    return super.resource(path);
+  }
+}
+
 class EndKomga extends TestKomga with EmptyClientSettings {
   EndKomga(this.next);
   final Map<String, dynamic>? next;
@@ -127,6 +142,65 @@ void main() {
     await g.up();
     await tester.pump();
     expect(find.byKey(preview), findsNothing);
+    await settle(tester);
+  });
+
+  Future<void> previewDrawn(WidgetTester tester) async {
+    for (var i = 0; i < 20 && find.byKey(const ValueKey('preview-loading')).evaluate().isNotEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+  }
+
+  testWidgets('the preview of a chapter laid out for an earlier preview and let go since is laid out again (audit, '
+      '2026-10-11: it span for ever)', (tester) async {
+    final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+    await open(tester, MemorySource({for (final c in spine) c: '<html><body>${para('delta', 10)}</body></html>'},
+        EpubInfo(spine: spine, toc: const [])));
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    final r = tester.getRect(find.byType(Slider));
+    var g = await tester.startGesture(Offset(r.left + 20, r.center.dy)); // the thumb, on page 1
+    await g.moveTo(Offset(r.left + 60, r.center.dy));
+    await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last chapter: laid out for the preview
+    await tester.pump();
+    await previewDrawn(tester);
+    expect(find.byKey(const ValueKey('preview-loading')), findsNothing);
+    await g.moveTo(Offset(r.left + 20, r.center.dy)); // back to page 1, and let go there
+    await tester.pump();
+    await g.up();
+    await settle(tester);
+    await tester.tapAt(const Offset(400, 600)); // the controls away
+    await tester.pump();
+    await tester.tapAt(const Offset(760, 600)); // on to chapter 2: the last chapter let go
+    await settle(tester);
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    g = await tester.startGesture(Offset(r.left + 20 + (r.width - 40) / 5, r.center.dy)); // the thumb, on page 2
+    await g.moveTo(Offset(r.right - 20, r.center.dy));
+    await tester.pump();
+    await previewDrawn(tester);
+    expect(find.byKey(const ValueKey('preview-loading')), findsNothing, reason: 'laid out again, drawn');
+    await g.moveTo(Offset(r.left + 20 + (r.width - 40) / 5, r.center.dy));
+    await g.up();
+    await settle(tester);
+  });
+
+  testWidgets("on a wide screen the preview draws the whole sheet's page, its ground under all of it (audit, "
+      '2026-10-11: drawn at the sheet\'s size, it covered only part)', (tester) async {
+    await open(tester, twoChapters(), size: const Size(1600, 1000));
+    await tester.tapAt(const Offset(800, 500)); // the controls
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    final r = tester.getRect(find.byType(Slider));
+    final g = await tester.startGesture(Offset(r.left + 20, r.center.dy));
+    await g.moveTo(Offset(r.left + 80, r.center.dy));
+    await tester.pump();
+    await previewDrawn(tester);
+    final paint = find.descendant(of: find.byKey(const ValueKey('page-preview')),
+        matching: find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'));
+    expect(tester.getSize(paint), const Size(1600, 1000), reason: 'painted at the page size, shifted to the sheet');
+    await g.moveTo(Offset(r.left + 20, r.center.dy));
+    await g.up();
     await settle(tester);
   });
 
@@ -884,6 +958,19 @@ void main() {
     await open(tester, twoChapters());
     expect(store.kept.keys.single, contains('/0.5/'), reason: 'laid out with the kept size, not a fresh measurement');
     expect(store.textSizes[key], (0.5, false), reason: 'not measured again');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets("a text size measured with a chapter that couldn't be read (the network, for a moment) isn't kept: the "
+      'next open measures again (audit, 2026-10-11: the fallback size was kept until the next app build)',
+      (tester) async {
+    final store = EpubCountStore.instance as MemoryCountStore;
+    final book = twoChapters();
+    await open(tester, _FailsOnce(book.files, book.infoValue, fails: 'c2.xhtml'));
+    expect(store.textSizes, isEmpty, reason: 'measured from fewer chapters: not kept');
+    await tester.pumpWidget(const SizedBox());
+    await open(tester, twoChapters());
+    expect(store.textSizes, hasLength(1), reason: 'every chapter read this time: kept');
     await tester.pumpWidget(const SizedBox());
   });
 

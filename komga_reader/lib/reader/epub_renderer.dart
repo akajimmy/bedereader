@@ -235,8 +235,10 @@ class EpubRenderer extends Renderer {
         ..textSize = kept.$1
         ..textBold = kept.$2;
     } else {
-      await b.measureTextSize();
-      unawaited(EpubCountStore.instance.saveTextSize(id, version, b.textSize, b.textBold));
+      // kept only when every sampled chapter was read (one that failed - the network - is measured again next time)
+      if (await b.measureTextSize()) {
+        unawaited(EpubCountStore.instance.saveTextSize(id, version, b.textSize, b.textBold));
+      }
     }
     _progress = progress;
     return _Prepared(b, chapter, fraction, known);
@@ -842,14 +844,19 @@ class EpubRenderer extends Renderer {
     final area = _sheet ?? Offset.zero & _size;
     const w = 132.0;
     final h = area.isEmpty ? 196.0 : (w * area.height / area.width).clamp(120.0, 240.0);
-    if (b.pagesNow(c) == null && _previewChapter != c) {
+    // asked for again once done: a chapter laid out for a preview and let go since (read on elsewhere) is laid out
+    // again, and one that failed shows that - it span for ever (audit, 2026-10-11)
+    if (b.pagesNow(c) == null && b.errorOf(c) == null && _previewChapter != c) {
       _previewChapter = c;
       _previewWait?.cancel();
       _previewWait = Timer(const Duration(milliseconds: 180), () {
         if (_disposed || _book != b) return;
-        unawaited(b.pages(c).then<void>((_) {
-          if (!_disposed) _previewLaid.value++;
-        }, onError: (Object _) {}));
+        b.keepAround(_chapter); // the chapters laid out for earlier previews let go (they were kept)
+        unawaited(b.pages(c).then<void>((_) {}, onError: (Object _) {}).whenComplete(() {
+          if (_disposed) return;
+          if (_previewChapter == c) _previewChapter = null;
+          _previewLaid.value++;
+        }));
       });
     }
     return Positioned(
@@ -870,6 +877,10 @@ class EpubRenderer extends Renderer {
                 valueListenable: _previewLaid,
                 builder: (_, __, ___) {
                   final pages = b.pagesNow(c);
+                  if (b.errorOf(c) != null) {
+                    return const Center(key: ValueKey('preview-error'),
+                        child: Icon(Icons.error_outline, color: Colors.white38));
+                  }
                   if (pages == null || pages.isEmpty || area.isEmpty) {
                     return const Center(key: ValueKey('preview-loading'),
                         child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)));
@@ -877,11 +888,20 @@ class EpubRenderer extends Renderer {
                   final page = pages[p.clamp(0, pages.length - 1)];
                   return ClipRect(child: FittedBox(
                     fit: BoxFit.contain,
+                    // the whole page drawn at the screen's size, shifted so the sheet's part shows: drawn in the
+                    // sheet's box it was the sheet's size, its ground covering only part of it (audit, 2026-10-11)
                     child: SizedBox.fromSize(
                       size: area.size,
-                      child: Transform.translate(
-                        offset: -area.topLeft,
-                        child: CustomPaint(size: _size, painter: _PagePainter(page, _drawn.background, null)),
+                      child: OverflowBox(
+                        alignment: Alignment.topLeft,
+                        minWidth: _size.width,
+                        maxWidth: _size.width,
+                        minHeight: _size.height,
+                        maxHeight: _size.height,
+                        child: Transform.translate(
+                          offset: -area.topLeft,
+                          child: CustomPaint(size: _size, painter: _PagePainter(page, _drawn.background, null)),
+                        ),
                       ),
                     ),
                   ));
