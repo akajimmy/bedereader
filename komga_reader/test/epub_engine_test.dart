@@ -231,7 +231,7 @@ void main() {
     }
 
     // some text first, over half the page left: 450 high doesn't fit in it (it used to be shrunk into it)
-    final pages = lay(List.filled(4, '<p>${List.filled(12, 'word').join(' ')}</p>').join());
+    final pages = lay('<p>${List.filled(12, 'word').join(' ')}</p>');
     expect(pages.last.imageRects.single.size, const Size(200, 450), reason: 'on the next page, at its size');
     expect(pages.first.imageRects, isEmpty);
     final tall = await _image(200, 2000);
