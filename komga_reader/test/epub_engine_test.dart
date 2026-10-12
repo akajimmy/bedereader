@@ -546,6 +546,14 @@ void main() {
             "Belgariad's chapters open so)");
   });
 
+  test('the text is shown as written: a typewriter\'s "--" and "---" stay hyphens (user, 2026-10-11: no guessing from '
+      'the text - the em dash rewrite was taken out)', () {
+    final b = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml("<body><p>brutally---or them--I'm</p></body>"))
+        .single as TextBlock;
+    expect(b.runs.map((r) => r.text).join(), "brutally---or them--I'm");
+  });
+
   test("a book's Windows dashes and quotes read as control characters (The Forever War's \"Sir\\u0097we\") are shown "
       'as what they stood for', () {
     final b = ChapterReader(StyleSheet(), (h) => h)
@@ -553,46 +561,6 @@ void main() {
         .single as TextBlock;
     expect(b.runs.map((r) => r.text).join(), 'Sir—we “go” … it’s');
     expect(fixC1('plain — text'), 'plain — text');
-  });
-
-  test("verse set a line to a paragraph, marked like the prose (The Crystal Cave's opening poem): no gaps between its "
-      'lines with the reader\'s own paragraphs, a gap between stanzas; short dialogue keeps its gaps', () {
-    const css = 'p { margin: 1em 0 0 0 }';
-    const src = '<body><p>O Merlin in your crystal cave</p><p>Deep in the diamond of the day,</p>'
-        '<p>Will there ever be a singer</p><p>Across the meadow and the wave?</p>'
-        '<p>"You may need it yet," said the Cornishman.</p><p>"I may."</p><p>"And the boy?"</p>'
-        '<p>Or a runner who will outrun</p><p>Man\'s long shadow driving on,</p><p>And hang the apple on the tree?</p>'
-        '<p>Will your sorcery ever show</p><p>The sleeping bride shut in her bower,</p><p>And Time in his tower?</p>'
-        '</body>';
-    // wide enough that each line is one (the test font's letters are square)
-    final o = Paginator(const EpubTheme(ownParagraphs: true, paragraphGap: 1), const Size(1400, 900), null)
-        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(src)))
-        .single
-        .textOrigins;
-    final line = o[1].dy - o[0].dy;
-    expect(o[2].dy - o[1].dy, closeTo(line, 0.5));
-    expect(o[3].dy - o[2].dy, closeTo(line, 0.5), reason: 'the verse: one line under another');
-    expect(o[5].dy - o[4].dy, greaterThan(line + 10), reason: 'dialogue: its paragraph gap');
-    expect(o[6].dy - o[5].dy, greaterThan(line + 10));
-    expect(o[8].dy - o[7].dy, closeTo(line, 0.5), reason: 'the next stanza: tight');
-    expect(o[10].dy - o[9].dy, greaterThan(line + 10), reason: 'between two stanzas: a gap');
-    expect(o[11].dy - o[10].dy, closeTo(line, 0.5));
-
-    // a list - contents, "Also by" - is short lines too, but no line ends on a comma: its gaps stay (library check)
-    const list = '<body><p>Prologue</p><p>Bran</p><p>Catelyn</p><p>Daenerys</p><p>Eddard</p></body>';
-    final l = Paginator(const EpubTheme(ownParagraphs: true), const Size(1400, 900), null)
-        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(list)))
-        .single
-        .textOrigins;
-    expect(l[2].dy - l[1].dy, greaterThan(line + 10), reason: 'a list keeps its gaps');
-  });
-
-  test("a typewriter's dashes (Xanth: \"brutally---or\", \"them--I'm\") read as em dashes; a drawn line of hyphens and "
-      'a single hyphen stay', () {
-    final b = ChapterReader(StyleSheet(), (h) => h)
-        .read(parseXhtml("<body><p>brutally---or them--I'm a well-known -------- line--.</p></body>"))
-        .single as TextBlock;
-    expect(b.runs.map((r) => r.text).join(), "brutally—or them—I'm a well-known -------- line—.");
   });
 
   test('headings are not hyphenated ("DEMOS-THENES" - Ender\'s Game), the text under them is; bold divs count as '
