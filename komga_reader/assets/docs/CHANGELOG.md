@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 108 - 2026-10-12
+
 **New**
 - **A key for the side menu**: Settings > Remote and keys > Anywhere else > Open the side menu - no key until you give
   it one. It opens the side menu on Home, a library, a series and the like (and closes it again); not while you're
@@ -27,8 +31,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **eBooks: a double click selects a word with the mouse only** - on a touch screen a word is a long press, as
   before, and a tap in the middle of the page opens the controls at once again (since build 106 it waited a moment
   for a second tap).
-
-## 1.3.0
 
 ### Build 107 - 2026-10-12
 
