@@ -42,8 +42,6 @@ void main() {
     // the old "Book's formatting" switch isn't migrated (user, 2026-10-07): ignored, the defaults
     final was = EpubPrefs.fromJson(const {'bookFormatting': true});
     expect(was.align, EpubAlign.justified);
-    // nor the Paragraphs setting, gone 2026-10-11 (Paragraph spacing owns the gaps): an old save of it is ignored
-    expect(EpubPrefs.fromJson(const {'paragraphs': 'book'}).paragraphGap, EpubParagraphGap.none);
   });
 
   test("margins: on a wide screen the setting still shows - lines stop at its length (Narrow longest, Wide "

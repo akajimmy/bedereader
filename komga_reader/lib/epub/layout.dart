@@ -41,7 +41,8 @@ class EpubTheme {
   /// (user, 2026-10-06: "images ... at their native resolution").
   final double pixelRatio;
 
-  /// Space added between one paragraph and the next, in ems of the reader's text (a setting).
+  /// The gap between one paragraph and the next, in ems of the reader's text (Paragraph spacing's step), with
+  /// [ownParagraphs]: it is the gap - where the book keeps one, the larger of the two (user, 2026-10-11).
   final double paragraphGap;
 
   /// The page's sides are the book's own page margin (each chapter's body margin - [EpubTheme.withSides]), not
@@ -58,15 +59,17 @@ class EpubTheme {
   final double fontSize, lineHeight;
   final EdgeInsets margins;
 
-  /// The reader's own alignment for every ordinary paragraph (justified or left), or null: the book's. With
-  /// [ownParagraphs], the reader's own paragraphs: a first-line indent only where the book indents (its own amount),
-  /// none after a heading or break, the usual gap between them taken out. They were one switch ("Book's formatting"),
-  /// split 2026-10-07 (user); [bookFormatting] in the constructor still sets both (off: justified and the reader's).
+  /// The reader's own alignment for every ordinary paragraph (justified or left), or null: the book's.
   final TextAlign? ownAlign;
+
+  /// Paragraph spacing is a step, not Book's: the book's usual gap between paragraphs is taken out and [paragraphGap]
+  /// is the gap (spacing the book asks for specifically is kept). Off: the book's gaps as they are. Indents are the
+  /// book's either way (user, 2026-10-11).
   final bool ownParagraphs;
   final bool hyphenate;
 
-  /// Both the book's: its alignment and its paragraphs.
+  /// Both the book's: its alignment and its paragraphs. ([bookFormatting] in the constructor sets both - off:
+  /// justified and a spacing step; the check tools and some tests use it.)
   bool get bookFormatting => ownAlign == null && !ownParagraphs;
 
   // equal themes lay out the same: a book isn't laid out again for an equal one
@@ -851,11 +854,6 @@ int pageFor(List<EpubPage> pages, int position) {
   return i;
 }
 
-/// The text size most of a book's paragraphs are set in (sampled chapters' [blocks]), as the book's own sizes run
-/// (1 = the reader's size) - when one size covers more than half their text; else 1. A book that sets its text
-/// smaller or larger all through doesn't override the reader's size; a size on a few blocks (a prelude, a letter,
-/// notes) stays (user, 2026-10-06: "don't let explicit css styling over-ride the default font size of the whole
-/// book").
 /// Whether a border shows by these declarations: a style that draws (not none / hidden) and a width above 0 - Exile's
 /// "border-style: solid; border-width: 0" drew a box round every chapter (user, build 73). Per side too.
 bool showsBorder(Map<String, String> d) {
@@ -905,6 +903,11 @@ bool bookTextBold(Iterable<List<Block>> chapters) {
   return total > 0 && bold * 2 > total;
 }
 
+/// The text size most of a book's body text is set in (sampled chapters' [blocks]; headings left out - all body
+/// text, p or div, user 2026-10-11), as the book's own sizes run (1 = the reader's size) - when one size covers more
+/// than half of it; else 1. A book that sets its text smaller or larger all through doesn't override the reader's
+/// size; a size on a few blocks (a prelude, a letter, notes) stays (user, 2026-10-06: "don't let explicit css
+/// styling over-ride the default font size of the whole book").
 double bookTextSize(Iterable<List<Block>> chapters) {
   final chars = <double, int>{};
   var total = 0;
@@ -1083,11 +1086,12 @@ class Paginator {
       // Paragraph spacing between two paragraphs: with the reader's paragraphs (a step) it IS the gap - the usual one
       // is gone (above), and where the book keeps one, the larger of the two (user, 2026-10-11: the setting owns the
       // gaps; never closer than the book's where it keeps one)
-      final step = b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph && !b.breakBefore
+      // (Book's - not [EpubTheme.ownParagraphs] - is the book's gaps alone)
+      final step = theme.ownParagraphs && b is TextBlock && b.paragraph && prev is TextBlock && prev.paragraph &&
+              !b.breakBefore
           ? theme.paragraphGap * theme.fontSize
           : 0.0;
-      final kept = math.max(_pendingGap, mt * _bookEm);
-      var gap = theme.ownParagraphs ? math.max(kept, step) : kept + step;
+      var gap = math.max(math.max(_pendingGap, mt * _bookEm), step);
       // text under a heading: half a line at least, when the book leaves none (New Sun's, Xanth's, the Belgariad's
       // chapter titles sat on their first line - user, 2026-10-06 survey: "gap after headings")
       if (b is TextBlock && prev is TextBlock && isHeading(prev) && !isHeading(b) && !b.breakBefore) {
