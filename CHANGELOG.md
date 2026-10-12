@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **eBooks: a footnote showed every note in the book** in books that keep all their notes in one block (Hogfather
+  and other calibre-made books); it now shows just the note tapped.
+
 ## 1.3.0
 
 ### Build 104 - 2026-10-11
