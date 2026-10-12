@@ -186,7 +186,10 @@ class Downloads extends ChangeNotifier {
     _serverTimer?.cancel();
     waitingForServer = false;
     final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
-    final folder = await serverFolder(base, api.baseUrl);
+    var folder = await serverFolder(base, api.baseUrl);
+    // none here yet, and another address's downloads are this library's (Komga moved, its database with it): they're
+    // this server's now
+    folder = await movedFrom(base, folder, api.baseUrl, (id) async => await api.book(id) != null) ?? folder;
     // the same folder (signed in again to the same server): the same store - a second one for it, while a download
     // from before was still writing through the first, had two writing index.json (code review 2026-10-05, #27)
     if (store?.root.path != folder.path) {
@@ -246,6 +249,59 @@ class Downloads extends ChangeNotifier {
     final safe = me.replaceAll(RegExp(r'^[a-z]+://'), '').replaceAll(RegExp(r'[^a-z0-9.]+'), '_');
     final other = Directory('${base.path}-$safe');
     return await owner(other) == me ? other : claim(other);
+  }
+
+  /// The same Komga at a new address (user, 2026-10-12: moved to the NAS, its database with it): its downloads, filed
+  /// under the old address ([serverFolder]), went missing - a new, empty folder for the new one. When [current] (this
+  /// server's folder) has no books and another address's folder has, and this server knows most of those books
+  /// ([known]: asked about a few), that folder becomes this server's - its reading progress not yet sent goes with it,
+  /// to the same database. The empty folder is removed (only if nothing but its label and empty lists is in it).
+  /// Null: nothing to take over (books here already; none elsewhere; another library's; Komga not answering - asked
+  /// again next time).
+  static Future<Directory?> movedFrom(Directory base, Directory current, String baseUrl,
+      Future<bool> Function(String bookId) known) async {
+    try {
+      final here = OfflineStore(current);
+      await here.load();
+      if (here.books.isNotEmpty) return null;
+      final queued = here.file('queue.json');
+      if (await queued.exists() && (jsonDecode(await queued.readAsString()) as List).isNotEmpty) {
+        return null; // downloads already asked for at this address: it's in use - left as it is
+      }
+      final parent = base.parent;
+      if (!await parent.exists()) return null;
+      final name = base.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      final others = <(Directory, OfflineStore)>[];
+      await for (final e in parent.list()) {
+        if (e is! Directory || e.path == current.path) continue;
+        final n = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+        if (n != name && !n.startsWith('$name-')) continue;
+        if (!await File('${e.path}${Platform.pathSeparator}server.json').exists()) continue;
+        final s = OfflineStore(e);
+        await s.load();
+        if (s.books.isNotEmpty) others.add((e, s));
+      }
+      others.sort((a, b) => b.$2.books.length - a.$2.books.length); // the most books first
+      for (final (dir, s) in others) {
+        final sample = s.books.keys.take(3).toList();
+        var found = 0;
+        for (final id in sample) {
+          if (await known(id)) found++;
+        }
+        if (found * 2 <= sample.length) continue; // most not on this server: another library
+        String norm(String u) => u.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+        await File('${dir.path}${Platform.pathSeparator}server.json').writeAsString(jsonEncode({'url': norm(baseUrl)}));
+        // the empty folder made for this address: gone, if empty (its label, and lists with nothing in them)
+        final left = await current.list().map((f) => f.uri.pathSegments.where((p) => p.isNotEmpty).last).toList();
+        if (left.every(const {'server.json', 'index.json', 'progress.json', 'queue.json'}.contains)) {
+          await current.delete(recursive: true);
+        }
+        return dir;
+      }
+    } catch (_) {
+      // offline, or Komga not answering: asked again next time
+    }
+    return null;
   }
 
   // ---- Delete once read (Settings > Downloads, this device): Never / Ask / Always (tablet bug, 2026-09-30) -----------
