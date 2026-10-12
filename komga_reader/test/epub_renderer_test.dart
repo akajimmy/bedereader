@@ -218,6 +218,9 @@ void main() {
       await tester.pump();
       expect(curling(), findsOneWidget, reason: 'this page curling away');
       expect(page(tester), 1.0, reason: 'the next page already underneath');
+      // the back of the page in the page's own colour, not white paper (user, 2026-10-11)
+      expect((tester.widget<CustomPaint>(curling()).painter! as PageCurlPainter).paper,
+          AppSettings.instance.epub.colours.background);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(curling(), findsNothing);

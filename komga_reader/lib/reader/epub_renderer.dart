@@ -537,6 +537,7 @@ class EpubRenderer extends Renderer {
       if (turned && _pc.hasClients) host.turned((_pc.page ?? 0).round());
     },
     pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
+    paper: () => _drawn.background, // the back of the page in the page's own colour (user, 2026-10-11)
   );
   static const _turnCurve = Curves.easeInOut;
 
