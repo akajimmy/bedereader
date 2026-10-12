@@ -452,6 +452,36 @@ void main() {
     expect(o[4].dy - o[3].dy, closeTo(line, 0.5), reason: "the break's usual 1em below goes like the others'");
   });
 
+  test("Paragraph spacing owns the gaps (user, 2026-10-11): a step IS the gap between indented paragraphs (the book's "
+      "usual one replaced, not added to); where the book keeps a gap - unindented paragraphs - the larger of the two; "
+      "Book's: the book's gaps as they are", () {
+    List<Offset> lay(String css, EpubTheme theme) => Paginator(theme, const Size(1400, 900), null)
+        .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml('<body><p>One.</p><p>Two.</p></body>')))
+        .single
+        .textOrigins;
+    // the gap over Default's (no gap): what the setting added
+    double gap(String css, EpubTheme theme) {
+      final o = lay(css, theme), d = lay(css, const EpubTheme(ownParagraphs: true));
+      return (o[1].dy - o[0].dy) - (d[1].dy - d[0].dy);
+    }
+
+    const indented = 'p { margin: 1em 0; text-indent: 1.5em }', flush = 'p { margin: 1em 0 }';
+    // indented: Default (0) leaves no gap; a step of 1 em is 1 em (19), not the book's 1 em plus 1
+    expect(gap(indented, const EpubTheme(ownParagraphs: true, paragraphGap: 1)), closeTo(19, 0.5));
+    // flush: the book's 1 em kept; a step of 0.5 em doesn't shrink it, one of 1.5 em is 1.5 em
+    final flushDefault = lay(flush, const EpubTheme(ownParagraphs: true));
+    double flushGap(double step) {
+      final o = lay(flush, EpubTheme(ownParagraphs: true, paragraphGap: step));
+      return o[1].dy - o[0].dy;
+    }
+    expect(flushGap(0.5), closeTo(flushDefault[1].dy - flushDefault[0].dy, 0.5), reason: 'never closer than the book');
+    expect(flushGap(1.5) - flushGap(0), closeTo(0.5 * 19, 0.5), reason: 'the larger: 1.5 em, not 1 + 1.5');
+    // Book's: the book's own 1 em, nothing taken out or added
+    final book = lay(indented, const EpubTheme(ownAlign: TextAlign.justify));
+    final none = lay(indented, const EpubTheme(ownParagraphs: true));
+    expect((book[1].dy - book[0].dy) - (none[1].dy - none[0].dy), closeTo(19, 0.5));
+  });
+
   test("alignment and paragraphs set apart (user, 2026-10-07: \"Book's formatting\" in three): the reader's own "
       "alignment keeps the book's paragraph gaps; the reader's paragraphs take them out whatever the alignment", () {
     const css = 'p { margin: 1em 0; text-indent: 1.5em }';
@@ -485,7 +515,8 @@ void main() {
     expect(o[2].dy - o[1].dy, greaterThan(line[2].dy - line[1].dy + 10), reason: "the book's gap stays");
     final indented = page('p { margin: 0; text-indent: 3em }');
     expect(indented.textIndents[1], closeTo(3 * 19, 1), reason: "the book's own 3 em, not the reader's 1.5");
-    expect(indented.textIndents[0], lessThan(1), reason: 'not the first paragraph, after nothing');
+    expect(indented.textIndents[0], closeTo(3 * 19, 1),
+        reason: 'the first paragraph too: the book indents it (user, 2026-10-11: follow the book exactly)');
   });
 
   test("a flush first paragraph followed by indented ones (Foundation's cotx1 then tx) has no more gap under it than "
@@ -704,8 +735,8 @@ void main() {
     expect((blocks.single as TextBlock).floatImage?.src, 'a.png');
   });
 
-  test('E4: a scene break written as <hr/> keeps a gap, and the paragraph after it starts without an indent (with '
-      "the reader's paragraphs)", () {
+  test('E4: a scene break written as <hr/> keeps a gap; the paragraph after it keeps the book\'s indent (user, '
+      "2026-10-11: follow the book exactly - it used to be taken off, as in print)", () {
     // (a book whose paragraphs are indented: the indent is the book's, never the reader's - user, 2026-10-07)
     EpubPage page(String body) => Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
         .run(ChapterReader(StyleSheet()..add('p { text-indent: 1.5em }'), (h) => h)
@@ -716,7 +747,7 @@ void main() {
     final plain = lay(plainSrc), broken = lay(brokenSrc);
     expect(broken[2].dy - broken[1].dy, greaterThan(plain[2].dy - plain[1].dy + 10), reason: 'a gap at the break');
     expect(page(plainSrc).textIndents[2], greaterThan(10), reason: 'an ordinary paragraph is indented');
-    expect(page(brokenSrc).textIndents[2], lessThan(1), reason: 'no indent after the break');
+    expect(page(brokenSrc).textIndents[2], greaterThan(10), reason: "the book's indent after the break too");
     // blank paragraphs between EVERY paragraph are a converted book's spacing, not breaks: the reader's paragraphs even them
     final spaced = lay(List.generate(8, (i) => '<p>P$i.</p><p>&nbsp;</p>').join());
     expect(spaced[2].dy - spaced[1].dy, closeTo(spaced[1].dy - spaced[0].dy, 0.5));

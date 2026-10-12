@@ -168,9 +168,10 @@ class EpubRenderer extends Renderer {
         EpubAlign.justified => TextAlign.justify,
         EpubAlign.left => TextAlign.left,
       },
-      ownParagraphs: e.paragraphs == EpubParagraphs.mine,
+      // the gaps between paragraphs are Paragraph spacing's: Book's leaves the book's, a step replaces them
+      ownParagraphs: e.paragraphGap != EpubParagraphGap.book,
       hyphenate: e.hyphenate,
-      paragraphGap: e.paragraphGap.ems,
+      paragraphGap: e.paragraphGap.ems ?? 0,
       accent: Theme.of(context).colorScheme.primary,
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
@@ -220,7 +221,19 @@ class EpubRenderer extends Renderer {
     }
     // the book's own text size first (a book set smaller or larger all through shows at the reader's size)
     final b = EpubBook(from, info, hy);
-    await b.measureTextSize();
+    // measured once per build of the app and file of the book, then kept with its page counts (user, 2026-10-11: it
+    // loaded five chapters on every open)
+    final version = '${_appVersion ??= await getAppVersion() ?? ''}|'
+        '${book['fileLastModified'] ?? ''}/${book['sizeBytes'] ?? ''}';
+    final kept = await EpubCountStore.instance.loadTextSize(id, version).catchError((Object _) => null);
+    if (kept != null) {
+      b
+        ..textSize = kept.$1
+        ..textBold = kept.$2;
+    } else {
+      await b.measureTextSize();
+      unawaited(EpubCountStore.instance.saveTextSize(id, version, b.textSize, b.textBold));
+    }
     _progress = progress;
     return _Prepared(b, chapter, fraction, known);
   }

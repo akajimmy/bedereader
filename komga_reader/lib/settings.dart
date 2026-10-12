@@ -431,18 +431,21 @@ enum EpubMargins {
   static const double topBottom = 40;
 }
 
-/// Space added between paragraphs, in ems of the text (user, 2026-10-06: "an option to increase the spacing between
-/// paragraphs"): on top of the book's own spacing, or of none with the reader's own formatting.
+/// The gap between paragraphs (user, 2026-10-06: "an option to increase the spacing between paragraphs"; 2026-10-11:
+/// the setting owns the gaps). Book's: the book's own gaps, as it sets them. A step: that gap, in ems of the text,
+/// in place of the chapter's usual one (Default: none) - never closer than the book's where it keeps one for a reason
+/// (a paragraph it doesn't indent, under a picture, a gap that differs from the usual).
 enum EpubParagraphGap {
   // (saved by name: 'small' stays half a line - shown as Medium since the steps became five, user 2026-10-08)
-  none(0, 'None'),
+  book(null, "Book's"),
+  none(0, 'Default'),
   tiny(0.25, 'Small'),
   small(0.5, 'Medium'),
   large(1, 'Large'),
   huge(1.5, 'Extra large');
 
   const EpubParagraphGap(this.ems, this.label);
-  final double ems;
+  final double? ems; // null: the book's
   final String label;
 }
 
@@ -457,20 +460,11 @@ enum EpubAlign {
   final String label;
 }
 
-/// Paragraphs' first-line indents and the gaps between them: the book's own, or the reader's (indents only where the
-/// book indents, the usual gaps taken out).
-enum EpubParagraphs {
-  book("Book's"), mine('Auto'); // (saved as 'mine'; shown as Auto - user, 2026-10-07)
-
-  const EpubParagraphs(this.label);
-  final String label;
-}
-
 @immutable
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.5,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
-      this.paragraphs = EpubParagraphs.mine, this.hyphenate = true, this.turn = EpubTurn.slide,
+      this.hyphenate = true, this.turn = EpubTurn.slide,
       this.paragraphGap = EpubParagraphGap.none});
   final EpubFont font;
   final double size; // px at the app's text size
@@ -478,7 +472,6 @@ class EpubPrefs {
   final EpubMargins margins;
   final EpubColours colours;
   final EpubAlign align;
-  final EpubParagraphs paragraphs;
   final bool hyphenate;
   final EpubTurn turn;
   final EpubParagraphGap paragraphGap;
@@ -488,15 +481,15 @@ class EpubPrefs {
   static const spacings = [1.0, 1.25, 1.5, 1.75, 2.0];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          EpubAlign? align, EpubParagraphs? paragraphs, bool? hyphenate, EpubTurn? turn,
+          EpubAlign? align, bool? hyphenate, EpubTurn? turn,
           EpubParagraphGap? paragraphGap}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours, align: align ?? this.align,
-          paragraphs: paragraphs ?? this.paragraphs, hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
+          hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
           paragraphGap: paragraphGap ?? this.paragraphGap);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
-      'margins': margins.name, 'colours': colours.name, 'align': align.name, 'paragraphs': paragraphs.name,
+      'margins': margins.name, 'colours': colours.name, 'align': align.name,
       'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
@@ -511,7 +504,6 @@ class EpubPrefs {
       margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       align: pick(EpubAlign.values, j['align'], EpubAlign.justified),
-      paragraphs: pick(EpubParagraphs.values, j['paragraphs'], EpubParagraphs.mine),
       hyphenate: j['hyphenate'] != false,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
