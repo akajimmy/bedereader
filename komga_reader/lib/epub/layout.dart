@@ -446,9 +446,15 @@ class ChapterReader {
       _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
-    // only a p is a paragraph - the reader's alignment and spacing act on those; a div is shown as the book styles it
-    // (user, 2026-10-11: "p only, the usual way" - divs of text were taken for paragraphs, and bold ones for titles)
-    final isPara = para.paragraph;
+    // a div holding only running text is a paragraph too - 64 of the library's books write every paragraph so (Dune,
+    // Kingkiller, Codex Alera, the Culture): without this, the reader's alignment and spacing missed them all (user,
+    // 2026-10-11: "treat text-only divs as paragraphs"). Not one with blocks inside, nor one set larger than round it
+    // (a title) - whether it's bold doesn't count (user, 2026-10-11: titles might not be bold, bold things might not be
+    // titles)
+    final plainDiv = e.name == 'div' && st.size <= inh.size + 0.001;
+    final isPara = para.paragraph || (plainDiv && blocks.length == startAt && identical(_cur, para));
+    // text opening a div before its paragraphs is one too (the Belgariad's chapters open so)
+    if (isPara || (plainDiv && !para.isEmpty)) para.paragraph = true;
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
       final first = para.runs.first;
       final t = first.text.trimLeft();

@@ -527,20 +527,23 @@ void main() {
 
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
 
-  test('only a p is a paragraph (user, 2026-10-11: "p only, the usual way"): a div of text - Dune\'s div.tx - is shown '
-      "as the book styles it, untouched by Paragraph spacing; its size still counts as the book's text size", () {
+  test("a div holding only text is a paragraph (64 of the library's books write every paragraph so - Dune's div.tx): "
+      "Paragraph spacing reaches it, and its size counts as the book's; a div with blocks inside, or set larger, isn't; "
+      'bold makes no difference (user, 2026-10-11)', () {
     List<Block> read(String css, String html) => ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html));
     final dune = read('.tx { font-size: small; text-indent: 1em }',
         '<body><div class="tx">One line.</div><div class="tx">Two lines.</div></body>');
-    expect(dune.cast<TextBlock>().any((b) => b.paragraph), isFalse);
-    expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: still shown at the reader's size");
+    expect(dune.cast<TextBlock>().every((b) => b.paragraph), isTrue);
+    expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: shown at the reader's size");
     double second(double gap) =>
         Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(dune).single.textOrigins[1].dy;
-    expect(second(1), closeTo(second(0), 0.01), reason: 'Paragraph spacing leaves divs alone');
-    final others = read('.b { font-weight: bold }',
-        '<body><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div><div>They were nine days</div></body>');
+    expect(second(1) - second(0), closeTo(19, 0.01), reason: 'Paragraph spacing: 1 em more');
+    final others = read('.big { font-size: x-large } .b { font-weight: bold }',
+        '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div>'
+        '<div>They were nine days <p>a block</p></div></body>');
     expect(others.cast<TextBlock>().where((b) => b.paragraph).map((b) => b.runs.map((r) => r.text).join().trim()),
-        ['Inside.', 'Text.'], reason: 'the p elements; text in a div, bold or not, is not a paragraph');
+        ['Inside.', 'Eleven', 'Text.', 'They were nine days', 'a block'],
+        reason: 'not the larger title; the bold text opening its div is a paragraph like any other (bold isn\'t a title)');
   });
 
   test('the text is shown as written: a typewriter\'s "--" and "---" stay hyphens (user, 2026-10-11: no guessing from '
@@ -560,15 +563,17 @@ void main() {
     expect(fixC1('plain — text'), 'plain — text');
   });
 
-  test('headings are not hyphenated ("DEMOS-THENES" - Ender\'s Game), the text under them is; bold divs count as '
-      "headings (the Belgariad's chapter titles)", () {
+  test('headings are not hyphenated ("DEMOS-THENES" - Ender\'s Game), the text under them is; text opening a '
+      "div is a paragraph even when bold (user, 2026-10-11: bold isn't a title - the Belgariad's bold titles read as "
+      'text)', () {
     const word = 'Demosthenes extraordinary recriminations';
     int marks(String html, {String css = ''}) => Paginator(const EpubTheme(), const Size(260, 900), hy.forLang('en'))
         .run(ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html)))
         .fold(0, (n, p) => n + p.hyphenMarks);
     expect(marks('<body><p>$word $word</p></body>'), greaterThan(0), reason: 'running text: hyphenated');
     expect(marks('<body><h2>$word</h2></body>'), 0);
-    expect(marks('<body><div class="bs2"><span>$word</span><p/></div></body>', css: '.bs2 { font-weight: bold }'), 0);
+    expect(marks('<body><div class="bs2"><span>$word</span><p/></div></body>', css: '.bs2 { font-weight: bold }'),
+        greaterThan(0), reason: 'a paragraph, hyphenated like one');
   });
 
   test('a heading gets half a line of space under it when the book leaves none (New Sun, Xanth, the Belgariad)', () {
