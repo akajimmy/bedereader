@@ -1,8 +1,9 @@
 # Builds BeDeReader for iPhone / iPad, signs it and uploads it to App Store Connect, where it shows up in TestFlight
 # (user, 2026-10-12: TestFlight rather than sideloading - no cable, builds that last 90 days). Signing is Xcode's own,
 # managed through the App Store Connect API key: no certificate or profile is kept anywhere.
-# Run it from the Actions tab ("Run workflow"). Needs these repository secrets (Settings > Secrets and variables >
-# Actions), added by the user:
+# Runs on every push to the ios branch (a run started by hand needs the workflow on the default branch, main). Until
+# these repository secrets are set (Settings > Secrets and variables > Actions - added by the user) it does nothing
+# and says so:
 #   ASC_KEY_ID       the API key's Key ID
 #   ASC_ISSUER_ID    the Issuer ID shown above the keys list
 #   ASC_KEY_P8       the whole text of the AuthKey_XXXX.p8 file
@@ -11,6 +12,8 @@ name: TestFlight
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ios]
 
 jobs:
   testflight:
@@ -25,27 +28,39 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - name: The secrets are there
+        id: ready
+        working-directory: .
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          for s in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
-            if [ -z "${!s}" ]; then echo "::error::The repository secret $s isn't set"; exit 1; fi
+          for s in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID ASC_KEY_P8; do
+            if [ -z "${!s}" ]; then
+              echo "::notice::No TestFlight build: the repository secret $s isn't set yet"
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
           done
+          echo "go=true" >> "$GITHUB_OUTPUT"
 
       - uses: actions/checkout@v7
+        if: steps.ready.outputs.go == 'true'
 
       - uses: subosito/flutter-action@v2
+        if: steps.ready.outputs.go == 'true'
         with:
           flutter-version: 3.47.5 # the same as the Windows / Android builds
           channel: stable
           cache: true
 
       - name: Dependencies
+        if: steps.ready.outputs.go == 'true'
         run: flutter pub get
 
       - name: The API key on disk (only for this run)
+        if: steps.ready.outputs.go == 'true'
         env:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
         run: |
-          if [ -z "$ASC_KEY_P8" ]; then echo "::error::The repository secret ASC_KEY_P8 isn't set"; exit 1; fi
           mkdir -p "$RUNNER_TEMP/keys"
           printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
           echo "ASC_KEY_PATH=$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8" >> "$GITHUB_ENV"
@@ -53,9 +68,11 @@ jobs:
       # Flutter's side (the Dart code compiled, the version and build number set); Xcode builds and signs the rest.
       # Build numbers: this workflow's run number + 1000, above anything the unsigned iOS build used.
       - name: Flutter's part
+        if: steps.ready.outputs.go == 'true'
         run: flutter build ios --release --config-only --build-number=$((1000 + ${{ github.run_number }}))
 
       - name: Archive (signed by Xcode through the API key)
+        if: steps.ready.outputs.go == 'true'
         run: |
           xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
@@ -66,6 +83,7 @@ jobs:
             archive
 
       - name: Export and upload to App Store Connect
+        if: steps.ready.outputs.go == 'true'
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
@@ -88,4 +106,5 @@ jobs:
 
       - name: The API key off disk
         if: always()
+        working-directory: .
         run: rm -rf "$RUNNER_TEMP/keys"
