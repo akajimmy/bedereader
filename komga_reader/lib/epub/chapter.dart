@@ -65,7 +65,9 @@ class ChapterLoader {
       try {
         codec = await ui.instantiateImageCodec(await source.resource(e.key));
         final picture = (await codec.getNextFrame()).image;
-        final ink = math.min(picture.width, picture.height) < 150 && await inkOnLight(picture);
+        // an ornament: its shorter side 150 px or less (The Dispossessed's chapter numbers are 150 x 555, Thud's
+        // ornament 150 x 185 - they were left white); maps and illustrations aren't recoloured (user, 2026-10-11)
+        final ink = math.min(picture.width, picture.height) <= 150 && await inkOnLight(picture);
         for (final img in e.value) {
           img
             ..image = picture.clone()
@@ -105,5 +107,7 @@ Future<bool> inkOnLight(ui.Image picture) async {
       }
     }
   }
-  return all > 0 && coloured / all < 0.05 && edge > 0 && lightEdge / edge > 0.8;
+  // at least half the edge light (it was 80%: Hitchhiker's drop-cap T, Homeland's E and A Dance with Dragons' chapter
+  // band have 52-71% and stayed white boxes - library check 2026-10-11)
+  return all > 0 && coloured / all < 0.05 && edge > 0 && lightEdge / edge >= 0.5;
 }
