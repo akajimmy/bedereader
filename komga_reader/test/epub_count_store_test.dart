@@ -33,6 +33,21 @@ void main() {
     expect((await FileCountStore(root: root).load('B1', 'L6'))!.starts, counts(7).starts);
   });
 
+  test("the book's text size and its counts saved at the same moment: both kept (each read the file, changed it and "
+      'wrote it; the second write lost the first - audit, 2026-10-11)', () async {
+    final store = FileCountStore(root: root);
+    await Future.wait([
+      store.saveTextSize('B1', 'v1', 0.85, true),
+      store.save('B1', 'L0', counts(1)),
+      store.saveTextSize('B2', 'v1', 1.0, false),
+      store.save('B2', 'L0', counts(2)),
+    ]);
+    expect(await store.loadTextSize('B1', 'v1'), (0.85, true));
+    expect((await store.load('B1', 'L0'))!.lengths, counts(1).lengths);
+    expect(await store.loadTextSize('B2', 'v1'), (1.0, false));
+    expect((await store.load('B2', 'L0'))!.lengths, counts(2).lengths);
+  });
+
   test("a damaged file is no counts (the book is counted again), and it's written afresh", () async {
     final store = FileCountStore(root: root);
     await store.save('B1', 'L0', counts(1));

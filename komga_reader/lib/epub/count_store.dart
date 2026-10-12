@@ -116,8 +116,21 @@ class FileCountStore implements EpubCountStore {
     }
   }
 
+  // a book's file read, changed and written by one save at a time: the text size's save (not waited for) and a count's
+  // could cross, the second written over the first (audit, 2026-10-11)
+  final Map<String, Future<void>> _writing = {};
+  Future<void> _inTurn(String bookId, Future<void> Function() write) {
+    final next = (_writing[bookId] ?? Future<void>.value()).then((_) => write());
+    _writing[bookId] = next;
+    return next.whenComplete(() {
+      if (identical(_writing[bookId], next)) _writing.remove(bookId);
+    });
+  }
+
   @override
-  Future<void> save(String bookId, String layout, EpubCounts counts) async {
+  Future<void> save(String bookId, String layout, EpubCounts counts) => _inTurn(bookId, () => _save(bookId, layout, counts));
+
+  Future<void> _save(String bookId, String layout, EpubCounts counts) async {
     try {
       final f = await _file(bookId);
       if (f == null) return;
@@ -152,7 +165,10 @@ class FileCountStore implements EpubCountStore {
   }
 
   @override
-  Future<void> saveTextSize(String bookId, String version, double size, bool bold) async {
+  Future<void> saveTextSize(String bookId, String version, double size, bool bold) =>
+      _inTurn(bookId, () => _saveTextSize(bookId, version, size, bold));
+
+  Future<void> _saveTextSize(String bookId, String version, double size, bool bold) async {
     try {
       final f = await _file(bookId);
       if (f == null) return;
