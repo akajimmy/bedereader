@@ -870,6 +870,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets("the book's own text size is measured on the first open and kept with its counts; the next open uses "
+      'what was kept instead of loading chapters to measure it again (user, 2026-10-11)', (tester) async {
+    final store = EpubCountStore.instance as MemoryCountStore;
+    await open(tester, twoChapters());
+    expect(store.textSizes.values.single, (1.0, false), reason: 'measured, and kept');
+    await tester.pumpWidget(const SizedBox());
+
+    // what's kept is what's used: a size put there shows up in the layout the book is counted in
+    final key = store.textSizes.keys.single;
+    store.textSizes[key] = (0.5, false);
+    store.kept.clear();
+    await open(tester, twoChapters());
+    expect(store.kept.keys.single, contains('/0.5/'), reason: 'laid out with the kept size, not a fresh measurement');
+    expect(store.textSizes[key], (0.5, false), reason: 'not measured again');
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
     await open(tester, MemorySource({
       'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',

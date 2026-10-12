@@ -36,6 +36,13 @@ abstract class EpubCountStore {
   Future<EpubCounts?> load(String bookId, String layout);
 
   Future<void> save(String bookId, String layout, EpubCounts counts);
+
+  /// The book's own text size and whether it's bold all through ([EpubBook.measureTextSize]) as measured for
+  /// [version] (the app's build and the book's file) - null if not kept. Kept apart from the layouts: it doesn't
+  /// depend on them (user, 2026-10-11: measured on the first open only, not every time).
+  Future<(double, bool)?> loadTextSize(String bookId, String version) async => null;
+
+  Future<void> saveTextSize(String bookId, String version, double size, bool bold) async {}
 }
 
 /// Kept in memory (tests).
@@ -51,6 +58,19 @@ class MemoryCountStore implements EpubCountStore {
 
   @override
   Future<void> save(String bookId, String layout, EpubCounts counts) async => kept['$bookId|$layout'] = counts;
+
+  final Map<String, (double, bool)> textSizes = {};
+  int textSizeLoads = 0;
+
+  @override
+  Future<(double, bool)?> loadTextSize(String bookId, String version) async {
+    textSizeLoads++;
+    return textSizes['$bookId|$version'];
+  }
+
+  @override
+  Future<void> saveTextSize(String bookId, String version, double size, bool bold) async =>
+      textSizes['$bookId|$version'] = (size, bold);
 }
 
 /// One file per book in the app's storage (epub-counts\<book>.json), its last [perBook] layouts in it; at most
@@ -105,13 +125,43 @@ class FileCountStore implements EpubCountStore {
       final all = await _read(f);
       all.remove(layout); // the newest last
       all[layout] = counts.toJson();
-      while (all.length > perBook) {
-        all.remove(all.keys.first);
+      while (all.keys.where((k) => k != _textSizeKey).length > perBook) {
+        all.remove(all.keys.firstWhere((k) => k != _textSizeKey));
       }
       await f.writeAsString(jsonEncode(all), flush: true);
       await _trim(f.parent);
     } catch (_) {
       // not kept: the book is counted again next time
+    }
+  }
+
+  // the book's text size, in the book's file beside its layouts (not one of the [perBook] trimmed)
+  static const _textSizeKey = 'textSize';
+
+  @override
+  Future<(double, bool)?> loadTextSize(String bookId, String version) async {
+    try {
+      final f = await _file(bookId);
+      if (f == null || !await f.exists()) return null;
+      final j = (await _read(f))[_textSizeKey];
+      if (j is! Map || j['version'] != version || j['size'] is! num || j['bold'] is! bool) return null;
+      return ((j['size'] as num).toDouble(), j['bold'] as bool);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveTextSize(String bookId, String version, double size, bool bold) async {
+    try {
+      final f = await _file(bookId);
+      if (f == null) return;
+      await f.parent.create(recursive: true);
+      final all = await _read(f);
+      all[_textSizeKey] = {'version': version, 'size': size, 'bold': bold};
+      await f.writeAsString(jsonEncode(all), flush: true);
+    } catch (_) {
+      // not kept: measured again next time
     }
   }
 
