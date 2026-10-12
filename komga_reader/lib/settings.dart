@@ -411,6 +411,8 @@ enum EpubColours {
 /// The page's left and right margins (user, 2026-10-08: "wider margins than currently possible" - five steps; the top
 /// and bottom no longer follow them: [topBottom] is the same for all).
 enum EpubMargins {
+  // the book's own page margin (its body's), as a browser shows it - no share, no line length (user, 2026-10-11)
+  book(0, 0, "Book's"),
   narrow(0.04, 40, 'Narrow'),
   normal(0.08, 34, 'Normal'),
   wide(0.14, 28, 'Wide'),

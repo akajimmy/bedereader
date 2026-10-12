@@ -68,14 +68,17 @@ class EpubRenderer extends Renderer {
 
   /// The page's left / right margin at [width]: the setting's share of the width ([EpubMargins.share]), or more on a
   /// wide screen, where lines stop at the setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
-  static double sideMargin(EpubPrefs e, double width) =>
-      math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
+  /// Margins: Book's - none here: each chapter's own page margin is used ([EpubTheme.bookMargins]).
+  static double sideMargin(EpubPrefs e, double width) => e.margins == EpubMargins.book
+      ? 0
+      : math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
 
   /// The page drawn as a sheet on a wide screen (user, 2026-10-11): where the lines stop at their length
   /// ([sideMargin]'s second case) with room to spare, the text column with the margins a page just that wide would
   /// have, the full height, centred - the rest is the surround ([surround]). Null where the page fills the screen (a
   /// portrait tablet, a narrow window). The text doesn't move: it's in the middle either way.
   static Rect? sheetRect(EpubPrefs e, Size size) {
+    if (e.margins == EpubMargins.book) return null; // the book's margins, as a browser: no sheet
     final share = e.margins.share;
     final width = e.size * e.margins.lineEms / (1 - 2 * share); // the column and a page's margins round it
     if ((size.width - width) / 2 < minSurround) return null;
@@ -172,6 +175,7 @@ class EpubRenderer extends Renderer {
       ownParagraphs: e.paragraphGap != EpubParagraphGap.book,
       hyphenate: e.hyphenate,
       paragraphGap: e.paragraphGap.ems ?? 0,
+      bookMargins: e.margins == EpubMargins.book,
       accent: Theme.of(context).colorScheme.primary,
       pixelRatio: MediaQuery.devicePixelRatioOf(context),
     );
@@ -406,7 +410,7 @@ class EpubRenderer extends Renderer {
       '${b.size.width.toStringAsFixed(1)}x${b.size.height.toStringAsFixed(1)}@${t.pixelRatio}',
       '${t.fontFamily}/${t.fontSize}/${t.lineHeight}/${t.paragraphGap}',
       '${m.left}/${m.top}/${m.right}/${m.bottom}',
-      '${t.ownAlign}/${t.ownParagraphs}/${t.hyphenate}/${b.textSize}/${b.textBold}',
+      '${t.ownAlign}/${t.ownParagraphs}/${t.hyphenate}/${b.textSize}/${b.textBold}/${t.bookMargins}',
     ].join('|');
   }
 

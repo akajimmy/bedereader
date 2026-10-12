@@ -3,6 +3,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/scheduler.dart';
@@ -10,6 +11,7 @@ import 'package:flutter/widgets.dart';
 
 import 'chapter.dart';
 import 'count_store.dart';
+import 'css.dart' show cssLength;
 import 'hyphenator.dart';
 import 'layout.dart';
 import 'source.dart';
@@ -200,7 +202,11 @@ class EpubBook extends ChangeNotifier {
     // the layout runs in one go on the UI thread: as long as it takes, frames wait (timed for the trace: a page turn
     // that stutters at a chapter's start shows here - user, 2026-10-06, "not smooth in the way that comics are")
     final laying = Stopwatch()..start();
-    final p = Paginator(_theme, _size, _theme.hyphenate ? hyphenators.forLang(content.lang) : null,
+    // Margins: Book's - this chapter's own page margin, as a browser has it (px as layout px, em the text's, % of the
+    // page's width)
+    double side(String v) => math.max(0, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
+    final theme = _theme.bookMargins ? _theme.withSides(side(content.bodyLeft), side(content.bodyRight)) : _theme;
+    final p = Paginator(theme, _size, theme.hyphenate ? hyphenators.forLang(content.lang) : null,
         baseSize: textSize, baseBold: textBold);
     final pages = p.run(content.blocks);
     if (gen != _generation) {
