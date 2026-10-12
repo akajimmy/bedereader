@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Windows: a right-click with the mouse moving went missing** - in both readers (the controls) and on posters (the
+  menu); so did a click that hides the reader's controls. Moved more than a short way while pressed, it wasn't taken
+  as a click. Now they count however far the mouse moves.
+
 ## 1.3.0
 
 ### Build 108 - 2026-10-12
