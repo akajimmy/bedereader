@@ -269,11 +269,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           progressBarRow(s, BookKind.ebooks),
         ]),
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
-        if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.ebooks)]),
+        SettingsGroup(title: 'Screen', children: [
+          epubSheetRow(s),
+          if (canRotate) rotationRow(s, BookKind.ebooks),
+        ]),
         _resetRow(context, 'eBooks', "Every setting on this page back to the defaults - Text, Formatting and Page on "
             "every device (they're synced).", () {
           s.setEpub(const EpubPrefs());
-          s.setDisplay(s.display.copyWith(ebooks: const DisplayPrefs().ebooks));
+          const z = DisplayPrefs();
+          s.setDisplay(s.display.copyWith(ebooks: z.ebooks, epubSheet: z.epubSheet));
         }),
       ]);
 

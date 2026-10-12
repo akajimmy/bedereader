@@ -529,6 +529,17 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
+/// eBooks on a wide screen: the page as a sheet on a surround, or the page's colour across the screen - this
+/// device's own (user, 2026-10-11: on the settings page, not the reader's panel).
+Widget epubSheetRow(AppSettings s) => SwitchRow(
+      title: 'Page as a sheet on wide screens',
+      subtitle: s.display.epubSheet
+          ? 'The page in the middle, a shade apart from the screen round it (this device)'
+          : 'The page colour across the whole screen (this device)',
+      value: s.display.epubSheet,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(epubSheet: v)),
+    );
+
 /// The note in the page's bottom-right corner, [kind]'s own - the same note for both kinds: the page of the book's
 /// pages (user, 2026-10-07).
 Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(

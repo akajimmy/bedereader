@@ -255,8 +255,14 @@ class DisplayPrefs {
       this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
-      this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs()});
+      this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
+      this.epubSheet = true});
   final bool night;
+
+  /// eBooks on a wide screen: the page as a sheet on a surround (on), or the page's colour across the whole screen
+  /// (off) - this device's own (user, 2026-10-11: "per device setting", not in the reader's panel). The lines are as
+  /// long either way.
+  final bool epubSheet;
 
   /// The reading settings set apart per kind of book ([KindPrefs]).
   final KindPrefs comics, ebooks;
@@ -319,9 +325,9 @@ class DisplayPrefs {
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
-          KindPrefs? comics, KindPrefs? ebooks}) =>
+          KindPrefs? comics, KindPrefs? ebooks, bool? epubSheet}) =>
       DisplayPrefs(
-        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks,
+        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, epubSheet: epubSheet ?? this.epubSheet,
         pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         posterDate: posterDate ?? this.posterDate,
@@ -346,7 +352,7 @@ class DisplayPrefs {
       'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
-      'comics': comics.toJson(), 'ebooks': ebooks.toJson()};
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'epubSheet': epubSheet};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -375,7 +381,8 @@ class DisplayPrefs {
         pagePreviews: j['pagePreviews'] != false, // on unless switched off
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
-        ebooks: kind('ebooks', none.ebooks));
+        ebooks: kind('ebooks', none.ebooks),
+        epubSheet: j['epubSheet'] != false); // on unless switched off
   }
 }
 
