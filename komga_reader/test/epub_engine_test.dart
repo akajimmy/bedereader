@@ -220,6 +220,27 @@ void main() {
     expect(pages.length, 1);
   });
 
+  test("a picture that doesn't fit in the space left on a page goes to the next page at its size, not squeezed into "
+      "what's left (user, 2026-10-11); one taller than a page is shrunk to a page", () async {
+    final img = await _image(200, 300);
+    List<EpubPage> lay(String before) {
+      final blocks =
+          ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$before<div><img src="i.jpg"/></div></body>'));
+      blocks.whereType<ImageBlock>().single.image = img;
+      return Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks);
+    }
+
+    // about two thirds of the page taken by text first: 300 high doesn't fit in what's left (it used to be shrunk into it)
+    final pages = lay(List.filled(9, '<p>${List.filled(12, 'word').join(' ')}</p>').join());
+    expect(pages.last.imageRects.single.size, const Size(200, 300), reason: 'on the next page, at its size');
+    expect(pages.first.imageRects, isEmpty);
+    final tall = await _image(200, 2000);
+    final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><div><img src="t.jpg"/></div></body>'));
+    blocks.whereType<ImageBlock>().single.image = tall;
+    final r = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).single.imageRects.single;
+    expect(r.height, closeTo(520, 0.5), reason: 'taller than a page: shrunk to the page (600 less 40 + 40)');
+  });
+
   test('pictures as a browser draws them (user, 2026-10-11): a size the book gives wins (Thud\'s chapter ornament, '
       'width="100"; em, %); a small picture with none at its own pixels as CSS pixels (the 30 x 45 star); a big one '
       'never drawn bigger than pixel for pixel, whatever the book says', () async {
@@ -290,13 +311,12 @@ void main() {
       expect(r.left, 36);
       expect(page.textOrigins.first.dx, greaterThan(r.right), reason: 'the first lines beside it');
       expect(page.textOrigins.last.dx, 36, reason: 'then the full width under it');
-      // smaller than two lines of text (Homeland's are 17 x 36; lines here 19 x 1.45): raised to two lines, in shape
-      // (user, 2026-10-06 survey: "native with a floor based on text")
+      // smaller than two lines of text (Homeland's are 17 x 36): its own size too - no two-line floor any more (user,
+      // 2026-10-11: drop caps at their own size)
       para.floatImage!.image = await _image(17, 36);
       page = Paginator(const EpubTheme(), const Size(400, 600), null).run(blocks).first;
       r = page.imageRects.single;
-      expect(r.height, closeTo(2 * 19 * 1.45 - 8, 0.01));
-      expect(r.width / r.height, closeTo(17 / 36, 0.001));
+      expect(r.size, const Size(17, 36));
     }
   });
 
@@ -669,6 +689,29 @@ void main() {
         reason: 'red ink: a colour picture');
     expect(await inkOnLight(await drawn(40, 60, const Color(0xFF101010), const Color(0xFFFFFFFF))), isFalse,
         reason: 'a dark ground: it sits on a dark page already');
+    // ink running off one side: 54% of the edge light (Hitchhiker's drop-cap T has 54%, Homeland's E 71% - they
+    // stayed white boxes under the old 80% rule; library check 2026-10-11)
+    final rec = ui.PictureRecorder();
+    Canvas(rec)
+      ..drawRect(const Rect.fromLTWH(0, 0, 40, 60), Paint()..color = const Color(0xFFFFFFFF))
+      ..drawRect(const Rect.fromLTWH(0, 0, 16, 60), Paint()..color = const Color(0xFF000000));
+    expect(await inkOnLight(await rec.endRecording().toImage(40, 60)), isTrue, reason: 'half the edge light is enough');
+  });
+
+  test("an ornament up to 150 px on its shorter side is recoloured (The Dispossessed's 150 x 555 chapter numbers); a "
+      'bigger picture - a map, an illustration - is left as it is', () async {
+    Future<Uint8List> png(int w, int h) async =>
+        (await (await drawn(w, h, const Color(0xFFFFFFFF), const Color(0xFF000000)))
+                .toByteData(format: ui.ImageByteFormat.png))!
+            .buffer
+            .asUint8List();
+    final source = _CountingSource(
+        {'c.xhtml': '<html><body><p><img src="orn.png"/></p><p><img src="map.png"/></p></body></html>'},
+        const EpubInfo(spine: ['c.xhtml'], toc: []),
+        binary: {'orn.png': await png(150, 300), 'map.png': await png(151, 300)});
+    final ch = await ChapterLoader(source).load('c.xhtml');
+    expect(ch.blocks.whereType<ImageBlock>().map((p) => p.inkOnLight), [true, false]);
+    ch.dispose();
   });
 
   test("a chapter number printed on white is drawn in the page's colours: its ground the page's, its ink the text's",

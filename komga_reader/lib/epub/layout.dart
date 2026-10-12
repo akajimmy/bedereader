@@ -1375,13 +1375,12 @@ class Paginator {
     } else if (fimg != null) {
       // a floated picture - a drop cap drawn as one included - at its own size, as the book has it, the text flowing
       // beside it (user, 2026-10-06: "as they would in the proper formatting", not resized like the text drop caps)
-      // ... but never shorter than two lines of text: Homeland's picture "T"s (17 x 36 pixels) were a speck beside one
-      // line (user, 2026-10-06 survey: "native with a floor based on text")
-      final floor = (2 * lineH - 8) / fimg.height;
-      final s = math.min(math.max(1.0, floor),
-          math.min(width * 0.35 / fimg.width, (_bottom - theme.margins.top) * 0.45 / fimg.height));
-      boxW = fimg.width * s;
-      boxH = fimg.height * s;
+      // - its size as any picture's ([_pictureSize]: the book's, or its own), no floor (user, 2026-10-11: drop caps at
+      // their own size); never more than 35% of the line's width or 45% of the page's height
+      final (fw, fh) = _pictureSize(b.floatImage!, fimg);
+      final s = math.min(1.0, math.min(width * 0.35 / fw, (_bottom - theme.margins.top) * 0.45 / fh));
+      boxW = fw * s;
+      boxH = fh * s;
       if (_y + boxH > _bottom && !_pageEmpty) _newPage();
       floatPiece = _ImagePiece(fimg, Rect.fromLTWH(x, _y + 4, boxW, boxH), filter: _filterFor(b.floatImage!));
     } else {
@@ -1514,13 +1513,12 @@ class Paginator {
     if (img == null) return;
     if (_y < _floatBottom) _y = _floatBottom; // a picture of its own goes below a float
     final maxW = _width;
-    var maxH = _bottom - _y;
-    if (maxH < (size.height - theme.margins.vertical) * 0.4 && !_pageEmpty) {
-      _newPage();
-      maxH = _bottom - _y;
-    }
-    // at the size the book gives it, or its own (shrunk to fit), centred
+    // at the size the book gives it, or its own, centred - shrunk only to the text's width or to a whole page: one
+    // that doesn't fit in the space left goes to the next page (user, 2026-10-11: never squeezed into what's left)
     final (w0, h0) = _pictureSize(b, img);
+    final hAtWidth = h0 * math.min(1.0, maxW / w0);
+    if (_y + hAtWidth > _bottom && !_pageEmpty) _newPage();
+    final maxH = _bottom - _y;
     final scale = math.min(1.0, math.min(maxW / w0, maxH / h0));
     final w = w0 * scale, h = h0 * scale;
     pages.last._at(b.start);
