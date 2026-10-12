@@ -527,23 +527,20 @@ void main() {
 
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
 
-  test("a div holding only text is a paragraph (Codex Alera's and Dune's every paragraph is a div.tx): Paragraph "
-      "spacing reaches it, and its size counts as the book's; a div with blocks inside, or set larger, isn't", () {
+  test('only a p is a paragraph (user, 2026-10-11: "p only, the usual way"): a div of text - Dune\'s div.tx - is shown '
+      "as the book styles it, untouched by Paragraph spacing; its size still counts as the book's text size", () {
     List<Block> read(String css, String html) => ChapterReader(StyleSheet()..add(css), (h) => h).read(parseXhtml(html));
     final dune = read('.tx { font-size: small; text-indent: 1em }',
         '<body><div class="tx">One line.</div><div class="tx">Two lines.</div></body>');
-    expect(dune.cast<TextBlock>().every((b) => b.paragraph), isTrue);
-    expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: shown at the reader's size");
+    expect(dune.cast<TextBlock>().any((b) => b.paragraph), isFalse);
+    expect(bookTextSize([dune]), 0.85, reason: "Dune's text is small all through: still shown at the reader's size");
     double second(double gap) =>
         Paginator(EpubTheme(paragraphGap: gap), const Size(400, 600), null).run(dune).single.textOrigins[1].dy;
-    expect(second(1) - second(0), closeTo(19, 0.01), reason: 'Paragraph spacing: 1 em more');
-    final others = read('.big { font-size: x-large } .b { font-weight: bold }',
-        '<body><div class="big">Chapter One</div><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div>'
-        '<div>They were nine days <p>a block</p></div></body>');
+    expect(second(1), closeTo(second(0), 0.01), reason: 'Paragraph spacing leaves divs alone');
+    final others = read('.b { font-weight: bold }',
+        '<body><div><p>Inside.</p></div><div class="b">Eleven<p>Text.</p></div><div>They were nine days</div></body>');
     expect(others.cast<TextBlock>().where((b) => b.paragraph).map((b) => b.runs.map((r) => r.text).join().trim()),
-        ['Inside.', 'Text.', 'They were nine days', 'a block'],
-        reason: "not the large title, nor the bold one opening its div; the text opening a plain div is (the "
-            "Belgariad's chapters open so)");
+        ['Inside.', 'Text.'], reason: 'the p elements; text in a div, bold or not, is not a paragraph');
   });
 
   test('the text is shown as written: a typewriter\'s "--" and "---" stay hyphens (user, 2026-10-11: no guessing from '

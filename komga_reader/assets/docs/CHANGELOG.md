@@ -22,6 +22,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   sizes them - at the size the book gives, or a small one at its own size in points; big pictures still never get
   bigger than their own pixels.
 
+**Changed**
+- **eBooks: only a book's real paragraphs get the reader's formatting.** Text a book sets in other blocks (some
+  books write every paragraph that way - Dune, Codex Alera) is shown as the book styles it; the Alignment and
+  Paragraph spacing settings no longer change it. Its text is still shown at your text size.
+
 ## 1.3.0
 
 ### Build 103 - 2026-10-11

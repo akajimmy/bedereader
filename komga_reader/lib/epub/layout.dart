@@ -446,14 +446,9 @@ class ChapterReader {
       _pendingDropImage = null;
     }
     _walk(e, st, al, ind);
-    // a <div> holding only running text is a paragraph too - some books write every one so (Codex Alera's and Dune's
-    // div.tx): the reader's paragraph spacing and formatting missed them all (user, 2026-10-06 survey). Not one with
-    // blocks inside, nor one set larger than round it (a title).
-    final plainDiv = e.name == 'div' && st.size <= inh.size + 0.001;
-    final isPara = para.paragraph || (plainDiv && blocks.length == startAt && identical(_cur, para));
-    // text opening a div before its paragraphs is one too (the Belgariad's chapters open so: the paragraph after had
-    // no indent or spacing) - a bold one is a title
-    if (isPara || (plainDiv && !st.bold && !para.isEmpty)) para.paragraph = true;
+    // only a p is a paragraph - the reader's alignment and spacing act on those; a div is shown as the book styles it
+    // (user, 2026-10-11: "p only, the usual way" - divs of text were taken for paragraphs, and bold ones for titles)
+    final isPara = para.paragraph;
     if (dropLetter && para.drop == null && para.runs.isNotEmpty) {
       final first = para.runs.first;
       final t = first.text.trimLeft();
@@ -827,14 +822,14 @@ bool showsBorder(Map<String, String> d) {
   return false;
 }
 
-/// Whether most of a book's paragraph text (sampled chapters' [blocks]) is bold - a book set in bold all through
+/// Whether most of a book's body text (sampled chapters' [blocks]) is bold - a book set in bold all through
 /// (Exile: its text wrapped in a bold class) is shown in the reader's normal weight; bold on a few parts stays (the
 /// font-size rule's reasoning: explicit CSS doesn't override the whole book's text - user, 2026-10-06).
 bool bookTextBold(Iterable<List<Block>> chapters) {
   var bold = 0, total = 0;
   for (final blocks in chapters) {
     for (final b in blocks) {
-      if (b is! TextBlock || !b.paragraph) continue;
+      if (b is! TextBlock || b.heading) continue; // all body text, p or div (user, 2026-10-11)
       for (final r in b.runs) {
         final n = r.text.trim().length;
         total += n;
@@ -850,7 +845,7 @@ double bookTextSize(Iterable<List<Block>> chapters) {
   var total = 0;
   for (final blocks in chapters) {
     for (final b in blocks) {
-      if (b is! TextBlock || !b.paragraph) continue;
+      if (b is! TextBlock || b.heading) continue; // all body text, p or div (user, 2026-10-11)
       for (final r in b.runs) {
         final n = r.text.trim().length;
         if (n == 0) continue;
