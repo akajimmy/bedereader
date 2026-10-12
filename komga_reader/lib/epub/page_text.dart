@@ -269,11 +269,12 @@ class PageText {
       final s = _segs[i];
       final from = i == a.seg ? a.offset : s.start, to = i == b.seg ? b.offset : s.end;
       if (to <= from) continue;
-      for (final box in s.laid.tp.getBoxesForSelection(TextSelection(baseOffset: from, extentOffset: to))) {
+      // (raised text - superscript - boxed where it's drawn, its line where it sits)
+      for (final (box, lift) in s.laid.boxesLifted(from, to)) {
         final r = box.toRect();
         final mid = r.center.dy;
         if (mid < s.piece.from || mid >= s.piece.to) continue; // (a line on another page)
-        out.add(r.shift(Offset(s.piece.at.dx, s.piece.at.dy - s.piece.from)));
+        out.add(r.shift(Offset(s.piece.at.dx, s.piece.at.dy - s.piece.from - lift)));
       }
     }
     return out;
