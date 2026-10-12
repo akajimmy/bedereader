@@ -573,6 +573,30 @@ class _Laid {
   /// Flutter can't raise text off the line, so the line keeps their room and this draws them.
   final TextPainter? raised;
   final double raise;
+
+  /// The painter ranges drawn raised (in [raised]).
+  final List<(int, int)> raisedRanges = [];
+
+  /// [tp]'s boxes for the painter range [from]..[to], each with how far above it it's drawn: the raised parts
+  /// [raise] (a selection or a highlight on a superscript sat under it - audit, 2026-10-11), the rest 0.
+  List<(TextBox, double)> boxesLifted(int from, int to) {
+    List<TextBox> plain(int a, int b) =>
+        a < b ? tp.getBoxesForSelection(TextSelection(baseOffset: a, extentOffset: b)) : const [];
+    final out = <(TextBox, double)>[];
+    var at = from;
+    for (final (s, e) in raisedRanges) {
+      if (e <= at || s >= to) continue;
+      out.addAll([for (final b in plain(at, math.max(at, s))) (b, 0.0)]);
+      out.addAll([for (final b in plain(math.max(at, s), math.min(e, to))) (b, raise)]);
+      at = math.min(e, to);
+    }
+    out.addAll([for (final b in plain(at, to)) (b, 0.0)]);
+    return out;
+  }
+
+  /// [boxesLifted], as drawn.
+  List<Rect> boxesFor(int from, int to) =>
+      [for (final (b, lift) in boxesLifted(from, to)) b.toRect().translate(0, -lift)];
   final List<Offset> marks = []; // painter coordinates: the hyphen's top-left
   final int base; // the chapter position of the painter's first character
   final List<(Rect, String, String)> links = []; // painter coordinates, where to, the link's text
@@ -913,13 +937,14 @@ class Paginator {
 
   bool _bold(InlineStyle s) => s.bold && !(baseBold && (s.size - baseSize).abs() < 0.01);
 
-  /// A heading: an <h1>-<h6>, or a short block that isn't a paragraph, all of it larger than the text or bold (the
-  /// Belgariad's chapter titles are bold divs). Not hyphenated, and some space under it.
+  /// A heading: an <h1>-<h6>, or a short block that isn't a paragraph, all of it larger than the text. Not
+  /// hyphenated, and some space under it. Bold alone doesn't make one (user, 2026-10-11: titles might not be bold,
+  /// bold things might not be titles - a short bold list item or quotation was still taken for one: audit).
   bool isHeading(TextBlock b) {
     if (b.heading) return true;
     if (b.paragraph || b.length > 120) return false;
     final shown = b.runs.where((r) => r.text.trim().isNotEmpty);
-    return shown.isNotEmpty && shown.every((r) => r.style.size >= baseSize * 1.15 || _bold(r.style));
+    return shown.isNotEmpty && shown.every((r) => r.style.size >= baseSize * 1.15);
   }
 
   /// The book's em: its margins, indents and spacing are in its own text size's ems - in proportion to it, as its
@@ -948,6 +973,10 @@ class Paginator {
 
   // every painter made, so the pages can be let go of (a chapter far from the one being read)
   final List<TextPainter> _made = [];
+
+  /// How many painters the layout keeps with its pages (tests).
+  @visibleForTesting
+  int get paintersKept => _made.length;
   // the hyphen at the book's own text size - the text's (at the default size it came out bigger in a book with a size
   // of its own, sat above the first line of a paragraph and wasn't drawn - user, build 74: Exile)
   late final TextPainter _hyphen = TextPainter(
@@ -1031,7 +1060,9 @@ class Paginator {
           final ownTop = (b.paraTop - _usualTop).abs() >= 0.01, ownBottom = (b.paraBottom - _usualBottom).abs() >= 0.01;
           // the indent is the book's, exactly - after a heading or a scene break too (user, 2026-10-11: "follow the
           // book exactly"; it used to be taken off there, as in print)
-          final booksIndent = b.indent > 0;
+          // A hanging indent marks a paragraph as a first-line one does ([_findUsual] - Foundation's transcript): its
+          // usual gap goes too (it kept it, the step's gap not taking its place - audit, 2026-10-11)
+          final booksIndent = b.indent != 0;
           // ... and only between two indented paragraphs: under a picture or a table the book's gap stays (the text
           // touched Small Gods' turtle ornament - user, build 82), and so does it for a paragraph the book doesn't
           // indent - its gap is what tells it from the one before (without either, paragraphs ran together)
@@ -1041,7 +1072,7 @@ class Paginator {
           // (Foundation's chapters open with a flush paragraph, then indented ones - the gap under the first was twice
           // the others, user 2026-10-08). Where most are flush, an indented one is something set apart (a letter,
           // verse, an epigraph - the Herbert / Anderson Dune books): the gap above it stays (library check 2026-10-11)
-          final indentedNext = _indentsUsual && next is TextBlock && next.paragraph && next.indent > 0 &&
+          final indentedNext = _indentsUsual && next is TextBlock && next.paragraph && next.indent != 0 &&
               !next.breakBefore &&
               (next.breakGap == 0 || _breaksAreSpacing);
           mb = ownBottom || (!booksIndent && !indentedNext) ? math.max(b.wrapBottom, b.paraBottom) : b.wrapBottom;
@@ -1118,12 +1149,16 @@ class Paginator {
     final least = List<double>.filled(cols, 0);
     for (final row in t.rows) {
       for (var c = 0; c < row.length; c++) {
-        final tp = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity, hyphenate: false).tp;
+        final laid = _painter(TextBlock()..runs.addAll(row[c]), row[c], double.infinity, hyphenate: false);
+        final tp = laid.tp;
         widths[c] = math.max(widths[c], tp.maxIntrinsicWidth.ceilToDouble());
         least[c] = math.max(least[c], tp.minIntrinsicWidth.ceilToDouble());
-        // only measured: freed now, not kept with the chapter's pages (E13)
-        _made.remove(tp);
-        tp.dispose();
+        // only measured: freed now, not kept with the chapter's pages (E13) - its raised twin too (superscript)
+        for (final p in [tp, laid.raised]) {
+          if (p == null) continue;
+          _made.remove(p);
+          p.dispose();
+        }
       }
     }
     final avail = _width - gap * (cols - 1);
@@ -1221,7 +1256,7 @@ class Paginator {
     // line). In [spans] they're clear - keeping their room in the line, and its height - and [shadow], the same text
     // with only them showing, is drawn a third of the text's size higher ([_Laid.raised]).
     final spans = <InlineSpan>[], shadow = <InlineSpan>[];
-    var raised = false;
+    final ups = <(int, int)>[]; // the painter ranges drawn raised
     const clear = Color(0x00000000);
     // the text's size here: the first plain run's (a marker in a <sup> is sized from the text, not the <sup>)
     final plainRun = runs.where((r) => r.style.link == null && !r.style.sup && r.text.trim().isNotEmpty).firstOrNull;
@@ -1235,7 +1270,7 @@ class Paginator {
     }
     var lead = true;
     var at = ind ? 1 : 0; // painter offset (the indent's placeholder is one character)
-    final linkRanges = <(int, int, String, String, bool)>[];
+    final linkRanges = <(int, int, String, String)>[];
     // headings aren't hyphenated ("DEMOS-THENES" - Ender's Game)
     final hyphens = hyphenate && !prepared && hyphenator != null && theme.hyphenate && !isHeading(b);
     // a note marker is a link in running text: a block that is all link (Ender's chapter number "8", a link back to
@@ -1267,9 +1302,9 @@ class Paginator {
       }
       spans.add(TextSpan(text: t, style: up ? style.copyWith(color: clear) : style));
       shadow.add(TextSpan(text: t, style: up ? style : style.copyWith(color: clear)));
-      raised |= up && t.trim().isNotEmpty;
+      if (up && t.trim().isNotEmpty) ups.add((at, at + t.length));
       if (link != null && t.trim().isNotEmpty) {
-        linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim(), up));
+        linkRanges.add((at, at + t.length, link, t.replaceAll(Hyphenator.soft, '').trim()));
       }
       at += t.length;
     }
@@ -1296,12 +1331,13 @@ class Paginator {
     final tp = lay(spans);
     final hyphen = _hyphen;
     final raise = textSize / 3;
-    final laid = _Laid(tp, hyphen, base ?? b.start, raised: raised ? lay(shadow) : null, raise: raise)..block = b;
-    for (final (s, e, href, text, up) in linkRanges) {
-      // one tap area per line the link is on (justified lines give a box per word)
+    final laid = _Laid(tp, hyphen, base ?? b.start, raised: ups.isEmpty ? null : lay(shadow), raise: raise)
+      ..block = b
+      ..raisedRanges.addAll(ups);
+    for (final (s, e, href, text) in linkRanges) {
+      // one tap area per line the link is on (justified lines give a box per word) - a raised marker's where it's drawn
       final lines = <double, Rect>{};
-      for (final box in tp.getBoxesForSelection(TextSelection(baseOffset: s, extentOffset: e))) {
-        final r = box.toRect().translate(0, up ? -raise : 0); // (where a raised marker is drawn)
+      for (final r in laid.boxesFor(s, e)) {
         final key = r.top.roundToDouble();
         lines[key] = lines[key]?.expandToInclude(r) ?? r;
       }
@@ -1513,10 +1549,11 @@ class Paginator {
     return out;
   }
 
-  /// A picture that opens full screen with a tap: 150 picture pixels or more both ways - an illustration, a map, a
+  /// A picture that opens full screen with a tap: over 150 picture pixels both ways - an illustration, a map, a
   /// cover; not a drop cap, an ornament or a chapter-head banner (Homeland's are 321 x 96) (user, 2026-10-06: "only
-  /// ... over a certain size").
-  static bool zoomable(ui.Image img) => math.min(img.width, img.height) >= 150;
+  /// ... over a certain size"). The ornaments drawn in the page's colours go to 150 ([inkOnLight]'s use): at 150 they
+  /// opened full screen as the white box they no longer are on the page (audit, 2026-10-11).
+  static bool zoomable(ui.Image img) => math.min(img.width, img.height) > 150;
 
   /// A small black-and-white picture on a light ground ([ImageBlock.inkOnLight]) in the page's own colours: its white
   /// box no longer glares on a dark page (user, 2026-10-06: "drop clashing backgrounds"). Others as they are.

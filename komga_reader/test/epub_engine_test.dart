@@ -590,6 +590,58 @@ void main() {
     expect(o[7].dy - o[6].dy, closeTo(o[8].dy - o[7].dy, 0.5), reason: 'under the flush one: the usual gap');
   });
 
+  test("hanging-indent paragraphs take Paragraph spacing's gap as first-line ones do: the book's usual gap goes "
+      '(audit 2026-10-11: they kept it - Foundation\'s transcript)', () {
+    List<Offset> lay(String cls) => Paginator(const EpubTheme(ownParagraphs: true), const Size(600, 900), null)
+        .run(ChapterReader(StyleSheet()..add('p { margin: 1em 0 } .tx { text-indent: 1em } '
+                '.dia { text-indent: -2em; margin-left: 2em }'), (h) => h)
+            .read(parseXhtml('<body>${List.filled(4, '<p class="$cls">Q. A question.</p>').join()}</body>')))
+        .single
+        .textOrigins;
+    final hanging = lay('dia'), firstLine = lay('tx');
+    expect(hanging[2].dy - hanging[1].dy, closeTo(firstLine[2].dy - firstLine[1].dy, 0.5));
+  });
+
+  // ---- the audit of 2026-10-11
+
+  test('only a larger size makes a short block a title - bold alone doesn\'t (user, 2026-10-11): a short bold list '
+      'item or quotation is text', () {
+    final p = Paginator(const EpubTheme(), const Size(400, 600), null);
+    TextBlock block(String html) =>
+        ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body>$html</body>')).whereType<TextBlock>().first;
+    expect(p.isHeading(block('<blockquote><b>A short bold line.</b></blockquote>')), isFalse);
+    expect(p.isHeading(block('<ul><li><b>Bold item</b></li></ul>')), isFalse);
+    expect(p.isHeading(block('<blockquote><span style="font-size: 1.5em">Larger.</span></blockquote>')), isTrue);
+  });
+
+  test('a picture 150 px on its shorter side - an ornament, drawn in the page\'s colours - doesn\'t open full '
+      'screen (there it showed as the white box it no longer is on the page); a bigger one does', () async {
+    Future<int> zooms(int w, int h) async {
+      final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p><img src="i.png"/></p></body>'));
+      blocks.whereType<ImageBlock>().single.image = await _image(w, h);
+      return Paginator(const EpubTheme(), const Size(1000, 1400), null).run(blocks).single.pictures.length;
+    }
+
+    expect(await zooms(150, 555), 0);
+    expect(await zooms(151, 555), 1);
+  });
+
+  test('a selection or a highlight on superscript is boxed where the raised text is drawn, not under it', () {
+    final page = Paginator(const EpubTheme(), const Size(400, 600), null)
+        .run(ChapterReader(StyleSheet(), (h) => h).read(parseXhtml('<body><p>Water<sup>12</sup> boils.</p></body>')))
+        .single;
+    final sup = page.text.boxesOfPositions(5, 7).single, word = page.text.boxesOfPositions(0, 5).single;
+    expect(sup.bottom, lessThan(word.bottom - 4), reason: 'raised: $sup, the word $word');
+  });
+
+  test("a table cell with superscript: the painters made to measure it are freed at once (the raised one was kept "
+      "with the chapter's pages)", () {
+    final blocks = ChapterReader(StyleSheet(), (h) => h)
+        .read(parseXhtml('<body><table><tr><td>Water<sup>12</sup></td></tr></table></body>'));
+    final p = Paginator(const EpubTheme(), const Size(400, 600), null)..run(blocks);
+    expect(p.paintersKept, 2, reason: "the cell's text and its raised twin, as drawn - none from measuring");
+  });
+
   // ---- the 2026-10-06 survey of 46 books on the tablet's page
 
   test("a div holding only text is a paragraph (64 of the library's books write every paragraph so - Dune's div.tx): "
