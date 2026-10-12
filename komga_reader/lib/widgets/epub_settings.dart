@@ -123,13 +123,6 @@ List<Widget> _formattingRows(EpubPrefs e, ValueChanged<EpubPrefs> set) => [
         value: e.align,
         onChanged: (v) => set(e.copyWith(align: v)),
       ),
-      SegmentRow<EpubParagraphs>(
-        title: 'Paragraphs',
-        subtitle: 'Indents and the gaps between them',
-        choices: [for (final p in EpubParagraphs.values) Choice(p, p.label)],
-        value: e.paragraphs,
-        onChanged: (v) => set(e.copyWith(paragraphs: v)),
-      ),
       SwitchRow(
         title: 'Auto-hyphenation',
         value: e.hyphenate,

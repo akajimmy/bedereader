@@ -71,14 +71,15 @@ void main() {
     final seen = <String>[];
     Focus.of(tester.element(find.text('Literata'))).requestFocus();
     await tester.pumpAndSettle();
-    for (var i = 0; i < 7; i++) {
+    for (var i = 0; i < 6; i++) {
       seen.add(name(focus()));
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown, platform: 'android');
       await tester.pumpAndSettle();
     }
-    // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment and Paragraphs open on Book's)
-    // (each row named by its first button: Line spacing's is Compact since its five steps, 2026-10-08)
-    expect(seen, ['Literata', 'Smaller', 'Compact', 'None', 'Narrow', "Book's", "Book's"]);
+    // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment opens on Book's)
+    // (each row named by its first button: Line spacing's is Compact since its five steps, 2026-10-08; Paragraph
+    // spacing's Book's since 2026-10-11, when the Paragraphs row went)
+    expect(seen, ['Literata', 'Smaller', 'Compact', "Book's", 'Narrow', "Book's"]);
   });
 
   // (the rows' order by screen position, not the focus tree's, is checked by settings_remote_test's walk of Library &

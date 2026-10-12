@@ -12,6 +12,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 - **eBooks open sooner**: the book's own text size is measured on its first open and remembered, instead of
   loading five chapters to measure it every time the book is opened.
+- **eBook settings: Paragraph spacing now decides the gaps between paragraphs, and the Paragraphs setting is
+  gone.** Its choices are Book's (the book's own gaps), Default (no gap, as before), Small, Medium, Large and
+  Extra large. A step sets the gap between paragraphs rather than adding to the book's; where the book keeps a
+  gap (paragraphs it doesn't indent, under a picture, scene breaks), it's never made smaller. Indents are always the
+  book's own - a chapter's first paragraph and the one after a scene break are indented when the book indents them.
+  (The old Paragraphs choice isn't carried over: everyone starts on Default.)
 
 **New**
 - **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
