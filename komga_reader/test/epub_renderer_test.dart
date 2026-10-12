@@ -1010,11 +1010,12 @@ void main() {
     await tester.tapAt(tester.getTopLeft(find.byType(PageView)) + marker.rect.center);
     await settle(tester);
     expect(find.text('The second note.'), findsOneWidget, reason: 'that note, alone');
-    await tester.tap(find.text('Close'));
+    await tester.tapAt(const Offset(400, 20)); // outside the sheet
     await settle(tester);
   });
 
-  testWidgets('a footnote marker opens the note over the page; the page stays', (tester) async {
+  testWidgets("a footnote marker opens the note in a sheet over the page, as Define's (user, 2026-10-11); Back or a "
+      'tap outside closes it; the page stays', (tester) async {
     await open(tester, MemorySource({
       'c1.xhtml': '<html><body><p>Here<a href="notes.xhtml#n1">*</a> is a note.</p></body></html>',
       'notes.xhtml': '<html><body><p id="n1"><a href="c1.xhtml">*</a>The note itself.</p></body></html>',
@@ -1027,9 +1028,19 @@ void main() {
     await tester.tapAt(tester.getTopLeft(find.byType(PageView)) + marker.rect.center);
     await settle(tester);
     expect(find.text('The note itself.'), findsOneWidget, reason: "the note, its own marker (its link back) left out");
-    await tester.tap(find.text('Close'));
+    expect(find.ancestor(of: find.text('The note itself.'), matching: find.byType(BottomSheet)), findsOneWidget,
+        reason: 'a sheet, not a dialog');
+    await tester.tapAt(const Offset(400, 20)); // outside the sheet
     await settle(tester);
     expect(find.text('The note itself.'), findsNothing);
     expect(find.byType(PageView), findsOneWidget, reason: 'still on the page');
+    // Back closes it too
+    await tester.tapAt(tester.getTopLeft(find.byType(PageView)) + marker.rect.center);
+    await settle(tester);
+    expect(find.text('The note itself.'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    expect(find.text('The note itself.'), findsNothing);
+    expect(find.byType(PageView), findsOneWidget, reason: 'Back closed the note, not the book');
   });
 }

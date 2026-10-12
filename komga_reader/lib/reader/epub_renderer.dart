@@ -26,6 +26,7 @@ import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../widgets/define_sheet.dart';
+import '../widgets/note_sheet.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/epub_settings.dart';
 import '../widgets/error_text.dart';
@@ -673,10 +674,7 @@ class EpubRenderer extends Renderer {
       final ctx = host.context;
       final note = await _noteText(path, frag);
       if (note != null && ctx.mounted) {
-        await showDialog<void>(context: ctx, builder: (c) => AlertDialog(
-          content: SingleChildScrollView(child: Text(note, style: const TextStyle(fontSize: 16, height: 1.4))),
-          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
-        ));
+        await showNote(ctx, l.text, note); // a sheet, as Define's (user, 2026-10-11)
         return;
       }
     }
