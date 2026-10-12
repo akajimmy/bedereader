@@ -378,6 +378,41 @@ void main() {
     expect((mark.r, mark.g, mark.b), (accent.r, accent.g, accent.b));
   });
 
+  testWidgets('Windows: a mouse click in the middle that moves a pixel or two while pressed still brings up the '
+      'controls (the selection took it for a drag - user, build 107: "having to click a couple times"); a double '
+      'click where there is no word brings them up too (it cancelled them)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      Future<void> click(Offset at, {double wobble = 0}) async {
+        final g = await tester.startGesture(at, kind: PointerDeviceKind.mouse);
+        await tester.pump(const Duration(milliseconds: 30));
+        if (wobble > 0) await g.moveBy(Offset(wobble, 0));
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.up();
+      }
+
+      final spot = Offset(400, at(tester, 'weather').dy);
+      await click(spot, wobble: 2);
+      await tester.pump(EpubRenderer.doubleTapWait);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'the wobbly click: the controls');
+      expect(selected(tester), isNull, reason: 'nothing selected by the wobble');
+      await tester.tapAt(const Offset(400, 600), kind: PointerDeviceKind.mouse); // the controls away
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsNothing);
+      // a double click below the text (no word there)
+      final blank = Offset(400, tester.getSize(find.byType(PageView)).height - 12);
+      await click(blank);
+      await tester.pump(const Duration(milliseconds: 80));
+      await click(blank);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'no word: the controls after all');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('a finger tap in the middle opens the controls at once - a word on a touch screen is a long press, not a '
       'double tap (user, build 107)', (tester) async {
     await open(tester);
