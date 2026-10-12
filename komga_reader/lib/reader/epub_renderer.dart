@@ -537,6 +537,7 @@ class EpubRenderer extends Renderer {
       if (turned && _pc.hasClients) host.turned((_pc.page ?? 0).round());
     },
     pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
+    paper: () => _drawn.background, // the back of the page in the page's own colour (user, 2026-10-11)
   );
   static const _turnCurve = Curves.easeInOut;
 
@@ -1253,7 +1254,10 @@ class EpubRenderer extends Renderer {
   /// The page's sheet now (null: the page fills the screen).
   // the sheet of the settings the book is laid out in: while new ones settle ([settleDelay]) the page is drawn as it
   // was, and the sheet with it (it took the new margins at once, the text running over its edge - audit, 2026-10-11)
-  Rect? get _sheet => sheetRect(_laidIn ?? AppSettings.instance.epub, _size);
+  // Switched off on this device (Settings > eBooks > Screen): none - the page's colour across the screen, the lines
+  // as long and as placed (user, 2026-10-11)
+  Rect? get _sheet =>
+      AppSettings.instance.display.epubSheet ? sheetRect(_laidIn ?? AppSettings.instance.epub, _size) : null;
   EpubPrefs? _laidIn;
 
   /// A page's paper with [child] on it: the whole area, or the sheet - with the surround round it when [surround] (a

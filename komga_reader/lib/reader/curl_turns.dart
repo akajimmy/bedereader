@@ -17,7 +17,7 @@ import '../page_curl.dart';
 /// goes on a RepaintBoundary round the page view (the snapshots); [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio}) {
+      required this.done, required this.pixelRatio, this.paper}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
       ..addStatusListener((s) {
@@ -30,6 +30,9 @@ class CurlTurns {
   final Rect Function() pageRect;
   final void Function({required bool turned}) done;
   final double Function() pixelRatio;
+
+  /// The back of the turning page's colour (the page's own); white paper when not given.
+  final Color Function()? paper;
 
   final boundary = GlobalKey(debugLabel: 'curl-pages');
   late final AnimationController _anim;
@@ -204,6 +207,7 @@ class CurlTurns {
               if (!c.pending)
                 CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
                     grab: c.grab, finger: c.finger, mirror: false,
+                    paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
           );

@@ -14,6 +14,7 @@ uniform vec2 uFold;    // a point on the fold line (page coordinates)
 uniform vec2 uNormal;  // unit normal of the fold line, pointing to the side that lifts
 uniform float uRadius; // cylinder radius
 uniform float uMirror; // 1 = right-to-left book: page coordinates run from the page's right edge
+uniform vec3 uPaper;   // the back of the page's colour: white paper for comics, the page's own for eBooks
 uniform sampler2D uSheet;
 
 out vec4 fragColor;
@@ -27,7 +28,7 @@ vec3 sheet(vec2 q) {  // q in page coordinates
   return texture(uSheet, (q + uRect.xy) / uSize).rgb;
 }
 
-vec3 backOf(vec2 q) { return mix(sheet(q), vec3(0.97, 0.96, 0.94), 0.82); }  // paper, the print showing through
+vec3 backOf(vec2 q) { return mix(sheet(q), uPaper, 0.82); }  // paper, the print showing through
 
 void main() {
   vec2 p = FlutterFragCoord().xy - uRect.xy;  // page coordinates

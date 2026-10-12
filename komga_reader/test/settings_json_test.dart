@@ -56,7 +56,7 @@ void main() {
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, posterDate: false);
+        pagePreviews: false, pageStrip: true, posterDate: false, epubSheet: false);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -87,6 +87,7 @@ void main() {
       ('pagePreviews', (d) => d.pagePreviews, false, true),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
+      ('epubSheet', (d) => d.epubSheet, false, true), // eBooks' sheet on wide screens, this device's (2026-10-11)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
     final none = DisplayPrefs.fromJson({}); // a save with none of them

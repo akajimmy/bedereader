@@ -9,7 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **Settings > eBooks > Screen: Page as a sheet on wide screens** - switch the sheet and its surround off to have
+  the page's colour across the whole screen (the lines stay as they are). Set on each device on its own.
+
 **Changed**
+- **eBooks, Page turn: Curl - the back of the turning page is the page's own colour** (it was white paper, glaring
+  on the dark and black pages).
 - **eBooks: footnotes and endnotes open in a panel like Define's** - sliding up from the bottom, headed "Note" with
   its marker, the note in larger text; Back or a tap outside closes it (it was a plain box with a Close button).
 

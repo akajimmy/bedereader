@@ -218,6 +218,9 @@ void main() {
       await tester.pump();
       expect(curling(), findsOneWidget, reason: 'this page curling away');
       expect(page(tester), 1.0, reason: 'the next page already underneath');
+      // the back of the page in the page's own colour, not white paper (user, 2026-10-11)
+      expect((tester.widget<CustomPaint>(curling()).painter! as PageCurlPainter).paper,
+          AppSettings.instance.epub.colours.background);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(curling(), findsNothing);
@@ -273,6 +276,35 @@ void main() {
 
     await open(tester, twoChapters());
     expect(surroundBox(), findsNothing, reason: '800 wide: the page fills the screen');
+  });
+
+  testWidgets("the sheet on wide screens switched off on this device (user, 2026-10-11): the page's colour across the "
+      'screen, no surround; the lines where they were', (tester) async {
+    addTearDown(() => AppSettings.instance.setDisplay(const DisplayPrefs()));
+    await open(tester, twoChapters(), size: const Size(1600, 1000));
+    final round = EpubRenderer.surround(AppSettings.instance.epub.colours.background);
+    Finder surroundBox() => find.byWidgetPredicate((w) => w is ColoredBox && w.color == round);
+    Set<Rect?> sheets() => tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'))
+        .map((w) => (w.painter as dynamic).sheet as Rect?)
+        .toSet();
+    List<Offset> lines() => (tester
+            .widgetList<CustomPaint>(find.byWidgetPredicate((w) =>
+                w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter' &&
+                (w.painter as dynamic).page != null))
+            .first
+            .painter as dynamic)
+        .page
+        .textOrigins as List<Offset>;
+    expect(surroundBox(), findsOneWidget);
+    expect(sheets().whereType<Rect>(), isNotEmpty);
+    final before = lines();
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubSheet: false));
+    await settle(tester);
+    expect(surroundBox(), findsNothing, reason: 'no surround');
+    expect(sheets(), {null}, reason: 'no sheet: the page fills the screen');
+    expect(lines(), before, reason: 'the lines as long and as placed');
   });
 
   testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "
