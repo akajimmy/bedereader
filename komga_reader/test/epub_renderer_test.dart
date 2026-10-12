@@ -71,6 +71,7 @@ class ReadListKomga extends TestKomga with EmptyClientSettings {
 }
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   // the curl's shader, before any test: loaded inside a group after a widget test, it never finished (the whole file
   // hung - 2026-10-11)
   setUpAll(preloadShaders);

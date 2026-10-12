@@ -10,6 +10,7 @@ import 'package:komga_reader/offline/sync.dart';
 import 'package:komga_reader/screens/downloads_screen.dart';
 import 'package:komga_reader/widgets/sync_alert.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 
 import 'support/helpers.dart';
 import 'support/library_server.dart';
@@ -99,6 +100,7 @@ class ProgressServer extends LibraryServer {
 /// Offline phase 5: progress made offline reaches Komga - as it is when only this device changed it, further-wins
 /// with an alert entry when Komga changed too; downloaded copies follow Komga.
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
   late ProgressServer server;
