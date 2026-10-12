@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -78,62 +79,93 @@ class PosterTile extends StatelessWidget {
       onTap: onOpen,
       onHold: onMenu,
       child: Builder(builder: (context) {
-        return InkWell(
-          autofocus: autofocus,
-          onTap: onOpen,
-          onLongPress: onMenu,
-          onSecondaryTap: onMenu, // right-click on desktop
-          borderRadius: BorderRadius.circular(6),
-          focusColor: Colors.transparent,
-          child: _FocusFrame(accent: accent, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Stack(fit: StackFit.expand, children: [
-                  image ?? Image(image: ResizeImage(api.thumbImage(imageUrl), width: 400), fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F))),
-                  if (read) Container(color: Colors.black.withValues(alpha: 0.45)),
-                  if (read) const Positioned(right: 6, top: 6, child: _ReadBadge()),
-                  if (selected != null) ...[
-                    if (selected!)
-                      DecoratedBox(decoration: BoxDecoration(
-                        color: accent.withValues(alpha: 0.30),
-                        border: Border.all(color: accent, width: 4),
-                        borderRadius: BorderRadius.circular(4),
+        return _RightClick(
+          onClick: onMenu, // the menu, on desktop
+          child: InkWell(
+            autofocus: autofocus,
+            onTap: onOpen,
+            onLongPress: onMenu,
+            borderRadius: BorderRadius.circular(6),
+            focusColor: Colors.transparent,
+            child: _FocusFrame(accent: accent, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Stack(fit: StackFit.expand, children: [
+                    image ?? Image(image: ResizeImage(api.thumbImage(imageUrl), width: 400), fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(color: const Color(0xFF1C1C1F))),
+                    if (read) Container(color: Colors.black.withValues(alpha: 0.45)),
+                    if (read) const Positioned(right: 6, top: 6, child: _ReadBadge()),
+                    if (selected != null) ...[
+                      if (selected!)
+                        DecoratedBox(decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.30),
+                          border: Border.all(color: accent, width: 4),
+                          borderRadius: BorderRadius.circular(4),
+                        )),
+                      Positioned(left: 6, top: 6, child: Icon(
+                        selected! ? Icons.check_box : Icons.check_box_outline_blank,
+                        size: 32, color: selected! ? accent : Colors.white,
+                        shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
                       )),
-                    Positioned(left: 6, top: 6, child: Icon(
-                      selected! ? Icons.check_box : Icons.check_box_outline_blank,
-                      size: 32, color: selected! ? accent : Colors.white,
-                      shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
-                    )),
-                  ],
-                  if (badge != null) Positioned(right: 6, bottom: 9, child: badge!), // clear of the progress bar
-                  if (progress != null && !read)
-                    Positioned(left: 0, right: 0, bottom: 0,
-                        child: LinearProgressIndicator(value: progress, minHeight: 3, color: accent, backgroundColor: Colors.black54)),
+                    ],
+                    if (badge != null) Positioned(right: 6, bottom: 9, child: badge!), // clear of the progress bar
+                    if (progress != null && !read)
+                      Positioned(left: 0, right: 0, bottom: 0,
+                          child: LinearProgressIndicator(value: progress, minHeight: 3, color: accent, backgroundColor: Colors.black54)),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // Fixed-height text block (always room for a 2-line title + the subtitle), so a long title never takes
+              // height from the cover: every cover in a grid or row stays the same size.
+              SizedBox(
+                height: textBlockHeight(context, caption: caption != null),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.2)),
+                  if (subtitle != null)
+                    Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF9A9A9A))),
+                  if (caption != null && caption!.isNotEmpty)
+                    Text(caption!, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF7A7A7A))),
                 ]),
               ),
-            ),
-            const SizedBox(height: 6),
-            // Fixed-height text block (always room for a 2-line title + the subtitle), so a long title never takes
-            // height from the cover: every cover in a grid or row stays the same size.
-            SizedBox(
-              height: textBlockHeight(context, caption: caption != null),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, height: 1.2)),
-                if (subtitle != null)
-                  Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF9A9A9A))),
-                if (caption != null && caption!.isNotEmpty)
-                  Text(caption!, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, height: 1.3, color: Color(0xFF7A7A7A))),
-              ]),
-            ),
-          ])),
+            ])),
+          ),
         );
       }),
     );
   }
+}
+
+/// A right-click on [child] (a mouse, or a pen's side button): [onClick] when the button is let go, however far the
+/// pointer moved meanwhile - as a gesture a right-click moved past 18 px was lost, and nothing is dragged with the
+/// right button (user, build 108: "right clicks get missed if the mouse moves").
+class _RightClick extends StatefulWidget {
+  const _RightClick({required this.onClick, required this.child});
+  final VoidCallback? onClick;
+  final Widget child;
+  @override
+  State<_RightClick> createState() => _RightClickState();
+}
+
+class _RightClickState extends State<_RightClick> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) => widget.onClick == null
+      ? widget.child
+      : Listener(
+          onPointerDown: (e) => _down = e.buttons == kSecondaryButton,
+          onPointerCancel: (_) => _down = false,
+          onPointerUp: (_) {
+            if (!_down) return;
+            _down = false;
+            widget.onClick!();
+          },
+          child: widget.child,
+        );
 }
 
 /// The remote's OK on a focused tile: a press opens it (as a tap), holding it for half a second opens its menu (as a

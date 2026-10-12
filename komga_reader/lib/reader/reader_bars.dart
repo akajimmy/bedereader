@@ -142,9 +142,10 @@ class ReaderBottomBar extends StatelessWidget {
 /// [onTapOutside] - a tap anywhere else hides them; so does a right-click, which showed them (it fell on this layer,
 /// which took it and did nothing: the page's own right-click is under it - Windows, 2026-10-11).
 List<Widget> readerBars({required Widget top, required Widget bottom, VoidCallback? onTapOutside}) => [
+      // a press let go on it, however far it moved meanwhile: as gestures, a click moved past 18 px was lost - nothing
+      // here is dragged (user, build 108: "right clicks get missed if the mouse moves")
       if (onTapOutside != null)
-        Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTapOutside,
-            onSecondaryTap: onTapOutside)),
+        Positioned.fill(child: Listener(behavior: HitTestBehavior.opaque, onPointerUp: (_) => onTapOutside())),
       Positioned(left: 0, right: 0, top: 0, child: top),
       Positioned(left: 0, right: 0, bottom: 0, child: bottom),
     ];

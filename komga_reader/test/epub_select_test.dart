@@ -413,6 +413,30 @@ void main() {
     }
   });
 
+  testWidgets('a right-click brings up the controls and another takes them away, however far the mouse moves while '
+      'the button is down (past 18 px the click was lost - user, build 108)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      Future<void> rightClick(Offset at) async {
+        final g = await tester.startGesture(at, kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.moveBy(const Offset(30, 4));
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.up();
+        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      }
+
+      await rightClick(Offset(400, at(tester, 'weather').dy));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'shown');
+      expect(selected(tester), isNull, reason: 'no word selected by it');
+      await rightClick(const Offset(400, 600));
+      expect(find.byTooltip('Contents'), findsNothing, reason: 'hidden again');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('a finger tap in the middle opens the controls at once - a word on a touch screen is a long press, not a '
       'double tap (user, build 107)', (tester) async {
     await open(tester);

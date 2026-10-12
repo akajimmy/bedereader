@@ -121,6 +121,20 @@ void main() {
     expect(find.byType(SeriesScreen), findsOneWidget, reason: 'the click opened the series');
   });
 
+  testWidgets("a right-click on a poster opens its menu however far the mouse moves while the button is down (past "
+      '18 px it was lost - user, build 108)', (tester) async {
+    await open(tester);
+    final poster = inRow('Continue reading', 'Ongoing #4');
+    final g = await tester.startGesture(tester.getCenter(poster), kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryMouseButton);
+    await tester.pump(const Duration(milliseconds: 30));
+    await g.moveBy(const Offset(30, 4));
+    await tester.pump(const Duration(milliseconds: 30));
+    await g.up();
+    await tester.pumpAndSettle();
+    expect(find.text('Mark as read'), findsOneWidget, reason: "the book's menu");
+  });
+
   testWidgets("each row shows its own books (or series), from the query that's its own", (tester) async {
     final api = await open(tester);
     for (final (row, item) in [

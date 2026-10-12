@@ -301,6 +301,7 @@ class ComicRenderer extends Renderer {
   }
 
   int _fingers = 0; // two or more on the page = a pinch: page swiping pauses at once so it can't steal the gesture
+  bool _rightDown = false; // the right mouse button is down on the page (a right-click on its way)
   final Map<int, ScrollController> _scrolls = {};
   final Map<int, bool Function(bool forward)> _steppers = {}; // zoomed-in pan steps, per page (page_image.dart)
   final Map<int, void Function(Offset global)> _zoomers = {}; // double-tap zoom, per page (page_image.dart)
@@ -672,15 +673,27 @@ class ComicRenderer extends Renderer {
                     .register(e, (ev) => wheel((ev as PointerScrollEvent).scrollDelta.dy));
               }
             },
-            onPointerDown: (_) {
+            onPointerDown: (e) {
               host.awake();
               _setFingers(_fingers + 1);
+              _rightDown = e.buttons == kSecondaryButton; // (a mouse, or a pen's side button)
             },
-            onPointerUp: (_) => _setFingers(_fingers - 1),
-            onPointerCancel: (_) => _setFingers(_fingers - 1),
+            // a right-click: the controls, however far the mouse moved meanwhile - a right drag means nothing here,
+            // and past Flutter's 18 px the click was lost (user, build 108: "right clicks get missed if the mouse
+            // moves")
+            onPointerUp: (_) {
+              _setFingers(_fingers - 1);
+              if (_rightDown) {
+                _rightDown = false;
+                host.toggleControls();
+              }
+            },
+            onPointerCancel: (_) {
+              _setFingers(_fingers - 1);
+              _rightDown = false;
+            },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onSecondaryTap: host.toggleControls, // right-click
               // 3D page curl: a horizontal drag curls the page (the page view doesn't scroll in that mode)
               onHorizontalDragStart: _curlDrag ? _curlDragStart : null,
               onHorizontalDragUpdate: _curlDrag ? _curlDragUpdate : null,

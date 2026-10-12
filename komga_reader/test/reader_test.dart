@@ -267,6 +267,25 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets('a right-click shows and hides the controls however far the mouse moves while the button is down (past '
+      '18 px the click was lost - user, build 108)', (tester) async {
+    await openReader(tester);
+    final middle = tester.getCenter(find.byType(ReaderScreen));
+    Future<void> rightClick() async {
+      final g = await tester.startGesture(middle, kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+      await tester.pump(const Duration(milliseconds: 30));
+      await g.moveBy(const Offset(30, 4));
+      await tester.pump(const Duration(milliseconds: 30));
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await rightClick();
+    expect(find.byTooltip('Next book'), findsOneWidget, reason: 'shown');
+    await rightClick();
+    expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
+  });
+
   testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
       'them)', (tester) async {
     await openReader(tester);

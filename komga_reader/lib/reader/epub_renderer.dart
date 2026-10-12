@@ -687,6 +687,7 @@ class EpubRenderer extends Renderer {
 
   // a mouse click, told by hand (see buildPages): where the button went down, and whether text was selected then
   Offset? _mouseDown;
+  bool _rightDown = false; // the right mouse button is down on the page (a right-click on its way)
   bool _mouseDownSelected = false;
   static const _clickSlop = 5.0; // logical px a mouse may move while clicking (Flutter's gestures allow it 1-2)
 
@@ -1159,9 +1160,18 @@ class EpubRenderer extends Renderer {
                     _mouseDown = e.position;
                     _mouseDownSelected = _selected.value;
                   }
+                  _rightDown = e.buttons == kSecondaryButton; // (a mouse, or a pen's side button)
                 },
                 onPointerUp: (e) {
                   _pressed.value = math.max(0, _pressed.value - 1);
+                  // a right-click: the controls, however far the mouse moved meanwhile - a right drag means nothing
+                  // here, and past Flutter's 18 px the click was lost (user, build 108: "right clicks get missed if
+                  // the mouse moves"). With text selected it's the selection's (its pane is up).
+                  if (_rightDown) {
+                    _rightDown = false;
+                    if (!_selected.value) host.toggleControls();
+                    return;
+                  }
                   final from = _mouseDown;
                   _mouseDown = null;
                   if (e.kind == PointerDeviceKind.mouse && from != null && (e.position - from).distance < _clickSlop) {
@@ -1172,6 +1182,7 @@ class EpubRenderer extends Renderer {
                 onPointerCancel: (_) {
                   _pressed.value = math.max(0, _pressed.value - 1);
                   _mouseDown = null;
+                  _rightDown = false;
                 },
                 child: Stack(key: _pageStack, children: [
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
@@ -1216,8 +1227,9 @@ class EpubRenderer extends Renderer {
                 onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: b.totalPages! + 1) : null,
                 onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
                 onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,
-                // right-click, as with comics - with text selected it's the selection's (its menu)
-                onSecondaryTap: selected ? null : host.toggleControls,
+                // right-click: the controls, told by the Listener above (any distance); claimed here only so the
+                // selection area doesn't take it to select a word - with text selected it's the selection's
+                onSecondaryTap: selected ? null : () {},
               )),
             ),
           ]));
