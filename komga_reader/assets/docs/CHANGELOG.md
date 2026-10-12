@@ -22,6 +22,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   gap (paragraphs it doesn't indent, under a picture, scene breaks), it's never made smaller. Indents are always the
   book's own - a chapter's first paragraph and the one after a scene break are indented when the book indents them.
   (The old Paragraphs choice isn't carried over: everyone starts on Default.)
+- **eBooks: pictures.** A picture drop cap is drawn at its own size (it used to be enlarged to two lines of text). A
+  picture that doesn't fit in the space left on a page goes to the next page at its size instead of being shrunk into
+  the gap; only one taller than a whole page is shrunk. Black-and-white ornaments on a white ground are drawn in the
+  page's colours more often (Hitchhiker's and Homeland's drop caps, The Dispossessed's chapter numbers, A Dance with
+  Dragons' chapter bands were white boxes on a dark page); maps and illustrations are left as they are.
 
 **New**
 - **eBooks: page previews on the slider**, as comics have: dragging the slider shows a small picture of the page
