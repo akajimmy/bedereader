@@ -19,16 +19,5 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      # Material's fonts (Roboto) where the SDK keeps them: settings_remote_test lays out in the real font, and the
-      # runner's SDK hasn't got them (that test failed here from build 94 on; flutter precache, even forced, didn't
-      # bring them - 2026-10-12). The archive is the one the SDK names for its version.
-      - name: Material fonts
-        run: |
-          root="$(dirname "$(dirname "$(which flutter)")")"
-          dest="$root/bin/cache/artifacts/material_fonts"
-          curl -fsSL "https://storage.googleapis.com/$(cat "$root/bin/internal/material_fonts.version")" -o /tmp/fonts.zip
-          mkdir -p "$dest"
-          unzip -oq /tmp/fonts.zip -d "$dest"
-          ls "$dest" | grep -i roboto-
       - run: flutter analyze # lint findings count too (they report as infos)
       - run: flutter test

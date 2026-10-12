@@ -156,8 +156,13 @@ Future<void> loadRoboto() async {
   final root = Platform.environment['FLUTTER_ROOT'];
   if (root == null) fail('FLUTTER_ROOT not set: the real font comes from the Flutter SDK');
   final loader = FontLoader('Roboto');
+  final dir = Directory([root, 'bin', 'cache', 'artifacts', 'material_fonts'].join(Platform.pathSeparator));
   for (final f in ['roboto-regular.ttf', 'roboto-medium.ttf']) {
-    final file = File([root, 'bin', 'cache', 'artifacts', 'material_fonts', f].join(Platform.pathSeparator));
+    // the name in any case: Linux's SDK has Roboto-Regular.ttf, and its file names are case-sensitive (the test
+    // failed on GitHub from build 94 on - 2026-10-12)
+    final file = dir.listSync().whereType<File>().firstWhere(
+        (e) => e.uri.pathSegments.last.toLowerCase() == f,
+        orElse: () => fail('$f not in ${dir.path}'));
     loader.addFont(file.readAsBytes().then((b) => ByteData.sublistView(b)));
   }
   await loader.load();
