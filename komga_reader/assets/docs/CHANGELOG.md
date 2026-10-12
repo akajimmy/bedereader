@@ -37,6 +37,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   you'd go to, with its page number and chapter.
 
 **Fixed**
+- **eBooks, Page turn: Curl - a curl let go before it turned still counted as a page turn**: the page sprang back,
+  but the place was saved as if it had turned, and on the last page the book could be marked read. A turn now counts
+  only when it completes.
 - **eBooks, Paragraphs: Auto - the first-paragraph fix of build 103 went too far** in books whose ordinary
   paragraphs are set flush and only special passages are indented (a letter, verse, an epigraph - the Brian Herbert
   and Kevin J. Anderson Dune books): those passages had lost the space above them. They keep it again; Foundation
