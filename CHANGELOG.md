@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBooks: a double click selects a word with the mouse only** - on a touch screen a word is a long press, as
+  before, and a tap in the middle of the page opens the controls at once again (since build 106 it waited a moment
+  for a second tap).
+
 ## 1.3.0
 
 ### Build 107 - 2026-10-12
