@@ -9,7 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **eBooks, selecting text: the same pane everywhere** - Copy, Highlight, Define - shows above the selection by
+  itself once it's made, with the mouse too (on Windows it took a right-click and looked different).
+- **eBooks: a double tap or double click on a word selects it** (in the middle of the page - the sides still turn
+  pages at once). A single tap in the middle opens the controls a moment later than before, to tell the two apart.
+- **eBooks: highlights are in the app's accent colour** (they were always yellow).
+
 **Fixed**
+- **eBooks: a highlight could only be removed by tapping it** - a selection over a highlight now offers Remove
+  highlight.
 - **Downloads went missing when Komga moved to a new address** (the same server, its database moved with it):
   downloads are kept per server address, so the new address started with none. Now, when the new address has no
   downloads and Komga there has the books downloaded at an old address, they carry over - with any reading progress
