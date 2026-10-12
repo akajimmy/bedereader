@@ -13,6 +13,7 @@ import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/client_settings.dart';
+import 'support/helpers.dart' show preloadShaders;
 import 'support/no_network.dart';
 
 const _base = 'http://test/api/v1/books/B1/resource/';
@@ -119,6 +120,7 @@ Map<String, dynamic> _saved(String href, double progression) =>
     {'locator': {'href': href, 'type': 'application/xhtml+xml', 'locations': {'progression': progression}}};
 
 void main() {
+  setUpAll(preloadShaders); // (the curl's; top level - in a group after widget tests it never finished)
   late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -262,6 +264,28 @@ void main() {
     await run(tester, const Duration(seconds: 1));
     expect(find.text('library'), findsOneWidget);
     expect(total(api.puts.last), reached, reason: "the save on closing is the place reached, not the book's start");
+  });
+
+  testWidgets('Curl: a curl let go early leaves no trace; one that turns counts once (audit 2026-10-11: counted as it '
+      'started, one let go on the last page marked the book read)', (tester) async {
+    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+    final api = await open(tester);
+    Future<void> drag(double to) async {
+      final g = await tester.startGesture(const Offset(700, 600));
+      for (var i = 1; i <= 10; i++) {
+        await g.moveTo(Offset(700 - (700 - to) * i / 10, 600));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await run(tester, const Duration(seconds: 3)); // the curl's end, and past the save delay
+    }
+
+    await drag(660);
+    expect(api.puts, isEmpty, reason: 'sprang back: nothing turned, nothing saved');
+    await drag(150);
+    expect(api.puts, hasLength(1), reason: 'turned: saved once');
+    expect(api.marked, isEmpty);
   });
 
   testWidgets("the keyboard coming up doesn't lay the book out again (the reader has no text box)", (tester) async {
