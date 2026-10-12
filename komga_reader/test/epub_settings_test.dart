@@ -69,7 +69,9 @@ void main() {
   test('a wide screen shows the page as a sheet (user, 2026-10-11): the text column with the margins a page that wide '
       'would have, centred, full height; none where the page fills the screen; the surround a shade off the page',
       () {
-    for (final m in EpubMargins.values) {
+    expect(EpubRenderer.sheetRect(const EpubPrefs(margins: EpubMargins.book), const Size(1920, 1080)), isNull,
+        reason: "Margins: Book's - the book's own margins, as a browser: no sheet");
+    for (final m in EpubMargins.values.where((m) => m != EpubMargins.book)) {
       final e = EpubPrefs(margins: m, size: 24);
       const wide = Size(1920, 1080);
       final s = EpubRenderer.sheetRect(e, wide)!;

@@ -79,7 +79,7 @@ void main() {
     // Text, then Formatting (2026-10-07: Page colours moved to the Page group; Alignment opens on Book's)
     // (each row named by its first button: Line spacing's is Compact since its five steps, 2026-10-08; Paragraph
     // spacing's Book's since 2026-10-11, when the Paragraphs row went)
-    expect(seen, ['Literata', 'Smaller', 'Compact', "Book's", 'Narrow', "Book's"]);
+    expect(seen, ['Literata', 'Smaller', 'Compact', "Book's", "Book's", "Book's"]); // Margins' too, since 2026-10-11
   });
 
   // (the rows' order by screen position, not the focus tree's, is checked by settings_remote_test's walk of Library &
