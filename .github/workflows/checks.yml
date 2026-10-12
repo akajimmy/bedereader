@@ -19,5 +19,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
+      # the SDK's shared files, Material's Roboto among them: settings_remote_test lays out in the real font, and the
+      # runner's cached SDK hasn't got it (that test failed here from build 94 on - 2026-10-12)
+      - run: flutter precache --universal
       - run: flutter analyze # lint findings count too (they report as infos)
       - run: flutter test
