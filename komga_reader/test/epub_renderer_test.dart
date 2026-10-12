@@ -275,6 +275,26 @@ void main() {
     expect(surroundBox(), findsNothing, reason: '800 wide: the page fills the screen');
   });
 
+  testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "
+      "changes with the text (audit, 2026-10-11: it changed at once, the old layout's text over its edge)",
+      (tester) async {
+    addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+    await open(tester, twoChapters(), size: const Size(1600, 1000));
+    Set<Rect?> sheets() => tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'))
+        .map((w) => (w.painter as dynamic).sheet as Rect?)
+        .toSet();
+    final before = sheets();
+    expect(before.whereType<Rect>(), isNotEmpty, reason: 'a sheet at 1600 wide');
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(margins: EpubMargins.narrow));
+    await tester.pump();
+    expect(sheets(), before, reason: 'settling: the sheet of the layout shown');
+    await tester.pump(EpubRenderer.settleDelay);
+    await settle(tester);
+    expect(sheets(), isNot(before), reason: 'laid out for the new margins: their sheet');
+  });
+
   test("an EPUB is told from a comic by its media profile (the one Reader picks its renderer by it)", () {
     expect(isEpub({'id': 'e', 'media': {'mediaProfile': 'EPUB'}}), isTrue);
     expect(isEpub({'id': 'c', 'media': {'mediaProfile': 'DIVINA'}}), isFalse);

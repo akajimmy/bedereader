@@ -56,6 +56,25 @@ void main() {
     expect(sent(s), hasLength(2), reason: 'Komga has it now');
   });
 
+  test("listed in reading order - the chapter's place in the book, not its file name (audit, 2026-10-11: ch10 came "
+      'before ch2)', () {
+    const spine = ['ch2.xhtml', 'ch10.xhtml'];
+    final marks = inReadingOrder(const [
+      Highlight('ch10.xhtml', 5, 9, 'later'),
+      Highlight('ch2.xhtml', 50, 60, 'second'),
+      Highlight('ch2.xhtml', 1, 4, 'first'),
+    ], spine);
+    expect(marks.map((m) => m.text), ['first', 'second', 'later']);
+  });
+
+  test("a damaged copy on the device is no highlights, not a failure (sorting it threw)", () async {
+    SharedPreferences.setMockInitialValues({'highlights.B1': 'not json'});
+    final h = BookHighlights(noNetwork(SettingsServer.new), 'B1');
+    addTearDown(h.dispose);
+    await h.load();
+    expect(h.items, isEmpty);
+  });
+
   test('highlights within a stretch of a chapter: the ones touching it only', () async {
     final s = noNetwork(SettingsServer.new);
     final h = BookHighlights(s, 'B1');
