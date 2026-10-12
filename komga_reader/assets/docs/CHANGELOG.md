@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Downloads went missing when Komga moved to a new address** (the same server, its database moved with it):
+  downloads are kept per server address, so the new address started with none. Now, when the new address has no
+  downloads and Komga there has the books downloaded at an old address, they carry over - with any reading progress
+  not yet sent.
+
 ## 1.3.0
 
 ### Build 105 - 2026-10-11
