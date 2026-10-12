@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 104 - 2026-10-11
+
 **New**
 - **eBook settings: Margins has a Book's step** - the book's own page margins, as a web browser shows them (a small
   edge where the book sets none, and always room at the edge for a line-end hyphen). Lines then run as long as the
@@ -57,8 +61,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   bigger than their own pixels.
 - **eBooks, highlights: the list in Contents is in reading order** (chapter 10's came before chapter 2's), and damaged
   saved highlights no longer stop a book's highlights loading.
-
-## 1.3.0
 
 ### Build 103 - 2026-10-11
 
