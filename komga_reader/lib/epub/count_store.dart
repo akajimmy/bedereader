@@ -128,7 +128,8 @@ class FileCountStore implements EpubCountStore {
   }
 
   @override
-  Future<void> save(String bookId, String layout, EpubCounts counts) => _inTurn(bookId, () => _save(bookId, layout, counts));
+  Future<void> save(String bookId, String layout, EpubCounts counts) =>
+      _inTurn(bookId, () => _save(bookId, layout, counts));
 
   Future<void> _save(String bookId, String layout, EpubCounts counts) async {
     try {
