@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 107 - 2026-10-12
+
 **Fixed**
 - **eBooks: the selection pane's buttons did nothing** (build 106) - a click or a tap on Highlight, Define or Copy
   made the pane vanish before it took the click.
-
-## 1.3.0
 
 ### Build 106 - 2026-10-12
 
