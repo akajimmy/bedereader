@@ -750,7 +750,7 @@ class EpubRenderer extends Renderer {
     final toc = b.info.toc;
     TocEntry? picked;
     Highlight? pickedMark;
-    final marks = _highlights?.items ?? const <Highlight>[];
+    final marks = inReadingOrder(_highlights?.items ?? const [], b.info.spine);
     // the comic reader's panel look (user, 2026-10-06): a side sheet on a wide screen, a bottom sheet on a narrow one
     await showReaderPanelFrame(host.context, title: 'Contents', children: (c, _) => [
           if (toc.isEmpty) const Padding(padding: EdgeInsets.all(14), child: Text('This book has no table of contents')),
