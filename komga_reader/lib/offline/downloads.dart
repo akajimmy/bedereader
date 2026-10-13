@@ -72,6 +72,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
     return [for (final p in (e['pages'] as List?) ?? []) {'number': p['number'], 'mediaType': p['mediaType']}];
   }
 
+  /// A downloaded EPUB's file (downloaded whole from the server at [baseUrl], and still on the device) - else null.
+  File? epubFileOf(String baseUrl, String bookId) {
+    final f = _here(baseUrl, bookId)?['epubFile'];
+    if (f is! String) return null;
+    final file = store!.file('$bookId/$f');
+    return file.existsSync() ? file : null;
+  }
+
   @override
   Future<Uint8List>? pageOf(String baseUrl, String bookId, int number) {
     final e = _here(baseUrl, bookId);
