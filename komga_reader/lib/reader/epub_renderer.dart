@@ -21,6 +21,7 @@ import '../epub/trace.dart';
 import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../highlights.dart';
+import '../offline/downloads.dart';
 import '../offline/offline_komga.dart';
 import '../page_curl.dart';
 import '../screen.dart';
@@ -97,10 +98,11 @@ class EpubRenderer extends Renderer {
     return Color.lerp(page, const Color(0xFF000000), l < 0.3 ? 0.45 : 0.1)!;
   }
 
-  /// Where book [id]'s files come from: offline, a downloaded EPUB's file (its progress kept on the device, sent to
-  /// Komga later); else Komga.
+  /// Where book [id]'s files come from: a downloaded EPUB's file - offline (its progress kept on the device, sent to
+  /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
+  /// still go to Komga as before); else Komga.
   static EpubSource sourceFor(Komga api, String id) {
-    final file = api is OfflineKomga ? api.epubFile(id) : null;
+    final file = api is OfflineKomga ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
 
