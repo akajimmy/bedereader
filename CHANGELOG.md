@@ -9,13 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 111 - 2026-10-12
+
 **Changed**
 - **A downloaded book is read from the device, online too** - a comic's pages (the page strip and the slider's
   pictures too) and an eBook's file load from the download instead of Komga (faster, and no data used). Reading
   progress and highlights still go to Komga as you read. A book still downloading, or one whose files have gone, is
   read from Komga as before.
-
-## 1.3.0
 
 ### Build 110 - 2026-10-12
 
