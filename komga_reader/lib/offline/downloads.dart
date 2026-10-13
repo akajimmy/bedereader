@@ -49,9 +49,40 @@ class _Lookups {
 
 /// Downloads books for offline reading (1.1 phase 2): a queue worked one book at a time, page by page, into the
 /// [OfflineStore]. The queue survives restarts; a size limit (or none) is checked before each book.
-class Downloads extends ChangeNotifier {
+class Downloads extends ChangeNotifier implements LocalPages {
   Downloads._();
   static final Downloads instance = Downloads._();
+
+  // ---- a downloaded book read from the device, online too (user, 2026-10-12: "use a downloaded version of a comic
+  // if present, even if online") - Komga's calls ask here first ([Komga.localPages])
+
+  /// The entry of [bookId], downloaded whole from the server at [baseUrl] (this one's downloads) - else null.
+  Map<String, dynamic>? _here(String baseUrl, String bookId) {
+    final a = _api, s = store;
+    String norm(String u) => u.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (a == null || s == null || norm(a.baseUrl) != norm(baseUrl)) return null;
+    final e = s.books[bookId];
+    return e?['state'] == 'done' ? e : null;
+  }
+
+  @override
+  List<dynamic>? pagesOf(String baseUrl, String bookId) {
+    final e = _here(baseUrl, bookId);
+    if (e == null) return null;
+    return [for (final p in (e['pages'] as List?) ?? []) {'number': p['number'], 'mediaType': p['mediaType']}];
+  }
+
+  @override
+  Future<Uint8List>? pageOf(String baseUrl, String bookId, int number) {
+    final e = _here(baseUrl, bookId);
+    if (e == null) return null;
+    for (final p in (e['pages'] as List?) ?? []) {
+      if (p['number'] != number) continue;
+      final f = store!.file('$bookId/${p['file']}');
+      return f.existsSync() ? f.readAsBytes() : null; // (gone from the device: Komga's)
+    }
+    return null;
+  }
 
   static const _capKey = 'downloads.capBytes';
   static const gb = 1024 * 1024 * 1024;
@@ -180,6 +211,7 @@ class Downloads extends ChangeNotifier {
 
   Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
     _api = api;
+    Komga.localPages = this;
     _session++;
     _running = false; // any older worker notices the new session and stops
     _queueWrites = Future.value(); // a fresh start: nothing to wait behind

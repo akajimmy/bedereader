@@ -453,7 +453,15 @@ class Komga {
       }) as Map<String, dynamic>;
 
   // ---- pages and posters
-  Future<List<dynamic>> pages(String bookId) async => (await _get('/api/v1/books/$bookId/pages')) as List<dynamic>;
+  /// A book downloaded on this device is read from the device, online too (user, 2026-10-12: "use a downloaded
+  /// version of a comic if present, even if online") - its page list and pages ([localPages]: the downloads, for
+  /// this server); anything else asks Komga.
+  Future<List<dynamic>> pages(String bookId) async =>
+      localPages?.pagesOf(baseUrl, bookId) ?? (await _get('/api/v1/books/$bookId/pages')) as List<dynamic>;
+
+  /// The pages downloaded on this device (lib/offline/downloads.dart sets it): what [pages], [pageBytes] and
+  /// [pageThumbBytes] take from the device rather than Komga.
+  static LocalPages? localPages;
   String pageUrl(String bookId, int number) => '$baseUrl/api/v1/books/$bookId/pages/$number'; // 1-based
   String seriesThumb(String id) => '$baseUrl/api/v1/series/$id/thumbnail';
   String bookThumb(String id) => '$baseUrl/api/v1/books/$id/thumbnail';
@@ -589,7 +597,8 @@ class Komga {
       });
 
   // ---- raw page bytes (the reader decodes and adjusts them itself)
-  Future<Uint8List> pageBytes(String bookId, int number) => _net(() async {
+  Future<Uint8List> pageBytes(String bookId, int number) =>
+      localPages?.pageOf(baseUrl, bookId, number) ?? _net(() async {
         final r = await _http.get(Uri.parse(pageUrl(bookId, number)), headers: imageHeaders);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'page $number');
         return r.bodyBytes;
@@ -601,7 +610,8 @@ class Komga {
   /// one from the book file as it's asked, so on a slow share they can take seconds (2026-09-30: 0.2-3.7 s each, and
   /// some queued past the time limit): one running out of time means slow, not gone - Komga isn't reported
   /// unreachable for it.
-  Future<Uint8List> pageThumbBytes(String bookId, int number) => _net(() async {
+  Future<Uint8List> pageThumbBytes(String bookId, int number) =>
+      localPages?.pageOf(baseUrl, bookId, number) ?? _net(() async { // (downloaded: the page itself, drawn small)
         final r = await _http.get(Uri.parse('${pageUrl(bookId, number)}/thumbnail'), headers: imageHeaders);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'page $number thumbnail');
         return r.bodyBytes;
@@ -627,6 +637,13 @@ class Komga {
 }
 
 /// Komga answered with an error status. What people see comes from lib/errors.dart; this text is for the error log.
+/// The pages of the books downloaded on this device ([Komga.localPages]): null for a book that isn't (wholly)
+/// downloaded from the server at [baseUrl] - then Komga is asked.
+abstract interface class LocalPages {
+  List<dynamic>? pagesOf(String baseUrl, String bookId);
+  Future<Uint8List>? pageOf(String baseUrl, String bookId, int number);
+}
+
 class KomgaError implements Exception {
   KomgaError(this.status, this.path);
   final int status;
