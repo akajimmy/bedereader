@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/offline/store.dart';
@@ -228,6 +231,33 @@ void main() {
     d.resumeAll();
     await settle(d);
     expect(d.isDownloaded('B1'), isTrue);
+  });
+
+  test('a downloaded book is read from the device, online too - its page list and its pages; a book not downloaded, '
+      "or another server's, still from Komga (user, 2026-10-12)", () async {
+    await d.attach(server(), root: dir); // http://test
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+    final asked = <String>[];
+    Komga komga(String url) => Komga(url, 'k', client: MockClient((r) async {
+          asked.add(r.url.path);
+          return r.url.path.endsWith('/pages')
+              ? http.Response('[{"number":1,"mediaType":"image/jpeg"}]', 200)
+              : http.Response.bytes([9, 9, 9], 200);
+        }));
+    final online = komga('http://test');
+    expect((await online.pages('B1')).map((p) => p['number']), [1, 2, 3], reason: 'its three downloaded pages');
+    final bytes = await online.pageBytes('B1', 2);
+    expect(bytes, isNot([9, 9, 9]), reason: 'the page from the device');
+    await online.pageThumbBytes('B1', 1);
+    expect(asked, isEmpty, reason: 'nothing asked of Komga for a downloaded book');
+    await online.pageBytes('B7', 1);
+    await online.pages('B7');
+    expect(asked, ['/api/v1/books/B7/pages/1', '/api/v1/books/B7/pages'], reason: 'not downloaded: Komga');
+    asked.clear();
+    await komga('http://elsewhere:25600').pageBytes('B1', 1);
+    expect(asked, ['/api/v1/books/B1/pages/1'], reason: "another server's B1 isn't this one");
   });
 
   test("each server's downloads in a folder of their own; today's folder belongs to the first server that uses it",
