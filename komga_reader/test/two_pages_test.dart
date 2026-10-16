@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/reader/comic_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
