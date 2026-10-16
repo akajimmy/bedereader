@@ -125,6 +125,7 @@ class ComicRenderer extends Renderer {
     _sideways.clear();
     _pageRects.clear();
     _joined.clear();
+    _spineAt.clear();
     _startAtEnd = null;
     zoomed = false;
     pc = PageController(initialPage: _at, keepPage: false);
@@ -234,6 +235,7 @@ class ComicRenderer extends Renderer {
     _dual = !area.isEmpty && _twoPagesOn(area);
     _pair();
     _joined.clear();
+    _spineAt.clear();
     _at = _viewOf(start);
     pc = PageController(initialPage: _at, keepPage: false); // (a kept page would be the last book's)
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -480,7 +482,7 @@ class ComicRenderer extends Renderer {
     final target = next ? _at + 1 : _at - 1;
     if (target < 0 || target > _views) return;
     if (_curlMode) {
-      final page = _pageRect(next ? _at : target);
+      final page = _curlRect(next ? _at : target);
       final grab = Offset(page.width, page.height * 0.72);
       final start = next ? grab : Offset(PageCurl.gone(page.width), grab.dy);
       if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
@@ -600,6 +602,34 @@ class ComicRenderer extends Renderer {
   /// the whole area.
   Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
 
+  /// The page that curls at item [v]: two pages up, a pair's later page - the right one (left, right to left), its
+  /// spine at the gutter, as a book's page turns (user, 2026-10-16); else the whole page.
+  Rect _curlRect(int v) {
+    final page = _pageRect(v), x = _spineX(v);
+    if (x == null) return page;
+    return rtl
+        ? Rect.fromLTRB(page.left, page.top, x, page.bottom)
+        : Rect.fromLTRB(x, page.top, page.right, page.bottom);
+  }
+
+  /// Where the gutter is on screen at item [v] - a pair's (two pages up, joined); null otherwise.
+  double? _spineX(int v) {
+    final share = _dual && v < _views && !_spreads[v].wide && _spreads[v].pages.length == 2 ? _spineAt[v] : null;
+    if (share == null) return null;
+    final page = _pageRect(v);
+    return page.left + share * page.width;
+  }
+
+  /// A pair's earlier page and all the screen on its side: it stays put while the later page turns over onto it.
+  Rect? _earlierSide(int v) {
+    final x = _spineX(v);
+    if (x == null) return null;
+    return rtl ? Rect.fromLTRB(x, 0, _area.width, _area.height) : Rect.fromLTRB(0, 0, x, _area.height);
+  }
+
+  /// The gutter of each joined pair, as a share of the joined picture's width from its left (from [_joinedAt]).
+  final Map<int, double> _spineAt = {};
+
   bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
 
   /// A horizontal drag curls the page - unless it's moving the page itself (zoomed, pinching, a sideways page).
@@ -631,7 +661,10 @@ class ComicRenderer extends Renderer {
     final now = _snapshot();
     if (now == null) return false;
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
-        under: next ? null : now, pending: !next);
+        // two pages up, forward: the earlier page stays (its side of the old view), the later turns over onto it;
+        // back: the old view covers it all until the previous page has uncurled
+        under: next ? (_earlierSide(_at) == null ? null : now) : now, underClip: next ? _earlierSide(_at) : null,
+        pending: !next);
     _curl = c;
     pc!.jumpToPage(target);
     _changed();
@@ -716,7 +749,7 @@ class ComicRenderer extends Renderer {
       final dx = p.dx - s.dx;
       if (dx.abs() < 4) return;
       final next = dx < 0;
-      final page = _pageRect(next ? _at : _at - 1);
+      final page = _curlRect(next ? _at : _at - 1);
       final at = _pagePoint(s0, page);
       final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
       if (!_startCurl(next: next, page: page, grab: grab,
@@ -827,7 +860,11 @@ class ComicRenderer extends Renderer {
           Positioned.fill(
             child: IgnorePointer(
               child: Stack(fit: StackFit.expand, children: [
-                if (_curl!.under != null) RawImage(image: _curl!.under, fit: BoxFit.fill),
+                if (_curl!.under != null)
+                  _curl!.underClip == null
+                      ? RawImage(image: _curl!.under, fit: BoxFit.fill)
+                      : ClipRect(clipper: _RectClip(_curl!.underClip!),
+                          child: RawImage(image: _curl!.under, fit: BoxFit.fill)),
                 if (!_curl!.pending)
                   CustomPaint(painter: _CurlLayer(_curl!, mirror: rtl, moved: _curlMoved,
                       shader: _curlShader ??= PageCurl.loaded!.fragmentShader())),
@@ -857,7 +894,12 @@ class ComicRenderer extends Renderer {
       try {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
         final images = [for (final p in pair) crop > 0 ? await cropEdges(p.image, crop) : p.image];
-        return PageData(await joinPages(rtl ? images.reversed.toList() : images), Uint8List(0));
+        final onScreen = rtl ? images.reversed.toList() : images;
+        // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
+        final h = math.max(onScreen[0].height, onScreen[1].height);
+        double w(ui.Image i) => i.width * h / i.height;
+        _spineAt[v] = w(onScreen[0]) / (w(onScreen[0]) + w(onScreen[1]));
+        return PageData(await joinPages(onScreen), Uint8List(0));
       } catch (_) {
         _joined.remove(key)?.ignore(); // Retry joins them again
         rethrow;
@@ -1391,6 +1433,13 @@ class ComicRenderer extends Renderer {
 @visibleForTesting
 abstract interface class CurlLayer {
   bool get mirror;
+
+  /// The page curling (two pages up: a pair's later page).
+  Rect get page;
+
+  /// What of the view from before the turn stays over it meanwhile (two pages up, forward: the earlier page's side);
+  /// null: none, or all of it.
+  Rect? get held;
 }
 
 /// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
@@ -1400,6 +1449,10 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
   @override
   final bool mirror;
   final ui.FragmentShader shader;
+  @override
+  Rect get page => curl.page;
+  @override
+  Rect? get held => curl.underClip;
 
   @override
   void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
@@ -1413,9 +1466,10 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
 /// A page turn in progress (3D page curl).
 class _Curl {
   _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.pending = false});
+      required this.from, this.under, this.underClip, this.pending = false});
   ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
   final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
+  final Rect? underClip; // only this part of [under] (two pages up, forward: the earlier page's side)
   final bool forward;
   final Rect page; // the curling page's image on screen - only it curls, not the bars around it
   final Offset grab; // where the page was taken hold of (its right edge, page coordinates in reading direction)
@@ -1429,6 +1483,16 @@ class _Curl {
     sheet.dispose();
     if (under != null && !identical(under, sheet)) under!.dispose();
   }
+}
+
+/// Clips to a fixed rectangle.
+class _RectClip extends CustomClipper<Rect> {
+  _RectClip(this.rect);
+  final Rect rect;
+  @override
+  Rect getClip(Size size) => rect;
+  @override
+  bool shouldReclip(_RectClip old) => old.rect != rect;
 }
 
 /// Lets go of the least recently used pictures in [pictures] (most recent last) until there are at most [count] of
