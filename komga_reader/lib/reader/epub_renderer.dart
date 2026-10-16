@@ -620,6 +620,7 @@ class EpubRenderer extends Renderer {
     pageRect: () => _dual ? _sideRect(later: true) : _sheet ?? Offset.zero & _size,
     spine: () => _dual,
     held: () => _dual ? Rect.fromLTWH(0, 0, _size.width, _area.height) : null,
+    gap: () => _dual && _sheet != null ? 2 * minSurround : 0,
     done: ({required turned}) {
       if (turned && _pc.hasClients) host.turned(_placeOf((_pc.page ?? 0).round()));
     },
@@ -1547,15 +1548,13 @@ class EpubRenderer extends Renderer {
 
   /// A page's paper with [child] on it: the whole area, or the sheet - with the surround round it when [surround] (a
   /// page in the page view leaves that to the one still surround under them all).
-  /// [sheet]: the sheet to draw (two pages up, its side's - [_sideSheet]); else the page's.
-  Widget _paper(Color background, {Widget? child, bool surround = false, Rect? sheet}) =>
-      Stack(fit: StackFit.expand, children: [
+  Widget _paper(Color background, {Widget? child, bool surround = false}) => Stack(fit: StackFit.expand, children: [
         if (surround && _sheet != null) ColoredBox(color: EpubRenderer.surround(background)),
-        CustomPaint(painter: _PagePainter(null, background, sheet ?? _sheet)),
+        CustomPaint(painter: _PagePainter(null, background, _sheet)),
         if (child != null) child,
       ]);
 
-  Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar, GlobalKey? key, Rect? sheet]) {
+  Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar, GlobalKey? key]) {
     final b = _book!;
     final theme = _drawn;
     if (i >= b.totalPages!) return host.endCard();
@@ -1571,7 +1570,7 @@ class EpubRenderer extends Renderer {
       } else {
         _prefetch(c);
       }
-      return _paper(theme.background, sheet: sheet, child: const Center(child: CircularProgressIndicator()));
+      return _paper(theme.background, child: const Center(child: CircularProgressIndicator()));
     }
     final page = pages[p.clamp(0, pages.length - 1)];
     return SelectablePage(
@@ -1579,14 +1578,14 @@ class EpubRenderer extends Renderer {
       page: page,
       registrar: registrar,
       colour: theme.accent.withValues(alpha: 0.35),
-      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, sheet ?? _sheet,
+      child: CustomPaint(size: size, painter: _PagePainter(page, theme.background, _sheet,
           marks: _marksOn(page, c), markColour: _markColour(theme.accent, theme.background))),
     );
   }
 
   /// Two pages up: spread [v] - the earlier page on the left, the later on the right, each a page wide; a side with
-  /// no page (a chapter starts on the right, ends where it ends) blank paper. With sheets (Inset page) the two meet
-  /// at the spine, an open book: each shifted towards the middle ([_sideShift]). A shade down the gutter.
+  /// no page (a chapter starts on the right, ends where it ends) blank paper. With sheets (Inset page) two apart, a
+  /// gap between ([_sideShift]); without, the pages touch, a shade down the gutter.
   Widget _spreadAt(int v, SelectionRegistrar? registrar) {
     if (v >= _spreads.length) return host.endCard();
     final s = _spreads[v];
@@ -1595,8 +1594,8 @@ class EpubRenderer extends Renderer {
           child: Transform.translate(
             offset: Offset(_sideShift(later: later), 0),
             child: page == null
-                ? _paper(_drawn.background, sheet: _sideSheet(later: later))
-                : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage, _sideSheet(later: later)),
+                ? _paper(_drawn.background)
+                : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage),
           ),
         );
     return Stack(children: [
@@ -1606,11 +1605,12 @@ class EpubRenderer extends Renderer {
         maxWidth: 2 * _size.width,
         child: Row(children: [side(s.earlier, later: false), side(s.later, later: true)]),
       )),
-      Positioned(
+      // the pages touching (no Inset page): a shade down the gutter; as sheets they're apart (below)
+      if (_sheet == null) Positioned(
         left: _size.width - 14,
         width: 28,
-        top: _sheet?.top ?? 0,
-        bottom: _sheet == null ? 0 : _size.height - _sheet!.bottom,
+        top: 0,
+        bottom: 0,
         child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [
           const Color(0x00000000),
           Color.fromRGBO(0, 0, 0, _drawn.background.computeLuminance() > 0.3 ? 0.10 : 0.22),
@@ -1620,33 +1620,19 @@ class EpubRenderer extends Renderer {
     ]);
   }
 
-  /// Two pages up: how far side [later] (else the earlier, left) is drawn shifted towards the spine, so its sheet
-  /// meets the other's there - the wide screen's sheet, a column narrower than the half (0 with no sheet, or the
-  /// card: that one reaches the spine instead - [_sideSheet]).
+  /// Two pages up with Inset page: two sheets apart, a gap between them as wide as two of the surround's insets (user,
+  /// 2026-10-16: "two discrete pages, with a gap between") - Always's card has it as it is (16 in on every side); the
+  /// wide screen's column moves in from the middle of its half to the same gap. How far side [later] (else the
+  /// earlier, left) is shifted for that; 0 with no sheet (the pages touch, a shade down the gutter).
   double _sideShift({required bool later}) {
     final s = _sheet;
-    if (s == null || _card) return 0;
-    return later ? -s.left : _size.width - s.right;
-  }
-
-  /// The page's sheet is Inset page's card (in from every edge - Always on a narrow screen, or Margins: Book's).
-  bool get _card {
-    final e = _laidIn ?? AppSettings.instance.epub;
-    return sheetInset(e, _size, _laidInset ?? AppSettings.instance.display.insetPage).left > 0;
-  }
-
-  /// Two pages up: side [later]'s sheet, in its page's terms - the card reaching to the spine, so the two meet there
-  /// with the surround only round the outside, an open book (its text keeps the page's margins: a wider gutter, as
-  /// a printed book's); the wide screen's sheet as it is (shifted - [_sideShift]). Null: no sheet.
-  Rect? _sideSheet({required bool later}) {
-    final s = _sheet;
-    if (s == null || !_card) return s;
-    return later ? Rect.fromLTRB(0, s.top, s.right, s.bottom) : Rect.fromLTRB(s.left, s.top, _size.width, s.bottom);
+    if (s == null) return 0;
+    return later ? minSurround - s.left : _size.width - minSurround - s.right;
   }
 
   /// Two pages up: side [later]'s page (its sheet, or the whole page) on the page area.
-  Rect _sideRect({required bool later}) => (_sideSheet(later: later) ?? Offset.zero & _size)
-      .shift(Offset((later ? _size.width : 0) + _sideShift(later: later), 0));
+  Rect _sideRect({required bool later}) =>
+      (_sheet ?? Offset.zero & _size).shift(Offset((later ? _size.width : 0) + _sideShift(later: later), 0));
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
   Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) => _paper(
