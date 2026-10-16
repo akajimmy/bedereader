@@ -19,6 +19,7 @@ import 'offline/connection.dart';
 import 'offline/downloads.dart';
 import 'offline/sync.dart';
 import 'ondeck_hidden.dart';
+import 'synced_ids.dart';
 import 'pins.dart';
 import 'reader_keys.dart';
 import 'settings.dart';
@@ -183,6 +184,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       unawaited(AppSettings.instance.refresh());
       unawaited(Pins.instance.refresh());
       unawaited(OnDeckHidden.instance.refresh());
+      unawaited(PairShift.instance.refresh());
     }
     _nav.currentState?.popUntil((r) => r.isFirst);
     setState(() {});
@@ -264,6 +266,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       unawaited(AppSettings.instance.load(c.api, fetch: online)); // c.api: the offline source while offline
       unawaited(Pins.instance.load(c.api, fetch: online));
       unawaited(OnDeckHidden.instance.load(c.api, fetch: online));
+      unawaited(PairShift.instance.load(c.api, fetch: online));
     }
     if (!mounted) return;
     setState(() {
@@ -281,6 +284,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(AppSettings.instance.load(api));
     unawaited(Pins.instance.load(api));
     unawaited(OnDeckHidden.instance.load(api));
+    unawaited(PairShift.instance.load(api));
     unawaited(_startDownloads(api));
   }
 
@@ -303,6 +307,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await AppSettings.instance.clearAccount();
     await Pins.instance.clearAccount();
     await OnDeckHidden.instance.clearAccount();
+    await PairShift.instance.clearAccount();
     final old = _api;
     if (mounted) setState(() => _api = null);
     // the old connection isn't used again (signing in makes a new one): its client goes once what's on its way has

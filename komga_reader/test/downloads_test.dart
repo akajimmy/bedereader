@@ -18,6 +18,15 @@ import 'support/settle.dart';
 
 LibraryServer server() => noNetwork(LibraryServer.new);
 
+/// Pages with their sizes, as Komga lists them: page 2 wide (a spread).
+class SizedPages extends LibraryServer {
+  @override
+  Future<List<dynamic>> pages(String bookId) async => [
+        for (final p in await super.pages(bookId))
+          {...p as Map, 'width': p['number'] == 2 ? 2000 : 1000, 'height': 1500},
+      ];
+}
+
 Map<String, dynamic> book(String id, int n) =>
     {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
 
@@ -443,5 +452,17 @@ void main() {
     expect(d.store!.books.containsKey('B2'), isFalse); // partial download cleaned up
     expect(await Directory(d.store!.file('B2').path).exists(), isFalse);
   });
-}
 
+
+  test("a download keeps its pages' sizes (2026-10-16: two pages side by side pair on them - a wide page alone); "
+      'listed so online and offline', () async {
+    await d.attach(noNetwork(SizedPages.new), root: dir);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    final sizes = [for (final p in d.pagesOf('http://test', 'B1')!) (p['width'], p['height'])];
+    expect(sizes, [(1000, 1500), (2000, 1500), (1000, 1500)]);
+    final offline = await OfflineKomga(d.store!).pages('B1');
+    expect([for (final p in offline) (p['number'], p['width'], p['height'])],
+        [(1, 1000, 1500), (2, 2000, 1500), (3, 1000, 1500)]);
+  });
+}

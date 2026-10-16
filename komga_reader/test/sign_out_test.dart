@@ -10,6 +10,7 @@ import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/synced_ids.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -30,6 +31,7 @@ void main() {
       'pins': jsonEncode([const Pin(name: 'Events', kind: 'library', id: 'L1', title: 'Events').toJson()]),
       'readerPrefs': jsonEncode({'v': 1, 'default': const ReaderPrefs().toJson(), 'series': {'S1': const ReaderPrefs().toJson()}}),
       'ondeck.hidden': jsonEncode({'series': ['S9'], 'books': ['B9']}),
+      'pairshift': jsonEncode({'books': ['B9']}), // comics in two pages: a book's pairing shifted (2026-10-16)
       'displayPrefs': jsonEncode(const DisplayPrefs(accent: Accent.green).toJson()), // this device's
       'downloads.capBytes': 5 * 1024 * 1024 * 1024, // this device's
     });
@@ -37,7 +39,8 @@ void main() {
     final komga = ShellKomga();
     await komga.pumpApp(tester);
     await waitUntil(() => shows(find.byType(HomeScreen)) && Pins.instance.items.length == 1 &&
-        AppSettings.instance.hasOwn('S1') && OnDeckHidden.instance.count == 2 && Connection.instance.online != null,
+        AppSettings.instance.hasOwn('S1') && OnDeckHidden.instance.count == 2 && PairShift.instance.shifted('B9') &&
+        Connection.instance.online != null,
         tester: tester, timeout: const Duration(seconds: 5),
         reason: "Home, with the account's things and the connection loaded");
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100))); // the start-up check, sync
@@ -69,12 +72,13 @@ void main() {
 
     final p = await SharedPreferences.getInstance();
     expect(await KeyStore.read(), isNull, reason: 'the key is removed');
-    for (final key in ['pins', 'readerPrefs', 'ondeck.hidden']) {
+    for (final key in ['pins', 'readerPrefs', 'ondeck.hidden', 'pairshift']) {
       expect(p.containsKey(key), isFalse, reason: "the account's $key are gone from the device");
     }
     expect(Pins.instance.items, isEmpty);
     expect(AppSettings.instance.series, isEmpty);
     expect(OnDeckHidden.instance.isEmpty, isTrue);
+    expect(PairShift.instance.isEmpty, isTrue);
 
     expect(p.getString('server'), url, reason: 'the address is kept for signing in again');
     expect(find.text(url), findsOneWidget, reason: 'and filled in');

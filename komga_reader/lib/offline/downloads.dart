@@ -69,8 +69,15 @@ class Downloads extends ChangeNotifier implements LocalPages {
   List<dynamic>? pagesOf(String baseUrl, String bookId) {
     final e = _here(baseUrl, bookId);
     if (e == null) return null;
-    return [for (final p in (e['pages'] as List?) ?? []) {'number': p['number'], 'mediaType': p['mediaType']}];
+    return [for (final p in (e['pages'] as List?) ?? []) listed(p as Map)];
   }
+
+  /// A downloaded page as Komga lists it: its number, type and - downloaded since 2026-10-16 - size.
+  static Map<String, dynamic> listed(Map p) => {
+        'number': p['number'], 'mediaType': p['mediaType'],
+        if (p['width'] != null) 'width': p['width'],
+        if (p['height'] != null) 'height': p['height'],
+      };
 
   /// A downloaded EPUB's file (downloaded whole from the server at [baseUrl], and still on the device) - else null.
   File? epubFileOf(String baseUrl, String bookId) {
@@ -702,6 +709,9 @@ class Downloads extends ChangeNotifier implements LocalPages {
           {
             'number': p['number'],
             'mediaType': p['mediaType'],
+            // its size: two pages side by side pair on it (a wide page is alone - lib/reader/spreads.dart)
+            if (p['width'] != null) 'width': p['width'],
+            if (p['height'] != null) 'height': p['height'],
             'file': 'pages/${(p['number'] as int).toString().padLeft(4, '0')}.${_extension(p['mediaType'] as String?)}',
           },
       ];
