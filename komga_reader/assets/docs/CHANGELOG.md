@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 119 - 2026-10-16
+
 **Changed**
 - **Inset page follows the text** - the sheet's edges now sit 20 px out from the text all round: left of where every
   line starts, above the first line, right of where lines end, below the last. Margins still decide where the text
@@ -17,8 +21,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   under 20 px leaves that side of the sheet at the screen's edge. With Margins: Book's, each page's sheet follows its
   chapter's own margins.
 - **The Dark page colour sits on black** with Inset page (it was a near-black grey).
-
-## 1.3.0
 
 ### Build 118 - 2026-10-16
 
