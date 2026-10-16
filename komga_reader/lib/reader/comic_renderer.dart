@@ -269,7 +269,8 @@ class ComicRenderer extends Renderer {
   ({SpotText? left, SpotText? centre, SpotText? right}) spots(int place) => (
         // the title on top, the page and how far through on the left (the right spot is free - mockup "A, comic")
         centre: SpotText(_bookTitle, 'title'),
-        left: SpotText('Pg. ${_pagesText(place)}/${pages.length} · ${((place + 1) / pages.length * 100).round()}%', 'page'),
+        left: SpotText(
+            'Pg. ${_pagesText(place)}/${pages.length} · ${((place + 1) / pages.length * 100).round()}%', 'page'),
         right: null,
       );
 
@@ -484,7 +485,7 @@ class ComicRenderer extends Renderer {
     if (_curlMode) {
       final page = _curlRect(next ? _at : target);
       final grab = Offset(page.width, page.height * 0.72);
-      final start = next ? grab : Offset(PageCurl.gone(page.width), grab.dy);
+      final start = next ? grab : Offset(_goneAt(page, target), grab.dy);
       if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
         _animateCurl(complete: true);
         return;
@@ -602,6 +603,11 @@ class ComicRenderer extends Renderer {
   /// the whole area.
   Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
 
+  /// Where a turn of [page] (at item [v]) ends: off itself - or, a pair's page turning over onto the one beside it,
+  /// exactly over that one (its width past the spine).
+  double _goneAt(Rect page, int v) => _spineX(v) != null ? -page.width : PageCurl.gone(page.width);
+  double _gone(_Curl c) => c.spine ? -c.page.width : PageCurl.gone(c.page.width);
+
   /// The page that curls at item [v]: two pages up, a pair's later page - the right one (left, right to left), its
   /// spine at the gutter, as a book's page turns (user, 2026-10-16); else the whole page.
   Rect _curlRect(int v) {
@@ -661,6 +667,7 @@ class ComicRenderer extends Renderer {
     final now = _snapshot();
     if (now == null) return false;
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
+        spine: _spineX(next ? _at : target) != null,
         // two pages up, forward: the earlier page stays (its side of the old view), the later turns over onto it;
         // back: the old view covers it all until the previous page has uncurled
         under: next ? (_earlierSide(_at) == null ? null : now) : now, underClip: next ? _earlierSide(_at) : null,
@@ -694,7 +701,9 @@ class ComicRenderer extends Renderer {
       ..completing = complete
       ..animFrom = c.finger
       ..animTo = c.forward == complete
-          ? Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
+          ? c.spine
+              ? Offset(-w, c.grab.dy) // turned over flat onto the page beside it
+              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _curlAnim.forward(from: 0);
   }
@@ -753,14 +762,14 @@ class ComicRenderer extends Renderer {
       final at = _pagePoint(s0, page);
       final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
       if (!_startCurl(next: next, page: page, grab: grab,
-          finger: next ? grab : Offset(PageCurl.gone(page.width), grab.dy))) {
+          finger: next ? grab : Offset(_goneAt(page, _at - 1), grab.dy))) {
         _dragStart = null;
         return;
       }
     }
     final c = _curl!;
     if (_curlAnim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
+    final w = c.page.width, gone = _gone(c);
     final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
     final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
@@ -774,7 +783,7 @@ class ComicRenderer extends Renderer {
     final c = _curl;
     _dragStart = null;
     if (c == null || _curlAnim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
+    final w = c.page.width, gone = _gone(c);
     var vx = d.velocity.pixelsPerSecond.dx;
     if (rtl) vx = -vx;
     final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
@@ -1440,6 +1449,12 @@ abstract interface class CurlLayer {
   /// What of the view from before the turn stays over it meanwhile (two pages up, forward: the earlier page's side);
   /// null: none, or all of it.
   Rect? get held;
+
+  /// Where the grabbed edge is now (page coordinates, reading direction).
+  Offset get finger;
+
+  /// Turning over onto the page beside it, attached at the spine.
+  bool get spine;
 }
 
 /// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
@@ -1453,10 +1468,14 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
   Rect get page => curl.page;
   @override
   Rect? get held => curl.underClip;
+  @override
+  Offset get finger => curl.finger;
+  @override
+  bool get spine => curl.spine;
 
   @override
   void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
-          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader)
+          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader, spine: curl.spine)
       .paint(canvas, size);
 
   @override
@@ -1466,10 +1485,11 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
 /// A page turn in progress (3D page curl).
 class _Curl {
   _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.underClip, this.pending = false});
+      required this.from, this.under, this.underClip, this.pending = false, this.spine = false});
   ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
   final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
   final Rect? underClip; // only this part of [under] (two pages up, forward: the earlier page's side)
+  final bool spine; // a pair's page: turns over onto the one beside it, attached at the gutter (PageCurl.spineRadius)
   final bool forward;
   final Rect page; // the curling page's image on screen - only it curls, not the bars around it
   final Offset grab; // where the page was taken hold of (its right edge, page coordinates in reading direction)

@@ -317,12 +317,32 @@ void main() {
       await tester.pump();
     });
 
+    testWidgets('dragged to full stretch, the page goes no further than over the page beside it - attached at the '
+        'spine (user, 2026-10-16: it pulled away from the spine, the page beneath showing)', (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      // (a drag turns the page fully once it has come as far as from where it started to the screen's edge)
+      final g = await tester.startGesture(const Offset(900, 500));
+      for (var i = 1; i <= 30; i++) {
+        await g.moveTo(Offset(900 - i * 30.0, 500)); // to the screen's left edge
+        await tester.pump(const Duration(milliseconds: 30));
+      }
+      final c = curl(tester)!;
+      expect(c.spine, isTrue);
+      expect(c.finger.dx, closeTo(-c.page.width, 1), reason: 'its edge at most over the outer edge of the other page');
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(await position(tester), startsWith('Pg. 5-6/9'));
+    });
+
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
       await openReal(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
       await tester.pump();
       final c = curl(tester)!;
       expect(c.held, isNull);
+      expect(c.spine, isFalse, reason: 'it turns away as a single page does');
       expect(c.page.width, lessThan(800), reason: 'the cover itself, centred');
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
