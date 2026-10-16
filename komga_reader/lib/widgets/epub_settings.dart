@@ -24,6 +24,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
           value: e.turn,
           onChanged: (v) => set(e.copyWith(turn: v)),
         ),
+        _twoPagesRow(e, set),
       ]),
     ];
 
@@ -43,6 +44,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     SettingsGroup(title: 'Formatting', children: _formattingRows(e, set)),
     SettingsGroup(title: 'Reading', children: [
       _coloursRow(e, set),
+      _twoPagesRow(e, set),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
@@ -50,6 +52,23 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     ]),
   ];
 }
+
+/// Dual page mode (user, 2026-10-16: eBooks as comics - in the reader's panel, synced).
+Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoPages>(
+      title: 'Dual page mode',
+      subtitle: switch (e.twoPages) {
+        TwoPages.off => 'One page at a time',
+        TwoPages.wideScreen => 'Two pages side by side when the screen is wider than tall',
+        TwoPages.always => 'Two pages side by side, a tall screen too',
+      },
+      choices: const [
+        Choice(TwoPages.off, 'Off'),
+        Choice(TwoPages.wideScreen, 'Wide screen'),
+        Choice(TwoPages.always, 'Always'),
+      ],
+      value: e.twoPages,
+      onChanged: (t) => set(e.copyWith(twoPages: t)),
+    );
 
 // the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down to fit
 // the side sheet until the names couldn't be read (user, 2026-10-06). One row with its label, so the chips have room

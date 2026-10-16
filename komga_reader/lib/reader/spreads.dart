@@ -75,6 +75,27 @@ List<Spread> pairPages(List<bool> wide, {bool shifted = false}) {
   return out;
 }
 
+/// An eBook's pages paired for two pages side by side (user, 2026-10-16): each chapter starts on a right-hand page,
+/// as in a printed book - its first page alone in the later slot (the page beside it blank), then pairs, an odd last
+/// page alone in the earlier slot. A spread never holds two chapters. [pagesPerChapter]: each chapter's page count, in
+/// order; the pages are numbered through the book (the first chapter's from 0).
+List<Spread> pairChapters(List<int> pagesPerChapter) {
+  final out = <Spread>[];
+  var first = 0;
+  for (final n in pagesPerChapter) {
+    if (n > 0) {
+      out.add(Spread.alone(later: first));
+      var i = first + 1;
+      for (; i + 1 < first + n; i += 2) {
+        out.add(Spread.pair(i, i + 1));
+      }
+      if (i < first + n) out.add(Spread.alone(earlier: i));
+    }
+    first += n;
+  }
+  return out;
+}
+
 /// The spread each page is in: index i holds the spread number of page i.
 List<int> spreadIndex(List<Spread> spreads, int pageCount) {
   final of = List<int>.filled(pageCount, 0);

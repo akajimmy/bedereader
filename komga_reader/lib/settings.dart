@@ -500,7 +500,7 @@ class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.5,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
       this.hyphenate = true, this.turn = EpubTurn.slide,
-      this.paragraphGap = EpubParagraphGap.none});
+      this.paragraphGap = EpubParagraphGap.none, this.twoPages = TwoPages.wideScreen});
   final EpubFont font;
   final double size; // px at the app's text size
   final double lineSpacing;
@@ -511,21 +511,24 @@ class EpubPrefs {
   final EpubTurn turn;
   final EpubParagraphGap paragraphGap;
 
+  /// Dual page mode: two pages side by side, as an open book (user, 2026-10-16: eBooks as comics - the Aa panel).
+  final TwoPages twoPages;
+
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   /// Line spacing's steps (user, 2026-10-08: 1 to 2 by a quarter, "names as above": Compact .. Double).
   static const spacings = [1.0, 1.25, 1.5, 1.75, 2.0];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
           EpubAlign? align, bool? hyphenate, EpubTurn? turn,
-          EpubParagraphGap? paragraphGap}) =>
+          EpubParagraphGap? paragraphGap, TwoPages? twoPages}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours, align: align ?? this.align,
           hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
-          paragraphGap: paragraphGap ?? this.paragraphGap);
+          paragraphGap: paragraphGap ?? this.paragraphGap, twoPages: twoPages ?? this.twoPages);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'align': align.name,
-      'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name};
+      'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name, 'twoPages': twoPages.name};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -542,6 +545,7 @@ class EpubPrefs {
       hyphenate: j['hyphenate'] != false,
       turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
+      twoPages: pick(TwoPages.values, j['twoPages'], TwoPages.wideScreen),
     );
   }
 
