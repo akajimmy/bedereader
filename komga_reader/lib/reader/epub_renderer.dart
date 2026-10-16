@@ -36,6 +36,7 @@ import 'epub_selection.dart';
 import 'position_row.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
+import 'spreads.dart';
 
 /// An EPUB ready to show (from [EpubRenderer.prepare]).
 class _Prepared {
@@ -329,11 +330,16 @@ class EpubRenderer extends Renderer {
 
   // ---- layout: every new size or setting is counted again (or its counts remembered) before the book shows
 
-  void _layout(Size size) {
+  void _layout(Size area) {
     final b = _book!;
     // no room at all (a minimised window): nothing to lay out - it lost the place, and opened at the chapter's
     // start afterwards (EPUB review R12)
-    if (size.isEmpty) return;
+    if (area.isEmpty) return;
+    _area = area;
+    // Dual page mode (user, 2026-10-16): two pages side by side, each laid out at half the width
+    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    _laidDual = dual;
+    final size = dual ? Size(area.width / 2, area.height) : area;
     _size = size;
     final theme = _theme;
     if (b.size == size && b.theme == theme) {
@@ -341,6 +347,9 @@ class EpubRenderer extends Renderer {
       _settle = null;
       // laid out as these settings would be: their sheet
       _laidInset = AppSettings.instance.display.insetPage;
+      // the same pages, set out the other way (a half-width page and a narrow window's are the same page): two up or
+      // one, after this frame
+      if (_ready && dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _arrange(dual));
       return;
     }
     // only the settings changed (the same page, laid out before): laid out once they stop changing - the size up five
@@ -417,9 +426,11 @@ class EpubRenderer extends Renderer {
       to = b.bookPage(c, b.pageAt(c, ((_startFraction ?? 0) * b.lengthOf(c)).round()))!;
       _startFraction = null;
     }
+    _dual = _laidDual; // one page or two, as laid out ([_layout]): the spreads of this count
+    _pairBook();
     _setPlace(to);
     final old = _pc;
-    _pc = PageController(initialPage: to);
+    _pc = PageController(initialPage: _viewOf(to));
     WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     _countChanges = b.countChanges;
     _ready = true;
@@ -460,8 +471,9 @@ class EpubRenderer extends Renderer {
       // a chapter's number of pages changed after counting: the book's page numbers after it moved - back to the
       // same page (the page view kept its number, now another page - EPUB review R5)
       _countChanges = b.countChanges;
+      _pairBook(); // (two pages up: the spreads move with the pages)
       final at = b.bookPage(_chapter, _page);
-      if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != at) _jumpView(at);
+      if (at != null && _pc.hasClients && (_pc.page ?? 0).round() != _viewOf(at)) _jumpView(_viewOf(at));
     }
     _changed(); // the spinner's count, a chapter laid out
   }
@@ -512,9 +524,10 @@ class EpubRenderer extends Renderer {
     if (ms >= 2) EpubTrace.instance.log('page change took ${ms.toStringAsFixed(1)} ms');
   }
 
-  void _pageChanged(int i) {
+  void _pageChanged(int view) {
     _clearSelection(); // a selection is the page's: turned (any way), it goes
     if (!_ownJump) _anchor = null; // a turn: the page shown is the place now
+    final i = _placeOf(view);
     EpubTrace.instance.log('page $i${_ownJump ? ' by the reader' : ''}');
     _setPlace(i);
     if (!_end) _prefetchAround();
@@ -527,11 +540,11 @@ class EpubRenderer extends Renderer {
 
   bool _ownJump = false;
 
-  /// The renderer's own move of the page view (laid out again, a count change): not a turn.
-  void _jumpView(int page) {
+  /// The renderer's own move of the page view to item [view] (laid out again, a count change): not a turn.
+  void _jumpView(int view) {
     _queued = 0; // a turn waiting on a slide is dropped: the reader went elsewhere
     _ownJump = true;
-    _pc.jumpToPage(page);
+    _pc.jumpToPage(view);
     _ownJump = false;
   }
 
@@ -539,7 +552,52 @@ class EpubRenderer extends Renderer {
   void jumpTo(int place) {
     _queued = 0;
     _anchor = null;
-    if (_pc.hasClients) _pc.jumpToPage(place);
+    if (_pc.hasClients) _pc.jumpToPage(_viewOf(place));
+  }
+
+  // ---- Dual page mode (user, 2026-10-16): the page view goes by spread - two pages, each chapter starting on the
+  // right (lib/reader/spreads.dart pairChapters) - and the place is the earlier page shown; one page each otherwise
+
+  /// Two pages side by side now (the spreads of this count).
+  bool _dual = false;
+  bool _laidDual = false; // the last layout's: two up (it takes effect once counted)
+  Size _area = Size.zero; // the whole page area (both pages; [_size] is a page's)
+  List<Spread> _spreads = const [];
+  List<int> _spreadOf = const [];
+
+  /// The spreads of this count (none, one page up).
+  void _pairBook() {
+    final b = _book;
+    if (!_dual || b == null || !b.counted) {
+      _spreads = const [];
+      _spreadOf = const [];
+      return;
+    }
+    _spreads = pairChapters([for (var c = 0; c < b.chapterCount; c++) b.pageCount(c)!]);
+    _spreadOf = spreadIndex(_spreads, b.totalPages!);
+  }
+
+  /// The page view's item showing page [place] (past the last: the end card).
+  int _viewOf(int place) => !_dual ? place : place > last ? _spreads.length : _spreadOf[place];
+
+  /// The place at page view item [view]: two up, the earlier page shown (the end card: past the last page).
+  int _placeOf(int view) => !_dual ? view : view >= _spreads.length ? last + 1 : _spreads[view].first;
+
+  /// The page view's items before the end card.
+  int get _views => _dual ? _spreads.length : _book!.totalPages!;
+
+  /// One page or two now, the same layout (the window's shape changed, not the page's): the page view again, on the
+  /// same page.
+  void _arrange(bool dual) {
+    if (_disposed || !_ready || dual == _dual) return;
+    final keep = place;
+    _dual = dual;
+    _pairBook();
+    _clearSelection();
+    final old = _pc;
+    _pc = PageController(initialPage: _viewOf(keep));
+    WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    _changed();
   }
 
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
@@ -555,12 +613,15 @@ class EpubRenderer extends Renderer {
   CurlTurns get _curl => _curlMade ??= CurlTurns(
     vsync: host.vsync,
     current: () => _pc.hasClients ? (_pc.page ?? 0).round() : 0,
-    jump: (p) {
-      if (_pc.hasClients) _pc.jumpToPage(p);
+    jump: (v) {
+      if (_pc.hasClients) _pc.jumpToPage(v);
     },
-    pageRect: () => _sheet ?? Offset.zero & _size,
+    // two pages up: the right-hand page turns, over onto the left, attached at the spine (as comics')
+    pageRect: () => _dual ? _sideRect(later: true) : _sheet ?? Offset.zero & _size,
+    spine: () => _dual,
+    held: () => _dual ? Rect.fromLTWH(0, 0, _size.width, _area.height) : null,
     done: ({required turned}) {
-      if (turned && _pc.hasClients) host.turned((_pc.page ?? 0).round());
+      if (turned && _pc.hasClients) host.turned(_placeOf((_pc.page ?? 0).round()));
     },
     pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
     paper: () => _drawn.background, // the back of the page in the page's own colour (user, 2026-10-11)
@@ -620,7 +681,7 @@ class EpubRenderer extends Renderer {
         ? cut.$1
         : (_pc.page ?? 0).round();
     final target = from + by;
-    if (target < 0 || target > last + 1) return;
+    if (target < 0 || target > _views) return;
     if (_curlMode && _curl.turn(next: by > 0, target: target)) return;
     if (_turnTime == Duration.zero) {
       _pc.jumpToPage(target);
@@ -648,21 +709,23 @@ class EpubRenderer extends Renderer {
   /// slowest part, so a held key crept and never turned a page - user, build 82, Windows).
   bool _sliding = false;
 
-  void _tap(TapUpDetails d, Size size, EpubPage? page) {
+  void _tap(TapUpDetails d, Size size) {
     // text selected: a tap lets go of it - and does nothing else (no turn, no controls)
     if (_selected.value) {
       _clearSelection();
       return;
     }
+    // the page under the finger, and where on it (two pages up: the one on that side)
+    final (page, at) = _pageUnder(d.localPosition);
     // a highlight tapped: what to do with it (not a turn)
-    final hit = page == null ? null : _highlightAt(page, d.localPosition);
+    final hit = page == null ? null : _highlightAt(page, at);
     if (hit != null) {
       unawaited(_highlightMenu(hit, d.globalPosition));
       return;
     }
     // a link under the finger first (footnotes)
     for (final l in page?.links ?? const <EpubLink>[]) {
-      if (l.rect.inflate(10).contains(d.localPosition)) {
+      if (l.rect.inflate(10).contains(at)) {
         unawaited(_openLink(l));
         return;
       }
@@ -672,7 +735,7 @@ class EpubRenderer extends Renderer {
     // a picture can fill the page)
     if (!host.controlsUp && x >= 1 / 3 && x <= 2 / 3) {
       for (final (rect, image) in page?.pictures ?? const <(Rect, ui.Image)>[]) {
-        if (rect.contains(d.localPosition)) {
+        if (rect.contains(at)) {
           unawaited(_showPicture(image));
           return;
         }
@@ -717,13 +780,28 @@ class EpubRenderer extends Renderer {
   /// A mouse click on the page: as a tap - except that one made with text selected lets go of it and does nothing
   /// else (the selection area has let go of it already, as the button went down), and a selection made by the click's
   /// own wobble (a letter or two dragged over) is let go of first.
-  void _mouseClick(TapUpDetails d, Size size, EpubPage? page) {
+  void _mouseClick(TapUpDetails d, Size size) {
     if (_mouseDownSelected) {
       _clearSelection();
       return;
     }
     _clearSelection();
-    _tap(d, size, page);
+    _tap(d, size);
+  }
+
+  /// The page at [local] (on the page area) and the point there in its own terms - two pages up, the one on that
+  /// side, shifted as it's drawn ([_sideShift]); null over a blank side, the end card, a page not laid out.
+  (EpubPage?, Offset) _pageUnder(Offset local) {
+    final b = _book!;
+    if (_end) return (null, local);
+    final v = _viewOf(place), later = local.dx >= _size.width;
+    if (_dual && v >= _spreads.length) return (null, local);
+    final int? page = !_dual ? place : later ? _spreads[v].later : _spreads[v].earlier;
+    final at = !_dual ? local : local - Offset((later ? _size.width : 0) + _sideShift(later: later), 0);
+    if (page == null) return (null, at);
+    final (c, p) = b.chapterPage(page);
+    final pages = b.pagesNow(c);
+    return (pages == null || pages.isEmpty ? null : pages[p.clamp(0, pages.length - 1)], at);
   }
 
   /// How long a tap in the middle waits for a second (a double tap selects the word); zero: no double tap, the
@@ -1019,15 +1097,22 @@ class EpubRenderer extends Renderer {
     final (c, p) = b.chapterPage(at);
     final pct = (b.progression(b.positionOf(c, p)) * 100).round();
     return (
-      left: SpotText('Book · Pg. ${at + 1}/${b.totalPages} · $pct%', 'book page'),
+      left: SpotText('Book · Pg. ${_pagesText(at)}/${b.totalPages} · $pct%', 'book page'),
       centre: SpotText(_chapterNameOf(c), 'chapter'),
       // no chapter number: the book's file count, not the chapter's own ("Ch. 4" under "Chapter One" - user, 2026-10-07)
       right: SpotText('Ch. · Pg. ${p + 1}/${b.pageCount(c)}', 'chapter page'),
     );
   }
 
+  /// The page number at [place] - two pages up, both of the spread shown there: "4-5".
+  String _pagesText(int place) {
+    if (!_dual || place > last || _spreadOf.isEmpty) return '${place + 1}';
+    final s = _spreads[_spreadOf[place]];
+    return s.pages.length == 1 ? '${s.first + 1}' : '${s.first + 1}-${s.last + 1}';
+  }
+
   @override
-  String corner(int place) => '${place.clamp(0, last) + 1} / ${_book!.totalPages}';
+  String corner(int place) => '${_pagesText(place.clamp(0, last))} / ${_book!.totalPages}';
   @override
   String placeLabel(int place) => 'Page ${place + 1}';
 
@@ -1152,11 +1237,8 @@ class EpubRenderer extends Renderer {
         Positioned.fill(child: LayoutBuilder(builder: (context, box) {
           final size = box.biggest;
           _layout(size);
-          final b = _book!;
           if (!_ready) return _paper(_drawn.background, surround: true); // laid out again: the spinner next frame
-          final pages = b.pagesNow(_chapter) ?? const <EpubPage>[];
-          final shown = _end || pages.isEmpty ? null : pages[_page.clamp(0, pages.length - 1)];
-          final here = _end ? -1 : place;
+          final here = _end ? -1 : _viewOf(place);
           // text selection (user, 2026-10-08): the page on screen is selectable; Flutter's selection area gives the
           // long press / mouse drag, the handles, the menu (Copy only, for now), Select all and Ctrl+C
           return SelectionArea(
@@ -1199,7 +1281,7 @@ class EpubRenderer extends Renderer {
                   _mouseDown = null;
                   if (e.kind == PointerDeviceKind.mouse && from != null && (e.position - from).distance < _clickSlop) {
                     _mouseClick(TapUpDetails(kind: PointerDeviceKind.mouse, globalPosition: e.position,
-                        localPosition: e.localPosition), size, shown);
+                        localPosition: e.localPosition), size);
                   }
                 },
                 onPointerCancel: (_) {
@@ -1215,7 +1297,7 @@ class EpubRenderer extends Renderer {
               controller: _pc,
               // Curl: a drag curls the page instead of sliding it (below)
               physics: _curlMode ? const NeverScrollableScrollPhysics() : null,
-              itemCount: b.totalPages! + 1, // + the end card
+              itemCount: _views + 1, // + the end card
               onPageChanged: _onPageChanged,
               // the pages either side built ahead, as the comic reader's are: a tap's turn no longer builds the
               // incoming page in its first frame (most tap turns missed one refresh there - measured on the
@@ -1223,7 +1305,9 @@ class EpubRenderer extends Renderer {
               allowImplicitScrolling: true,
               // each page drawn once and kept as a picture: sliding moves it, rather than drawing every line
               // of both pages again each frame
-              itemBuilder: (_, i) => RepaintBoundary(child: _pageAt(i, size, i == here ? registrar : null)),
+              itemBuilder: (_, v) => RepaintBoundary(child: _dual
+                  ? _spreadAt(v, v == here ? registrar : null)
+                  : _pageAt(v, size, v == here ? registrar : null)),
             ))),
             // the page turning over (Curl)
             if (_curlMode) Positioned.fill(child: _curl.overlay()),
@@ -1246,8 +1330,8 @@ class EpubRenderer extends Renderer {
               builder: (_, selected, __) => Positioned.fill(child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 // (a mouse's clicks are told by the Listener above)
-                onTapUp: (d) => d.kind == PointerDeviceKind.mouse ? null : _tap(d, size, shown),
-                onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: b.totalPages! + 1) : null,
+                onTapUp: (d) => d.kind == PointerDeviceKind.mouse ? null : _tap(d, size),
+                onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: _views + 1) : null,
                 onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
                 onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,
                 // right-click: the controls, told by the Listener above (any distance); claimed here only so the
@@ -1302,15 +1386,20 @@ class EpubRenderer extends Renderer {
   /// Define for a word or a short phrase (2026-10-11: the offline English dictionary).
   Widget _selectionPane(BuildContext context) {
     if (!_selected.value || _pressed.value > 0) return const SizedBox.shrink();
-    final render = _shownPage.currentContext?.findRenderObject();
     final stack = _pageStack.currentContext?.findRenderObject();
-    if (render is! RenderSelectablePage || stack is! RenderBox || !render.attached) return const SizedBox.shrink();
-    final rects = render.value.selectionRects;
-    final range = render.selectedPositions;
-    if (rects.isEmpty || range == null) return const SizedBox.shrink();
-    final box = rects.reduce((a, b) => a.expandToInclude(b));
-    final topLeft = render.localToGlobal(box.topLeft, ancestor: stack);
-    final bottomRight = render.localToGlobal(box.bottomRight, ancestor: stack);
+    final range = _selectedRange;
+    if (stack is! RenderBox || range == null) return const SizedBox.shrink();
+    // the selection's boxes on the page area (two pages up: on either page, or both)
+    Rect? box;
+    for (final r in _shownRenders) {
+      for (final rect in r.value.selectionRects) {
+        final onStack = Rect.fromPoints(r.localToGlobal(rect.topLeft, ancestor: stack),
+            r.localToGlobal(rect.bottomRight, ancestor: stack));
+        box = box == null ? onStack : box.expandToInclude(onStack);
+      }
+    }
+    if (box == null) return const SizedBox.shrink();
+    final topLeft = box.topLeft, bottomRight = box.bottomRight;
     final selected = _selectedText;
     final covered = _highlights?.within(_chapterFile(_chapter), range.$1, range.$2) ?? const <Highlight>[];
     final whole = covered.any((h) => h.start <= range.$1 && h.end >= range.$2); // all of it highlighted already
@@ -1351,8 +1440,12 @@ class EpubRenderer extends Renderer {
 
   /// The word at [global] (screen coordinates) selected - a double tap or double click (user, 2026-10-12).
   void _selectWordAt(Offset global) {
-    final render = _shownPage.currentContext?.findRenderObject();
-    if (render is! RenderSelectablePage) return;
+    // the page under the pointer (two pages up, either)
+    RenderSelectablePage? render;
+    for (final r in _shownRenders) {
+      if ((Offset.zero & r.size).contains(r.globalToLocal(global))) render = r;
+    }
+    if (render == null) return;
     render.dispatchSelectionEvent(SelectWordSelectionEvent(globalPosition: global));
     _selectedText = render.getSelectedContent()?.plainText ?? '';
     _selected.value = _selectedText.isNotEmpty;
@@ -1366,7 +1459,25 @@ class EpubRenderer extends Renderer {
   // ---- highlights (user, 2026-10-11: one colour, synced through Komga, no notes)
 
   BookHighlights? _highlights;
-  final _shownPage = GlobalKey(debugLabel: 'epub-page-on-screen');
+  final _shownPage = GlobalKey(debugLabel: 'epub-page-on-screen'); // (two pages up: the earlier, left one)
+  final _shownLater = GlobalKey(debugLabel: 'epub-later-page-on-screen'); // two pages up: the later, right one
+
+  /// The pages on screen that take part in the selection (two pages up, both).
+  List<RenderSelectablePage> get _shownRenders => [
+        for (final k in [_shownPage, if (_dual) _shownLater])
+          if (k.currentContext?.findRenderObject() case final RenderSelectablePage r when r.attached) r,
+      ];
+
+  /// What's selected, in the chapter's characters - across both pages, two pages up (a spread is one chapter).
+  (int, int)? get _selectedRange {
+    (int, int)? range;
+    for (final r in _shownRenders) {
+      final p = r.selectedPositions;
+      if (p == null) continue;
+      range = range == null ? p : (math.min(range.$1, p.$1), math.max(range.$2, p.$2));
+    }
+    return range;
+  }
 
   /// The chapter file [chapter] is, in the book (what a highlight is kept against).
   String _chapterFile(int chapter) => _book!.info.spine[chapter];
@@ -1401,8 +1512,7 @@ class EpubRenderer extends Renderer {
 
   /// The selection, highlighted (one taken in with any it overlaps); the selection let go of.
   void _highlightSelection() {
-    final render = _shownPage.currentContext?.findRenderObject();
-    final range = render is RenderSelectablePage ? render.selectedPositions : null;
+    final range = _selectedRange;
     if (range != null && _highlights != null) {
       unawaited(_highlights!.add(Highlight(_chapterFile(_chapter), range.$1, range.$2, _selectedText.trim())));
     }
@@ -1443,7 +1553,7 @@ class EpubRenderer extends Renderer {
         if (child != null) child,
       ]);
 
-  Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar]) {
+  Widget _pageAt(int i, Size size, [SelectionRegistrar? registrar, GlobalKey? key]) {
     final b = _book!;
     final theme = _drawn;
     if (i >= b.totalPages!) return host.endCard();
@@ -1453,7 +1563,7 @@ class EpubRenderer extends Renderer {
       if (b.errorOf(c) != null) return _chapterError(b, c, theme);
       // the page on screen: laid out now (a failure shows here, with Retry); a neighbour built ahead (implicit
       // scrolling): after the usual pause, so its layout doesn't land in the next turn
-      final onScreen = !_pc.hasClients || _pc.page == null || _pc.page!.round() == i;
+      final onScreen = !_pc.hasClients || _pc.page == null || _pc.page!.round() == _viewOf(i);
       if (onScreen) {
         unawaited(b.pages(c).then<void>((_) {}, onError: (Object _) {}));
       } else {
@@ -1463,7 +1573,7 @@ class EpubRenderer extends Renderer {
     }
     final page = pages[p.clamp(0, pages.length - 1)];
     return SelectablePage(
-      key: registrar != null ? _shownPage : null,
+      key: registrar != null ? key ?? _shownPage : null,
       page: page,
       registrar: registrar,
       colour: theme.accent.withValues(alpha: 0.35),
@@ -1471,6 +1581,49 @@ class EpubRenderer extends Renderer {
           marks: _marksOn(page, c), markColour: _markColour(theme.accent, theme.background))),
     );
   }
+
+  /// Two pages up: spread [v] - the earlier page on the left, the later on the right, each a page wide; a side with
+  /// no page (a chapter starts on the right, ends where it ends) blank paper. With sheets (Inset page) the two meet
+  /// at the spine, an open book: each shifted towards the middle ([_sideShift]). A shade down the gutter.
+  Widget _spreadAt(int v, SelectionRegistrar? registrar) {
+    if (v >= _spreads.length) return host.endCard();
+    final s = _spreads[v];
+    Widget side(int? page, {required bool later}) => SizedBox.fromSize(
+          size: _size,
+          child: Transform.translate(
+            offset: Offset(_sideShift(later: later), 0),
+            child: page == null
+                ? _paper(_drawn.background)
+                : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage),
+          ),
+        );
+    return Stack(children: [
+      Row(children: [side(s.earlier, later: false), side(s.later, later: true)]),
+      Positioned(
+        left: _size.width - 14,
+        width: 28,
+        top: _sheet?.top ?? 0,
+        bottom: _sheet == null ? 0 : _size.height - _sheet!.bottom,
+        child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [
+          const Color(0x00000000),
+          Color.fromRGBO(0, 0, 0, _drawn.background.computeLuminance() > 0.3 ? 0.10 : 0.22),
+          const Color(0x00000000),
+        ])))),
+      ),
+    ]);
+  }
+
+  /// Two pages up: how far side [later] (else the earlier, left) is drawn shifted towards the spine, so its sheet
+  /// meets the other's there (0 with no sheet: the pages meet as they are).
+  double _sideShift({required bool later}) {
+    final s = _sheet;
+    if (s == null) return 0;
+    return later ? -s.left : _size.width - s.right;
+  }
+
+  /// Two pages up: side [later]'s page (its sheet, or the whole page) on the page area.
+  Rect _sideRect({required bool later}) =>
+      (_sheet ?? Offset.zero & _size).shift(Offset((later ? _size.width : 0) + _sideShift(later: later), 0));
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
   Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) => _paper(

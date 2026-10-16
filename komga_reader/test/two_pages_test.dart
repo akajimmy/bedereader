@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
-import 'package:komga_reader/reader/comic_renderer.dart';
+import 'package:komga_reader/reader/spreads.dart' show twoPagesAllowed;
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/synced_ids.dart';
@@ -37,11 +37,11 @@ void main() {
   setUpAll(preloadShaders);
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    ComicRenderer.twoPagesAllowed = true; // (off for every other test file - flutter_test_config.dart)
+    twoPagesAllowed = true; // (off for every other test file - flutter_test_config.dart)
     PairShift.instance.reset();
   });
   tearDown(() {
-    ComicRenderer.twoPagesAllowed = false;
+    twoPagesAllowed = false;
     AppSettings.instance.setDisplay(const DisplayPrefs());
     AppSettings.instance.setDefault(const ReaderPrefs());
     AppSettings.instance.useDefaults('S1');

@@ -1,5 +1,10 @@
 import 'package:flutter/foundation.dart';
 
+/// Tests: two pages can come up at all - comics and eBooks (off for every test but the two-page ones:
+/// test/flutter_test_config.dart - the test window is wider than tall, and Dual page mode's default is Wide screen).
+/// Always on in the app.
+bool twoPagesAllowed = true;
+
 /// What two pages side by side show (dual-page mode - user, 2026-10-16): a pair, a page alone in one of the two
 /// slots, or a wide page across both. Pages are 0-based indexes into the book's pages; [earlier] / [later] are in
 /// reading order - left / right in a left-to-right book, right / left in a right-to-left one (the renderer mirrors).
