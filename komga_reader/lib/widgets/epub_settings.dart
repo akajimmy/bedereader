@@ -45,6 +45,26 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     SettingsGroup(title: 'Reading', children: [
       _coloursRow(e, set),
       _twoPagesRow(e, set),
+      // TEMPORARY (user, 2026-10-16: "give me a slider for the number of pixels") - out once the gap is settled
+      SliderRow(
+        label: 'Inset page gap',
+        value: s.display.insetGap,
+        min: 0,
+        max: 120,
+        divisions: 60,
+        valueText: '${s.display.insetGap.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetGap: v)),
+      ),
+      // TEMPORARY (user, 2026-10-16: "the distance between the two inset pages should be a fixed distance")
+      SliderRow(
+        label: 'Distance between pages',
+        value: s.display.insetBetween,
+        min: 0,
+        max: 200,
+        divisions: 50,
+        valueText: '${s.display.insetBetween.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetBetween: v)),
+      ),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
