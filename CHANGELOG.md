@@ -9,13 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 116 - 2026-10-16
+
 **Changed**
 - **Dual page mode** (two pages side by side; it was "Two pages") moved into the reader: Comic settings, with the page
   layout - and to Settings > Comics > Pages - defaults. It's now a reading default, the same on every device, that a
   series can override with its own (Override defaults, as for Fit and Direction); Make default carries it too. Off,
   Wide screen and Always as before. A device that had it off is back on Wide screen.
-
-## 1.3.0
 
 ### Build 115 - 2026-10-16
 
