@@ -20,6 +20,12 @@ import 'support/reader_server.dart';
 class SpreadBook extends ReaderServer {
   // (from 1) 1 cover, 2-6 single (five: odd - one alone after the cover), 7 wide, 8-9
   static const wide = {7};
+
+  /// Pages that load (the curl tests: pairs joined): [png] for each.
+  static bool real = false;
+  static late Uint8List png;
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) => real ? Future.value(png) : super.pageBytes(bookId, number);
   @override
   Future<List<dynamic>> pages(String bookId) async => [
         for (var n = 1; n <= 9; n++) {'number': n, 'width': wide.contains(n) ? 2400 : 1200, 'height': 1800},
@@ -186,6 +192,98 @@ void main() {
     await turn(tester, back: true); // (right to left: Left is forward)
     await turn(tester, back: true);
     expect(await choices(), ['Left (page 4)', 'Right (page 3)', 'Both, as one picture']);
+  });
+
+  group('the page curl, two pages up (user, 2026-10-16: the right-hand page turns over onto the left)', () {
+    setUp(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl)));
+
+    /// The book with real pictures (2 x 3, as the page list says): pairs are joined.
+    Future<void> openReal(WidgetTester tester) async {
+      SpreadBook.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
+      SpreadBook.real = true;
+      addTearDown(() => SpreadBook.real = false);
+      await open(tester);
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.pump();
+    }
+
+    CurlLayer? curl(WidgetTester tester) {
+      final f = find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CurlLayer);
+      return f.evaluate().isEmpty ? null : tester.widget<CustomPaint>(f).painter as CurlLayer;
+    }
+
+    /// To the pair 3|4 (the cover, page 2 alone, then it), with its picture joined.
+    Future<void> toPair(WidgetTester tester, {bool rtl = false}) async {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      await turn(tester, back: rtl); // (right to left: Left is forward)
+      await turn(tester, back: rtl);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // decoded, joined
+        await tester.pump();
+      }
+      expect(await position(tester), startsWith('Pg. 3-4/9'));
+    }
+
+    // 1600 x 1000, a pair of 2 x 3 pages: the joined picture 1333 wide, from 133 to 1467, its gutter at 800
+    testWidgets('forward from a pair: only the right-hand page curls, from the gutter; the left-hand one stays',
+        (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.page.left, closeTo(800, 1), reason: 'its spine at the gutter');
+      expect(c.page.right, closeTo(1467, 1));
+      expect((c.held!.left, c.held!.top, c.held!.bottom), (0, 0, 1000), reason: 'the left side of the old view held');
+      expect(c.held!.right, closeTo(800, 1));
+      expect(c.mirror, isFalse);
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(curl(tester), isNull);
+      expect(await position(tester), startsWith('Pg. 5-6/9'));
+    });
+
+    testWidgets("back to a pair: its right-hand page uncurls back over the right; right to left, mirrored - the "
+        "later page on the left, turning from the gutter", (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      await turn(tester); // 5|6
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.pump();
+      final back = curl(tester)!;
+      expect(back.page.left, closeTo(800, 1), reason: "3|4's right-hand page comes back");
+      expect(back.held, isNull, reason: 'the whole old view covers it until then');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+
+      ReaderServer.direction = 'RIGHT_TO_LEFT';
+      await openReal(tester);
+      await toPair(tester, rtl: true);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft); // (right to left: forward)
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.mirror, isTrue);
+      expect(c.page.left, closeTo(133, 1), reason: 'the left-hand page, the later');
+      expect(c.page.right, closeTo(800, 1));
+      expect(c.held!.left, closeTo(800, 1), reason: 'the right side held');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    });
+
+    testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
+      await openReal(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.held, isNull);
+      expect(c.page.width, lessThan(800), reason: 'the cover itself, centred');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    });
   });
 
   test('two pages joined: the shorter scaled to the taller one\'s height, side by side, edge to edge', () async {
