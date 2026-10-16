@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 117 - 2026-10-16
+
 **New**
 - **eBooks in Dual page mode** - two pages side by side, as an open book: the Aa panel (Reading) and Settings >
   eBooks > Page, Off / Wide screen (the default) / Always, synced like the other eBook settings.
@@ -28,8 +32,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Dual page mode: the turning page no longer pulls away from the spine** - dragged all the way across, it went on
   past the other page and its spine edge lifted, the page beneath showing at the gutter. It now stays attached along
   the spine, its roll flattening as it goes, and lands flat exactly over the other page.
-
-## 1.3.0
 
 ### Build 116 - 2026-10-16
 
