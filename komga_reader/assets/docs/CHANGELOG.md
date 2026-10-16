@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 118 - 2026-10-16
+
 **Changed**
 - **eBooks in Dual page mode with Inset page: two separate pages, a gap between** - instead of meeting at the
   spine as an open book, each page is its own sheet with the surround between them as well as round them (Always:
   each card 16 px in all round; Wide screen: the two columns move in to the same gap). The page curl turns the
   right-hand sheet over the gap and lands it exactly on the left one. Without Inset page the pages still touch, with
   the shade down the gutter.
-
-## 1.3.0
 
 ### Build 117 - 2026-10-16
 
