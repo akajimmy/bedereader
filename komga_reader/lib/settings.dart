@@ -200,6 +200,11 @@ extension PosterSizeLabel on PosterSize {
 /// turn, or not at all (user, 2026-10-06: option H, for EPUBs; both kinds since 2026-10-07).
 enum PageNote { always, afterTurn, off }
 
+/// eBooks' page as a sheet with a surround ([DisplayPrefs.insetPage]; user, 2026-10-12: "inset page"): never - the
+/// page's colour across the screen; on a wide screen, where the lines leave room to spare; always - on a narrow screen
+/// too, a card in from all four edges (user, 2026-10-15).
+enum InsetPage { never, wideScreen, always }
+
 /// The two kinds of book the one Reader reads (a renderer each).
 enum BookKind { comics, ebooks }
 
@@ -256,13 +261,12 @@ class DisplayPrefs {
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
       this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
-      this.epubSheet = true});
+      this.insetPage = InsetPage.wideScreen});
   final bool night;
 
-  /// eBooks on a wide screen: the page as a sheet on a surround (on), or the page's colour across the whole screen
-  /// (off) - this device's own (user, 2026-10-11: "per device setting", not in the reader's panel). The lines are as
-  /// long either way.
-  final bool epubSheet;
+  /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always ([InsetPage]) - this device's own
+  /// (user, 2026-10-11: "per device setting", not in the reader's panel; three choices since 2026-10-15).
+  final InsetPage insetPage;
 
   /// The reading settings set apart per kind of book ([KindPrefs]).
   final KindPrefs comics, ebooks;
@@ -325,9 +329,9 @@ class DisplayPrefs {
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
-          KindPrefs? comics, KindPrefs? ebooks, bool? epubSheet}) =>
+          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage}) =>
       DisplayPrefs(
-        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, epubSheet: epubSheet ?? this.epubSheet,
+        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
         pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         posterDate: posterDate ?? this.posterDate,
@@ -352,7 +356,7 @@ class DisplayPrefs {
       'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
-      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'epubSheet': epubSheet};
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -382,7 +386,7 @@ class DisplayPrefs {
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         ebooks: kind('ebooks', none.ebooks),
-        epubSheet: j['epubSheet'] != false); // on unless switched off
+        insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen));
   }
 }
 
