@@ -10,6 +10,24 @@ import 'support/helpers.dart';
 void main() {
   setUpAll(preloadShaders);
 
+  test('turning over onto the page beside it (two pages up): the fold never passes the spine - the page stays '
+      'attached there all through the turn and lands flat, its grabbed edge exactly over the outer edge of the other '
+      '(user, 2026-10-16: at full stretch it pulled away from the spine, the page beneath showing)', () {
+    const w = 800.0, grab = Offset(w, 500);
+    for (var x = w; x >= -w; x -= 20) {
+      final finger = Offset(x, 500);
+      final r = PageCurl.spineRadius(w, grab, finger);
+      final f = PageCurl.fold(grab, finger, r);
+      if (f == null) continue;
+      expect(f.$1.dx, greaterThanOrEqualTo(-1), reason: 'the fold at finger $x (under a pixel)');
+    }
+    expect(PageCurl.spineRadius(w, grab, grab), PageCurl.radius(w), reason: 'flat: the usual curl');
+    final end = PageCurl.fold(grab, const Offset(-w, 500), PageCurl.spineRadius(w, grab, const Offset(-w, 500)))!;
+    expect(end.$1.dx, closeTo(0, 1), reason: 'turned over: the fold on the spine, the page flat');
+    // the old curl at that point: the fold well past the spine (the page lifted off it)
+    expect(PageCurl.fold(grab, const Offset(-w, 500), PageCurl.radius(w))!.$1.dx, lessThan(-50));
+  });
+
   test("the back of the turning page is the colour given: white paper for comics, the eBook page's own (user, "
       '2026-10-11: a light back on the dark page looked wrong)', () async {
     const size = Size(200, 300);
