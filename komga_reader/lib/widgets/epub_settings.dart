@@ -47,13 +47,23 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
       _twoPagesRow(e, set),
       // TEMPORARY (user, 2026-10-16: "give me a slider for the number of pixels") - out once the gap is settled
       SliderRow(
-        label: 'Inset page gap',
+        label: 'Inset page, sides',
         value: s.display.insetGap,
         min: 0,
         max: 120,
         divisions: 60,
         valueText: '${s.display.insetGap.round()} px',
         onChanged: (v) => s.setDisplay(s.display.copyWith(insetGap: v)),
+      ),
+      // TEMPORARY (user, 2026-10-16: "separate sliders for horizontal page border and vertical page border")
+      SliderRow(
+        label: 'Inset page, top and bottom',
+        value: s.display.insetGapEnds,
+        min: 0,
+        max: 120,
+        divisions: 60,
+        valueText: '${s.display.insetGapEnds.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetGapEnds: v)),
       ),
       // TEMPORARY (user, 2026-10-16: "the distance between the two inset pages should be a fixed distance")
       SliderRow(
