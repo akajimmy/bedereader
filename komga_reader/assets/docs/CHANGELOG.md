@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed (temporary)**
+- **Inset page's gap round the text: two sliders** - "Inset page, sides" (left and right; the old gap slider) and
+  "Inset page, top and bottom" (0 to 120 px, 20 to start), in the eBook panel's Reading group.
+
 ## 1.3.0
 
 ### Build 120 - 2026-10-16
