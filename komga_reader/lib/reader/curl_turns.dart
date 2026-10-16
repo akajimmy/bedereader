@@ -17,7 +17,7 @@ import '../page_curl.dart';
 /// goes on a RepaintBoundary round the page view (the snapshots); [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio, this.paper, this.spine, this.held}) {
+      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
       ..addStatusListener((s) {
@@ -42,10 +42,14 @@ class CurlTurns {
   /// until the turning one lands on it.
   final Rect? Function()? held;
 
+  /// Two pages side by side as two sheets (Inset page): the gap between them - the page turns about its middle, so
+  /// it lands over the other sheet (user, 2026-10-16: "two discrete pages, with a gap between").
+  final double Function()? gap;
+
   bool get _spine => spine?.call() ?? false;
 
-  /// Where a turn of a page [width] wide ends: off itself, or over the page beside it.
-  double _goneFor(double width, bool spine) => spine ? -width : PageCurl.gone(width);
+  /// Where a turn of a page [width] wide ends: off itself, or over the page beside it (past the gap between).
+  double _goneFor(double width, bool spine) => spine ? -width - (gap?.call() ?? 0) : PageCurl.gone(width);
 
   final boundary = GlobalKey(debugLabel: 'curl-pages');
   late final AnimationController _anim;
@@ -124,7 +128,7 @@ class CurlTurns {
       ..animFrom = c.finger
       ..animTo = c.forward == complete
           ? c.spine
-              ? Offset(-w, c.grab.dy) // turned over flat onto the page beside it
+              ? Offset(_goneFor(w, true), c.grab.dy) // turned over flat onto the page beside it
               : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _anim.forward(from: 0);

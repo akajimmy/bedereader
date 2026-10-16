@@ -131,7 +131,8 @@ void main() {
     expect(pages((await spots(tester))!.$1), '${int.parse(now) + 1}');
   });
 
-  testWidgets('Inset page with two pages up: the two sheets meet at the spine, an open book', (tester) async {
+  testWidgets('Inset page with two pages up: two pages apart, a gap between (user, 2026-10-16: "two discrete pages, '
+      'with a gap between") - each card 16 in all round', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     await open(tester);
     await turn(tester); // a pair: both sides with a page
@@ -147,14 +148,12 @@ void main() {
     }
     sheets.sort((a, b) => a.left.compareTo(b.left));
     expect(sheets.length, 2, reason: '$sheets');
-    expect(sheets[0].right, closeTo(800, 0.5), reason: 'the left sheet to the spine');
-    expect(sheets[1].left, closeTo(800, 0.5), reason: 'the right sheet from the spine');
-    expect(sheets[0].left, closeTo(16, 0.5));
-    expect(sheets[1].right, closeTo(1584, 0.5));
+    expect((sheets[0].left, sheets[0].right), (16, 784), reason: 'the left card');
+    expect((sheets[1].left, sheets[1].right), (816, 1584), reason: 'the right card: 32 apart');
   });
 
-  testWidgets("a wide screen's sheets (the column with its margins, narrower than half the screen) shift to meet at "
-      'the spine, the surround round the outside', (tester) async {
+  testWidgets("a wide screen's sheets (the column with its margins, narrower than half the screen) move in from the "
+      "middle of their halves to the same gap as the cards' - 16 either side of the middle", (tester) async {
     await open(tester, size: const Size(2400, 1000));
     await turn(tester);
     final sheets = <Rect>[];
@@ -168,8 +167,8 @@ void main() {
     }
     sheets.sort((a, b) => a.left.compareTo(b.left));
     expect(sheets.length, 2, reason: '$sheets');
-    expect(sheets[0].right, closeTo(1200, 0.5));
-    expect(sheets[1].left, closeTo(1200, 0.5));
+    expect(sheets[0].right, closeTo(1184, 0.5));
+    expect(sheets[1].left, closeTo(1216, 0.5));
     expect(sheets[0].left, greaterThan(16), reason: 'a column: the surround round the outside');
     expect(sheets[0].width, closeTo(sheets[1].width, 0.5));
   });
@@ -208,8 +207,7 @@ void main() {
   });
 
   testWidgets('the curl with Inset page (user, 2026-10-16: "how are you handling page curl + inset page"): the '
-      "right-hand sheet turns - from the spine, the surround's edge left out - and lands over the left one, the same "
-      'size', (tester) async {
+      'right-hand card turns, about the middle of the gap, and lands over the left one, the same size', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
     await open(tester);
@@ -218,10 +216,13 @@ void main() {
     final c = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
         .single.painter as PageCurlPainter;
     expect(c.spine, isTrue);
-    expect(c.page, const Rect.fromLTRB(800, 16, 1584, 984), reason: 'the right-hand card: from the spine to 16 in');
-    // turned over flat it lies its own width left of the spine: over the left card (16 .. 800)
-    expect(800 - c.page.width, 16);
-    await tester.pump(const Duration(milliseconds: 500));
+    expect(c.page, const Rect.fromLTRB(816, 16, 1584, 984), reason: 'the right-hand card');
+    // near the end of the turn its edge is its width and the gap past where it was hinged: over the left card
+    await tester.pump(const Duration(milliseconds: 370));
+    final end = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
+        .single.painter as PageCurlPainter;
+    expect(end.finger.dx, closeTo(-(768 + 32), 4), reason: 'its edge at 816 - 800 = 16: the left card');
+    await tester.pump(const Duration(milliseconds: 200));
     await settle(tester);
   });
 
