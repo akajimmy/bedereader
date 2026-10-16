@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 114 - 2026-10-16
+
 **New**
 - **Comics in two pages side by side** - Settings > Comics > Screen > Two pages: Off, Wide screen (when the screen is
   wider than tall - the default) or Always; set on each device on its own.
@@ -29,8 +33,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
   you are ("34% read"); a tap opens the reader. Long-press it to rename or unpin it. Offline, a pinned book that isn't
   downloaded is hidden, as other pins with nothing downloaded are; one deleted from the server says so and offers
   Unpin.
-
-## 1.3.0
 
 ### Build 113 - 2026-10-16
 
