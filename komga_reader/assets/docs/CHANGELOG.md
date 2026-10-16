@@ -10,6 +10,20 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 ## Unreleased
 
 **New**
+- **Comics in two pages side by side** - Settings > Comics > Screen > Two pages: Off, Wide screen (when the screen is
+  wider than tall - the default) or Always; set on each device on its own.
+  - The cover is alone, a spread (a page wider than tall) is alone, and a page alone is centred. The pages before a
+    spread pair up so the spread starts on a left page, as in print - in a scan missing its inside cover, the page
+    after the cover is the one alone.
+  - A turn goes a pair at a time; the position reads "Pg. 4-5/40"; progress is the later page shown, so the last pair
+    finishes the book. Turning the screen keeps the page.
+  - **Shift pairing by one** on the bottom bar (two pages up) re-pairs the pages before the first spread, for that
+    book on every device - for a scan whose pairs come out a page off.
+  - Two pages show as one picture: fit, zoom and Enhance work on the pair; Crop trims each page before they meet.
+  - Save page and Copy page ask which: the left, the right, or both as one picture.
+  - Right-to-left series read their pairs right to left.
+  - The page curl still turns both pages as one for now.
+  - Books downloaded before this build pair without knowing their spreads - download them again.
 - **Pin a single book to Home** - "Pin to Home" in a book's menu (long-press or right-click its poster) and a pin
   button on its Details screen. On Home it shows the book's cover, the name you gave the pin and how far through it
   you are ("34% read"); a tap opens the reader. Long-press it to rename or unpin it. Offline, a pinned book that isn't
