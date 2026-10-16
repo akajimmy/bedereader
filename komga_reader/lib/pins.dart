@@ -28,13 +28,19 @@ class Pin {
       this.sort, this.filters = ViewFilter.none});
 
   final String name;
-  final String kind; // library | series | readlist | collection
+  final String kind; // library | series | readlist | collection | book
   final String? id; // null = all libraries
   final String title; // the screen's own title (library / series / list name)
   final String filter; // ReadFilter name: all | hideRead | hideUnread
   final String? mode; // libraries: series | books | collections | readLists
   final String? sort; // libraries: sort key
   final ViewFilter filters; // the filter panel's filters (writer, years, ...); none = not filtered
+
+  /// A single book pinned (user, 2026-10-12): on Home its cover; a tap opens the reader. Named after its title.
+  factory Pin.book(dynamic b) {
+    final title = '${b['metadata']?['title'] ?? b['name'] ?? ''}';
+    return Pin(name: title, kind: 'book', id: b['id'] as String, title: title);
+  }
 
   ReadFilter get readFilter => ReadFilterApi.fromName(filter);
 

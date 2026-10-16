@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../book_title.dart';
 import '../errors.dart';
+import '../pins.dart';
 import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
@@ -130,7 +131,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     ]);
 
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
-      appBar: AppBar(title: const Text('Details'), actions: const [FullscreenExit()]),
+      // pinned to Home from here too (user, 2026-10-16), as a series or a read list from theirs
+      appBar: AppBar(title: const Text('Details'),
+          actions: [PinButton(current: Pin.book(_book)), const FullscreenExit()]),
       // pull down to refresh (re-reads the book and series from Komga)
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
       // edge behind it (user, 2026-10-07)

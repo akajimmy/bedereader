@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **Pin a single book to Home** - "Pin to Home" in a book's menu (long-press or right-click its poster) and a pin
+  button on its Details screen. On Home it shows the book's cover, the name you gave the pin and how far through it
+  you are ("34% read"); a tap opens the reader. Long-press it to rename or unpin it. Offline, a pinned book that isn't
+  downloaded is hidden, as other pins with nothing downloaded are; one deleted from the server says so and offers
+  Unpin.
+
 ## 1.3.0
 
 ### Build 113 - 2026-10-16

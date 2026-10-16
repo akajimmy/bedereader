@@ -35,6 +35,9 @@ void main() {
       Pin(name: 'Surfer', kind: 'series', id: 'S1', title: 'Silver Surfer'), // downloaded
       Pin(name: 'Hulk', kind: 'series', id: 'S9', title: 'Hulk'), // nothing downloaded
       Pin(name: 'Surfer unread', kind: 'series', id: 'S1', title: 'Silver Surfer', filter: 'hideRead'), // B2, B5
+      // a single book (2026-10-16): downloaded, and not
+      Pin(name: 'Book two', kind: 'book', id: 'B2', title: 'B2'),
+      Pin(name: 'Book nine', kind: 'book', id: 'B9', title: 'B9'),
     ];
     final api = OfflineKomga(Downloads.instance.store!);
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
@@ -44,6 +47,8 @@ void main() {
     expect(find.text('Surfer'), findsOneWidget);
     expect(find.text('Surfer unread'), findsOneWidget);
     expect(find.text('Hulk'), findsNothing);
+    expect(find.text('Book two'), findsOneWidget);
+    expect(find.text('Book nine'), findsNothing, reason: 'a pinned book not downloaded: hidden');
     expect(find.text('Nothing downloaded on deck'), findsOneWidget); // S1 has a book in progress, so nothing on deck
   });
 }
