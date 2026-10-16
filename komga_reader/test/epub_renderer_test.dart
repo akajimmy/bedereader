@@ -342,8 +342,8 @@ void main() {
     expect(sheets(), {card});
     final side = 16 + EpubRenderer.sideMargin(e, 800 - 32);
     expect(left(lines()), greaterThanOrEqualTo(side - 0.5), reason: 'the margins of a page the card wide, in it');
-    expect(left(before), lessThan(side - 0.5));
     expect(top(lines()), greaterThanOrEqualTo(16 + EpubMargins.topBottom - 0.5));
+    expect(top(before), lessThan(16 + EpubMargins.topBottom - 0.5), reason: 'it moved down into the card');
 
     AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
     await tester.pump(EpubRenderer.settleDelay);
