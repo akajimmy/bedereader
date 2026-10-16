@@ -45,8 +45,9 @@ class EpubTheme {
   /// [ownParagraphs]: it is the gap - where the book keeps one, the larger of the two (user, 2026-10-11).
   final double paragraphGap;
 
-  /// The page's sides are the book's own page margin (each chapter's body margin - [EpubTheme.withSides]), not
-  /// [margins]' (Margins: Book's - user, 2026-10-11).
+  /// The page's sides are the book's own page margin (each chapter's body margin - [EpubTheme.withSides]), inside
+  /// [margins]' sides - 0, or the page's card inset (Inset page always - 2026-10-15) (Margins: Book's - user,
+  /// 2026-10-11).
   final bool bookMargins;
 
   /// This theme with [left] / [right] as the page's sides (a chapter's own, with [bookMargins]).
