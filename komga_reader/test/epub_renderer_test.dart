@@ -344,12 +344,12 @@ void main() {
     expect(left(lines()) - sheets().single!.left, closeTo(20, 0.5), reason: '20 left of where the lines start');
 
     // the gap dialled in (user, 2026-10-16: "20 pixels is too close" - a slider for now): the sheet moves, no text
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 48));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 48, insetGapEnds: 30));
     await settle(tester);
-    expect(sheets(), {Rect.fromLTRB(side - 48, EpubMargins.topBottom - 48, 800 - side + 48, 1200 - EpubMargins.topBottom + 48)
-        .intersect(const Rect.fromLTWH(0, 0, 800, 1200))}, reason: '48 out');
+    expect(sheets(), {Rect.fromLTRB(side - 48, EpubMargins.topBottom - 30, 800 - side + 48, 1200 - EpubMargins.topBottom + 30)
+        .intersect(const Rect.fromLTWH(0, 0, 800, 1200))}, reason: '48 out at the sides, 30 above and below');
     expect(lines(), before);
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 20));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 20, insetGapEnds: 20));
 
     AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
     await tester.pump(EpubRenderer.settleDelay);

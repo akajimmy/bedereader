@@ -64,7 +64,7 @@ void main() {
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, posterDate: false, insetPage: InsetPage.never, insetGap: 40, insetBetween: 60);
+        pagePreviews: false, pageStrip: true, posterDate: false, insetPage: InsetPage.never, insetGap: 40, insetGapEnds: 50, insetBetween: 60);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -97,6 +97,7 @@ void main() {
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
       ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen), // eBooks' sheet, this device's (2026-10-12)
       ('insetGap', (d) => d.insetGap, 40.0, 20.0), // how far out round the text (2026-10-16: being dialled in)
+      ('insetGapEnds', (d) => d.insetGapEnds, 50.0, 20.0), // ... above and below (likewise)
       ('insetBetween', (d) => d.insetBetween, 60.0, 32.0), // two pages up, how far apart (likewise)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
