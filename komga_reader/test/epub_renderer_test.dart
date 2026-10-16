@@ -281,7 +281,8 @@ void main() {
   });
 
   testWidgets("the sheet on wide screens switched off on this device (user, 2026-10-11): the page's colour across the "
-      'screen, no surround; the lines where they were', (tester) async {
+      'screen, no surround; the lines where they were sideways, 16 higher (the top inset of the sheet gone)',
+      (tester) async {
     addTearDown(() => AppSettings.instance.setDisplay(const DisplayPrefs()));
     await open(tester, twoChapters(), size: const Size(1600, 1000));
     final round = EpubRenderer.surround(AppSettings.instance.epub.colours.background);
@@ -306,7 +307,9 @@ void main() {
     await settle(tester);
     expect(surroundBox(), findsNothing, reason: 'no surround');
     expect(sheets(), {null}, reason: 'no sheet: the page fills the screen');
-    expect(lines(), before, reason: 'the lines as long and as placed');
+    final after = lines();
+    expect(after.first, before.first - const Offset(0, 16), reason: 'the first line: as placed sideways, 16 up');
+    expect(after.map((o) => o.dx).toSet(), before.map((o) => o.dx).toSet(), reason: 'the lines as long');
   });
 
   testWidgets('Inset page always on a narrow screen (user, 2026-10-15): the page a card 16 in from every edge, the text '
