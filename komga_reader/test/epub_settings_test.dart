@@ -34,8 +34,10 @@ void main() {
       "no paragraph spacing (Default), slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book);
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book, twoPages: TwoPages.always);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
+    expect(EpubPrefs.fromJson(changed.toJson()).twoPages, TwoPages.always, reason: 'dual page mode (2026-10-16)');
+    expect(EpubPrefs.fromJson(const {}).twoPages, TwoPages.wideScreen, reason: 'saved before it: Wide screen');
     final d = EpubPrefs.fromJson(const {});
     expect((d.font, d.colours, d.align, d.paragraphGap, d.hyphenate, d.turn, d.size), (EpubFont.literata,
         EpubColours.dark, EpubAlign.justified, EpubParagraphGap.none, true, EpubTurn.slide, 19.0));

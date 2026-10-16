@@ -9,6 +9,21 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **eBooks in Dual page mode** - two pages side by side, as an open book: the Aa panel (Reading) and Settings >
+  eBooks > Page, Off / Wide screen (the default) / Always, synced like the other eBook settings.
+  - Each page is laid out at half the width, with the margins of a page that size; a book is counted again the first
+    time it opens this way.
+  - Every chapter starts on a right-hand page, as in a printed book - the page beside it blank when needed - so a
+    spread never holds two chapters.
+  - Inset page: the two sheets meet at the spine, the surround only round the outside (Always: each card runs to the
+    spine; Wide screen: the two columns move in to meet), with a soft shade down the gutter.
+  - The page curl turns the right-hand page over onto the left, attached at the spine; the left-hand page stays put
+    meanwhile.
+  - A turn goes a spread at a time; the position reads both pages ("Pg. 4-5/312"); the place saved is the left-hand
+    page. Text can be selected, highlighted and defined on either page.
+  - Turning the screen, or resizing the window, keeps the place.
+
 **Fixed**
 - **Dual page mode: the turning page no longer pulls away from the spine** - dragged all the way across, it went on
   past the other page and its spine edge lifted, the page beneath showing at the gutter. It now stays attached along

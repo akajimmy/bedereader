@@ -80,11 +80,6 @@ class ComicRenderer extends Renderer {
   /// Two pages side by side now (the setting, on this screen's shape).
   bool get dual => _dual;
 
-  /// Tests: two pages can come up at all (off for every test but the two-page ones - test/flutter_test_config.dart:
-  /// the test window is wider than tall, and the setting's default is Wide screen).
-  @visibleForTesting
-  static bool twoPagesAllowed = true;
-
   bool _twoPagesOn(Size area) => twoPagesAllowed && prefs.twoPages.on(area); // (the series' own, or the default)
   bool _dual = false;
   List<Spread> _spreads = const [];
