@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 112 - 2026-10-15
+
 **Changed**
 - **Settings > eBooks > Screen: Inset page** replaces the "Page as a sheet on wide screens" switch, with three
   choices: Never (the page's colour across the whole screen), Wide screen (the sheet as before, where the lines
   leave room to spare) and Always (on a narrow screen too: the page becomes a card set in from all four edges, the
   text laid out inside it - a portrait tablet's pages count again the first time). Set on each device on its own; a
   device that had the switch off is back on Wide screen.
-
-## 1.3.0
 
 ### Build 111 - 2026-10-12
 
