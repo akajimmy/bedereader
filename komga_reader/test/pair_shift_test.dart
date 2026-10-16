@@ -44,8 +44,16 @@ void main() {
     await pumpEventQueue();
     expect(OnDeckHidden.instance.bookHidden('B1'), isFalse);
     expect(s.shifted('B2'), isFalse);
-    expect(api.written[OnDeckHidden.komgaKey], isNot(contains('B1')));
-    expect(api.written[PairShift.komgaKey], isNot(contains('B2')));
+    expect(api.written[OnDeckHidden.komgaKey], allOf(contains('B2'), isNot(contains('B1'))));
+    expect(api.written[PairShift.komgaKey], allOf(contains('B1'), isNot(contains('B2'))));
+    // and so on another device
+    SharedPreferences.setMockInitialValues({});
+    s.reset();
+    OnDeckHidden.instance.reset();
+    await s.load(api);
+    await OnDeckHidden.instance.load(api);
+    expect((s.shifted('B1'), s.shifted('B2')), (true, false));
+    expect((OnDeckHidden.instance.bookHidden('B2'), OnDeckHidden.instance.bookHidden('B1')), (true, false));
   });
 
   test('signing out: the account\'s list goes from this device', () async {
