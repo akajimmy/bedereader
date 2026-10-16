@@ -175,7 +175,8 @@ class _ReaderPanel extends StatelessWidget {
                 title: 'Use this layout for new series',
                 button: TextButton(
                   onPressed: () {
-                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background));
+                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
+                        twoPages: p.twoPages));
                     _toast(context, "Series you haven't adjusted will open like this one");
                   },
                   child: const Text('Make default'),
@@ -300,6 +301,23 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       ],
       value: p.direction,
       onChanged: (d) => setP(p.copyWith(direction: d)),
+      enabled: enabled,
+    ),
+    // two pages side by side (user, 2026-10-16: in the reader's panel, a default a series can override)
+    SegmentRow<TwoPages>(
+      title: 'Dual page mode',
+      subtitle: switch (p.twoPages) {
+        TwoPages.off => 'One page at a time',
+        TwoPages.wideScreen => 'Two pages side by side when the screen is wider than tall',
+        TwoPages.always => 'Two pages side by side, a tall screen too',
+      },
+      choices: const [
+        Choice(TwoPages.off, 'Off'),
+        Choice(TwoPages.wideScreen, 'Wide screen'),
+        Choice(TwoPages.always, 'Always'),
+      ],
+      value: p.twoPages,
+      onChanged: (t) => setP(p.copyWith(twoPages: t)),
       enabled: enabled,
     ),
     // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
@@ -527,23 +545,6 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
           : 'Just the page number - for a slow link to your books',
       value: s.display.pagePreviews,
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
-    );
-
-/// Two pages side by side, [kind]'s own, this device's (user, 2026-10-16): never, on a wide screen, always.
-Widget twoPagesRow(AppSettings s, BookKind kind) => SegmentRow<TwoPages>(
-      title: 'Two pages',
-      subtitle: switch (s.display.kind(kind).twoPages) {
-        TwoPages.off => 'One page at a time (this device)',
-        TwoPages.wideScreen => 'Side by side when the screen is wider than tall (this device)',
-        TwoPages.always => 'Side by side, a tall screen too (this device)',
-      },
-      choices: const [
-        Choice(TwoPages.off, 'Off'),
-        Choice(TwoPages.wideScreen, 'Wide screen'),
-        Choice(TwoPages.always, 'Always'),
-      ],
-      value: s.display.kind(kind).twoPages,
-      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(twoPages: v))),
     );
 
 /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always - this device's own (user,

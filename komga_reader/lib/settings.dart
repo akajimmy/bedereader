@@ -35,7 +35,7 @@ extension ReadingDirectionLabel on ReadingDirection {
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
       this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0, this.ownLayout = true,
-      this.ownImage = true, this.background = ReaderBackground.black});
+      this.ownImage = true, this.background = ReaderBackground.black, this.twoPages = TwoPages.wideScreen});
 
   /// A series' settings come in two parts, each overriding the defaults or not (the panels' "Override the
   /// defaults" toggles, user 2026-09-30): the page layout (fit, direction, background) and the image settings. A part
@@ -46,6 +46,9 @@ class ReaderPrefs {
   final ReadingDirection direction; // auto = the series' reading direction in Komga
   // around the page - a reading default with a series' own (user, 2026-10-05; it was a setting of each device)
   final ReaderBackground background;
+  // Dual page mode: two pages side by side - part of the page layout, a reading default with a series' own (user,
+  // 2026-10-16: "make it part of the defaults that are over-rideable per series"; it was a setting of each device)
+  final TwoPages twoPages;
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
@@ -57,15 +60,17 @@ class ReaderPrefs {
   bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels && crop == 0;
 
   ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
-          ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage, ReaderBackground? background}) =>
+          ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage, ReaderBackground? background,
+          TwoPages? twoPages}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
           direction: direction ?? this.direction, crop: crop ?? this.crop, ownLayout: ownLayout ?? this.ownLayout,
-          ownImage: ownImage ?? this.ownImage, background: background ?? this.background);
+          ownImage: ownImage ?? this.ownImage, background: background ?? this.background,
+          twoPages: twoPages ?? this.twoPages);
 
-  /// Same page layout (fit, direction, background), image settings back to neutral.
+  /// Same page layout (fit, direction, background, dual page mode), image settings back to neutral.
   ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction, ownLayout: ownLayout, ownImage: ownImage,
-      background: background);
+      background: background, twoPages: twoPages);
 
   /// This one's page layout (fit, direction, background) with [image]'s image settings.
   ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(brightness: image.brightness, contrast: image.contrast,
@@ -77,6 +82,7 @@ class ReaderPrefs {
         if (!ownLayout) 'ol': false,
         if (!ownImage) 'oi': false,
         if (background != ReaderBackground.black) 'bg': background.name, // (likewise: black, as before, unwritten)
+        if (twoPages != TwoPages.wideScreen) 'tp': twoPages.name, // (likewise: the default unwritten)
       };
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
@@ -90,6 +96,7 @@ class ReaderPrefs {
         ownLayout: j['ol'] != false,
         ownImage: j['oi'] != false,
         background: ReaderBackground.values.firstWhere((b) => b.name == j['bg'], orElse: () => ReaderBackground.black),
+        twoPages: TwoPages.values.firstWhere((t) => t.name == j['tp'], orElse: () => TwoPages.wideScreen),
       );
 
   @override
@@ -205,9 +212,20 @@ enum PageNote { always, afterTurn, off }
 /// too, a card in from all four edges (user, 2026-10-15).
 enum InsetPage { never, wideScreen, always }
 
-/// Two pages side by side ([KindPrefs.twoPages]; user, 2026-10-16): never; on a wide screen (wider than tall); always
-/// (a portrait screen too). Each kind its own, this device's.
-enum TwoPages { off, wideScreen, always }
+/// Dual page mode, two pages side by side ([ReaderPrefs.twoPages]; user, 2026-10-16): never; on a wide screen (wider
+/// than tall); always (a portrait screen too).
+enum TwoPages {
+  off,
+  wideScreen,
+  always;
+
+  /// Two pages side by side on a screen of [size].
+  bool on(Size size) => switch (this) {
+        TwoPages.off => false,
+        TwoPages.wideScreen => size.width > size.height,
+        TwoPages.always => true,
+      };
+}
 
 /// The two kinds of book the one Reader reads (a renderer each).
 enum BookKind { comics, ebooks }
@@ -217,7 +235,7 @@ enum BookKind { comics, ebooks }
 @immutable
 class KindPrefs {
   const KindPrefs({this.pageNote = PageNote.always, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
-      this.progressBar = false, this.hiddenSpots = const [], this.twoPages = TwoPages.wideScreen});
+      this.progressBar = false, this.hiddenSpots = const []});
 
   /// The note in the page's bottom-right corner, "12 / 36".
   final PageNote pageNote;
@@ -227,24 +245,13 @@ class KindPrefs {
   /// The position text's spots not shown ('left', 'centre', 'right' - lib/reader/position_row.dart).
   final List<String> hiddenSpots;
 
-  /// Two pages side by side - never, on a wide screen, always (lib/reader/spreads.dart pairs a comic's).
-  final TwoPages twoPages;
-
-  /// Two pages side by side on a screen of [size].
-  bool twoPagesOn(Size size) => switch (twoPages) {
-        TwoPages.off => false,
-        TwoPages.wideScreen => size.width > size.height,
-        TwoPages.always => true,
-      };
-
   KindPrefs copyWith({PageNote? pageNote, Rotation? rotation, ShowWhen? clock, bool? progressBar,
-          List<String>? hiddenSpots, TwoPages? twoPages}) =>
+          List<String>? hiddenSpots}) =>
       KindPrefs(pageNote: pageNote ?? this.pageNote, rotation: rotation ?? this.rotation, clock: clock ?? this.clock,
-          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots,
-          twoPages: twoPages ?? this.twoPages);
+          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots);
 
   Map<String, dynamic> toJson() => {'pageNote': pageNote.name, 'rotation': rotation.name, 'clock': clock.name,
-      'progressBar': progressBar, 'hiddenSpots': hiddenSpots, 'twoPages': twoPages.name};
+      'progressBar': progressBar, 'hiddenSpots': hiddenSpots};
 
   /// From [j]; anything it lacks, [fallback]'s (the kind's defaults).
   factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs fallback = const KindPrefs()}) {
@@ -257,7 +264,6 @@ class KindPrefs {
       clock: pick(ShowWhen.values, j['clock'], fallback.clock),
       progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : fallback.progressBar,
       hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : fallback.hiddenSpots,
-      twoPages: pick(TwoPages.values, j['twoPages'], fallback.twoPages),
     );
   }
 
@@ -643,7 +649,8 @@ class AppSettings extends ChangeNotifier {
   /// The series' page layout (fit, direction, background) from [p] - overriding the defaults from now on.
   void setSeriesLayout(String seriesId, ReaderPrefs p) {
     final now = prefsFor(seriesId);
-    setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, background: p.background, ownLayout: true,
+    setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, background: p.background,
+        twoPages: p.twoPages, ownLayout: true,
         ownImage: now.ownImage));
   }
 

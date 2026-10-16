@@ -23,6 +23,14 @@ void main() {
       expect(ReaderPrefs.fromJson(ReaderPrefs(background: bg).toJson()).background, bg, reason: 'background ${bg.name}');
     }
     expect(const ReaderPrefs().toJson().containsKey('bg'), isFalse);
+    // dual page mode: part of the layout since 2026-10-16; the default (Wide screen) isn't written
+    for (final t in TwoPages.values) {
+      expect(ReaderPrefs.fromJson(ReaderPrefs(twoPages: t).toJson()).twoPages, t, reason: 'dual page mode ${t.name}');
+    }
+    expect(const ReaderPrefs().toJson().containsKey('tp'), isFalse);
+    expect(ReaderPrefs.fromJson({'fit': 'width'}).twoPages, TwoPages.wideScreen, reason: 'saved before: Wide screen');
+    expect(const ReaderPrefs(twoPages: TwoPages.off, contrast: 0.2).imageReset().twoPages, TwoPages.off,
+        reason: 'part of the layout: kept by an image reset');
     expect(ReaderPrefs.fromJson({'fit': 'width'}).background, ReaderBackground.black, reason: 'saved before: black');
     expect(const ReaderPrefs(background: ReaderBackground.white, contrast: 0.2).imageReset().background,
         ReaderBackground.white, reason: 'part of the layout: kept by an image reset');
@@ -50,9 +58,9 @@ void main() {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl,
         comics: KindPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true,
-            pageNote: PageNote.off, hiddenSpots: ['left'], twoPages: TwoPages.always),
+            pageNote: PageNote.off, hiddenSpots: ['left']),
         ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn,
-            progressBar: true, hiddenSpots: ['right', 'centre'], twoPages: TwoPages.off),
+            progressBar: true, hiddenSpots: ['right', 'centre']),
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
@@ -68,13 +76,11 @@ void main() {
       ('comics clock', (d) => d.comics.clock, ShowWhen.always, ShowWhen.withControls),
       ('comics progressBar', (d) => d.comics.progressBar, true, false),
       ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(','), 'left', ''),
-      ('comics twoPages', (d) => d.comics.twoPages, TwoPages.always, TwoPages.wideScreen), // (2026-10-16)
       ('ebooks pageNote', (d) => d.ebooks.pageNote, PageNote.afterTurn, PageNote.always),
       ('ebooks rotation', (d) => d.ebooks.rotation, Rotation.portrait, Rotation.auto),
       ('ebooks clock', (d) => d.ebooks.clock, ShowWhen.off, ShowWhen.withControls),
       ('ebooks progressBar', (d) => d.ebooks.progressBar, true, false),
       ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
-      ('ebooks twoPages', (d) => d.ebooks.twoPages, TwoPages.off, TwoPages.wideScreen),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 20, 0),

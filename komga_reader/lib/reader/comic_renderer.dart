@@ -85,7 +85,7 @@ class ComicRenderer extends Renderer {
   @visibleForTesting
   static bool twoPagesAllowed = true;
 
-  bool _twoPagesOn(Size area) => twoPagesAllowed && _settings.display.comics.twoPagesOn(area);
+  bool _twoPagesOn(Size area) => twoPagesAllowed && prefs.twoPages.on(area); // (the series' own, or the default)
   bool _dual = false;
   List<Spread> _spreads = const [];
   List<int> _spreadOf = const [];

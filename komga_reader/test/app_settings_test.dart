@@ -169,7 +169,7 @@ void main() {
         posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
         pagePreviews: false, pageStrip: true, insetPage: InsetPage.always,
         comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
-            progressBar: true, hiddenSpots: ['left'], twoPages: TwoPages.always),
+            progressBar: true, hiddenSpots: ['left']),
         ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
             hiddenSpots: ['right']));
     const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,

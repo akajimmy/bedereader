@@ -243,10 +243,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         pagePreviewsRow(s),
         pageStripRow(s),
       ]),
-      SettingsGroup(title: 'Screen', children: [
-        twoPagesRow(s, BookKind.comics),
-        if (canRotate) rotationRow(s, BookKind.comics),
-      ]),
+      if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.comics)]),
       SettingsGroup(title: 'Series with their own settings', synced: true, children: [
         ActionRow(
           title: n == 0 ? 'Every series follows the defaults' : '$n series ${n == 1 ? 'has its' : 'have their'} own settings',
