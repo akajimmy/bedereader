@@ -82,13 +82,14 @@ class EpubRenderer extends Renderer {
   /// screen, or half of it two pages up): a style that ignores the margins. Never: none; Wide screen: on a screen
   /// wider than tall ([area]); Always: always. Kept on the page: a margin under [textGap] leaves that edge at the
   /// page's. Null: no sheet.
-  static Rect? sheetRect(Rect? textArea, Size page, InsetPage inset, Size area) {
+  /// [gap]: how far out (DisplayPrefs.insetGap - for now the panel's slider, to dial it in).
+  static Rect? sheetRect(Rect? textArea, Size page, InsetPage inset, Size area, {double gap = textGap}) {
     if (textArea == null || inset == InsetPage.never) return null;
     if (inset == InsetPage.wideScreen && area.width <= area.height) return null;
-    return textArea.inflate(textGap).intersect(Offset.zero & page);
+    return textArea.inflate(gap).intersect(Offset.zero & page);
   }
 
-  /// How far the sheet's edges sit out from the text (user, 2026-10-16: 20 px).
+  /// How far the sheet's edges sit out from the text by default (user, 2026-10-16: 20 px; "too close" - being dialled in).
   static const textGap = 20.0;
 
   /// The colour round the sheet: the page's own, a shade darker (a white page on light grey); the dark grey page on
@@ -1534,7 +1535,8 @@ class EpubRenderer extends Renderer {
     if (b == null || b.size == Size.zero) return null;
     final m = b.theme.margins;
     final text = page?.textArea ?? Rect.fromLTRB(m.left, m.top, b.size.width - m.right, b.size.height - m.bottom);
-    return sheetRect(text, b.size, _laidInset ?? AppSettings.instance.display.insetPage, _area);
+    final d = AppSettings.instance.display;
+    return sheetRect(text, b.size, _laidInset ?? d.insetPage, _area, gap: d.insetGap);
   }
   InsetPage? _laidInset;
 

@@ -167,7 +167,7 @@ void main() {
     const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
         midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
         posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, insetPage: InsetPage.always,
+        pagePreviews: false, pageStrip: true, insetPage: InsetPage.always, insetGap: 40,
         comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
             progressBar: true, hiddenSpots: ['left']),
         ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
@@ -183,7 +183,7 @@ void main() {
       'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',
       'pageTurn': 'Comics', 'doubleTapZoom': 'Comics', 'pagePreviews': 'Comics', 'pageStrip': 'Comics',
       'comics': 'Comics',
-      'ebooks': 'eBooks', 'insetPage': 'eBooks',
+      'ebooks': 'eBooks', 'insetPage': 'eBooks', 'insetGap': null, // (the reader's panel only - temporary)
       'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
       'textScale': 'Look', 'accent': 'Look',
       'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,
