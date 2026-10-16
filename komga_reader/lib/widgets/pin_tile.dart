@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../pins.dart';
 import '../view_sort.dart';
+import 'download_badge.dart';
 import 'poster.dart';
 import 'readlist_tile.dart';
 
@@ -16,6 +17,9 @@ Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
       fields[parts.first] == null ? null : '${fields[parts.first]},${desc ? 'desc' : 'asc'}';
   // the same requests as the screens (lib/view_sort.dart), in the pin's sort, with its filters
   switch (p.kind) {
+    case 'book': // the book itself, or nothing: gone from the server, or offline not downloaded (the pin hidden)
+      final b = await api.book(p.id!);
+      return {'content': [if (b != null) b], 'totalElements': b == null ? 0 : 1};
     case 'series':
       return seriesBooksPage(api, p.id!, ViewSort.fromPin(seriesBookSorts, p.sort), read: read, filter: p.filters,
           page: 0, size: size);
@@ -72,7 +76,17 @@ List<String> _thumbs(Komga api, Pin p, List<dynamic> items) {
   return [for (final i in items) thumb(i['id'] as String)];
 }
 
-/// A pin on Home as a poster: a 2x2 of the first four items of its view, the pin's name, and the view's count.
+/// How far through a pinned book is: "Read", "34% read", "Not started".
+String bookState(Map b) {
+  final rp = b['readProgress'];
+  final pages = (b['media']?['pagesCount'] ?? 0) as int;
+  if (rp == null) return 'Not started';
+  if (rp['completed'] == true) return 'Read';
+  return pages > 0 ? '${(100 * (rp['page'] as int) / pages).round()}% read' : 'Started';
+}
+
+/// A pin on Home as a poster: a 2x2 of the first four items of its view, the pin's name, and the view's count; a
+/// pinned book, its own cover and how far through it is (user, 2026-10-16).
 /// Tap opens the view; long-press (or right-click) renames or unpins.
 class PinTile extends StatefulWidget {
   const PinTile({super.key, required this.api, required this.pin, required this.onOpen, this.autofocus = false});
@@ -124,6 +138,23 @@ class _PinTileState extends State<PinTile> {
       builder: (context, snap) {
         final items = (snap.data?['content'] as List<dynamic>?) ?? const [];
         final total = snap.data?['totalElements'] as int?;
+        if (widget.pin.kind == 'book') {
+          final b = items.isEmpty ? null : items.first as Map;
+          final rp = b?['readProgress'], pages = (b?['media']?['pagesCount'] ?? 0) as int;
+          final completed = rp?['completed'] == true;
+          return PosterTile(
+            api: widget.api,
+            autofocus: widget.autofocus,
+            imageUrl: widget.api.bookThumb(widget.pin.id!),
+            title: widget.pin.name,
+            subtitle: b == null ? null : bookState(b),
+            read: completed,
+            progress: rp != null && !completed && pages > 0 ? (rp['page'] as int) / pages : null,
+            badge: DownloadBadge.book(widget.pin.id!),
+            onOpen: widget.onOpen,
+            onMenu: () => showPinDialog(context, widget.pin, pinned: true),
+          );
+        }
         return PosterTile(
           api: widget.api,
           autofocus: widget.autofocus,
