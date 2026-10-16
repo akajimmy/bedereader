@@ -781,6 +781,12 @@ ColorFilter pageColours(Color background, Color text) {
 }
 
 class EpubPage {
+  EpubPage([this.textArea]);
+
+  /// Where the text goes on the page: inside its margins (with Margins: Book's, its chapter's own). Inset page's
+  /// sheet sits round it (lib/reader/epub_renderer.dart, sheetRect).
+  final Rect? textArea;
+
   final List<Piece> pieces = [];
   final List<EpubLink> links = []; // page coordinates (footnote markers among them)
 
@@ -958,7 +964,8 @@ class Paginator {
   final Size size;
   final Hyphenator? hyphenator;
 
-  final List<EpubPage> pages = [EpubPage()];
+  late final List<EpubPage> pages = [EpubPage(_textArea)];
+  Rect get _textArea => Rect.fromLTRB(theme.margins.left, theme.margins.top, size.width - theme.margins.right, _bottom);
   late double _y = theme.margins.top;
   double get _bottom => size.height - theme.margins.bottom;
   double get _width => size.width - theme.margins.horizontal;
@@ -967,7 +974,7 @@ class Paginator {
   double _floatBottom = -1, _floatW = 0;
 
   void _newPage() {
-    pages.add(EpubPage());
+    pages.add(EpubPage(_textArea));
     _y = theme.margins.top;
     _pendingGap = 0;
     _floatBottom = -1;
