@@ -9,12 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 115 - 2026-10-16
+
 **Changed**
 - **Comics in two pages: the page curl turns one page, like a book** - going forward, the right-hand page lifts from
   the gutter and turns over onto the left while the left-hand page stays put; going back, the previous right-hand page
   comes back over. Right-to-left series turn the other way. A page alone (the cover) or a spread still curls whole.
-
-## 1.3.0
 
 ### Build 114 - 2026-10-16
 
