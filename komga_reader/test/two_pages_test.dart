@@ -9,6 +9,7 @@ import 'package:komga_reader/reader/comic_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/synced_ids.dart';
+import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -42,6 +43,8 @@ void main() {
   tearDown(() {
     ComicRenderer.twoPagesAllowed = false;
     AppSettings.instance.setDisplay(const DisplayPrefs());
+    AppSettings.instance.setDefault(const ReaderPrefs());
+    AppSettings.instance.useDefaults('S1');
     ReaderServer.direction = 'LEFT_TO_RIGHT';
   });
 
@@ -101,19 +104,59 @@ void main() {
     expect(await position(tester), startsWith('Pg. 3/9'), reason: 'page by page');
 
     final s = AppSettings.instance;
-    s.setDisplay(s.display.withKind(BookKind.comics, s.display.comics.copyWith(twoPages: TwoPages.always)));
+    s.setDefault(s.defaults.copyWith(twoPages: TwoPages.always));
     await tester.pump();
     await tester.pump();
     expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'Always: the pair page 3 is in');
 
     await open(tester);
-    s.setDisplay(s.display.withKind(BookKind.comics, s.display.comics.copyWith(twoPages: TwoPages.off)));
+    s.setDefault(s.defaults.copyWith(twoPages: TwoPages.off));
     await tester.pump();
     await tester.pump();
     await turn(tester);
     expect(await position(tester), startsWith('Pg. 2/9'));
     await turn(tester);
     expect(await position(tester), startsWith('Pg. 3/9'), reason: 'Off: page by page on a wide screen');
+  });
+
+  testWidgets("dual page mode in the reader's Comic settings, a default a series overrides (user, 2026-10-16): the "
+      "series' own Off - one page at a time on a wide screen, the default still Wide screen", (tester) async {
+    await open(tester);
+    await turn(tester);
+    await turn(tester);
+    expect(await position(tester), startsWith('Pg. 3-4/9'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    await tester.tap(find.byTooltip('Comic settings'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100)); // (no settling: the pages never load)
+    }
+    await tester.tap(find.text('Override defaults'));
+    await tester.pump();
+    final row = find.ancestor(of: find.text('Dual page mode'), matching: find.byType(SegmentRow<TwoPages>));
+    await tester.tap(find.descendant(of: row, matching: find.text('Off')));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    final s = AppSettings.instance;
+    expect(s.prefsFor('S1').twoPages, TwoPages.off, reason: "the series' own");
+    expect(s.defaults.twoPages, TwoPages.wideScreen, reason: 'the default unchanged');
+    await tester.ensureVisible(find.text('Make default'));
+    await tester.tap(find.text('Make default'));
+    await tester.pump();
+    expect(s.defaults.twoPages, TwoPages.off, reason: "Make default: the series' layout, dual page mode with it");
+    s.setDefault(s.defaults.copyWith(twoPages: TwoPages.wideScreen));
+    Navigator.of(tester.element(find.text('Dual page mode'))).pop();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    if (find.byTooltip('Comic settings').evaluate().isNotEmpty) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // (the controls away)
+      await tester.pump();
+    }
+    expect(await position(tester), startsWith('Pg. 4/9'), reason: 'one page: the page being read');
+    await turn(tester);
+    expect(await position(tester), startsWith('Pg. 5/9'));
   });
 
   testWidgets('turned from wide to tall mid-book: the same page, now alone; and back: its pair', (tester) async {
