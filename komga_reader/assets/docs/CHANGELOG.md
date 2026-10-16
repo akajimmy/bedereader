@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.3.0
+
+### Build 120 - 2026-10-16
+
 **New (temporary)**
 - **Two sliders in the eBook reader's panel (Reading), to dial Inset page in** - kept on each device, to go once the
   values are settled:
   - **Inset page gap**: how far the sheet sits out from the text, 0 to 120 px (20 to start).
   - **Distance between pages**: two pages up, how far apart the two sheets are, 0 to 200 px (32 to start) - each page,
     sheet and text together, slides to it, and the page curl lands across it.
-
-## 1.3.0
 
 ### Build 119 - 2026-10-16
 
