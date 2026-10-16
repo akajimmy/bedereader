@@ -55,6 +55,16 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
         valueText: '${s.display.insetGap.round()} px',
         onChanged: (v) => s.setDisplay(s.display.copyWith(insetGap: v)),
       ),
+      // TEMPORARY (user, 2026-10-16: "the distance between the two inset pages should be a fixed distance")
+      SliderRow(
+        label: 'Distance between pages',
+        value: s.display.insetBetween,
+        min: 0,
+        max: 200,
+        divisions: 50,
+        valueText: '${s.display.insetBetween.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetBetween: v)),
+      ),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),

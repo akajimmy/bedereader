@@ -605,7 +605,7 @@ class EpubRenderer extends Renderer {
     spine: () => _dual,
     held: () => _dual ? Rect.fromLTWH(0, 0, _size.width, _area.height) : null,
     // (the sheets round the text: apart by the margins between the texts, less the gap round each)
-    gap: () => _dual && _sheet != null ? _size.width - _sheet!.right + _sheet!.left : 0,
+    gap: () => _dual && _sheet != null ? AppSettings.instance.display.insetBetween : 0,
     done: ({required turned}) {
       if (turned && _pc.hasClients) host.turned(_placeOf((_pc.page ?? 0).round()));
     },
@@ -783,7 +783,7 @@ class EpubRenderer extends Renderer {
     final v = _viewOf(place), later = local.dx >= _size.width;
     if (_dual && v >= _spreads.length) return (null, local);
     final int? page = !_dual ? place : later ? _spreads[v].later : _spreads[v].earlier;
-    final at = !_dual ? local : local - Offset(later ? _size.width : 0, 0);
+    final at = !_dual ? local : local - Offset((later ? _size.width : 0) + _sideShift(later: later), 0);
     if (page == null) return (null, at);
     final (c, p) = b.chapterPage(page);
     final pages = b.pagesNow(c);
@@ -1585,9 +1585,12 @@ class EpubRenderer extends Renderer {
     final s = _spreads[v];
     Widget side(int? page, {required bool later}) => SizedBox.fromSize(
           size: _size,
-          child: page == null
-              ? _paper(_drawn.background)
-              : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage),
+          child: Transform.translate(
+            offset: Offset(_sideShift(later: later), 0),
+            child: page == null
+                ? _paper(_drawn.background)
+                : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage),
+          ),
         );
     return Stack(children: [
       // (the window just narrowed, one page up from the next frame ([_layout]): the pair clipped till then)
@@ -1613,7 +1616,18 @@ class EpubRenderer extends Renderer {
 
   /// Two pages up: side [later]'s page (its sheet, or the whole page) on the page area. With Inset page the two are
   /// apart (user, 2026-10-16: "two discrete pages, with a gap between"), each round its own text.
-  Rect _sideRect({required bool later}) => (_sheet ?? Offset.zero & _size).shift(Offset(later ? _size.width : 0, 0));
+  Rect _sideRect({required bool later}) =>
+      (_sheet ?? Offset.zero & _size).shift(Offset((later ? _size.width : 0) + _sideShift(later: later), 0));
+
+  /// Two pages up with Inset page: how far side [later] (else the earlier, left) slides, sheet and text together, so
+  /// the two sheets are [DisplayPrefs.insetBetween] apart (user, 2026-10-16: "a fixed distance" - each keeps the same
+  /// gap round its text); 0 with no sheet (the pages touch).
+  double _sideShift({required bool later}) {
+    final s = _sheet;
+    if (s == null) return 0;
+    final half = AppSettings.instance.display.insetBetween / 2;
+    return later ? half - s.left : _size.width - half - s.right;
+  }
 
   /// A chapter that couldn't be loaded or laid out: why, and Retry (never a spinner for good).
   Widget _chapterError(EpubBook b, int chapter, EpubTheme theme) => _paper(
