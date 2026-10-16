@@ -529,15 +529,23 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
-/// eBooks on a wide screen: the page as a sheet on a surround, or the page's colour across the screen - this
-/// device's own (user, 2026-10-11: on the settings page, not the reader's panel).
-Widget epubSheetRow(AppSettings s) => SwitchRow(
-      title: 'Page as a sheet on wide screens',
-      subtitle: s.display.epubSheet
-          ? 'The page in the middle, a shade apart from the screen round it (this device)'
-          : 'The page colour across the whole screen (this device)',
-      value: s.display.epubSheet,
-      onChanged: (v) => s.setDisplay(s.display.copyWith(epubSheet: v)),
+/// eBooks: the page as a sheet on a surround - never, on a wide screen, or always - this device's own (user,
+/// 2026-10-11: on the settings page, not the reader's panel; "inset page", three choices - 2026-10-12).
+Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(
+      title: 'Inset page',
+      subtitle: switch (s.display.insetPage) {
+        InsetPage.never => 'The page colour across the whole screen (this device)',
+        InsetPage.wideScreen => 'On a wide screen, the page in the middle, a shade apart from the screen round it '
+            '(this device)',
+        InsetPage.always => 'The page a shade apart from the screen round it, a narrow screen too (this device)',
+      },
+      choices: const [
+        Choice(InsetPage.never, 'Never'),
+        Choice(InsetPage.wideScreen, 'Wide screen'),
+        Choice(InsetPage.always, 'Always'),
+      ],
+      value: s.display.insetPage,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(insetPage: v)),
     );
 
 /// The note in the page's bottom-right corner, [kind]'s own - the same note for both kinds: the page of the book's

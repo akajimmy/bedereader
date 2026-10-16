@@ -1,5 +1,6 @@
 // The EPUB renderer in the one Reader (lib/reader/epub_renderer.dart) over a small book held in memory.
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
@@ -301,11 +302,55 @@ void main() {
     expect(surroundBox(), findsOneWidget);
     expect(sheets().whereType<Rect>(), isNotEmpty);
     final before = lines();
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubSheet: false));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
     await settle(tester);
     expect(surroundBox(), findsNothing, reason: 'no surround');
     expect(sheets(), {null}, reason: 'no sheet: the page fills the screen');
     expect(lines(), before, reason: 'the lines as long and as placed');
+  });
+
+  testWidgets('Inset page always on a narrow screen (user, 2026-10-15): the page a card 16 in from every edge, the text '
+      "laid out inside it - once the setting settles, the card with it; Margins: Book's too", (tester) async {
+    addTearDown(() {
+      AppSettings.instance.setDisplay(const DisplayPrefs());
+      AppSettings.instance.setEpub(const EpubPrefs());
+    });
+    await open(tester, twoChapters()); // 800 x 1200
+    Set<Rect?> sheets() => tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'))
+        .map((w) => (w.painter as dynamic).sheet as Rect?)
+        .toSet();
+    List<Offset> lines() => (tester
+            .widgetList<CustomPaint>(find.byWidgetPredicate((w) =>
+                w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter' &&
+                (w.painter as dynamic).page != null))
+            .first
+            .painter as dynamic)
+        .page
+        .textOrigins as List<Offset>;
+    double left(List<Offset> l) => l.map((o) => o.dx).reduce(math.min);
+    double top(List<Offset> l) => l.map((o) => o.dy).reduce(math.min);
+    expect(sheets(), {null}, reason: 'wide screen only (the default): none at 800 wide');
+    final e = AppSettings.instance.epub, before = lines();
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    await tester.pump();
+    expect(sheets(), {null}, reason: 'settling: the page as it is laid out');
+    await tester.pump(EpubRenderer.settleDelay);
+    await settle(tester);
+    const card = Rect.fromLTRB(16, 16, 800 - 16, 1200 - 16);
+    expect(sheets(), {card});
+    final side = 16 + EpubRenderer.sideMargin(e, 800 - 32);
+    expect(left(lines()), greaterThanOrEqualTo(side - 0.5), reason: 'the margins of a page the card wide, in it');
+    expect(left(before), lessThan(side - 0.5));
+    expect(top(lines()), greaterThanOrEqualTo(16 + EpubMargins.topBottom - 0.5));
+
+    AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
+    await tester.pump(EpubRenderer.settleDelay);
+    await settle(tester);
+    expect(sheets(), {card}, reason: "Book's margins: the card too");
+    expect(left(lines()), greaterThanOrEqualTo(16 + math.max(10, 0.6 * e.size) - 0.5),
+        reason: "the chapter's margins inside the card");
   });
 
   testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "
