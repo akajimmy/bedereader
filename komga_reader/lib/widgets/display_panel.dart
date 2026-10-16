@@ -529,6 +529,23 @@ Widget pagePreviewsRow(AppSettings s) => SwitchRow(
       onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
+/// Two pages side by side, [kind]'s own, this device's (user, 2026-10-16): never, on a wide screen, always.
+Widget twoPagesRow(AppSettings s, BookKind kind) => SegmentRow<TwoPages>(
+      title: 'Two pages',
+      subtitle: switch (s.display.kind(kind).twoPages) {
+        TwoPages.off => 'One page at a time (this device)',
+        TwoPages.wideScreen => 'Side by side when the screen is wider than tall (this device)',
+        TwoPages.always => 'Side by side, a tall screen too (this device)',
+      },
+      choices: const [
+        Choice(TwoPages.off, 'Off'),
+        Choice(TwoPages.wideScreen, 'Wide screen'),
+        Choice(TwoPages.always, 'Always'),
+      ],
+      value: s.display.kind(kind).twoPages,
+      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(twoPages: v))),
+    );
+
 /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always - this device's own (user,
 /// 2026-10-11: on the settings page, not the reader's panel; "inset page", three choices - 2026-10-12).
 Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(

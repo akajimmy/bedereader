@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' show Color;
+import 'dart:ui' show Color, Size;
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -205,6 +205,10 @@ enum PageNote { always, afterTurn, off }
 /// too, a card in from all four edges (user, 2026-10-15).
 enum InsetPage { never, wideScreen, always }
 
+/// Two pages side by side ([KindPrefs.twoPages]; user, 2026-10-16): never; on a wide screen (wider than tall); always
+/// (a portrait screen too). Each kind its own, this device's.
+enum TwoPages { off, wideScreen, always }
+
 /// The two kinds of book the one Reader reads (a renderer each).
 enum BookKind { comics, ebooks }
 
@@ -213,7 +217,7 @@ enum BookKind { comics, ebooks }
 @immutable
 class KindPrefs {
   const KindPrefs({this.pageNote = PageNote.always, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
-      this.progressBar = false, this.hiddenSpots = const []});
+      this.progressBar = false, this.hiddenSpots = const [], this.twoPages = TwoPages.wideScreen});
 
   /// The note in the page's bottom-right corner, "12 / 36".
   final PageNote pageNote;
@@ -223,13 +227,24 @@ class KindPrefs {
   /// The position text's spots not shown ('left', 'centre', 'right' - lib/reader/position_row.dart).
   final List<String> hiddenSpots;
 
+  /// Two pages side by side - never, on a wide screen, always (lib/reader/spreads.dart pairs a comic's).
+  final TwoPages twoPages;
+
+  /// Two pages side by side on a screen of [size].
+  bool twoPagesOn(Size size) => switch (twoPages) {
+        TwoPages.off => false,
+        TwoPages.wideScreen => size.width > size.height,
+        TwoPages.always => true,
+      };
+
   KindPrefs copyWith({PageNote? pageNote, Rotation? rotation, ShowWhen? clock, bool? progressBar,
-          List<String>? hiddenSpots}) =>
+          List<String>? hiddenSpots, TwoPages? twoPages}) =>
       KindPrefs(pageNote: pageNote ?? this.pageNote, rotation: rotation ?? this.rotation, clock: clock ?? this.clock,
-          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots);
+          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots,
+          twoPages: twoPages ?? this.twoPages);
 
   Map<String, dynamic> toJson() => {'pageNote': pageNote.name, 'rotation': rotation.name, 'clock': clock.name,
-      'progressBar': progressBar, 'hiddenSpots': hiddenSpots};
+      'progressBar': progressBar, 'hiddenSpots': hiddenSpots, 'twoPages': twoPages.name};
 
   /// From [j]; anything it lacks, [fallback]'s (the kind's defaults).
   factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs fallback = const KindPrefs()}) {
@@ -242,6 +257,7 @@ class KindPrefs {
       clock: pick(ShowWhen.values, j['clock'], fallback.clock),
       progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : fallback.progressBar,
       hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : fallback.hiddenSpots,
+      twoPages: pick(TwoPages.values, j['twoPages'], fallback.twoPages),
     );
   }
 

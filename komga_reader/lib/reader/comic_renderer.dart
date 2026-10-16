@@ -18,8 +18,10 @@ import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import 'position_row.dart';
+import '../synced_ids.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
+import 'spreads.dart';
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class NoPages implements Exception {}
@@ -61,6 +63,8 @@ class ComicRenderer extends Renderer {
   List<dynamic> pages = [];
   PageLoader? _loader;
   PageController? pc;
+
+  /// The page being read (the place: progress, the slider, the corner) - with two pages up, the later of the two.
   int index = 0;
   @override
   int get place => index;
@@ -69,6 +73,77 @@ class ComicRenderer extends Renderer {
   @override
   bool get opened => pc != null;
   bool get onEndCard => index > last;
+
+  // ---- two pages side by side (user, 2026-10-16 - NOTES, "Dual-page mode"): the page view goes by spread
+  // (lib/reader/spreads.dart), one page each otherwise; [_at] is where the page view is, [index] the page read
+
+  /// Two pages side by side now (the setting, on this screen's shape).
+  bool get dual => _dual;
+
+  /// Tests: two pages can come up at all (off for every test but the two-page ones - test/flutter_test_config.dart:
+  /// the test window is wider than tall, and the setting's default is Wide screen).
+  @visibleForTesting
+  static bool twoPagesAllowed = true;
+
+  bool _twoPagesOn(Size area) => twoPagesAllowed && _settings.display.comics.twoPagesOn(area);
+  bool _dual = false;
+  List<Spread> _spreads = const [];
+  List<int> _spreadOf = const [];
+  int _at = 0;
+  int _viewGen = 0;
+
+  /// The spreads, pairing this book's pages - shifted by one where the reader's button said so (per book, synced).
+  void _pair() {
+    _spreads = pairPages([for (final p in pages) isWidePage(p as Map)],
+        shifted: PairShift.instance.shifted(_book['id'] as String));
+    _spreadOf = spreadIndex(_spreads, pages.length);
+  }
+
+  /// The page view's item showing page [place] ([pages.length]: the end card).
+  int _viewOf(int place) => !_dual ? place : place > last ? _spreads.length : _spreadOf[place];
+
+  /// The page read at page view item [view]: the later page of a spread.
+  int _placeOf(int view) => !_dual ? view : view >= _spreads.length ? pages.length : _spreads[view].last;
+
+  /// The page view's items before the end card.
+  int get _views => _dual ? _spreads.length : pages.length;
+
+  /// The pages shown at item [view].
+  List<int> _pagesAt(int view) => !_dual ? [view] : view >= _spreads.length ? const [] : _spreads[view].pages;
+
+  /// The screen's shape or the setting changed between one page and two (or the shift between pairings): the page
+  /// view again, on the page being read.
+  void _rebuildView({required bool dual}) {
+    if (_disposed || pages.isEmpty) return;
+    finishCurlNow();
+    final keep = index;
+    _dual = dual;
+    _pair();
+    _at = _viewOf(keep.clamp(0, pages.length));
+    final oldPc = pc, oldScrolls = List.of(_scrolls.values);
+    _scrolls.clear();
+    _sideways.clear();
+    _pageRects.clear();
+    _joined.clear();
+    _startAtEnd = null;
+    zoomed = false;
+    pc = PageController(initialPage: _at, keepPage: false);
+    _viewGen++; // a fresh page view for the new controller
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      oldPc?.dispose();
+      for (final c in oldScrolls) {
+        c.dispose();
+      }
+    });
+    _changed();
+  }
+
+  /// The reader's "Shift pairing by one" (bottom bar, two pages up): this book's pairing flipped, kept and synced.
+  void shiftPairing() {
+    final id = _book['id'] as String;
+    PairShift.instance.setShifted(id, !PairShift.instance.shifted(id));
+    _rebuildView(dual: _dual);
+  }
   @override
   int openedAt = 0;
 
@@ -153,7 +228,14 @@ class ComicRenderer extends Renderer {
     _loader = loader;
     zoomed = false;
     _bookFit = null;
-    pc = PageController(initialPage: start, keepPage: false); // (a kept page would be the last book's)
+    // two pages: as the page area is now - before the first layout, the screen's (the reader fills it; the layout
+    // corrects it if it differs - buildPages)
+    final area = _area.isEmpty && host.mounted ? MediaQuery.sizeOf(host.context) : _area;
+    _dual = !area.isEmpty && _twoPagesOn(area);
+    _pair();
+    _joined.clear();
+    _at = _viewOf(start);
+    pc = PageController(initialPage: _at, keepPage: false); // (a kept page would be the last book's)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       oldPc?.dispose();
       for (final c in oldScrolls) {
@@ -185,7 +267,7 @@ class ComicRenderer extends Renderer {
   ({SpotText? left, SpotText? centre, SpotText? right}) spots(int place) => (
         // the title on top, the page and how far through on the left (the right spot is free - mockup "A, comic")
         centre: SpotText(_bookTitle, 'title'),
-        left: SpotText('Pg. ${place + 1}/${pages.length} · ${((place + 1) / pages.length * 100).round()}%', 'page'),
+        left: SpotText('Pg. ${_pagesText(place)}/${pages.length} · ${((place + 1) / pages.length * 100).round()}%', 'page'),
         right: null,
       );
 
@@ -196,12 +278,21 @@ class ComicRenderer extends Renderer {
     return title.isEmpty || title == heading || heading.endsWith(title) ? heading : '$heading - $title';
   }
 
+  /// The page number at [place] - two pages up, both of the pair shown there: "4-5".
+  String _pagesText(int place) {
+    if (!_dual || place > last) return '${place + 1}';
+    final s = _spreads[_spreadOf[place]];
+    return s.pages.length == 1 ? '${place + 1}' : '${s.first + 1}-${s.last + 1}';
+  }
+
   @override
-  String corner(int place) => '${place + 1} / ${pages.length}';
+  String corner(int place) => '${_pagesText(place)} / ${pages.length}';
   @override
   String placeLabel(int place) => 'Page ${place + 1}';
   @override
-  String get whereText => 'You are on page ${index + 1} of ${pages.length}.';
+  String get whereText => _pagesText(index).contains('-')
+      ? 'You are on pages ${_pagesText(index)} of ${pages.length}.'
+      : 'You are on page ${index + 1} of ${pages.length}.';
 
   // ---- progress on Komga: the page (from 1, or null: not started) and finished
 
@@ -277,7 +368,7 @@ class ComicRenderer extends Renderer {
     }
     _scrolls.clear();
     _stripScroll.dispose();
-    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode]) {
+    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode, shiftNode]) {
       n.dispose();
     }
     super.dispose();
@@ -316,12 +407,15 @@ class ComicRenderer extends Renderer {
     if (pinch != wasPinch) _changed();
   }
 
-  /// The page view moved to [i] (a turn, a swipe or a jump).
-  void _onPage(int i) {
-    if (_startAtEnd != null && _startAtEnd != i) _startAtEnd = null; // (#22) only the page turned back to
+  /// The page view moved to item [v] (a turn, a swipe or a jump).
+  void _onPage(int v) {
+    if (_startAtEnd != null && _startAtEnd != v) _startAtEnd = null; // (#22) only the page turned back to
+    _at = v;
+    final i = _placeOf(v);
     index = i;
     zoomed = false;
-    if (i <= last) _loader?.around(i);
+    // (two pages: the window of pages kept and preloaded twice as wide - a turn moves two)
+    if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1);
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
     host.pageChanged(i, curling: _curl != null);
@@ -331,7 +425,7 @@ class ComicRenderer extends Renderer {
   @override
   void jumpTo(int place) {
     finishCurlNow();
-    pc?.jumpToPage(place);
+    pc?.jumpToPage(_viewOf(place));
   }
 
   // ---- turning (the page after the last is the "end of book" card)
@@ -343,12 +437,12 @@ class ComicRenderer extends Renderer {
   @override
   void forward({bool snap = false}) {
     if (_blocked) return;
-    if (index >= pages.length) {
+    if (_at >= _views) {
       host.nextBook();
       return;
     }
-    if (zoomed && (_steppers[index]?.call(true) ?? false)) return; // zoomed in: pan along the page first
-    final c = _scrolls[index];
+    if (zoomed && (_steppers[_at]?.call(true) ?? false)) return; // zoomed in: pan along the page first
+    final c = _scrolls[_at];
     if (prefs.fit != FitMode.screen && c != null && c.hasClients) {
       final p = c.position;
       if (p.pixels < p.maxScrollExtent - 1) {
@@ -364,18 +458,18 @@ class ComicRenderer extends Renderer {
   @override
   void back({bool snap = false}) {
     if (_blocked) return;
-    if (zoomed && (_steppers[index]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
-    final c = _scrolls[index];
+    if (zoomed && (_steppers[_at]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
+    final c = _scrolls[_at];
     if (prefs.fit != FitMode.screen && c != null && c.hasClients && c.position.pixels > 1) {
       final p = c.position;
       c.animateTo((p.pixels - p.viewportDimension * 0.85).clamp(0, p.maxScrollExtent), duration: _turn,
           curve: Curves.easeOut);
       return;
     }
-    if (index == 0) return;
+    if (_at == 0) return;
     if (prefs.fit != FitMode.screen) {
-      _scrolls.remove(index - 1)?.dispose(); // fresh controller so the page lays out again from its end
-      _startAtEnd = index - 1;
+      _scrolls.remove(_at - 1)?.dispose(); // fresh controller so the page lays out again from its end
+      _startAtEnd = _at - 1;
     }
     _turnPage(next: false);
   }
@@ -383,10 +477,10 @@ class ComicRenderer extends Renderer {
   /// One page on or back, in the chosen animation: Wipe (slide), Instant flip, or 3D page curl.
   void _turnPage({required bool next}) {
     if (host.busy || _curlSettling) return;
-    final target = next ? index + 1 : index - 1;
-    if (target < 0 || target > pages.length) return;
+    final target = next ? _at + 1 : _at - 1;
+    if (target < 0 || target > _views) return;
     if (_curlMode) {
-      final page = _pageRect(next ? index : target);
+      final page = _pageRect(next ? _at : target);
       final grab = Offset(page.width, page.height * 0.72);
       final start = next ? grab : Offset(PageCurl.gone(page.width), grab.dy);
       if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
@@ -404,7 +498,7 @@ class ComicRenderer extends Renderer {
   /// A Zoom in / Zoom out step (the keys) - fit screen, the only fit that zooms.
   @override
   void zoomStep(bool zoomIn) {
-    if (prefs.fit == FitMode.screen) _zoomSteps[index]?.call(zoomIn);
+    if (prefs.fit == FitMode.screen) _zoomSteps[_at]?.call(zoomIn);
   }
 
   // ---- the mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise
@@ -414,7 +508,7 @@ class ComicRenderer extends Renderer {
 
   void wheel(double dy) {
     if (host.controlsUp || pc == null) return;
-    final c = _scrolls[index];
+    final c = _scrolls[_at];
     if (prefs.fit != FitMode.screen && c != null && c.hasClients) {
       final p = c.position;
       final target = (p.pixels + dy).clamp(0.0, p.maxScrollExtent);
@@ -443,7 +537,7 @@ class ComicRenderer extends Renderer {
   Offset? _firstTap; // waiting for a possible second tap
 
   void _onTapUp(TapUpDetails d, double width) {
-    final zoomer = _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[index] : null;
+    final zoomer = _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null;
     final waiting = _firstTap;
     final pending = waiting != null && (_tapTimer?.isActive ?? false);
     _tapTimer?.cancel();
@@ -510,7 +604,7 @@ class ComicRenderer extends Renderer {
 
   /// A horizontal drag curls the page - unless it's moving the page itself (zoomed, pinching, a sideways page).
   bool get _curlDrag =>
-      _curlMode && !zoomed && _fingers <= 1 && !_sideways.contains(index) && pc != null && !host.controlsUp;
+      _curlMode && !zoomed && _fingers <= 1 && !_sideways.contains(_at) && pc != null && !host.controlsUp;
 
   /// Positions in reading-direction space (x from the right edge in a right-to-left book).
   Offset _reading(Offset p) => rtl ? Offset(_area.width - p.dx, p.dy) : p;
@@ -531,12 +625,12 @@ class ComicRenderer extends Renderer {
   }
 
   bool _startCurl({required bool next, required Rect page, required Offset grab, required Offset finger}) {
-    final target = next ? index + 1 : index - 1;
-    if (target < 0 || target > pages.length || pc == null || _area.isEmpty) return false;
+    final target = next ? _at + 1 : _at - 1;
+    if (target < 0 || target > _views || pc == null || _area.isEmpty) return false;
     finishCurlNow();
     final now = _snapshot();
     if (now == null) return false;
-    final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: index,
+    final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
         under: next ? null : now, pending: !next);
     _curl = c;
     pc!.jumpToPage(target);
@@ -622,7 +716,7 @@ class ComicRenderer extends Renderer {
       final dx = p.dx - s.dx;
       if (dx.abs() < 4) return;
       final next = dx < 0;
-      final page = _pageRect(next ? index : index - 1);
+      final page = _pageRect(next ? _at : _at - 1);
       final at = _pagePoint(s0, page);
       final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
       if (!_startCurl(next: next, page: page, grab: grab,
@@ -665,6 +759,10 @@ class ComicRenderer extends Renderer {
   List<Widget> buildPages(BuildContext context) => [
         LayoutBuilder(builder: (context, box) {
           _area = Size(box.maxWidth, box.maxHeight);
+          // one page or two, by the screen's shape now (turned, a window resized) and the setting: the page view
+          // again after this frame, on the same page
+          final dual = pages.isNotEmpty && _twoPagesOn(_area);
+          if (dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: dual));
           return Listener(
             // wheel over the end card or a loading page (over a page, the page itself takes it)
             onPointerSignal: (e) {
@@ -706,19 +804,19 @@ class ComicRenderer extends Renderer {
                   child: PageView.builder(
                     // a fresh page view for each book: kept, it hands the new controller the last book's place
                     // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
-                    key: ValueKey(_book['id']),
+                    key: ValueKey((_book['id'], _viewGen)),
                     controller: pc,
                     // keep the neighbours built, so they're processed before they're turned to (in every mode: a
                     // wipe used to build - and process - the next page while it slid in)
                     allowImplicitScrolling: true,
                     reverse: rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
                     // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
-                    physics: zoomed || _fingers > 1 || _sideways.contains(index) || _curlMode
+                    physics: zoomed || _fingers > 1 || _sideways.contains(_at) || _curlMode
                         ? const NeverScrollableScrollPhysics()
                         : null,
-                    itemCount: pages.length + 1,
+                    itemCount: _views + 1,
                     onPageChanged: _onPage,
-                    itemBuilder: (context, i) => i == pages.length ? host.endCard() : _page(context, i),
+                    itemBuilder: (context, v) => v == _views ? host.endCard() : _view(context, v),
                   ),
                 ),
               ),
@@ -738,9 +836,38 @@ class ComicRenderer extends Renderer {
           ),
       ];
 
-  Widget _page(BuildContext context, int i) {
+  /// The page view's item [v]: a page - or, two pages up, a spread: a pair joined side by side as one picture (fit,
+  /// zoom, pan and Enhance work on it as on a page), or a page alone, centred (user, 2026-10-16).
+  Widget _view(BuildContext context, int v) {
+    if (!_dual) return _page(context, v, _loader!.get(v));
+    final s = _spreads[v];
+    if (s.pages.length == 1) return _page(context, v, _loader!.get(s.first));
+    // (cropped page by page before they're joined: the pages meet at the spine, not their cut-off margins)
+    return _page(context, v, _joinedAt(v, s), prefs: prefs.copyWith(crop: 0));
+  }
+
+  /// Two pages joined, by item, the crop and the direction they were joined in - the ones near the page being read.
+  final Map<(int, double, bool), Future<PageData>> _joined = {};
+
+  Future<PageData> _joinedAt(int v, Spread s) {
+    _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 2);
+    final crop = prefs.crop;
+    final key = (v, crop, rtl);
+    return _joined.putIfAbsent(key, () async {
+      try {
+        final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
+        final images = [for (final p in pair) crop > 0 ? await cropEdges(p.image, crop) : p.image];
+        return PageData(await joinPages(rtl ? images.reversed.toList() : images), Uint8List(0));
+      } catch (_) {
+        _joined.remove(key)?.ignore(); // Retry joins them again
+        rethrow;
+      }
+    });
+  }
+
+  Widget _page(BuildContext context, int i, Future<PageData> data, {ReaderPrefs? prefs}) {
     return FutureBuilder<PageData>(
-      future: _loader!.get(i),
+      future: data,
       builder: (context, snap) {
         if (snap.hasError) {
           // the reason on the page itself (user's mock-ups, 2026-09-29): "This page didn't load: can't reach Komga."
@@ -759,7 +886,7 @@ class ComicRenderer extends Renderer {
         }
         if (!snap.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         return PageCanvas(
-          data: snap.data!, prefs: prefs, scroll: _scrollFor(i),
+          data: snap.data!, prefs: prefs ?? this.prefs, scroll: _scrollFor(i),
           startAtEnd: _startAtEnd == i,
           levels: _loader!.bookLevels,
           levelsNow: () => _loader?.levelsNow,
@@ -773,8 +900,8 @@ class ComicRenderer extends Renderer {
           onPanChanged: (pans) => _setSideways(i, pans),
           onEdgeSwipe: (forward) => _turnPage(next: forward), // dragged on past the page's edge
           onPageRect: (r) => _pageRects[i] = r, // for the page curl (layout only - no rebuild)
-          idle: i == index ? null : _whenIdle, // neighbours: processed between turns, not during one
-          current: i == index, // moved off, a zoomed page goes back to fit
+          idle: i == _at ? null : _whenIdle, // neighbours: processed between turns, not during one
+          current: i == _at, // moved off, a zoomed page goes back to fit
           onStepper: (step) => step == null ? _steppers.remove(i) : _steppers[i] = step,
           onZoomToggle: (zoom) => zoom == null ? _zoomers.remove(i) : _zoomers[i] = zoom,
           onZoomStep: (step) => step == null ? _zoomSteps.remove(i) : _zoomSteps[i] = step,
@@ -792,6 +919,7 @@ class ComicRenderer extends Renderer {
   final imageNode = FocusNode(debugLabel: 'ctl-image');
   final readerNode = FocusNode(debugLabel: 'ctl-reader');
   final stripNode = FocusNode(debugLabel: 'ctl-strip');
+  final shiftNode = FocusNode(debugLabel: 'ctl-shift');
 
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
   @override
@@ -810,6 +938,11 @@ class ComicRenderer extends Renderer {
   /// The bottom bar's own: the page strip, image settings (a series), reader settings.
   @override
   List<BarButton> bottomButtons(BuildContext context) => [
+        // two pages up: pairs a page off (a scan missing a page, a spread split across two pairs) - this book, synced
+        // (user, 2026-10-16: a button on the bottom bar)
+        if (_dual && pages.length > 2)
+          BarButton(shiftNode, barIcon(node: shiftNode, icon: Icons.compare_arrows, label: 'Shift pairing by one',
+              onPressed: shiftPairing)),
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
@@ -842,10 +975,36 @@ class ComicRenderer extends Renderer {
 
   static String titleOf(dynamic b) => bookTitle(b);
 
-  /// The page being read: (its picture file, a name for it). Null on the end card.
+  /// The page being read: (its picture file, a name for it). Null on the end card, or a choice not made. Two pages
+  /// up, a pair: which one is asked - the left, the right, or both as one picture (user, 2026-10-16).
   Future<(Uint8List, String)?> _pageFile() async {
-    final i = index;
-    if (i > last || _loader == null) return null;
+    if (index > last || _loader == null) return null;
+    final shown = _pagesAt(_at);
+    if (shown.length < 2) return _fileOf(shown.isEmpty ? index : shown.first);
+    final left = rtl ? shown.last : shown.first, right = rtl ? shown.first : shown.last;
+    final pick = await showDialog<String>(
+      context: host.context,
+      builder: (ctx) => SimpleDialog(title: const Text('Which page?'), children: [
+        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'left'), child: Text('Left (page ${left + 1})')),
+        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'right'), child: Text('Right (page ${right + 1})')),
+        SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'both'), child: const Text('Both, as one picture')),
+      ]),
+    );
+    if (pick == null) return null;
+    if (pick != 'both') return _fileOf(pick == 'left' ? left : right);
+    // the two files as Komga sends them, side by side as they show (not cropped or enhanced, as a page alone)
+    final images = [for (final i in [left, right]) (await _loader!.get(i)).image];
+    final joined = await joinPages(images);
+    try {
+      final png = await joined.toByteData(format: ui.ImageByteFormat.png);
+      if (png == null) throw StateError('the picture could not be made');
+      return (png.buffer.asUint8List(), '${titleOf(_book)} - pages ${shown.first + 1}-${shown.last + 1}');
+    } finally {
+      joined.dispose();
+    }
+  }
+
+  Future<(Uint8List, String)> _fileOf(int i) async {
     final bytes = _loader!.loadedBytes(i) ?? await api.pageBytes(_book['id'] as String, _loader!.pageNumbers[i]);
     return (bytes, '${titleOf(_book)} - page ${i + 1}');
   }
@@ -1005,7 +1164,7 @@ class ComicRenderer extends Renderer {
               itemExtent: w + _stripGap,
               itemCount: last + 1,
               itemBuilder: (context, i) {
-                final current = i == index;
+                final current = _dual ? _pagesAt(_at).contains(i) : i == index; // (both pages of a pair)
                 // white: where the remote is in the strip, or the page being picked on the slider
                 final remote = (node.hasFocus && i == (_stripAt ?? index)) || i == scrub;
                 return Padding(
