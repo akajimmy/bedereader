@@ -66,7 +66,7 @@ void main() {
   });
 
   test('a wide screen shows the page as a sheet (user, 2026-10-11): the text column with the margins a page that wide '
-      'would have, centred, full height; none where the page fills the screen; the surround a shade off the page',
+      'would have, centred, 16 in from the top and bottom (user, 2026-10-16); none where the page fills the screen; the surround a shade off the page',
       () {
     Rect? sheetRect(EpubPrefs e, Size size) => EpubRenderer.sheetRect(e, size, InsetPage.wideScreen);
     expect(sheetRect(const EpubPrefs(margins: EpubMargins.book), const Size(1920, 1080)), isNull,
@@ -76,7 +76,7 @@ void main() {
       const wide = Size(1920, 1080);
       final s = sheetRect(e, wide)!;
       expect(s.center.dx, closeTo(wide.width / 2, 0.01), reason: '${m.name}: centred');
-      expect(s.height, wide.height);
+      expect((s.top, s.bottom), (16, wide.height - 16), reason: m.name);
       // the text sits in the sheet as on a page just that wide
       expect(EpubRenderer.sideMargin(e, wide.width) - s.left, closeTo(EpubRenderer.sideMargin(e, s.width), 0.01),
           reason: '${m.name}: the margins inside the sheet');
@@ -99,12 +99,14 @@ void main() {
     expect(EpubRenderer.sheetRect(e, wide, InsetPage.never), isNull);
     expect(EpubRenderer.sheetRect(e, wide, InsetPage.always), EpubRenderer.sheetRect(e, wide, InsetPage.wideScreen),
         reason: 'room to spare: the same sheet');
-    expect(EpubRenderer.cardInset(e, wide, InsetPage.always), 0, reason: 'that sheet moves no text');
+    expect(EpubRenderer.sheetInset(e, wide, InsetPage.always), const EdgeInsets.symmetric(vertical: 16),
+        reason: 'that sheet moves the text down and up, not sideways');
     final card = EpubRenderer.sheetRect(e, tablet, InsetPage.always);
     expect(card, const Rect.fromLTRB(16, 16, 800 - 16, 1230 - 16));
-    expect(EpubRenderer.cardInset(e, tablet, InsetPage.always), 16);
+    expect(EpubRenderer.sheetInset(e, tablet, InsetPage.always), const EdgeInsets.all(16));
     expect(EpubRenderer.sheetRect(e, tablet, InsetPage.wideScreen), isNull);
-    expect(EpubRenderer.cardInset(e, tablet, InsetPage.wideScreen), 0);
+    expect(EpubRenderer.sheetInset(e, tablet, InsetPage.wideScreen), EdgeInsets.zero);
+    expect(EpubRenderer.sheetInset(e, wide, InsetPage.never), EdgeInsets.zero);
     for (final size in [wide, tablet]) {
       expect(EpubRenderer.sheetRect(book, size, InsetPage.always), (Offset.zero & size).deflate(16), reason: '$size');
       expect(EpubRenderer.sheetRect(book, size, InsetPage.wideScreen), isNull, reason: '$size');

@@ -77,24 +77,31 @@ class EpubRenderer extends Renderer {
 
   /// The page drawn as a sheet on a wide screen (user, 2026-10-11): where the lines stop at their length
   /// ([sideMargin]'s second case) with room to spare, the text column with the margins a page just that wide would
-  /// have, the full height, centred - the rest is the surround ([surround]). Null where the page fills the screen (a
-  /// portrait tablet, a narrow window). The text doesn't move: it's in the middle either way.
+  /// have, centred - the rest is the surround ([surround]). Null where the page fills the screen (a portrait tablet,
+  /// a narrow window). The text doesn't move sideways: it's in the middle either way.
   /// Inset page ([InsetPage]; user, 2026-10-12): never - none; always - where no such sheet fits (and with Margins:
-  /// Book's, which has none), a card [minSurround] in from all four edges, the text laid out inside it ([cardInset]).
-  static Rect? sheetRect(EpubPrefs e, Size size, InsetPage inset) {
+  /// Book's, which has none), a card [minSurround] in from the sides too, the text laid out inside it. Either sheet
+  /// sits [minSurround] in from the top and bottom (user, 2026-10-16: "even on widescreen") - [sheetInset].
+  static Rect? sheetRect(EpubPrefs e, Size size, InsetPage inset) => _sheetOf(e, size, inset)?.$1;
+
+  /// How far the margins grow for the page's sheet ([sheetRect]): its top and bottom inset; its sides too for the
+  /// card - the wide screen's sheet sits round the text where it already is.
+  static EdgeInsets sheetInset(EpubPrefs e, Size size, InsetPage inset) => switch (_sheetOf(e, size, inset)) {
+        null => EdgeInsets.zero,
+        (_, final card) => EdgeInsets.symmetric(horizontal: card ? minSurround : 0, vertical: minSurround),
+      };
+
+  /// The sheet, and whether it's the card.
+  static (Rect, bool)? _sheetOf(EpubPrefs e, Size size, InsetPage inset) {
     if (inset == InsetPage.never) return null;
     if (e.margins != EpubMargins.book) { // Book's: the book's margins, as a browser - no column to sit round
       final share = e.margins.share;
       final width = e.size * e.margins.lineEms / (1 - 2 * share); // the column and a page's margins round it
       final left = (size.width - width) / 2;
-      if (left >= minSurround) return Rect.fromLTWH(left, 0, width, size.height);
+      if (left >= minSurround) return (Rect.fromLTWH(left, minSurround, width, size.height - 2 * minSurround), false);
     }
-    return inset == InsetPage.always ? (Offset.zero & size).deflate(minSurround) : null;
+    return inset == InsetPage.always ? ((Offset.zero & size).deflate(minSurround), true) : null;
   }
-
-  /// How far in the page's card sits ([sheetRect], Inset page: always, on a narrow screen): the margins grow by it.
-  /// 0 for the wide screen's sheet, which sits round the text where it already is.
-  static double cardInset(EpubPrefs e, Size size, InsetPage inset) => sheetRect(e, size, inset)?.top ?? 0;
 
   /// The least surround beside a sheet: less, and the page fills the screen. Inset page always: the card's inset.
   static const minSurround = 16.0;
@@ -168,9 +175,9 @@ class EpubRenderer extends Renderer {
       EpubFont.deviceSerif => defaultTargetPlatform == TargetPlatform.windows ? 'Georgia' : 'serif',
       _ => null,
     };
-    // Inset page always on a narrow screen: the page a card inside the screen, laid out as a page that size
-    final inset = cardInset(e, _size, AppSettings.instance.display.insetPage);
-    final side = inset + sideMargin(e, _size.width - 2 * inset);
+    // the page a sheet (Inset page): laid out as a page that tall - and on a narrow screen (a card) that wide
+    final inset = sheetInset(e, _size, AppSettings.instance.display.insetPage);
+    final side = inset.left + sideMargin(e, _size.width - inset.horizontal);
     final context = host.context;
     return EpubTheme(
       background: e.colours.background,
@@ -178,7 +185,7 @@ class EpubRenderer extends Renderer {
       fontFamily: family,
       fontSize: e.size,
       lineHeight: e.lineSpacing,
-      margins: EdgeInsets.fromLTRB(side, inset + EpubMargins.topBottom, side, inset + EpubMargins.topBottom),
+      margins: EdgeInsets.fromLTRB(side, inset.top + EpubMargins.topBottom, side, inset.bottom + EpubMargins.topBottom),
       // the book's alignment and paragraphs, or the reader's (user, 2026-10-07: three settings, from one)
       ownAlign: switch (e.align) {
         EpubAlign.book => null,
@@ -332,7 +339,7 @@ class EpubRenderer extends Renderer {
     if (b.size == size && b.theme == theme) {
       _settle?.cancel(); // changed and changed back before it was due
       _settle = null;
-      // laid out as these settings would be: their sheet (Inset page from never to on a wide screen moves no text)
+      // laid out as these settings would be: their sheet
       _laidInset = AppSettings.instance.display.insetPage;
       return;
     }
