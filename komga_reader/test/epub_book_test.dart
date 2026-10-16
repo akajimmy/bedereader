@@ -57,6 +57,11 @@ void main() {
       await book.pages(1);
       await book.pages(2);
       expect(left(0), closeTo(3 * 20, 0.5), reason: "the book's 3 em, at the reader's text size");
+      // the page knows where its text goes - its chapter's own sides (Inset page's sheet sits round it, 2026-10-16)
+      final area = book.pagesNow(0)!.first.textArea!;
+      expect(area.left, closeTo(60, 0.5));
+      expect(area.right, closeTo(400 - 60, 0.5));
+      expect(area.top, 40);
       expect(left(2), closeTo(0.6 * 20, 0.5), reason: 'none at all: the least edge, 0.6 em (a hyphen and a border fit)');
       expect(left(1), closeTo(0.6 * 20, 0.5), reason: "none set: a browser's 8 px - under the least edge, so that");
       // the page a card 16 in (Inset page always - 2026-10-15): the chapter's margin inside it

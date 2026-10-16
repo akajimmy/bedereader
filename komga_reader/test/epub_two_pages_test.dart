@@ -131,11 +131,8 @@ void main() {
     expect(pages((await spots(tester))!.$1), '${int.parse(now) + 1}');
   });
 
-  testWidgets('Inset page with two pages up: two pages apart, a gap between (user, 2026-10-16: "two discrete pages, '
-      'with a gap between") - each card 16 in all round', (tester) async {
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
-    await open(tester);
-    await turn(tester); // a pair: both sides with a page
+  /// The sheets drawn on screen now, left to right.
+  List<Rect> sheetsOnScreen(WidgetTester tester, double width) {
     final sheets = <Rect>[];
     for (final e in find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter')
         .evaluate()) {
@@ -143,34 +140,25 @@ void main() {
       final box = e.renderObject as RenderBox;
       if (sheet == null || !box.attached) continue;
       final at = box.localToGlobal(Offset.zero);
-      if (at.dx < -1 || at.dx > 1599) continue; // (the neighbours built ahead, off screen)
+      if (at.dx < -1 || at.dx > width - 1) continue; // (the neighbours built ahead, off screen)
       sheets.add(sheet.shift(at));
     }
-    sheets.sort((a, b) => a.left.compareTo(b.left));
-    expect(sheets.length, 2, reason: '$sheets');
-    expect((sheets[0].left, sheets[0].right), (16, 784), reason: 'the left card');
-    expect((sheets[1].left, sheets[1].right), (816, 1584), reason: 'the right card: 32 apart');
-  });
+    return sheets..sort((a, b) => a.left.compareTo(b.left));
+  }
 
-  testWidgets("a wide screen's sheets (the column with its margins, narrower than half the screen) move in from the "
-      "middle of their halves to the same gap as the cards' - 16 either side of the middle", (tester) async {
-    await open(tester, size: const Size(2400, 1000));
-    await turn(tester);
-    final sheets = <Rect>[];
-    for (final e in find.byWidgetPredicate((w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter')
-        .evaluate()) {
-      final sheet = ((e.widget as CustomPaint).painter as dynamic).sheet as Rect?;
-      final box = e.renderObject as RenderBox;
-      final at = box.localToGlobal(Offset.zero);
-      if (sheet == null || at.dx < -1 || at.dx > 2399) continue;
-      sheets.add(sheet.shift(at));
+  testWidgets('Inset page with two pages up: two pages apart (user, 2026-10-16: "two discrete pages, with a gap '
+      'between"), each sheet 20 out round its own text, wherever the margins put it in its half', (tester) async {
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    for (final width in [1600.0, 2400.0]) {
+      await open(tester, size: Size(width, 1000));
+      await turn(tester); // a pair: both sides with a page
+      final sheets = sheetsOnScreen(tester, width);
+      expect(sheets.length, 2, reason: '$width: $sheets');
+      final side = EpubRenderer.sideMargin(AppSettings.instance.epub, width / 2);
+      expect(sheets[0], Rect.fromLTRB(side - 20, 20, width / 2 - side + 20, 980), reason: '$width: the left page');
+      expect(sheets[1], sheets[0].shift(Offset(width / 2, 0)), reason: '$width: the right, the same in its half');
+      expect(sheets[1].left - sheets[0].right, closeTo(2 * (side - 20), 0.5), reason: '$width: apart');
     }
-    sheets.sort((a, b) => a.left.compareTo(b.left));
-    expect(sheets.length, 2, reason: '$sheets');
-    expect(sheets[0].right, closeTo(1184, 0.5));
-    expect(sheets[1].left, closeTo(1216, 0.5));
-    expect(sheets[0].left, greaterThan(16), reason: 'a column: the surround round the outside');
-    expect(sheets[0].width, closeTo(sheets[1].width, 0.5));
   });
 
   testWidgets("one page or two, the same page size (1600 wide two up, then an 800-wide window: one): the same place, "
@@ -207,7 +195,7 @@ void main() {
   });
 
   testWidgets('the curl with Inset page (user, 2026-10-16: "how are you handling page curl + inset page"): the '
-      'right-hand card turns, about the middle of the gap, and lands over the left one, the same size', (tester) async {
+      'right-hand sheet turns, about the middle of the gap, and lands over the left one, the same size', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
     await open(tester);
@@ -216,12 +204,14 @@ void main() {
     final c = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
         .single.painter as PageCurlPainter;
     expect(c.spine, isTrue);
-    expect(c.page, const Rect.fromLTRB(816, 16, 1584, 984), reason: 'the right-hand card');
-    // near the end of the turn its edge is its width and the gap past where it was hinged: over the left card
+    final side = EpubRenderer.sideMargin(AppSettings.instance.epub, 800);
+    final right = Rect.fromLTRB(800 + side - 20, 20, 1600 - side + 20, 980), gap = 2 * (side - 20);
+    expect(c.page, right, reason: 'the right-hand sheet');
+    // near the end of the turn its edge is its width and the gap past where it was hinged: over the left sheet
     await tester.pump(const Duration(milliseconds: 370));
     final end = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
         .single.painter as PageCurlPainter;
-    expect(end.finger.dx, closeTo(-(768 + 32), 4), reason: 'its edge at 816 - 800 = 16: the left card');
+    expect(end.finger.dx, closeTo(-(right.width + gap), 4), reason: 'its edge over the left sheet\'s outer edge');
     await tester.pump(const Duration(milliseconds: 200));
     await settle(tester);
   });

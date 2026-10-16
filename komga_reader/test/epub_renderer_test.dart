@@ -281,7 +281,7 @@ void main() {
   });
 
   testWidgets("the sheet on wide screens switched off on this device (user, 2026-10-11): the page's colour across the "
-      'screen, no surround; the lines where they were sideways, 16 higher (the top inset of the sheet gone)',
+      'screen, no surround; the lines where they were (the sheet is round the text: it moves none - 2026-10-16)',
       (tester) async {
     addTearDown(() => AppSettings.instance.setDisplay(const DisplayPrefs()));
     await open(tester, twoChapters(), size: const Size(1600, 1000));
@@ -307,13 +307,12 @@ void main() {
     await settle(tester);
     expect(surroundBox(), findsNothing, reason: 'no surround');
     expect(sheets(), {null}, reason: 'no sheet: the page fills the screen');
-    final after = lines();
-    expect(after.first, before.first - const Offset(0, 16), reason: 'the first line: as placed sideways, 16 up');
-    expect(after.map((o) => o.dx).toSet(), before.map((o) => o.dx).toSet(), reason: 'the lines as long');
+    expect(lines(), before, reason: 'the lines as long and as placed');
   });
 
-  testWidgets('Inset page always on a narrow screen (user, 2026-10-15): the page a card 16 in from every edge, the text '
-      "laid out inside it - once the setting settles, the card with it; Margins: Book's too", (tester) async {
+  testWidgets('Inset page round the text (user, 2026-10-16): the sheet 20 out from the lines - left of where they '
+      "start, above the first - wherever the margins put them; turning it on moves no text; Margins: Book's: round "
+      "each chapter's own sides", (tester) async {
     addTearDown(() {
       AppSettings.instance.setDisplay(const DisplayPrefs());
       AppSettings.instance.setEpub(const EpubPrefs());
@@ -321,7 +320,8 @@ void main() {
     await open(tester, twoChapters()); // 800 x 1200
     Set<Rect?> sheets() => tester
         .widgetList<CustomPaint>(find.byWidgetPredicate(
-            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'))
+            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter' &&
+                (w.painter as dynamic).page != null))
         .map((w) => (w.painter as dynamic).sheet as Rect?)
         .toSet();
     List<Offset> lines() => (tester
@@ -333,27 +333,23 @@ void main() {
         .page
         .textOrigins as List<Offset>;
     double left(List<Offset> l) => l.map((o) => o.dx).reduce(math.min);
-    double top(List<Offset> l) => l.map((o) => o.dy).reduce(math.min);
-    expect(sheets(), {null}, reason: 'wide screen only (the default): none at 800 wide');
+    expect(sheets(), {null}, reason: 'Wide screen (the default): none on a tall screen');
     final e = AppSettings.instance.epub, before = lines();
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
-    await tester.pump();
-    expect(sheets(), {null}, reason: 'settling: the page as it is laid out');
-    await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    const card = Rect.fromLTRB(16, 16, 800 - 16, 1200 - 16);
-    expect(sheets(), {card});
-    final side = 16 + EpubRenderer.sideMargin(e, 800 - 32);
-    expect(left(lines()), greaterThanOrEqualTo(side - 0.5), reason: 'the margins of a page the card wide, in it');
-    expect(top(lines()), greaterThanOrEqualTo(16 + EpubMargins.topBottom - 0.5));
-    expect(top(before), lessThan(16 + EpubMargins.topBottom - 0.5), reason: 'it moved down into the card');
+    final side = EpubRenderer.sideMargin(e, 800);
+    expect(sheets(), {Rect.fromLTRB(side - 20, EpubMargins.topBottom - 20, 800 - side + 20, 1200 - EpubMargins.topBottom + 20)},
+        reason: 'the text area, 20 out all round');
+    expect(lines(), before, reason: 'no text moved');
+    expect(left(lines()) - sheets().single!.left, closeTo(20, 0.5), reason: '20 left of where the lines start');
 
     AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    expect(sheets(), {card}, reason: "Book's margins: the card too");
-    expect(left(lines()), greaterThanOrEqualTo(16 + math.max(10, 0.6 * e.size) - 0.5),
-        reason: "the chapter's margins inside the card");
+    final s = sheets().single!;
+    // (this book sets no page margin: its text 11.4 in (the least edge) - 20 out from that is off the page: the edge)
+    expect(s.left, closeTo(math.max(0, left(lines()) - 20), 0.5), reason: "Book's margins: round the chapter's own");
+    expect(s.left, 0, reason: 'a margin under 20: that side at the page edge');
   });
 
   testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "
