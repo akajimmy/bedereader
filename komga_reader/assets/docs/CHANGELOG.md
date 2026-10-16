@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Inset page: the sheet is set in from the top and bottom on wide screens too** - Wide screen and Always draw the
+  sheet 16 px in from the top and bottom of the screen, as Always's card on a narrow screen; the text moves in with
+  it, so books on a wide screen count their pages again the first time.
+
 ## 1.3.0
 
 ### Build 112 - 2026-10-15
