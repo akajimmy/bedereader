@@ -1,5 +1,4 @@
 // Comics in two pages side by side (user, 2026-10-16 - NOTES, "Dual-page mode"; the pairing: spreads_test.dart).
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
