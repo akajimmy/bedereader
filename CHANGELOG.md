@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- **Dual page mode, comics: the page curl showed the next spread through the background** - beside a page alone,
+  the part of the screen that should stay until the page lands let the next spread show through at once, and
+  the background on the turning half was drawn black whatever its colour. Both now keep the background until
+  the turn is over.
+
 ## 1.4.0
 
 ### Build 125 - 2026-10-17
