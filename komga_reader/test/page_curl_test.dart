@@ -82,7 +82,8 @@ void main() {
       final landed = PageCurlPainter(program: program, sheet: sheet, page: page, grab: const Offset(200, 150),
           finger: Offset(-200 - gap, 150), mirror: mirror, spine: true, back: back, gap: gap);
       // turned over flat: the back page as it lies (the light on the curl's back aside: red stays reddest, and so on)
-      for (final (x, want) in [(a + 50, red), (a + 150, yellow)]) {
+      // (10 px either side of the stripes' edge: off by the gap, 20, and it's the other colour)
+      for (final (x, want) in [(a + 90, red), (a + 110, yellow), (a + 150, yellow)]) {
         final c = await at(landed, x);
         expect(c.r > 0.5 && c.b < 0.3 && (c.g > 0.5) == (want == yellow), isTrue,
             reason: '$page${mirror ? ' mirrored' : ''}, gap $gap: at $x $c, wanted $want');

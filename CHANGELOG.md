@@ -9,6 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- **Dual page mode, the page curl: the next page is on the back of the turning one** - as you lift the right-hand
+  page, its back is the next spread's left-hand page, so it lands as that page instead of switching to it at the
+  end. Turning back, the page coming over shows the left-hand page you're leaving on its back. Comics only hold the
+  old left-hand page itself while the page turns: a double-page spread or a page alone that's wider shows round it
+  from the start, as the next page does in a book. A page alone (the cover) still turns away whole. Comics and
+  eBooks, Inset page's two sheets too.
+
 ## 1.3.0
 
 **Released as build 123, tagged `v1.3.0`** (2026-10-16). Release candidates: build 105 (`v1.3.0-rc.1`).
