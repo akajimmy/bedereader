@@ -5,7 +5,7 @@
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
 
-For an Android tablet or phone, or a Windows PC. Browse your libraries with proper posters, read with touch,
+For an Android tablet or phone, or a Windows PC - and iPhone / iPad, in testing. Browse your libraries with proper posters, read with touch,
 keyboard, mouse or a remote page-turner, take books with you offline, and make old scans look their best.
 
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
@@ -85,6 +85,9 @@ This app shows them and keeps everything in sync.
 2. Install the app:
    - **Android**: install `BeDeReader-<version>-android.apk` (allow installs from this source when asked).
    - **Windows**: unzip `BeDeReader-<version>-windows.zip` anywhere and run `BeDeReader.exe`.
+   - **iPhone / iPad**: in testing through TestFlight, not on the App Store yet. On first connecting, allow
+     BeDeReader on the local network when iOS asks (Settings > Privacy & Security > Local Network), or it can't
+     reach a Komga server at home.
 3. Enter your Komga address (for example `http://192.168.1.10:25600`) and the API key.
 
 ## Where your settings live
