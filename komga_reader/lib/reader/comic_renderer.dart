@@ -600,12 +600,19 @@ class ComicRenderer extends Renderer {
 
   /// Where a turn of [page] (at item [v]) ends: off itself - or, a pair's page turning over onto the one beside it,
   /// exactly over that one (its width past the spine).
-  double _goneAt(Rect page, int v) => _spineX(v) != null ? -page.width : PageCurl.gone(page.width);
+  double _goneAt(Rect page, int v) =>
+      _spineX(v) != null || _padded(v) != null ? -page.width : PageCurl.gone(page.width);
   double _gone(_Curl c) => c.spine ? -c.page.width : PageCurl.gone(c.page.width);
 
   /// The page that curls at item [v]: two pages up, a pair's later page - the right one (left, right to left), its
-  /// spine at the gutter, as a book's page turns (user, 2026-10-16); else the whole page.
+  /// spine at the gutter, as a book's page turns (user, 2026-10-16); a page alone before a pair or a spread, the later
+  /// half of the double page it makes up ([_padded]) - turning on from it, or back onto it; else the whole page.
   Rect _curlRect(int v) {
+    final padded = _padded(v);
+    if (padded != null) {
+      final (r, x) = padded;
+      return rtl ? Rect.fromLTRB(r.left, r.top, x, r.bottom) : Rect.fromLTRB(x, r.top, r.right, r.bottom);
+    }
     final page = _pageRect(v), x = _spineX(v);
     if (x == null) return page;
     return rtl
@@ -623,6 +630,21 @@ class ComicRenderer extends Renderer {
     if (share == null) return null;
     final page = _pageRect(v);
     return page.left + share * page.width;
+  }
+
+  /// Two pages up, turning between a page alone (the cover) and the pair or spread after it, on from it or back onto
+  /// it (user, 2026-10-17: "turn the single into a double by including background empty space to each side of the
+  /// front cover (such that its width matches the double page underneath)", treat it "as you would any other double
+  /// page when we're curling it", and "cover the reverse turn the same way"): the double page it makes up - as wide
+  /// as the next view's, the page alone with background either side, as tall as either - and where it folds, the
+  /// next view's gutter. Null otherwise (a page alone to a page alone still turns away whole).
+  (Rect, double)? _padded(int v) {
+    if (!_dual || v + 1 >= _views || _spineX(v) != null) return null;
+    final s = _spreads[v];
+    final x = _spineX(v + 1);
+    if (s.pages.length != 1 || s.wide || x == null) return null;
+    final page = _pageRect(v), next = _pageRect(v + 1);
+    return (Rect.fromLTRB(next.left, math.min(page.top, next.top), next.right, math.max(page.bottom, next.bottom)), x);
   }
 
   /// Two pages up, a page turning over at the gutter [x]: what of view [v]'s picture stays put meanwhile - its part on
@@ -673,16 +695,23 @@ class ComicRenderer extends Renderer {
     finishCurlNow();
     final now = _snapshot();
     if (now == null) return false;
+    final padded = _padded(next ? _at : target);
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
-        spine: _spineX(next ? _at : target) != null,
+        spine: _spineX(next ? _at : target) != null || padded != null,
         // two pages up, as a book: forward, the earlier page stays (its picture in the old view) until the later turns
         // over onto it; back, the later page stays until the previous spread's later page lands on it - the earlier
         // side shows that spread at once, under the page lifting away (user, 2026-10-16: going back, the old left page
         // showed under the curl). One page up: back, the old view covers it all until the page has uncurled.
-        under: next ? (_spineX(_at) == null ? null : now) : now,
-        underClip: next
-            ? _heldPage(_at, _spineX(_at), earlier: true)
-            : _heldPage(_at, _spineX(target), earlier: false),
+        under: next ? (_spineX(_at) == null && padded == null ? null : now) : now,
+        // forward from a page alone made up into a double page: its earlier half stays, as a pair's earlier page does;
+        // back onto one, the pair's later page stays until the page alone's later half lands on it
+        underClip: next && padded != null
+            ? (rtl
+                ? Rect.fromLTRB(padded.$2, padded.$1.top, padded.$1.right, padded.$1.bottom)
+                : Rect.fromLTRB(padded.$1.left, padded.$1.top, padded.$2, padded.$1.bottom))
+            : next
+                ? _heldPage(_at, _spineX(_at), earlier: true)
+                : _heldPage(_at, _spineX(target) ?? padded?.$2, earlier: false),
         pending: !next);
     // two pages up, the turning page's back is a page (user, 2026-10-16): back, this spread's earlier page - the old
     // view; forward, the next spread's, snapshot once the view shows it (_snapBack)
