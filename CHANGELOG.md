@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Dual page mode: a spread in one picture turns like two pages** - with the page curl, its right half lifts from
+  the middle of the picture and turns over onto the left half, and turning back onto it brings its right half back,
+  as with a spread made of two pages. (Any page wider than tall counts as a spread.)
+
 **Fixed**
 - **Dual page mode, turning back with the page curl** - the left-hand page you were leaving stayed under the page as
   it lifted away, until the turn ended. Now, as in a book, the previous spread's left-hand page shows under it at
