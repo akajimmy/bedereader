@@ -401,6 +401,54 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
     });
+
+    testWidgets('from a page alone to a pair, the page alone turns as a double page as wide as the pair, background '
+        'either side of it (user, 2026-10-17: "turn the single into a double by including background empty space to '
+        'each side")', (tester) async {
+      await openReal(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      await turn(tester); // [1] then [2], alone, before the pair 3|4
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+      }
+      expect(await position(tester), startsWith('Pg. 2/9'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump();
+      final c = curl(tester)!;
+      // page 2 is 667 wide, 467 to 1133; the pair underneath 133 to 1467, its gutter at 800
+      expect(c.spine, isTrue, reason: 'it turns over at the gutter, as a pair does');
+      expect(c.page.left, closeTo(800, 1), reason: 'its right half, from the gutter');
+      expect(c.page.right, closeTo(1467, 1), reason: "and the background beside it, out to the pair's edge");
+      expect(c.held!.left, closeTo(133, 1), reason: 'its left half held, the background beside it too');
+      expect(c.held!.right, closeTo(800, 1));
+      expect(c.back, isNotNull, reason: "its back: the pair's left-hand page");
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(await position(tester), startsWith('Pg. 3-4/9'));
+
+      // back onto it the same way (user, 2026-10-17: "cover the reverse turn the same way"): its made-up right half
+      // comes back over the pair's right-hand page, which stays until it lands
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.pump();
+      final back = curl(tester)!;
+      expect(back.spine, isTrue);
+      expect(back.page.left, closeTo(800, 1));
+      expect(back.page.right, closeTo(1467, 1));
+      expect(back.held!.left, closeTo(800, 1), reason: "the pair's right-hand page held");
+      expect(back.held!.right, closeTo(1467, 1));
+      expect(back.back, isNotNull, reason: "its back: the pair's left-hand page");
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(await position(tester), startsWith('Pg. 2/9'));
+    });
   });
 
   test('two pages joined: the shorter scaled to the taller one\'s height, side by side, edge to edge', () async {
