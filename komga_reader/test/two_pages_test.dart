@@ -278,9 +278,15 @@ void main() {
       final c = curl(tester)!;
       expect(c.page.left, closeTo(800, 1), reason: 'its spine at the gutter');
       expect(c.page.right, closeTo(1467, 1));
-      expect((c.held!.left, c.held!.top, c.held!.bottom), (0, 0, 1000), reason: 'the left side of the old view held');
+      // only the left-hand page's picture held - round it, the next view at once (user, 2026-10-16: "make sure it works
+      // properly for single images and double-page spreads": a wider page beneath shows past it)
+      expect(c.held!.left, closeTo(133, 1), reason: 'the left-hand page held');
+      expect((c.held!.top, c.held!.bottom), (0, 1000));
       expect(c.held!.right, closeTo(800, 1));
       expect(c.mirror, isFalse);
+      // (user, 2026-10-16: "the following left-hand page should be shown on the back")
+      expect(curl(tester)!.back, isNotNull, reason: 'its back: the next spread, snapshot once in the view');
+      expect(identical(curl(tester)!.back, curl(tester)!.sheet), isFalse, reason: 'not the page turning');
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(curl(tester), isNull);
@@ -301,8 +307,11 @@ void main() {
       expect(back.page.left, closeTo(800, 1), reason: "3|4's right-hand page comes back");
       // only the right side of the old view stays, until the page lands on it: the left shows 3|4's left-hand page
       // at once, under the page lifting away (user, 2026-10-16: the old left page showed under the curl)
-      expect(back.held!.left, closeTo(800, 1), reason: 'the right side held, from the gutter');
-      expect((back.held!.top, back.held!.right, back.held!.bottom), (0, 1600, 1000));
+      expect(back.held!.left, closeTo(800, 1), reason: "the right-hand page's picture held, from the gutter");
+      expect(back.held!.right, closeTo(1467, 1));
+      expect((back.held!.top, back.held!.bottom), (0, 1000));
+      expect(back.back, isNotNull, reason: "its back: 5|6's left-hand page, in the view the turn started from");
+      expect(identical(back.back, back.sheet), isFalse);
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 
@@ -315,7 +324,8 @@ void main() {
       expect(c.mirror, isTrue);
       expect(c.page.left, closeTo(133, 1), reason: 'the left-hand page, the later');
       expect(c.page.right, closeTo(800, 1));
-      expect(c.held!.left, closeTo(800, 1), reason: 'the right side held');
+      expect(c.held!.left, closeTo(800, 1), reason: 'the right-hand page held');
+      expect(c.held!.right, closeTo(1467, 1));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
     });
@@ -358,6 +368,8 @@ void main() {
       expect(c.spine, isTrue);
       expect(c.page.left, closeTo(800, 1), reason: "from the picture's middle");
       expect(c.held!.right, closeTo(800, 1), reason: 'its left half held');
+      await tester.pump();
+      expect(curl(tester)!.back, isNotNull, reason: "its back: 8|9's left-hand page");
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(await position(tester), startsWith('Pg. 8-9/9'));
@@ -371,6 +383,7 @@ void main() {
       final back = curl(tester)!;
       expect(back.spine, isTrue);
       expect(back.page.left, closeTo(800, 1), reason: "the spread's right half comes back");
+      expect(back.back, isNotNull, reason: "its back: 8|9's left-hand page");
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
     });
@@ -383,6 +396,8 @@ void main() {
       expect(c.held, isNull);
       expect(c.spine, isFalse, reason: 'it turns away as a single page does');
       expect(c.page.width, lessThan(800), reason: 'the cover itself, centred');
+      await tester.pump();
+      expect(curl(tester)!.back, isNull, reason: 'it turns away: paper on its back');
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
     });

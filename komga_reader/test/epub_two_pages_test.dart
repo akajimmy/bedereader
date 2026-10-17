@@ -191,6 +191,14 @@ void main() {
     expect((c.page.left, c.page.right), (800, 1600), reason: 'the right-hand page');
     final held = tester.widgetList<ClipRect>(find.byType(ClipRect)).where((w) => w.clipper != null).toList();
     expect(held, isNotEmpty, reason: 'the left side of the view from before the turn, held');
+    // its back: the next spread's left-hand page (user, 2026-10-16: "the following left-hand page should be shown on
+    // the back") - a snapshot of the view once it shows that spread
+    await tester.pump();
+    final turning = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint &&
+        w.painter is PageCurlPainter)).single.painter as PageCurlPainter;
+    expect(turning.back, isNotNull);
+    expect(identical(turning.back, turning.sheet), isFalse, reason: 'not the page turning');
+    expect(turning.gap, 0, reason: 'no gap between the pages');
     await tester.pump(const Duration(milliseconds: 500));
     await settle(tester);
     expect(pages((await spots(tester))!.$1), contains('-'));
@@ -209,6 +217,11 @@ void main() {
     final held = tester.widgetList<ClipRect>(find.byType(ClipRect)).where((w) => w.clipper != null)
         .map((w) => w.clipper!.getClip(const Size(1600, 1000))).toList();
     expect(held, [const Rect.fromLTWH(800, 0, 800, 1000)], reason: 'the right side only');
+    await tester.pump();
+    final turning = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint &&
+        w.painter is PageCurlPainter)).single.painter as PageCurlPainter;
+    expect(turning.back, isNotNull, reason: "its back: the left-hand page of the spread the turn started from");
+    expect(identical(turning.back, turning.sheet), isFalse);
     await tester.pump(const Duration(milliseconds: 500));
     await settle(tester);
   });
@@ -226,6 +239,7 @@ void main() {
     final side = EpubRenderer.sideMargin(AppSettings.instance.epub, 800), gap = 24.0;
     final right = Rect.fromLTWH(800 + gap / 2, 16, 800 - 2 * side + 120, 968);
     expect(c.page, right, reason: 'the right-hand sheet');
+    expect(c.gap, gap, reason: 'its back lands past the gap, over the left sheet');
     // near the end of the turn its edge is its width and the gap past where it was hinged: over the left sheet
     await tester.pump(const Duration(milliseconds: 370));
     final end = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))

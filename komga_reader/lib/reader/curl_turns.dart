@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -99,9 +100,14 @@ class CurlTurns {
     final keep = held?.call(next);
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: current(),
         under: next ? (keep == null ? null : now) : now, underClip: keep, pending: !next, spine: _spine);
+    // two pages up, the turning page's back is a page (user, 2026-10-16: "the following left-hand page should be
+    // shown on the back"): back, this spread's earlier page - the view now; forward, the next spread's, snapshot once
+    // the view shows it
+    if (c.spine && !next) c.back = now;
     _curl = c;
     jump(target);
     _moved.value++;
+    if (c.spine && next) _snapBack(c);
     if (!next) {
       // the previous page is now in the view (under the cover): snapshot it to uncurl
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -118,6 +124,23 @@ class CurlTurns {
       });
     }
     return true;
+  }
+
+  /// Two pages up, forward: the next spread is in the view now (under the cover) - snapshot it for the turning page's
+  /// back, and again a moment later in case it was still being drawn.
+  void _snapBack(_Curl c) {
+    void take() {
+      if (_curl != c) return;
+      final b = _snapshot();
+      if (b == null) return;
+      final old = c.back;
+      c.back = b;
+      _moved.value++;
+      if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => take());
+    c.backTimer = Timer(const Duration(milliseconds: 250), take);
   }
 
   void _animate({required bool complete}) {
@@ -230,7 +253,8 @@ class CurlTurns {
                     : ClipRect(clipper: _RectClip(c.underClip!), child: RawImage(image: c.under, fit: BoxFit.fill)),
               if (!c.pending)
                 CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
-                    grab: c.grab, finger: c.finger, mirror: false, spine: c.spine,
+                    grab: c.grab, finger: c.finger, mirror: false, spine: c.spine, back: c.back,
+                    gap: c.spine ? gap?.call() ?? 0 : 0,
                     paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
@@ -271,11 +295,15 @@ class _Curl {
   Offset finger; // where that point is now
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
+  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
+  Timer? backTimer; // its second snapshot
   bool completing = true;
   Offset animFrom = Offset.zero, animTo = Offset.zero;
 
   void dispose() {
+    backTimer?.cancel();
     sheet.dispose();
     if (under != null && !identical(under, sheet)) under!.dispose();
+    if (back != null && !identical(back, sheet) && !identical(back, under)) back!.dispose();
   }
 }
