@@ -903,24 +903,30 @@ class ComicRenderer extends Renderer {
               onTapUp: (d) => _onTapUp(d, box.maxWidth),
               child: RepaintBoundary(
                 key: _pagesKey,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _onPagesScroll,
-                  child: PageView.builder(
-                    // a fresh page view for each book: kept, it hands the new controller the last book's place
-                    // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
-                    key: ValueKey((_book['id'], _viewGen)),
-                    controller: pc,
-                    // keep the neighbours built, so they're processed before they're turned to (in every mode: a
-                    // wipe used to build - and process - the next page while it slid in)
-                    allowImplicitScrolling: true,
-                    reverse: rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
-                    // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
-                    physics: zoomed || _fingers > 1 || _sideways.contains(_at) || _curlMode
-                        ? const NeverScrollableScrollPhysics()
-                        : null,
-                    itemCount: _views + 1,
-                    onPageChanged: _onPage,
-                    itemBuilder: (context, v) => v == _views ? host.endCard() : _view(context, v),
+                // the background inside the snapshots: transparent there, the bars round a page let the new view
+                // show through what a turn holds of the old one (user, 2026-10-17: the spread beside the cover "just
+                // pops into existence as soon as the curl starts")
+                child: ColoredBox(
+                  color: background,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: _onPagesScroll,
+                    child: PageView.builder(
+                      // a fresh page view for each book: kept, it hands the new controller the last book's place
+                      // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
+                      key: ValueKey((_book['id'], _viewGen)),
+                      controller: pc,
+                      // keep the neighbours built, so they're processed before they're turned to (in every mode: a
+                      // wipe used to build - and process - the next page while it slid in)
+                      allowImplicitScrolling: true,
+                      reverse: rtl, // right to left: page 1 on the right, swipe left-to-right goes forward
+                      // zoomed, pinching, or a sideways page: a drag moves the page, not to the next one
+                      physics: zoomed || _fingers > 1 || _sideways.contains(_at) || _curlMode
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
+                      itemCount: _views + 1,
+                      onPageChanged: _onPage,
+                      itemBuilder: (context, v) => v == _views ? host.endCard() : _view(context, v),
+                    ),
                   ),
                 ),
               ),
