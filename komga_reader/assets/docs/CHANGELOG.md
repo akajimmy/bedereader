@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+- **Dual page mode, turning back with the page curl** - the left-hand page you were leaving stayed under the page as
+  it lifted away, until the turn ended. Now, as in a book, the previous spread's left-hand page shows under it at
+  once; only the right-hand side keeps the old page until the turning one lands on it. Comics and eBooks.
+
 ## 1.3.0
 
 ### Build 121 - 2026-10-16
