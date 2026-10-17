@@ -78,7 +78,8 @@ class PageCurl {
 class PageCurlPainter extends CustomPainter {
   /// [shader]: one kept by the caller and used for every paint (else one is made, and freed, per paint).
   PageCurlPainter({required this.program, required this.sheet, required this.page, required this.grab,
-      required this.finger, required this.mirror, this.shader, this.paper = whitePaper, this.spine = false});
+      required this.finger, required this.mirror, this.shader, this.paper = whitePaper, this.spine = false, this.back,
+      this.gap = 0});
   final ui.FragmentProgram program;
   final ui.FragmentShader? shader;
   final ui.Image sheet;
@@ -93,6 +94,13 @@ class PageCurlPainter extends CustomPainter {
   /// on the dark page looked wrong).
   final Color paper;
   static const whitePaper = Color(0xFFF7F5F0);
+
+  /// Two pages up: the page on the back of this one (user, 2026-10-16: "the following left-hand page should be shown
+  /// on the back"), as a snapshot of the whole area where it lies once this one has turned over onto it; null: paper.
+  final ui.Image? back;
+
+  /// Two pages up as two sheets: the gap between them, which the page turns over (it lands past it).
+  final double gap;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -109,10 +117,11 @@ class PageCurlPainter extends CustomPainter {
     var i = 0;
     final s = shader ?? program.fragmentShader();
     for (final v in [size.width, size.height, page.left, page.top, page.width, page.height, point.dx, point.dy,
-        normal.dx, normal.dy, r, mirror ? 1.0 : 0.0, paper.r, paper.g, paper.b]) {
+        normal.dx, normal.dy, r, mirror ? 1.0 : 0.0, paper.r, paper.g, paper.b, back != null ? 1.0 : 0.0, gap]) {
       s.setFloat(i++, v);
     }
     s.setImageSampler(0, sheet, filterQuality: FilterQuality.medium);
+    s.setImageSampler(1, back ?? sheet, filterQuality: FilterQuality.medium);
     canvas.drawRect(Offset.zero & size, Paint()..shader = s);
     if (shader == null) s.dispose();
   }
@@ -120,5 +129,5 @@ class PageCurlPainter extends CustomPainter {
   @override
   bool shouldRepaint(PageCurlPainter o) =>
       o.sheet != sheet || o.page != page || o.grab != grab || o.finger != finger || o.mirror != mirror ||
-      o.paper != paper || o.spine != spine;
+      o.paper != paper || o.spine != spine || o.back != back || o.gap != gap;
 }

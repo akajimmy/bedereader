@@ -51,4 +51,54 @@ void main() {
     expect(dark, lessThan(white - 20), reason: 'the turned-over part drawn dark on a dark page: $dark vs $white');
     sheet.dispose();
   });
+
+  test('two pages up, the back of the turning page is the page given (user, 2026-10-16: "the following left-hand '
+      'page should be shown on the back"): each point of it shows what lies where it lands, so the landed page is '
+      'exactly the page under it - left to right, right to left, and over the gap between two sheets', () async {
+    const size = Size(440, 300), red = Color(0xFFFF0000), yellow = Color(0xFFFFFF00), blue = Color(0xFF0000FF);
+    final program = (await PageCurl.program())!;
+    final sheet = await solidImage(440, 300, const Color(0xFF00FF00));
+    // the page on the back, where it lies: two stripes, [a, a + 100) red and [a + 100, a + 200) yellow, blue elsewhere
+    Future<ui.Image> backAt(double a) {
+      final rec = ui.PictureRecorder(), c = Canvas(rec);
+      c.drawRect(Offset.zero & size, Paint()..color = blue);
+      c.drawRect(Rect.fromLTWH(a, 0, 100, 300), Paint()..color = red);
+      c.drawRect(Rect.fromLTWH(a + 100, 0, 100, 300), Paint()..color = yellow);
+      return rec.endRecording().toImage(440, 300);
+    }
+
+    Future<Color> at(PageCurlPainter p, double x) async {
+      final rec = ui.PictureRecorder();
+      p.paint(Canvas(rec), size);
+      final img = await rec.endRecording().toImage(440, 300);
+      final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+      img.dispose();
+      final i = (150 * 440 + x.round()) * 4;
+      return Color.fromARGB(255, px[i], px[i + 1], px[i + 2]);
+    }
+
+    Future<void> check({required Rect page, required bool mirror, required double gap, required double a}) async {
+      final back = await backAt(a);
+      final landed = PageCurlPainter(program: program, sheet: sheet, page: page, grab: const Offset(200, 150),
+          finger: Offset(-200 - gap, 150), mirror: mirror, spine: true, back: back, gap: gap);
+      // turned over flat: the back page as it lies (the light on the curl's back aside: red stays reddest, and so on)
+      // (10 px either side of the stripes' edge: off by the gap, 20, and it's the other colour)
+      for (final (x, want) in [(a + 90, red), (a + 110, yellow), (a + 150, yellow)]) {
+        final c = await at(landed, x);
+        expect(c.r > 0.5 && c.b < 0.3 && (c.g > 0.5) == (want == yellow), isTrue,
+            reason: '$page${mirror ? ' mirrored' : ''}, gap $gap: at $x $c, wanted $want');
+      }
+      // half way: the part over the other page shows the back page too (red or yellow), not paper or the front
+      final half = PageCurlPainter(program: program, sheet: sheet, page: page, grab: const Offset(200, 150),
+          finger: Offset(-100 - gap, 150), mirror: mirror, spine: true, back: back, gap: gap);
+      final c = await at(half, mirror ? page.right + 50 : page.left - 50);
+      expect(c.r > 0.5 && c.b < 0.3, isTrue, reason: 'half way: $c');
+      back.dispose();
+    }
+
+    await check(page: const Rect.fromLTWH(200, 0, 200, 300), mirror: false, gap: 0, a: 0);
+    await check(page: const Rect.fromLTWH(0, 0, 200, 300), mirror: true, gap: 0, a: 200);
+    await check(page: const Rect.fromLTWH(220, 0, 200, 300), mirror: false, gap: 20, a: 0);
+    sheet.dispose();
+  });
 }

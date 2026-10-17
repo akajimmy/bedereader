@@ -625,18 +625,19 @@ class ComicRenderer extends Renderer {
     return page.left + share * page.width;
   }
 
-  /// A pair's earlier page and all the screen on its side: it stays put while the later page turns over onto it.
-  Rect? _earlierSide(int v) {
-    final x = _spineX(v);
+  /// Two pages up, a page turning over at the gutter [x]: what of view [v]'s picture stays put meanwhile - its part on
+  /// the [earlier] side of [x] (forward: the earlier page, until the later lands on it), or on the later side (back:
+  /// until the previous spread's later page lands on it). Only the picture: round it the new view shows at once - a
+  /// spread or a page alone that's wider than the old page shows past it, as a book's next page does (user,
+  /// 2026-10-16: "make sure it works properly for single images and double-page spreads") - rather than appearing as
+  /// the page lands. Null: no gutter [x] (one page turning whole).
+  Rect? _heldPage(int v, double? x, {required bool earlier}) {
     if (x == null) return null;
-    return rtl ? Rect.fromLTRB(x, 0, _area.width, _area.height) : Rect.fromLTRB(0, 0, x, _area.height);
-  }
-
-  /// A pair's later page and all the screen on its side (the earlier's other side).
-  Rect? _laterSide(int v) {
-    final x = _spineX(v);
-    if (x == null) return null;
-    return rtl ? Rect.fromLTRB(0, 0, x, _area.height) : Rect.fromLTRB(x, 0, _area.width, _area.height);
+    final p = _pageRect(v);
+    final r = earlier != rtl
+        ? Rect.fromLTRB(p.left, p.top, math.min(x, p.right), p.bottom)
+        : Rect.fromLTRB(math.max(x, p.left), p.top, p.right, p.bottom);
+    return r.width > 0 ? r : Rect.zero;
   }
 
   /// The gutter of each joined pair, as a share of the joined picture's width from its left (from [_joinedAt]).
@@ -674,16 +675,22 @@ class ComicRenderer extends Renderer {
     if (now == null) return false;
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
         spine: _spineX(next ? _at : target) != null,
-        // two pages up, as a book: forward, the earlier page stays (its side of the old view) until the later turns
-        // over onto it; back, the later side stays until the previous spread's later page lands on it - the earlier
+        // two pages up, as a book: forward, the earlier page stays (its picture in the old view) until the later turns
+        // over onto it; back, the later page stays until the previous spread's later page lands on it - the earlier
         // side shows that spread at once, under the page lifting away (user, 2026-10-16: going back, the old left page
         // showed under the curl). One page up: back, the old view covers it all until the page has uncurled.
-        under: next ? (_earlierSide(_at) == null ? null : now) : now,
-        underClip: next ? _earlierSide(_at) : _laterSide(target),
+        under: next ? (_spineX(_at) == null ? null : now) : now,
+        underClip: next
+            ? _heldPage(_at, _spineX(_at), earlier: true)
+            : _heldPage(_at, _spineX(target), earlier: false),
         pending: !next);
+    // two pages up, the turning page's back is a page (user, 2026-10-16): back, this spread's earlier page - the old
+    // view; forward, the next spread's, snapshot once the view shows it (_snapBack)
+    if (c.spine && !next) c.back = now;
     _curl = c;
     pc!.jumpToPage(target);
     _changed();
+    if (c.spine && next) _snapBack(c);
     if (!next) {
       // the previous page is now in the view (under the cover): snapshot it to uncurl
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -700,6 +707,23 @@ class ComicRenderer extends Renderer {
       });
     }
     return true;
+  }
+
+  /// Two pages up, forward: the next spread is in the view now (under the cover) - snapshot it for the turning page's
+  /// back, and again a moment later in case its pictures were still coming in.
+  void _snapBack(_Curl c) {
+    void take() {
+      if (_curl != c) return;
+      final b = _snapshot();
+      if (b == null) return;
+      final old = c.back;
+      c.back = b;
+      _changed();
+      if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => take());
+    c.backTimer = Timer(const Duration(milliseconds: 250), take);
   }
 
   void _animateCurl({required bool complete}) {
@@ -1455,9 +1479,14 @@ abstract interface class CurlLayer {
   /// The page curling (two pages up: a pair's later page).
   Rect get page;
 
-  /// What of the view from before the turn stays over it meanwhile (two pages up, forward: the earlier page's side);
-  /// null: none, or all of it.
+  /// What of the view from before the turn stays over it meanwhile (two pages up, forward: the earlier page's
+  /// picture); null: none, or all of it.
   Rect? get held;
+
+  /// The page on the curling one's back (two pages up: a snapshot of the view holding it), and the curling page's own
+  /// snapshot; [back] null: paper.
+  ui.Image? get back;
+  ui.Image get sheet;
 
   /// Where the grabbed edge is now (page coordinates, reading direction).
   Offset get finger;
@@ -1481,10 +1510,15 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
   Offset get finger => curl.finger;
   @override
   bool get spine => curl.spine;
+  @override
+  ui.Image? get back => curl.back;
+  @override
+  ui.Image get sheet => curl.sheet;
 
   @override
   void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
-          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader, spine: curl.spine)
+          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader, spine: curl.spine,
+          back: curl.back)
       .paint(canvas, size);
 
   @override
@@ -1505,12 +1539,16 @@ class _Curl {
   Offset finger; // where that point is now
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
+  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
+  Timer? backTimer; // its second snapshot
   bool completing = true;
   Offset animFrom = Offset.zero, animTo = Offset.zero;
 
   void dispose() {
+    backTimer?.cancel();
     sheet.dispose();
     if (under != null && !identical(under, sheet)) under!.dispose();
+    if (back != null && !identical(back, sheet) && !identical(back, under)) back!.dispose();
   }
 }
 

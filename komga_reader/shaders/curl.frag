@@ -15,7 +15,10 @@ uniform vec2 uNormal;  // unit normal of the fold line, pointing to the side tha
 uniform float uRadius; // cylinder radius
 uniform float uMirror; // 1 = right-to-left book: page coordinates run from the page's right edge
 uniform vec3 uPaper;   // the back of the page's colour: white paper for comics, the page's own for eBooks
+uniform float uBackOn; // 1 = the back of the page is a page of its own (two pages up), taken from uBack
+uniform float uGap;    // two pages up: the gap between the pages - the page lands at x = -uGap - x (page coordinates)
 uniform sampler2D uSheet;
+uniform sampler2D uBack; // a snapshot of the whole area holding the page on the back, where it lies once turned
 
 out vec4 fragColor;
 
@@ -28,7 +31,17 @@ vec3 sheet(vec2 q) {  // q in page coordinates
   return texture(uSheet, (q + uRect.xy) / uSize).rgb;
 }
 
-vec3 backOf(vec2 q) { return mix(sheet(q), uPaper, 0.82); }  // paper, the print showing through
+// The back of the sheet at q: paper with the print showing through - or, two pages up, the page that's on the back
+// (user, 2026-10-16: the following left page, so it doesn't switch when the page lands): what lies, once the page has
+// turned over, where q lands - so the landed page is exactly what's under it then.
+vec3 backOf(vec2 q) {
+  if (uBackOn > 0.5) {
+    float x = -uGap - q.x;
+    if (uMirror > 0.5) x = uRect.z - x;
+    return texture(uBack, (vec2(x, q.y) + uRect.xy) / uSize).rgb;
+  }
+  return mix(sheet(q), uPaper, 0.82);
+}
 
 void main() {
   vec2 p = FlutterFragCoord().xy - uRect.xy;  // page coordinates
