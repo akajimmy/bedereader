@@ -628,6 +628,13 @@ class ComicRenderer extends Renderer {
     return rtl ? Rect.fromLTRB(x, 0, _area.width, _area.height) : Rect.fromLTRB(0, 0, x, _area.height);
   }
 
+  /// A pair's later page and all the screen on its side (the earlier's other side).
+  Rect? _laterSide(int v) {
+    final x = _spineX(v);
+    if (x == null) return null;
+    return rtl ? Rect.fromLTRB(0, 0, x, _area.height) : Rect.fromLTRB(x, 0, _area.width, _area.height);
+  }
+
   /// The gutter of each joined pair, as a share of the joined picture's width from its left (from [_joinedAt]).
   final Map<int, double> _spineAt = {};
 
@@ -663,9 +670,12 @@ class ComicRenderer extends Renderer {
     if (now == null) return false;
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
         spine: _spineX(next ? _at : target) != null,
-        // two pages up, forward: the earlier page stays (its side of the old view), the later turns over onto it;
-        // back: the old view covers it all until the previous page has uncurled
-        under: next ? (_earlierSide(_at) == null ? null : now) : now, underClip: next ? _earlierSide(_at) : null,
+        // two pages up, as a book: forward, the earlier page stays (its side of the old view) until the later turns
+        // over onto it; back, the later side stays until the previous spread's later page lands on it - the earlier
+        // side shows that spread at once, under the page lifting away (user, 2026-10-16: going back, the old left page
+        // showed under the curl). One page up: back, the old view covers it all until the page has uncurled.
+        under: next ? (_earlierSide(_at) == null ? null : now) : now,
+        underClip: next ? _earlierSide(_at) : _laterSide(target),
         pending: !next);
     _curl = c;
     pc!.jumpToPage(target);

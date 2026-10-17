@@ -202,6 +202,23 @@ void main() {
     expect(pages((await spots(tester))!.$1), contains('-'));
   });
 
+  testWidgets('the curl back, two pages up: the left side shows the previous spread at once, under the page lifting '
+      'away; only the right side holds the old view until the page lands on it (user, 2026-10-16)', (tester) async {
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
+    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    await open(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump(const Duration(milliseconds: 500));
+    await settle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pump();
+    final held = tester.widgetList<ClipRect>(find.byType(ClipRect)).where((w) => w.clipper != null)
+        .map((w) => w.clipper!.getClip(const Size(1600, 1000))).toList();
+    expect(held, [const Rect.fromLTWH(800, 0, 800, 1000)], reason: 'the right side only');
+    await tester.pump(const Duration(milliseconds: 500));
+    await settle(tester);
+  });
+
   testWidgets('the curl with Inset page (user, 2026-10-16: "how are you handling page curl + inset page"): the '
       'right-hand sheet turns, about the middle of the gap, and lands over the left one, the same size', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));

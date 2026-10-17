@@ -38,9 +38,10 @@ class CurlTurns {
   /// and lands flat over it ([PageCurl.spineRadius]) - it doesn't go off past it.
   final bool Function()? spine;
 
-  /// Two pages side by side, turning forward: the part of the view from before the turn that stays (the other page)
-  /// until the turning one lands on it.
-  final Rect? Function()? held;
+  /// Two pages side by side: the part of the view from before the turn that stays until the turning page lands on it -
+  /// forward, the other page; back ([forward] false), the page the previous spread's comes back over (the other side
+  /// shows that spread at once, under the page lifting away - user, 2026-10-16).
+  final Rect? Function(bool forward)? held;
 
   /// Two pages side by side as two sheets (Inset page): the gap between them - the page turns about its middle, so
   /// it lands over the other sheet (user, 2026-10-16: "two discrete pages, with a gap between").
@@ -95,7 +96,7 @@ class CurlTurns {
     finishNow();
     final now = _snapshot();
     if (now == null) return false;
-    final keep = next ? held?.call() : null;
+    final keep = held?.call(next);
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: current(),
         under: next ? (keep == null ? null : now) : now, underClip: keep, pending: !next, spine: _spine);
     _curl = c;
