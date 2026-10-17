@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 125 - 2026-10-17
+
 **Changed**
 
 - **Dual page mode, comics: turning between a page alone and a spread** - a page alone (the cover) next to a pair or
   a double-page spread now turns as a double page as wide as that spread: the page with background either side of
   it, folding at the spread's gutter like any other spread, the next page on its back. Turning back onto it works
   the same way. The wider spread no longer appears round the page before the turn is over.
-
-## 1.4.0
 
 ### Build 124 - 2026-10-16
 
