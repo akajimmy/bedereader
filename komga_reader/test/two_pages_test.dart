@@ -425,6 +425,13 @@ void main() {
       expect(c.held!.left, closeTo(133, 1), reason: 'its left half held, the background beside it too');
       expect(c.held!.right, closeTo(800, 1));
       expect(c.back, isNotNull, reason: "its back: the pair's left-hand page");
+      // the background beside page 2 is in the snapshot of the old view, solid: what's held of it hides the new
+      // spread until the page lands (user, 2026-10-17: transparent, the spread beside the cover "just pops into
+      // existence as soon as the curl starts")
+      final sheet = c.sheet, scale = sheet.width / 1600;
+      final px = (await tester.runAsync(() => sheet.toByteData(format: ui.ImageByteFormat.rawRgba)))!;
+      final at = ((500 * scale).round() * sheet.width + (200 * scale).round()) * 4;
+      expect(px.getUint8(at + 3), 255, reason: 'the bar left of page 2, held: opaque');
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(await position(tester), startsWith('Pg. 3-4/9'));
