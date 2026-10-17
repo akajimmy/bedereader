@@ -339,6 +339,42 @@ void main() {
       expect(await position(tester), startsWith('Pg. 5-6/9'));
     });
 
+    testWidgets('a spread in one picture turns as a pair does (user, 2026-10-16): its right half over its middle, the '
+        'left half held; back onto it, its right half comes back', (tester) async {
+      await openReal(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      for (var i = 0; i < 4; i++) {
+        await turn(tester); // [1] [2] [3|4] [5|6] then the spread, page 7
+      }
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+      }
+      expect(await position(tester), startsWith('Pg. 7/9'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.spine, isTrue);
+      expect(c.page.left, closeTo(800, 1), reason: "from the picture's middle");
+      expect(c.held!.right, closeTo(800, 1), reason: 'its left half held');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(await position(tester), startsWith('Pg. 8-9/9'));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.pump();
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.pump();
+      final back = curl(tester)!;
+      expect(back.spine, isTrue);
+      expect(back.page.left, closeTo(800, 1), reason: "the spread's right half comes back");
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    });
+
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
       await openReal(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);

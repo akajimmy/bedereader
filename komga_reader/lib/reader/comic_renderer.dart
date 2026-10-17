@@ -613,9 +613,13 @@ class ComicRenderer extends Renderer {
         : Rect.fromLTRB(x, page.top, page.right, page.bottom);
   }
 
-  /// Where the gutter is on screen at item [v] - a pair's (two pages up, joined); null otherwise.
+  /// Where the gutter is on screen at item [v] - a pair's (two pages up, joined), or a spread picture's middle; null
+  /// otherwise.
   double? _spineX(int v) {
-    final share = _dual && v < _views && !_spreads[v].wide && _spreads[v].pages.length == 2 ? _spineAt[v] : null;
+    // a spread in one picture (wider than tall): its middle, as two pages' gutter - it turns as a pair does (user,
+    // 2026-10-16: "curl the same way it does when it's two separate images")
+    final s = !_dual || v >= _views ? null : _spreads[v];
+    final share = s == null ? null : s.wide ? 0.5 : s.pages.length == 2 ? _spineAt[v] : null;
     if (share == null) return null;
     final page = _pageRect(v);
     return page.left + share * page.width;
