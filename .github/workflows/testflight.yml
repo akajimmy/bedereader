@@ -1,0 +1,98 @@
+# Builds BeDeReader for iPhone / iPad, signs it and uploads it to App Store Connect, where it shows up in TestFlight
+# (user, 2026-10-12: TestFlight rather than sideloading - no cable, builds that last 90 days).
+# Signing (2026-10-16): an App Store distribution certificate and profile, made and found through the App Store Connect
+# API key with codemagic-cli-tools - no device needed (Xcode's own automatic signing archived with a development
+# profile first, which wants a registered device: "Your team has no devices"). The certificate is made once from the
+# private key in CERTIFICATE_PRIVATE_KEY and found again on later runs; it lives in a keychain of this run only.
+# Runs on every push to the ios branch (a run started by hand needs the workflow on the default branch, main). Until
+# these repository secrets are set (Settings > Secrets and variables > Actions - added by the user) it does nothing
+# and says so:
+#   ASC_KEY_ID               the API key's Key ID
+#   ASC_ISSUER_ID            the Issuer ID shown above the keys list
+#   ASC_KEY_P8               the whole text of the AuthKey_XXXX.p8 file
+#   APPLE_TEAM_ID            the team ID (Membership details on developer.apple.com)
+#   CERTIFICATE_PRIVATE_KEY  an RSA private key (PEM) for the distribution certificate - made once by the user
+name: TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ios]
+
+jobs:
+  testflight:
+    runs-on: macos-26 # Xcode 26: Apple takes only apps built with the iOS 26 SDK or later (upload refused, 2026-10-16)
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: komga_reader
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.ASC_KEY_ID }}
+    steps:
+      - name: The secrets are there
+        id: ready
+        working-directory: .
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+        run: |
+          for s in ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID ASC_KEY_P8 CERTIFICATE_PRIVATE_KEY; do
+            if [ -z "${!s}" ]; then
+              echo "::notice::No TestFlight build: the repository secret $s isn't set yet"
+              echo "go=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v7
+        if: steps.ready.outputs.go == 'true'
+
+      - uses: subosito/flutter-action@v2
+        if: steps.ready.outputs.go == 'true'
+        with:
+          flutter-version: 3.47.5 # the same as the Windows / Android builds
+          channel: stable
+          cache: true
+
+      - name: Dependencies
+        if: steps.ready.outputs.go == 'true'
+        run: flutter pub get
+
+      - name: Signing tools (codemagic-cli-tools)
+        if: steps.ready.outputs.go == 'true'
+        run: pipx install codemagic-cli-tools
+
+      # the App Store certificate and profile into a keychain of this run, and the Xcode project set to sign with them
+      # (it also writes the export options the .ipa is made with: ~/export_options.plist)
+      - name: Signing files (through the API key)
+        if: steps.ready.outputs.go == 'true'
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+          CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
+        run: |
+          keychain initialize
+          app-store-connect fetch-signing-files com.nickp.bedereader --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles --project ios/Runner.xcodeproj
+
+      # Build numbers: this workflow's run number + 1000, above anything the unsigned iOS build used.
+      - name: Build and sign (.ipa)
+        if: steps.ready.outputs.go == 'true'
+        run: |
+          flutter build ipa --release --build-number=$((1000 + ${{ github.run_number }})) \
+            --export-options-plist="$HOME/export_options.plist"
+
+      - name: Upload to App Store Connect
+        if: steps.ready.outputs.go == 'true'
+        env:
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.ASC_KEY_P8 }}
+        run: app-store-connect publish --path "$(find build/ios/ipa -name '*.ipa' | head -1)"
+
+      - name: The run's keychain gone
+        if: always() && steps.ready.outputs.go == 'true'
+        run: keychain use-login || true
