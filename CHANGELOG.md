@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+- **iPhone and iPad** - BeDeReader runs on iOS, in testing through TestFlight (not on the App Store). Everything the
+  Android app does, with iOS's own screen brightness and keep-awake. On first connecting, allow BeDeReader on the
+  local network when iOS asks (Settings > Privacy & Security > Local Network), or it can't reach Komga at home.
+
 **Changed**
 - **Inset page's spacing settled** - the sheet sits 60 px out from the text at the sides and 24 px above and below,
   and two pages up the sheets are 24 px apart. The three temporary sliders in the eBook panel are gone.
