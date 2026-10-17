@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 124 - 2026-10-16
+
 **Changed**
 
 - **Dual page mode, the page curl: the next page is on the back of the turning one** - as you lift the right-hand
