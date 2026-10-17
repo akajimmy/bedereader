@@ -147,7 +147,7 @@ void main() {
   }
 
   testWidgets('Inset page with two pages up: two pages apart (user, 2026-10-16: "two discrete pages, with a gap '
-      'between"), a fixed distance (32, then set to 100), each sheet 20 out round its own text', (tester) async {
+      'between"), 24 apart, each sheet 60 out from its own text at the sides and 24 above and below', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     for (final width in [1600.0, 2400.0]) {
       await open(tester, size: Size(width, 1000));
@@ -155,18 +155,12 @@ void main() {
       final sheets = sheetsOnScreen(tester, width);
       expect(sheets.length, 2, reason: '$width: $sheets');
       final side = EpubRenderer.sideMargin(AppSettings.instance.epub, width / 2), text = width / 2 - 2 * side;
-      expect(sheets[0].width, closeTo(text + 40, 0.5), reason: '$width: 20 out round the text');
-      expect((sheets[0].top, sheets[0].bottom), (20, 980));
+      expect(sheets[0].width, closeTo(text + 120, 0.5), reason: '$width: 60 out at the sides');
+      expect((sheets[0].top, sheets[0].bottom), (16, 984), reason: '$width: 24 above and below');
       expect(sheets[1].size, sheets[0].size);
-      expect(sheets[0].right, closeTo(width / 2 - 16, 0.5), reason: '$width: 32 apart, about the middle');
-      expect(sheets[1].left, closeTo(width / 2 + 16, 0.5));
+      expect(sheets[0].right, closeTo(width / 2 - 12, 0.5), reason: '$width: 24 apart, about the middle');
+      expect(sheets[1].left, closeTo(width / 2 + 12, 0.5));
     }
-    // dialled in (the panel's slider, for now)
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetBetween: 100));
-    await settle(tester);
-    final apart = sheetsOnScreen(tester, 2400);
-    expect(apart[1].left - apart[0].right, closeTo(100, 0.5));
-    expect(apart[0].right, closeTo(1150, 0.5));
   });
 
   testWidgets("one page or two, the same page size (1600 wide two up, then an 800-wide window: one): the same place, "
@@ -229,8 +223,8 @@ void main() {
     final c = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
         .single.painter as PageCurlPainter;
     expect(c.spine, isTrue);
-    final side = EpubRenderer.sideMargin(AppSettings.instance.epub, 800), gap = 32.0;
-    final right = Rect.fromLTWH(800 + gap / 2, 20, 800 - 2 * side + 40, 960);
+    final side = EpubRenderer.sideMargin(AppSettings.instance.epub, 800), gap = 24.0;
+    final right = Rect.fromLTWH(800 + gap / 2, 16, 800 - 2 * side + 120, 968);
     expect(c.page, right, reason: 'the right-hand sheet');
     // near the end of the turn its edge is its width and the gap past where it was hinged: over the left sheet
     await tester.pump(const Duration(milliseconds: 370));

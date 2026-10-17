@@ -77,23 +77,25 @@ class EpubRenderer extends Renderer {
       : math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
 
   /// Inset page ([InsetPage]): the page drawn as a sheet on a surround ([surround]). Its edges follow the text, not
-  /// the screen (user, 2026-10-16): [textGap] out from [textArea] all round - left of where every line starts, above
-  /// the first line, right of where lines end, below the last - wherever the margins put the text on the [page] (the
-  /// screen, or half of it two pages up): a style that ignores the margins. Never: none; Wide screen: on a screen
-  /// wider than tall ([area]); Always: always. Kept on the page: a margin under [textGap] leaves that edge at the
-  /// page's. Null: no sheet.
-  /// [gap]: how far out at the sides, [ends] above and below (DisplayPrefs.insetGap / insetGapEnds - for now the
-  /// panel's sliders, to dial them in); [ends] unset: [gap].
-  static Rect? sheetRect(Rect? textArea, Size page, InsetPage inset, Size area, {double gap = textGap, double? ends}) {
+  /// the screen (user, 2026-10-16): [textGapSides] out from [textArea] left and right - left of where every line
+  /// starts, right of where lines end - and [textGapEnds] above the first line and below the last, wherever the margins
+  /// put the text on the [page] (the screen, or half of it two pages up): a style that ignores the margins. Never:
+  /// none; Wide screen: on a screen wider than tall ([area]); Always: always. Kept on the page: a margin under the gap
+  /// leaves that edge at the page's. Null: no sheet.
+  static Rect? sheetRect(Rect? textArea, Size page, InsetPage inset, Size area) {
     if (textArea == null || inset == InsetPage.never) return null;
     if (inset == InsetPage.wideScreen && area.width <= area.height) return null;
-    final v = ends ?? gap;
-    return Rect.fromLTRB(textArea.left - gap, textArea.top - v, textArea.right + gap, textArea.bottom + v)
+    return Rect.fromLTRB(textArea.left - textGapSides, textArea.top - textGapEnds, textArea.right + textGapSides,
+            textArea.bottom + textGapEnds)
         .intersect(Offset.zero & page);
   }
 
-  /// How far the sheet's edges sit out from the text by default (user, 2026-10-16: 20 px; "too close" - being dialled in).
-  static const textGap = 20.0;
+  /// How far the sheet's edges sit out from the text: at the sides, and above and below - dialled in on the tablet with
+  /// sliders and baked in for 1.3 (user, 2026-10-16: "use the settings that are on screen right now": 60 and 24).
+  static const textGapSides = 60.0, textGapEnds = 24.0;
+
+  /// Two pages up with Inset page: how far apart the two sheets are (likewise: 24).
+  static const pagesApart = 24.0;
 
   /// The colour round the sheet: the page's own, a shade darker (a white page on light grey); the dark grey page on
   /// black (user, 2026-10-16: "full black"); black, a shade lighter (user, 2026-10-11: derived, no setting).
@@ -612,7 +614,7 @@ class EpubRenderer extends Renderer {
             ? Rect.fromLTWH(0, 0, _size.width, _area.height)
             : Rect.fromLTWH(_size.width, 0, _size.width, _area.height),
     // (the sheets round the text: apart by the margins between the texts, less the gap round each)
-    gap: () => _dual && _sheet != null ? AppSettings.instance.display.insetBetween : 0,
+    gap: () => _dual && _sheet != null ? pagesApart : 0,
     done: ({required turned}) {
       if (turned && _pc.hasClients) host.turned(_placeOf((_pc.page ?? 0).round()));
     },
@@ -1543,7 +1545,7 @@ class EpubRenderer extends Renderer {
     final m = b.theme.margins;
     final text = page?.textArea ?? Rect.fromLTRB(m.left, m.top, b.size.width - m.right, b.size.height - m.bottom);
     final d = AppSettings.instance.display;
-    return sheetRect(text, b.size, _laidInset ?? d.insetPage, _area, gap: d.insetGap, ends: d.insetGapEnds);
+    return sheetRect(text, b.size, _laidInset ?? d.insetPage, _area);
   }
   InsetPage? _laidInset;
 
@@ -1627,12 +1629,12 @@ class EpubRenderer extends Renderer {
       (_sheet ?? Offset.zero & _size).shift(Offset((later ? _size.width : 0) + _sideShift(later: later), 0));
 
   /// Two pages up with Inset page: how far side [later] (else the earlier, left) slides, sheet and text together, so
-  /// the two sheets are [DisplayPrefs.insetBetween] apart (user, 2026-10-16: "a fixed distance" - each keeps the same
-  /// gap round its text); 0 with no sheet (the pages touch).
+  /// the two sheets are [pagesApart] apart (user, 2026-10-16: "a fixed distance" - each keeps the same gap round its
+  /// text); 0 with no sheet (the pages touch).
   double _sideShift({required bool later}) {
     final s = _sheet;
     if (s == null) return 0;
-    final half = AppSettings.instance.display.insetBetween / 2;
+    const half = pagesApart / 2;
     return later ? half - s.left : _size.width - half - s.right;
   }
 
