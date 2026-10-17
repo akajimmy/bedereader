@@ -69,7 +69,9 @@ jobs:
       # Build numbers: this workflow's run number + 1000, above anything the unsigned iOS build used.
       - name: Flutter's part
         if: steps.ready.outputs.go == 'true'
-        run: flutter build ios --release --config-only --build-number=$((1000 + ${{ github.run_number }}))
+        # (--no-codesign: Flutter's part looked for a signing certificate on the runner and stopped - there's none;
+        # Xcode's archive below signs, through the API key)
+        run: flutter build ios --release --config-only --no-codesign --build-number=$((1000 + ${{ github.run_number }}))
 
       - name: Archive (signed by Xcode through the API key)
         if: steps.ready.outputs.go == 'true'
