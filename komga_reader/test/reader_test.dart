@@ -382,7 +382,9 @@ void main() {
     s.setDisplay(s.display.copyWith(brightness: () => 0.0)); // extra dim, as set in bed
     expect(asked.last, -1, reason: 'no book open: the system brightness');
 
-    Finder dimLayer() => find.byWidgetPredicate((w) => w is ColoredBox && w.color.a > 0.5 && w.color.r == 0);
+    // (see-through - at most 0.75 - unlike the reader's own background behind its pages)
+    Finder dimLayer() =>
+        find.byWidgetPredicate((w) => w is ColoredBox && w.color.a > 0.5 && w.color.a < 1 && w.color.r == 0);
     api = noNetwork(ReaderServer.new);
     await tester.pumpWidget(MaterialApp(
       builder: (context, child) => NightOverlay(child: child!),
