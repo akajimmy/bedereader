@@ -12,7 +12,7 @@ import 'support/no_network.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  const key = 'komgareader.highlights.B1';
+  const key = 'komgareader.highlights.b1';
   List<Map<String, dynamic>> sent(SettingsServer s) => (jsonDecode(s.written[key]!) as List).cast();
 
   test('a highlight is saved on Komga under the book; one overlapping others takes them in (start of the first to '

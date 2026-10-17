@@ -27,6 +27,11 @@ mixin ClientSettingsStore on Komga {
   @override
   Future<void> putClientSetting(String key, String value) async {
     if (down) throw KomgaUnreachable(baseUrl);
+    // Komga's own rules (its API docs): a key is a lowercase namespace string, a value isn't empty - else 400 (the
+    // highlights' key had the book's id in capitals: Komga turned every save down - user's error log, build 106)
+    if (key != key.toLowerCase() || !RegExp(r'^[a-z0-9_-]+(\.[a-z0-9_-]+)+$').hasMatch(key) || value.isEmpty) {
+      throw KomgaError(400, '/api/v1/client-settings/user');
+    }
     puts++;
     await holdPut?.future;
     written[key] = value;

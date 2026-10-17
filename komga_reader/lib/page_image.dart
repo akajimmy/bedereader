@@ -58,12 +58,13 @@ class PageLoader {
     return load;
   }
 
-  /// Called on every page change: preload ahead, forget pages far away (the GC frees them).
-  void around(int i) {
-    for (final j in [i + 1, i + 2]) {
+  /// Called on every page change: preload ahead, forget pages far away (the GC frees them). [span]: pages a turn
+  /// moves (two pages up: 2 - the window twice as wide).
+  void around(int i, {int span = 1}) {
+    for (var j = i + 1; j <= i + 2 * span; j++) {
       if (j < pageNumbers.length) get(j).ignore();
     }
-    _cache.removeWhere((k, _) => k < i - 2 || k > i + 3);
+    _cache.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
     _loaded.removeWhere((k, _) => !_cache.containsKey(k));
   }
 
@@ -203,6 +204,23 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
       Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..filterQuality = FilterQuality.none);
   final picture = rec.endRecording();
   return picture.toImage(w, h).whenComplete(picture.dispose);
+}
+
+/// Two pages side by side as one picture, left to right as given (two pages up - lib/reader/spreads.dart): the
+/// shorter one scaled to the taller's height, so they meet edge to edge at the spine (a GPU copy, once per pair).
+Future<ui.Image> joinPages(List<ui.Image> images) {
+  final h = images.map((i) => i.height).reduce(math.max);
+  final rec = ui.PictureRecorder();
+  final canvas = Canvas(rec);
+  var x = 0.0;
+  for (final img in images) {
+    final w = img.width * h / img.height;
+    canvas.drawImageRect(img, Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        Rect.fromLTWH(x, 0, w, h.toDouble()), Paint()..filterQuality = FilterQuality.medium);
+    x += w;
+  }
+  final picture = rec.endRecording();
+  return picture.toImage(x.round(), h).whenComplete(picture.dispose);
 }
 
 /// One page, laid out by the fit mode and drawn with the series' image adjustments.

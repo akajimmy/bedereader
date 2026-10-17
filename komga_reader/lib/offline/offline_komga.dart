@@ -398,7 +398,7 @@ class OfflineKomga extends Komga {
   // ---- pages and posters: files on disk -------------------------------------------------------------------------------
   @override
   Future<List<dynamic>> pages(String bookId) async => [
-        for (final p in (store.books[bookId]?['pages'] as List?) ?? []) {'number': p['number'], 'mediaType': p['mediaType']},
+        for (final p in (store.books[bookId]?['pages'] as List?) ?? []) Downloads.listed(p as Map),
       ];
 
   @override

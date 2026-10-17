@@ -50,13 +50,25 @@ void main() {
         'c.xhtml': '<html><head><style>body { margin: 0 }</style></head><body><p>Hello.</p></body></html>',
       }, info), info, hy);
       double left(int chapter) => book.pagesNow(chapter)!.first.textOrigins.first.dx;
-      book.setLayout(const EpubTheme(fontSize: 20, bookMargins: true), const Size(400, 600));
+      // (the theme's sides: none - the renderer's, but for a card's inset)
+      const sides0 = EdgeInsets.fromLTRB(0, 40, 0, 40);
+      book.setLayout(const EpubTheme(fontSize: 20, bookMargins: true, margins: sides0), const Size(400, 600));
       await book.pages(0);
       await book.pages(1);
       await book.pages(2);
       expect(left(0), closeTo(3 * 20, 0.5), reason: "the book's 3 em, at the reader's text size");
+      // the page knows where its text goes - its chapter's own sides (Inset page's sheet sits round it, 2026-10-16)
+      final area = book.pagesNow(0)!.first.textArea!;
+      expect(area.left, closeTo(60, 0.5));
+      expect(area.right, closeTo(400 - 60, 0.5));
+      expect(area.top, 40);
       expect(left(2), closeTo(0.6 * 20, 0.5), reason: 'none at all: the least edge, 0.6 em (a hyphen and a border fit)');
       expect(left(1), closeTo(0.6 * 20, 0.5), reason: "none set: a browser's 8 px - under the least edge, so that");
+      // the page a card 16 in (Inset page always - 2026-10-15): the chapter's margin inside it
+      book.setLayout(const EpubTheme(fontSize: 20, bookMargins: true, margins: EdgeInsets.fromLTRB(16, 56, 16, 56)),
+          const Size(400, 600));
+      await book.pages(0);
+      expect(left(0), closeTo(16 + 3 * 20, 0.5), reason: "the card's inset, then the book's 3 em");
       book.setLayout(const EpubTheme(fontSize: 20, margins: EdgeInsets.fromLTRB(36, 40, 36, 40)), const Size(400, 600));
       await book.pages(0);
       expect(left(0), closeTo(36, 0.5), reason: "the reader's step: its own sides, the body margin ignored");

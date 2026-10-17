@@ -17,6 +17,7 @@ import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   late EpubCountStore counts;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -33,8 +34,10 @@ void main() {
       "no paragraph spacing (Default), slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book);
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book, twoPages: TwoPages.always);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
+    expect(EpubPrefs.fromJson(changed.toJson()).twoPages, TwoPages.always, reason: 'dual page mode (2026-10-16)');
+    expect(EpubPrefs.fromJson(const {}).twoPages, TwoPages.wideScreen, reason: 'saved before it: Wide screen');
     final d = EpubPrefs.fromJson(const {});
     expect((d.font, d.colours, d.align, d.paragraphGap, d.hyphenate, d.turn, d.size), (EpubFont.literata,
         EpubColours.dark, EpubAlign.justified, EpubParagraphGap.none, true, EpubTurn.slide, 19.0));
@@ -64,24 +67,24 @@ void main() {
     expect(side(EpubMargins.widest) / 800, greaterThanOrEqualTo(0.25));
   });
 
-  test('a wide screen shows the page as a sheet (user, 2026-10-11): the text column with the margins a page that wide '
-      'would have, centred, full height; none where the page fills the screen; the surround a shade off the page',
-      () {
-    expect(EpubRenderer.sheetRect(const EpubPrefs(margins: EpubMargins.book), const Size(1920, 1080)), isNull,
-        reason: "Margins: Book's - the book's own margins, as a browser: no sheet");
-    for (final m in EpubMargins.values.where((m) => m != EpubMargins.book)) {
-      final e = EpubPrefs(margins: m, size: 24);
-      const wide = Size(1920, 1080);
-      final s = EpubRenderer.sheetRect(e, wide)!;
-      expect(s.center.dx, closeTo(wide.width / 2, 0.01), reason: '${m.name}: centred');
-      expect(s.height, wide.height);
-      // the text sits in the sheet as on a page just that wide
-      expect(EpubRenderer.sideMargin(e, wide.width) - s.left, closeTo(EpubRenderer.sideMargin(e, s.width), 0.01),
-          reason: '${m.name}: the margins inside the sheet');
-      expect(EpubRenderer.sheetRect(e, Size(s.width + 10, 1080)), isNull, reason: '${m.name}: no room, no sheet');
-    }
-    expect(EpubRenderer.sheetRect(const EpubPrefs(margins: EpubMargins.wide, size: 24), const Size(800, 1230)), isNull,
-        reason: 'the tablet in portrait: the page fills the screen');
+  test('Inset page round the text (user, 2026-10-16: "the edges of the inset page should be based on the location of '
+      'the text"): the sheet 20 out from the text all round, wherever the margins put it; Never: none; Wide screen: '
+      'on a screen wider than tall; Always: on a tall one too; a margin under 20: that edge at the page\'s', () {
+    const page = Size(800, 1000), wide = Size(1600, 1000), tall = Size(800, 1200);
+    const text = Rect.fromLTRB(77, 40, 723, 960);
+    final sheet = EpubRenderer.sheetRect(text, page, InsetPage.always, wide)!;
+    expect(sheet, const Rect.fromLTRB(57, 20, 743, 980), reason: '20 left of the lines, above the first, and so on');
+    expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, wide), sheet, reason: 'wider than tall');
+    expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, tall), isNull, reason: 'taller than wide');
+    expect(EpubRenderer.sheetRect(text, page, InsetPage.always, tall), sheet);
+    expect(EpubRenderer.sheetRect(text, page, InsetPage.never, wide), isNull);
+    expect(EpubRenderer.sheetRect(const Rect.fromLTRB(10, 40, 790, 960), page, InsetPage.always, wide),
+        const Rect.fromLTRB(0, 20, 800, 980), reason: 'margins of 10: the sides at the page edges');
+  });
+
+  test('the surround: the dark grey page on black (user, 2026-10-16: "full black"); a light page on a shade darker; '
+      'the black page on a shade lighter', () {
+    expect(EpubRenderer.surround(EpubColours.dark.background), const Color(0xFF000000));
     for (final c in EpubColours.values) {
       final page = c.background, round = EpubRenderer.surround(page);
       expect((round.computeLuminance() - page.computeLuminance()).abs(), greaterThan(0.002), reason: c.name);

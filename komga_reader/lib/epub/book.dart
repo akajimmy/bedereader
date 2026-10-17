@@ -207,9 +207,14 @@ class EpubBook extends ChangeNotifier {
     // Margins: Book's - this chapter's own page margin, as a browser has it (px as layout px, em the text's, % of the
     // page's width) - never under an edge that holds a line-end hyphen (hung past the line) and a boxed passage's border
     // (10 past the text): a book with no margin had them off the screen (user, 2026-10-11)
+    // The page a card inside the screen (Inset page always): the theme's sides are its inset, the chapter's margins
+    // inside it
     final least = math.max(10.0, 0.6 * _theme.fontSize);
-    double side(String v) => math.max(least, cssLength(v, em: _theme.fontSize, percentOf: _size.width) ?? 8);
-    final theme = _theme.bookMargins ? _theme.withSides(side(content.bodyLeft), side(content.bodyRight)) : _theme;
+    final m = _theme.margins, page = _size.width - m.horizontal;
+    double side(String v) => math.max(least, cssLength(v, em: _theme.fontSize, percentOf: page) ?? 8);
+    final theme = _theme.bookMargins
+        ? _theme.withSides(m.left + side(content.bodyLeft), m.right + side(content.bodyRight))
+        : _theme;
     final p = Paginator(theme, _size, theme.hyphenate ? hyphenators.forLang(content.lang) : null,
         baseSize: textSize, baseBold: textBold);
     final pages = p.run(content.blocks);

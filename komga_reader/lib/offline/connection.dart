@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
 import '../ondeck_hidden.dart';
+import '../synced_ids.dart';
 import '../pins.dart';
 import '../settings.dart';
 import 'downloads.dart';
@@ -205,6 +206,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
     Pins.instance.useApi(api);
     OnDeckHidden.instance.useApi(api);
+    PairShift.instance.useApi(api);
     final poll = autoOffline && !forcedOffline && !reachableAgain && !keyRefused; // a refused key won't come back
     if (poll && _poll == null) {
       _poll = Timer.periodic(pollEvery, (_) => check());

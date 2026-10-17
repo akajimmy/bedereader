@@ -5,6 +5,7 @@ import '../book_title.dart';
 import '../errors.dart';
 import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
+import '../pins.dart';
 import '../widgets/error_text.dart';
 import 'book_details.dart';
 import 'series.dart';
@@ -19,6 +20,7 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     {required VoidCallback onChanged, VoidCallback? onSelectMultiple, String? readListId, bool showViewSeries = true}) async {
   final title = bookTitle(b);
   final dl = Downloads.instance;
+  final pinned = Pins.instance.find(Pin.book(b));
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -44,6 +46,13 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
+        // a single book pinned to Home (user, 2026-10-16); pinned: rename or unpin it
+        if (pinned == null)
+          ListTile(leading: const Icon(Icons.push_pin_outlined), title: const Text('Pin to Home'),
+              onTap: () => Navigator.pop(ctx, 'pin'))
+        else
+          ListTile(leading: const Icon(Icons.push_pin), title: Text('Pinned as "${pinned.name}"'),
+              subtitle: const Text('Rename or unpin'), onTap: () => Navigator.pop(ctx, 'pin')),
         OnDeckHidden.instance.bookHidden(b['id'] as String?)
             ? ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('Show in On deck again'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-show'))
@@ -62,6 +71,10 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'pin') {
+    await showPinDialog(context, pinned ?? Pin.book(b), pinned: pinned != null);
     return null;
   }
   if (choice == 'ondeck-hide' || choice == 'ondeck-show') {

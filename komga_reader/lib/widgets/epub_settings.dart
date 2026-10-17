@@ -24,6 +24,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
           value: e.turn,
           onChanged: (v) => set(e.copyWith(turn: v)),
         ),
+        _twoPagesRow(e, set),
       ]),
     ];
 
@@ -43,6 +44,37 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     SettingsGroup(title: 'Formatting', children: _formattingRows(e, set)),
     SettingsGroup(title: 'Reading', children: [
       _coloursRow(e, set),
+      _twoPagesRow(e, set),
+      // TEMPORARY (user, 2026-10-16: "give me a slider for the number of pixels") - out once the gap is settled
+      SliderRow(
+        label: 'Inset page, sides',
+        value: s.display.insetGap,
+        min: 0,
+        max: 120,
+        divisions: 60,
+        valueText: '${s.display.insetGap.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetGap: v)),
+      ),
+      // TEMPORARY (user, 2026-10-16: "separate sliders for horizontal page border and vertical page border")
+      SliderRow(
+        label: 'Inset page, top and bottom',
+        value: s.display.insetGapEnds,
+        min: 0,
+        max: 120,
+        divisions: 60,
+        valueText: '${s.display.insetGapEnds.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetGapEnds: v)),
+      ),
+      // TEMPORARY (user, 2026-10-16: "the distance between the two inset pages should be a fixed distance")
+      SliderRow(
+        label: 'Distance between pages',
+        value: s.display.insetBetween,
+        min: 0,
+        max: 200,
+        divisions: 50,
+        valueText: '${s.display.insetBetween.round()} px',
+        onChanged: (v) => s.setDisplay(s.display.copyWith(insetBetween: v)),
+      ),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
@@ -50,6 +82,23 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     ]),
   ];
 }
+
+/// Dual page mode (user, 2026-10-16: eBooks as comics - in the reader's panel, synced).
+Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoPages>(
+      title: 'Dual page mode',
+      subtitle: switch (e.twoPages) {
+        TwoPages.off => 'One page at a time',
+        TwoPages.wideScreen => 'Two pages side by side when the screen is wider than tall',
+        TwoPages.always => 'Two pages side by side, a tall screen too',
+      },
+      choices: const [
+        Choice(TwoPages.off, 'Off'),
+        Choice(TwoPages.wideScreen, 'Wide screen'),
+        Choice(TwoPages.always, 'Always'),
+      ],
+      value: e.twoPages,
+      onChanged: (t) => set(e.copyWith(twoPages: t)),
+    );
 
 // the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down to fit
 // the side sheet until the names couldn't be read (user, 2026-10-06). One row with its label, so the chips have room

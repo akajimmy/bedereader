@@ -9,7 +9,193 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+- **Dual page mode: a spread in one picture turns like two pages** - with the page curl, its right half lifts from
+  the middle of the picture and turns over onto the left half, and turning back onto it brings its right half back,
+  as with a spread made of two pages. (Any page wider than tall counts as a spread.)
+
+**Fixed**
+- **Dual page mode, turning back with the page curl** - the left-hand page you were leaving stayed under the page as
+  it lifted away, until the turn ended. Now, as in a book, the previous spread's left-hand page shows under it at
+  once; only the right-hand side keeps the old page until the turning one lands on it. Comics and eBooks.
+
 ## 1.3.0
+
+### Build 121 - 2026-10-16
+
+**Changed (temporary)**
+- **Inset page's gap round the text: two sliders** - "Inset page, sides" (left and right; the old gap slider) and
+  "Inset page, top and bottom" (0 to 120 px, 20 to start), in the eBook panel's Reading group.
+
+### Build 120 - 2026-10-16
+
+**New (temporary)**
+- **Two sliders in the eBook reader's panel (Reading), to dial Inset page in** - kept on each device, to go once the
+  values are settled:
+  - **Inset page gap**: how far the sheet sits out from the text, 0 to 120 px (20 to start).
+  - **Distance between pages**: two pages up, how far apart the two sheets are, 0 to 200 px (32 to start) - each page,
+    sheet and text together, slides to it, and the page curl lands across it.
+
+### Build 119 - 2026-10-16
+
+**Changed**
+- **Inset page follows the text** - the sheet's edges now sit 20 px out from the text all round: left of where every
+  line starts, above the first line, right of where lines end, below the last. Margins still decide where the text
+  sits on the screen (or on its half, two pages up), and Inset page no longer moves it - turning it on or off doesn't
+  count the book again. Wide screen shows the sheet when the screen is wider than tall; Always, always. A margin
+  under 20 px leaves that side of the sheet at the screen's edge. With Margins: Book's, each page's sheet follows its
+  chapter's own margins.
+- **The Dark page colour sits on black** with Inset page (it was a near-black grey).
+
+### Build 118 - 2026-10-16
+
+**Changed**
+- **eBooks in Dual page mode with Inset page: two separate pages, a gap between** - instead of meeting at the
+  spine as an open book, each page is its own sheet with the surround between them as well as round them (Always:
+  each card 16 px in all round; Wide screen: the two columns move in to the same gap). The page curl turns the
+  right-hand sheet over the gap and lands it exactly on the left one. Without Inset page the pages still touch, with
+  the shade down the gutter.
+
+### Build 117 - 2026-10-16
+
+**New**
+- **eBooks in Dual page mode** - two pages side by side, as an open book: the Aa panel (Reading) and Settings >
+  eBooks > Page, Off / Wide screen (the default) / Always, synced like the other eBook settings.
+  - Each page is laid out at half the width, with the margins of a page that size; a book is counted again the first
+    time it opens this way.
+  - Every chapter starts on a right-hand page, as in a printed book - the page beside it blank when needed - so a
+    spread never holds two chapters.
+  - Inset page: the two sheets meet at the spine, the surround only round the outside (Always: each card runs to the
+    spine; Wide screen: the two columns move in to meet), with a soft shade down the gutter.
+  - The page curl turns the right-hand page over onto the left, attached at the spine; the left-hand page stays put
+    meanwhile.
+  - A turn goes a spread at a time; the position reads both pages ("Pg. 4-5/312"); the place saved is the left-hand
+    page. Text can be selected, highlighted and defined on either page.
+  - Turning the screen, or resizing the window, keeps the place.
+
+**Fixed**
+- **Dual page mode: the turning page no longer pulls away from the spine** - dragged all the way across, it went on
+  past the other page and its spine edge lifted, the page beneath showing at the gutter. It now stays attached along
+  the spine, its roll flattening as it goes, and lands flat exactly over the other page.
+
+### Build 116 - 2026-10-16
+
+**Changed**
+- **Dual page mode** (two pages side by side; it was "Two pages") moved into the reader: Comic settings, with the page
+  layout - and to Settings > Comics > Pages - defaults. It's now a reading default, the same on every device, that a
+  series can override with its own (Override defaults, as for Fit and Direction); Make default carries it too. Off,
+  Wide screen and Always as before. A device that had it off is back on Wide screen.
+
+### Build 115 - 2026-10-16
+
+**Changed**
+- **Comics in two pages: the page curl turns one page, like a book** - going forward, the right-hand page lifts from
+  the gutter and turns over onto the left while the left-hand page stays put; going back, the previous right-hand page
+  comes back over. Right-to-left series turn the other way. A page alone (the cover) or a spread still curls whole.
+
+### Build 114 - 2026-10-16
+
+**New**
+- **Comics in two pages side by side** - Settings > Comics > Screen > Two pages: Off, Wide screen (when the screen is
+  wider than tall - the default) or Always; set on each device on its own.
+  - The cover is alone, a spread (a page wider than tall) is alone, and a page alone is centred. The pages before a
+    spread pair up so the spread starts on a left page, as in print - in a scan missing its inside cover, the page
+    after the cover is the one alone.
+  - A turn goes a pair at a time; the position reads "Pg. 4-5/40"; progress is the later page shown, so the last pair
+    finishes the book. Turning the screen keeps the page.
+  - **Shift pairing by one** on the bottom bar (two pages up) re-pairs the pages before the first spread, for that
+    book on every device - for a scan whose pairs come out a page off.
+  - Two pages show as one picture: fit, zoom and Enhance work on the pair; Crop trims each page before they meet.
+  - Save page and Copy page ask which: the left, the right, or both as one picture.
+  - Right-to-left series read their pairs right to left.
+  - The page curl still turns both pages as one for now.
+  - Books downloaded before this build pair without knowing their spreads - download them again.
+- **Pin a single book to Home** - "Pin to Home" in a book's menu (long-press or right-click its poster) and a pin
+  button on its Details screen. On Home it shows the book's cover, the name you gave the pin and how far through it
+  you are ("34% read"); a tap opens the reader. Long-press it to rename or unpin it. Offline, a pinned book that isn't
+  downloaded is hidden, as other pins with nothing downloaded are; one deleted from the server says so and offers
+  Unpin.
+
+### Build 113 - 2026-10-16
+
+**Changed**
+- **Inset page: the sheet is set in from the top and bottom on wide screens too** - Wide screen and Always draw the
+  sheet 16 px in from the top and bottom of the screen, as Always's card on a narrow screen; the text moves in with
+  it, so books on a wide screen count their pages again the first time.
+
+### Build 112 - 2026-10-15
+
+**Changed**
+- **Settings > eBooks > Screen: Inset page** replaces the "Page as a sheet on wide screens" switch, with three
+  choices: Never (the page's colour across the whole screen), Wide screen (the sheet as before, where the lines
+  leave room to spare) and Always (on a narrow screen too: the page becomes a card set in from all four edges, the
+  text laid out inside it - a portrait tablet's pages count again the first time). Set on each device on its own; a
+  device that had the switch off is back on Wide screen.
+
+### Build 111 - 2026-10-12
+
+**Changed**
+- **A downloaded book is read from the device, online too** - a comic's pages (the page strip and the slider's
+  pictures too) and an eBook's file load from the download instead of Komga (faster, and no data used). Reading
+  progress and highlights still go to Komga as you read. A book still downloading, or one whose files have gone, is
+  read from Komga as before.
+
+### Build 110 - 2026-10-12
+
+**New**
+- **Windows: the mouse pointer hides while you read with the keyboard** - turning a page with a key (or a remote)
+  hides it; it's back as soon as the mouse moves. Turning pages with the mouse leaves it where it is.
+
+### Build 109 - 2026-10-12
+
+**Fixed**
+- **Windows: a right-click with the mouse moving went missing** - in both readers (the controls) and on posters (the
+  menu); so did a click that hides the reader's controls. Moved more than a short way while pressed, it wasn't taken
+  as a click. Now they count however far the mouse moves.
+
+### Build 108 - 2026-10-12
+
+**New**
+- **A key for the side menu**: Settings > Remote and keys > Anywhere else > Open the side menu - no key until you give
+  it one. It opens the side menu on Home, a library, a series and the like (and closes it again); not while you're
+  typing in a box. Kept on each device, like the reader's keys.
+
+**Fixed**
+- **Windows: mouse clicks went missing** - on Home's posters, and on an eBook's page (it took a couple of clicks to
+  bring up the controls). A mouse moved by even a pixel while clicking was taken for a drag: on Home for the side
+  menu's swipe (now a finger's only - the mouse has the menu button), on a page for selecting text. And a second click
+  made in doubt cancelled the controls; a double click where there's no word now brings them up.
+- **eBooks: highlights never reached Komga** (since they came in build 103) - Komga turned every save down (the
+  name they're kept under had capital letters, which it doesn't take), so they stayed on the device they were made
+  on. They're sent now - each book's the next time it's opened.
+
+**Changed**
+- **eBooks: a double click selects a word with the mouse only** - on a touch screen a word is a long press, as
+  before, and a tap in the middle of the page opens the controls at once again (since build 106 it waited a moment
+  for a second tap).
+
+### Build 107 - 2026-10-12
+
+**Fixed**
+- **eBooks: the selection pane's buttons did nothing** (build 106) - a click or a tap on Highlight, Define or Copy
+  made the pane vanish before it took the click.
+
+### Build 106 - 2026-10-12
+
+**Changed**
+- **eBooks, selecting text: the same pane everywhere** - Copy, Highlight, Define - shows above the selection by
+  itself once it's made, with the mouse too (on Windows it took a right-click and looked different).
+- **eBooks: a double tap or double click on a word selects it** (in the middle of the page - the sides still turn
+  pages at once). A single tap in the middle opens the controls a moment later than before, to tell the two apart.
+- **eBooks: highlights are in the app's accent colour** (they were always yellow).
+
+**Fixed**
+- **eBooks: a highlight could only be removed by tapping it** - a selection over a highlight now offers Remove
+  highlight.
+- **Downloads went missing when Komga moved to a new address** (the same server, its database moved with it):
+  downloads are kept per server address, so the new address started with none. Now, when the new address has no
+  downloads and Komga there has the books downloaded at an old address, they carry over - with any reading progress
+  not yet sent.
 
 ### Build 105 - 2026-10-11
 

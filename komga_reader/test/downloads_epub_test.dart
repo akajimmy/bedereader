@@ -58,6 +58,7 @@ class EpubLibrary extends LibraryServer {
 Map<String, dynamic> book(String id, int n) => {'id': id, 'seriesTitle': 'Discworld', 'metadata': {'number': '$n'}};
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   late Directory dir;
   final d = Downloads.instance;
 
@@ -96,7 +97,13 @@ void main() {
     expect(info.title, 'Sourcery', reason: 'the downloaded file reads');
     // offline, the reader reads that file
     expect(EpubRenderer.sourceFor(offline, 'B1'), isA<FileEpubSource>());
-    // online, from Komga as usual
+    // online, the downloaded file too (user, 2026-10-12) - a book not downloaded, or another server's, from Komga
+    expect(EpubRenderer.sourceFor(api, 'B1'), isA<FileEpubSource>());
+    expect(EpubRenderer.sourceFor(api, 'B9'), isA<KomgaEpubSource>());
+    expect(EpubRenderer.sourceFor(noNetwork(() => LibraryServer('http://elsewhere:25600')), 'B1'),
+        isA<KomgaEpubSource>());
+    // its file gone from the device: Komga again
+    await d.store!.file('B1/book.epub').delete();
     expect(EpubRenderer.sourceFor(api, 'B1'), isA<KomgaEpubSource>());
   });
 

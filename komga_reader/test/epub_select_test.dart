@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/dictionary.dart';
 import 'package:komga_reader/epub/count_store.dart';
 import 'package:komga_reader/epub/source.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/reader/epub_selection.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -150,7 +151,7 @@ void main() {
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    final saved = jsonDecode(server.written['komgareader.highlights.B1']!) as List;
+    final saved = jsonDecode(server.written['komgareader.highlights.b1']!) as List;
     expect(saved.single['t'], 'eel');
     expect(saved.single['e'] - saved.single['s'], 3, reason: 'three characters of the chapter');
     expect(selected(tester), isNull, reason: 'the selection let go of');
@@ -178,7 +179,7 @@ void main() {
     await tester.tap(find.text('Remove highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await settle(tester);
-    expect(jsonDecode(server.written['komgareader.highlights.B1']!), isEmpty);
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!), isEmpty);
     await tester.tapAt(at(tester, 'eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.text('Remove highlight'), findsNothing, reason: 'gone: a tap is a tap again');
@@ -276,6 +277,197 @@ void main() {
     expect(find.text('Copy'), findsNothing);
     expect(tester.renderObjectList<RenderSelectablePage>(find.byType(SelectablePage))
         .where((r) => r.getSelectedContent() != null), isEmpty);
+  });
+
+  // ---- user, 2026-10-12 (bug reports, on Windows)
+
+  /// A press on [f] as a hand makes it: down, held over a few frames, up (a tap in one frame hid that the pane went
+  /// from under the button as it was pressed - build 106, Windows: Highlight and Define did nothing).
+  Future<void> press(WidgetTester tester, Finder f, {PointerDeviceKind kind = PointerDeviceKind.touch}) async {
+    final g = await tester.startGesture(tester.getCenter(f), kind: kind);
+    await tester.pump(const Duration(milliseconds: 40));
+    await tester.pump(const Duration(milliseconds: 40));
+    await g.up();
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+  }
+
+  testWidgets("the pane's buttons take a press held over a few frames, as a hand presses them - a mouse click on "
+      'Windows (a double click selecting), a finger on the tablet (user, build 106: nothing happened)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      final spot = Offset(400, at(tester, 'weather').dy);
+      await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      final word = selected(tester);
+      expect(word, isNotNull);
+      await press(tester, find.text('Highlight'), kind: PointerDeviceKind.mouse);
+      await settle(tester);
+      expect(server.written['komgareader.highlights.b1'], isNotNull, reason: 'the click highlighted it');
+      expect((jsonDecode(server.written['komgareader.highlights.b1']!) as List).single['t'], word);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+    // a finger (Android)
+    await tester.longPressAt(at(tester, 'cow'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await press(tester, find.text('Copy'));
+    expect(copied, 'cow');
+  });
+
+  testWidgets("Windows: the selection's pane shows by itself once a mouse drag lets go - no right-click - and its "
+      'Copy copies', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      final g = await tester.startGesture(box(tester, 'Dog').centerLeft + const Offset(1, 0),
+          kind: PointerDeviceKind.mouse);
+      await tester.pump();
+      await g.moveTo(box(tester, 'eel').centerRight - const Offset(1, 0));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('epub-selection-pane')), findsNothing, reason: 'not while the button is down');
+      await g.up();
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(selected(tester), 'Dog eel');
+      expect(find.byKey(const ValueKey('epub-selection-pane')), findsOneWidget, reason: 'by itself');
+      expect(find.text('Highlight'), findsOneWidget);
+      await tester.tap(find.text('Copy'));
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(copied, 'Dog eel');
+      expect(selected(tester), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('a selection over a highlight offers Remove highlight, which takes it away (there was no way to it '
+      'from a selection)', (tester) async {
+    await open(tester);
+    await tester.longPressAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Highlight'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, hasLength(1));
+    await tester.longPressAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.text('Remove highlight'), findsOneWidget);
+    expect(find.text('Highlight'), findsNothing, reason: 'all of it highlighted already');
+    await tester.tap(find.text('Remove highlight'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, isEmpty);
+  });
+
+  testWidgets('a highlight is drawn in the app\'s accent colour (it was a fixed yellow)', (tester) async {
+    await open(tester);
+    await tester.longPressAt(at(tester, 'eel'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Highlight'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await settle(tester);
+    final accent = Theme.of(tester.element(find.byType(PageView))).colorScheme.primary;
+    final painters = tester
+        .widgetList<CustomPaint>(find.byWidgetPredicate(
+            (w) => w is CustomPaint && w.painter.runtimeType.toString() == '_PagePainter'))
+        .map((w) => w.painter as dynamic)
+        .where((p) => (p.marks as List).isNotEmpty);
+    final mark = painters.first.markColour as Color;
+    expect((mark.r, mark.g, mark.b), (accent.r, accent.g, accent.b));
+  });
+
+  testWidgets('Windows: a mouse click in the middle that moves a pixel or two while pressed still brings up the '
+      'controls (the selection took it for a drag - user, build 107: "having to click a couple times"); a double '
+      'click where there is no word brings them up too (it cancelled them)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      Future<void> click(Offset at, {double wobble = 0}) async {
+        final g = await tester.startGesture(at, kind: PointerDeviceKind.mouse);
+        await tester.pump(const Duration(milliseconds: 30));
+        if (wobble > 0) await g.moveBy(Offset(wobble, 0));
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.up();
+      }
+
+      final spot = Offset(400, at(tester, 'weather').dy);
+      await click(spot, wobble: 2);
+      await tester.pump(EpubRenderer.doubleTapWait);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'the wobbly click: the controls');
+      expect(selected(tester), isNull, reason: 'nothing selected by the wobble');
+      await tester.tapAt(const Offset(400, 600), kind: PointerDeviceKind.mouse); // the controls away
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsNothing);
+      // a double click below the text (no word there)
+      final blank = Offset(400, tester.getSize(find.byType(PageView)).height - 12);
+      await click(blank);
+      await tester.pump(const Duration(milliseconds: 80));
+      await click(blank);
+      await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'no word: the controls after all');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('a right-click brings up the controls and another takes them away, however far the mouse moves while '
+      'the button is down (past 18 px the click was lost - user, build 108)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      Future<void> rightClick(Offset at) async {
+        final g = await tester.startGesture(at, kind: PointerDeviceKind.mouse, buttons: kSecondaryMouseButton);
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.moveBy(const Offset(30, 4));
+        await tester.pump(const Duration(milliseconds: 30));
+        await g.up();
+        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+      }
+
+      await rightClick(Offset(400, at(tester, 'weather').dy));
+      expect(find.byTooltip('Contents'), findsOneWidget, reason: 'shown');
+      expect(selected(tester), isNull, reason: 'no word selected by it');
+      await rightClick(const Offset(400, 600));
+      expect(find.byTooltip('Contents'), findsNothing, reason: 'hidden again');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('a finger tap in the middle opens the controls at once - a word on a touch screen is a long press, not a '
+      'double tap (user, build 107)', (tester) async {
+    await open(tester);
+    await tester.tapAt(Offset(400, at(tester, 'weather').dy));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byTooltip('Contents'), findsOneWidget, reason: 'no wait for a second tap');
+  });
+
+  testWidgets('a double click on a word in the middle of the page selects it, with its pane; one click there still '
+      'opens the controls (a moment later); the sides still turn at once', (tester) async {
+    await open(tester);
+    final spot = Offset(400, at(tester, 'weather').dy); // the middle of a full line of the long paragraph
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    final word = selected(tester);
+    expect(word, isNotNull, reason: 'a word selected');
+    expect(word, matches(RegExp(r'^[A-Za-z­]+[.,]?$')), reason: 'one whole word: "$word"');
+    expect(find.byKey(const ValueKey('epub-selection-pane')), findsOneWidget);
+    expect(find.byTooltip('Contents'), findsNothing, reason: 'no controls');
+    await tester.tapAt(const Offset(400, 40), kind: PointerDeviceKind.mouse); // a click lets go of the selection
+    await settle(tester);
+    expect(selected(tester), isNull);
+    await tester.tapAt(spot, kind: PointerDeviceKind.mouse); // one click
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byTooltip('Contents'), findsNothing, reason: 'not yet: a second click could come');
+    await tester.pump(EpubRenderer.doubleTapWait);
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.byTooltip('Contents'), findsOneWidget, reason: 'the controls');
   });
 
   testWidgets('Windows: a mouse drag selects, Ctrl+C copies; a click lets go of it', (tester) async {

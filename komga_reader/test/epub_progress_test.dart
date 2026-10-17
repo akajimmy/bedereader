@@ -11,6 +11,7 @@ import 'package:komga_reader/epub/progress.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 
 import 'support/client_settings.dart';
 import 'support/helpers.dart' show preloadShaders;
@@ -120,6 +121,7 @@ Map<String, dynamic> _saved(String href, double progression) =>
     {'locator': {'href': href, 'type': 'application/xhtml+xml', 'locations': {'progression': progression}}};
 
 void main() {
+  setUpAll(() => EpubRenderer.doubleTapWait = Duration.zero); // a middle tap: the controls at once (no double tap here)
   setUpAll(preloadShaders); // (the curl's; top level - in a group after widget tests it never finished)
   late EpubCountStore counts;
   setUp(() {

@@ -270,14 +270,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ]),
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
         SettingsGroup(title: 'Screen', children: [
-          epubSheetRow(s),
+          insetPageRow(s),
           if (canRotate) rotationRow(s, BookKind.ebooks),
         ]),
         _resetRow(context, 'eBooks', "Every setting on this page back to the defaults - Text, Formatting and Page on "
             "every device (they're synced).", () {
           s.setEpub(const EpubPrefs());
           const z = DisplayPrefs();
-          s.setDisplay(s.display.copyWith(ebooks: z.ebooks, epubSheet: z.epubSheet));
+          s.setDisplay(s.display.copyWith(ebooks: z.ebooks, insetPage: z.insetPage));
         }),
       ]);
 
@@ -369,7 +369,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final k = ReaderKeys.instance;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'In the reader, with the controls hidden', children: [
-        for (final a in ReaderAction.values) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
+        for (final a in ReaderAction.values)
+          if (a != ReaderAction.openMenu) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
         NoteRow('${hasVolumeKeys ? 'Any key can be added, the volume keys too (to turn pages with them: Volume down to '
             'Next page, Volume up to Previous page). ' : ''}For a book read right to left, Left and Right swap. '
             'Shift+Space always goes back. Once the controls are up, the arrows and OK move around them.'),
@@ -377,6 +378,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           title: 'Reset to default',
           button: TextButton(onPressed: k.isDefault ? null : k.reset, child: const Text('Reset keys')),
         ),
+      ]),
+      // the screens with a side menu (Home, the libraries, a series...) - no key by default (user, 2026-10-12)
+      SettingsGroup(title: 'Anywhere else', children: [
+        _KeyRow(action: ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
       ]),
     ]);
   }

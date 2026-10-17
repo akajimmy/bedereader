@@ -49,9 +49,55 @@ class _Lookups {
 
 /// Downloads books for offline reading (1.1 phase 2): a queue worked one book at a time, page by page, into the
 /// [OfflineStore]. The queue survives restarts; a size limit (or none) is checked before each book.
-class Downloads extends ChangeNotifier {
+class Downloads extends ChangeNotifier implements LocalPages {
   Downloads._();
   static final Downloads instance = Downloads._();
+
+  // ---- a downloaded book read from the device, online too (user, 2026-10-12: "use a downloaded version of a comic
+  // if present, even if online") - Komga's calls ask here first ([Komga.localPages])
+
+  /// The entry of [bookId], downloaded whole from the server at [baseUrl] (this one's downloads) - else null.
+  Map<String, dynamic>? _here(String baseUrl, String bookId) {
+    final a = _api, s = store;
+    String norm(String u) => u.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+    if (a == null || s == null || norm(a.baseUrl) != norm(baseUrl)) return null;
+    final e = s.books[bookId];
+    return e?['state'] == 'done' ? e : null;
+  }
+
+  @override
+  List<dynamic>? pagesOf(String baseUrl, String bookId) {
+    final e = _here(baseUrl, bookId);
+    if (e == null) return null;
+    return [for (final p in (e['pages'] as List?) ?? []) listed(p as Map)];
+  }
+
+  /// A downloaded page as Komga lists it: its number, type and - downloaded since 2026-10-16 - size.
+  static Map<String, dynamic> listed(Map p) => {
+        'number': p['number'], 'mediaType': p['mediaType'],
+        if (p['width'] != null) 'width': p['width'],
+        if (p['height'] != null) 'height': p['height'],
+      };
+
+  /// A downloaded EPUB's file (downloaded whole from the server at [baseUrl], and still on the device) - else null.
+  File? epubFileOf(String baseUrl, String bookId) {
+    final f = _here(baseUrl, bookId)?['epubFile'];
+    if (f is! String) return null;
+    final file = store!.file('$bookId/$f');
+    return file.existsSync() ? file : null;
+  }
+
+  @override
+  Future<Uint8List>? pageOf(String baseUrl, String bookId, int number) {
+    final e = _here(baseUrl, bookId);
+    if (e == null) return null;
+    for (final p in (e['pages'] as List?) ?? []) {
+      if (p['number'] != number) continue;
+      final f = store!.file('$bookId/${p['file']}');
+      return f.existsSync() ? f.readAsBytes() : null; // (gone from the device: Komga's)
+    }
+    return null;
+  }
 
   static const _capKey = 'downloads.capBytes';
   static const gb = 1024 * 1024 * 1024;
@@ -180,13 +226,17 @@ class Downloads extends ChangeNotifier {
 
   Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
     _api = api;
+    Komga.localPages = this;
     _session++;
     _running = false; // any older worker notices the new session and stops
     _queueWrites = Future.value(); // a fresh start: nothing to wait behind
     _serverTimer?.cancel();
     waitingForServer = false;
     final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
-    final folder = await serverFolder(base, api.baseUrl);
+    var folder = await serverFolder(base, api.baseUrl);
+    // none here yet, and another address's downloads are this library's (Komga moved, its database with it): they're
+    // this server's now
+    folder = await movedFrom(base, folder, api.baseUrl, (id) async => await api.book(id) != null) ?? folder;
     // the same folder (signed in again to the same server): the same store - a second one for it, while a download
     // from before was still writing through the first, had two writing index.json (code review 2026-10-05, #27)
     if (store?.root.path != folder.path) {
@@ -246,6 +296,59 @@ class Downloads extends ChangeNotifier {
     final safe = me.replaceAll(RegExp(r'^[a-z]+://'), '').replaceAll(RegExp(r'[^a-z0-9.]+'), '_');
     final other = Directory('${base.path}-$safe');
     return await owner(other) == me ? other : claim(other);
+  }
+
+  /// The same Komga at a new address (user, 2026-10-12: moved to the NAS, its database with it): its downloads, filed
+  /// under the old address ([serverFolder]), went missing - a new, empty folder for the new one. When [current] (this
+  /// server's folder) has no books and another address's folder has, and this server knows most of those books
+  /// ([known]: asked about a few), that folder becomes this server's - its reading progress not yet sent goes with it,
+  /// to the same database. The empty folder is removed (only if nothing but its label and empty lists is in it).
+  /// Null: nothing to take over (books here already; none elsewhere; another library's; Komga not answering - asked
+  /// again next time).
+  static Future<Directory?> movedFrom(Directory base, Directory current, String baseUrl,
+      Future<bool> Function(String bookId) known) async {
+    try {
+      final here = OfflineStore(current);
+      await here.load();
+      if (here.books.isNotEmpty) return null;
+      final queued = here.file('queue.json');
+      if (await queued.exists() && (jsonDecode(await queued.readAsString()) as List).isNotEmpty) {
+        return null; // downloads already asked for at this address: it's in use - left as it is
+      }
+      final parent = base.parent;
+      if (!await parent.exists()) return null;
+      final name = base.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      final others = <(Directory, OfflineStore)>[];
+      await for (final e in parent.list()) {
+        if (e is! Directory || e.path == current.path) continue;
+        final n = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+        if (n != name && !n.startsWith('$name-')) continue;
+        if (!await File('${e.path}${Platform.pathSeparator}server.json').exists()) continue;
+        final s = OfflineStore(e);
+        await s.load();
+        if (s.books.isNotEmpty) others.add((e, s));
+      }
+      others.sort((a, b) => b.$2.books.length - a.$2.books.length); // the most books first
+      for (final (dir, s) in others) {
+        final sample = s.books.keys.take(3).toList();
+        var found = 0;
+        for (final id in sample) {
+          if (await known(id)) found++;
+        }
+        if (found * 2 <= sample.length) continue; // most not on this server: another library
+        String norm(String u) => u.trim().toLowerCase().replaceAll(RegExp(r'/+$'), '');
+        await File('${dir.path}${Platform.pathSeparator}server.json').writeAsString(jsonEncode({'url': norm(baseUrl)}));
+        // the empty folder made for this address: gone, if empty (its label, and lists with nothing in them)
+        final left = await current.list().map((f) => f.uri.pathSegments.where((p) => p.isNotEmpty).last).toList();
+        if (left.every(const {'server.json', 'index.json', 'progress.json', 'queue.json'}.contains)) {
+          await current.delete(recursive: true);
+        }
+        return dir;
+      }
+    } catch (_) {
+      // offline, or Komga not answering: asked again next time
+    }
+    return null;
   }
 
   // ---- Delete once read (Settings > Downloads, this device): Never / Ask / Always (tablet bug, 2026-09-30) -----------
@@ -606,6 +709,9 @@ class Downloads extends ChangeNotifier {
           {
             'number': p['number'],
             'mediaType': p['mediaType'],
+            // its size: two pages side by side pair on it (a wide page is alone - lib/reader/spreads.dart)
+            if (p['width'] != null) 'width': p['width'],
+            if (p['height'] != null) 'height': p['height'],
             'file': 'pages/${(p['number'] as int).toString().padLeft(4, '0')}.${_extension(p['mediaType'] as String?)}',
           },
       ];

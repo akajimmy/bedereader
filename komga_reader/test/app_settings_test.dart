@@ -167,22 +167,23 @@ void main() {
     const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
         midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
         posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, epubSheet: false,
+        pagePreviews: false, pageStrip: true, insetPage: InsetPage.always, insetGap: 40, insetGapEnds: 50, insetBetween: 60,
         comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
             progressBar: true, hiddenSpots: ['left']),
         ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
             hiddenSpots: ['right']));
     const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small);
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small, twoPages: TwoPages.off);
     const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
-        autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white);
+        autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white,
+        twoPages: TwoPages.always);
     // which page's reset puts back each of this device's settings (by its saved name); null: no page's
     const resetBy = <String, String?>{
       'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',
       'pageTurn': 'Comics', 'doubleTapZoom': 'Comics', 'pagePreviews': 'Comics', 'pageStrip': 'Comics',
       'comics': 'Comics',
-      'ebooks': 'eBooks', 'epubSheet': 'eBooks',
+      'ebooks': 'eBooks', 'insetPage': 'eBooks', 'insetGap': null, 'insetGapEnds': null, 'insetBetween': null, // (the reader's panel only - temporary)
       'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
       'textScale': 'Look', 'accent': 'Look',
       'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,

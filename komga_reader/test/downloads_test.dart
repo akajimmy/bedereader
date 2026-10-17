@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -12,6 +17,15 @@ import 'support/no_network.dart';
 import 'support/settle.dart';
 
 LibraryServer server() => noNetwork(LibraryServer.new);
+
+/// Pages with their sizes, as Komga lists them: page 2 wide (a spread).
+class SizedPages extends LibraryServer {
+  @override
+  Future<List<dynamic>> pages(String bookId) async => [
+        for (final p in await super.pages(bookId))
+          {...p as Map, 'width': p['number'] == 2 ? 2000 : 1000, 'height': 1500},
+      ];
+}
 
 Map<String, dynamic> book(String id, int n) =>
     {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '$n'}};
@@ -228,6 +242,33 @@ void main() {
     expect(d.isDownloaded('B1'), isTrue);
   });
 
+  test('a downloaded book is read from the device, online too - its page list and its pages; a book not downloaded, '
+      "or another server's, still from Komga (user, 2026-10-12)", () async {
+    await d.attach(server(), root: dir); // http://test
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+    final asked = <String>[];
+    Komga komga(String url) => Komga(url, 'k', client: MockClient((r) async {
+          asked.add(r.url.path);
+          return r.url.path.endsWith('/pages')
+              ? http.Response('[{"number":1,"mediaType":"image/jpeg"}]', 200)
+              : http.Response.bytes([9, 9, 9], 200);
+        }));
+    final online = komga('http://test');
+    expect((await online.pages('B1')).map((p) => p['number']), [1, 2, 3], reason: 'its three downloaded pages');
+    final bytes = await online.pageBytes('B1', 2);
+    expect(bytes, isNot([9, 9, 9]), reason: 'the page from the device');
+    await online.pageThumbBytes('B1', 1);
+    expect(asked, isEmpty, reason: 'nothing asked of Komga for a downloaded book');
+    await online.pageBytes('B7', 1);
+    await online.pages('B7');
+    expect(asked, ['/api/v1/books/B7/pages/1', '/api/v1/books/B7/pages'], reason: 'not downloaded: Komga');
+    asked.clear();
+    await komga('http://elsewhere:25600').pageBytes('B1', 1);
+    expect(asked, ['/api/v1/books/B1/pages/1'], reason: "another server's B1 isn't this one");
+  });
+
   test("each server's downloads in a folder of their own; today's folder belongs to the first server that uses it",
       () async {
     await File('${dir.path}${Platform.pathSeparator}index.json').writeAsString('{}'); // downloads from before
@@ -239,6 +280,75 @@ void main() {
     expect((await Downloads.serverFolder(dir, 'http://10.0.0.23:25600/')).path, dir.path, reason: 'A again');
     expect((await Downloads.serverFolder(dir, 'https://komga.example.org')).path, b.path, reason: 'B again');
     await Directory(b.path).delete(recursive: true);
+  });
+
+  test('the same Komga at a new address (user, 2026-10-12: moved to the NAS, its database with it): its downloads, '
+      "filed under the old address, become the new one's - unsent reading progress with them; the empty folder made "
+      'for the new address goes', () async {
+    String p(Directory d, String f) => '${d.path}${Platform.pathSeparator}$f';
+    Future<void> books(Directory d, String url, List<String> ids) async {
+      await d.create(recursive: true);
+      await File(p(d, 'server.json')).writeAsString(jsonEncode({'url': url}));
+      await File(p(d, 'index.json')).writeAsString(jsonEncode({
+        'v': 2,
+        'books': {for (final id in ids) id: {'book': {'id': id}, 'state': 'done'}},
+      }));
+      await File(p(d, 'progress.json')).writeAsString(jsonEncode({
+        'v': 1,
+        'progress': {ids.first: {'page': 7, 'completed': false, 'synced': false}},
+      }));
+    }
+
+    await books(dir, 'http://10.0.0.23:25600', ['B1', 'B2', 'B3']);
+    const nas = 'http://10.0.0.226:25600';
+    final fresh = await Downloads.serverFolder(dir, nas); // what signing in at the new address made: empty
+    expect(fresh.path, isNot(dir.path));
+    final asked = <String>[];
+    final moved = await Downloads.movedFrom(dir, fresh, nas, (id) async {
+      asked.add(id);
+      return id != 'B3'; // one book re-ingested since (a new id): most are still there
+    });
+    expect(moved?.path, dir.path, reason: "the old address's downloads: this server's now");
+    expect(asked, hasLength(3), reason: 'a few of its books asked about');
+    expect(await Directory(fresh.path).exists(), isFalse, reason: 'the empty folder for the new address removed');
+    expect((await Downloads.serverFolder(dir, nas)).path, dir.path, reason: 'and found there from now on');
+    final store = OfflineStore(dir);
+    await store.load();
+    expect(store.books.keys, ['B1', 'B2', 'B3']);
+    expect(store.progress['B1']?['synced'], isFalse, reason: 'progress not yet sent goes with it - to the same database');
+  });
+
+  test('signed in to the same Komga at its new address: the books downloaded at the old one are still downloaded',
+      () async {
+    await d.attach(server(), root: dir); // http://test
+    await d.add([book('B1', 1), book('B2', 2)]);
+    await settle(d);
+    expect(d.isDownloaded('B1'), isTrue);
+    await d.attach(noNetwork(() => LibraryServer('http://nas.test:25600')), root: dir); // the same books, moved
+    expect(d.isDownloaded('B1'), isTrue, reason: 'they came along to the new address');
+    expect(d.isDownloaded('B2'), isTrue);
+  });
+
+  test("another library's downloads aren't taken over; nor is anything when this address has books of its own or "
+      'downloads queued, or Komga can\'t be asked', () async {
+    String p(Directory d, String f) => '${d.path}${Platform.pathSeparator}$f';
+    await dir.create(recursive: true);
+    await File(p(dir, 'server.json')).writeAsString(jsonEncode({'url': 'https://other.example.org'}));
+    await File(p(dir, 'index.json')).writeAsString(jsonEncode({'v': 2, 'books': {'X1': {}, 'X2': {}}}));
+    const me = 'http://10.0.0.226:25600';
+    final mine = await Downloads.serverFolder(dir, me);
+    expect(await Downloads.movedFrom(dir, mine, me, (_) async => false), isNull, reason: 'not on this server');
+    expect(await Downloads.movedFrom(dir, mine, me, (_) async => throw const SocketException('off')), isNull,
+        reason: "Komga can't be asked: next time");
+    await File(p(mine, 'queue.json')).writeAsString(jsonEncode([{'bookId': 'Q1', 'title': 'Q', 'state': 'queued'}]));
+    expect(await Downloads.movedFrom(dir, mine, me, (_) async => true), isNull, reason: 'downloads queued here');
+    await File(p(mine, 'queue.json')).delete();
+    await File(p(mine, 'index.json')).writeAsString(jsonEncode({'v': 2, 'books': {'M1': {}}}));
+    expect(await Downloads.movedFrom(dir, mine, me, (_) async => true), isNull, reason: 'books here already');
+    expect(jsonDecode(await File(p(dir, 'server.json')).readAsString())['url'], 'https://other.example.org',
+        reason: "the other library's folder untouched");
+    expect(await Directory(mine.path).exists(), isTrue);
+    await Directory(mine.path).delete(recursive: true);
   });
 
   test("Delete once read = Ask, answered Keep: that book isn't asked about again", () async {
@@ -342,5 +452,17 @@ void main() {
     expect(d.store!.books.containsKey('B2'), isFalse); // partial download cleaned up
     expect(await Directory(d.store!.file('B2').path).exists(), isFalse);
   });
-}
 
+
+  test("a download keeps its pages' sizes (2026-10-16: two pages side by side pair on them - a wide page alone); "
+      'listed so online and offline', () async {
+    await d.attach(noNetwork(SizedPages.new), root: dir);
+    await d.add([book('B1', 1)]);
+    await settle(d);
+    final sizes = [for (final p in d.pagesOf('http://test', 'B1')!) (p['width'], p['height'])];
+    expect(sizes, [(1000, 1500), (2000, 1500), (1000, 1500)]);
+    final offline = await OfflineKomga(d.store!).pages('B1');
+    expect([for (final p in offline) (p['number'], p['width'], p['height'])],
+        [(1, 1000, 1500), (2, 2000, 1500), (3, 1000, 1500)]);
+  });
+}

@@ -17,7 +17,7 @@ import '../page_curl.dart';
 /// goes on a RepaintBoundary round the page view (the snapshots); [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio, this.paper}) {
+      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
       ..addStatusListener((s) {
@@ -33,6 +33,24 @@ class CurlTurns {
 
   /// The back of the turning page's colour (the page's own); white paper when not given.
   final Color Function()? paper;
+
+  /// Two pages side by side (user, 2026-10-16): the page turns over onto the one beside it, attached at the spine,
+  /// and lands flat over it ([PageCurl.spineRadius]) - it doesn't go off past it.
+  final bool Function()? spine;
+
+  /// Two pages side by side: the part of the view from before the turn that stays until the turning page lands on it -
+  /// forward, the other page; back ([forward] false), the page the previous spread's comes back over (the other side
+  /// shows that spread at once, under the page lifting away - user, 2026-10-16).
+  final Rect? Function(bool forward)? held;
+
+  /// Two pages side by side as two sheets (Inset page): the gap between them - the page turns about its middle, so
+  /// it lands over the other sheet (user, 2026-10-16: "two discrete pages, with a gap between").
+  final double Function()? gap;
+
+  bool get _spine => spine?.call() ?? false;
+
+  /// Where a turn of a page [width] wide ends: off itself, or over the page beside it (past the gap between).
+  double _goneFor(double width, bool spine) => spine ? -width - (gap?.call() ?? 0) : PageCurl.gone(width);
 
   final boundary = GlobalKey(debugLabel: 'curl-pages');
   late final AnimationController _anim;
@@ -66,7 +84,7 @@ class CurlTurns {
     final page = pageRect();
     final grab = Offset(page.width, page.height * 0.72);
     if (!_start(next: next, target: target, page: page, grab: grab,
-        finger: next ? grab : Offset(PageCurl.gone(page.width), grab.dy))) {
+        finger: next ? grab : Offset(_goneFor(page.width, _spine), grab.dy))) {
       return false;
     }
     _animate(complete: true);
@@ -78,8 +96,9 @@ class CurlTurns {
     finishNow();
     final now = _snapshot();
     if (now == null) return false;
+    final keep = held?.call(next);
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: current(),
-        under: next ? null : now, pending: !next);
+        under: next ? (keep == null ? null : now) : now, underClip: keep, pending: !next, spine: _spine);
     _curl = c;
     jump(target);
     _moved.value++;
@@ -109,7 +128,9 @@ class CurlTurns {
       ..completing = complete
       ..animFrom = c.finger
       ..animTo = c.forward == complete
-          ? Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
+          ? c.spine
+              ? Offset(_goneFor(w, true), c.grab.dy) // turned over flat onto the page beside it
+              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _anim.forward(from: 0);
   }
@@ -168,14 +189,14 @@ class CurlTurns {
       }
       final grab = Offset(page.width, (s.dy - page.top).clamp(0.0, page.height));
       if (!_start(next: next, target: target, page: page, grab: grab,
-          finger: next ? grab : Offset(PageCurl.gone(page.width), grab.dy))) {
+          finger: next ? grab : Offset(_goneFor(page.width, _spine), grab.dy))) {
         _dragStart = null;
         return;
       }
     }
     final c = _curl!;
     if (_anim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
+    final w = c.page.width, gone = _goneFor(w, c.spine);
     final room = c.forward ? s.dx : area.width - s.dx;
     final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
@@ -188,7 +209,7 @@ class CurlTurns {
     final c = _curl;
     _dragStart = null;
     if (c == null || _anim.isAnimating) return;
-    final w = c.page.width, gone = PageCurl.gone(w);
+    final w = c.page.width, gone = _goneFor(w, c.spine);
     final vx = d.velocity.pixelsPerSecond.dx;
     final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
     final complete = c.forward ? vx < -250 || (vx < 250 && turned > 0.3) : vx > 250 || (vx > -250 && turned < 0.7);
@@ -203,10 +224,13 @@ class CurlTurns {
           if (c == null) return const SizedBox.shrink();
           return IgnorePointer(
             child: Stack(fit: StackFit.expand, children: [
-              if (c.under != null) RawImage(image: c.under, fit: BoxFit.fill),
+              if (c.under != null)
+                c.underClip == null
+                    ? RawImage(image: c.under, fit: BoxFit.fill)
+                    : ClipRect(clipper: _RectClip(c.underClip!), child: RawImage(image: c.under, fit: BoxFit.fill)),
               if (!c.pending)
                 CustomPaint(painter: PageCurlPainter(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
-                    grab: c.grab, finger: c.finger, mirror: false,
+                    grab: c.grab, finger: c.finger, mirror: false, spine: c.spine,
                     paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
@@ -223,12 +247,24 @@ class CurlTurns {
   }
 }
 
+/// Clips to a fixed rectangle.
+class _RectClip extends CustomClipper<Rect> {
+  _RectClip(this.rect);
+  final Rect rect;
+  @override
+  Rect getClip(Size size) => rect;
+  @override
+  bool shouldReclip(_RectClip old) => old.rect != rect;
+}
+
 /// A page turn in progress.
 class _Curl {
   _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.pending = false});
+      required this.from, this.under, this.underClip, this.pending = false, this.spine = false});
   ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
   final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
+  final Rect? underClip; // only this part of [under] (two pages up, forward: the other page's side)
+  final bool spine; // two pages up: turns over onto the page beside it, attached at the spine
   final bool forward;
   final Rect page; // the curling page on screen
   final Offset grab; // where the page was taken hold of (its right edge, page coordinates)

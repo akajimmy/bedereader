@@ -140,6 +140,10 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     try {
       final Widget screen;
       switch (p.kind) {
+        case 'book': // straight into the reader (user, 2026-10-16)
+          final b = await api.book(p.id!);
+          if (b == null) return _gone(p);
+          screen = readerFor(api, b);
         case 'series':
           final s = await api.oneSeries(p.id!);
           if (s == null) return _gone(p);
@@ -163,7 +167,9 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     if (!mounted) return;
     if (Connection.instance.offline) {
       // offline this only means nothing from it is downloaded - not that it's gone
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Nothing from "${p.title}" is downloaded')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(p.kind == 'book'
+          ? '"${p.title}" is not downloaded'
+          : 'Nothing from "${p.title}" is downloaded')));
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
