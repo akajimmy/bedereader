@@ -16,6 +16,11 @@
        if the tablet isn't reachable the build still counts and it says so.
     7. Unzips the Windows build over Desktop\BeDeReader, the copy used on this PC (tools\update-desktop.ps1),
        unless -NoInstall; if the app is open from there it's closed first (forcefully - user, 2026-10-07).
+    8. iOS (with -Bump, unless -NoIos): pushes the build-<n> tag to GitHub, where .github\workflows\testflight.yml
+       builds that commit for iPhone / iPad and uploads it to TestFlight - about 15-20 minutes, on GitHub; it's
+       pushed as soon as the tag exists, so it runs while the tablet and the Desktop copy are updated.
+       tools\ios-status.ps1 -Build <n> says how it's going (user, 2026-10-17: "any time we're building, we're
+       building Windows, Android, and iOS").
 
     Each step prints a timestamped line; the tools' full output goes to dist\build.log
     (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
@@ -33,6 +38,7 @@ param(
     [switch]$SkipTests,
     [switch]$AllowDirty,
     [switch]$NoInstall,     # don't install on the tablet or update the Desktop copy afterwards
+    [switch]$NoIos,         # don't send the build to TestFlight (its build-<n> tag stays on this PC)
     [switch]$Timing         # the EPUB reader's timing instruments compiled in (frame times, page-change timer, the
                             # trace mirrored to the system log for adb) - for measuring; off in everyday builds
 )
@@ -292,6 +298,19 @@ if ($Bump) {
 # the rest still runs - it used to stop the script there, skipping the Desktop copy and the summary (code review,
 # 2026-09-30).
 $notDone = @()
+
+# ---- 8. iOS, started first: it builds on GitHub (a Mac runner) while the tablet and the Desktop copy are updated --
+if ($Bump -and -not $NoIos) {
+    try {
+        Git "push -q origin build-$build" | Out-Null
+        Say "iOS: build-$build pushed to GitHub - the TestFlight build runs there (tools\ios-status.ps1 -Build $build)"
+    } catch {
+        Say "iOS: NOT started - $($_.Exception.Message)"
+        $notDone += 'iOS: the build tag was not pushed'
+    }
+} elseif ($Bump) {
+    Say 'iOS: not sent to TestFlight (-NoIos)'
+}
 
 # ---- 6. put it on the tablet ---------------------------------------------------------------------------------------
 if ($Platforms -contains 'android' -and -not $NoInstall) {

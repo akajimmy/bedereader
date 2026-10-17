@@ -128,3 +128,7 @@ Git "tag -a $tag $commit -m `"$message`"" | Out-Null
 Write-Host "tagged $tag -> $buildTag ($($commit.Substring(0, 7))); CHANGELOG noted and committed"
 if ($Final) { Write-Host "pubspec.yaml: the next build is the first $next build" }
 Write-Host "Not pushed: push main and $tag when you want them on GitHub."
+# the same build on iPhone / iPad: TestFlight has it if its build-<n> tag went to GitHub (tools\build.ps1 pushes it;
+# user, 2026-10-17: "Every time we build a new release, I want it available on all three platforms")
+& (Join-Path $PSScriptRoot 'ios-status.ps1') -Build $Build
+if ($LASTEXITCODE -ne 0) { Write-Host "iOS: this build isn't (yet) on TestFlight - see above" }

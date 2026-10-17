@@ -157,7 +157,8 @@ The rest of this file is about building the app.
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
 - `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB;
-  `tools\update-desktop.cmd` - puts the newest Windows build in `Desktop\BeDeReader`.
+  `tools\update-desktop.cmd` - puts the newest Windows build in `Desktop\BeDeReader`; `tools\ios-status.ps1` - how
+  a build's iPhone / iPad (TestFlight) build on GitHub is going.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
 - `keytest\` - a page for finding out which keys a remote sends.
 - `dev_setup.py` - downloads and verifies the toolchain.
@@ -210,6 +211,11 @@ into the app,
 builds Android and Windows into `dist\<version>\` with checksums and a BUILD-INFO.txt, then commits and tags
 `build-<n>`. If a build fails, the version, changelog and bundled documents are put back. A `-Bump` build must be
 signed with the release key, and its `build-<n>` tag must not exist yet.
+
+A `-Bump` build then pushes its `build-<n>` tag to GitHub, where `.github\workflows\testflight.yml` builds that same
+commit for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about
+15-20 minutes, while the tablet and the Desktop copy are updated. `tools\ios-status.ps1 -Build <n>` says how it's
+going; `-NoIos` keeps the tag on this PC and skips it.
 
 Options: `-Platforms android` (or `windows`) builds one of them; `-Timing` compiles in the EPUB reader's
 timing instruments (a measuring build); `-SkipTests` skips the tests; `-NoInstall`
