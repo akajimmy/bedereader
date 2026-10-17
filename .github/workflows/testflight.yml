@@ -21,7 +21,7 @@ on:
 
 jobs:
   testflight:
-    runs-on: macos-15
+    runs-on: macos-26 # Xcode 26: Apple takes only apps built with the iOS 26 SDK or later (upload refused, 2026-10-16)
     timeout-minutes: 60
     defaults:
       run:
