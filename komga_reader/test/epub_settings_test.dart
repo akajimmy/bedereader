@@ -68,18 +68,19 @@ void main() {
   });
 
   test('Inset page round the text (user, 2026-10-16: "the edges of the inset page should be based on the location of '
-      'the text"): the sheet 20 out from the text all round, wherever the margins put it; Never: none; Wide screen: '
-      'on a screen wider than tall; Always: on a tall one too; a margin under 20: that edge at the page\'s', () {
+      'the text"): the sheet 60 out from the text at the sides and 24 above and below (dialled in on the tablet), '
+      'wherever the margins put it; Never: none; Wide screen: on a screen wider than tall; Always: on a tall one too; '
+      'a margin under the gap: that edge at the page\'s', () {
     const page = Size(800, 1000), wide = Size(1600, 1000), tall = Size(800, 1200);
     const text = Rect.fromLTRB(77, 40, 723, 960);
     final sheet = EpubRenderer.sheetRect(text, page, InsetPage.always, wide)!;
-    expect(sheet, const Rect.fromLTRB(57, 20, 743, 980), reason: '20 left of the lines, above the first, and so on');
+    expect(sheet, const Rect.fromLTRB(17, 16, 783, 984), reason: '60 left of the lines, 24 above the first, and so on');
     expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, wide), sheet, reason: 'wider than tall');
     expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, tall), isNull, reason: 'taller than wide');
     expect(EpubRenderer.sheetRect(text, page, InsetPage.always, tall), sheet);
     expect(EpubRenderer.sheetRect(text, page, InsetPage.never, wide), isNull);
     expect(EpubRenderer.sheetRect(const Rect.fromLTRB(10, 40, 790, 960), page, InsetPage.always, wide),
-        const Rect.fromLTRB(0, 20, 800, 980), reason: 'margins of 10: the sides at the page edges');
+        const Rect.fromLTRB(0, 16, 800, 984), reason: 'margins of 10: the sides at the page edges');
   });
 
   test('the surround: the dark grey page on black (user, 2026-10-16: "full black"); a light page on a shade darker; '

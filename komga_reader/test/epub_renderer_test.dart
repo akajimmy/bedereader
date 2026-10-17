@@ -338,26 +338,19 @@ void main() {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     await settle(tester);
     final side = EpubRenderer.sideMargin(e, 800);
-    expect(sheets(), {Rect.fromLTRB(side - 20, EpubMargins.topBottom - 20, 800 - side + 20, 1200 - EpubMargins.topBottom + 20)},
-        reason: 'the text area, 20 out all round');
+    // (60 out at the sides, 24 above and below - dialled in on the tablet, 2026-10-16)
+    expect(sheets(), {Rect.fromLTRB(side - 60, EpubMargins.topBottom - 24, 800 - side + 60, 1200 - EpubMargins.topBottom + 24)
+        .intersect(const Rect.fromLTWH(0, 0, 800, 1200))}, reason: 'the text area, 60 out at the sides, 24 above and below');
     expect(lines(), before, reason: 'no text moved');
-    expect(left(lines()) - sheets().single!.left, closeTo(20, 0.5), reason: '20 left of where the lines start');
-
-    // the gap dialled in (user, 2026-10-16: "20 pixels is too close" - a slider for now): the sheet moves, no text
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 48, insetGapEnds: 30));
-    await settle(tester);
-    expect(sheets(), {Rect.fromLTRB(side - 48, EpubMargins.topBottom - 30, 800 - side + 48, 1200 - EpubMargins.topBottom + 30)
-        .intersect(const Rect.fromLTWH(0, 0, 800, 1200))}, reason: '48 out at the sides, 30 above and below');
-    expect(lines(), before);
-    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetGap: 20, insetGapEnds: 20));
+    expect(left(lines()) - sheets().single!.left, closeTo(60, 0.5), reason: '60 left of where the lines start');
 
     AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
     final s = sheets().single!;
-    // (this book sets no page margin: its text 11.4 in (the least edge) - 20 out from that is off the page: the edge)
-    expect(s.left, closeTo(math.max(0, left(lines()) - 20), 0.5), reason: "Book's margins: round the chapter's own");
-    expect(s.left, 0, reason: 'a margin under 20: that side at the page edge');
+    // (this book sets no page margin: its text 11.4 in (the least edge) - 60 out from that is off the page: the edge)
+    expect(s.left, closeTo(math.max(0, left(lines()) - 60), 0.5), reason: "Book's margins: round the chapter's own");
+    expect(s.left, 0, reason: 'a margin under the gap: that side at the page edge');
   });
 
   testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "

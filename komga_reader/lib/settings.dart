@@ -283,25 +283,12 @@ class DisplayPrefs {
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
       this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
-      this.insetPage = InsetPage.wideScreen, this.insetGap = 20, this.insetGapEnds = 20,
-      this.insetBetween = 32});
+      this.insetPage = InsetPage.wideScreen});
   final bool night;
 
   /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always ([InsetPage]) - this device's own
   /// (user, 2026-10-11: "per device setting", not in the reader's panel; three choices since 2026-10-15).
   final InsetPage insetPage;
-
-  /// How far Inset page's sheet sits out from the text, px - TEMPORARY, to dial it in (user, 2026-10-16: "20 pixels is
-  /// too close ... give me a slider"): the eBook panel's slider; once settled, a constant again.
-  final double insetGap;
-
-  /// Its distance above and below the text - TEMPORARY likewise (user, 2026-10-16: "separate sliders for horizontal
-  /// page border and vertical page border"); [insetGap] is the sides'.
-  final double insetGapEnds;
-
-  /// Two pages up: how far apart the two sheets are, px - TEMPORARY, to dial it in (user, 2026-10-16: "the distance
-  /// between the two inset pages should be a fixed distance"): each page, sheet and text, slides to it.
-  final double insetBetween;
 
   /// The reading settings set apart per kind of book ([KindPrefs]).
   final KindPrefs comics, ebooks;
@@ -364,12 +351,9 @@ class DisplayPrefs {
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
-          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage, double? insetGap, double? insetGapEnds,
-          double? insetBetween}) =>
+          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage}) =>
       DisplayPrefs(
-        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage, insetGap: insetGap ?? this.insetGap,
-        insetGapEnds: insetGapEnds ?? this.insetGapEnds,
-        insetBetween: insetBetween ?? this.insetBetween,
+        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
         pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         posterDate: posterDate ?? this.posterDate,
@@ -394,8 +378,7 @@ class DisplayPrefs {
       'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
-      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name, 'insetGap': insetGap, 'insetGapEnds': insetGapEnds,
-      'insetBetween': insetBetween};
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -425,10 +408,7 @@ class DisplayPrefs {
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         ebooks: kind('ebooks', none.ebooks),
-        insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen),
-        insetGap: ((j['insetGap'] as num?)?.toDouble() ?? 20).clamp(0.0, 120.0),
-        insetGapEnds: ((j['insetGapEnds'] as num?)?.toDouble() ?? 20).clamp(0.0, 120.0),
-        insetBetween: ((j['insetBetween'] as num?)?.toDouble() ?? 32).clamp(0.0, 200.0));
+        insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen));
   }
 }
 
