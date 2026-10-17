@@ -299,7 +299,10 @@ void main() {
       await tester.pump();
       final back = curl(tester)!;
       expect(back.page.left, closeTo(800, 1), reason: "3|4's right-hand page comes back");
-      expect(back.held, isNull, reason: 'the whole old view covers it until then');
+      // only the right side of the old view stays, until the page lands on it: the left shows 3|4's left-hand page
+      // at once, under the page lifting away (user, 2026-10-16: the old left page showed under the curl)
+      expect(back.held!.left, closeTo(800, 1), reason: 'the right side held, from the gutter');
+      expect((back.held!.top, back.held!.right, back.held!.bottom), (0, 1600, 1000));
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
 

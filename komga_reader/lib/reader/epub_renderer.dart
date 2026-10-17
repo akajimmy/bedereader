@@ -606,7 +606,11 @@ class EpubRenderer extends Renderer {
     // two pages up: the right-hand page turns, over onto the left, attached at the spine (as comics')
     pageRect: () => _dual ? _sideRect(later: true) : _sheet ?? Offset.zero & _size,
     spine: () => _dual,
-    held: () => _dual ? Rect.fromLTWH(0, 0, _size.width, _area.height) : null,
+    held: (forward) => !_dual
+        ? null
+        : forward
+            ? Rect.fromLTWH(0, 0, _size.width, _area.height)
+            : Rect.fromLTWH(_size.width, 0, _size.width, _area.height),
     // (the sheets round the text: apart by the margins between the texts, less the gap round each)
     gap: () => _dual && _sheet != null ? AppSettings.instance.display.insetBetween : 0,
     done: ({required turned}) {
