@@ -87,25 +87,52 @@ void main() {
   String pages(String left) => RegExp(r'Pg\. ([0-9-]+)/').firstMatch(left)!.group(1)!;
   int of(String spot) => int.parse(RegExp(r'/(\d+)').firstMatch(spot)!.group(1)!);
 
-  testWidgets('a wide screen (the default, Wide screen): two pages side by side - each chapter starts on a '
-      'right-hand page, then pairs; a turn goes a spread on, to the end card', (tester) async {
+  testWidgets('a wide screen (the default, Wide screen): two pages side by side - chapters starting on the next page '
+      '(the default) or on a right-hand page (the setting), then pairs; a turn goes a spread on, to the end card',
+      (tester) async {
+    for (final start in [ChapterStart.nextPage, ChapterStart.rightPage]) {
+      AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(chapterStart: start));
+      await open(tester);
+      final first = (await spots(tester))!;
+      final total = of(first.$1), chapter1 = of(first.$2);
+      final expected = [
+        for (final s in pairChapters([chapter1, total - chapter1], rightHand: start == ChapterStart.rightPage))
+          s.pages.length == 1 ? '${s.first + 1}' : '${s.first + 1}-${s.last + 1}',
+      ];
+      final seen = [pages(first.$1)];
+      for (var i = 1; i < expected.length; i++) {
+        await turn(tester);
+        seen.add(pages((await spots(tester))!.$1));
+      }
+      expect(seen, expected, reason: '$start');
+      expect(seen.first, '1', reason: '$start: the first page on a right-hand page, alone');
+      if (start == ChapterStart.rightPage) {
+        expect(seen, contains('${chapter1 + 1}'), reason: 'the second chapter alone on the right too');
+      } else {
+        expect(seen, isNot(contains('${chapter1 + 1}')), reason: 'the second chapter beside a page, not alone');
+      }
+      await turn(tester);
+      expect(find.text('You finished the book'), findsNothing); // (the end card's own text is the Reader's)
+      await tester.pumpWidget(const SizedBox());
+    }
+    AppSettings.instance.setEpub(const EpubPrefs());
+  });
+
+  testWidgets('chapters set to start elsewhere while reading: the book paired again, on the same page', (tester) async {
     await open(tester);
     final first = (await spots(tester))!;
-    final total = of(first.$1), chapter1 = of(first.$2);
-    final expected = [
-      for (final s in pairChapters([chapter1, total - chapter1]))
-        s.pages.length == 1 ? '${s.first + 1}' : '${s.first + 1}-${s.last + 1}',
-    ];
-    final seen = [pages(first.$1)];
-    for (var i = 1; i < expected.length; i++) {
+    final chapter1 = of(first.$2);
+    // to the spread holding the second chapter's first page (next page: beside the first chapter's last, or after)
+    while (!pages((await spots(tester))!.$1).split('-').contains('${chapter1 + 1}')) {
       await turn(tester);
-      seen.add(pages((await spots(tester))!.$1));
     }
-    expect(seen, expected);
-    expect(seen.first, '1', reason: 'the first chapter on a right-hand page, alone');
-    expect(seen, contains('${chapter1 + 1}'), reason: 'the second one too');
-    await turn(tester);
-    expect(find.text('You finished the book'), findsNothing); // (the end card's own text is the Reader's)
+    final before = pages((await spots(tester))!.$1);
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(chapterStart: ChapterStart.rightPage));
+    await settle(tester);
+    final after = pages((await spots(tester))!.$1);
+    expect(after.split('-').first, before.split('-').first, reason: 'the place kept: $before -> $after');
+    AppSettings.instance.setEpub(const EpubPrefs());
+    await settle(tester);
   });
 
   testWidgets('a tall screen: one page at a time; Off: one on a wide screen too; Always: two on a tall one',

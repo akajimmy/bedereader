@@ -80,11 +80,25 @@ List<Spread> pairPages(List<bool> wide, {bool shifted = false}) {
   return out;
 }
 
-/// An eBook's pages paired for two pages side by side (user, 2026-10-16): each chapter starts on a right-hand page,
-/// as in a printed book - its first page alone in the later slot (the page beside it blank), then pairs, an odd last
-/// page alone in the earlier slot. A spread never holds two chapters. [pagesPerChapter]: each chapter's page count, in
-/// order; the pages are numbered through the book (the first chapter's from 0).
-List<Spread> pairChapters(List<int> pagesPerChapter) {
+/// An eBook's pages paired for two pages side by side (user, 2026-10-16). [rightHand] (Settings: chapters start on a
+/// right-hand page): each chapter starts on a right-hand page, as in a printed book - its first page alone in the
+/// later slot (the page beside it blank), then pairs, an odd last page alone in the earlier slot; a spread never
+/// holds two chapters. Otherwise (the default since 2026-10-18 - a book of one-page chapters showed every left-hand
+/// page blank): the book's first page alone on the right, as a cover, then the pages two by two right through the
+/// book, a chapter starting on whichever side comes next. [pagesPerChapter]: each chapter's page count, in order; the
+/// pages are numbered through the book (the first chapter's from 0).
+List<Spread> pairChapters(List<int> pagesPerChapter, {required bool rightHand}) {
+  if (!rightHand) {
+    final total = pagesPerChapter.fold(0, (a, n) => a + n);
+    if (total == 0) return const [];
+    final out = [Spread.alone(later: 0)];
+    var i = 1;
+    for (; i + 1 < total; i += 2) {
+      out.add(Spread.pair(i, i + 1));
+    }
+    if (i < total) out.add(Spread.alone(earlier: i));
+    return out;
+  }
   final out = <Spread>[];
   var first = 0;
   for (final n in pagesPerChapter) {

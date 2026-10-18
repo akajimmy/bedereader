@@ -61,15 +61,30 @@ void main() {
     }
   });
 
-  test("eBooks: each chapter starts on a right-hand page (user, 2026-10-16) - the page beside it blank; then pairs; an "
-      'odd last page alone on the left; a spread never holds two chapters; an empty chapter takes nothing', () {
-    String chapters(List<int> counts) => pairChapters(counts).join(' ');
+  test("eBooks, chapters set to start on a right-hand page (user, 2026-10-16): the page beside it blank; then pairs; "
+      'an odd last page alone on the left; a spread never holds two chapters; an empty chapter takes nothing', () {
+    String chapters(List<int> counts) => pairChapters(counts, rightHand: true).join(' ');
     expect(chapters([1, 4, 3]), '[-|0] [-|1] [2|3] [4|-] [-|5] [6|7]');
     expect(chapters([5]), '[-|0] [1|2] [3|4]');
     expect(chapters([2, 0, 2]), '[-|0] [1|-] [-|2] [3|-]');
     for (final counts in [[1, 4, 3], [5], [2, 0, 2], [7, 1, 6]]) {
       final total = counts.fold(0, (a, b) => a + b);
-      final spreads = pairChapters(counts);
+      final spreads = pairChapters(counts, rightHand: true);
+      expect([for (final s in spreads) ...s.pages], List.generate(total, (i) => i), reason: '$counts: every page once');
+    }
+  });
+
+  test('eBooks, chapters on the next page (the default, user 2026-10-18: a book of one-page chapters showed every '
+      'left-hand page blank): the first page alone on the right, then two by two through the book, chapters or not',
+      () {
+    String chapters(List<int> counts) => pairChapters(counts, rightHand: false).join(' ');
+    expect(chapters([1, 1, 1, 1, 1]), '[-|0] [1|2] [3|4]', reason: 'one-page chapters: no blank page beside them');
+    expect(chapters([1, 4, 3]), '[-|0] [1|2] [3|4] [5|6] [7|-]');
+    expect(chapters([2, 0, 2]), '[-|0] [1|2] [3|-]');
+    expect(chapters([0, 0]), '', reason: 'nothing to show');
+    for (final counts in [[1, 4, 3], [5], [2, 0, 2], [7, 1, 6]]) {
+      final total = counts.fold(0, (a, b) => a + b);
+      final spreads = pairChapters(counts, rightHand: false);
       expect([for (final s in spreads) ...s.pages], List.generate(total, (i) => i), reason: '$counts: every page once');
     }
   });
