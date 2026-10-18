@@ -203,6 +203,8 @@ Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) as
 Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
     {required VoidCallback onChanged, bool inSeries = false, VoidCallback? onSelectMultiple}) async {
   final title = (s['metadata']?['title'] ?? s['name']) as String;
+  final view = listPin('series', s['id'] as String, title);
+  final pinned = Pins.instance.find(view);
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -212,6 +214,7 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
         const Divider(height: 1),
         ListTile(autofocus: true, leading: const Icon(Icons.info_outline), title: const Text('Details'),
             onTap: () => Navigator.pop(ctx, 'details')),
+        pinTile(ctx, pinned),
         ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark series as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark series as unread'),
@@ -237,6 +240,7 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
     onSelectMultiple!();
     return;
   }
+  if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
   if (choice == 'details') {
     await Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => SeriesDetailsScreen(api: api, series: s, showOpen: !inSeries)));
@@ -293,22 +297,98 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
 /// Renames a read list on Komga (user, 2026-10-18: "starting with the ability to rename a read list"): asks for the
 /// name, sends it, and updates [rl] in place - its screen shows the new name - and the pins of the list. Komga lets
 /// admin accounts only do it, and turns down a name another read list has: both said so.
-Future<void> renameReadList(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) async {
-  final old = rl['name'] as String;
-  final name = await askName(context, title: 'Rename read list', label: 'Name', initial: old, action: 'Rename');
+Future<void> renameReadList(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) =>
+    _renameList(context, rl, 'read list', 'readlist', api.renameReadList, onChanged);
+
+/// Renames a collection, as [renameReadList] a read list (user, 2026-10-18: its menu "does not ... have any options").
+Future<void> renameCollection(BuildContext context, Komga api, dynamic c, {required VoidCallback onChanged}) =>
+    _renameList(context, c, 'collection', 'collection', api.renameCollection, onChanged);
+
+Future<void> _renameList(BuildContext context, dynamic list, String thing, String pinKind,
+    Future<void> Function(String id, String name) send, VoidCallback onChanged) async {
+  final old = list['name'] as String;
+  final name = await askName(context, title: 'Rename $thing', label: 'Name', initial: old, action: 'Rename');
   if (name == null || name == old || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
   try {
-    await api.renameReadList(rl['id'] as String, name);
+    await send(list['id'] as String, name);
   } catch (e, st) {
     showErrorOn(messenger, e is KomgaError && e.status == 400
-        ? "Couldn't rename \"$old\": Komga turned the name down. Another read list may already be called \"$name\"."
-        : couldnt('rename "$old"', e, thing: 'read list', forbidden: editNeedsAdmin), e, st);
+        ? "Couldn't rename \"$old\": Komga turned the name down. Another $thing may already be called \"$name\"."
+        : couldnt('rename "$old"', e, thing: thing, forbidden: editNeedsAdmin), e, st);
     return;
   }
-  rl['name'] = name;
-  Pins.instance.retitle('readlist', rl['id'] as String, old, name);
+  list['name'] = name;
+  Pins.instance.retitle(pinKind, list['id'] as String, old, name);
   messenger.showSnackBar(SnackBar(content: Text('Renamed to "$name"')));
+  onChanged();
+}
+
+/// A series', read list's or collection's plain view as a pin - as its screen pins it with nothing filtered or
+/// sorted - for "Pin to Home" in its menu (user, 2026-10-18: "right click / context menu on a read list or series
+/// should allow pin").
+Pin listPin(String kind, String id, String name) => Pin(name: name, kind: kind, id: id, title: name);
+
+/// A menu's pin entry: "Pin to Home", or, pinned already, the pin's name - to rename or unpin it. Pops 'pin'.
+Widget pinTile(BuildContext ctx, Pin? pinned, {bool autofocus = false}) => pinned == null
+    ? ListTile(autofocus: autofocus, leading: const Icon(Icons.push_pin_outlined), title: const Text('Pin to Home'),
+        onTap: () => Navigator.pop(ctx, 'pin'))
+    : ListTile(autofocus: autofocus, leading: const Icon(Icons.push_pin), title: Text('Pinned as "${pinned.name}"'),
+        subtitle: const Text('Rename or unpin'), onTap: () => Navigator.pop(ctx, 'pin'));
+
+/// Collection actions (right-click / long-press a collection; user, 2026-10-18: it had no menu at all): pin it to
+/// Home, mark every series in it read or unread, rename it.
+Future<void> showCollectionActions(BuildContext context, Komga api, dynamic c, {required VoidCallback onChanged}) async {
+  final name = c['name'] as String;
+  final ids = [for (final id in (c['seriesIds'] as List?) ?? const []) '$id'];
+  final view = listPin('collection', c['id'] as String, name);
+  final pinned = Pins.instance.find(view);
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    backgroundColor: const Color(0xFF141416),
+    builder: (ctx) => SafeArea(
+      child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        ListTile(title: Text(name), subtitle: Text('${ids.length} series')),
+        const Divider(height: 1),
+        pinTile(ctx, pinned, autofocus: true),
+        ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark all as read'),
+            onTap: () => Navigator.pop(ctx, 'read')),
+        ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
+            onTap: () => Navigator.pop(ctx, 'unread')),
+        ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Rename'),
+            onTap: () => Navigator.pop(ctx, 'rename')),
+      ])),
+    ),
+  );
+  if (choice == null || !context.mounted) return;
+  if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
+  if (choice == 'rename') return renameCollection(context, api, c, onChanged: onChanged);
+  final read = choice == 'read';
+  if (!await confirmBulk(context,
+      read ? 'Mark all ${ids.length} series of "$name" read?' : 'Mark all ${ids.length} series of "$name" unread?',
+      read ? 'Books in progress are marked finished.' : 'This also clears the saved page of books in progress.',
+      read ? 'Mark read' : 'Mark unread')) {
+    return;
+  }
+  if (!context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.showSnackBar(SnackBar(content: Text('Updating "$name"…'), duration: const Duration(minutes: 5)));
+  var done = 0;
+  try {
+    for (final id in ids) {
+      read ? await api.markSeriesRead(id) : await api.markSeriesUnread(id);
+      done++;
+    }
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${ids.length} series marked ${read ? 'read' : 'unread'}')));
+  } catch (e, st) {
+    messenger.hideCurrentSnackBar();
+    final word = read ? 'read' : 'unread';
+    showErrorOn(messenger, done == 0
+        ? couldnt('mark "$name" as $word', e, thing: 'collection')
+        : stoppedAfter('Marked $done of ${ids.length} series $word', e), e, st);
+  }
   onChanged();
 }
 
@@ -342,6 +422,8 @@ Future<String?> askName(BuildContext context,
 Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) async {
   final name = rl['name'] as String;
   final total = (rl['bookIds'] as List?)?.length ?? 0;
+  final view = listPin('readlist', rl['id'] as String, name);
+  final pinned = Pins.instance.find(view);
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -349,7 +431,8 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
       child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
         ListTile(title: Text(name), subtitle: Text('$total books')),
         const Divider(height: 1),
-        ListTile(autofocus: true, leading: const Icon(Icons.check_circle_outline), title: const Text('Mark all as read'),
+        pinTile(ctx, pinned, autofocus: true),
+        ListTile(leading: const Icon(Icons.check_circle_outline), title: const Text('Mark all as read'),
             onTap: () => Navigator.pop(ctx, 'read')),
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
@@ -361,6 +444,7 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
   );
   if (choice == null || !context.mounted) return;
   if (choice == 'rename') return renameReadList(context, api, rl, onChanged: onChanged);
+  if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
   if (choice == 'dl-all' || choice == 'dl-unread') {
     return queueDownloads(context, '"$name"', (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
         unreadOnly: choice == 'dl-unread');

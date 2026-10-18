@@ -430,6 +430,9 @@ class Komga {
   /// to a name another read list already has.
   Future<void> renameReadList(String id, String name) => _send('PATCH', '/api/v1/readlists/$id', {'name': name});
 
+  /// Renames a collection - as [renameReadList] (admin accounts only; 400 for a name taken).
+  Future<void> renameCollection(String id, String name) => _send('PATCH', '/api/v1/collections/$id', {'name': name});
+
   Future<Map<String, dynamic>?> book(String id) async => await _get('/api/v1/books/$id') as Map<String, dynamic>?;
 
   /// A collection's series in the collection's own order (Komga's: as arranged for an ordered collection, by title

@@ -154,11 +154,12 @@ class _ReadListTileState extends State<ReadListTile> {
 /// Collection tile: Komga's own poster on All; under a filter, a 2x2 of its first four matching series and "3 of 8
 /// series unread" / "read" (user, 2026-10-07).
 class CollectionTile extends StatelessWidget {
-  const CollectionTile({super.key, required this.api, required this.collection, required this.onOpen,
+  const CollectionTile({super.key, required this.api, required this.collection, required this.onOpen, this.onMenu,
       this.autofocus = false, this.filter = ReadFilter.all});
   final Komga api;
   final dynamic collection;
   final VoidCallback onOpen;
+  final VoidCallback? onMenu; // right-click / long-press: collection actions
   final bool autofocus;
   final ReadFilter filter;
 
@@ -174,6 +175,7 @@ class CollectionTile extends StatelessWidget {
           title: collection['name'] as String,
           subtitle: subtitle ?? '$total series',
           onOpen: onOpen,
+          onMenu: onMenu,
         );
     if (filter == ReadFilter.all) return tile();
     return FutureBuilder<Map<String, dynamic>>(

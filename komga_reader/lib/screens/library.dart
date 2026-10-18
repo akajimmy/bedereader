@@ -310,6 +310,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
       case BrowseMode.collections:
         return CollectionTile(api: api, collection: it, autofocus: first, filter: _filter,
           onOpen: () => _push(SeriesListScreen(api: api, title: it['name'] as String, collectionId: it['id'] as String)),
+          onMenu: () => showCollectionActions(context, api, it, onChanged: _refresh),
         );
       case BrowseMode.readLists:
         return ReadListTile(api: api, readList: it, autofocus: first, filter: _filter,

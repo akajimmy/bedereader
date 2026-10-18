@@ -10,6 +10,7 @@ import '../widgets/poster_row.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/error_text.dart';
+import 'actions.dart';
 import 'library.dart';
 import 'open_book.dart';
 import 'readlist.dart';
@@ -179,7 +180,8 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
             title: _title('Read lists', _readLists),
             itemCount: lists.length,
             itemBuilder: (context, i) => ReadListTile(api: api, readList: lists[i],
-                onOpen: () => _push(ReadListScreen(api: api, readList: lists[i]))),
+                onOpen: () => _push(ReadListScreen(api: api, readList: lists[i])),
+                onMenu: () => showReadListActions(context, api, lists[i], onChanged: refreshView)),
           ),
         if (cols.isNotEmpty)
           PosterRow(
@@ -190,6 +192,7 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
               subtitle: '${(cols[i]['seriesIds'] as List?)?.length ?? 0} series',
               onOpen: () => _push(SeriesListScreen(api: api, title: cols[i]['name'] as String,
                   collectionId: cols[i]['id'] as String)),
+              onMenu: () => showCollectionActions(context, api, cols[i], onChanged: refreshView),
             ),
           ),
       ])),
