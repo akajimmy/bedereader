@@ -130,7 +130,10 @@ void main() {
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(chapterStart: ChapterStart.rightPage));
     await settle(tester);
     final after = pages((await spots(tester))!.$1);
-    expect(after.split('-').first, before.split('-').first, reason: 'the place kept: $before -> $after');
+    // the spread had the second chapter's first page beside another; now a chapter starts alone on the right - and
+    // the place (the spread's earlier page) is still on screen
+    expect(after, isNot(before), reason: 'paired again: $before -> $after');
+    expect(after.split('-'), contains(before.split('-').first), reason: 'the place kept: $before -> $after');
     AppSettings.instance.setEpub(const EpubPrefs());
     await settle(tester);
   });
