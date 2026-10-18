@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 128 - 2026-10-18
+
 **New**
 
 - **Pin to Home from a series', read list's or collection's menu** (right-click, long-press, or hold OK on the
@@ -17,8 +21,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Collections have a menu** - a right-click or long-press on a collection did nothing. Now: Pin to Home, Mark all
   as read / unread (every series in it, asked first), and Rename (admin accounts, as read lists). Read lists and
   collections found by Search have their menus too.
-
-## 1.4.0
 
 ### Build 127 - 2026-10-18
 
