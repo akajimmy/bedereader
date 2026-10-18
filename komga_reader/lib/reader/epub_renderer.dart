@@ -339,7 +339,10 @@ class EpubRenderer extends Renderer {
       _laidInset = AppSettings.instance.display.insetPage;
       // the same pages, set out the other way (a half-width page and a narrow window's are the same page): two up or
       // one, after this frame
-      if (_ready && dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _arrange(dual));
+      // (or the chapters set to start elsewhere: paired again, on the same page)
+      if (_ready && (dual != _dual || (dual && _pairedBy != AppSettings.instance.epub.chapterStart))) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _arrange(dual));
+      }
       return;
     }
     // only the settings changed (the same page, laid out before): laid out once they stop changing - the size up five
@@ -544,8 +547,9 @@ class EpubRenderer extends Renderer {
     if (_pc.hasClients) _pc.jumpToPage(_viewOf(place));
   }
 
-  // ---- Dual page mode (user, 2026-10-16): the page view goes by spread - two pages, each chapter starting on the
-  // right (lib/reader/spreads.dart pairChapters) - and the place is the earlier page shown; one page each otherwise
+  // ---- Dual page mode (user, 2026-10-16): the page view goes by spread - two pages, a chapter starting on the next
+  // page or on the right (lib/reader/spreads.dart pairChapters) - and the place is the earlier page shown; one page
+  // each otherwise
 
   /// Two pages side by side now (the spreads of this count).
   bool _dual = false;
@@ -553,6 +557,7 @@ class EpubRenderer extends Renderer {
   Size _area = Size.zero; // the whole page area (both pages; [_size] is a page's)
   List<Spread> _spreads = const [];
   List<int> _spreadOf = const [];
+  ChapterStart? _pairedBy; // the setting the spreads follow (changed: paired again, no new layout)
 
   /// The spreads of this count (none, one page up).
   void _pairBook() {
@@ -562,7 +567,9 @@ class EpubRenderer extends Renderer {
       _spreadOf = const [];
       return;
     }
-    _spreads = pairChapters([for (var c = 0; c < b.chapterCount; c++) b.pageCount(c)!]);
+    _pairedBy = AppSettings.instance.epub.chapterStart;
+    _spreads = pairChapters([for (var c = 0; c < b.chapterCount; c++) b.pageCount(c)!],
+        rightHand: _pairedBy == ChapterStart.rightPage);
     _spreadOf = spreadIndex(_spreads, b.totalPages!);
   }
 
@@ -578,7 +585,9 @@ class EpubRenderer extends Renderer {
   /// One page or two now, the same layout (the window's shape changed, not the page's): the page view again, on the
   /// same page.
   void _arrange(bool dual) {
-    if (_disposed || !_ready || dual == _dual) return;
+    if (_disposed || !_ready || (dual == _dual && (!dual || _pairedBy == AppSettings.instance.epub.chapterStart))) {
+      return;
+    }
     final keep = place;
     _dual = dual;
     _pairBook();

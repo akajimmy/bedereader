@@ -182,7 +182,8 @@ void main() {
             hiddenSpots: ['right']));
     const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small, twoPages: TwoPages.off);
+        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small, twoPages: TwoPages.off,
+        chapterStart: ChapterStart.rightPage);
     const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
         autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white,
         twoPages: TwoPages.always);

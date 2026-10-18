@@ -25,6 +25,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
           onChanged: (v) => set(e.copyWith(turn: v)),
         ),
         _twoPagesRow(e, set),
+        _chapterStartRow(e, set),
       ]),
     ];
 
@@ -45,6 +46,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     SettingsGroup(title: 'Reading', children: [
       _coloursRow(e, set),
       _twoPagesRow(e, set),
+      _chapterStartRow(e, set),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
@@ -68,6 +70,17 @@ Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoP
       ],
       value: e.twoPages,
       onChanged: (t) => set(e.copyWith(twoPages: t)),
+    );
+
+/// Dual page mode: where a chapter starts (user, 2026-10-18: "A setting") - the next page, or a right-hand one.
+Widget _chapterStartRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<ChapterStart>(
+      title: 'Chapters start on',
+      subtitle: e.chapterStart == ChapterStart.nextPage
+          ? 'Two pages up: the next page, left or right'
+          : 'Two pages up: a right-hand page, as in print - the page before it blank as needed',
+      choices: const [Choice(ChapterStart.nextPage, 'Next page'), Choice(ChapterStart.rightPage, 'Right-hand page')],
+      value: e.chapterStart,
+      onChanged: (v) => set(e.copyWith(chapterStart: v)),
     );
 
 // the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down to fit
