@@ -11,6 +11,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- **eBooks in Dual page mode: chapters start on the next page** - every chapter used to start on a right-hand page,
+  leaving the page before it blank; a book of very short chapters showed every left-hand page empty. Now the pages
+  run on through the book, a chapter starting on whichever side comes next. The print-book way is a setting:
+  "Chapters start on" Next page / Right-hand page, in the eBook panel (Reading) and Settings > eBooks > Page.
 - **eBooks are named by their title and author, not "Discworld #13"** - posters show the title, then the author;
   the book's menu, the reader's top bar (the author over the title), Book details, messages and a pinned eBook's
   name use the title too. Comics are named as before ("Saga #3").
