@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 129 - 2026-10-18
+
 **Changed**
 
 - **eBooks in Dual page mode: chapters start on the next page** - every chapter used to start on a right-hand page,
@@ -21,8 +25,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Settings > Library & Home: eBook posters have their own lines** - "Under eBook posters": Title, Author, Series #,
   Release date (title and author to start with), apart from the comics' "Under comic posters" (Series #, Title,
   Release date, as they were).
-
-## 1.4.0
 
 ### Build 128 - 2026-10-18
 
