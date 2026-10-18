@@ -108,7 +108,8 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     );
 
     final facts = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(bookTitle(_book),
+      // above the title: a comic's series and number, an eBook's author (user, 2026-10-18)
+      Text(isEbook(_book) ? bookAuthors(_book) : bookSeriesLine(_book),
           style: const TextStyle(fontSize: 15, color: Color(0xFF9A9A9A))),
       const SizedBox(height: 4),
       Text((m['title'] ?? _book['name'] ?? '') as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),

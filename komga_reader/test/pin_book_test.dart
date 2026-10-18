@@ -68,6 +68,8 @@ void main() {
     final b1 = BookPinServer.theBook('B1');
     expect(Pin.book({...b1, 'metadata': {'title': 'Discworld #13', 'number': '13'}}).name, 'Discworld #13');
     expect(Pin.book({...b1, 'seriesTitle': null, 'metadata': {'title': 'Small Gods'}}).name, 'Small Gods');
+    // an eBook is its title alone (user, 2026-10-18: nobody names a novel by its series and number)
+    expect(Pin.book({...b1, 'media': {'mediaProfile': 'EPUB'}}).name, 'Small Gods');
     expect(pin.sameView(Pin.book({...BookPinServer.theBook('B1'), 'readProgress': null})), isTrue);
     expect(pin.sameView(Pin.book(BookPinServer.theBook('B2'))), isFalse);
     expect(Pin.fromJson(pin.toJson()).sameView(pin), isTrue, reason: 'kept and synced as the other pins');

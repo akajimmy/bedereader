@@ -9,6 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- **eBooks are named by their title and author, not "Discworld #13"** - posters show the title, then the author;
+  the book's menu, the reader's top bar (the author over the title), Book details, messages and a pinned eBook's
+  name use the title too. Comics are named as before ("Saga #3").
+- **Settings > Library & Home: eBook posters have their own lines** - "Under eBook posters": Title, Author, Series #,
+  Release date (title and author to start with), apart from the comics' "Under comic posters" (Series #, Title,
+  Release date, as they were).
+
 ## 1.4.0
 
 ### Build 128 - 2026-10-18

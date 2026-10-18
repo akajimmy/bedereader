@@ -98,4 +98,35 @@ void main() {
     expect(await lines(false, false, false), isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets("eBook posters have their own lines (user, 2026-10-18: \"Nobody thinks of books in that way\"): title "
+      "then author by default, not the series and number; the series and the date if asked; the comics' lines don't "
+      'touch them', (tester) async {
+    final api = plainKomga();
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    final b = {'id': 'e1', 'seriesTitle': 'Discworld', 'media': {'mediaProfile': 'EPUB'}, 'metadata': {'number': '13',
+        'title': 'Small Gods', 'releaseDate': '1992-05-01',
+        'authors': [{'name': 'Josh Kirby', 'role': 'cover'}, {'name': 'Terry Pratchett', 'role': 'writer'}]}};
+    const all = ['Small Gods', 'Terry Pratchett', 'Discworld #13', '1 May 1992'];
+    Future<List<String>> lines(DisplayPrefs d) async {
+      s.setDisplay(d);
+      await tester.pumpWidget(MaterialApp(key: UniqueKey(), home: Scaffold(body: Builder(builder: (context) =>
+          SizedBox(width: 150, height: 300, child: bookTile(context, api, b, onOpen: () {}))))));
+      await tester.pump();
+      final texts = [for (final e in find.byType(Text).evaluate()) (e.widget as Text).data ?? '']
+          .where(all.contains).toList();
+      final tops = {for (final t in texts) t: tester.getTopLeft(find.text(t)).dy};
+      return texts..sort((a, c) => tops[a]!.compareTo(tops[c]!));
+    }
+
+    expect(await lines(const DisplayPrefs()), ['Small Gods', 'Terry Pratchett'], reason: 'the defaults');
+    expect(await lines(const DisplayPrefs(posterSeries: false, posterTitle: false, posterDate: false)),
+        ['Small Gods', 'Terry Pratchett'], reason: "the comics' lines: not the eBooks'");
+    expect(await lines(const DisplayPrefs(ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true)),
+        ['Small Gods', 'Discworld #13', '1 May 1992']);
+    expect(await lines(const DisplayPrefs(ebookPosterTitle: false, ebookPosterSeries: true)),
+        ['Terry Pratchett', 'Discworld #13']);
+    expect(tester.takeException(), isNull);
+  });
 }

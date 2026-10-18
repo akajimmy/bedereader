@@ -280,6 +280,8 @@ class DisplayPrefs {
       this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
+      this.ebookPosterTitle = true, this.ebookPosterAuthor = true, this.ebookPosterSeries = false,
+      this.ebookPosterDate = false,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
       this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
@@ -297,6 +299,11 @@ class DisplayPrefs {
   /// Book posters' caption, any of three lines, always in this order (user, 2026-10-07): the series and number
   /// ("Saga #12"), the book's title, the release date ("13 Mar 2024").
   final bool posterSeries, posterTitle, posterDate;
+
+  /// eBook posters' caption, their own (user, 2026-10-18: "make sure it's split between eBooks and comics"): any of
+  /// the title, the author, the series and number, the release date, in this order - the first three of them shown.
+  /// Title and author by default ("The option I'm going to want in the end is title, then author").
+  final bool ebookPosterTitle, ebookPosterAuthor, ebookPosterSeries, ebookPosterDate;
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
   /// button (user, 2026-10-02)
   final bool pageStrip;
@@ -351,11 +358,16 @@ class DisplayPrefs {
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
+          bool? ebookPosterTitle, bool? ebookPosterAuthor, bool? ebookPosterSeries, bool? ebookPosterDate,
           KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
         pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
+        ebookPosterTitle: ebookPosterTitle ?? this.ebookPosterTitle,
+        ebookPosterAuthor: ebookPosterAuthor ?? this.ebookPosterAuthor,
+        ebookPosterSeries: ebookPosterSeries ?? this.ebookPosterSeries,
+        ebookPosterDate: ebookPosterDate ?? this.ebookPosterDate,
         posterDate: posterDate ?? this.posterDate,
         nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
         nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
@@ -376,6 +388,8 @@ class DisplayPrefs {
       'pageTurn': pageTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
+      'ebookPosterTitle': ebookPosterTitle, 'ebookPosterAuthor': ebookPosterAuthor,
+      'ebookPosterSeries': ebookPosterSeries, 'ebookPosterDate': ebookPosterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name};
@@ -399,6 +413,10 @@ class DisplayPrefs {
         posterSeries: j['posterSeries'] != false,
         posterTitle: j['posterTitle'] != false,
         posterDate: j['posterDate'] != false,
+        ebookPosterTitle: j['ebookPosterTitle'] != false,
+        ebookPosterAuthor: j['ebookPosterAuthor'] != false,
+        ebookPosterSeries: j['ebookPosterSeries'] == true,
+        ebookPosterDate: j['ebookPosterDate'] == true,
         nightSchedule: j['nightSchedule'] == true,
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
@@ -570,10 +588,12 @@ class AppSettings extends ChangeNotifier {
 
   /// Tells only of changes to how posters look (size, title only, release date): poster grids listen to this, not to
   /// every setting - a brightness slider drag rebuilt every grid under the reader (code review 2026-10-05, #44).
-  final posterLook = ValueNotifier<(PosterSize, bool, bool, bool)>((PosterSize.medium, true, true, true));
+  final posterLook = ValueNotifier<(PosterSize, bool, bool, bool, (bool, bool, bool, bool))>(
+      (PosterSize.medium, true, true, true, (true, true, false, false)));
 
-  void _posterLookFollows() =>
-      posterLook.value = (display.posterSize, display.posterSeries, display.posterTitle, display.posterDate);
+  void _posterLookFollows() => posterLook.value = (display.posterSize, display.posterSeries, display.posterTitle,
+      display.posterDate, (display.ebookPosterTitle, display.ebookPosterAuthor, display.ebookPosterSeries,
+          display.ebookPosterDate));
   EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
   String? syncError; // last Komga sync problem, shown at the bottom of the reader's panels
 
