@@ -60,9 +60,14 @@ void main() {
     return api;
   }
 
-  test("a book's pin: named after its title, the same pin whatever the book's read state", () {
+  test("a book's pin: named after its series, number and title (user, 2026-10-18), the same pin whatever the "
+      "book's read state", () {
     final pin = Pin.book(BookPinServer.theBook('B1'));
-    expect((pin.kind, pin.id, pin.name, pin.title), ('book', 'B1', 'Small Gods', 'Small Gods'));
+    expect((pin.kind, pin.id, pin.name, pin.title), ('book', 'B1', 'Discworld #13 · Small Gods', 'Small Gods'));
+    // a title that only repeats the series and number isn't said twice; a book in no series is its title
+    final b1 = BookPinServer.theBook('B1');
+    expect(Pin.book({...b1, 'metadata': {'title': 'Discworld #13', 'number': '13'}}).name, 'Discworld #13');
+    expect(Pin.book({...b1, 'seriesTitle': null, 'metadata': {'title': 'Small Gods'}}).name, 'Small Gods');
     expect(pin.sameView(Pin.book({...BookPinServer.theBook('B1'), 'readProgress': null})), isTrue);
     expect(pin.sameView(Pin.book(BookPinServer.theBook('B2'))), isFalse);
     expect(Pin.fromJson(pin.toJson()).sameView(pin), isTrue, reason: 'kept and synced as the other pins');
@@ -97,7 +102,7 @@ void main() {
     expect(Pins.instance.items, isEmpty);
   });
 
-  testWidgets('the book menu: Pin to Home (named after its title); pinned, it says so - and renames or unpins',
+  testWidgets('the book menu: Pin to Home (named after its series, number and title); pinned, it says so - and renames or unpins',
       (tester) async {
     final api = noNetwork(BookPinServer.new);
     await Pins.instance.load(api);
@@ -108,16 +113,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Pin to Home'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, 'Small Gods'), findsOneWidget, reason: 'named after the title');
+    expect(find.widgetWithText(TextField, 'Discworld #13 · Small Gods'), findsOneWidget,
+        reason: 'named after its series, number and title');
     await tester.tap(find.widgetWithText(FilledButton, 'Pin'));
     await tester.pumpAndSettle();
     expect(Pins.instance.items.single.sameView(Pin.book(b)), isTrue);
-    expect(Pins.instance.items.single.name, 'Small Gods');
+    expect(Pins.instance.items.single.name, 'Discworld #13 · Small Gods');
 
     await tester.tap(find.text('menu'));
     await tester.pumpAndSettle();
     expect(find.text('Pin to Home'), findsNothing);
-    await tester.tap(find.text('Pinned as "Small Gods"'));
+    await tester.tap(find.text('Pinned as "Discworld #13 · Small Gods"'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unpin'));
     await tester.pumpAndSettle();
@@ -134,7 +140,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Pin'));
     await tester.pumpAndSettle();
-    expect(Pins.instance.items.single.name, 'Mort');
+    expect(Pins.instance.items.single.name, 'Discworld #4 · Mort');
     expect(find.byIcon(Icons.push_pin), findsOneWidget, reason: 'pinned');
   });
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'book_title.dart';
 import 'errors.dart';
 import 'refresh_gate.dart';
 import 'view_filter.dart';
@@ -36,10 +37,14 @@ class Pin {
   final String? sort; // libraries: sort key
   final ViewFilter filters; // the filter panel's filters (writer, years, ...); none = not filtered
 
-  /// A single book pinned (user, 2026-10-12): on Home its cover; a tap opens the reader. Named after its title.
+  /// A single book pinned (user, 2026-10-12): on Home its cover; a tap opens the reader. Named, until renamed, after
+  /// its series, number and title - "Discworld #13 · Small Gods" (user, 2026-10-18: "it shouldn't just take the
+  /// title"); the title left out when it only repeats the rest, the series and number when the book has neither.
   factory Pin.book(dynamic b) {
     final title = '${b['metadata']?['title'] ?? b['name'] ?? ''}';
-    return Pin(name: title, kind: 'book', id: b['id'] as String, title: title);
+    final where = bookTitle(b);
+    final name = where.isEmpty ? title : title.isEmpty || title == where ? where : '$where · $title';
+    return Pin(name: name, kind: 'book', id: b['id'] as String, title: title);
   }
 
   ReadFilter get readFilter => ReadFilterApi.fromName(filter);
