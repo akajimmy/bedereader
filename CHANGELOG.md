@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 127 - 2026-10-18
+
 **New**
 
 - **Rename a read list** - ⋮ on a read list (or its poster's menu) > Rename. The new name goes to Komga; the list's
@@ -20,8 +24,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - **Pin a single book: named after its series, number and title** - "Discworld #13 · Small Gods" rather than "Small
   Gods" alone (the title is left out when it only repeats the series and number). You can still change the name
   before pinning.
-
-## 1.4.0
 
 ### Build 126 - 2026-10-17
 
