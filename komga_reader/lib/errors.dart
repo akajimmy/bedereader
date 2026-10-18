@@ -120,6 +120,9 @@ Explained explain(Object e, {bool signIn = false, String thing = 'item', String?
 /// Why a delete was refused (Komga answers 403: only admins may delete files).
 const deleteNeedsAdmin = 'deleting files needs an admin account in Komga';
 
+/// Why an edit was refused (Komga answers 403: only admins may change read lists, collections and metadata).
+const editNeedsAdmin = 'changing that needs an admin account in Komga';
+
 /// A failed action: "Couldn't mark "Saga #3" as read: can't reach Komga."
 String couldnt(String action, Object e, {String thing = 'item', String? forbidden}) =>
     "Couldn't $action: ${explain(e, thing: thing, forbidden: forbidden).reason}.";

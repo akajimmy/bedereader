@@ -134,7 +134,10 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
             sort: _sort.isDefault(readListBookSorts) ? null : _sort.pinValue, // null: as pins made before sorts
           ),
           onRefresh: _paged.refresh,
-          onMore: () => showReadListActions(context, widget.api, widget.readList, onChanged: _paged.refresh),
+          onMore: () => showReadListActions(context, widget.api, widget.readList, onChanged: () {
+            setState(() {}); // renamed: the title and the pin button's name
+            _paged.refresh();
+          }),
           moreTooltip: 'Read list actions',
         ),
       ),

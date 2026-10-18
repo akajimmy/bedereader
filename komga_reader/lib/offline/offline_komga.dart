@@ -581,6 +581,8 @@ class OfflineKomga extends Komga {
   @override
   Future<void> deleteBookFile(String bookId) async => throw NotAvailableOffline('Deleting a book');
   @override
+  Future<void> renameReadList(String id, String name) async => throw NotAvailableOffline('Renaming a read list');
+  @override
   Future<void> deleteSeriesFiles(String seriesId) async => throw NotAvailableOffline('Deleting a series');
 }
 

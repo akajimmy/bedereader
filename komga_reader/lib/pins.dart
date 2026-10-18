@@ -66,6 +66,12 @@ class Pin {
   Pin renamed(String n) =>
       Pin(name: n, kind: kind, id: id, title: title, filter: filter, mode: mode, sort: sort, filters: filters);
 
+  /// The same pin for a list renamed on Komga: its title [to], and its name too where that was the old title [from]
+  /// - alone, or before " · " and the view's words ("Civil War · Unread"); a name of your own is kept.
+  Pin retitled(String from, String to) => Pin(
+      name: name == from ? to : name.startsWith('$from · ') ? to + name.substring(from.length) : name,
+      kind: kind, id: id, title: to, filter: filter, mode: mode, sort: sort, filters: filters);
+
   Map<String, dynamic> toJson() => {
         'name': name, 'kind': kind, 'id': id, 'title': title, 'filter': filter, 'mode': mode, 'sort': sort,
         if (filters.isNotEmpty) 'filters': filters.toJson(),
@@ -245,6 +251,12 @@ class Pins extends ChangeNotifier {
   void add(Pin pin) => _save([...items.where((p) => !p.sameView(pin)), pin]);
   void remove(Pin pin) => _save(items.where((p) => !p.sameView(pin)).toList());
   void rename(Pin pin, String name) => _save([for (final p in items) p.sameView(pin) ? p.renamed(name) : p]);
+
+  /// A read list (or other [kind]) renamed on Komga from [from] to [to]: its pins follow ([Pin.retitled]).
+  void retitle(String kind, String id, String from, String to) {
+    if (!items.any((p) => p.kind == kind && p.id == id)) return;
+    _save([for (final p in items) p.kind == kind && p.id == id ? p.retitled(from, to) : p]);
+  }
 
   String get _raw => jsonEncode([for (final p in items) p.toJson()]);
 

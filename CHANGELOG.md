@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- **Rename a read list** - ⋮ on a read list (or its poster's menu) > Rename. The new name goes to Komga; the list's
+  screen and its pins on Home follow (a pin you named yourself keeps its name). Komga allows it to admin accounts
+  only, and turns down a name another read list already has - both are said in words. Not available offline.
+
 **Changed**
 
 - **Pin a single book: named after its series, number and title** - "Discworld #13 · Small Gods" rather than "Small

@@ -426,6 +426,10 @@ class Komga {
   Future<Map<String, dynamic>?> oneSeries(String id) async => await _get('/api/v1/series/$id') as Map<String, dynamic>?;
   Future<Map<String, dynamic>?> readList(String id) async => await _get('/api/v1/readlists/$id') as Map<String, dynamic>?;
 
+  /// Renames a read list (user, 2026-10-18). Komga allows it to admin accounts only (403 otherwise), and answers 400
+  /// to a name another read list already has.
+  Future<void> renameReadList(String id, String name) => _send('PATCH', '/api/v1/readlists/$id', {'name': name});
+
   Future<Map<String, dynamic>?> book(String id) async => await _get('/api/v1/books/$id') as Map<String, dynamic>?;
 
   /// A collection's series in the collection's own order (Komga's: as arranged for an ordered collection, by title

@@ -290,7 +290,54 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
   }
 }
 
-/// Read-list actions (long-press a read list, or ⋮ in the list): mark every book in it read or unread.
+/// Renames a read list on Komga (user, 2026-10-18: "starting with the ability to rename a read list"): asks for the
+/// name, sends it, and updates [rl] in place - its screen shows the new name - and the pins of the list. Komga lets
+/// admin accounts only do it, and turns down a name another read list has: both said so.
+Future<void> renameReadList(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) async {
+  final old = rl['name'] as String;
+  final name = await askName(context, title: 'Rename read list', label: 'Name', initial: old, action: 'Rename');
+  if (name == null || name == old || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    await api.renameReadList(rl['id'] as String, name);
+  } catch (e, st) {
+    showErrorOn(messenger, e is KomgaError && e.status == 400
+        ? "Couldn't rename \"$old\": Komga turned the name down. Another read list may already be called \"$name\"."
+        : couldnt('rename "$old"', e, thing: 'read list', forbidden: editNeedsAdmin), e, st);
+    return;
+  }
+  rl['name'] = name;
+  Pins.instance.retitle('readlist', rl['id'] as String, old, name);
+  messenger.showSnackBar(SnackBar(content: Text('Renamed to "$name"')));
+  onChanged();
+}
+
+/// Asks for a name: [initial] filled in and selected, ready to type over. Null: cancelled, or left empty.
+Future<String?> askName(BuildContext context,
+    {required String title, required String label, required String initial, required String action}) async {
+  final name = TextEditingController(text: initial)..selection = TextSelection(baseOffset: 0, extentOffset: initial.length);
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: TextField(
+        controller: name,
+        autofocus: true,
+        decoration: InputDecoration(labelText: label),
+        onSubmitted: (_) => Navigator.pop(ctx, true),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+      ],
+    ),
+  );
+  // (not disposed here: the dialog still shows the field while it closes - showPinDialog leaves it to the GC too)
+  final n = name.text.trim();
+  return ok == true && n.isNotEmpty ? n : null;
+}
+
+/// Read-list actions (long-press a read list, or ⋮ in the list): mark every book in it read or unread; rename it.
 /// Komga has no bulk call for read lists, so only the books that need changing are updated, a few at a time.
 Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) async {
   final name = rl['name'] as String;
@@ -307,10 +354,13 @@ Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {r
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
         ...downloadTiles(ctx),
+        ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Rename'),
+            onTap: () => Navigator.pop(ctx, 'rename')),
       ])),
     ),
   );
   if (choice == null || !context.mounted) return;
+  if (choice == 'rename') return renameReadList(context, api, rl, onChanged: onChanged);
   if (choice == 'dl-all' || choice == 'dl-unread') {
     return queueDownloads(context, '"$name"', (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
         unreadOnly: choice == 'dl-unread');
