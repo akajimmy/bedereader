@@ -64,7 +64,8 @@ void main() {
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, posterDate: false, insetPage: InsetPage.never);
+        pagePreviews: false, pageStrip: true, posterDate: false, insetPage: InsetPage.never,
+        ebookPosterTitle: false, ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -95,6 +96,11 @@ void main() {
       ('pagePreviews', (d) => d.pagePreviews, false, true),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
+      // eBook posters' own lines (user, 2026-10-18): title and author unless changed
+      ('ebookPosterTitle', (d) => d.ebookPosterTitle, false, true),
+      ('ebookPosterAuthor', (d) => d.ebookPosterAuthor, false, true),
+      ('ebookPosterSeries', (d) => d.ebookPosterSeries, true, false),
+      ('ebookPosterDate', (d) => d.ebookPosterDate, true, false),
       ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen), // eBooks' sheet, this device's (2026-10-12)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());

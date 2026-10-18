@@ -512,13 +512,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               value: d.posterSize,
               onChanged: (p) => s.setDisplay(d.copyWith(posterSize: p)),
             ),
-            // any of three lines under a book's poster, always in this order (user, 2026-10-07)
+            // any of three lines under a book's poster, always in this order (user, 2026-10-07); comics and eBooks each
+            // their own (user, 2026-10-18)
             ToggleChipsRow(
-              title: 'Under book posters',
+              title: 'Under comic posters',
               chips: [
                 ToggleChip('Series #', d.posterSeries, (v) => s.setDisplay(d.copyWith(posterSeries: v))),
                 ToggleChip('Title', d.posterTitle, (v) => s.setDisplay(d.copyWith(posterTitle: v))),
                 ToggleChip('Release date', d.posterDate, (v) => s.setDisplay(d.copyWith(posterDate: v))),
+              ],
+            ),
+            ToggleChipsRow(
+              title: 'Under eBook posters',
+              chips: [
+                ToggleChip('Title', d.ebookPosterTitle, (v) => s.setDisplay(d.copyWith(ebookPosterTitle: v))),
+                ToggleChip('Author', d.ebookPosterAuthor, (v) => s.setDisplay(d.copyWith(ebookPosterAuthor: v))),
+                ToggleChip('Series #', d.ebookPosterSeries, (v) => s.setDisplay(d.copyWith(ebookPosterSeries: v))),
+                ToggleChip('Release date', d.ebookPosterDate, (v) => s.setDisplay(d.copyWith(ebookPosterDate: v))),
               ],
             ),
           ]);
@@ -548,7 +558,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           const z = DisplayPrefs();
           final s = AppSettings.instance;
           s.setDisplay(s.display.copyWith(posterSize: z.posterSize, posterSeries: z.posterSeries,
-              posterTitle: z.posterTitle, posterDate: z.posterDate));
+              posterTitle: z.posterTitle, posterDate: z.posterDate, ebookPosterTitle: z.ebookPosterTitle,
+              ebookPosterAuthor: z.ebookPosterAuthor, ebookPosterSeries: z.ebookPosterSeries,
+              ebookPosterDate: z.ebookPosterDate));
           unawaited(HiddenLibraries.instance.clear());
           unawaited(HomeSections.instance.reset());
         }),

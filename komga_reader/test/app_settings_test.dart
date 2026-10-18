@@ -128,10 +128,17 @@ void main() {
       (SettingsPage.reading, find.text('10 min'), () => s.display.screenOn, 10),
       // Library & Home: the poster size, and the three caption lines each on or off (user, 2026-10-07)
       (SettingsPage.library, find.text('Large'), () => s.display.posterSize, PosterSize.large),
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #'),
+      // (the first row: comics')
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #').first,
           () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, true)),
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Release date'),
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Release date').first,
           () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, false)),
+      // eBooks' own lines (user, 2026-10-18): title and author by default; the comics' stay as they were
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Author'),
+          () => (s.display.ebookPosterTitle, s.display.ebookPosterAuthor, s.display.ebookPosterSeries,
+              s.display.ebookPosterDate, s.display.posterSeries), (true, false, false, false, false)), // (comics: as left above)
+      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #').last,
+          () => (s.display.ebookPosterSeries, s.display.posterSeries), (true, false)),
       // Look
       (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),
       (SettingsPage.look, find.bySemanticsLabel('Green'), () => s.display.accent, Accent.green),
@@ -166,7 +173,8 @@ void main() {
     // could be dropped from a reset and nothing failed)
     const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
         midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
-        posterDate: false, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
+        posterDate: false, ebookPosterTitle: false, ebookPosterAuthor: false, ebookPosterSeries: true,
+        ebookPosterDate: true, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
         pagePreviews: false, pageStrip: true, insetPage: InsetPage.always,
         comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
             progressBar: true, hiddenSpots: ['left']),
@@ -187,6 +195,7 @@ void main() {
       'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
       'textScale': 'Look', 'accent': 'Look',
       'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,
+      'ebookPosterTitle': null, 'ebookPosterAuthor': null, 'ebookPosterSeries': null, 'ebookPosterDate': null,
     };
     final none = const DisplayPrefs().toJson(), moved = away.toJson();
     expect(resetBy.keys.toSet(), moved.keys.toSet(), reason: 'every setting placed in the table');

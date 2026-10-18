@@ -26,7 +26,7 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
     backgroundColor: const Color(0xFF141416),
     builder: (ctx) => SafeArea(
       child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        ListTile(title: Text(title), subtitle: Text(b['metadata']?['title'] ?? '')),
+        ListTile(title: Text(title), subtitle: Text(bookSubtitle(b))),
         const Divider(height: 1),
         ListTile(autofocus: true, leading: const Icon(Icons.info_outline), title: const Text('Details'),
             onTap: () => Navigator.pop(ctx, 'details')),

@@ -369,13 +369,22 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final completed = rp != null && rp['completed'] == true;
   final title = (b['metadata']?['title'] ?? b['name']) as String;
   final display = AppSettings.instance.display;
-  // Settings > Library & Home: any of the three lines, always in this order (user, 2026-10-07) - the first is the
-  // tile's title, the next its subtitle, the third its caption ('' keeps a book's date line when it has none)
-  final lines = [
-    if (display.posterSeries) bookTitle(b),
-    if (display.posterTitle) title,
-    if (display.posterDate) posterDate(b['metadata']?['releaseDate'] as String?) ?? '',
-  ];
+  final date = posterDate(b['metadata']?['releaseDate'] as String?) ?? '';
+  // Settings > Library & Home: any of the lines, always in this order (user, 2026-10-07) - the first is the tile's
+  // title, the next its subtitle, the third its caption ('' keeps a line when the book has nothing for it). Comics
+  // and eBooks each their own (user, 2026-10-18): an eBook by its title and author, not "Discworld #13".
+  final lines = isEbook(b)
+      ? [
+          if (display.ebookPosterTitle) title,
+          if (display.ebookPosterAuthor) bookAuthors(b),
+          if (display.ebookPosterSeries) bookSeriesLine(b),
+          if (display.ebookPosterDate) date,
+        ]
+      : [
+          if (display.posterSeries) bookSeriesLine(b),
+          if (display.posterTitle) title,
+          if (display.posterDate) date,
+        ];
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.bookThumb(b['id']),
     title: lines.isEmpty ? '' : lines[0],
