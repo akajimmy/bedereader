@@ -9,6 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- **Pin to Home from a series', read list's or collection's menu** (right-click, long-press, or hold OK on the
+  remote) - the plain view, as its own screen pins it; once pinned, the menu shows the pin's name to rename or unpin
+  it.
+- **Collections have a menu** - a right-click or long-press on a collection did nothing. Now: Pin to Home, Mark all
+  as read / unread (every series in it, asked first), and Rename (admin accounts, as read lists). Read lists and
+  collections found by Search have their menus too.
+
 ## 1.4.0
 
 ### Build 127 - 2026-10-18
