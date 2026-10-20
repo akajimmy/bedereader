@@ -191,6 +191,17 @@ void main() {
       expect(sheets[0].right, closeTo(width / 2 - 12, 0.5), reason: '$width: 24 apart, about the middle');
       expect(sheets[1].left, closeTo(width / 2 + 12, 0.5));
     }
+    // the Gutter setting (user, 2026-10-20: 24 by default): 80 apart, the open book's page as it was
+    expect(AppSettings.instance.epub.gutter, 24);
+    final before = pages((await spots(tester))!.$1);
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(gutter: 80));
+    await settle(tester);
+    final apart = sheetsOnScreen(tester, 2400);
+    expect(apart[1].left - apart[0].right, closeTo(80, 0.5));
+    expect(apart[0].right, closeTo(1160, 0.5), reason: 'about the middle');
+    expect(pages((await spots(tester))!.$1), before, reason: 'not laid out again: the same pages');
+    AppSettings.instance.setEpub(const EpubPrefs());
+    await settle(tester);
   });
 
   testWidgets("one page or two, the same page size (1600 wide two up, then an 800-wide window: one): the same place, "

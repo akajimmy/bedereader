@@ -183,10 +183,10 @@ void main() {
     const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
         turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small, twoPages: TwoPages.off,
-        chapterStart: ChapterStart.rightPage);
+        chapterStart: ChapterStart.rightPage, gutter: 40);
     const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
         autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white,
-        twoPages: TwoPages.always);
+        twoPages: TwoPages.always, gutter: 10);
     // which page's reset puts back each of this device's settings (by its saved name); null: no page's
     const resetBy = <String, String?>{
       'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',

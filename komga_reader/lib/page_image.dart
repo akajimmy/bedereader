@@ -208,12 +208,17 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 
 /// Two pages side by side as one picture, left to right as given (two pages up - lib/reader/spreads.dart): the
 /// shorter one scaled to the taller's height, so they meet edge to edge at the spine (a GPU copy, once per pair).
-Future<ui.Image> joinPages(List<ui.Image> images) {
+/// [gap]: the gutter between them, picture pixels, filled with [fill] (user, 2026-10-20: a setting).
+Future<ui.Image> joinPages(List<ui.Image> images, {double gap = 0, Color fill = const Color(0xFF000000)}) {
   final h = images.map((i) => i.height).reduce(math.max);
   final rec = ui.PictureRecorder();
   final canvas = Canvas(rec);
   var x = 0.0;
-  for (final img in images) {
+  for (final (n, img) in images.indexed) {
+    if (n > 0 && gap > 0) {
+      canvas.drawRect(Rect.fromLTWH(x, 0, gap, h.toDouble()), Paint()..color = fill);
+      x += gap;
+    }
     final w = img.width * h / img.height;
     canvas.drawImageRect(img, Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
         Rect.fromLTWH(x, 0, w, h.toDouble()), Paint()..filterQuality = FilterQuality.medium);

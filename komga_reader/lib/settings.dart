@@ -35,7 +35,8 @@ extension ReadingDirectionLabel on ReadingDirection {
 class ReaderPrefs {
   const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
       this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0, this.ownLayout = true,
-      this.ownImage = true, this.background = ReaderBackground.black, this.twoPages = TwoPages.wideScreen});
+      this.ownImage = true, this.background = ReaderBackground.black, this.twoPages = TwoPages.wideScreen,
+      this.gutter = defaultGutter});
 
   /// A series' settings come in two parts, each overriding the defaults or not (the panels' "Override the
   /// defaults" toggles, user 2026-09-30): the page layout (fit, direction, background) and the image settings. A part
@@ -49,6 +50,12 @@ class ReaderPrefs {
   // Dual page mode: two pages side by side - part of the page layout, a reading default with a series' own (user,
   // 2026-10-16: "make it part of the defaults that are over-rideable per series"; it was a setting of each device)
   final TwoPages twoPages;
+
+  /// Dual page mode: the space between a pair's two pages, logical px on screen at the page's fit (user, 2026-10-20:
+  /// "gutter width (space between pages) measured in pixels" - comics 2 by default). Part of the page layout.
+  final double gutter;
+  static const defaultGutter = 2.0, maxGutter = 100.0;
+
   final double brightness; // -0.5 .. 0.5, added to every channel
   final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
@@ -61,16 +68,16 @@ class ReaderPrefs {
 
   ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
           ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage, ReaderBackground? background,
-          TwoPages? twoPages}) =>
+          TwoPages? twoPages, double? gutter}) =>
       ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
           direction: direction ?? this.direction, crop: crop ?? this.crop, ownLayout: ownLayout ?? this.ownLayout,
           ownImage: ownImage ?? this.ownImage, background: background ?? this.background,
-          twoPages: twoPages ?? this.twoPages);
+          twoPages: twoPages ?? this.twoPages, gutter: gutter ?? this.gutter);
 
   /// Same page layout (fit, direction, background, dual page mode), image settings back to neutral.
   ReaderPrefs imageReset() => ReaderPrefs(fit: fit, direction: direction, ownLayout: ownLayout, ownImage: ownImage,
-      background: background, twoPages: twoPages);
+      background: background, twoPages: twoPages, gutter: gutter);
 
   /// This one's page layout (fit, direction, background) with [image]'s image settings.
   ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(brightness: image.brightness, contrast: image.contrast,
@@ -83,6 +90,7 @@ class ReaderPrefs {
         if (!ownImage) 'oi': false,
         if (background != ReaderBackground.black) 'bg': background.name, // (likewise: black, as before, unwritten)
         if (twoPages != TwoPages.wideScreen) 'tp': twoPages.name, // (likewise: the default unwritten)
+        if (gutter != defaultGutter) 'gut': gutter, // (likewise)
       };
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
@@ -97,6 +105,7 @@ class ReaderPrefs {
         ownImage: j['oi'] != false,
         background: ReaderBackground.values.firstWhere((b) => b.name == j['bg'], orElse: () => ReaderBackground.black),
         twoPages: TwoPages.values.firstWhere((t) => t.name == j['tp'], orElse: () => TwoPages.wideScreen),
+        gutter: ((j['gut'] as num?)?.toDouble() ?? defaultGutter).clamp(0.0, maxGutter),
       );
 
   @override
@@ -524,7 +533,7 @@ class EpubPrefs {
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
       this.hyphenate = true, this.turn = EpubTurn.slide,
       this.paragraphGap = EpubParagraphGap.none, this.twoPages = TwoPages.wideScreen,
-      this.chapterStart = ChapterStart.nextPage});
+      this.chapterStart = ChapterStart.nextPage, this.gutter = defaultGutter});
   final EpubFont font;
   final double size; // px at the app's text size
   final double lineSpacing;
@@ -541,23 +550,29 @@ class EpubPrefs {
   /// Dual page mode: where each chapter starts ([ChapterStart]) - the next page unless asked.
   final ChapterStart chapterStart;
 
+  /// Dual page mode with Inset page: the space between the two sheets, logical px (user, 2026-10-20: "gutter width
+  /// ... the default value for ebooks at whatever it currently uses" - 24, dialled in on the tablet 2026-10-16).
+  /// Without Inset page the two pages are one surface and meet, as before.
+  final double gutter;
+  static const defaultGutter = 24.0, maxGutter = 200.0;
+
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   /// Line spacing's steps (user, 2026-10-08: 1 to 2 by a quarter, "names as above": Compact .. Double).
   static const spacings = [1.0, 1.25, 1.5, 1.75, 2.0];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
           EpubAlign? align, bool? hyphenate, EpubTurn? turn,
-          EpubParagraphGap? paragraphGap, TwoPages? twoPages, ChapterStart? chapterStart}) =>
+          EpubParagraphGap? paragraphGap, TwoPages? twoPages, ChapterStart? chapterStart, double? gutter}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours, align: align ?? this.align,
           hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
           paragraphGap: paragraphGap ?? this.paragraphGap, twoPages: twoPages ?? this.twoPages,
-          chapterStart: chapterStart ?? this.chapterStart);
+          chapterStart: chapterStart ?? this.chapterStart, gutter: gutter ?? this.gutter);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'align': align.name,
       'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name, 'twoPages': twoPages.name,
-      'chapterStart': chapterStart.name};
+      'chapterStart': chapterStart.name, 'gutter': gutter};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -576,6 +591,7 @@ class EpubPrefs {
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
       twoPages: pick(TwoPages.values, j['twoPages'], TwoPages.wideScreen),
       chapterStart: pick(ChapterStart.values, j['chapterStart'], ChapterStart.nextPage),
+      gutter: ((j['gutter'] as num?)?.toDouble() ?? defaultGutter).clamp(0.0, maxGutter),
     );
   }
 
@@ -686,7 +702,7 @@ class AppSettings extends ChangeNotifier {
   void setSeriesLayout(String seriesId, ReaderPrefs p) {
     final now = prefsFor(seriesId);
     setSeries(seriesId, now.copyWith(fit: p.fit, direction: p.direction, background: p.background,
-        twoPages: p.twoPages, ownLayout: true,
+        twoPages: p.twoPages, gutter: p.gutter, ownLayout: true,
         ownImage: now.ownImage));
   }
 

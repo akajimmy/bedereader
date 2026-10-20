@@ -94,8 +94,9 @@ class EpubRenderer extends Renderer {
   /// sliders and baked in for 1.3 (user, 2026-10-16: "use the settings that are on screen right now": 60 and 24).
   static const textGapSides = 60.0, textGapEnds = 24.0;
 
-  /// Two pages up with Inset page: how far apart the two sheets are (likewise: 24).
-  static const pagesApart = 24.0;
+  /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
+  /// on the tablet; user, 2026-10-20: a setting).
+  static double get pagesApart => AppSettings.instance.epub.gutter;
 
   /// The colour round the sheet: the page's own, a shade darker (a white page on light grey); the dark grey page on
   /// black (user, 2026-10-16: "full black"); black, a shade lighter (user, 2026-10-11: derived, no setting).
@@ -1643,7 +1644,7 @@ class EpubRenderer extends Renderer {
   double _sideShift({required bool later}) {
     final s = _sheet;
     if (s == null) return 0;
-    const half = pagesApart / 2;
+    final half = pagesApart / 2;
     return later ? half - s.left : _size.width - half - s.right;
   }
 
