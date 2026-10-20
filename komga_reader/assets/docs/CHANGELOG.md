@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- **Dual page mode: Gutter, the space between the two pages, in pixels** - comics: 2 px by default (the pages used
+  to touch), in the Comic settings panel under Dual page mode, a default a series can override; the page curl turns
+  the right-hand page from its own edge and lands it past the gutter. eBooks: with Inset page, the space between the
+  two sheets - 24 px by default, as before - in the eBook panel and Settings > eBooks > Page.
+
 ## 1.4.0
 
 ### Build 129 - 2026-10-18
