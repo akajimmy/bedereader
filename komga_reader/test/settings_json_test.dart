@@ -8,8 +8,8 @@ import 'package:komga_reader/settings.dart';
 /// progress bar, double-tap zoom / volume keys, direction), panel_test (the override flags), app_settings_test (the
 /// device settings) and night_schedule_test (schedule, text size, accent) - test audit, 2026-09-30.
 void main() {
-  test('the Gutter (user, 2026-10-20): comics 2 px and eBooks 24 by default, saved and read back; the comics' left out '
-      'of the saved form at its default, as their other layout settings; out of range: the most', () {
+  test('the Gutter (user, 2026-10-20): comics 2 px and eBooks 24 by default, saved and read back; the comic one left '
+      'out of the saved form at its default, as the other layout settings; out of range: the most', () {
     expect(ReaderPrefs.fromJson(const ReaderPrefs(gutter: 10).toJson()).gutter, 10);
     expect(const ReaderPrefs().toJson().containsKey('gut'), isFalse);
     expect(ReaderPrefs.fromJson(const {}).gutter, 2);
