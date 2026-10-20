@@ -176,7 +176,7 @@ class _ReaderPanel extends StatelessWidget {
                 button: TextButton(
                   onPressed: () {
                     s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
-                        twoPages: p.twoPages));
+                        twoPages: p.twoPages, gutter: p.gutter));
                     _toast(context, "Series you haven't adjusted will open like this one");
                   },
                   child: const Text('Make default'),
@@ -320,6 +320,17 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       onChanged: (t) => setP(p.copyWith(twoPages: t)),
       enabled: enabled,
     ),
+    // the space between a pair's pages (user, 2026-10-20), with dual page mode on
+    if (p.twoPages != TwoPages.off)
+      SliderRow(
+        label: 'Gutter',
+        value: p.gutter,
+        max: ReaderPrefs.maxGutter,
+        divisions: ReaderPrefs.maxGutter.round(),
+        valueText: '${p.gutter.round()} px',
+        enabled: enabled,
+        onChanged: (v) => setP(p.copyWith(gutter: v.roundToDouble())),
+      ),
     // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
     SettingRow(
       title: 'Page colours', // as eBooks' (user, 2026-10-07: it was "Background")

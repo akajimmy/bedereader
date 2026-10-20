@@ -26,6 +26,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         ),
         _twoPagesRow(e, set),
         _chapterStartRow(e, set),
+        _gutterRow(e, set),
       ]),
     ];
 
@@ -47,6 +48,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
       _coloursRow(e, set),
       _twoPagesRow(e, set),
       _chapterStartRow(e, set),
+      _gutterRow(e, set),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
       if (canRotate) rotationRow(s, BookKind.ebooks),
@@ -70,6 +72,16 @@ Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoP
       ],
       value: e.twoPages,
       onChanged: (t) => set(e.copyWith(twoPages: t)),
+    );
+
+/// Dual page mode with Inset page: the space between the two sheets (user, 2026-10-20).
+Widget _gutterRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SliderRow(
+      label: 'Gutter',
+      value: e.gutter,
+      max: EpubPrefs.maxGutter,
+      divisions: EpubPrefs.maxGutter.round(),
+      valueText: '${e.gutter.round()} px',
+      onChanged: (v) => set(e.copyWith(gutter: v.roundToDouble())),
     );
 
 /// Dual page mode: where a chapter starts (user, 2026-10-18: "A setting") - the next page, or a right-hand one.

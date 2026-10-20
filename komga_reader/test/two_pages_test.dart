@@ -238,7 +238,11 @@ void main() {
   });
 
   group('the page curl, two pages up (user, 2026-10-16: the right-hand page turns over onto the left)', () {
-    setUp(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl)));
+    setUp(() {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      // (the pages touching, as these were worked out for - the Gutter has its own test below)
+      AppSettings.instance.setDefault(const ReaderPrefs(gutter: 0));
+    });
 
     /// The book with real pictures (2 x 3, as the page list says): pairs are joined.
     Future<void> openReal(WidgetTester tester) async {
@@ -385,6 +389,43 @@ void main() {
       expect(back.page.left, closeTo(800, 1), reason: "the spread's right half comes back");
       expect(back.back, isNotNull, reason: "its back: 8|9's left-hand page");
       await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    });
+
+    testWidgets("the Gutter (user, 2026-10-20: \"space between pages\", comics 2 px by default): a pair's pages that far "
+        'apart on screen, the background between them; the right-hand page turns from its own edge and lands past '
+        'the gutter, over the left one', (tester) async {
+      AppSettings.instance.setDefault(const ReaderPrefs()); // the default, 2 px
+      expect(AppSettings.instance.defaults.gutter, 2);
+      await openReal(tester);
+      await toPair(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      var c = curl(tester)!;
+      // 1600 x 1000: the pair about 1335 wide with its gutter, 132 to 1468 - the gutter 799 to 801
+      expect(c.page.left, closeTo(801, 0.6), reason: "the right-hand page's own edge, past the gutter");
+      expect(c.page.right, closeTo(1468, 1)); // (the joined picture a whole number of pixels wide)
+      expect(c.held!.right, closeTo(800, 0.6), reason: "the old left page held to the gutter's middle");
+      await tester.pump(const Duration(milliseconds: 370));
+      expect(curl(tester)!.finger.dx, closeTo(-c.page.width - 2, 4), reason: 'landing past the gutter, over the left page');
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump();
+      expect(await position(tester), startsWith('Pg. 5-6/9'));
+
+      // 40 px: the pages 40 apart (the pair narrower to make room - fit screen keeps it on the screen)
+      AppSettings.instance.setDefault(const ReaderPrefs(gutter: 40));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // joined again
+        await tester.pump();
+      }
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      c = curl(tester)!;
+      expect(c.page.left - c.held!.right, closeTo(20, 1), reason: 'half the gutter each side of its middle');
+      expect(c.page.left, closeTo(820, 1));
+      await tester.pump(const Duration(milliseconds: 370));
+      expect(curl(tester)!.finger.dx, closeTo(-c.page.width - 40, 6), reason: 'landing past the 40 px gutter');
+      await tester.pump(const Duration(milliseconds: 230));
       await tester.pump();
     });
 

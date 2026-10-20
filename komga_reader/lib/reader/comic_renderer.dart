@@ -601,23 +601,36 @@ class ComicRenderer extends Renderer {
   /// Where a turn of [page] (at item [v]) ends: off itself - or, a pair's page turning over onto the one beside it,
   /// exactly over that one (its width past the spine).
   double _goneAt(Rect page, int v) =>
-      _spineX(v) != null || _padded(v) != null ? -page.width : PageCurl.gone(page.width);
-  double _gone(_Curl c) => c.spine ? -c.page.width : PageCurl.gone(c.page.width);
+      _spineX(v) != null || _padded(v) != null ? -page.width - _gapOn(v) : PageCurl.gone(page.width);
+  double _gone(_Curl c) => c.spine ? -c.page.width - c.gap : PageCurl.gone(c.page.width);
+
+  /// The gutter between the pages turning at item [v], on screen (Gutter; user, 2026-10-20): a pair's - its pages
+  /// that far apart, the later turning from its own edge and landing past it; a page alone before a pair, that pair's
+  /// (it turns as one); none for a spread in one picture (its gutter is in the art) or one page.
+  double _gapOn(int v) {
+    if (!_dual || v >= _views) return 0;
+    final s = _spreads[v];
+    if (s.pages.length == 2 && !s.wide) return (_gapAt[v] ?? 0) * _pageRect(v).width;
+    return _padded(v) != null ? _gapOn(v + 1) : 0;
+  }
 
   /// The page that curls at item [v]: two pages up, a pair's later page - the right one (left, right to left), its
   /// spine at the gutter, as a book's page turns (user, 2026-10-16); a page alone before a pair or a spread, the later
   /// half of the double page it makes up ([_padded]) - turning on from it, or back onto it; else the whole page.
   Rect _curlRect(int v) {
     final padded = _padded(v);
+    final half = _gapOn(v) / 2; // (the later page starts past the gutter)
     if (padded != null) {
       final (r, x) = padded;
-      return rtl ? Rect.fromLTRB(r.left, r.top, x, r.bottom) : Rect.fromLTRB(x, r.top, r.right, r.bottom);
+      return rtl
+          ? Rect.fromLTRB(r.left, r.top, x - half, r.bottom)
+          : Rect.fromLTRB(x + half, r.top, r.right, r.bottom);
     }
     final page = _pageRect(v), x = _spineX(v);
     if (x == null) return page;
     return rtl
-        ? Rect.fromLTRB(page.left, page.top, x, page.bottom)
-        : Rect.fromLTRB(x, page.top, page.right, page.bottom);
+        ? Rect.fromLTRB(page.left, page.top, x - half, page.bottom)
+        : Rect.fromLTRB(x + half, page.top, page.right, page.bottom);
   }
 
   /// Where the gutter is on screen at item [v] - a pair's (two pages up, joined), or a spread picture's middle; null
@@ -662,8 +675,25 @@ class ComicRenderer extends Renderer {
     return r.width > 0 ? r : Rect.zero;
   }
 
-  /// The gutter of each joined pair, as a share of the joined picture's width from its left (from [_joinedAt]).
-  final Map<int, double> _spineAt = {};
+  /// The gutter of each joined pair, as a share of the joined picture's width from its left - the middle of the space
+  /// between the pages - and that space's own share of the width (from [_joinedAt]).
+  final Map<int, double> _spineAt = {}, _gapAt = {};
+
+  /// Gutter (logical px on screen at the page's fit) in the joined picture's own pixels, for two pages [w0] wide
+  /// together at height [h] (picture pixels): how the fit will scale the picture on this screen.
+  double _gapPixels(double h, double w0) {
+    final gap = prefs.gutter;
+    if (gap <= 0 || _area.isEmpty || h <= 0 || w0 <= 0) return 0;
+    final a = _area;
+    double byHeight() => gap * h / a.height; // the picture as tall as the screen
+    double byWidth() => gap * w0 / math.max(1.0, a.width - gap); // as wide (the gap included)
+    return switch (prefs.fit) {
+      FitMode.height => byHeight(),
+      FitMode.width => byWidth(),
+      FitMode.original => gap,
+      FitMode.screen => (w0 + byHeight()) * a.height / h <= a.width ? byHeight() : byWidth(),
+    };
+  }
 
   bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
 
@@ -697,6 +727,7 @@ class ComicRenderer extends Renderer {
     if (now == null) return false;
     final padded = _padded(next ? _at : target);
     final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
+        gap: _gapOn(next ? _at : target),
         spine: _spineX(next ? _at : target) != null || padded != null,
         // two pages up, as a book: forward, the earlier page stays (its picture in the old view) until the later turns
         // over onto it; back, the later page stays until the previous spread's later page lands on it - the earlier
@@ -764,7 +795,7 @@ class ComicRenderer extends Renderer {
       ..animFrom = c.finger
       ..animTo = c.forward == complete
           ? c.spine
-              ? Offset(-w, c.grab.dy) // turned over flat onto the page beside it
+              ? Offset(-w - c.gap, c.grab.dy) // turned over flat onto the page beside it, past the gutter
               : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _curlAnim.forward(from: 0);
@@ -961,12 +992,12 @@ class ComicRenderer extends Renderer {
   }
 
   /// Two pages joined, by item, the crop and the direction they were joined in - the ones near the page being read.
-  final Map<(int, double, bool), Future<PageData>> _joined = {};
+  final Map<(int, double, bool, double, FitMode, Size, Color), Future<PageData>> _joined = {};
 
   Future<PageData> _joinedAt(int v, Spread s) {
     _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 2);
     final crop = prefs.crop;
-    final key = (v, crop, rtl);
+    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _area, background);
     return _joined.putIfAbsent(key, () async {
       try {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
@@ -975,8 +1006,10 @@ class ComicRenderer extends Renderer {
         // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
         final h = math.max(onScreen[0].height, onScreen[1].height);
         double w(ui.Image i) => i.width * h / i.height;
-        _spineAt[v] = w(onScreen[0]) / (w(onScreen[0]) + w(onScreen[1]));
-        return PageData(await joinPages(onScreen), Uint8List(0));
+        final w0 = w(onScreen[0]) + w(onScreen[1]), gap = _gapPixels(h.toDouble(), w0);
+        _spineAt[v] = (w(onScreen[0]) + gap / 2) / (w0 + gap);
+        _gapAt[v] = gap / (w0 + gap);
+        return PageData(await joinPages(onScreen, gap: gap, fill: background), Uint8List(0));
       } catch (_) {
         _joined.remove(key)?.ignore(); // Retry joins them again
         rethrow;
@@ -1553,7 +1586,7 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
   @override
   void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
           page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader, spine: curl.spine,
-          back: curl.back)
+          back: curl.back, gap: curl.gap)
       .paint(canvas, size);
 
   @override
@@ -1563,8 +1596,9 @@ class _CurlLayer extends CustomPainter implements CurlLayer {
 /// A page turn in progress (3D page curl).
 class _Curl {
   _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.underClip, this.pending = false, this.spine = false});
+      required this.from, this.under, this.underClip, this.pending = false, this.spine = false, this.gap = 0});
   ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
+  final double gap; // two pages up: the gutter it turns over (on screen; [_gapOn])
   final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
   final Rect? underClip; // only this part of [under] (two pages up, forward: the earlier page's side)
   final bool spine; // a pair's page: turns over onto the one beside it, attached at the gutter (PageCurl.spineRadius)
