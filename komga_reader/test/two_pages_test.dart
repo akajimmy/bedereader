@@ -423,7 +423,9 @@ void main() {
       c = curl(tester)!;
       expect(c.page.left - c.held!.right, closeTo(20, 1), reason: 'half the gutter each side of its middle');
       expect(c.page.left, closeTo(820, 1));
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 370));
+      expect(curl(tester)!.finger.dx, closeTo(-c.page.width - 40, 6), reason: 'landing past the 40 px gutter');
+      await tester.pump(const Duration(milliseconds: 230));
       await tester.pump();
     });
 
