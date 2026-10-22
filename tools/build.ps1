@@ -8,7 +8,9 @@
     2. -Bump: raises the build number in komga_reader\pubspec.yaml (0.1.0+17 -> 0.1.0+18); the APK must be signed
        with the release key, and the build-<n> tag must not exist yet.
     3. Builds the requested platforms:
-         android  -> BeDeReader-<ver>-android.apk
+         android  -> BeDeReader-<ver>-android.apk, and BeDeReader-<ver>-android.aab - the app bundle Google Play
+                     takes (signed with the release key, Play's upload key; user, 2026-10-22: "getting this into the
+                     play store")
          windows  -> BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
     4. Writes SHA256SUMS.txt and BUILD-INFO.txt next to them.
     5. With -Bump, commits the version change and tags it build-<n>.
@@ -218,6 +220,7 @@ if ($Platforms -contains 'android') {
     }
     try {
         Run 'Android APK' "flutter build apk --release$defines"
+        Run 'Android app bundle (Google Play)' "flutter build appbundle --release$defines"
     } finally {
         Remove-Item Env:KOMGA_SIGNING_PASSWORD -ErrorAction SilentlyContinue
     }
@@ -241,6 +244,20 @@ if ($Platforms -contains 'android') {
     $apk = Join-Path $out "$product-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
     $artifacts += $apk
+    # the bundle: which key signed it (keytool reads a signed jar - no password needed); a real build's must be the
+    # release key, as the APK's - Play takes uploads only from the key it was given
+    $bundle = Join-Path $app 'build\app\outputs\bundle\release\app-release.aab'
+    $keytool = 'C:\Dev\jdk17\bin\keytool.exe'
+    $owner = if (Test-Path $keytool) {
+        (cmd /c "`"$keytool`" -printcert -jarfile `"$bundle`" 2>&1" | Select-String '^Owner: (.*)' | Select-Object -First 1).Matches.Groups[1].Value
+    }
+    Say "app bundle signed by: $(if ($owner) { $owner } else { 'unknown (keytool not found, or unsigned)' })"
+    if ($Bump -and (-not $owner -or $owner -match 'CN=Android Debug')) {
+        throw "the app bundle isn't signed with the release key ($owner) - nothing committed or tagged."
+    }
+    $aab = Join-Path $out "$product-$version-android.aab"
+    Copy-Item $bundle $aab -Force
+    $artifacts += $aab
 }
 if ($Platforms -contains 'windows') {
     Run 'Windows app' "flutter build windows --release$defines"
