@@ -288,17 +288,16 @@ void Win32Window::OnDestroy() {
   // No-op; provided for subclasses.
 }
 
+// Windows' own title bar in the app's colours (user, 2026-10-22: "the basic window chrome styled to match the app";
+// Windows' buttons, snap layouts and dragging kept): always dark, as the app is - not the system's light / dark
+// setting; on Windows 11 the bar is the app's background (#0B0B0C), its text light, the border a plain dark line
+// (#26282E, the app's dividers). Windows 10 knows only the dark mode, and keeps its own dark bar.
 void Win32Window::UpdateTheme(HWND const window) {
-  DWORD light_mode;
-  DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                               kGetPreferredBrightnessRegValue,
-                               RRF_RT_REG_DWORD, nullptr, &light_mode,
-                               &light_mode_size);
-
-  if (result == ERROR_SUCCESS) {
-    BOOL enable_dark_mode = light_mode == 0;
-    DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE,
-                          &enable_dark_mode, sizeof(enable_dark_mode));
-  }
+  BOOL dark = TRUE;
+  DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+  const DWORD kBorderColor = 34, kCaptionColor = 35, kTextColor = 36;  // DWMWA_*_COLOR (Windows 11)
+  COLORREF caption = RGB(0x0B, 0x0B, 0x0C), text = RGB(0xE6, 0xE6, 0xE6), border = RGB(0x26, 0x28, 0x2E);
+  DwmSetWindowAttribute(window, kCaptionColor, &caption, sizeof(caption));
+  DwmSetWindowAttribute(window, kTextColor, &text, sizeof(text));
+  DwmSetWindowAttribute(window, kBorderColor, &border, sizeof(border));
 }
