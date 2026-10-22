@@ -495,17 +495,75 @@ class EpubRenderer extends Renderer {
     host.placed(to); // not a turn
     _prefetchAround();
     _changed();
+    unawaited(_countOtherWay(b));
   }
+
+  /// A device that turns: the book counted the other way up too, behind the page being read, and kept with the rest
+  /// ([EpubCountStore]) - turning it shows the book at once, not after a count (user, 2026-10-22: "generate and store
+  /// the layout for landscape and portrait ... so that rotating back and forth doesn't immediately trigger a
+  /// re-layout every time"; quiz: "make ahead and save to disk"). Its own copy of the book, a chapter at a time, a
+  /// pause between and none while a page turns; given up when the book or its layout changes.
+  Future<void> _countOtherWay(EpubBook b) async {
+    if (!canRotate || !countOtherWay || _otherWay != null || _area.isEmpty) return;
+    final area = Size(_area.height, _area.width);
+    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    final size = dual ? Size(area.width / 2, area.height) : area;
+    final theme = _themeFor(size, _planSheet(size, area, dual));
+    final id = _record['id'] as String, key = await _layoutKeyFor(theme, size, b);
+    if (_disposed || _book != b) return;
+    if (await EpubCountStore.instance.load(id, key).catchError((Object _) => null) != null) return;
+    if (_disposed || _book != b) return;
+    final other = EpubBook(b.source, b.info, b.hyphenators)
+      ..textSize = b.textSize
+      ..textBold = b.textBold
+      ..setLayout(theme, size);
+    _otherWay = other;
+    final laidFor = b.theme;
+    bool gone() => _disposed || _book != b || b.theme != laidFor;
+    try {
+      await other.countAll(current: () => 0, breath: () async {
+        // (each chapter is laid out on the UI thread: a pause, and none of it while a page turns)
+        do {
+          await Future<void>.delayed(otherWayPause);
+        } while (!gone() && (_sliding || (_curlMade?.active ?? false)));
+        // (gone: the count stops at the next chapter - its layout changed)
+        if (gone()) other.setLayout(const EpubTheme(), Size.zero);
+      });
+      final counts = other.counts;
+      if (!gone() && counts != null) {
+        await EpubCountStore.instance.save(id, key, counts);
+        EpubTrace.instance.log('counted the other way up: ${size.width.round()}x${size.height.round()}');
+      }
+    } catch (_) {
+      // not kept: counted when turned, as before
+    } finally {
+      if (identical(_otherWay, other)) _otherWay = null;
+      other.dispose();
+    }
+  }
+
+  EpubBook? _otherWay; // the book being counted the other way up ([_countOtherWay])
+
+  /// The pause between chapters counted the other way up.
+  @visibleForTesting
+  static Duration otherWayPause = const Duration(milliseconds: 300);
+
+  /// Off in tests but its own (flutter_test_config.dart): the test platform turns, and the count would run on behind
+  /// every eBook test.
+  @visibleForTesting
+  static bool countOtherWay = true;
 
   /// What a book's counts depend on: this app's build (its layout code), the book's file, the page size and the
   /// look - not the colours.
-  Future<String> _layoutKey(EpubBook b) async {
-    final t = b.theme, m = t.margins;
+  Future<String> _layoutKey(EpubBook b) => _layoutKeyFor(b.theme, b.size, b);
+
+  Future<String> _layoutKeyFor(EpubTheme t, Size size, EpubBook b) async {
+    final m = t.margins;
     final file = '${_record['fileLastModified'] ?? ''}/${_record['sizeBytes'] ?? ''}';
     return [
       _appVersion ??= await getAppVersion() ?? '',
       file,
-      '${b.size.width.toStringAsFixed(1)}x${b.size.height.toStringAsFixed(1)}@${t.pixelRatio}',
+      '${size.width.toStringAsFixed(1)}x${size.height.toStringAsFixed(1)}@${t.pixelRatio}',
       '${t.fontFamily}/${t.fontSize}/${t.lineHeight}/${t.paragraphGap}',
       '${m.left}/${m.top}/${m.right}/${m.bottom}',
       '${t.ownAlign}/${t.ownParagraphs}/${t.hyphenate}/${b.textSize}/${b.textBold}/${t.bookMargins}',

@@ -1074,6 +1074,47 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('a device that turns: the book counted the other way up too, behind the page, and kept - turned, it '
+      'shows at once, no count; a desktop that doesn\'t turn: only the way it is (user, 2026-10-22)', (tester) async {
+    final store = EpubCountStore.instance as MemoryCountStore;
+    final pause = EpubRenderer.otherWayPause;
+    EpubRenderer.countOtherWay = true;
+    EpubRenderer.otherWayPause = const Duration(milliseconds: 10);
+    addTearDown(() {
+      EpubRenderer.countOtherWay = false;
+      EpubRenderer.otherWayPause = pause;
+      debugDefaultTargetPlatformOverride = null;
+    });
+    final spine = [for (var i = 0; i < 6; i++) 'c$i.xhtml'];
+    final files = {for (final c in spine) c: '<html><body>${List.filled(4, para('delta', 40)).join()}</body></html>'};
+    final info = EpubInfo(spine: spine, toc: const []);
+    await open(tester, MemorySource(files, info)); // 800 x 1200, a phone or tablet (the test platform)
+    await settle(tester);
+    await settle(tester);
+    expect(store.kept, hasLength(2), reason: 'this way up and the other');
+    final before = await label(tester);
+
+    tester.view.physicalSize = const Size(1200, 800);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const ValueKey('epub-counting')), findsNothing, reason: 'turned: no count');
+    expect(find.byType(PageView), findsOneWidget, reason: 'the book at once');
+    await settle(tester);
+    expect(store.kept, hasLength(2), reason: 'nothing more counted either way');
+    expect(await label(tester), isNot(before), reason: 'its own count landscape (fewer pages)');
+    await tester.pumpWidget(const SizedBox());
+
+    // a desktop (no rotation sensor): the way it is only
+    store.kept.clear();
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    await open(tester, MemorySource(files, info));
+    await settle(tester);
+    await settle(tester);
+    expect(store.kept, hasLength(1), reason: "a screen that doesn't turn: the other way never needed");
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets("the book's own text size is measured on the first open and kept with its counts; the next open uses "
       'what was kept instead of loading chapters to measure it again (user, 2026-10-11)', (tester) async {
     final store = EpubCountStore.instance as MemoryCountStore;
