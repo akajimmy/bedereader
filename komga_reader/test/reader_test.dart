@@ -1295,11 +1295,11 @@ void main() {
           await openLoaded(tester);
           final pic = tester.getRect(find.byType(RawImage).first);
           final g = await tester.startGesture(pic.center);
-          for (var i = 1; i <= 5; i++) {
-            await g.moveBy(const Offset(-5, 0));
-            await tester.pump(const Duration(milliseconds: 8)); // ~600 px/s
+          for (var i = 1; i <= 5; i++) { // (the moves' own times: the velocity is worked out from them)
+            await g.moveBy(const Offset(-5, 0), timeStamp: Duration(milliseconds: 8 * i)); // ~600 px/s
+            await tester.pump(const Duration(milliseconds: 8));
           }
-          await g.up();
+          await g.up(timeStamp: const Duration(milliseconds: 48));
           await tester.pump();
           await tester.pump(const Duration(milliseconds: 800));
           await tester.pump();
