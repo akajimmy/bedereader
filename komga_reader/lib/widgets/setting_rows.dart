@@ -245,8 +245,8 @@ class SettingRow extends StatelessWidget {
   }
 }
 
-/// The slim buttons' look, shared by every choice (segments, on/off toggles, Auto): the choice in force a tint of
-/// the accent with its text in the accent; switched off (a series following the defaults), no accent at all - grey,
+/// The slim buttons' look, shared by every choice (segments, on/off toggles, Auto): the choice in force the accent
+/// itself with the accent's own text colour; switched off (a series following the defaults), no accent at all - grey,
 /// the choice in force still shaded so the value shows (user, 2026-10-22: "hard to tell disabled from enabled and
 /// doesn't really follow the accent colour well").
 ButtonStyle slimButtonStyle(ColorScheme scheme) {
@@ -411,10 +411,10 @@ class SegmentRow<T> extends StatelessWidget {
     );
   }
 
-  /// The choice in force: a clear tint of the accent, its text the accent itself, a little lightened to read on the
-  /// dark boxes (user, 2026-10-21: not solid accent buttons; 2026-10-22: it has to follow the accent).
-  static Color selectedFill(ColorScheme scheme) => scheme.primary.withValues(alpha: 0.30);
-  static Color selectedText(ColorScheme scheme) => Color.lerp(scheme.primary, Colors.white, 0.2)!;
+  /// The choice in force: the accent itself, its text the accent's own text colour (user, 2026-10-22: "bring those
+  /// controls up to the actual accent colour with appropriate font colour" - the tint read as muted).
+  static Color selectedFill(ColorScheme scheme) => scheme.primary;
+  static Color selectedText(ColorScheme scheme) => scheme.onPrimary;
 
   Widget _buttons(BuildContext context, {bool shrinkLabels = false}) {
     return SegmentedButton<T>(

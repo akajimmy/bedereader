@@ -7,20 +7,20 @@ import 'support/helpers.dart';
 /// The shared setting rows (widgets/setting_rows.dart): how they look and how they lay out. Moved here from
 /// row_nav_test, which is about Up / Down only (test audit, 2026-09-30).
 void main() {
-  testWidgets('slim buttons (user, 2026-10-21: the mock-ups\' A): the choice in force a tint of the accent with light '
-      'accent text, not the solid accent; a lighter outline; lower than before', (tester) async {
+  testWidgets('slim buttons: the choice in force the accent itself, its text the accent\'s own text colour (user, '
+      '2026-10-22: the tint read as muted); lower than before', (tester) async {
     const accent = Colors.blue;
-    await tester.pumpWidget(MaterialApp(theme: ThemeData(colorScheme: const ColorScheme.dark(primary: accent)),
+    const onAccent = Color(0xFF101010);
+    await tester.pumpWidget(MaterialApp(
+        theme: ThemeData(colorScheme: const ColorScheme.dark(primary: accent, onPrimary: onAccent)),
         home: Scaffold(body: SettingsGroup(children: [
           SegmentRow<int>(title: 'Fit', value: 2, onChanged: (_) {},
               choices: const [Choice(1, 'Screen'), Choice(2, 'Width'), Choice(3, 'Height')]),
         ]))));
     final b = tester.widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>));
     final bg = b.style!.backgroundColor!.resolve({WidgetState.selected})!;
-    expect(bg.a, lessThan(0.5), reason: 'a tint');
-    expect((bg.r, bg.g, bg.b), (accent.r, accent.g, accent.b), reason: 'of the accent');
-    final fg = b.style!.foregroundColor!.resolve({WidgetState.selected})!;
-    expect(fg.computeLuminance(), greaterThan(accent.computeLuminance()), reason: 'lighter than the accent');
+    expect(bg, accent, reason: 'the accent, solid');
+    expect(b.style!.foregroundColor!.resolve({WidgetState.selected}), onAccent);
     expect(tester.getSize(find.byType(SegmentedButton<int>)).height, lessThan(36), reason: 'lower');
   });
 
@@ -52,7 +52,7 @@ void main() {
       if (bg != null) expect(grey(bg), isTrue, reason: 'fill, $states');
       expect(grey(style.side!.resolve(states)!.color), isTrue, reason: 'outline, $states');
     }
-    expect(grey(style.foregroundColor!.resolve({WidgetState.selected})!), isFalse, reason: 'enabled: the accent');
+    expect(grey(style.backgroundColor!.resolve({WidgetState.selected})!), isFalse, reason: 'enabled: the accent');
     // the disabled choice in force is dimmer than an enabled one
     expect(style.foregroundColor!.resolve({...off, WidgetState.selected})!.a,
         lessThan(style.foregroundColor!.resolve({})!.a + 0.001));
