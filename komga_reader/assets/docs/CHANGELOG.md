@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- **Sign-in: a note when the API key would travel unencrypted** - an address outside your home network over plain
+  http:// shows a warning under the Server field (https, home addresses and names, and Tailscale don't).
+
 **Fixed**
 
 - **eBooks in Dual page mode without Inset page: a darker band down the middle** - a shade drawn down the gutter

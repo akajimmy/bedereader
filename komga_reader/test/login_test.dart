@@ -31,6 +31,34 @@ void main() {
     expect(field(tester, 'API key').controller!.text, isEmpty); // never kept
   });
 
+  test('the API key in the clear (user, 2026-10-21: a note at sign-in): plain http to a host outside the home '
+      'network; not https, not a home address or name, not Tailscale (its tunnel is encrypted)', () {
+    for (final outside in ['http://komga.example.com:25600', 'komga.example.com', 'http://8.8.8.8:25600',
+        'http://172.32.0.1', 'http://[2001:db8::1]:25600']) {
+      expect(sendsKeyInTheClear(outside), isTrue, reason: outside);
+    }
+    for (final fine in ['https://komga.example.com', '10.0.0.226:25600', 'http://192.168.1.10:25600',
+        'http://172.16.4.2', 'http://127.0.0.1:25600', 'localhost:25600', 'http://nick-nas:25600', 'nas.local',
+        'http://nas.lan', 'http://box.home.arpa', 'http://100.101.102.103', 'http://nas.tail1234.ts.net',
+        'http://[fd12::1]', 'http://[::1]:25600', 'http://169.254.1.2', 'not an address !!', '']) {
+      expect(sendsKeyInTheClear(fine), isFalse, reason: fine);
+    }
+  });
+
+  testWidgets('the note shows under the server field as an outside http address is typed, and goes for a home one',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
+    await tester.pump();
+    final note = find.textContaining('your API key would travel unencrypted');
+    expect(note, findsNothing);
+    await tester.enterText(find.widgetWithText(TextField, 'Server'), 'http://komga.example.com:25600');
+    await tester.pump();
+    expect(note, findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Server'), 'http://192.168.1.10:25600');
+    await tester.pump();
+    expect(note, findsNothing);
+  });
+
   test('the server address is tidied up: spaces out, http:// added, trailing slashes off', () {
     String? s(String typed) => serverAddress(typed);
     expect(s('192.168.1.10: 25600'), 'http://192.168.1.10:25600'); // as typed on the tablet (user's screenshot)
