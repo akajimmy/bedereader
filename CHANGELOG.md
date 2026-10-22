@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 137 - 2026-10-22
+
 **Changed**
 
 - eBooks, Inset page: the page taller - 12 px short of the screen above and below (it was 24).
@@ -16,8 +20,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **New**
 
 - eBooks: the slider marks where each chapter starts, with the same small dots the comic slider has for pages.
-
-## 1.4.0
 
 ### Build 136 - 2026-10-22
 
