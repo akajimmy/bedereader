@@ -100,8 +100,8 @@ class EpubRenderer extends Renderer {
 
   /// The sheet's distance from the screen's edges (above and below; at the sides when it's narrowed), and its width
   /// for its height (user, 2026-10-22 quiz: "a small fixed gap", "2:3 - trade paperback"; then, tried on the tablet in
-  /// build 135: "a bit wider ratio but it's closer" - 7:10).
-  static const sheetGap = 24.0, sheetRatio = 0.7;
+  /// build 135: "a bit wider ratio but it's closer" - 7:10; build 136: "reduce the back to 12 pixels" - 12, was 24).
+  static const sheetGap = 12.0, sheetRatio = 0.7;
 
   /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
   /// on the tablet; user, 2026-10-20: a setting).
