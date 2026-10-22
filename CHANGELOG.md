@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- A version check (Android and Windows): at most once a day the app asks GitHub for the latest release, and if it's newer than the installed build, Home says "BeDeReader 1.5.0 is available" with a button to its page on GitHub (x hides it until the next version). Nothing is asked in offline mode, and nothing about you is sent; the README's Privacy section says so.
+
 **Changed**
 
 - Windows: the title bar in the app's colours - the app's black, a light title and buttons, a dark border - whatever the system's light or dark setting. Windows' own buttons, snap layouts and dragging are unchanged.
