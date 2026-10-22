@@ -2138,6 +2138,45 @@ void main() {
     expect(OrientationLock.instance.held, isFalse);
   });
 
+  testWidgets("rotation on iOS (user, 2026-10-22: Auto / Locked): Locked holds the screen the way it is up as the "
+      'book opens; if the screen turned over instead, the other way', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final turnsOver in [false, true]) {
+      var wayUp = 'reverseLandscape';
+      final (requests, _) = recordOrientation(tester, () => wayUp);
+      final s = AppSettings.instance;
+      s.setDisplay(s.display.copyWith(rotation: Rotation.locked));
+      await openReader(tester);
+      await tester.pump();
+      expect(requests.last, ['DeviceOrientation.landscapeRight'], reason: 'held as it is up (turnsOver $turnsOver)');
+      if (turnsOver) wayUp = 'landscape'; // iOS took that name the other way round: the screen turned over
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(requests.last, turnsOver ? ['DeviceOrientation.landscapeLeft'] : ['DeviceOrientation.landscapeRight'],
+          reason: turnsOver ? 'turned back' : 'left as it is');
+      await tester.pumpWidget(const SizedBox());
+      expect(requests.last, isEmpty, reason: 'closed: the device again');
+      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
+    }
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('the Rotation setting on iOS: Auto and Locked, nothing else; Locked chosen is kept', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(rotation: Rotation.auto)));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
+        listenable: s, builder: (context, _) => rotationRow(s)))));
+    final row = tester.widget<SegmentedButton<Rotation>>(find.byType(SegmentedButton<Rotation>));
+    expect([for (final g in row.segments) g.value], [Rotation.auto, Rotation.locked]);
+    await tester.tap(find.text('Locked'));
+    await tester.pump();
+    expect(s.display.rotation, Rotation.locked);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets("rotation (Windows and the rest): one way up, the usual one; the way up isn't asked", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

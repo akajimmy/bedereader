@@ -566,19 +566,29 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
 /// held when the lock starts; tapping the one in force again turns it upside down (user, 2026-10-07). One for both
 /// kinds of book (user, 2026-10-21).
 Widget rotationRow(AppSettings s) {
+  // iOS: Auto / Locked (user, 2026-10-22); Android: Auto / Portrait / Landscape
+  if (rotationLocksOnly) {
+    return SegmentRow<Rotation>(
+      title: 'Rotation',
+      choices: const [Choice(Rotation.auto, 'Auto'), Choice(Rotation.locked, 'Locked')],
+      value: s.display.rotation == Rotation.auto ? Rotation.auto : Rotation.locked,
+      onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
+    );
+  }
   final rotation = s.display.rotation;
+  bool turns(Rotation r) => r == Rotation.portrait || r == Rotation.landscape;
   return SegmentRow<Rotation>(
       title: 'Rotation',
       // the lock in force marked as a switch: tapped again, it turns over (user, 2026-10-07)
       choices: [
-        for (final r in Rotation.values)
-          Choice(r, r.label, mark: r != Rotation.auto && r == rotation ? Icons.sync : null),
+        for (final r in const [Rotation.auto, Rotation.portrait, Rotation.landscape])
+          Choice(r, r.label, mark: turns(r) && r == rotation ? Icons.sync : null),
       ],
       markRoom: true, // the buttons the same size, mark or not (user, 2026-10-07: no resizing)
-      value: rotation,
+      value: rotation == Rotation.locked ? Rotation.auto : rotation,
       onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
       onReselect: (r) {
-        if (r != Rotation.auto) OrientationLock.instance.flip(); // (only while a book holds the lock)
+        if (turns(r)) OrientationLock.instance.flip(); // (only while a book holds the lock)
       },
     );
 }

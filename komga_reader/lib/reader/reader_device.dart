@@ -75,7 +75,11 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
     final r = _settings.display.rotation;
     if (r == _rotation) return;
     _rotation = r;
-    OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
+    if (r == Rotation.locked) {
+      OrientationLock.instance.holdNow(); // iOS: the way it is now
+    } else {
+      OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
+    }
   }
 
   // ---- Keep the screen on (Settings > Comics): always while a book is open, for N minutes after the last page turn

@@ -154,10 +154,16 @@ extension ReaderBackgroundLabel on ReaderBackground {
 }
 
 /// The reader's rotation: follow the device (as the rest of the app does), or hold portrait or landscape.
-enum Rotation { auto, portrait, landscape }
+/// [locked]: iOS's - the screen held the way it is when the lock starts (Android has [portrait] / [landscape]).
+enum Rotation { auto, portrait, landscape, locked }
 
 extension RotationLabel on Rotation {
-  String get label => switch (this) { Rotation.auto => 'Auto', Rotation.portrait => 'Portrait', Rotation.landscape => 'Landscape' };
+  String get label => switch (this) {
+        Rotation.auto => 'Auto',
+        Rotation.portrait => 'Portrait',
+        Rotation.landscape => 'Landscape',
+        Rotation.locked => 'Locked',
+      };
 }
 
 /// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark

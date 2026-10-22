@@ -48,8 +48,12 @@ Future<bool> setFullscreen(bool on) async {
   }
 }
 
-/// Only a phone or tablet turns; a PC window doesn't, so the reader's rotation lock is Android only.
-bool get canRotate => defaultTargetPlatform == TargetPlatform.android;
+/// Only a phone or tablet turns; a PC window doesn't, so the reader's rotation lock is Android's and iOS's.
+bool get canRotate => defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+
+/// iOS: the rotation lock is Auto / Locked - Locked holds the screen the way it is (user, 2026-10-22: "two: auto and
+/// locked"; an app can't switch the device's own lock). Android: Auto / Portrait / Landscape.
+bool get rotationLocksOnly => defaultTargetPlatform == TargetPlatform.iOS;
 
 /// The battery for the reader's clock: (level 0..100, charging), or null where there's none to read (a desktop PC).
 Future<(int, bool)?> batteryState() async {
@@ -116,6 +120,39 @@ class OrientationLock {
     if (_portrait == null) return;
     _flipped = !_flipped;
     await _apply();
+  }
+
+  /// iOS's Locked: the screen held the way it is now. Looked at again a moment later: if the screen turned over instead
+  /// (iOS may name its two landscapes the other way round from Android's - not checkable here), the other one.
+  Future<void> holdNow() async {
+    final way = await _wayUp();
+    if (way == null) return; // not known: nothing held
+    _portrait = way == 'portrait' || way == 'reversePortrait';
+    _flipped = way.startsWith('reverse');
+    await _apply();
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    if (_portrait == null) return; // let go meanwhile
+    final now = await _wayUp();
+    if (now != null && now == _opposite(way)) {
+      _flipped = !_flipped;
+      await _apply();
+    }
+  }
+
+  static String _opposite(String way) => switch (way) {
+        'portrait' => 'reversePortrait',
+        'reversePortrait' => 'portrait',
+        'landscape' => 'reverseLandscape',
+        _ => 'landscape',
+      };
+
+  /// The way the screen is up now (portrait, reversePortrait, landscape, reverseLandscape), or null.
+  Future<String?> _wayUp() async {
+    try {
+      return await _channel.invokeMethod<String>('currentWayUp');
+    } catch (_) {
+      return null;
+    }
   }
 
   /// The book closed: the app follows the device again.
