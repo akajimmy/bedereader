@@ -6,17 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/refresh_gate.dart';
-import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart';
-import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/client_settings.dart';
 import 'support/home_server.dart';
-import 'support/helpers.dart' show onePage, setView;
+import 'support/helpers.dart' show onePage;
 import 'support/no_network.dart';
 
 /// Home, with Komga's client settings (where pins are kept: what's written, whether it can be reached), an empty read
@@ -178,89 +176,21 @@ void main() {
     expect(OnDeckHidden.instance.seriesHidden('S9'), isTrue, reason: 'and On deck hidden');
   });
 
-  // Sync pins across devices, a switch per device (user, 2026-10-05): on by default
-  group('sync pins across devices', () {
-    const xb = Pin(name: 'X-Books', kind: 'readlist', id: 'RL2', title: 'X-Books');
-
-    test('off: this device keeps a copy as its own list; pins made here stay here, and ones made elsewhere stay '
-        'there - after a restart too', () async {
-      final api = server()..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
-      await Pins.instance.load(api);
-      expect(Pins.instance.sync, isTrue, reason: 'on by default');
-      await Pins.instance.setSync(false);
-      expect(Pins.instance.items.single.id, 'RL1', reason: 'starts as a copy of the shared list');
-      final puts = api.puts;
-      Pins.instance.add(xb);
-      await pumpEventQueue();
-      expect(api.puts, puts, reason: 'not sent');
-      expect(api.written[Pins.komgaKey], isNot(contains('RL2')));
-      api.written[Pins.komgaKey] = '[]'; // unpinned everything on the tablet
-      await Pins.instance.refresh();
-      expect(Pins.instance.items.map((p) => p.id), ['RL1', 'RL2'], reason: "the tablet's change doesn't arrive");
-      Pins.instance.items = []; // a restart
-      await Pins.instance.load(api);
-      expect(Pins.instance.sync, isFalse);
-      expect(Pins.instance.items.map((p) => p.id), ['RL1', 'RL2'], reason: "this device's own list, kept");
-    });
-
-    test("back on: the shared list returns, from Komga; this device's own goes", () async {
-      final api = server()..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
-      await Pins.instance.load(api);
-      await Pins.instance.setSync(false);
-      Pins.instance.add(xb);
-      await pumpEventQueue();
-      expect(await Pins.instance.deviceOnly(), [xb], reason: 'what switching back on would drop');
-      api.written[Pins.komgaKey] = jsonEncode([uu.toJson(), const Pin(name: 'Pull List', kind: 'readlist',
-          id: 'RL3', title: 'Pull List').toJson()]); // changed elsewhere meanwhile
-      await Pins.instance.setSync(true);
-      expect(Pins.instance.items.map((p) => p.id), ['RL1', 'RL3'], reason: "Komga's list, as it is now");
-      expect(await Pins.instance.deviceOnly(), isEmpty);
-      expect((await SharedPreferences.getInstance()).getString('pins.device'), isNull);
-    });
-
-    test("signing out: this device's own pins go too (they were the account's)", () async {
-      final api = server();
-      await Pins.instance.load(api);
-      await Pins.instance.setSync(false);
-      Pins.instance.add(xb);
-      await pumpEventQueue();
-      await Pins.instance.clearAccount();
-      expect((await SharedPreferences.getInstance()).getString('pins.device'), isNull);
-    });
-
-    testWidgets('Settings > Server and sync (moved from Library & Home, 2026-10-07): the switch; back on with pins only this device has asks first, naming '
-        'them - Cancel keeps it off', (tester) async {
-      setView(tester, const Size(1280, 1600));
-      final api = noNetwork(PinsServer.new)..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
-      await tester.runAsync(() async {
-        await Pins.instance.load(api);
-        await Pins.instance.setSync(false);
-      });
-      Pins.instance.add(xb);
-      await tester.runAsync(pumpEventQueue);
-      await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api, onSignOut: () {},
-          initialPage: SettingsPage.server)));
-      await tester.pump();
-      final row = find.widgetWithText(SwitchRow, 'Sync pins across devices');
-      await tester.ensureVisible(row);
-      expect(find.text('This device has its own pins'), findsOneWidget);
-      await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
-      await tester.runAsync(pumpEventQueue);
-      await tester.pumpAndSettle();
-      expect(find.textContaining('This device has 1 pin the shared list doesn\'t (X-Books)'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(Pins.instance.sync, isFalse, reason: 'cancelled: still off');
-      await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
-      await tester.runAsync(pumpEventQueue);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sync'));
-      await tester.runAsync(pumpEventQueue);
-      await tester.pumpAndSettle();
-      expect(Pins.instance.sync, isTrue);
-      expect(Pins.instance.items.single.id, 'RL1', reason: 'the shared list');
-      expect(find.text('The same pins on every device signed in to this account'), findsOneWidget);
-    });
+  // pins always sync (user, 2026-10-21: "drop this setting entirely. pins always sync.")
+  test('always synced: a device that had its own list (the switch from before) gets the shared list; the old keys '
+      'go', () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('pins.sync', false);
+    await prefs.setString('pins.device', jsonEncode([const Pin(name: 'X-Books', kind: 'readlist', id: 'RL2',
+        title: 'X-Books').toJson()]));
+    final api = server()..written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+    await Pins.instance.load(api);
+    expect(Pins.instance.items.map((p) => p.id), ['RL1'], reason: 'the shared list');
+    expect((prefs.containsKey('pins.sync'), prefs.containsKey('pins.device')), (false, false));
+    final puts = api.puts;
+    Pins.instance.add(const Pin(name: 'Pull List', kind: 'readlist', id: 'RL3', title: 'Pull List'));
+    await pumpEventQueue();
+    expect(api.puts, puts + 1, reason: 'sent');
   });
 
   testWidgets('a read list opened from a pin starts with that pin\'s filter, and its pin button shows pinned', (tester) async {

@@ -521,7 +521,7 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
 }
 
 Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
-      title: 'Page turn animation',
+      title: 'Page turn', // as eBooks' (user, 2026-10-21: "the same name")
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
       value: s.display.pageTurn,
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),

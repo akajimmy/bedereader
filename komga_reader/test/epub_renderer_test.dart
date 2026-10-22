@@ -208,7 +208,10 @@ void main() {
   });
 
   group('Page turn: Curl (user, 2026-10-11: the comics\' 3D curl for eBooks)', () {
-    setUp(() => AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(turn: EpubTurn.curl)));
+    setUp(() {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.curl));
+      addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
+    });
     tearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
 
     Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter);

@@ -602,12 +602,12 @@ class EpubRenderer extends Renderer {
   // A turn's slide: 320 ms, easing in and out. The old 220 ms ease-out moved the page ~150 px a frame at the start -
   // sharp text moving that far a frame reads as judder even at a full 60 fps (user, build 75: "not smooth in the way
   // that comics are"); this one peaks near 100 px.
-  Duration get _turnTime => AppSettings.instance.epub.turn == EpubTurn.slide
+  Duration get _turnTime => AppSettings.instance.display.epubTurn == EpubTurn.slide
       ? const Duration(milliseconds: 320)
       : Duration.zero; // none - or curl, when it couldn't be drawn: at once
 
   /// 3D page curl (user, 2026-10-11: as the comics'): the page turns over from a snapshot (lib/reader/curl_turns.dart).
-  bool get _curlMode => AppSettings.instance.epub.turn == EpubTurn.curl && CurlTurns.available;
+  bool get _curlMode => AppSettings.instance.display.epubTurn == EpubTurn.curl && CurlTurns.available;
   CurlTurns? _curlMade;
   CurlTurns get _curl => _curlMade ??= CurlTurns(
     vsync: host.vsync,

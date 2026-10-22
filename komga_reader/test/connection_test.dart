@@ -82,7 +82,6 @@ void main() {
   });
 
   test('nothing downloaded: still says Komga can\'t be reached (Retry / OK), never switches', () async {
-    await conn.setAutoSwitch(true);
     d.store!.books.clear();
     server.up = false;
     await conn.check();
@@ -91,24 +90,34 @@ void main() {
     expect(conn.offline, isFalse);
   });
 
-  test('Automatic: switches offline by itself, and back once no book is open', () async {
-    await conn.setAutoSwitch(true);
-    expect((await SharedPreferences.getInstance()).getBool('offline.autoSwitch'), isTrue);
+  test('reachable again, after going offline from the prompt (user, 2026-10-21: no automatic switch - "when back online '
+      'prompt"): offline it stays until answered - asked once no book is open; Stay offline keeps it offline; the old '
+      "switch's saved key goes", () async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('offline.autoSwitch', true); // (saved by the setting that went)
+    await conn.load(server);
+    expect(prefs.containsKey('offline.autoSwitch'), isFalse);
     server.up = false;
     await conn.check();
-    expect(conn.askPending, isFalse);
-    expect(conn.offline, isTrue);
+    expect(conn.askPending, isTrue, reason: 'asked, never switched by itself');
+    expect(conn.offline, isFalse);
+    conn.useDownloads(); // the prompt's Go offline
 
     conn.readerOpened(); // reading a downloaded book
     server.up = true;
     await conn.check();
     expect(conn.reachableAgain, isTrue);
-    expect(conn.offline, isTrue); // not while the book is open
+    var told = 0;
+    void count() => told++;
+    conn.addListener(count);
+    conn.readerClosed(); // the moment to ask
+    await Future<void>.delayed(Duration.zero);
+    conn.removeListener(count);
+    expect(told, greaterThan(0), reason: 'the app hears it can ask now');
+    expect(conn.offline, isTrue, reason: 'not switched back by itself');
 
-    conn.readerClosed();
-    await Future<void>.delayed(Duration.zero);
-    await Future<void>.delayed(Duration.zero);
-    expect(conn.offline, isFalse);
+    conn.stayOffline();
+    expect((conn.offline, conn.reachableAgain), (true, false));
   });
 
   test('offline by hand wins: no checks, no prompts, no offers', () async {
@@ -135,7 +144,8 @@ void main() {
     expect(conn.offline, isTrue);
   }); // bug found 2026-09-30 (missing-tests audit): no forcedOffline guard there; fixed in Connection._onReachability
 
-  testWidgets('the prompt: Use downloaded books / Retry / Stay online', (tester) async {
+  testWidgets('the prompt (user, 2026-10-21: "retry or go offline"): Retry / Go offline, no Stay online',
+      (tester) async {
     server.up = false;
     await tester.runAsync(() => conn.check());
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
@@ -143,13 +153,43 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text("Can't reach Komga"), findsOneWidget);
-    expect(find.text('Stay online'), findsOneWidget);
+    expect(find.text('Stay online'), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
-    await tester.tap(find.text('Use downloaded books'));
+    await tester.tap(find.text('Go offline'));
     await tester.pumpAndSettle();
     expect(find.text("Can't reach Komga"), findsNothing);
     expect(conn.offline, isTrue);
     conn.reset(); // stops the 30 s poll going offline started (a timer left pending fails a widget test)
+  });
+
+  testWidgets('reachable again (user, 2026-10-21: "when back online prompt. if user dismisses prompt, stay in offline '
+      'mode"): Go online goes online; Stay offline, or closing it, stays offline', (tester) async {
+    Future<void> ask(Future<void> Function() answer) async {
+      server.up = false;
+      await tester.runAsync(() => conn.check());
+      conn.useDownloads();
+      server.up = true;
+      await tester.runAsync(() => conn.check());
+      expect(conn.reachableAgain, isTrue);
+      await tester.pumpWidget(MaterialApp(key: UniqueKey(), home: Builder(builder: (context) => TextButton(
+          onPressed: () => showReachableAgainPrompt(context), child: const Text('open')))));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(find.text('Komga is reachable again'), findsOneWidget);
+      await answer();
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+      await tester.pumpAndSettle();
+      expect(find.text('Komga is reachable again'), findsNothing);
+    }
+
+    await ask(() => tester.tap(find.text('Go online')));
+    expect(conn.offline, isFalse, reason: 'Go online');
+    await ask(() => tester.tap(find.text('Stay offline')));
+    expect((conn.offline, conn.reachableAgain), (true, false), reason: 'Stay offline');
+    await tester.runAsync(() => conn.goOnline());
+    await ask(() => tester.tapAt(const Offset(5, 5))); // closed: a tap outside
+    expect(conn.offline, isTrue, reason: 'closed: offline it stays');
+    conn.reset();
   });
 
   testWidgets("the prompt, when Komga answered before it was listening, closes - not a Retry that spins for good "

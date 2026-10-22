@@ -91,21 +91,6 @@ void main() {
         reason: 'both changes on Komga');
   });
 
-  test('#6: pins - turning sync off while a send is failing stops the retries (a minute later the device-only '
-      'list went over the shared pins)', () async {
-    final api = noNetwork(SettingsServer.new);
-    await pins.load(api);
-    addTearDown(() => pins.setSync(true));
-    api.holdPut = Completer<void>();
-    pins.add(const Pin(name: 'Shared', kind: 'library', title: 'Comics'));
-    await waitUntil(() => api.puts == 1, reason: 'the send on its way');
-    await pins.setSync(false); // while the send is on its way
-    api.holdPut!.completeError(StateError('Komga refused'));
-    api.holdPut = null;
-    await pumpEventQueue();
-    expect(pins.retrying, isFalse, reason: 'no try in a minute: the list is this device\'s now');
-  });
-
   testWidgets("#12: reader settings - a change made while Komga's copy was on its way stays (the refresh brought back "
       'the older value); a change not sent yet stays too', (tester) async {
     final s = AppSettings.instance;

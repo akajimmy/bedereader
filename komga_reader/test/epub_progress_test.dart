@@ -270,7 +270,7 @@ void main() {
 
   testWidgets('Curl: a curl let go early leaves no trace; one that turns counts once (audit 2026-10-11: counted as it '
       'started, one let go on the last page marked the book read)', (tester) async {
-    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.curl)); addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
     addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
     final api = await open(tester);
     Future<void> drag(double to) async {
