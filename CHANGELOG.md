@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.0
+
+### Build 136 - 2026-10-22
+
 **Fixed**
 
 - Page curl with an inset page: the shadow beside the lifting page no longer runs past the page's side onto the surround as a line.
@@ -16,8 +20,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 
 - eBooks, Inset page: the page a little wider - 7 wide for every 10 high (it was 2:3).
-
-## 1.4.0
 
 ### Build 135 - 2026-10-22
 
