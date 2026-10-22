@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- eBooks: the chapter dots on the slider a little larger and stronger than the comic page dots.
+
 ## 1.4.0
 
 ### Build 137 - 2026-10-22
