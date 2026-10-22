@@ -85,6 +85,33 @@ void main() {
     await tester.pump(const Duration(minutes: 2));
   });
 
+  testWidgets("the eBook font and text size are each device's own (user, 2026-10-22); the rest of the eBook set "
+      'still follows the account', (tester) async {
+    final api = server();
+    await s.load(api);
+    s.setEpub(s.epub.copyWith(font: EpubFont.lora, size: 26));
+    await tester.pump(const Duration(seconds: 3));
+    expect(api.puts, 0, reason: 'nothing sent for the font and size alone');
+    s.setEpub(s.epub.copyWith(lineSpacing: 1.75));
+    await tester.pump(const Duration(seconds: 3));
+    final sent = (jsonDecode(api.written[AppSettings.komgaKey]!) as Map)['epub'] as Map;
+    expect(sent['lineSpacing'], 1.75, reason: 'the line spacing goes to Komga');
+    expect(sent.containsKey('font') || sent.containsKey('size'), isFalse, reason: 'the font and size do not');
+
+    // this device again after a restart: its own font and size kept
+    await s.load(api);
+    expect((s.epub.font, s.epub.size, s.epub.lineSpacing), (EpubFont.lora, 26.0, 1.75));
+
+    // another device (its own storage empty), the same account: the spacing comes, the font and size are its own
+    await s.clearAccount();
+    SharedPreferences.setMockInitialValues({});
+    s.epub = const EpubPrefs(); // (a fresh install's)
+    await s.load(api);
+    expect(s.epub.lineSpacing, 1.75, reason: 'synced');
+    expect((s.epub.font, s.epub.size), (const EpubPrefs().font, const EpubPrefs().size), reason: "this device's own");
+    await tester.pump(const Duration(minutes: 2));
+  });
+
   testWidgets("series settings removed on another device go here too; Komga's copy is the truth", (tester) async {
     final api = server({AppSettings.komgaKey: blob({'S1': FitMode.width, 'S2': FitMode.height})});
     await s.load(api);

@@ -552,6 +552,12 @@ class EpubPrefs {
       'hyphenate': hyphenate, 'paragraphGap': paragraphGap.name, 'twoPages': twoPages.name,
       'chapterStart': chapterStart.name, 'gutter': gutter};
 
+  /// What's synced: all but the font and the text size - this device's own (user, 2026-10-22: "ebook text size and
+  /// font face should be per device"; [AppSettings.setEpub]).
+  Map<String, dynamic> syncJson() => toJson()
+    ..remove('font')
+    ..remove('size');
+
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -661,7 +667,13 @@ class AppSettings extends ChangeNotifier {
   void _posterLookFollows() => posterLook.value = (display.posterSize, library.posterSeries, library.posterTitle,
       library.posterDate, (library.ebookPosterTitle, library.ebookPosterAuthor, library.ebookPosterSeries,
           library.ebookPosterDate));
-  EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
+  // EPUB books: one set, synced with the reading defaults (key "epub") - but for the font and the text size, this
+  // device's own ([EpubPrefs.syncJson], kept under [_localEpubOwn])
+  EpubPrefs epub = const EpubPrefs();
+  static const _localEpubOwn = 'epub.own';
+
+  /// [p] with this device's font and text size (from [epub], which always has them).
+  EpubPrefs _withOwn(EpubPrefs p) => p.copyWith(font: epub.font, size: epub.size);
   LibraryPrefs library = const LibraryPrefs(); // posters' captions, Home's sections: synced (key "library")
   String? syncError; // last Komga sync problem, shown at the bottom of the reader's panels
 
@@ -718,7 +730,7 @@ class AppSettings extends ChangeNotifier {
     _api = null;
     _loaded = false;
     defaults = const ReaderPrefs();
-    epub = const EpubPrefs();
+    epub = _withOwn(const EpubPrefs()); // (this device's font and size stay)
     library = const LibraryPrefs();
     _posterLookFollows();
     series.clear();
@@ -783,6 +795,9 @@ class AppSettings extends ChangeNotifier {
     final savedDisplay = d == null ? null : jsonDecode(d) as Map<String, dynamic>;
     if (savedDisplay != null) display = DisplayPrefs.fromJson(savedDisplay);
     _posterLookFollows();
+    final own = p.getString(_localEpubOwn); // (a new key: from the defaults until set here - no migration)
+    final ownPrefs = own == null ? const EpubPrefs() : EpubPrefs.fromJson(jsonDecode(own) as Map<String, dynamic>);
+    epub = epub.copyWith(font: ownPrefs.font, size: ownPrefs.size);
     try {
       final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
       _dirtySeries
@@ -831,10 +846,21 @@ class AppSettings extends ChangeNotifier {
 
   bool _loaded = false;
 
-  /// The EPUB settings (the reader's Aa panel, Settings > eBooks). Synced.
+  /// The EPUB settings (the reader's Aa panel, Settings > eBooks). Synced - but for the font and the text size, kept
+  /// on this device only.
   void setEpub(EpubPrefs prefs) {
     if (prefs == epub) return;
+    final synced = jsonEncode(prefs.syncJson()) != jsonEncode(epub.syncJson());
+    final own = prefs.font != epub.font || prefs.size != epub.size;
     epub = prefs;
+    if (own) {
+      SharedPreferences.getInstance()
+          .then((p) => p.setString(_localEpubOwn, jsonEncode({'font': prefs.font.name, 'size': prefs.size})));
+    }
+    if (!synced) {
+      notifyListeners();
+      return;
+    }
     _dirtyEpub = true;
     _epubVersion++;
     _changedReader();
@@ -975,7 +1001,7 @@ class AppSettings extends ChangeNotifier {
       merged['v'] = 1;
       merged['series'] = remoteSeries;
       if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
-      if (sendEpub) merged['epub'] = epub.toJson();
+      if (sendEpub) merged['epub'] = epub.syncJson();
       if (sendLibrary) merged['library'] = library.toJson();
       await api.putClientSetting(komgaKey, jsonEncode(merged));
       // sent - unless it changed again meanwhile: then it's still to send
@@ -1009,7 +1035,7 @@ class AppSettings extends ChangeNotifier {
   Map<String, dynamic> _blob() => {
         'v': 1,
         'default': defaults.toJson(),
-        'epub': epub.toJson(),
+        'epub': epub.syncJson(),
         'library': library.toJson(),
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
       };
@@ -1021,7 +1047,7 @@ class AppSettings extends ChangeNotifier {
     final d = b['default'];
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
     final e = b['epub'];
-    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = EpubPrefs.fromJson(e);
+    if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = _withOwn(EpubPrefs.fromJson(e));
     final l = b['library'];
     if (l is Map<String, dynamic> && !(remote && _dirtyLibrary)) library = LibraryPrefs.fromJson(l);
     final s = b['series'];

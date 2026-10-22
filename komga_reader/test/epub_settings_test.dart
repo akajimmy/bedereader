@@ -176,8 +176,9 @@ void main() {
     }
   }
 
-  testWidgets("the text size is synced like the rest of the EPUB set (user, 2026-10-07 QA: one size again): Komga's "
-      'copy brings it', (tester) async {
+  testWidgets("the font and text size are this device's (user, 2026-10-22 - they were synced): Komga's copy of them "
+      "doesn't apply, nor the old synced copy kept on the device (a new key: the defaults until set - no migration)",
+      (tester) async {
     final api = noNetwork(() => SettingsServer({
       AppSettings.komgaKey: jsonEncode({'v': 1, 'series': {},
           'epub': const EpubPrefs(size: 28, font: EpubFont.lora).toJson()}),
@@ -186,8 +187,8 @@ void main() {
       'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': const EpubPrefs(size: 16).toJson()}),
     });
     await tester.runAsync(() => AppSettings.instance.load(api));
-    expect(AppSettings.instance.epub.font, EpubFont.lora, reason: "Komga's copy of the rest");
-    expect(AppSettings.instance.epub.size, 28, reason: "Komga's size, not the device's 16");
+    expect(AppSettings.instance.epub.font, const EpubPrefs().font, reason: "not Komga's font");
+    expect(AppSettings.instance.epub.size, const EpubPrefs().size, reason: "not Komga's 28, nor the old copy's 16");
   });
 
   testWidgets("synced: a change goes to Komga with the reading defaults (key 'epub'); Komga's copy arrives on load",
@@ -197,12 +198,11 @@ void main() {
           'epub': const EpubPrefs(size: 24).toJson()}),
     }));
     await tester.runAsync(() => AppSettings.instance.load(api));
-    expect(AppSettings.instance.epub.font, isNot(EpubFont.lora), reason: 'not set yet');
-    expect(AppSettings.instance.epub.size, 24, reason: "Komga's copy, the size included");
-    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(font: EpubFont.lora));
+    expect(AppSettings.instance.epub.lineSpacing, isNot(1.75), reason: 'not set yet');
+    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(lineSpacing: 1.75));
     await wait(tester, const Duration(seconds: 3));
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
-    expect(EpubPrefs.fromJson(Map<String, dynamic>.from(sent['epub'] as Map)).font, EpubFont.lora);
+    expect(EpubPrefs.fromJson(Map<String, dynamic>.from(sent['epub'] as Map)).lineSpacing, 1.75);
     expect(sent['default'], isNotNull, reason: 'the reading defaults stay');
   });
 

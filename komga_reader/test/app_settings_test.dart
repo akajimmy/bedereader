@@ -325,7 +325,8 @@ void main() {
     final p = await SharedPreferences.getInstance();
     await p.setString('view.library.all', '{"hideRead":true}');
     s.setSeries('S9', const ReaderPrefs(fit: FitMode.width)); // synced: untouched
-    s.setEpub(const EpubPrefs(size: 24, font: EpubFont.lora)); // the size is this device's; the font is synced
+    // the eBook font and text size: this device's (user, 2026-10-22); the line spacing: synced
+    s.setEpub(const EpubPrefs(size: 24, font: EpubFont.lora, lineSpacing: 1.75));
     expect(ReaderKeys.instance.isDefault, isFalse);
 
     await open(tester, page: SettingsPage.about);
@@ -352,7 +353,9 @@ void main() {
     expect(d.capBytes, Downloads.defaultCap);
     expect(d.deleteRead, DeleteRead.never);
     expect(s.series['S9']?.fit, FitMode.width);
-    expect((s.epub.size, s.epub.font), (24.0, EpubFont.lora), reason: 'the EPUB set is synced: untouched');
+    expect((s.epub.size, s.epub.font), (const EpubPrefs().size, const EpubPrefs().font),
+        reason: "the eBook font and text size: this device's, back to the defaults");
+    expect(s.epub.lineSpacing, 1.75, reason: 'the rest of the eBook set is synced: untouched');
     await tester.pump(const Duration(seconds: 5)); // the snackbar and the settings sync timer
   });
 
