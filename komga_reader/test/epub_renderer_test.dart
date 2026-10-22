@@ -14,6 +14,7 @@ import 'package:komga_reader/epub/layout.dart' show EpubPage;
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
+import 'package:komga_reader/reader/reader_slider.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -717,6 +718,26 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Close'), findsNothing);
     expect(find.byType(ReaderScreen), findsOneWidget);
+  });
+
+  testWidgets("the slider marks where each chapter starts, with the dots comics' slider has for pages - not a dot per "
+      'page (user, 2026-10-22: "same marks used for chapters")', (tester) async {
+    await open(tester, twoChapters());
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pump();
+    final total = int.parse(RegExp(r'/(\d+)').firstMatch(
+        tester.widget<Text>(find.byKey(const ValueKey('pos-left-text'))).data!)!.group(1)!);
+    final chapter1 = int.parse(RegExp(r'/(\d+)').firstMatch(
+        tester.widget<Text>(find.byKey(const ValueKey('pos-right-text'))).data!)!.group(1)!);
+    expect(chapter1, lessThan(total));
+    final marks = tester.widget<CustomPaint>(find.byKey(const ValueKey('slider-marks'))).painter as SliderMarksPainter;
+    final r = tester.getRect(find.byType(Slider));
+    const inset = ReaderSlider.inset;
+    // the second chapter's first page is page [chapter1] (from 0) of [total]: one mark, there
+    expect(marks.xs, hasLength(1), reason: 'two chapters: the second one starts');
+    expect(marks.xs.single, closeTo(inset + chapter1 / (total - 1) * (r.width - 2 * inset), 0.5));
+    expect(SliderTheme.of(tester.element(find.byType(Slider))).tickMarkShape, SliderTickMarkShape.noTickMark,
+        reason: "the Slider's own dot per page: none");
   });
 
   testWidgets('the slider: the position shown follows the finger while dragging; the page changes when it lifts',

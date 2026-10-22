@@ -1083,6 +1083,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         onJump: _sliderJump,
         changed: () => setState(() {}),
         label: _r.placeLabel(shown),
+        marks: _r.sliderMarks,
         preview: (shown, x) => _r.preview(context, shown, x) ?? const SizedBox.shrink(),
       );
 
