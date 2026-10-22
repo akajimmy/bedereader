@@ -627,7 +627,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
-            "what's shown over the page, rotation), night mode and its schedule, text size and "
+            "what's shown over the page, rotation), the eBook font and text size, night mode and its schedule, app "
+            "text size and "
             "accent colour, the reader's keys, poster size, the libraries shown, every screen's remembered "
             'filter and sort, and the download limit and Delete once read.\n\nNot touched: settings synced '
             "through Komga (reading defaults, series settings, pins, On deck, posters' captions, Home sections), "
@@ -641,6 +642,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     if (ok != true) return;
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
+    s.setEpub(s.epub.copyWith(font: const EpubPrefs().font, size: const EpubPrefs().size)); // this device's own
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
