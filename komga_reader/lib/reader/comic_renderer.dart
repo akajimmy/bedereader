@@ -1375,28 +1375,9 @@ class ComicRenderer extends Renderer {
   void scrubStarted() => _thumbShown = null;
 
   /// Page previews on the slider: while a page is being picked (dragging, or the remote scrubbing), a small picture
-  /// of it and its number, over the thumb at [x].
+  /// of it and its number, over the thumb at [x] - always (user, 2026-10-21: the switch for just the number went).
   @override
   Widget preview(BuildContext context, int shown, double x) {
-    if (!_settings.display.pagePreviews) {
-      // Page previews off (Settings > Comics): just the number over the thumb - nothing asked of Komga
-      const w = 96.0;
-      return Positioned(
-        left: x - w / 2,
-        top: -48,
-        width: w,
-        child: IgnorePointer(
-          child: Container(
-            key: const ValueKey('page-label'),
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(color: const Color(0xF0101012), borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white24)),
-            child: Text('Page ${shown + 1}', textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 13)),
-          ),
-        ),
-      );
-    }
     final dpr = MediaQuery.devicePixelRatioOf(context);
     return Positioned(
       left: x - _previewSize.width / 2,

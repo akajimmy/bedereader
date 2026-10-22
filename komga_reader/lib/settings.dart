@@ -33,7 +33,7 @@ extension ReadingDirectionLabel on ReadingDirection {
 /// How pages are shown. Saved per series (a new series starts from the global default) and synced through Komga.
 @immutable
 class ReaderPrefs {
-  const ReaderPrefs({this.fit = FitMode.screen, this.brightness = 0, this.contrast = 0, this.sharpen = false,
+  const ReaderPrefs({this.fit = FitMode.screen, this.sharpen = false,
       this.autoLevels = false, this.direction = ReadingDirection.auto, this.crop = 0, this.ownLayout = true,
       this.ownImage = true, this.background = ReaderBackground.black, this.twoPages = TwoPages.wideScreen,
       this.gutter = defaultGutter});
@@ -54,22 +54,25 @@ class ReaderPrefs {
   /// Dual page mode: the space between a pair's two pages, logical px on screen at the page's fit (user, 2026-10-20:
   /// "gutter width (space between pages) measured in pixels" - comics 2 by default). Part of the page layout.
   final double gutter;
-  static const defaultGutter = 2.0, maxGutter = 100.0;
+  static const defaultGutter = 2.0;
 
-  final double brightness; // -0.5 .. 0.5, added to every channel
-  final double contrast; // -0.5 .. 0.5, stretch around mid-grey
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
   final bool autoLevels; // shown as "Enhance colours": auto-levels + whiten paper + deepen ink (lib/enhance.dart)
-  final double crop; // "Crop edges": this fraction of the page cut off every side (0 .. 0.1)
+  final double crop; // "Crop edges": this fraction of the page cut off every side - one of [crops]
 
-  static const maxCrop = 0.10;
+  /// Crop edges' steps (user, 2026-10-21: "Off, 2%, 4%, 6%" - it was a 1% slider to 10%). A share saved that isn't
+  /// one of them reads as Off (no migration - user rule).
+  static const crops = [0.0, 0.02, 0.04, 0.06];
 
-  bool get neutralImage => brightness == 0 && contrast == 0 && !sharpen && !autoLevels && crop == 0;
+  /// The Gutter's steps, px (user, 2026-10-21: "a few steps" - it was a slider to dial in).
+  static const gutters = [0.0, 2.0, 8.0, 16.0];
 
-  ReaderPrefs copyWith({FitMode? fit, double? brightness, double? contrast, bool? sharpen, bool? autoLevels,
+  bool get neutralImage => !sharpen && !autoLevels && crop == 0;
+
+  ReaderPrefs copyWith({FitMode? fit, bool? sharpen, bool? autoLevels,
           ReadingDirection? direction, double? crop, bool? ownLayout, bool? ownImage, ReaderBackground? background,
           TwoPages? twoPages, double? gutter}) =>
-      ReaderPrefs(fit: fit ?? this.fit, brightness: brightness ?? this.brightness, contrast: contrast ?? this.contrast,
+      ReaderPrefs(fit: fit ?? this.fit,
           sharpen: sharpen ?? this.sharpen, autoLevels: autoLevels ?? this.autoLevels,
           direction: direction ?? this.direction, crop: crop ?? this.crop, ownLayout: ownLayout ?? this.ownLayout,
           ownImage: ownImage ?? this.ownImage, background: background ?? this.background,
@@ -80,11 +83,11 @@ class ReaderPrefs {
       background: background, twoPages: twoPages, gutter: gutter);
 
   /// This one's page layout (fit, direction, background) with [image]'s image settings.
-  ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(brightness: image.brightness, contrast: image.contrast,
+  ReaderPrefs withImageOf(ReaderPrefs image) => copyWith(
       sharpen: image.sharpen, autoLevels: image.autoLevels, crop: image.crop);
 
   Map<String, dynamic> toJson() => {
-        'fit': fit.name, 'b': brightness, 'c': contrast, 's': sharpen, 'l': autoLevels, 'd': direction.name, 'x': crop,
+        'fit': fit.name, 's': sharpen, 'l': autoLevels, 'd': direction.name, 'x': crop,
         // written only when off, so everything saved before (and the defaults) reads exactly as it did
         if (!ownLayout) 'ol': false,
         if (!ownImage) 'oi': false,
@@ -95,17 +98,15 @@ class ReaderPrefs {
 
   factory ReaderPrefs.fromJson(Map<String, dynamic> j) => ReaderPrefs(
         fit: FitMode.values.firstWhere((f) => f.name == j['fit'], orElse: () => FitMode.screen),
-        brightness: (j['b'] as num?)?.toDouble() ?? 0,
-        contrast: (j['c'] as num?)?.toDouble() ?? 0,
         sharpen: j['s'] == true,
         autoLevels: j['l'] == true,
         direction: ReadingDirection.values.firstWhere((d) => d.name == j['d'], orElse: () => ReadingDirection.auto),
-        crop: ((j['x'] as num?)?.toDouble() ?? 0).clamp(0.0, maxCrop),
+        crop: crops.contains((j['x'] as num?)?.toDouble()) ? (j['x'] as num).toDouble() : 0,
         ownLayout: j['ol'] != false,
         ownImage: j['oi'] != false,
         background: ReaderBackground.values.firstWhere((b) => b.name == j['bg'], orElse: () => ReaderBackground.black),
         twoPages: TwoPages.values.firstWhere((t) => t.name == j['tp'], orElse: () => TwoPages.wideScreen),
-        gutter: ((j['gut'] as num?)?.toDouble() ?? defaultGutter).clamp(0.0, maxGutter),
+        gutter: gutters.contains((j['gut'] as num?)?.toDouble()) ? (j['gut'] as num).toDouble() : defaultGutter,
       );
 
   @override
@@ -297,7 +298,7 @@ class DisplayPrefs {
       this.ebookPosterTitle = true, this.ebookPosterAuthor = true, this.ebookPosterSeries = false,
       this.ebookPosterDate = false,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue, this.pagePreviews = true, this.pageStrip = false,
+      this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
       this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen});
   final bool night;
@@ -321,9 +322,6 @@ class DisplayPrefs {
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
   /// button (user, 2026-10-02)
   final bool pageStrip;
-  /// reader: a picture of the page over the slider's thumb while picking one. Komga makes each from the book file as
-  /// it's asked, so on a slow link to the books they lag (user, 2026-09-30): off, just the page number.
-  final bool pagePreviews;
   final bool nightSchedule; // night mode on at [nightFrom] and off at [nightTo] by itself (still switchable by hand)
   final int nightFrom, nightTo; // minutes after midnight
   final double textScale; // this app's text size, on top of the device's (one of [textScales])
@@ -336,7 +334,8 @@ class DisplayPrefs {
   final PosterSize posterSize; // library grids and Home's rows
 
   static const alwaysOn = -1; // [screenOn]: as long as a book is open
-  static const screenOnChoices = [0, 5, 10, 20, 30, alwaysOn];
+  // (user, 2026-10-21: Off, 10 min, Always - it was 0, 5, 10, 20, 30, Always; another saved value reads as Off)
+  static const screenOnChoices = [0, 10, alwaysOn];
   final PageTurn pageTurn; // comics' page-turn animation (this device)
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
@@ -371,12 +370,12 @@ class DisplayPrefs {
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pagePreviews, bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
+          bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
           bool? ebookPosterTitle, bool? ebookPosterAuthor, bool? ebookPosterSeries, bool? ebookPosterDate,
           KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
-        pagePreviews: pagePreviews ?? this.pagePreviews, pageStrip: pageStrip ?? this.pageStrip,
+        pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         ebookPosterTitle: ebookPosterTitle ?? this.ebookPosterTitle,
         ebookPosterAuthor: ebookPosterAuthor ?? this.ebookPosterAuthor,
@@ -405,7 +404,7 @@ class DisplayPrefs {
       'ebookPosterTitle': ebookPosterTitle, 'ebookPosterAuthor': ebookPosterAuthor,
       'ebookPosterSeries': ebookPosterSeries, 'ebookPosterDate': ebookPosterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
-      'accent': accent.name, 'pagePreviews': pagePreviews, 'pageStrip': pageStrip,
+      'accent': accent.name, 'pageStrip': pageStrip,
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
@@ -436,7 +435,6 @@ class DisplayPrefs {
         nightTo: minutes(j['nightTo'], 7 * 60),
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
         accent: pick(Accent.values, j['accent'], Accent.blue),
-        pagePreviews: j['pagePreviews'] != false, // on unless switched off
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         ebooks: kind('ebooks', none.ebooks),
@@ -481,8 +479,7 @@ enum EpubMargins {
   narrow(0.04, 40, 'Narrow'),
   normal(0.08, 34, 'Normal'),
   wide(0.14, 28, 'Wide'),
-  wider(0.20, 24, 'Wider'),
-  widest(0.26, 20, 'Widest');
+  wider(0.20, 24, 'Wider'); // (Widest went - user, 2026-10-21; saved, it reads as Normal)
 
   const EpubMargins(this.share, this.lineEms, this.label);
 
@@ -503,13 +500,12 @@ enum EpubMargins {
 /// in place of the chapter's usual one (Default: none) - never closer than the book's where it keeps one for a reason
 /// (a paragraph it doesn't indent, under a picture, a gap that differs from the usual).
 enum EpubParagraphGap {
-  // (saved by name: 'small' stays half a line - shown as Medium since the steps became five, user 2026-10-08)
+  // four steps (user, 2026-10-21: "Book's, None, Normal (today's medium), Large (today's extra large)"). Saved by
+  // name: 'small' is half a line, 'huge' a line and a half, as they were; 'tiny' and 'large' went (they read as None)
   book(null, "Book's"),
-  none(0, 'Default'),
-  tiny(0.25, 'Small'),
-  small(0.5, 'Medium'),
-  large(1, 'Large'),
-  huge(1.5, 'Extra large');
+  none(0, 'None'),
+  small(0.5, 'Normal'),
+  huge(1.5, 'Large');
 
   const EpubParagraphGap(this.ems, this.label);
   final double? ems; // null: the book's
@@ -554,11 +550,15 @@ class EpubPrefs {
   /// ... the default value for ebooks at whatever it currently uses" - 24, dialled in on the tablet 2026-10-16).
   /// Without Inset page the two pages are one surface and meet, as before.
   final double gutter;
-  static const defaultGutter = 24.0, maxGutter = 200.0;
+  static const defaultGutter = 24.0;
+
+  /// The Gutter's steps, px (user, 2026-10-21: "12, 24, 48").
+  static const gutters = [12.0, 24.0, 48.0];
 
   static const sizes = [14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0, 22.0, 24.0, 26.0, 28.0, 32.0];
   /// Line spacing's steps (user, 2026-10-08: 1 to 2 by a quarter, "names as above": Compact .. Double).
-  static const spacings = [1.0, 1.25, 1.5, 1.75, 2.0];
+  // (user, 2026-10-21: Tight, Normal, Loose - Compact and Double went; another saved spacing reads as Normal)
+  static const spacings = [1.25, 1.5, 1.75];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
           EpubAlign? align, bool? hyphenate, EpubTurn? turn,
@@ -582,7 +582,7 @@ class EpubPrefs {
     return EpubPrefs(
       font: pick(EpubFont.values, j['font'], EpubFont.literata),
       size: size != null && size >= 10 && size <= 48 ? size : 19,
-      lineSpacing: spacing != null && spacing >= 1 && spacing <= 2.5 ? spacing : 1.5,
+      lineSpacing: spacings.contains(spacing) ? spacing! : 1.5,
       margins: pick(EpubMargins.values, j['margins'], EpubMargins.normal),
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       align: pick(EpubAlign.values, j['align'], EpubAlign.justified),
@@ -591,7 +591,7 @@ class EpubPrefs {
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
       twoPages: pick(TwoPages.values, j['twoPages'], TwoPages.wideScreen),
       chapterStart: pick(ChapterStart.values, j['chapterStart'], ChapterStart.nextPage),
-      gutter: ((j['gutter'] as num?)?.toDouble() ?? defaultGutter).clamp(0.0, maxGutter),
+      gutter: gutters.contains((j['gutter'] as num?)?.toDouble()) ? (j['gutter'] as num).toDouble() : defaultGutter,
     );
   }
 

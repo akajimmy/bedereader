@@ -21,6 +21,9 @@ class ReaderServer extends TestKomga {
   Future<List<dynamic>> pages(String bookId) async => [{'number': 1}, {'number': 2}, {'number': 3}];
   @override
   Future<Uint8List> pageBytes(String bookId, int number) => Future.any([]); // never completes
+  // the slider's page previews (always on since 2026-10-21): asked for while picking a page, never arriving
+  @override
+  Future<Uint8List> pageThumbBytes(String bookId, int number) => Future.any([]);
   @override
   Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
     saves.add(page);

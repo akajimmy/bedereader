@@ -115,13 +115,14 @@ void main() {
   testWidgets('side sheet 460 wide (user, 2026-10-21: at 380 most rows broke onto two lines): a slider sits beside its '
       'label, on one line, in directional navigation (the remote walk in settings_remote_test covers Up / Down off '
       'them)', (tester) async {
-    await openPanel(tester, const Size(1280, 800), image: true);
-    expect(tester.getSize(find.ancestor(of: find.text('Image'), matching: find.byType(SizedBox)).first).width, 460);
-    final slider = tester.getRect(find.byType(Slider).at(1)); // Brightness
+    await openPanel(tester, const Size(1280, 800));
+    expect(tester.getSize(find.ancestor(of: find.text('Comic settings'), matching: find.byType(SizedBox)).first).width,
+        460);
+    final slider = tester.getRect(find.byType(Slider).first); // screen brightness
     final label = tester.getRect(find.text('Brightness'));
     expect(slider.top, lessThan(label.bottom), reason: 'beside its label, not under it');
-    expect(slider.width, greaterThan(150));
-    final mq = tester.widget<MediaQuery>(find.ancestor(of: find.byType(Slider).at(1), matching: find.byType(MediaQuery)).first);
+    expect(slider.width, greaterThan(100)); // (in the test font, about twice as wide as a real one)
+    final mq = tester.widget<MediaQuery>(find.ancestor(of: find.byType(Slider).first, matching: find.byType(MediaQuery)).first);
     expect(mq.data.navigationMode, NavigationMode.directional); // Up/Down leave the slider
   });
 
