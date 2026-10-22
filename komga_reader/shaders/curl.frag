@@ -50,8 +50,9 @@ void main() {
   vec4 o = vec4(0.0);
 
   if (d > uRadius) {
-    // the page has lifted away here: whatever is underneath, darkened near the curl (only across the page's height)
-    if (p.y >= 0.0 && p.y <= uRect.w) {
+    // the page has lifted away here: whatever is underneath, darkened near the curl - only where the page was, not
+    // past its sides either (an inset page: it ran on over the surround as a line - user, 2026-10-22)
+    if (inside(p)) {
       float shade = (1.0 - clamp((d - uRadius) / (uRadius * 2.0 + 8.0), 0.0, 1.0)) * 0.35;
       o = vec4(0.0, 0.0, 0.0, shade);
     }
