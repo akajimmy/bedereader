@@ -9,12 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+### Build 140 - 2026-10-22
+
 **Changed**
 
 - Webtoons open at their own size - one picture pixel to a screen pixel, centred - instead of blown up to the screen's width. The fit button (and the series' Fit) now works in a webtoon: Original size or Fit width.
 - Webtoon scrolling, Page: the mouse wheel and a held key now move a screen at a time too (they scrolled as in Smooth); a spun wheel no longer loses half its notches.
-
-## 1.5.0
 
 ### Build 139 - 2026-10-22
 
