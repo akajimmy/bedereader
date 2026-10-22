@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../hidden_libraries.dart';
-import '../home_sections.dart';
 import '../ondeck_hidden.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
@@ -457,7 +456,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // ---- Library & Home --------------------------------------------------------------------------------------------
   List<Widget> _library() => [
         _live((s) {
-          final d = s.display;
+          final d = s.display, l = s.library; // (size: this device's; the captions: synced - LibraryPrefs)
           return SettingsGroup(title: 'Posters', children: [
             SegmentRow<PosterSize>(
               title: 'Size',
@@ -470,18 +469,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ToggleChipsRow(
               title: 'Under comic posters',
               chips: [
-                ToggleChip('Series #', d.posterSeries, (v) => s.setDisplay(d.copyWith(posterSeries: v))),
-                ToggleChip('Title', d.posterTitle, (v) => s.setDisplay(d.copyWith(posterTitle: v))),
-                ToggleChip('Release date', d.posterDate, (v) => s.setDisplay(d.copyWith(posterDate: v))),
+                ToggleChip('Series #', l.posterSeries, (v) => s.setLibrary(l.copyWith(posterSeries: v))),
+                ToggleChip('Title', l.posterTitle, (v) => s.setLibrary(l.copyWith(posterTitle: v))),
+                ToggleChip('Release date', l.posterDate, (v) => s.setLibrary(l.copyWith(posterDate: v))),
               ],
             ),
             ToggleChipsRow(
               title: 'Under eBook posters',
               chips: [
-                ToggleChip('Title', d.ebookPosterTitle, (v) => s.setDisplay(d.copyWith(ebookPosterTitle: v))),
-                ToggleChip('Author', d.ebookPosterAuthor, (v) => s.setDisplay(d.copyWith(ebookPosterAuthor: v))),
-                ToggleChip('Series #', d.ebookPosterSeries, (v) => s.setDisplay(d.copyWith(ebookPosterSeries: v))),
-                ToggleChip('Release date', d.ebookPosterDate, (v) => s.setDisplay(d.copyWith(ebookPosterDate: v))),
+                ToggleChip('Title', l.ebookPosterTitle, (v) => s.setLibrary(l.copyWith(ebookPosterTitle: v))),
+                ToggleChip('Author', l.ebookPosterAuthor, (v) => s.setLibrary(l.copyWith(ebookPosterAuthor: v))),
+                ToggleChip('Series #', l.ebookPosterSeries, (v) => s.setLibrary(l.copyWith(ebookPosterSeries: v))),
+                ToggleChip('Release date', l.ebookPosterDate, (v) => s.setLibrary(l.copyWith(ebookPosterDate: v))),
               ],
             ),
           ]);
@@ -620,7 +619,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   /// Everything kept on this device only, back to the defaults - after asking. Synced settings (reading defaults,
-  /// series settings, pins, On deck), the sign-in, the offline mode switch and the downloaded books stay.
+  /// series settings, pins, On deck, posters' captions, Home's sections), the sign-in, the offline mode switch and the
+  /// downloaded books stay.
   Future<void> _resetDevice(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -628,10 +628,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
             "what's shown over the page, rotation), night mode and its schedule, text size and "
-            "accent colour, the reader's keys, posters, the libraries shown, Home "
-            "sections, every screen's remembered filter and sort, and the download "
-            'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
-            'settings, pins, On deck), your sign-in and your downloaded books.'),
+            "accent colour, the reader's keys, poster size, the libraries shown, every screen's remembered "
+            'filter and sort, and the download limit and Delete once read.\n\nNot touched: settings synced '
+            "through Komga (reading defaults, series settings, pins, On deck, posters' captions, Home sections), "
+            'your sign-in and your downloaded books.'),
         actions: [
           TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset')),
@@ -641,7 +641,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     if (ok != true) return;
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
-    await HomeSections.instance.reset();
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();

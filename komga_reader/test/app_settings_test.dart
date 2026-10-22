@@ -122,15 +122,15 @@ void main() {
       (SettingsPage.library, find.text('Large'), () => s.display.posterSize, PosterSize.large),
       // (the first row: comics')
       (SettingsPage.library, find.text('Series #').first,
-          () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, true)),
+          () => (s.library.posterSeries, s.library.posterTitle, s.library.posterDate), (false, true, true)),
       (SettingsPage.library, find.text('Release date').first,
-          () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, false)),
+          () => (s.library.posterSeries, s.library.posterTitle, s.library.posterDate), (false, true, false)),
       // eBooks' own lines (user, 2026-10-18): title and author by default; the comics' stay as they were
       (SettingsPage.library, find.text('Author'),
-          () => (s.display.ebookPosterTitle, s.display.ebookPosterAuthor, s.display.ebookPosterSeries,
-              s.display.ebookPosterDate, s.display.posterSeries), (true, false, false, false, false)), // (comics: as left above)
+          () => (s.library.ebookPosterTitle, s.library.ebookPosterAuthor, s.library.ebookPosterSeries,
+              s.library.ebookPosterDate, s.library.posterSeries), (true, false, false, false, false)), // (comics: as left above)
       (SettingsPage.library, find.text('Series #').last,
-          () => (s.display.ebookPosterSeries, s.display.posterSeries), (true, false)),
+          () => (s.library.ebookPosterSeries, s.library.posterSeries), (true, false)),
       // Reading: what's over the page, one set for both kinds (user, 2026-10-21) - each on or off; the page counter's
       // when, only while it's on
       (SettingsPage.reading, find.text('Clock'), () => (s.display.showClock, s.display.showBattery), (true, false)),
@@ -143,7 +143,7 @@ void main() {
       (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),
       (SettingsPage.look, find.bySemanticsLabel('Green'), () => s.display.accent, Accent.green),
     ];
-    expect((s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (true, true, true));
+    expect((s.library.posterSeries, s.library.posterTitle, s.library.posterDate), (true, true, true));
     await open(tester, page: steps.first.$1);
     var on = steps.first.$1;
     for (final (i, (page, control, read, expected)) in steps.indexed) {
@@ -214,7 +214,7 @@ void main() {
     await tester.tap(onDeckSwitch());
     await tester.pump();
     expect(HomeSections.instance['ondeck'], isFalse);
-    expect((await SharedPreferences.getInstance()).getBool('home.show.ondeck'), isFalse);
+    expect(AppSettings.instance.library.homeShown['ondeck'], isFalse, reason: 'kept (synced)');
     await HomeSections.instance.set('ondeck', true); // e.g. from the Home menu
     await tester.pump();
     expect(tester.widget<Switch>(onDeckSwitch()).value, isTrue);
@@ -347,7 +347,7 @@ void main() {
     expect(ReaderKeys.instance.isDefault, isTrue, reason: "the reader's keys");
     expect(ReaderKeys.instance.actionFor(LogicalKeyboardKey.keyN), isNull);
     expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');
-    expect(HomeSections.instance['ondeck'], isTrue);
+    expect(HomeSections.instance['ondeck'], isFalse, reason: "Home's sections are synced now: untouched");
     expect(p.getString('view.library.all'), isNull);
     expect(d.capBytes, Downloads.defaultCap);
     expect(d.deleteRead, DeleteRead.never);

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/home_sections.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/settings.dart';
@@ -58,6 +59,29 @@ void main() {
     expect(s.series['S1']!.fit, FitMode.width, reason: "this device's unsent change wins");
     await tester.pump(const Duration(seconds: 3));
     expect(api.fitOn('S1'), FitMode.width, reason: 'and reaches Komga');
+    await tester.pump(const Duration(minutes: 2));
+  });
+
+  testWidgets("posters' captions and Home's sections follow the account (user, 2026-10-22: they were this device's): "
+      'set on one device, sent to Komga; another device takes them from there', (tester) async {
+    final api = server();
+    await s.load(api);
+    s.setLibrary(s.library.copyWith(posterDate: false, ebookPosterSeries: true));
+    await HomeSections.instance.set('ondeck', false);
+    await HomeSections.instance.move('pinned', -1);
+    await tester.pump(const Duration(seconds: 3)); // sent
+    final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
+    expect(sent['library'], isA<Map>(), reason: 'on Komga');
+
+    // the other device: its own storage empty, the same account
+    await s.clearAccount();
+    SharedPreferences.setMockInitialValues({});
+    expect((s.library.posterDate, HomeSections.instance['ondeck']), (true, true), reason: 'signed out: the defaults');
+    await s.load(api);
+    expect((s.library.posterDate, s.library.ebookPosterSeries), (false, true), reason: 'the captions came');
+    expect(HomeSections.instance['ondeck'], isFalse, reason: "Home's sections came");
+    final o = HomeSections.instance.order;
+    expect(o.indexOf('pinned'), lessThan(HomeSections.names.keys.toList().indexOf('pinned')), reason: 'and the order');
     await tester.pump(const Duration(minutes: 2));
   });
 

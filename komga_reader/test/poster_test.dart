@@ -45,7 +45,10 @@ void main() {
       'the line, so covers stay the same size; off, no date', (tester) async {
     final api = plainKomga();
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    addTearDown(() {
+      s.setDisplay(const DisplayPrefs());
+      s.setLibrary(const LibraryPrefs());
+    });
     final dated = {'id': 'b1', 'seriesTitle': 'X-Men', 'metadata': {'number': '3', 'title': 'Dated',
         'releaseDate': '2024-03-13'}};
     final undated = {'id': 'b2', 'seriesTitle': 'X-Men', 'metadata': {'number': '4', 'title': 'Undated'}};
@@ -57,14 +60,14 @@ void main() {
       await tester.pump();
     }
 
-    expect(s.display.posterDate, isTrue);
+    expect(s.library.posterDate, isTrue);
     await show();
     expect(find.text('13 Mar 2024'), findsOneWidget);
     final h = [for (final e in find.byType(ClipRRect).evaluate()) e.size!.height];
     expect(h[0], h[1], reason: 'the undated book keeps the date line: same cover size');
     expect(tester.takeException(), isNull);
 
-    s.setDisplay(const DisplayPrefs(posterDate: false));
+    s.setLibrary(const LibraryPrefs(posterDate: false));
     await show();
     expect(find.text('13 Mar 2024'), findsNothing);
     final off = [for (final e in find.byType(ClipRRect).evaluate()) e.size!.height];
@@ -75,11 +78,14 @@ void main() {
       '2026-10-07: no title = the series # over the date)', (tester) async {
     final api = plainKomga();
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    addTearDown(() {
+      s.setDisplay(const DisplayPrefs());
+      s.setLibrary(const LibraryPrefs());
+    });
     final b = {'id': 'b1', 'seriesTitle': 'X-Men', 'metadata': {'number': '3', 'title': 'Dated',
         'releaseDate': '2024-03-13'}};
     Future<List<String>> lines(bool series, bool title, bool date) async {
-      s.setDisplay(DisplayPrefs(posterSeries: series, posterTitle: title, posterDate: date));
+      s.setLibrary(LibraryPrefs(posterSeries: series, posterTitle: title, posterDate: date));
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) =>
           SizedBox(width: 150, height: 300, child: bookTile(context, api, b, onOpen: () {}))))));
       await tester.pump();
@@ -104,13 +110,16 @@ void main() {
       'touch them', (tester) async {
     final api = plainKomga();
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(const DisplayPrefs()));
+    addTearDown(() {
+      s.setDisplay(const DisplayPrefs());
+      s.setLibrary(const LibraryPrefs());
+    });
     final b = {'id': 'e1', 'seriesTitle': 'Discworld', 'media': {'mediaProfile': 'EPUB'}, 'metadata': {'number': '13',
         'title': 'Small Gods', 'releaseDate': '1992-05-01',
         'authors': [{'name': 'Josh Kirby', 'role': 'cover'}, {'name': 'Terry Pratchett', 'role': 'writer'}]}};
     const all = ['Small Gods', 'Terry Pratchett', 'Discworld #13', '1 May 1992'];
-    Future<List<String>> lines(DisplayPrefs d) async {
-      s.setDisplay(d);
+    Future<List<String>> lines(LibraryPrefs d) async {
+      s.setLibrary(d);
       await tester.pumpWidget(MaterialApp(key: UniqueKey(), home: Scaffold(body: Builder(builder: (context) =>
           SizedBox(width: 150, height: 300, child: bookTile(context, api, b, onOpen: () {}))))));
       await tester.pump();
@@ -120,12 +129,12 @@ void main() {
       return texts..sort((a, c) => tops[a]!.compareTo(tops[c]!));
     }
 
-    expect(await lines(const DisplayPrefs()), ['Small Gods', 'Terry Pratchett'], reason: 'the defaults');
-    expect(await lines(const DisplayPrefs(posterSeries: false, posterTitle: false, posterDate: false)),
+    expect(await lines(const LibraryPrefs()), ['Small Gods', 'Terry Pratchett'], reason: 'the defaults');
+    expect(await lines(const LibraryPrefs(posterSeries: false, posterTitle: false, posterDate: false)),
         ['Small Gods', 'Terry Pratchett'], reason: "the comics' lines: not the eBooks'");
-    expect(await lines(const DisplayPrefs(ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true)),
+    expect(await lines(const LibraryPrefs(ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true)),
         ['Small Gods', 'Discworld #13', '1 May 1992']);
-    expect(await lines(const DisplayPrefs(ebookPosterTitle: false, ebookPosterSeries: true)),
+    expect(await lines(const LibraryPrefs(ebookPosterTitle: false, ebookPosterSeries: true)),
         ['Terry Pratchett', 'Discworld #13']);
     expect(tester.takeException(), isNull);
   });

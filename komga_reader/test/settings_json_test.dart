@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/settings.dart';
 
@@ -88,10 +90,9 @@ void main() {
         comics: KindPrefs(hiddenSpots: ['left']), ebooks: KindPrefs(hiddenSpots: ['right', 'centre']),
         rotation: Rotation.landscape, pageNote: PageNote.off, showClock: true, showBattery: true, progressBar: true,
         doubleTapZoom: false, midBook: MidBook.keep,
-        screenOn: 10, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
+        screenOn: 10, posterSize: PosterSize.small,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pageStrip: true, posterDate: false, insetPage: InsetPage.never,
-        ebookPosterTitle: false, ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true);
+        pageStrip: true, insetPage: InsetPage.never);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -111,20 +112,12 @@ void main() {
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 10, 0),
       ('posterSize', (d) => d.posterSize, PosterSize.small, PosterSize.medium),
-      ('posterSeries', (d) => d.posterSeries, false, true),
-      ('posterTitle', (d) => d.posterTitle, false, true),
       ('nightSchedule', (d) => d.nightSchedule, true, false),
       ('nightFrom', (d) => d.nightFrom, 1320, 21 * 60),
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
       ('textScale', (d) => d.textScale, 1.15, 1.0),
       ('accent', (d) => d.accent, Accent.green, Accent.blue),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
-      ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
-      // eBook posters' own lines (user, 2026-10-18): title and author unless changed
-      ('ebookPosterTitle', (d) => d.ebookPosterTitle, false, true),
-      ('ebookPosterAuthor', (d) => d.ebookPosterAuthor, false, true),
-      ('ebookPosterSeries', (d) => d.ebookPosterSeries, true, false),
-      ('ebookPosterDate', (d) => d.ebookPosterDate, true, false),
       ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen), // eBooks' sheet, this device's (2026-10-12)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
@@ -146,6 +139,24 @@ void main() {
     // not a choice: the default
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0);
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
+  });
+
+  test("the account's library look (LibraryPrefs, synced - user, 2026-10-22) survives the saved form; a save without "
+      'it gets the defaults: comic posters series #, title and date; eBook posters title and author; Home as shipped',
+      () {
+    const changed = LibraryPrefs(posterSeries: false, posterTitle: false, posterDate: false, ebookPosterTitle: false,
+        ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true, homeShown: {'ondeck': false},
+        homeOrder: ['pinned', 'continue']);
+    expect(LibraryPrefs.fromJson(changed.toJson()), changed);
+    expect(LibraryPrefs.fromJson(jsonDecode(jsonEncode(changed.toJson())) as Map<String, dynamic>), changed,
+        reason: 'through JSON text, as stored');
+    expect(LibraryPrefs.fromJson({}), const LibraryPrefs());
+    const d = LibraryPrefs();
+    expect((d.posterSeries, d.posterTitle, d.posterDate), (true, true, true));
+    expect((d.ebookPosterTitle, d.ebookPosterAuthor, d.ebookPosterSeries, d.ebookPosterDate), (true, true, false, false));
+    // the device's old poster keys aren't taken over (no migrations): a DisplayPrefs save has no captions now
+    expect(const DisplayPrefs().toJson().keys.where((k) => k.toLowerCase().contains('poster') && k != 'posterSize'),
+        isEmpty);
   });
 
   test("the kinds' old rotation and over-the-page settings aren't taken over (no migrations): the shared ones start "

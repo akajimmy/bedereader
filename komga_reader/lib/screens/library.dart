@@ -371,7 +371,7 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final pagesCount = (b['media']?['pagesCount'] ?? 0) as int;
   final completed = rp != null && rp['completed'] == true;
   final title = (b['metadata']?['title'] ?? b['name']) as String;
-  final display = AppSettings.instance.display;
+  final display = AppSettings.instance.library; // (posters' captions: synced)
   final date = posterDate(b['metadata']?['releaseDate'] as String?) ?? '';
   // Settings > Library & Home: any of the lines, always in this order (user, 2026-10-07) - the first is the tile's
   // title, the next its subtitle, the third its caption ('' keeps a line when the book has nothing for it). Comics
