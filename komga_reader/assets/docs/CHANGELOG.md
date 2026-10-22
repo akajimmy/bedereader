@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Settings: the lines under posters (comics and eBooks) and Home's sections and their order now follow your account, synced through Komga like the reading defaults, instead of each device keeping its own. They start from the defaults once (set them again on one device and the others follow). Poster size stays per device; Reset this device's settings no longer touches them.
 - eBooks: the chapter dots on the slider a little larger and stronger than the comic page dots.
 
 ## 1.4.0

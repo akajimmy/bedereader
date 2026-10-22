@@ -276,9 +276,6 @@ class DisplayPrefs {
       this.epubTurn = EpubTurn.slide,
       this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
-      this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
-      this.ebookPosterTitle = true, this.ebookPosterAuthor = true, this.ebookPosterSeries = false,
-      this.ebookPosterDate = false,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
       this.comics = const KindPrefs(), this.ebooks = const KindPrefs(),
@@ -304,14 +301,7 @@ class DisplayPrefs {
   final KindPrefs comics, ebooks;
   KindPrefs kind(BookKind k) => k == BookKind.comics ? comics : ebooks;
 
-  /// Book posters' caption, any of three lines, always in this order (user, 2026-10-07): the series and number
-  /// ("Saga #12"), the book's title, the release date ("13 Mar 2024").
-  final bool posterSeries, posterTitle, posterDate;
-
-  /// eBook posters' caption, their own (user, 2026-10-18: "make sure it's split between eBooks and comics"): any of
-  /// the title, the author, the series and number, the release date, in this order - the first three of them shown.
-  /// Title and author by default ("The option I'm going to want in the end is title, then author").
-  final bool ebookPosterTitle, ebookPosterAuthor, ebookPosterSeries, ebookPosterDate;
+  // (posters' captions: synced since 2026-10-22 - [LibraryPrefs])
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
   /// button (user, 2026-10-02)
   final bool pageStrip;
@@ -366,8 +356,7 @@ class DisplayPrefs {
           EpubTurn? epubTurn,
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
-          bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
-          bool? ebookPosterTitle, bool? ebookPosterAuthor, bool? ebookPosterSeries, bool? ebookPosterDate,
+          bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage, Rotation? rotation, PageNote? pageNote,
           bool? showClock, bool? showBattery, bool? progressBar}) =>
       DisplayPrefs(
@@ -376,12 +365,6 @@ class DisplayPrefs {
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
         pageStrip: pageStrip ?? this.pageStrip,
-        posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
-        ebookPosterTitle: ebookPosterTitle ?? this.ebookPosterTitle,
-        ebookPosterAuthor: ebookPosterAuthor ?? this.ebookPosterAuthor,
-        ebookPosterSeries: ebookPosterSeries ?? this.ebookPosterSeries,
-        ebookPosterDate: ebookPosterDate ?? this.ebookPosterDate,
-        posterDate: posterDate ?? this.posterDate,
         nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
         nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
         night: night ?? this.night, warmth: warmth ?? this.warmth,
@@ -397,9 +380,6 @@ class DisplayPrefs {
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'epubTurn': epubTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
-      'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
-      'ebookPosterTitle': ebookPosterTitle, 'ebookPosterAuthor': ebookPosterAuthor,
-      'ebookPosterSeries': ebookPosterSeries, 'ebookPosterDate': ebookPosterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pageStrip': pageStrip,
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name,
@@ -424,13 +404,6 @@ class DisplayPrefs {
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
         screenOn: on is int && screenOnChoices.contains(on) ? on : 0,
         posterSize: pick(PosterSize.values, j['posterSize'], PosterSize.medium),
-        posterSeries: j['posterSeries'] != false,
-        posterTitle: j['posterTitle'] != false,
-        posterDate: j['posterDate'] != false,
-        ebookPosterTitle: j['ebookPosterTitle'] != false,
-        ebookPosterAuthor: j['ebookPosterAuthor'] != false,
-        ebookPosterSeries: j['ebookPosterSeries'] == true,
-        ebookPosterDate: j['ebookPosterDate'] == true,
         nightSchedule: j['nightSchedule'] == true,
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
@@ -605,6 +578,68 @@ class EpubPrefs {
   int get hashCode => jsonEncode(toJson()).hashCode;
 }
 
+/// The library's look that follows the account, synced through Komga (user, 2026-10-22: "i went too far with which
+/// settings are per device" - quiz: posters' captions and Home's sections synced; they were this device's). New keys:
+/// they start from the defaults (no migration).
+@immutable
+class LibraryPrefs {
+  const LibraryPrefs({this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
+      this.ebookPosterTitle = true, this.ebookPosterAuthor = true, this.ebookPosterSeries = false,
+      this.ebookPosterDate = false, this.homeShown = const {}, this.homeOrder = const []});
+
+  /// Book posters' caption, any of three lines, always in this order (user, 2026-10-07): the series and number
+  /// ("Saga #12"), the book's title, the release date ("13 Mar 2024").
+  final bool posterSeries, posterTitle, posterDate;
+
+  /// eBook posters' caption, their own (user, 2026-10-18: "make sure it's split between eBooks and comics"): any of
+  /// the title, the author, the series and number, the release date, in this order - the first three of them shown.
+  /// Title and author by default ("The option I'm going to want in the end is title, then author").
+  final bool ebookPosterTitle, ebookPosterAuthor, ebookPosterSeries, ebookPosterDate;
+
+  /// Home's sections switched on or off (a section not here: its default - [HomeSections]) and their order (the
+  /// ones not here after these, in the default order).
+  final Map<String, bool> homeShown;
+  final List<String> homeOrder;
+
+  LibraryPrefs copyWith({bool? posterSeries, bool? posterTitle, bool? posterDate, bool? ebookPosterTitle,
+          bool? ebookPosterAuthor, bool? ebookPosterSeries, bool? ebookPosterDate, Map<String, bool>? homeShown,
+          List<String>? homeOrder}) =>
+      LibraryPrefs(
+          posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
+          posterDate: posterDate ?? this.posterDate, ebookPosterTitle: ebookPosterTitle ?? this.ebookPosterTitle,
+          ebookPosterAuthor: ebookPosterAuthor ?? this.ebookPosterAuthor,
+          ebookPosterSeries: ebookPosterSeries ?? this.ebookPosterSeries,
+          ebookPosterDate: ebookPosterDate ?? this.ebookPosterDate, homeShown: homeShown ?? this.homeShown,
+          homeOrder: homeOrder ?? this.homeOrder);
+
+  Map<String, dynamic> toJson() => {
+        'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
+        'ebookPosterTitle': ebookPosterTitle, 'ebookPosterAuthor': ebookPosterAuthor,
+        'ebookPosterSeries': ebookPosterSeries, 'ebookPosterDate': ebookPosterDate,
+        'homeShown': homeShown, 'homeOrder': homeOrder,
+      };
+
+  factory LibraryPrefs.fromJson(Map<String, dynamic> j) {
+    final shown = j['homeShown'], order = j['homeOrder'];
+    return LibraryPrefs(
+      posterSeries: j['posterSeries'] != false,
+      posterTitle: j['posterTitle'] != false,
+      posterDate: j['posterDate'] != false,
+      ebookPosterTitle: j['ebookPosterTitle'] != false,
+      ebookPosterAuthor: j['ebookPosterAuthor'] != false,
+      ebookPosterSeries: j['ebookPosterSeries'] == true,
+      ebookPosterDate: j['ebookPosterDate'] == true,
+      homeShown: shown is Map ? {for (final e in shown.entries) if (e.value is bool) '${e.key}': e.value as bool} : const {},
+      homeOrder: order is List ? [for (final k in order) if (k is String) k] : const [],
+    );
+  }
+
+  @override
+  bool operator ==(Object other) => other is LibraryPrefs && jsonEncode(other.toJson()) == jsonEncode(toJson());
+  @override
+  int get hashCode => jsonEncode(toJson()).hashCode;
+}
+
 class AppSettings extends ChangeNotifier {
   AppSettings._();
   static final AppSettings instance = AppSettings._();
@@ -623,10 +658,11 @@ class AppSettings extends ChangeNotifier {
   final posterLook = ValueNotifier<(PosterSize, bool, bool, bool, (bool, bool, bool, bool))>(
       (PosterSize.medium, true, true, true, (true, true, false, false)));
 
-  void _posterLookFollows() => posterLook.value = (display.posterSize, display.posterSeries, display.posterTitle,
-      display.posterDate, (display.ebookPosterTitle, display.ebookPosterAuthor, display.ebookPosterSeries,
-          display.ebookPosterDate));
+  void _posterLookFollows() => posterLook.value = (display.posterSize, library.posterSeries, library.posterTitle,
+      library.posterDate, (library.ebookPosterTitle, library.ebookPosterAuthor, library.ebookPosterSeries,
+          library.ebookPosterDate));
   EpubPrefs epub = const EpubPrefs(); // EPUB books: one set, synced with the reading defaults (key "epub")
+  LibraryPrefs library = const LibraryPrefs(); // posters' captions, Home's sections: synced (key "library")
   String? syncError; // last Komga sync problem, shown at the bottom of the reader's panels
 
   /// A sync problem, in plain words; recorded in the error log when it changes (retries repeat it every minute).
@@ -642,6 +678,8 @@ class AppSettings extends ChangeNotifier {
   bool _dirtyDefault = false;
   bool _dirtyEpub = false;
   int _epubVersion = 0;
+  bool _dirtyLibrary = false;
+  int _libraryVersion = 0;
   // how many times each entry has changed: a send only clears the entries that didn't change again while it was on
   // its way (a change made mid-send used to be marked sent without being sent)
   final Map<String, int> _versions = {};
@@ -652,8 +690,10 @@ class AppSettings extends ChangeNotifier {
   /// Switch connection (online / offline) without reloading; a failed sync retries on its own.
   void useApi(Komga api) {
     _api = api;
-    if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncSoon();
+    if (_anyDirty) _syncSoon();
   }
+
+  bool get _anyDirty => _dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub || _dirtyLibrary;
 
   void _syncSoon([Duration after = const Duration(seconds: 2)]) {
     _syncTimer?.cancel();
@@ -662,11 +702,12 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> _saveUnsent() async {
     final p = await SharedPreferences.getInstance();
-    if (_dirtySeries.isEmpty && !_dirtyDefault && !_dirtyEpub) {
+    if (!_anyDirty) {
       await p.remove(_unsentKey);
     } else {
       await p.setString(_unsentKey,
-          jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault, 'epub': _dirtyEpub}));
+          jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault, 'epub': _dirtyEpub,
+            'library': _dirtyLibrary}));
     }
   }
 
@@ -678,10 +719,13 @@ class AppSettings extends ChangeNotifier {
     _loaded = false;
     defaults = const ReaderPrefs();
     epub = const EpubPrefs();
+    library = const LibraryPrefs();
+    _posterLookFollows();
     series.clear();
     _dirtySeries.clear();
     _dirtyDefault = false;
     _dirtyEpub = false;
+    _dirtyLibrary = false;
     _versions.clear();
     syncError = null;
     notifyListeners();
@@ -746,12 +790,14 @@ class AppSettings extends ChangeNotifier {
         ..addAll([for (final id in (u['series'] as List? ?? const [])) id as String]);
       _dirtyDefault = u['default'] == true;
       _dirtyEpub = u['epub'] == true;
+      _dirtyLibrary = u['library'] == true;
     } catch (_) {
       // damaged: nothing counts as unsent
     }
     final r = p.getString(_localReader);
     final savedReader = r == null ? null : jsonDecode(r) as Map<String, dynamic>;
     if (savedReader != null) _applyBlob(savedReader, remote: false);
+    _posterLookFollows();
     applyBacklight();
     notifyListeners();
     _loaded = true;
@@ -772,6 +818,7 @@ class AppSettings extends ChangeNotifier {
         final after = jsonEncode(_blob());
         if (after != before) {
           await p.setString(_localReader, after);
+          _posterLookFollows();
           notifyListeners();
         }
       }
@@ -779,7 +826,7 @@ class AppSettings extends ChangeNotifier {
     } catch (e) {
       _syncNote('Using the settings saved on this device: ${explain(e).reason}.', e);
     }
-    if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncSoon(); // what didn't reach Komga goes now
+    if (_anyDirty) _syncSoon(); // what didn't reach Komga goes now
   }
 
   bool _loaded = false;
@@ -790,6 +837,16 @@ class AppSettings extends ChangeNotifier {
     epub = prefs;
     _dirtyEpub = true;
     _epubVersion++;
+    _changedReader();
+  }
+
+  /// Posters' captions and Home's sections ([LibraryPrefs]). Synced.
+  void setLibrary(LibraryPrefs prefs) {
+    if (prefs == library) return;
+    library = prefs;
+    _dirtyLibrary = true;
+    _libraryVersion++;
+    _posterLookFollows();
     _changedReader();
   }
 
@@ -899,13 +956,15 @@ class AppSettings extends ChangeNotifier {
       return;
     }
     final api = _api;
-    if (api == null || (_dirtySeries.isEmpty && !_dirtyDefault && !_dirtyEpub)) return;
+    if (api == null || !_anyDirty) return;
     _syncing = true;
     final sending = {for (final id in _dirtySeries) id: _versions[id] ?? 0};
     final sendDefault = _dirtyDefault;
     final defaultVersion = _defaultVersion;
     final sendEpub = _dirtyEpub;
     final epubVersion = _epubVersion;
+    final sendLibrary = _dirtyLibrary;
+    final libraryVersion = _libraryVersion;
     try {
       final merged = await _fetchRemote() ?? <String, dynamic>{};
       final remoteSeries = Map<String, dynamic>.from((merged['series'] as Map?) ?? {});
@@ -917,6 +976,7 @@ class AppSettings extends ChangeNotifier {
       merged['series'] = remoteSeries;
       if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
       if (sendEpub) merged['epub'] = epub.toJson();
+      if (sendLibrary) merged['library'] = library.toJson();
       await api.putClientSetting(komgaKey, jsonEncode(merged));
       // sent - unless it changed again meanwhile: then it's still to send
       for (final e in sending.entries) {
@@ -924,9 +984,10 @@ class AppSettings extends ChangeNotifier {
       }
       if (sendDefault && _defaultVersion == defaultVersion) _dirtyDefault = false;
       if (sendEpub && _epubVersion == epubVersion) _dirtyEpub = false;
+      if (sendLibrary && _libraryVersion == libraryVersion) _dirtyLibrary = false;
       await _saveUnsent();
       syncError = null;
-      if (_dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub) _syncAgain = true;
+      if (_anyDirty) _syncAgain = true;
     } catch (e) {
       _syncNote('Settings saved on this device, not on Komga yet: ${explain(e).reason}.', e);
       _syncSoon(const Duration(minutes: 1));
@@ -949,6 +1010,7 @@ class AppSettings extends ChangeNotifier {
         'v': 1,
         'default': defaults.toJson(),
         'epub': epub.toJson(),
+        'library': library.toJson(),
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
       };
 
@@ -960,6 +1022,8 @@ class AppSettings extends ChangeNotifier {
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
     final e = b['epub'];
     if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = EpubPrefs.fromJson(e);
+    final l = b['library'];
+    if (l is Map<String, dynamic> && !(remote && _dirtyLibrary)) library = LibraryPrefs.fromJson(l);
     final s = b['series'];
     if (s is! Map) return;
     final next = <String, ReaderPrefs>{

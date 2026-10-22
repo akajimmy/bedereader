@@ -10,6 +10,7 @@ import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
+import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/poster_row.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -89,12 +90,15 @@ class HomeRowsServer extends HomeServer with ClientSettingsStore {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({})); // (Home loads its sections itself)
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AppSettings.instance.library = const LibraryPrefs(); // Home's sections: synced settings now (2026-10-22)
+  });
 
   /// Home, tall enough for every row, with every section switched on.
   Future<HomeRowsServer> open(WidgetTester tester, {bool empty = false, List<Pin> pins = const []}) async {
     setView(tester, const Size(1280, 3000));
-    SharedPreferences.setMockInitialValues({for (final k in HomeSections.names.keys) 'home.show.$k': true});
+    AppSettings.instance.library = LibraryPrefs(homeShown: {for (final k in HomeSections.names.keys) k: true});
     final api = noNetwork(() => HomeRowsServer(empty: empty));
     api.written[Pins.komgaKey] = jsonEncode([for (final p in pins) p.toJson()]);
     await Pins.instance.load(api);
@@ -252,7 +256,7 @@ void main() {
 
   // ---- the sections: shown or hidden, and their order (from home_test.dart)
   testWidgets('the ⋮ menu shows or hides each Home section, and the choice is remembered', (tester) async {
-    SharedPreferences.setMockInitialValues({'home.show.ondeck': false});
+    AppSettings.instance.library = const LibraryPrefs(homeShown: {'ondeck': false});
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();
@@ -266,22 +270,22 @@ void main() {
     await tester.tap(find.text('Libraries').last);
     await tester.pumpAndSettle();
     expect(find.text('Libraries'), findsNothing);
-    expect((await SharedPreferences.getInstance()).getBool('home.show.libraries'), isFalse);
+    expect(AppSettings.instance.library.homeShown['libraries'], isFalse, reason: 'kept (synced)');
   });
 
   test('section order: new rows start hidden, moves are saved, saved orders keep new sections', () async {
-    SharedPreferences.setMockInitialValues({'home.order': ['libraries', 'continue']});
+    AppSettings.instance.library = const LibraryPrefs(homeOrder: ['libraries', 'continue']);
     final h = HomeSections.instance;
     await h.load();
     expect(h.order.take(3), ['libraries', 'continue', 'ondeck']); // saved first, the rest after in default order
     expect(h['recentBooks'], isFalse);
     await h.move('libraries', 1);
     expect(h.order.take(2), ['continue', 'libraries']);
-    expect((await SharedPreferences.getInstance()).getStringList('home.order')!.take(2), ['continue', 'libraries']);
+    expect(AppSettings.instance.library.homeOrder.take(2), ['continue', 'libraries'], reason: 'kept (synced)');
   });
 
   testWidgets('Home draws the sections in the chosen order', (tester) async {
-    SharedPreferences.setMockInitialValues({'home.order': ['libraries', 'continue']});
+    AppSettings.instance.library = const LibraryPrefs(homeOrder: ['libraries', 'continue']);
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: noNetwork(HomeServer.new), onSignOut: () {})));
     await tester.pump();
     await tester.pump();
