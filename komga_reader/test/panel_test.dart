@@ -206,6 +206,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget, reason: 'back to the book');
+    expect(find.text('eBook settings'), findsNothing, reason: 'not to the panel: it closed');
   });
 
   testWidgets("eBooks' two-page rows (user, 2026-10-21): Chapters start on only with two pages up; the Gutter only "
