@@ -96,7 +96,7 @@ void main() {
     String spots(BookKind k) => s.display.kind(k).hiddenSpots.join(',');
     final steps = <(SettingsPage, Finder, Object? Function(), Object?)>[
       // Comics: each kind its own position text, progress bar
-      (SettingsPage.comics, find.widgetWithText(FilterChip, 'Book title'),
+      (SettingsPage.comics, find.text('Book title'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
           () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false)),
@@ -106,9 +106,9 @@ void main() {
           () => (s.defaults.background, s.prefsFor('S-follows-defaults').background),
           (ReaderBackground.white, ReaderBackground.white)),
       // eBooks: the other kind's position text, progress bar and page corner
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
+      (SettingsPage.ebooks, find.text('Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', 'right')),
-      (SettingsPage.ebooks, find.widgetWithText(FilterChip, 'Chapter progress'),
+      (SettingsPage.ebooks, find.text('Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Progress bar'),
           () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true)),
@@ -127,15 +127,15 @@ void main() {
       // Library & Home: the poster size, and the three caption lines each on or off (user, 2026-10-07)
       (SettingsPage.library, find.text('Large'), () => s.display.posterSize, PosterSize.large),
       // (the first row: comics')
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #').first,
+      (SettingsPage.library, find.text('Series #').first,
           () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, true)),
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Release date').first,
+      (SettingsPage.library, find.text('Release date').first,
           () => (s.display.posterSeries, s.display.posterTitle, s.display.posterDate), (false, true, false)),
       // eBooks' own lines (user, 2026-10-18): title and author by default; the comics' stay as they were
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Author'),
+      (SettingsPage.library, find.text('Author'),
           () => (s.display.ebookPosterTitle, s.display.ebookPosterAuthor, s.display.ebookPosterSeries,
               s.display.ebookPosterDate, s.display.posterSeries), (true, false, false, false, false)), // (comics: as left above)
-      (SettingsPage.library, find.widgetWithText(FilterChip, 'Series #').last,
+      (SettingsPage.library, find.text('Series #').last,
           () => (s.display.ebookPosterSeries, s.display.posterSeries), (true, false)),
       // Look
       (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),

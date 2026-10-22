@@ -64,8 +64,8 @@ void main() {
   testWidgets('the EPUB Text group (user, 2026-10-07: Down skipped from Font to Line spacing, and from Margins to '
       "Book's formatting): every row in turn", (tester) async {
     setView(tester, const Size(1280, 720));
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SettingsColumn(child: Builder(builder: (c) =>
-        ListView(children: epubSettingRows(c, const EpubPrefs(), (_) {})))))));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) =>
+        ListView(children: epubSettingRows(c, const EpubPrefs(), (_) {}))))));
     await tester.pumpAndSettle();
     asInRelease();
     // the rows by where their controls are on screen (not by what they're called: rows and steps get renamed and

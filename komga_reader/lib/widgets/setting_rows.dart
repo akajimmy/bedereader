@@ -245,40 +245,52 @@ class SettingRow extends StatelessWidget {
   }
 }
 
-/// Lines up the segmented choices of one page or panel: each reports how wide it needs to be, and all of them are
-/// drawn as wide as the widest, in one column flush with the right edge (user, 2026-09-30). A row too narrow for
-/// the shared width keeps its own; one too narrow for that goes under its label.
-class SettingsColumn extends StatefulWidget {
-  const SettingsColumn({super.key, required this.child});
-  final Widget child;
-
-  static _SettingsColumnState? _of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_ColumnScope>()?.state;
-
-  @override
-  State<SettingsColumn> createState() => _SettingsColumnState();
+/// The slim buttons' look, shared by every choice (segments, on/off toggles, Auto): the choice in force a tint of
+/// the accent with its text in the accent; switched off (a series following the defaults), no accent at all - grey,
+/// the choice in force still shaded so the value shows (user, 2026-10-22: "hard to tell disabled from enabled and
+/// doesn't really follow the accent colour well").
+ButtonStyle slimButtonStyle(ColorScheme scheme) {
+  final on = scheme.primary;
+  return ButtonStyle(
+    visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 12.5)),
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8)),
+    side: WidgetStateProperty.resolveWith((s) => BorderSide(
+        color: s.contains(WidgetState.disabled) ? const Color(0xFF383838) : const Color(0xFF5A5D66))),
+    backgroundColor: WidgetStateProperty.resolveWith((s) => !s.contains(WidgetState.selected)
+        ? null
+        : s.contains(WidgetState.disabled)
+            ? Colors.white.withValues(alpha: 0.08)
+            : SegmentRow.selectedFill(scheme)),
+    foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled)
+        ? (s.contains(WidgetState.selected) ? Colors.white54 : Colors.white30)
+        : s.contains(WidgetState.selected)
+            ? SegmentRow.selectedText(scheme)
+            : Colors.white70),
+    iconColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.disabled)
+        ? (s.contains(WidgetState.selected) ? Colors.white54 : Colors.white30)
+        : s.contains(WidgetState.selected)
+            ? SegmentRow.selectedText(scheme)
+            : Colors.white70),
+    overlayColor: WidgetStatePropertyAll(on.withValues(alpha: 0.10)),
+  );
 }
 
-class _SettingsColumnState extends State<SettingsColumn> {
-  double width = 0;
-
-  /// A control needs [w]: widen the column for everyone (after this frame - it's reported while building).
-  void report(double w) {
-    if (w <= width + 0.5) return;
-    width = w;
-    WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) setState(() {}); });
-  }
+/// Under a row's label, the full width of the row: the controls of a page or panel all start and end on the same
+/// lines (user, 2026-10-22: "all the selection controls go to their own line, full width of the space allowed").
+class _UnderLabel extends StatelessWidget {
+  const _UnderLabel({required this.title, this.subtitle, this.enabled = true, required this.control});
+  final String title;
+  final String? subtitle;
+  final bool enabled;
+  final Widget control;
 
   @override
-  Widget build(BuildContext context) => _ColumnScope(state: this, width: width, child: widget.child);
-}
-
-class _ColumnScope extends InheritedWidget {
-  const _ColumnScope({required this.state, required this.width, required super.child});
-  final _SettingsColumnState state;
-  final double width;
-  @override
-  bool updateShouldNotify(_ColumnScope old) => old.width != width;
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SettingRow(title: title, enabled: enabled, subtitle: subtitle),
+        Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 12), child: control),
+      ]);
 }
 
 /// On/off, the whole row tappable (and one focus stop for the remote).
@@ -308,8 +320,9 @@ class ToggleChip {
   final ValueChanged<bool> onChanged;
 }
 
-/// A few things that are each on or off, as chips under the label (user, 2026-10-07: the posters' three caption
-/// lines; the position text's spots) - any combination.
+/// A few things that are each on or off, under the label (user, 2026-10-07: the posters' caption lines; the position
+/// text's spots) - any combination. The same slim buttons as a [SegmentRow], each one lit while it's on (user,
+/// 2026-10-22: the chips were "ugly and inconsistent with everything else").
 class ToggleChipsRow extends StatelessWidget {
   const ToggleChipsRow({super.key, required this.title, this.subtitle, required this.chips});
   final String title;
@@ -317,17 +330,35 @@ class ToggleChipsRow extends StatelessWidget {
   final List<ToggleChip> chips;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: const TextStyle(fontSize: 14.5)),
-          if (subtitle != null) Text(subtitle!, style: const TextStyle(fontSize: 12, color: hintColour)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final c in chips)
-              FilterChip(label: Text(c.label), selected: c.on, onSelected: c.onChanged, visualDensity: VisualDensity.compact),
-          ]),
-        ]),
+  Widget build(BuildContext context) => _UnderLabel(
+        title: title,
+        subtitle: subtitle,
+        control: LayoutBuilder(builder: (context, box) {
+          var widest = 0.0;
+          for (final c in chips) {
+            final w = textWidth(context, c.label, 12.5);
+            if (w > widest) widest = w;
+          }
+          return SegmentedButton<int>(
+            expandedInsets: EdgeInsets.zero,
+            style: slimButtonStyle(Theme.of(context).colorScheme),
+            showSelectedIcon: false,
+            multiSelectionEnabled: true,
+            emptySelectionAllowed: true,
+            segments: [
+              for (var i = 0; i < chips.length; i++)
+                ButtonSegment(value: i, label: chips.length * (widest + 18) > box.maxWidth
+                    ? FittedBox(fit: BoxFit.scaleDown, child: Text(chips[i].label, maxLines: 1, softWrap: false))
+                    : Text(chips[i].label)),
+            ],
+            selected: {for (var i = 0; i < chips.length; i++) if (chips[i].on) i},
+            onSelectionChanged: (now) {
+              for (var i = 0; i < chips.length; i++) {
+                if (now.contains(i) != chips[i].on) chips[i].onChanged(now.contains(i));
+              }
+            },
+          );
+        }),
       );
 }
 
@@ -370,56 +401,27 @@ class SegmentRow<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final own = _width(context);
-    final column = SettingsColumn._of(context);
-    return LayoutBuilder(builder: (context, box) {
-      final inner = box.maxWidth - 28; // inside the row's padding
-      final room = textWidth(context, title, 14.5).clamp(0.0, SettingRow._labelRoom) + 12;
-      if (inner - own >= room) {
-        // beside the label, in the page's shared column: only controls that sit beside their label set its width -
-        // one that has to go under its label counting made the column too wide for anyone (tablet, 2026-09-30)
-        column?.report(own);
-        final shared = column == null || column.width < own ? own : column.width;
-        final w = inner - shared >= room ? shared : own;
-        return SettingRow(title: title, enabled: enabled, subtitle: subtitle, trailingWidth: w,
-            trailing: SizedBox(width: w, child: _buttons(context)));
-      }
-      // under the label: the full width of the row. Too narrow even for that, only the labels shrink - the buttons
-      // keep their height (user, 2026-10-08: shrinking the whole control "just makes it harder to tap")
-      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingRow(title: title, enabled: enabled, subtitle: subtitle),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          child: _buttons(context, shrinkLabels: own > inner),
-        ),
-      ]);
-    });
+    // under the label, the full width of the row (user, 2026-10-22). Too narrow for that, only the labels shrink -
+    // the buttons keep their height (user, 2026-10-08: shrinking the whole control "just makes it harder to tap")
+    return _UnderLabel(
+      title: title,
+      subtitle: subtitle,
+      enabled: enabled,
+      control: LayoutBuilder(builder: (context, box) => _buttons(context, shrinkLabels: own > box.maxWidth)),
+    );
   }
 
-  /// The choice in force, as slim buttons show it: the accent as a tint, its text a light accent (user, 2026-10-21:
-  /// the solid accent buttons were part of the clutter).
-  static Color selectedFill(ColorScheme scheme) => scheme.primary.withValues(alpha: 0.24);
-  static Color selectedText(ColorScheme scheme) => Color.lerp(scheme.primary, Colors.white, 0.5)!;
+  /// The choice in force: a clear tint of the accent, its text the accent itself, a little lightened to read on the
+  /// dark boxes (user, 2026-10-21: not solid accent buttons; 2026-10-22: it has to follow the accent).
+  static Color selectedFill(ColorScheme scheme) => scheme.primary.withValues(alpha: 0.30);
+  static Color selectedText(ColorScheme scheme) => Color.lerp(scheme.primary, Colors.white, 0.2)!;
 
   Widget _buttons(BuildContext context, {bool shrinkLabels = false}) {
-    final scheme = Theme.of(context).colorScheme;
     return SegmentedButton<T>(
           expandedInsets: EdgeInsets.zero, // fills its width: every segment as wide as the others
-          // slim buttons (user, 2026-10-21, the mock-ups' A): lower, a lighter outline, the choice in force a tint
-          style: ButtonStyle(
-            visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 12.5)),
-            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8)),
-            side: const WidgetStatePropertyAll(BorderSide(color: Color(0xFF4A4D55))),
-            // disabled (a series following the defaults), the choice in force stays highlighted - dimmed - so the
-            // value shows; Flutter draws a disabled selection with no highlight at all (user, 2026-09-30)
-            backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? (s.contains(WidgetState.disabled) ? scheme.primary.withValues(alpha: 0.12) : selectedFill(scheme))
-                : null),
-            foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? (s.contains(WidgetState.disabled) ? Colors.white54 : selectedText(scheme))
-                : null),
-          ),
+          // slim buttons (user, 2026-10-21, the mock-ups' A); disabled, the choice in force stays shaded so the value
+          // shows - Flutter draws a disabled selection with no highlight at all (user, 2026-09-30)
+          style: slimButtonStyle(Theme.of(context).colorScheme),
           showSelectedIcon: false,
           segments: [
             for (final c in choices)

@@ -27,8 +27,8 @@ void main() {
     // 2026-09-30.)
     setView(tester, const Size(1000, 800));
     var a = 1, c = 1, pressed = 0;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: StatefulBuilder(builder: (context, set) => SettingsColumn(
-      child: ListView(children: [
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: StatefulBuilder(builder: (context, set) =>
+      ListView(children: [
         SettingsGroup(title: 'G', children: [
           SegmentRow<int>(title: 'Wide', value: a, onChanged: (v) => set(() => a = v),
               choices: const [Choice(1, 'One'), Choice(2, 'Two'), Choice(3, 'Three'), Choice(4, 'Four')]),
@@ -37,9 +37,8 @@ void main() {
               choices: const [Choice(1, 'A'), Choice(2, 'B')]),
         ]),
       ]),
-    )))));
+    ))));
     await tester.pump();
-    await tester.pump(); // the shared width settles after the first frame
 
     // the premise: the button is off to the right, and the next row's first choice is straight under the wide one's
     final one = tester.getRect(find.text('One')), go = tester.getRect(find.text('Go'));

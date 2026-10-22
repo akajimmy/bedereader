@@ -142,7 +142,7 @@ void main() {
     messenger.setMockMethodCallHandler(channel, (call) async => call.method == 'getBrightness' ? 0.5 : null);
     AppSettings.instance.setDisplay(const DisplayPrefs()); // Auto
     await openPanel(tester, const Size(1280, 800));
-    final auto = find.widgetWithText(FilterChip, 'Auto');
+    final auto = find.widgetWithText(SegmentedButton<bool>, 'Auto');
     expect(auto, findsOneWidget);
     expect(find.text('Automatic brightness'), findsNothing, reason: 'no switch row of its own');
     final slider = find.ancestor(of: find.byType(Slider), matching: find.byType(BrightnessPreview));
@@ -166,7 +166,7 @@ void main() {
     await openPanel(tester, const Size(1280, 800)); // Comic settings, side sheet
     await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
     final sheet = tester.getRect(find.byType(ListView).last);
-    final choices = tester.getRect(find.byType(SegmentedButton<int>));
+    final choices = tester.getRect(find.widgetWithText(SegmentedButton<int>, 'Always'));
     expect(choices.right, lessThanOrEqualTo(sheet.right + 0.5)); // not cut off at the right edge
     expect(find.descendant(of: find.byType(SegmentedButton<int>), matching: find.text('Always')), findsOneWidget);
     expect(tester.takeException(), isNull);

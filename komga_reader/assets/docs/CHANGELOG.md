@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Settings and the reader's panels: every choice now sits on its own line under its name, the full width of the panel. The position text and poster line toggles and the brightness Auto button are now the same slim buttons as every other choice. The choice in force shows in the accent colour, and a greyed-out choice (a series following the defaults) has no accent at all.
 - Shift pairing by one is now a switch in the Comic settings panel, under This book, instead of a button on the reader's bottom bar.
 
 ## 1.4.0

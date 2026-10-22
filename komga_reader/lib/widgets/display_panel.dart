@@ -121,7 +121,7 @@ class _Panel extends StatelessWidget {
           ]),
           const SizedBox(height: 6),
           // the panel's segmented choices share one width
-          SettingsColumn(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: groups(s))),
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: groups(s)),
           if (s.syncError != null)
             Text(s.syncError!, style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 12)),
         ]);
@@ -409,14 +409,17 @@ class _BrightnessRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final b = s.display.brightness;
     const label = Text('Brightness', style: TextStyle(fontSize: 14.5));
-    final auto = FilterChip(
-      label: const Text('Auto'),
-      selected: b == null,
-      visualDensity: VisualDensity.compact,
-      onSelected: (auto) async {
-        if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
-        final now = await getScreenBrightness();
-        s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
+    // a slim button like every other choice, lit while on (user, 2026-10-22: the chip was "ugly and inconsistent")
+    final auto = SegmentedButton<bool>(
+      style: slimButtonStyle(Theme.of(context).colorScheme),
+      showSelectedIcon: false,
+      emptySelectionAllowed: true,
+      segments: const [ButtonSegment(value: true, label: Text('Auto'))],
+      selected: {if (b == null) true},
+      onSelectionChanged: (now) async {
+        if (now.isNotEmpty) return s.setDisplay(s.display.copyWith(brightness: () => null));
+        final level = await getScreenBrightness();
+        s.setDisplay(s.display.copyWith(brightness: () => level == null ? 0.6 : DisplayPrefs.sliderFor(level)));
       },
     );
     final slider = BrightnessPreview(child: Semantics(
