@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../reader/position_row.dart';
+import '../synced_ids.dart';
 import '../screen.dart';
 import '../settings.dart';
 import 'setting_rows.dart';
@@ -20,10 +21,11 @@ import 'setting_rows.dart';
 ///
 /// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
 /// [page]: Save page / Copy page for the page shown (null where there's no page to save, or no way to).
+/// [shiftBook]: two pages up, this book's "Shift pairing by one" ([shift] flips it) - null otherwise.
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
-        FitMode? bookFit, PageActions? page}) =>
+        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
-        bookFit: bookFit, page: page, side: side));
+        bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, side: side));
 
 /// The reader's Save page and Copy page (user, 2026-10-02): on one line at the top of its panel.
 class PageActions {
@@ -139,9 +141,11 @@ class _Panel extends StatelessWidget {
 String _seriesHeading(String? title) => title == null ? 'Settings for this series' : 'Settings for Series: $title';
 
 class _ReaderPanel extends StatelessWidget {
-  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page,
-      required this.side});
+  const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page, this.shiftBook,
+      this.shift, required this.side});
   final PageActions? page;
+  final String? shiftBook;
+  final VoidCallback? shift;
   final String? seriesId;
   final String? seriesTitle;
   final String? komgaDirection; // the series' reading direction in Komga, for Auto
@@ -156,6 +160,20 @@ class _ReaderPanel extends StatelessWidget {
       final own = id != null && s.ownsLayout(id);
       return [
         if (page != null) SettingsGroup(title: 'This page', children: [_PageActionsRow(page!)]),
+        // two pages up: this book's pairing, a page off (user, 2026-10-22: "does not need to be a top level button" -
+        // it was on the bottom bar)
+        if (shiftBook != null && shift != null)
+          SettingsGroup(title: 'This book', children: [
+            ListenableBuilder(
+              listenable: PairShift.instance,
+              builder: (context, _) => SwitchRow(
+                title: 'Shift pairing by one',
+                subtitle: 'The pages up to the first spread pair the other way',
+                value: PairShift.instance.shifted(shiftBook!),
+                onChanged: (_) => shift!(),
+              ),
+            ),
+          ]),
         if (id != null)
           SettingsGroup(title: _seriesHeading(seriesTitle), children: [
             // on: this series' own fit and direction; off: the defaults', greyed out (user, 2026-09-30)
