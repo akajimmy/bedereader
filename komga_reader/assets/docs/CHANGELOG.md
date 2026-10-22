@@ -17,6 +17,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
+- eBooks on a phone or tablet (or a PC that turns): once a book is open it is also counted the other way up in the background, a chapter at a time and never while a page turns, and kept with the rest - turning the device shows the book at once instead of counting it again. Kept counts stay capped (six layouts a book, 300 books).
 - A version check (Android and Windows): at most once a day the app asks GitHub for the latest release, and if it's newer than the installed build, Home says "BeDeReader 1.5.0 is available" with a button to its page on GitHub (x hides it until the next version). Nothing is asked in offline mode, and nothing about you is sent; the README's Privacy section says so.
 
 **Changed**
