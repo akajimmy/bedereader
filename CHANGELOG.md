@@ -9,12 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+### Build 142 - 2026-10-22
+
 **Changed**
 
 - Webtoons are now their own kind of book, with their own Settings page (Settings > Webtoons) and their own reading defaults, synced: Fit - Original size (the default), Fit width or Fit page height (one page as tall as the screen) - and page colours. They share nothing with comics but the Reading page. A series Komga marks as Webtoon uses them; a comic set to Vertical scroll keeps its comic settings. In the reader: Webtoon settings instead of Comic settings.
 - Webtoons: Tap zones - Left / right (as before) or Top / bottom, where the bottom third scrolls down and the top up; with Scrolling (Smooth / Page) on the Webtoons page and in the Webtoon settings panel. Webtoons have their own position text too.
-
-## 1.5.0
 
 ### Build 141 - 2026-10-22
 
