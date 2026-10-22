@@ -15,6 +15,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Filters: a series view's Status section always offers all four statuses, so opening the panel no longer sends four extra searches to Komga to find which ones the view has.
 - Windows: the title bar in the app's colours - the app's black, a light title and buttons, a dark border - whatever the system's light or dark setting. Windows' own buttons, snap layouts and dragging are unchanged.
 
 ## 1.4.0
