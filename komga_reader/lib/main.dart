@@ -166,7 +166,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       final ctx = _nav.currentContext;
       if (ctx != null) {
         _prompting = true;
-        showUnreachablePrompt(ctx).whenComplete(() => _prompting = false);
+        showUnreachablePrompt(ctx).then((toHome) {
+          _prompting = false;
+          if (toHome) _nav.currentState?.popUntil((r) => r.isFirst); // offline, nothing downloaded: Home
+        }, onError: (Object _) { _prompting = false; });
       }
     }
     // reachable again: asked once no book is open (going online returns to Home)

@@ -34,12 +34,16 @@ Future<bool> showKeyRefusedPrompt(BuildContext context) async {
 }
 
 /// "Can't reach Komga": Retry / Go offline (user, 2026-10-21: "prompt the user to retry or go offline"). With nothing
-/// downloaded it just says so (Retry / OK). Closes itself if Komga answers meanwhile.
-Future<void> showUnreachablePrompt(BuildContext context) => showDialog<void>(
+/// downloaded it says so - Retry / OK, and OK goes offline too: true, and the caller takes the user back to Home (user,
+/// 2026-10-22: OK "just leads me back to a non-responsive page. make sure it puts it in offline mode and dumps the user
+/// to the home screen"). Closes itself if Komga answers meanwhile.
+Future<bool> showUnreachablePrompt(BuildContext context) async =>
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _UnreachablePrompt(),
-    );
+    ) ??
+    false;
 
 /// Komga is reachable again, while offline after "can't reach Komga": Go online / Stay offline (user, 2026-10-21: "when
 /// back online prompt. if user dismisses prompt, stay in offline mode"). Closed any other way, it stays offline.
@@ -90,10 +94,10 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
     if (!c.askPending) _close(); // answered elsewhere, or Komga is back
   }
 
-  void _close() {
+  void _close([bool toHome = false]) {
     if (_closed || !mounted) return;
     _closed = true;
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(toHome);
   }
 
   Future<void> _retry() async {
@@ -120,7 +124,9 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
         downloads ? 'Read your downloaded books instead?' : 'Nothing is downloaded on this device to read offline.',
       ].join('\n\n')),
       actions: [
-        if (!downloads) TextButton(onPressed: _retrying ? null : () { _close(); c.stayOnline(); }, child: const Text('OK')),
+        // nothing to read either way: offline, and back to Home (the page behind is waiting on Komga)
+        if (!downloads)
+          TextButton(onPressed: _retrying ? null : () { _close(true); c.useDownloads(); }, child: const Text('OK')),
         TextButton(
           onPressed: _retrying ? null : _retry,
           child: _retrying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Retry'),
