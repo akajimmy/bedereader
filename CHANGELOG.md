@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- The choice in force is now filled with the accent colour itself, its text in the accent's own text colour (it was a muted tint).
+
 ## 1.4.0
 
 ### Build 132 - 2026-10-22
