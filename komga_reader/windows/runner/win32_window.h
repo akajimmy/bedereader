@@ -94,6 +94,13 @@ class Win32Window {
   // Update the window frame's theme to match the system theme.
   static void UpdateTheme(HWND const window);
 
+ public:
+  // The title bar in [colour] - the colour of what's under it (the app's black; a book's page) - with dark or light
+  // text and buttons to suit; kept for the system's theme changes too.
+  static void SetCaptionColour(HWND const window, COLORREF colour);
+
+ private:
+
   bool quit_on_close_ = false;
 
   // window handle for top level window.

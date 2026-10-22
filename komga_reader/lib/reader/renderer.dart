@@ -126,6 +126,10 @@ abstract class Renderer extends ChangeNotifier {
   // ---- the look
 
   Color get background;
+
+  /// The colour along the top of the screen, under the window's title bar (Windows sets the bar to it): the
+  /// background, unless something else lies there (an eBook's inset page: the surround round the sheet).
+  Color get edge => background;
   Color ink(double alpha); // text on the background
   bool get rtl => false;
 

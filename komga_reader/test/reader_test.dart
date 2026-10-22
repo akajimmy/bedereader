@@ -2177,6 +2177,35 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets("Windows: the title bar takes the reader's page colour, follows it when it changes, and goes back to the "
+      "app's own once the book closes (user, 2026-10-22: \"in a reader with a different background it stands out\")",
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final bars = <int>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'),
+        (c) async {
+      if (c.method == 'titleBar') bars.add(c.arguments as int);
+      return null;
+    });
+    final s = AppSettings.instance;
+    final before = s.defaults;
+    addTearDown(() {
+      s.setDefault(before);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+    });
+    s.setDefault(before.copyWith(background: ReaderBackground.white));
+    await openReader(tester);
+    await tester.pump();
+    expect(bars.last, ReaderBackground.white.colour.toARGB32(), reason: 'the page colour');
+    s.setDefault(s.defaults.copyWith(background: ReaderBackground.grey));
+    await tester.pump();
+    expect(bars.last, ReaderBackground.grey.colour.toARGB32(), reason: 'changed in the panel');
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpWidget(const SizedBox());
+    expect(bars.last, appBackground.toARGB32(), reason: "closed: the app's own");
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets("rotation off Android (macOS here; Windows has its own lock - pc_rotation_test): one way up, the usual "
       "one; the way up isn't asked", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;

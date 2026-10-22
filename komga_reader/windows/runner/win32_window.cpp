@@ -292,12 +292,29 @@ void Win32Window::OnDestroy() {
 // Windows' buttons, snap layouts and dragging kept): always dark, as the app is - not the system's light / dark
 // setting; on Windows 11 the bar is the app's background (#0B0B0C), its text light, the border a plain dark line
 // (#26282E, the app's dividers). Windows 10 knows only the dark mode, and keeps its own dark bar.
-void Win32Window::UpdateTheme(HWND const window) {
-  BOOL dark = TRUE;
+// the colour the title bar is in now (the app's black until the app says otherwise)
+static COLORREF g_caption = RGB(0x0B, 0x0B, 0x0C);
+
+void Win32Window::UpdateTheme(HWND const window) { SetCaptionColour(window, g_caption); }
+
+// (user, 2026-10-22: "the colour of the title bar should match the colour of the background ... in a reader with a
+// different background it stands out again")
+void Win32Window::SetCaptionColour(HWND const window, COLORREF colour) {
+  g_caption = colour;
+  const double luminance =
+      (0.2126 * GetRValue(colour) + 0.7152 * GetGValue(colour) + 0.0722 * GetBValue(colour)) / 255.0;
+  const bool light = luminance > 0.5;  // a light page: dark text and buttons
+  BOOL dark = light ? FALSE : TRUE;
   DwmSetWindowAttribute(window, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
   const DWORD kBorderColor = 34, kCaptionColor = 35, kTextColor = 36;  // DWMWA_*_COLOR (Windows 11)
-  COLORREF caption = RGB(0x0B, 0x0B, 0x0C), text = RGB(0xE6, 0xE6, 0xE6), border = RGB(0x26, 0x28, 0x2E);
-  DwmSetWindowAttribute(window, kCaptionColor, &caption, sizeof(caption));
+  COLORREF text = light ? RGB(0x1A, 0x1A, 0x1A) : RGB(0xE6, 0xE6, 0xE6);
+  // the border a shade off the bar: darker on a light one, lighter on a dark one (the app's black: its #26282E)
+  COLORREF border = colour == RGB(0x0B, 0x0B, 0x0C)
+      ? RGB(0x26, 0x28, 0x2E)
+      : light ? RGB(GetRValue(colour) * 85 / 100, GetGValue(colour) * 85 / 100, GetBValue(colour) * 85 / 100)
+              : RGB(GetRValue(colour) + (255 - GetRValue(colour)) / 8, GetGValue(colour) + (255 - GetGValue(colour)) / 8,
+                    GetBValue(colour) + (255 - GetBValue(colour)) / 8);
+  DwmSetWindowAttribute(window, kCaptionColor, &colour, sizeof(colour));
   DwmSetWindowAttribute(window, kTextColor, &text, sizeof(text));
   DwmSetWindowAttribute(window, kBorderColor, &border, sizeof(border));
 }

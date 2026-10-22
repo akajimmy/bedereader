@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -118,6 +119,29 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
   }
+
+  testWidgets("Windows: an eBook's title bar is the colour along the top - the page's, or with an inset page the "
+      'surround round the sheet (user, 2026-10-22)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    final bars = <int>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'),
+        (c) async {
+      if (c.method == 'titleBar') bars.add(c.arguments as int);
+      return null;
+    });
+    addTearDown(() {
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.wideScreen));
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
+    });
+    await open(tester, twoChapters());
+    await settle(tester);
+    final page = AppSettings.instance.epub.colours.background;
+    expect(bars.last, page.toARGB32(), reason: 'no inset page on a tall screen: the page colour');
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    await settle(tester);
+    expect(bars.last, EpubRenderer.surround(page).toARGB32(), reason: 'an inset page: the surround');
+    debugDefaultTargetPlatformOverride = null;
+  });
 
   testWidgets("the slider's thumb, dragged, shows a small drawing of the page picked, its number and chapter, over "
       'the thumb; letting go goes there (user, 2026-10-11: as comics have)', (tester) async {
