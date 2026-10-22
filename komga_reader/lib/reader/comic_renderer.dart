@@ -134,7 +134,8 @@ class ComicRenderer extends Renderer {
     _changed();
   }
 
-  /// The reader's "Shift pairing by one" (bottom bar, two pages up): this book's pairing flipped, kept and synced.
+  /// The reader's "Shift pairing by one" (the Comic settings panel, two pages up): this book's pairing flipped, kept
+  /// and synced.
   void shiftPairing() {
     final id = _book['id'] as String;
     PairShift.instance.setShifted(id, !PairShift.instance.shifted(id));
@@ -366,7 +367,7 @@ class ComicRenderer extends Renderer {
     }
     _scrolls.clear();
     _stripScroll.dispose();
-    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode, shiftNode]) {
+    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode]) {
       n.dispose();
     }
     super.dispose();
@@ -1071,7 +1072,6 @@ class ComicRenderer extends Renderer {
   final imageNode = FocusNode(debugLabel: 'ctl-image');
   final readerNode = FocusNode(debugLabel: 'ctl-reader');
   final stripNode = FocusNode(debugLabel: 'ctl-strip');
-  final shiftNode = FocusNode(debugLabel: 'ctl-shift');
 
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
   @override
@@ -1090,11 +1090,6 @@ class ComicRenderer extends Renderer {
   /// The bottom bar's own: the page strip, image settings (a series), reader settings.
   @override
   List<BarButton> bottomButtons(BuildContext context) => [
-        // two pages up: pairs a page off (a scan missing a page, a spread split across two pairs) - this book, synced
-        // (user, 2026-10-16: a button on the bottom bar)
-        if (_dual && pages.length > 2)
-          BarButton(shiftNode, barIcon(node: shiftNode, icon: Icons.compare_arrows, label: 'Shift pairing by one',
-              onPressed: shiftPairing)),
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
@@ -1105,7 +1100,11 @@ class ComicRenderer extends Renderer {
             onPressed: () => showReaderPanel(context,
                 seriesId: seriesId, seriesTitle: _book['seriesTitle'] as String?,
                 komgaDirection: _komgaDirection, bookFit: _bookFit,
-                page: canSaveCopyPictures && index <= last ? PageActions(save: _savePage, copy: _copyPage) : null))),
+                page: canSaveCopyPictures && index <= last ? PageActions(save: _savePage, copy: _copyPage) : null,
+                // two pages up: pairs a page off (a scan missing a page, a spread split across two pairs) - this book,
+                // synced (user, 2026-10-22: in the panel, not on the bottom bar)
+                shiftBook: _dual && pages.length > 2 ? _book['id'] as String : null,
+                shift: shiftPairing))),
       ];
 
   /// The top bar's fit button: the series' own fit when it overrides the default layout (saved, synced); otherwise

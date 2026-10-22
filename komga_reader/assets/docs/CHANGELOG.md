@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Shift pairing by one is now a switch in the Comic settings panel, under This book, instead of a button on the reader's bottom bar.
+
 ## 1.4.0
 
 ### Build 131 - 2026-10-22

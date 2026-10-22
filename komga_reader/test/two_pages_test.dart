@@ -174,16 +174,27 @@ void main() {
     expect(await position(tester), startsWith('Pg. 3-4/9'));
   });
 
-  testWidgets('"Shift pairing by one" on the bottom bar (two pages up only): the pages before the spread pair the other '
-      'way, kept for this book - and pairing after the spread stays', (tester) async {
+  testWidgets('"Shift pairing by one" in the Comic settings panel (user, 2026-10-22: not on the bottom bar; two pages up '
+      'only): the pages before the spread pair the other way, kept for this book - and pairing after the spread stays',
+      (tester) async {
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    await tester.tap(find.byTooltip('Shift pairing by one'));
+    expect(find.byTooltip('Shift pairing by one'), findsNothing, reason: 'no bar button');
+    await tester.tap(find.byTooltip('Comic settings'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    final row = find.widgetWithText(SwitchRow, 'Shift pairing by one');
+    expect(tester.widget<SwitchRow>(row).value, isFalse);
+    await tester.tap(row);
     await tester.pump();
     await tester.pump();
     expect(PairShift.instance.shifted('B1'), isTrue);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(tester.widget<SwitchRow>(row).value, isTrue, reason: 'the switch follows');
+    await tester.tap(find.text('Done'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // the controls away
     await tester.pump();
     final seen = <String>[];
     for (var i = 0; i < 5; i++) {
@@ -195,7 +206,10 @@ void main() {
     await open(tester, size: const Size(1000, 1600));
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    expect(find.byTooltip('Shift pairing by one'), findsNothing, reason: 'one page at a time: nothing to shift');
+    await tester.tap(find.byTooltip('Comic settings'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Shift pairing by one'), findsNothing, reason: 'one page at a time: nothing to shift');
   });
 
   testWidgets('Save page with a pair up asks which: the left, the right, or both; right to left, the earlier page is '
