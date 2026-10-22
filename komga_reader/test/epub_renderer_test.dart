@@ -408,18 +408,17 @@ void main() {
     }
   });
 
-  testWidgets("an EPUB follows the eBooks' own reading settings, not the comics' (user, 2026-10-07: set apart per "
-      'kind): page corner, progress bar', (tester) async {
-    AppSettings.instance.setDisplay(const DisplayPrefs(
-        comics: KindPrefs(pageNote: PageNote.always, progressBar: true),
-        ebooks: KindPrefs(pageNote: PageNote.off, progressBar: false)));
+  testWidgets('an EPUB follows the settings over the page, one set with comics (user, 2026-10-21): page counter, '
+      'progress bar', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(pageNote: PageNote.off, progressBar: false));
     await open(tester, twoChapters());
-    expect(find.byKey(const ValueKey('page-corner')), findsNothing, reason: "eBooks' Off, not comics' Always");
+    expect(find.byKey(const ValueKey('page-corner')), findsNothing, reason: 'Off');
     expect(find.byKey(const ValueKey('reading-progress')), findsNothing);
     final s = AppSettings.instance;
-    s.setDisplay(s.display.withKind(BookKind.ebooks, s.display.ebooks.copyWith(pageNote: PageNote.always)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.always, progressBar: true));
     await tester.pump();
     expect(find.byKey(const ValueKey('page-corner')), findsOneWidget);
+    expect(find.byKey(const ValueKey('reading-progress')), findsOneWidget);
   });
 
   testWidgets("the pages either side are built ahead, as the comic reader's are: a tap's turn doesn't build the "
@@ -611,15 +610,15 @@ void main() {
         (call) async => call.method == 'currentWayUp' ? wayUp : null);
     final s = AppSettings.instance;
     addTearDown(() {
-      s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.auto)));
+      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.landscape)));
+    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape));
     await open(tester, twoChapters());
     expect(requests, anyElement(equals(['DeviceOrientation.landscapeRight'])), reason: 'held the way it was held');
     wayUp = 'portrait';
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait))); // changed in the panel
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait)); // changed in the panel
     await tester.pump();
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitUp']);
@@ -825,12 +824,15 @@ void main() {
   testWidgets("where you are (user's options F + H): the bar has the chapter's name with the book's page and % at "
       "the left and the chapter's page at the right; the page's corner has the book's page of its pages (\"1 / 342\", "
       "as comics' - user 2026-10-07) - always, for a moment after a turn, or not at all", (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(pageNote: const DisplayPrefs().pageNote)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.always));
     await open(tester, twoChapters());
     String corner() => tester.widget<Text>(find.byKey(const ValueKey('page-corner'))).data!;
     double cornerOpacity() => tester.widget<AnimatedOpacity>(
         find.ancestor(of: find.byKey(const ValueKey('page-corner')), matching: find.byType(AnimatedOpacity))).opacity;
     expect(corner(), matches(RegExp(r'^1 / \d+$')), reason: "the book's page of its pages, as comics'");
-    expect(cornerOpacity(), 1, reason: 'Always (the default)');
+    expect(cornerOpacity(), 1, reason: 'Always');
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     expect(cornerOpacity(), 0, reason: 'not under the controls');
@@ -842,7 +844,7 @@ void main() {
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     // After a turn: hidden until a page turns, then for a moment
-    AppSettings.instance.setDisplay(AppSettings.instance.display.bothKinds((k) => k.copyWith(pageNote: PageNote.afterTurn)));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.afterTurn));
     await tester.pump();
     expect(cornerOpacity(), 0);
     await tester.tapAt(const Offset(750, 600));
@@ -852,7 +854,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(cornerOpacity(), 0, reason: 'a moment later');
     // Off: no corner
-    AppSettings.instance.setDisplay(AppSettings.instance.display.bothKinds((k) => k.copyWith(pageNote: PageNote.off)));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageNote: PageNote.off));
     await tester.pump();
     expect(find.byKey(const ValueKey('page-corner')), findsNothing);
   });

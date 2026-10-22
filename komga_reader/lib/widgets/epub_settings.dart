@@ -45,7 +45,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
       _gutterRow(e, set),
       positionTextRow(s, BookKind.ebooks),
       ...brightnessRows(s),
-      if (canRotate) rotationRow(s, BookKind.ebooks),
+      if (canRotate) rotationRow(s),
       screenOnRow(s),
     ]),
   ];

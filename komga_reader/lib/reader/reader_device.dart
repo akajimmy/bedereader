@@ -67,11 +67,12 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
     onReaderSettings();
   }
 
-  // ---- Rotation (Settings > Comics, and the readers' panels): follow the device, or hold portrait / landscape
+  // ---- Rotation (Settings > Reading, and the readers' panels - one for both kinds): follow the device, or hold
+  // portrait / landscape
   Rotation? _rotation;
 
   void _applyRotation() {
-    final r = _settings.display.kind(readerKind).rotation;
+    final r = _settings.display.rotation;
     if (r == _rotation) return;
     _rotation = r;
     OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);

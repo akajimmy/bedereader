@@ -13,7 +13,7 @@ import 'package:komga_reader/screen.dart';
 import 'package:komga_reader/screens/about.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
-import 'package:komga_reader/widgets/display_panel.dart' show NightMode;
+import 'package:komga_reader/widgets/display_panel.dart' show NightMode, overPageRows;
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:komga_reader/widgets/poster.dart' show PosterSizeButton;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -95,25 +95,19 @@ void main() {
     Finder segment<T>(String label) => find.descendant(of: find.byType(SegmentedButton<T>), matching: find.text(label));
     String spots(BookKind k) => s.display.kind(k).hiddenSpots.join(',');
     final steps = <(SettingsPage, Finder, Object? Function(), Object?)>[
-      // Comics: each kind its own position text, progress bar
+      // Comics: each kind its own position text
       (SettingsPage.comics, find.text('Book title'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
-      (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
-          () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false)),
       (SettingsPage.comics, segment<PageTurn>('None'), () => s.display.pageTurn, PageTurn.flip), // "None" is the flip
       // the page colours, for every series that follows the defaults (synced; user, 2026-10-05)
       (SettingsPage.comics, find.bySemanticsLabel('White background'),
           () => (s.defaults.background, s.prefsFor('S-follows-defaults').background),
           (ReaderBackground.white, ReaderBackground.white)),
-      // eBooks: the other kind's position text, progress bar and page corner
+      // eBooks: the other kind's position text
       (SettingsPage.ebooks, find.text('Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', 'right')),
       (SettingsPage.ebooks, find.text('Chapter progress'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
-      (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Progress bar'),
-          () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, true)),
-      (SettingsPage.ebooks, segment<PageNote>('Off'),
-          () => (s.display.comics.pageNote, s.display.ebooks.pageNote), (PageNote.afterTurn, PageNote.off)),
       // eBooks: the EPUB settings (the alignment on its own: user, 2026-10-07)
       // (Font face: a picker now - epub_settings_test)
       (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
@@ -137,6 +131,14 @@ void main() {
               s.display.ebookPosterDate, s.display.posterSeries), (true, false, false, false, false)), // (comics: as left above)
       (SettingsPage.library, find.text('Series #').last,
           () => (s.display.ebookPosterSeries, s.display.posterSeries), (true, false)),
+      // Reading: what's over the page, one set for both kinds (user, 2026-10-21) - each on or off; the page counter's
+      // when, only while it's on
+      (SettingsPage.reading, find.text('Clock'), () => (s.display.showClock, s.display.showBattery), (true, false)),
+      (SettingsPage.reading, find.text('Battery'), () => (s.display.showClock, s.display.showBattery), (true, true)),
+      (SettingsPage.reading, find.text('Progress bar'), () => s.display.progressBar, true),
+      (SettingsPage.reading, segment<PageNote>('Always'), () => s.display.pageNote, PageNote.always),
+      (SettingsPage.reading, find.text('Page counter'), () => s.display.pageNote, PageNote.off),
+      (SettingsPage.reading, find.text('Page counter'), () => s.display.pageNote, PageNote.afterTurn),
       // Look
       (SettingsPage.look, find.text('115%'), () => s.display.textScale, 1.15),
       (SettingsPage.look, find.bySemanticsLabel('Green'), () => s.display.accent, Accent.green),
@@ -155,6 +157,21 @@ void main() {
       expect(read(), expected, reason: 'step $i (${page.name}): $control');
     }
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
+  });
+
+  testWidgets("the page counter's when (After a turn / Always) shows only while the page counter is on (user, "
+      '2026-10-21: its own small choice under the chips)', (tester) async {
+    final s = AppSettings.instance;
+    addTearDown(() => s.setDisplay(s.display.copyWith(pageNote: const DisplayPrefs().pageNote)));
+    Future<int> rows(PageNote note) async {
+      s.setDisplay(s.display.copyWith(pageNote: note));
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: overPageRows(s)))));
+      return tester.widgetList(find.byType(SegmentedButton<PageNote>)).length;
+    }
+
+    expect(await rows(PageNote.afterTurn), 1);
+    expect(await rows(PageNote.always), 1);
+    expect(await rows(PageNote.off), 0);
   });
 
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {

@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Rotation and what's shown over the page are now one set for comics and eBooks, in Settings > Reading. A row "With the controls hidden show:" turns the clock, the battery, the page counter and the progress bar on or off, each on its own. While the page counter is on, a small choice under it sets when: after a turn, or always. With the controls up, the time and battery are always on the top bar. These settings start from the defaults (rotation Auto, page counter after a turn, the rest off). The position text stays separate for comics and eBooks, now titled "Over the slider (tap to hide)".
+
 ## 1.4.0
 
 ### Build 133 - 2026-10-22

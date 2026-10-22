@@ -633,7 +633,7 @@ void main() {
       'and % on the left; a spot tapped hides it - its place stays, tapped to show it again - kept on this device; '
       'picking a page shows it, in the accent colour', (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(hiddenSpots: const []))));
+    addTearDown(() => s.setDisplay(s.display.copyWith(comics: const KindPrefs(), ebooks: const KindPrefs())));
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.enter); // the controls
     expect(find.text('Test #1 - T'), findsOneWidget);
@@ -673,30 +673,28 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
-  testWidgets("a comic follows the comics' own reading settings, not the eBooks' (user, 2026-10-07: set apart per "
-      'kind): page corner, clock, progress bar', (tester) async {
+  testWidgets('a comic follows the settings over the page, one set with eBooks (user, 2026-10-21): page counter, '
+      'clock, progress bar', (tester) async {
     final s = AppSettings.instance;
     addTearDown(() => s.setDisplay(const DisplayPrefs()));
-    s.setDisplay(const DisplayPrefs(
-        comics: KindPrefs(pageNote: PageNote.off, clock: ShowWhen.off, progressBar: false),
-        ebooks: KindPrefs(pageNote: PageNote.always, clock: ShowWhen.always, progressBar: true)));
+    s.setDisplay(const DisplayPrefs(pageNote: PageNote.off));
     await openReader(tester);
-    expect(find.byKey(const ValueKey('page-corner')), findsNothing, reason: "comics' Off, not eBooks' Always");
+    expect(find.byKey(const ValueKey('page-corner')), findsNothing, reason: 'Off');
     expect(find.byKey(const ValueKey('reading-progress')), findsNothing);
     expect(find.byType(ReaderClock), findsNothing);
-    s.setDisplay(s.display.withKind(BookKind.comics, s.display.comics.copyWith(pageNote: PageNote.always,
-        progressBar: true)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.always, progressBar: true, showClock: true));
     await tester.pump();
-    expect(find.byKey(const ValueKey('page-corner')), findsOneWidget, reason: "comics' own, now Always");
+    expect(find.byKey(const ValueKey('page-corner')), findsOneWidget, reason: 'now Always');
     expect(find.byKey(const ValueKey('reading-progress')), findsOneWidget);
+    expect(find.byType(ReaderClock), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('page corner, one setting with EPUBs (user, 2026-10-07): After a turn shows "2 / 3" for a moment, '
       "bottom right, then it fades; Always keeps it there; Off, it isn't there", (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.always))));
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.afterTurn)));
+    addTearDown(() => s.setDisplay(s.display.copyWith(pageNote: PageNote.always)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.afterTurn));
     await openReader(tester);
     expect(flashOpacity(tester, '1 / 3'), 0.0, reason: 'After a turn: not before one');
     await key(tester, LogicalKeyboardKey.arrowRight);
@@ -708,13 +706,13 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 0.0);
 
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.always)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.always));
     await tester.pump(const Duration(milliseconds: 300));
     expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'Always: there with no turn');
     await tester.pump(const Duration(seconds: 2));
     expect(flashOpacity(tester, '2 / 3'), 1.0, reason: 'and stays');
 
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(pageNote: PageNote.off)));
+    s.setDisplay(s.display.copyWith(pageNote: PageNote.off));
     await tester.pump();
     await key(tester, LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 300));
@@ -1917,16 +1915,23 @@ void main() {
     expect(calls, isEmpty); // Off: never held
   });
 
-  testWidgets('clock and battery: Always shows it over the page; With the controls only on the top bar; Off never',
-      (tester) async {
+  testWidgets('the clock and the battery (user, 2026-10-21): with the controls hidden, over the page, each as set; '
+      'with them up, both on the top bar whatever is set', (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(clock: ShowWhen.withControls))));
-    for (final when in ShowWhen.values) {
-      s.setDisplay(s.display.bothKinds((k) => k.copyWith(clock: when)));
+    addTearDown(() => s.setDisplay(s.display.copyWith(showClock: false, showBattery: false)));
+    for (final (clock, battery) in [(false, false), (true, false), (false, true), (true, true)]) {
+      s.setDisplay(s.display.copyWith(showClock: clock, showBattery: battery));
       await openReader(tester);
-      expect(find.byType(ReaderClock), when == ShowWhen.always ? findsOneWidget : findsNothing, reason: '${when.name}, hidden');
+      final why = 'clock $clock, battery $battery';
+      if (!clock && !battery) {
+        expect(find.byType(ReaderClock), findsNothing, reason: '$why, hidden');
+      } else {
+        final shown = tester.widget<ReaderClock>(find.byType(ReaderClock));
+        expect((shown.time, shown.battery), (clock, battery), reason: '$why, hidden');
+      }
       await key(tester, LogicalKeyboardKey.enter); // the controls
-      expect(find.byType(ReaderClock), when == ShowWhen.off ? findsNothing : findsOneWidget, reason: '${when.name}, controls');
+      final bar = tester.widget<ReaderClock>(find.byType(ReaderClock));
+      expect((bar.time, bar.battery), (true, true), reason: '$why, controls');
       await tester.pumpWidget(const SizedBox());
     }
   });
@@ -1934,8 +1939,8 @@ void main() {
   testWidgets('progress bar: a line along the bottom while the controls are hidden; the slider takes over with them',
       (tester) async {
     final s = AppSettings.instance;
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(progressBar: true)));
-    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(progressBar: false))));
+    s.setDisplay(s.display.copyWith(progressBar: true));
+    addTearDown(() => s.setDisplay(s.display.copyWith(progressBar: false)));
     await openReader(tester);
     const bar = ValueKey('reading-progress');
     expect(tester.widget<LinearProgressIndicator>(find.byKey(bar)).value, closeTo(1 / 3, 1e-9)); // page 1 of 3
@@ -1965,7 +1970,7 @@ void main() {
     addTearDown(() async {
       // a test that fails with a book open leaves the lock held (app-wide): let it go here (test audit, 2026-10-07)
       await OrientationLock.instance.release();
-      s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.auto)));
+      s.setDisplay(s.display.copyWith(rotation: Rotation.auto));
       m.setMockMethodCallHandler(SystemChannels.platform, null);
       m.setMockMethodCallHandler(const MethodChannel('komga_reader/screen'), null);
     });
@@ -1978,7 +1983,7 @@ void main() {
     var wayUp = 'reversePortrait'; // the tablet held upside down as the book opens
     final (requests, _) = recordOrientation(tester, () => wayUp);
     final s = AppSettings.instance;
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await openReader(tester);
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'held as it was held: upside down');
@@ -1987,7 +1992,7 @@ void main() {
     expect(requests.last, ['DeviceOrientation.portraitUp']);
 
     wayUp = 'landscape';
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.landscape))); // changed mid-book (the Comic settings panel)
+    s.setDisplay(s.display.copyWith(rotation: Rotation.landscape)); // changed mid-book (the Comic settings panel)
     await tester.pump();
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.landscapeLeft']);
@@ -2004,7 +2009,7 @@ void main() {
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final (requests, asked) = recordOrientation(tester, () => 'reversePortrait');
     final s = AppSettings.instance;
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await openReader(tester);
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitUp']);
@@ -2019,13 +2024,13 @@ void main() {
     final s = AppSettings.instance;
     // the buttons' size with nothing locked (no mark), to compare: the mark mustn't resize them (user, 2026-10-07)
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
-        listenable: s, builder: (context, _) => rotationRow(s, BookKind.comics)))));
+        listenable: s, builder: (context, _) => rotationRow(s)))));
     final unmarked = tester.getSize(find.byType(SegmentedButton<Rotation>));
-    s.setDisplay(s.display.bothKinds((k) => k.copyWith(rotation: Rotation.portrait)));
+    s.setDisplay(s.display.copyWith(rotation: Rotation.portrait));
     await OrientationLock.instance.hold(portrait: true, landscape: false); // as a book does
     addTearDown(OrientationLock.instance.release);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(
-        listenable: s, builder: (context, _) => rotationRow(s, BookKind.comics)))));
+        listenable: s, builder: (context, _) => rotationRow(s)))));
     expect(requests.last, ['DeviceOrientation.portraitUp']);
     // the lock in force shows it's a switch: the circling arrows beside it (user, 2026-10-07); Auto and the other not
     Finder segment(String label) => find.ancestor(of: find.text(label), matching: find.byType(TextButton));
@@ -2035,7 +2040,7 @@ void main() {
     await tester.tap(find.text('Portrait'));
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'turned over');
-    expect(s.display.comics.rotation, Rotation.portrait, reason: 'still the Portrait lock');
+    expect(s.display.rotation, Rotation.portrait, reason: 'still the Portrait lock');
     expect(find.textContaining('tap Portrait again'), findsOneWidget);
   });
 }
