@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 
+- A library's name in the top bar shortens with "..." in a narrow window or on a phone, instead of running under the buttons.
 - Windows: when the app starts in full screen, leaving it (F11) brings back the window as it was before - maximized if it was maximized - instead of a smaller window.
 
 **New**
