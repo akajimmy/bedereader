@@ -371,9 +371,19 @@ void main() {
     await openPanel(tester);
     expect(section('writer'), isTrue, reason: 'one writer is enough');
     expect(section('years'), isTrue, reason: 'any year can be asked for');
-    for (final s in ['artist', 'publisher', 'genre', 'status']) {
+    for (final s in ['artist', 'publisher', 'genre']) {
       expect(section(s), isFalse, reason: s);
     }
+  });
+
+  testWidgets('status: all four offered in a series view, and nothing asked to find them (user, 2026-10-22: the four '
+      'one-series searches dropped)', (tester) async {
+    final api = await library(tester, api: server((s) => s.statusesHere = {'ONGOING'}));
+    await openPanel(tester);
+    for (final st in seriesStatuses) {
+      expect(find.byKey(ValueKey('filter.status.$st')), findsOneWidget, reason: st);
+    }
+    expect(api.asked.where((a) => a.filter.statuses.isNotEmpty), isEmpty, reason: 'no status searches');
   });
 
   testWidgets("release years: the same list in every view (this year back to 1800); From fills To", (tester) async {
