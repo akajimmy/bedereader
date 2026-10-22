@@ -341,8 +341,8 @@ void main() {
     expect(lines(), isNot(before), reason: 'laid out for the screen, not the sheet');
   });
 
-  testWidgets("Inset page from the screen (user, 2026-10-22): on a tall screen, Always: the screen's height less 24 "
-      "above and below, narrowed to the screen less 24 a side; the text inside it as though it were the screen - the "
+  testWidgets("Inset page from the screen (user, 2026-10-22): on a tall screen, Always: the screen's height less 12 "
+      "above and below, narrowed to the screen less 12 a side; the text inside it as though it were the screen - the "
       "margin setting's share of the sheet's width in from its edge; Margins: Book's: the chapter's own, in the sheet",
       (tester) async {
     addTearDown(() {
@@ -370,9 +370,9 @@ void main() {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    // (7:10 of 1152 is 806: wider than the 752 the screen has)
-    const sheet = Rect.fromLTWH(24, 24, 752, 1152);
-    expect(sheets(), {sheet}, reason: 'the height less 24 each end; too narrow a screen: 24 in at the sides');
+    // (7:10 of 1176 is 823: wider than the 776 the screen has)
+    const sheet = Rect.fromLTWH(12, 12, 776, 1176);
+    expect(sheets(), {sheet}, reason: 'the height less 12 each end; too narrow a screen: 12 in at the sides');
     expect(left(lines()) - sheet.left, closeTo(EpubRenderer.sideMargin(e, sheet.width, inSheet: true), 0.5),
         reason: "the margin setting's share of the sheet, in from its edge");
 

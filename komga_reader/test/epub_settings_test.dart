@@ -75,31 +75,31 @@ void main() {
   });
 
   test('Inset page from the screen (user, 2026-10-22: "the inset page height should be based on screen height (not '
-      'quite full height) and the width should be based on the height (use a common physical book ratio)"): 24 short '
+      'quite full height) and the width should be based on the height (use a common physical book ratio)"): 12 short '
       'of the height above and below, 7:10 wide, centred; a screen too narrow keeps the height and narrows it; two '
       'pages up the pair and the gutter fit together; Never: none; Wide screen: only wider than tall', () {
     const wide = Size(1600, 1000), tall = Size(800, 1200);
-    // one page on a wide screen: 952 tall, 7:10 -> 666.4 wide, centred
+    // one page on a wide screen: 976 tall, 7:10 -> 683.2 wide, centred
     final one = EpubRenderer.sheetRect(wide, wide, InsetPage.always)!;
-    expect(one.top, 24);
-    expect(one.height, 952);
-    expect(one.width, closeTo(952 * 0.7, 0.01), reason: '7:10');
+    expect(one.top, 12);
+    expect(one.height, 976);
+    expect(one.width, closeTo(976 * 0.7, 0.01), reason: '7:10');
     expect(one.center.dx, closeTo(800, 0.01), reason: 'centred');
     expect(EpubRenderer.sheetRect(wide, wide, InsetPage.wideScreen), one, reason: 'wider than tall');
     expect(EpubRenderer.sheetRect(tall, tall, InsetPage.wideScreen), isNull, reason: 'taller than wide');
     expect(EpubRenderer.sheetRect(wide, wide, InsetPage.never), isNull);
-    // a tall screen, Always: 1152 tall would be 806 wide - more than 800 less the gaps: the height kept, narrowed
+    // a tall screen, Always: 1176 tall would be 823 wide - more than 800 less the gaps: the height kept, narrowed
     final upright = EpubRenderer.sheetRect(tall, tall, InsetPage.always)!;
-    expect((upright.top, upright.height), (24, 1152), reason: 'the height kept');
-    expect(upright.width, 800 - 48, reason: 'narrowed to the screen, 24 at the sides');
-    // two pages up on 1600 x 1000, a gutter of 24: each half's sheet 7:10 (666.4 x 2 + 24 fits in 1600 - 48)
+    expect((upright.top, upright.height), (12, 1176), reason: 'the height kept');
+    expect(upright.width, 800 - 24, reason: 'narrowed to the screen, 12 at the sides');
+    // two pages up on 1600 x 1000, a gutter of 24: each half's sheet 7:10 (683.2 x 2 + 24 fits in 1600 - 24)
     final half = EpubRenderer.sheetRect(const Size(800, 1000), wide, InsetPage.always, dual: true, gutter: 24)!;
-    expect(half.width, closeTo(952 * 0.7, 0.01));
+    expect(half.width, closeTo(976 * 0.7, 0.01));
     // ... and on 1200 x 1000 they don't: narrowed together - the pair, the gutter and the outer gaps fill the width
     final tight = EpubRenderer.sheetRect(const Size(600, 1000), const Size(1200, 1000), InsetPage.always, dual: true,
         gutter: 24)!;
-    expect(2 * tight.width + 24 + 48, closeTo(1200, 0.01));
-    expect(tight.height, 952, reason: 'the height kept');
+    expect(2 * tight.width + 24 + 24, closeTo(1200, 0.01));
+    expect(tight.height, 976, reason: 'the height kept');
   });
 
   test("inside an inset page the margin setting is the share of the sheet's width, no line-length cap (user, "
