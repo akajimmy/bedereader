@@ -74,20 +74,42 @@ void main() {
     expect(side(EpubMargins.wider) / 800, greaterThanOrEqualTo(0.2));
   });
 
-  test('Inset page round the text (user, 2026-10-16: "the edges of the inset page should be based on the location of '
-      'the text"): the sheet 60 out from the text at the sides and 24 above and below (dialled in on the tablet), '
-      'wherever the margins put it; Never: none; Wide screen: on a screen wider than tall; Always: on a tall one too; '
-      'a margin under the gap: that edge at the page\'s', () {
-    const page = Size(800, 1000), wide = Size(1600, 1000), tall = Size(800, 1200);
-    const text = Rect.fromLTRB(77, 40, 723, 960);
-    final sheet = EpubRenderer.sheetRect(text, page, InsetPage.always, wide)!;
-    expect(sheet, const Rect.fromLTRB(17, 16, 783, 984), reason: '60 left of the lines, 24 above the first, and so on');
-    expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, wide), sheet, reason: 'wider than tall');
-    expect(EpubRenderer.sheetRect(text, page, InsetPage.wideScreen, tall), isNull, reason: 'taller than wide');
-    expect(EpubRenderer.sheetRect(text, page, InsetPage.always, tall), sheet);
-    expect(EpubRenderer.sheetRect(text, page, InsetPage.never, wide), isNull);
-    expect(EpubRenderer.sheetRect(const Rect.fromLTRB(10, 40, 790, 960), page, InsetPage.always, wide),
-        const Rect.fromLTRB(0, 16, 800, 984), reason: 'margins of 10: the sides at the page edges');
+  test('Inset page from the screen (user, 2026-10-22: "the inset page height should be based on screen height (not '
+      'quite full height) and the width should be based on the height (use a common physical book ratio)"): 24 short '
+      'of the height above and below, 2:3 wide, centred; a screen too narrow keeps the height and narrows it; two '
+      'pages up the pair and the gutter fit together; Never: none; Wide screen: only wider than tall', () {
+    const wide = Size(1600, 1000), tall = Size(800, 1200);
+    // one page on a wide screen: 952 tall, 2:3 -> 634.7 wide, centred
+    final one = EpubRenderer.sheetRect(wide, wide, InsetPage.always)!;
+    expect(one.top, 24);
+    expect(one.height, 952);
+    expect(one.width, closeTo(952 * 2 / 3, 0.01), reason: '2:3');
+    expect(one.center.dx, closeTo(800, 0.01), reason: 'centred');
+    expect(EpubRenderer.sheetRect(wide, wide, InsetPage.wideScreen), one, reason: 'wider than tall');
+    expect(EpubRenderer.sheetRect(tall, tall, InsetPage.wideScreen), isNull, reason: 'taller than wide');
+    expect(EpubRenderer.sheetRect(wide, wide, InsetPage.never), isNull);
+    // a tall screen, Always: 1152 tall would be 768 wide - more than 800 less the gaps: the height kept, narrowed
+    final upright = EpubRenderer.sheetRect(tall, tall, InsetPage.always)!;
+    expect((upright.top, upright.height), (24, 1152), reason: 'the height kept');
+    expect(upright.width, 800 - 48, reason: 'narrowed to the screen, 24 at the sides');
+    // two pages up on 1600 x 1000, a gutter of 24: each half's sheet 2:3 (634.7 x 2 + 24 fits in 1600 - 48)
+    final half = EpubRenderer.sheetRect(const Size(800, 1000), wide, InsetPage.always, dual: true, gutter: 24)!;
+    expect(half.width, closeTo(952 * 2 / 3, 0.01));
+    // ... and on 1200 x 1000 they don't: narrowed together - the pair, the gutter and the outer gaps fill the width
+    final tight = EpubRenderer.sheetRect(const Size(600, 1000), const Size(1200, 1000), InsetPage.always, dual: true,
+        gutter: 24)!;
+    expect(2 * tight.width + 24 + 48, closeTo(1200, 0.01));
+    expect(tight.height, 952, reason: 'the height kept');
+  });
+
+  test("inside an inset page the margin setting is the share of the sheet's width, no line-length cap (user, "
+      '2026-10-22)', () {
+    for (final m in EpubMargins.values.where((m) => m != EpubMargins.book)) {
+      expect(EpubRenderer.sideMargin(EpubPrefs(margins: m), 635, inSheet: true), 635 * m.share, reason: m.name);
+    }
+    // the cap would have widened the margins on a wide sheet; inside one it doesn't
+    expect(EpubRenderer.sideMargin(const EpubPrefs(margins: EpubMargins.narrow), 2000, inSheet: true),
+        lessThan(EpubRenderer.sideMargin(const EpubPrefs(margins: EpubMargins.narrow), 2000)));
   });
 
   test('the surround: the dark grey page on black (user, 2026-10-16: "full black"); a light page on a shade darker; '

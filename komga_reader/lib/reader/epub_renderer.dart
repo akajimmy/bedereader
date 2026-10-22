@@ -72,28 +72,35 @@ class EpubRenderer extends Renderer {
 
   /// The page's left / right margin at [width]: the setting's share of the width ([EpubMargins.share]), or more on a
   /// wide screen, where lines stop at the setting's length ([EpubMargins.lineEms]) and the rest goes to the margins.
-  /// Margins: Book's - none here: each chapter's own page margin is used ([EpubTheme.bookMargins]).
-  static double sideMargin(EpubPrefs e, double width) => e.margins == EpubMargins.book
+  /// [inSheet]: inside an inset page - its width, the share alone (user, 2026-10-22: no line-length cap there; the page
+  /// is book-shaped already). Margins: Book's - none here: each chapter's own page margin is used
+  /// ([EpubTheme.bookMargins]).
+  static double sideMargin(EpubPrefs e, double width, {bool inSheet = false}) => e.margins == EpubMargins.book
       ? 0
-      : math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
+      : inSheet
+          ? width * e.margins.share
+          : math.max(width * e.margins.share, (width - e.size * e.margins.lineEms) / 2);
 
-  /// Inset page ([InsetPage]): the page drawn as a sheet on a surround ([surround]). Its edges follow the text, not
-  /// the screen (user, 2026-10-16): [textGapSides] out from [textArea] left and right - left of where every line
-  /// starts, right of where lines end - and [textGapEnds] above the first line and below the last, wherever the margins
-  /// put the text on the [page] (the screen, or half of it two pages up): a style that ignores the margins. Never:
-  /// none; Wide screen: on a screen wider than tall ([area]); Always: always. Kept on the page: a margin under the gap
-  /// leaves that edge at the page's. Null: no sheet.
-  static Rect? sheetRect(Rect? textArea, Size page, InsetPage inset, Size area) {
-    if (textArea == null || inset == InsetPage.never) return null;
+  /// Inset page ([InsetPage]) - redone 2026-10-22 (user: "the inset page height should be based on screen height (not
+  /// quite full height) and the width should be based on the height (use a common physical book ratio)"): the sheet on
+  /// [cell] (the screen, or its half two pages up), [sheetGap] short of the screen's height above and below, [sheetRatio]
+  /// wide for its height (2:3, a trade paperback). A screen too narrow keeps the height and narrows it ([sheetGap] at
+  /// the sides; two pages up, the pair and the [gutter] between them fit together). Centred on its cell - two pages up,
+  /// [_sideShift] brings the pair together. The text is laid out inside it as though it were the screen ([_themeFor]).
+  /// Never: none; Wide screen: on a screen wider than tall ([area]); Always: always. Null: no sheet.
+  static Rect? sheetRect(Size cell, Size area, InsetPage inset, {bool dual = false, double gutter = 0}) {
+    if (inset == InsetPage.never || cell.isEmpty) return null;
     if (inset == InsetPage.wideScreen && area.width <= area.height) return null;
-    return Rect.fromLTRB(textArea.left - textGapSides, textArea.top - textGapEnds, textArea.right + textGapSides,
-            textArea.bottom + textGapEnds)
-        .intersect(Offset.zero & page);
+    final h = cell.height - 2 * sheetGap;
+    final room = dual ? (area.width - 2 * sheetGap - gutter) / 2 : cell.width - 2 * sheetGap;
+    final w = math.min(h * sheetRatio, room);
+    if (h <= 0 || w <= 0) return null;
+    return Rect.fromLTWH((cell.width - w) / 2, sheetGap, w, h);
   }
 
-  /// How far the sheet's edges sit out from the text: at the sides, and above and below - dialled in on the tablet with
-  /// sliders and baked in for 1.3 (user, 2026-10-16: "use the settings that are on screen right now": 60 and 24).
-  static const textGapSides = 60.0, textGapEnds = 24.0;
+  /// The sheet's distance from the screen's edges (above and below; at the sides when it's narrowed), and its width
+  /// for its height (user, 2026-10-22 quiz: "a small fixed gap", "2:3 - trade paperback").
+  static const sheetGap = 24.0, sheetRatio = 2 / 3;
 
   /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
   /// on the tablet; user, 2026-10-20: a setting).
@@ -198,14 +205,30 @@ class EpubRenderer extends Renderer {
 
   /// The book's look: font, size, spacing, margins, theme, formatting. Lines stay a comfortable length on a wide
   /// window (~34 em): the extra width goes to the margins.
-  EpubTheme get _theme {
+  EpubTheme get _theme => _themeFor(_size, _planSheet(_size, _area, _laidDual));
+
+  /// The sheet the settings give a [size] page on an [area] screen ([sheetRect]).
+  Rect? _planSheet(Size size, Size area, bool dual) =>
+      sheetRect(size, area, AppSettings.instance.display.insetPage, dual: dual, gutter: pagesApart);
+
+  /// The look for pages [size] big - with an inset page [sheet], the text laid out inside it as though it were the
+  /// screen: the margins the setting's, measured in from its edges (user, 2026-10-22: "the text should then render
+  /// within that page as though the page were the screen").
+  EpubTheme _themeFor(Size size, Rect? sheet) {
     final e = AppSettings.instance.epub;
     final family = e.font.family ?? switch (e.font) {
       EpubFont.deviceSerif => deviceSerifFamily,
       _ => null,
     };
-    // (Inset page doesn't move the text: its sheet sits round the text where the margins put it - sheetRect)
-    final side = sideMargin(e, _size.width);
+    final EdgeInsets margins;
+    if (sheet == null) {
+      final side = sideMargin(e, size.width);
+      margins = EdgeInsets.fromLTRB(side, EpubMargins.topBottom, side, EpubMargins.topBottom);
+    } else {
+      final side = sideMargin(e, sheet.width, inSheet: true);
+      margins = EdgeInsets.fromLTRB(sheet.left + side, sheet.top + EpubMargins.topBottom,
+          size.width - sheet.right + side, size.height - sheet.bottom + EpubMargins.topBottom);
+    }
     final context = host.context;
     return EpubTheme(
       background: e.colours.background,
@@ -213,7 +236,7 @@ class EpubRenderer extends Renderer {
       fontFamily: family,
       fontSize: e.size,
       lineHeight: e.lineSpacing,
-      margins: EdgeInsets.fromLTRB(side, EpubMargins.topBottom, side, EpubMargins.topBottom),
+      margins: margins,
       // the book's alignment and paragraphs, or the reader's (user, 2026-10-07: three settings, from one)
       ownAlign: switch (e.align) {
         EpubAlign.book => null,
@@ -372,12 +395,13 @@ class EpubRenderer extends Renderer {
     _laidDual = dual;
     final size = dual ? Size(area.width / 2, area.height) : area;
     _size = size;
-    final theme = _theme;
+    final sheet = _planSheet(size, area, dual);
+    final theme = _themeFor(size, sheet);
     if (b.size == size && b.theme == theme) {
       _settle?.cancel(); // changed and changed back before it was due
       _settle = null;
       // laid out as these settings would be: their sheet
-      _laidInset = AppSettings.instance.display.insetPage;
+      _laidSheet = sheet;
       // the same pages, set out the other way (a half-width page and a narrow window's are the same page): two up or
       // one, after this frame
       // (or the chapters set to start elsewhere: paired again, on the same page)
@@ -409,7 +433,7 @@ class EpubRenderer extends Renderer {
     // shown (found on the tablet). Laid out again before the last layout was counted: its anchor still stands.
     if (_ready && !_end) _anchor ??= b.positionOf(_chapter, _page);
     b.setLayout(theme, size);
-    _laidInset = AppSettings.instance.display.insetPage;
+    _laidSheet = sheet;
     _ready = false;
     WidgetsBinding.instance.addPostFrameCallback((_) => _count());
   }
@@ -1590,17 +1614,15 @@ class EpubRenderer extends Renderer {
   // as long and as placed (user, 2026-10-11); always: the card the text was laid out in, likewise once laid out
   Rect? get _sheet => _sheetFor();
 
-  /// [page]'s sheet - round its own text (Margins: Book's: its chapter's sides); no page: round the text of a page of
-  /// this layout (the margins it's laid out in: while new ones settle, the page is drawn as it was, sheet and all).
-  Rect? _sheetFor([EpubPage? page]) {
+  /// The sheet of the layout the book is in (while new settings settle, the page is drawn as it was, sheet and all) -
+  /// the same for every page now: it's the screen's, not the text's (2026-10-22).
+  Rect? _sheetFor([EpubPage? _]) {
     final b = _book;
     if (b == null || b.size == Size.zero) return null;
-    final m = b.theme.margins;
-    final text = page?.textArea ?? Rect.fromLTRB(m.left, m.top, b.size.width - m.right, b.size.height - m.bottom);
-    final d = AppSettings.instance.display;
-    return sheetRect(text, b.size, _laidInset ?? d.insetPage, _area);
+    return _laidSheet;
   }
-  InsetPage? _laidInset;
+
+  Rect? _laidSheet; // the sheet the book was laid out for (null: none)
 
   /// A page's paper with [child] on it: the whole area, or the sheet - with the surround round it when [surround] (a
   /// page in the page view leaves that to the one still surround under them all).

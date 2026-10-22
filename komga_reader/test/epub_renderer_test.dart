@@ -309,7 +309,8 @@ void main() {
   });
 
   testWidgets("the sheet on wide screens switched off on this device (user, 2026-10-11): the page's colour across the "
-      'screen, no surround; the lines where they were (the sheet is round the text: it moves none - 2026-10-16)',
+      'screen, no surround; the text laid out across the screen again (the sheet is the screen\'s now, the text inside '
+      'it - 2026-10-22)',
       (tester) async {
     addTearDown(() => AppSettings.instance.setDisplay(const DisplayPrefs()));
     await open(tester, twoChapters(), size: const Size(1600, 1000));
@@ -332,15 +333,17 @@ void main() {
     expect(sheets().whereType<Rect>(), isNotEmpty);
     final before = lines();
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
+    await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
     expect(surroundBox(), findsNothing, reason: 'no surround');
     expect(sheets(), {null}, reason: 'no sheet: the page fills the screen');
-    expect(lines(), before, reason: 'the lines as long and as placed');
+    expect(lines(), isNot(before), reason: 'laid out for the screen, not the sheet');
   });
 
-  testWidgets('Inset page round the text (user, 2026-10-16): the sheet 20 out from the lines - left of where they '
-      "start, above the first - wherever the margins put them; turning it on moves no text; Margins: Book's: round "
-      "each chapter's own sides", (tester) async {
+  testWidgets("Inset page from the screen (user, 2026-10-22): on a tall screen, Always: the screen's height less 24 "
+      "above and below, narrowed to the screen less 24 a side; the text inside it as though it were the screen - the "
+      "margin setting's share of the sheet's width in from its edge; Margins: Book's: the chapter's own, in the sheet",
+      (tester) async {
     addTearDown(() {
       AppSettings.instance.setDisplay(const DisplayPrefs());
       AppSettings.instance.setEpub(const EpubPrefs());
@@ -362,29 +365,28 @@ void main() {
         .textOrigins as List<Offset>;
     double left(List<Offset> l) => l.map((o) => o.dx).reduce(math.min);
     expect(sheets(), {null}, reason: 'Wide screen (the default): none on a tall screen');
-    final e = AppSettings.instance.epub, before = lines();
+    final e = AppSettings.instance.epub;
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    final side = EpubRenderer.sideMargin(e, 800);
-    // (60 out at the sides, 24 above and below - dialled in on the tablet, 2026-10-16)
-    expect(sheets(), {Rect.fromLTRB(side - 60, EpubMargins.topBottom - 24, 800 - side + 60, 1200 - EpubMargins.topBottom + 24)
-        .intersect(const Rect.fromLTWH(0, 0, 800, 1200))}, reason: 'the text area, 60 out at the sides, 24 above and below');
-    expect(lines(), before, reason: 'no text moved');
-    expect(left(lines()) - sheets().single!.left, closeTo(60, 0.5), reason: '60 left of where the lines start');
+    // (2:3 of 1152 is 768: wider than the 752 the screen has)
+    const sheet = Rect.fromLTWH(24, 24, 752, 1152);
+    expect(sheets(), {sheet}, reason: 'the height less 24 each end; too narrow a screen: 24 in at the sides');
+    expect(left(lines()) - sheet.left, closeTo(EpubRenderer.sideMargin(e, sheet.width, inSheet: true), 0.5),
+        reason: "the margin setting's share of the sheet, in from its edge");
 
     AppSettings.instance.setEpub(e.copyWith(margins: EpubMargins.book));
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    final s = sheets().single!;
-    // (this book sets no page margin: its text 11.4 in (the least edge) - 60 out from that is off the page: the edge)
-    expect(s.left, closeTo(math.max(0, left(lines()) - 60), 0.5), reason: "Book's margins: round the chapter's own");
-    expect(s.left, 0, reason: 'a margin under the gap: that side at the page edge');
+    expect(sheets(), {sheet}, reason: "the screen's sheet, whatever the margins");
+    // (this book sets no page margin of its own: its text the least edge in, from the sheet's)
+    expect(left(lines()), inInclusiveRange(sheet.left, sheet.left + 20), reason: "Book's margins: from the sheet's edge");
   });
 
-  testWidgets("on a wide screen, while new margins settle the sheet stays the one the page is laid out for; then it "
-      "changes with the text (audit, 2026-10-11: it changed at once, the old layout's text over its edge)",
+  testWidgets("on a wide screen, while Inset page settles the sheet stays the one the page is laid out for; then it "
+      "changes with the layout (audit, 2026-10-11: it changed at once, the old layout's text over its edge)",
       (tester) async {
-    addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+    addTearDown(() => AppSettings.instance.setDisplay(const DisplayPrefs()));
     await open(tester, twoChapters(), size: const Size(1600, 1000));
     Set<Rect?> sheets() => tester
         .widgetList<CustomPaint>(find.byWidgetPredicate(
@@ -393,12 +395,12 @@ void main() {
         .toSet();
     final before = sheets();
     expect(before.whereType<Rect>(), isNotEmpty, reason: 'a sheet at 1600 wide');
-    AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(margins: EpubMargins.narrow));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
     await tester.pump();
     expect(sheets(), before, reason: 'settling: the sheet of the layout shown');
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    expect(sheets(), isNot(before), reason: 'laid out for the new margins: their sheet');
+    expect(sheets(), {null}, reason: 'laid out without one: none');
   });
 
   test("an EPUB is told from a comic by its media profile (the one Reader picks its renderer by it)", () {
