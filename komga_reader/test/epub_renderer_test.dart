@@ -369,7 +369,7 @@ void main() {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     await tester.pump(EpubRenderer.settleDelay);
     await settle(tester);
-    // (2:3 of 1152 is 768: wider than the 752 the screen has)
+    // (7:10 of 1152 is 806: wider than the 752 the screen has)
     const sheet = Rect.fromLTWH(24, 24, 752, 1152);
     expect(sheets(), {sheet}, reason: 'the height less 24 each end; too narrow a screen: 24 in at the sides');
     expect(left(lines()) - sheet.left, closeTo(EpubRenderer.sideMargin(e, sheet.width, inSheet: true), 0.5),

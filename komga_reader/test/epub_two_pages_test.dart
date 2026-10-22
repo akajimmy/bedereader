@@ -179,7 +179,7 @@ void main() {
   }
 
   testWidgets('Inset page with two pages up: two pages apart (user, 2026-10-16: "two discrete pages, with a gap '
-      'between"), 24 apart; each sheet the screen\'s height less 24 above and below, 2:3 - narrowed together to fit '
+      'between"), 24 apart; each sheet the screen\'s height less 24 above and below, 7:10 - narrowed together to fit '
       'a screen too narrow for two (user, 2026-10-22)', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     for (final width in [1200.0, 1600.0, 2400.0]) {
@@ -187,9 +187,9 @@ void main() {
       await turn(tester); // a pair: both sides with a page
       final sheets = sheetsOnScreen(tester, width);
       expect(sheets.length, 2, reason: '$width: $sheets');
-      // (1200: 2 x 634.7 and the gutter is more than the screen less 24 a side - 564 each)
-      final w = math.min(952 * 2 / 3, (width - 48 - 24) / 2);
-      expect(sheets[0].width, closeTo(w, 0.5), reason: '$width: 2:3, or narrowed to fit');
+      // (1200: 2 x 666.4 and the gutter is more than the screen less 24 a side - 564 each)
+      final w = math.min(952 * 0.7, (width - 48 - 24) / 2);
+      expect(sheets[0].width, closeTo(w, 0.5), reason: '$width: 7:10, or narrowed to fit');
       expect((sheets[0].top, sheets[0].bottom), (24, 976), reason: '$width: 24 above and below');
       expect(sheets[1].size, sheets[0].size);
       expect(sheets[0].right, closeTo(width / 2 - 12, 0.5), reason: '$width: 24 apart, about the middle');
@@ -296,7 +296,7 @@ void main() {
         .single.painter as PageCurlPainter;
     expect(c.spine, isTrue);
     const gap = 24.0;
-    const right = Rect.fromLTWH(800 + gap / 2, 24, 952 * 2 / 3, 952);
+    const right = Rect.fromLTWH(800 + gap / 2, 24, 952 * 0.7, 952);
     expect(c.page, right, reason: 'the right-hand sheet');
     expect(c.gap, gap, reason: 'its back lands past the gap, over the left sheet');
     // near the end of the turn its edge is its width and the gap past where it was hinged: over the left sheet
