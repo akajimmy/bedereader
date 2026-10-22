@@ -259,7 +259,6 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
-    unawaited(UpdateCheck.instance.check()); // a newer release on GitHub? (at most once a day; Android, Windows)
     final p = await SharedPreferences.getInstance();
     // the key in plain text from before it was kept encrypted: not used, just removed (signing in once more)
     if (p.containsKey('apiKey')) await p.remove('apiKey');
@@ -275,6 +274,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       unawaited(OnDeckHidden.instance.load(c.api, fetch: online));
       unawaited(PairShift.instance.load(c.api, fetch: online));
     }
+    // a newer release on GitHub? (at most once a day; Android, Windows) - not in offline mode: nothing is sent then
+    if (!Connection.instance.forcedOffline) unawaited(UpdateCheck.instance.check());
     if (!mounted) return;
     setState(() {
       _api = api;
