@@ -262,6 +262,35 @@ void main() {
     expect(api.finished, [5], reason: 'jumped to the last page: read');
   });
 
+  testWidgets("Back held with the controls up (user, 2026-10-21: \"instead of closing the controls, it closes out of the "
+      "book\"): its first press hides them; the held key's repeats and its release stay the reader's - handed back to "
+      'Android, the release was taken as Back, and Back with the controls gone closes the book', (tester) async {
+    await openLoaded(tester, pages: 20);
+    // (the remote's Back as the other tests send it: no physical key of its own in the test kit)
+    const physical = PhysicalKeyboardKey.escape;
+    for (final back in [LogicalKeyboardKey.goBack, LogicalKeyboardKey.escape]) {
+      await key(tester, LogicalKeyboardKey.enter); // the controls
+      expect(find.byType(Slider), findsOneWidget, reason: '$back: the controls up');
+      expect(await tester.sendKeyDownEvent(back, physicalKey: physical), isTrue);
+      await tester.pump();
+      expect(find.byType(Slider), findsNothing, reason: '$back: the controls hidden');
+      for (var i = 0; i < 3; i++) {
+        expect(await tester.sendKeyRepeatEvent(back, physicalKey: physical), isTrue, reason: "$back held: a repeat, kept from Android");
+      }
+      expect(await tester.sendKeyUpEvent(back, physicalKey: physical), isTrue, reason: '$back let go: kept too');
+      await tester.pump();
+      expect(find.byType(ReaderScreen), findsOneWidget, reason: '$back: still reading');
+      expect(find.byType(Slider), findsNothing);
+    }
+    // a fresh press afterwards is a press of its own, not the rest of the last one: Back hides the controls again
+    await key(tester, LogicalKeyboardKey.enter);
+    expect(find.byType(Slider), findsOneWidget);
+    expect(await tester.sendKeyDownEvent(LogicalKeyboardKey.goBack, physicalKey: physical), isTrue);
+    await tester.pump();
+    expect(find.byType(Slider), findsNothing, reason: 'a new Back: taken');
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.goBack, physicalKey: physical);
+  });
+
   // Esc / Back in the middle of a scrub cancel it: the page picked isn't gone to, the controls go away, and the next
   // scrub works as usual (user, 2026-10-02)
   group('cancelling a scrub', () {
