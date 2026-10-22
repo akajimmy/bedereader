@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -21,6 +20,7 @@ import 'position_row.dart';
 import '../synced_ids.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
+import 'curl_turns.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
 
@@ -43,11 +43,6 @@ class ComicPages {
 class ComicRenderer extends Renderer {
   ComicRenderer(super.host) {
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
-    _curlAnim = AnimationController(vsync: host.vsync, duration: const Duration(milliseconds: 380))
-      ..addListener(_onCurlTick)
-      ..addStatusListener((s) {
-        if (s == AnimationStatus.completed) _endCurl();
-      });
   }
 
   AppSettings get _settings => AppSettings.instance;
@@ -357,10 +352,7 @@ class ComicRenderer extends Renderer {
   void dispose() {
     _disposed = true;
     _tapTimer?.cancel();
-    _curlAnim.dispose();
-    _curl?.dispose();
-    _curlShader?.dispose();
-    _curlMoved.dispose();
+    _curl.dispose();
     _idle?.complete(); // nothing left waiting
     pc?.dispose();
     for (final c in _scrolls.values) {
@@ -418,7 +410,7 @@ class ComicRenderer extends Renderer {
     if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1);
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
-    host.pageChanged(i, curling: _curl != null);
+    host.pageChanged(i, curling: _curl.active);
   }
 
   /// To [place] at once (the slider, the strip, another device's page) - not a turn (the Reader knows it's coming).
@@ -431,7 +423,7 @@ class ComicRenderer extends Renderer {
   // ---- turning (the page after the last is the "end of book" card)
   static const _turn = Duration(milliseconds: 180);
 
-  bool get _blocked => pc == null || host.busy || _curlSettling;
+  bool get _blocked => pc == null || host.busy || _curl.settling;
 
   /// Forward: in fit width/height scroll on through the page first, then turn; from the end card, the next book.
   @override
@@ -476,17 +468,11 @@ class ComicRenderer extends Renderer {
 
   /// One page on or back, in the chosen animation: Wipe (slide), Instant flip, or 3D page curl.
   void _turnPage({required bool next}) {
-    if (host.busy || _curlSettling) return;
+    if (host.busy || _curl.settling) return;
     final target = next ? _at + 1 : _at - 1;
     if (target < 0 || target > _views) return;
     if (_curlMode) {
-      final page = _curlRect(next ? _at : target);
-      final grab = Offset(page.width, page.height * 0.72);
-      final start = next ? grab : Offset(_goneAt(page, target), grab.dy);
-      if (_startCurl(next: next, page: page, grab: grab, finger: start)) {
-        _animateCurl(complete: true);
-        return;
-      }
+      if (!_area.isEmpty && _curl.turn(next: next, target: target)) return;
       pc!.jumpToPage(target); // couldn't snapshot the page: turn instantly
     } else if (_settings.display.pageTurn == PageTurn.flip) {
       pc!.jumpToPage(target);
@@ -556,25 +542,44 @@ class ComicRenderer extends Renderer {
     }
   }
 
-  // ---- 3D page curl (Page turn animation; lib/page_curl.dart) ----------------------------------------------------
-  // A turn jumps the page view to the target page at once and draws the turning page over it from a snapshot:
-  // forward, this page curls away over the next; back, the previous page uncurls over this one (a snapshot of this
-  // page covers the view until then). Letting go before halfway springs back and jumps back.
-  final _pagesKey = GlobalKey(); // repaint boundary around the page view: the snapshots
-  late final AnimationController _curlAnim;
-  _Curl? _curl;
-  // the curl moving (each animation tick, each drag move) repaints its own layer only - it rebuilt the whole reader
-  // ~23 times a turn, with a new shader each paint (code review 2026-10-05, #38)
-  final _curlMoved = ValueNotifier<int>(0);
-  ui.FragmentShader? _curlShader;
+  // ---- 3D page curl (Page turn animation): the readers' shared turn (curl_turns.dart - user, 2026-10-22: "move
+  // comic reader to the shared code"), told what turns here: two pages up a pair's later page at its gutter, a page
+  // alone before a pair made up into a double page, a spread picture at its middle; right to left, mirrored
+  late final CurlTurns _curl = CurlTurns(
+    vsync: host.vsync,
+    current: () => _at,
+    jump: (v) => pc?.jumpToPage(v), // (during a turn: not counted as one - _onPage, curling)
+    pageRect: _curlRect,
+    spine: (v) => _spineX(v) != null || _padded(v) != null,
+    gap: _gapOn,
+    held: (forward, target) {
+      // two pages up, as a book: forward, the earlier page stays (its picture in the old view) until the later turns
+      // over onto it - from a page alone made up into a double page, its earlier half; back, the later page stays
+      // until the previous spread's later page lands on it - the earlier side shows that spread at once
+      final padded = _padded(forward ? _at : target);
+      if (forward && padded != null) {
+        final (r, x) = padded;
+        return rtl ? Rect.fromLTRB(x, r.top, r.right, r.bottom) : Rect.fromLTRB(r.left, r.top, x, r.bottom);
+      }
+      return forward
+          ? _heldPage(_at, _spineX(_at), earlier: true)
+          : _heldPage(_at, _spineX(target) ?? padded?.$2, earlier: false);
+    },
+    mirror: () => rtl,
+    pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
+    done: ({required turned}) {
+      if (turned) host.turned(index);
+      _maybeIdle();
+      _changed();
+    },
+  );
   Size _area = Size.zero;
-  Offset? _dragStart;
   final Map<int, Rect> _pageRects = {}; // where each page's image sits on screen (from PageCanvas), for the curl
 
   // ---- page processing waits out page turns (PageCanvas.idle) ----------------------------------------------------
   bool _swiping = false; // the page view is sliding (a wipe, or a drag in Swipe mode)
   Completer<void>? _idle;
-  bool get _turning => _swiping || _curl != null;
+  bool get _turning => _swiping || _curl.active;
 
   /// Completes once no turn is playing - when pages off screen may do their GPU processing.
   Future<void> _whenIdle() => _turning ? (_idle ??= Completer<void>()).future : Future<void>.value();
@@ -599,12 +604,6 @@ class ComicRenderer extends Renderer {
   /// The page's image on screen - only it curls, not the bars around it. Unknown (the end card, still loading):
   /// the whole area.
   Rect _pageRect(int i) => _pageRects[i] ?? Offset.zero & _area;
-
-  /// Where a turn of [page] (at item [v]) ends: off itself - or, a pair's page turning over onto the one beside it,
-  /// exactly over that one (its width past the spine).
-  double _goneAt(Rect page, int v) =>
-      _spineX(v) != null || _padded(v) != null ? -page.width - _gapOn(v) : PageCurl.gone(page.width);
-  double _gone(_Curl c) => c.spine ? -c.page.width - c.gap : PageCurl.gone(c.page.width);
 
   /// The gutter between the pages turning at item [v], on screen (Gutter; user, 2026-10-20): a pair's - its pages
   /// that far apart, the later turning from its own edge and landing past it; a page alone before a pair, that pair's
@@ -719,201 +718,17 @@ class ComicRenderer extends Renderer {
     ..maxAngle = (() => _scrollsDown ? 30.0 : 60.0)
     ..onStart = (d) {
       if (_curlMode) {
-        _curlDragStart(d);
+        _curl.dragStart(d, pages: _views + 1);
       } else {
         _slide = pc?.position.drag(d, () => _slide = null);
       }
     }
-    ..onUpdate = ((d) { if (_curlMode) { _curlDragUpdate(d); } else { _slide?.update(d); } })
-    ..onEnd = ((d) { if (_curlMode) { _curlDragEnd(d); } else { _slide?.end(d); } })
-    ..onCancel = (() { if (_curlMode) { _curlDragEnd(DragEndDetails()); } else { _slide?.cancel(); } });
-
-  /// Positions in reading-direction space (x from the right edge in a right-to-left book).
-  Offset _reading(Offset p) => rtl ? Offset(_area.width - p.dx, p.dy) : p;
-
-  /// A screen position in [page]'s own coordinates, in reading direction (origin top-left; top-right for a
-  /// right-to-left book) - how the curl's geometry is worked out.
-  Offset _pagePoint(Offset screen, Rect page) =>
-      Offset(rtl ? page.right - screen.dx : screen.dx - page.left, screen.dy - page.top);
-
-  ui.Image? _snapshot() {
-    final b = _pagesKey.currentContext?.findRenderObject();
-    if (b is! RenderRepaintBoundary || !b.hasSize) return null;
-    try {
-      return b.toImageSync(pixelRatio: MediaQuery.devicePixelRatioOf(host.context));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool _startCurl({required bool next, required Rect page, required Offset grab, required Offset finger}) {
-    final target = next ? _at + 1 : _at - 1;
-    if (target < 0 || target > _views || pc == null || _area.isEmpty) return false;
-    finishCurlNow();
-    final now = _snapshot();
-    if (now == null) return false;
-    final padded = _padded(next ? _at : target);
-    final c = _Curl(sheet: now, forward: next, page: page, grab: grab, finger: finger, from: _at,
-        gap: _gapOn(next ? _at : target),
-        spine: _spineX(next ? _at : target) != null || padded != null,
-        // two pages up, as a book: forward, the earlier page stays (its picture in the old view) until the later turns
-        // over onto it; back, the later page stays until the previous spread's later page lands on it - the earlier
-        // side shows that spread at once, under the page lifting away (user, 2026-10-16: going back, the old left page
-        // showed under the curl). One page up: back, the old view covers it all until the page has uncurled.
-        under: next ? (_spineX(_at) == null && padded == null ? null : now) : now,
-        // forward from a page alone made up into a double page: its earlier half stays, as a pair's earlier page does;
-        // back onto one, the pair's later page stays until the page alone's later half lands on it
-        underClip: next && padded != null
-            ? (rtl
-                ? Rect.fromLTRB(padded.$2, padded.$1.top, padded.$1.right, padded.$1.bottom)
-                : Rect.fromLTRB(padded.$1.left, padded.$1.top, padded.$2, padded.$1.bottom))
-            : next
-                ? _heldPage(_at, _spineX(_at), earlier: true)
-                : _heldPage(_at, _spineX(target) ?? padded?.$2, earlier: false),
-        pending: !next);
-    // two pages up, the turning page's back is a page (user, 2026-10-16): back, this spread's earlier page - the old
-    // view; forward, the next spread's, snapshot once the view shows it (_snapBack)
-    if (c.spine && !next) c.back = now;
-    _curl = c;
-    pc!.jumpToPage(target);
-    _changed();
-    if (c.spine && next) _snapBack(c);
-    if (!next) {
-      // the previous page is now in the view (under the cover): snapshot it to uncurl
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_curl != c || !c.pending) return;
-        final prev = _snapshot();
-        if (prev == null) {
-          _endCurl(cancel: true);
-          return;
-        }
-        c
-          ..sheet = prev
-          ..pending = false;
-        _changed();
-      });
-    }
-    return true;
-  }
-
-  /// Two pages up, forward: the next spread is in the view now (under the cover) - snapshot it for the turning page's
-  /// back, and again a moment later in case its pictures were still coming in.
-  void _snapBack(_Curl c) {
-    void take() {
-      if (_curl != c) return;
-      final b = _snapshot();
-      if (b == null) return;
-      final old = c.back;
-      c.back = b;
-      _changed();
-      if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) => take());
-    c.backTimer = Timer(const Duration(milliseconds: 250), take);
-  }
-
-  void _animateCurl({required bool complete}) {
-    final c = _curl;
-    if (c == null) return;
-    final w = c.page.width;
-    c
-      ..completing = complete
-      ..animFrom = c.finger
-      ..animTo = c.forward == complete
-          ? c.spine
-              ? Offset(-w - c.gap, c.grab.dy) // turned over flat onto the page beside it, past the gutter
-              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
-          : c.grab; // flat on the page
-    _curlAnim.forward(from: 0);
-  }
-
-  void _onCurlTick() {
-    final c = _curl;
-    if (c == null) return;
-    c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_curlAnim.value))!;
-    _curlMoved.value++;
-  }
-
-  /// A curl is playing out after the finger let go (turning, or springing back): taps and keys wait for it (user,
-  /// 2026-09-30) - one during a spring-back skipped a page, from the last page it even opened the next book.
-  bool get _curlSettling => _curl != null && _curlAnim.isAnimating;
-
-  /// The turn is over: let go before halfway -> back to where it started, and nothing counted; else the turn counts.
-  void _endCurl({bool cancel = false}) {
-    final c = _curl;
-    if (c == null) return;
-    final back = cancel || !c.completing;
-    if (back) pc?.jumpToPage(c.from); // while _curl is still set: not counted as a turn (_onPage)
-    _curl = null;
-    if (!back) host.turned(index);
-    _maybeIdle();
-    _changed();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
-  }
+    ..onUpdate = ((d) { if (_curlMode) { _curl.dragUpdate(d, _area); } else { _slide?.update(d); } })
+    ..onEnd = ((d) { if (_curlMode) { _curl.dragEnd(d); } else { _slide?.end(d); } })
+    ..onCancel = (() { if (_curlMode) { _curl.dragEnd(DragEndDetails()); } else { _slide?.cancel(); } });
 
   /// Another turn while one is playing (or a jump): finish that one at once.
-  void finishCurlNow() {
-    if (_curl == null) return;
-    _curlAnim.stop();
-    _endCurl();
-  }
-
-  Offset? _dragStartScreen;
-
-  void _curlDragStart(DragStartDetails d) {
-    finishCurlNow(); // a quick second swipe: the turn still playing ends at once instead of eating this one
-    _dragStart = _reading(d.localPosition);
-    _dragStartScreen = d.localPosition;
-  }
-
-  /// A drag can start anywhere on the screen: the distance from where it starts to the edge it moves towards is
-  /// the whole turn (so from the middle, half the screen turns the page fully) - the page doesn't have to be taken
-  /// by its edge.
-  void _curlDragUpdate(DragUpdateDetails d) {
-    final s = _dragStart, s0 = _dragStartScreen;
-    if (s == null || s0 == null) return;
-    final p = _reading(d.localPosition);
-    if (_curl == null) {
-      final dx = p.dx - s.dx;
-      if (dx.abs() < 4) return;
-      final next = dx < 0;
-      final page = _curlRect(next ? _at : _at - 1);
-      final at = _pagePoint(s0, page);
-      final grab = Offset(page.width, at.dy.clamp(0.0, page.height));
-      if (!_startCurl(next: next, page: page, grab: grab,
-          finger: next ? grab : Offset(_goneAt(page, _at - 1), grab.dy))) {
-        _dragStart = null;
-        return;
-      }
-    }
-    final c = _curl!;
-    if (_curlAnim.isAnimating) return;
-    final w = c.page.width, gone = _gone(c);
-    final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
-    final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
-    final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
-    // the grabbed point follows the pointer up and down as well (user, 2026-10-22: "grab the top right corner of the
-    // page and drag it down left"; it went half the way) - PageCurl.pinned keeps the spine down
-    final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy);
-    c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
-    _curlMoved.value++;
-  }
-
-  void _curlDragEnd(DragEndDetails d) {
-    final c = _curl;
-    _dragStart = null;
-    if (c == null || _curlAnim.isAnimating) return;
-    final w = c.page.width, gone = _gone(c);
-    var vx = d.velocity.pixelsPerSecond.dx;
-    if (rtl) vx = -vx;
-    final turned = (w - c.finger.dx) / (w - gone); // 0 = flat on this page, 1 = turned away
-    // a flick (diagonal ones carry less sideways speed) or a slow drag about a third of the way
-    final complete = c.forward
-        ? vx < -250 || (vx < 250 && turned > 0.3)
-        : vx > 250 || (vx > -250 && turned < 0.7);
-    _animateCurl(complete: complete);
-  }
+  void finishCurlNow() => _curl.finishNow();
 
   // ---- the pages on screen
 
@@ -959,7 +774,7 @@ class ComicRenderer extends Renderer {
               // (drags that turn: the turn area over the pages, below)
               onTapUp: (d) => _onTapUp(d, box.maxWidth),
               child: RepaintBoundary(
-                key: _pagesKey,
+                key: _curl.boundary,
                 // the background inside the snapshots: transparent there, the bars round a page let the new view
                 // show through what a turn holds of the old one (user, 2026-10-17: the spread beside the cover "just
                 // pops into existence as soon as the curl starts")
@@ -998,21 +813,7 @@ class ComicRenderer extends Renderer {
         }),
         // a drag that turns the page, told from the page's own gestures (the zoom, scrolling) before they hear it
         Positioned.fill(child: TurnDragArea(configure: _configureTurn)),
-        if (_curl != null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Stack(fit: StackFit.expand, children: [
-                if (_curl!.under != null)
-                  _curl!.underClip == null
-                      ? RawImage(image: _curl!.under, fit: BoxFit.fill)
-                      : ClipRect(clipper: _RectClip(_curl!.underClip!),
-                          child: RawImage(image: _curl!.under, fit: BoxFit.fill)),
-                if (!_curl!.pending)
-                  CustomPaint(painter: _CurlLayer(_curl!, mirror: rtl, moved: _curlMoved,
-                      shader: _curlShader ??= PageCurl.loaded!.fragmentShader())),
-              ]),
-            ),
-          ),
+        Positioned.fill(child: _curl.overlay()),
       ];
 
   /// The page view's item [v]: a page - or, two pages up, a spread: a pair joined side by side as one picture (fit,
@@ -1553,98 +1354,6 @@ class ComicRenderer extends Renderer {
     _thumbQueue.clear();
     _thumbShown = null;
   }
-}
-
-/// What a test can see of the curl being drawn.
-@visibleForTesting
-abstract interface class CurlLayer {
-  bool get mirror;
-
-  /// The page curling (two pages up: a pair's later page).
-  Rect get page;
-
-  /// What of the view from before the turn stays over it meanwhile (two pages up, forward: the earlier page's
-  /// picture); null: none, or all of it.
-  Rect? get held;
-
-  /// The page on the curling one's back (two pages up: a snapshot of the view holding it), and the curling page's own
-  /// snapshot; [back] null: paper.
-  ui.Image? get back;
-  ui.Image get sheet;
-
-  /// Where the grabbed edge is now (page coordinates, reading direction).
-  Offset get finger;
-
-  /// Turning over onto the page beside it, attached at the spine.
-  bool get spine;
-}
-
-/// The curl drawn where it is now; repainted as it moves ([moved]), without rebuilding the reader.
-class _CurlLayer extends CustomPainter implements CurlLayer {
-  _CurlLayer(this.curl, {required this.mirror, required Listenable moved, required this.shader}) : super(repaint: moved);
-  final _Curl curl;
-  @override
-  final bool mirror;
-  final ui.FragmentShader shader;
-  @override
-  Rect get page => curl.page;
-  @override
-  Rect? get held => curl.underClip;
-  @override
-  Offset get finger => curl.finger;
-  @override
-  bool get spine => curl.spine;
-  @override
-  ui.Image? get back => curl.back;
-  @override
-  ui.Image get sheet => curl.sheet;
-
-  @override
-  void paint(Canvas canvas, Size size) => PageCurlPainter(program: PageCurl.loaded!, sheet: curl.sheet,
-          page: curl.page, grab: curl.grab, finger: curl.finger, mirror: mirror, shader: shader, spine: curl.spine,
-          back: curl.back, gap: curl.gap)
-      .paint(canvas, size);
-
-  @override
-  bool shouldRepaint(_CurlLayer o) => !identical(o.curl, curl) || o.mirror != mirror;
-}
-
-/// A page turn in progress (3D page curl).
-class _Curl {
-  _Curl({required this.sheet, required this.forward, required this.page, required this.grab, required this.finger,
-      required this.from, this.under, this.underClip, this.pending = false, this.spine = false, this.gap = 0});
-  ui.Image sheet; // the page that curls: this one going forward; the previous one coming back
-  final double gap; // two pages up: the gutter it turns over (on screen; [_gapOn])
-  final ui.Image? under; // going back: this page, covering the view until the previous one has uncurled
-  final Rect? underClip; // only this part of [under] (two pages up, forward: the earlier page's side)
-  final bool spine; // a pair's page: turns over onto the one beside it, attached at the gutter (PageCurl.spineRadius)
-  final bool forward;
-  final Rect page; // the curling page's image on screen - only it curls, not the bars around it
-  final Offset grab; // where the page was taken hold of (its right edge, page coordinates in reading direction)
-  Offset finger; // where that point is now
-  final int from; // the page before the turn, to go back to if it's let go
-  bool pending; // going back: the previous page's snapshot isn't taken yet
-  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
-  Timer? backTimer; // its second snapshot
-  bool completing = true;
-  Offset animFrom = Offset.zero, animTo = Offset.zero;
-
-  void dispose() {
-    backTimer?.cancel();
-    sheet.dispose();
-    if (under != null && !identical(under, sheet)) under!.dispose();
-    if (back != null && !identical(back, sheet) && !identical(back, under)) back!.dispose();
-  }
-}
-
-/// Clips to a fixed rectangle.
-class _RectClip extends CustomClipper<Rect> {
-  _RectClip(this.rect);
-  final Rect rect;
-  @override
-  Rect getClip(Size size) => rect;
-  @override
-  bool shouldReclip(_RectClip old) => old.rect != rect;
 }
 
 /// Lets go of the least recently used pictures in [pictures] (most recent last) until there are at most [count] of
