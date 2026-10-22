@@ -263,6 +263,20 @@ Future<(String, int)?> appVersionInfo() async {
   }
 }
 
+/// The app's own background, where no book sets another (lib/main.dart's scaffold colour).
+const appBackground = Color(0xFF0B0B0C);
+
+/// Windows: the title bar in [colour] - the colour of what's right under it (user, 2026-10-22: "the colour of the
+/// title bar should match the colour of the background"); dark or light text to suit. Elsewhere, nothing.
+Future<void> setTitleBarColour(Color colour) async {
+  if (defaultTargetPlatform != TargetPlatform.windows) return;
+  try {
+    await _channel.invokeMethod('titleBar', colour.toARGB32());
+  } catch (_) {
+    // no native side
+  }
+}
+
 /// Opens a link in the device's browser. False if it couldn't.
 Future<bool> openUrl(String url) async {
   try {

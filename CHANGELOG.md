@@ -21,6 +21,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Windows: in a book the title bar takes the reader's colour - the page colour, or with an inset page the colour round it - with dark text and buttons on a light page, and goes back to the app's own when the book closes.
 - Filters: a series view's Status section always offers all four statuses, so opening the panel no longer sends four extra searches to Komga to find which ones the view has.
 - Windows: the title bar in the app's colours - the app's black, a light title and buttons, a dark border - whatever the system's light or dark setting. Windows' own buttons, snap layouts and dragging are unchanged.
 

@@ -232,6 +232,10 @@ class EpubRenderer extends Renderer {
 
   @override
   Color get background => AppSettings.instance.epub.colours.background;
+
+  /// An inset page: the surround round the sheet is what's along the top.
+  @override
+  Color get edge => _ready && _sheet != null ? surround(background) : background;
   @override
   Color ink(double alpha) => AppSettings.instance.epub.colours.text.withValues(alpha: alpha);
 

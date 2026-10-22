@@ -21,6 +21,7 @@ import '../reader/renderer.dart';
 import '../reader_keys.dart';
 import '../screen.dart';
 import '../settings.dart';
+import '../widgets/title_bar_colour.dart';
 import '../widgets/error_text.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
@@ -761,7 +762,8 @@ class _ReaderScreenState extends State<ReaderScreen>
     }());
     final r = _renderer;
     final bg = r?.background ?? Colors.black;
-    return PopScope(
+    // Windows: the title bar in what's along the top of the reader (the page colour, or an inset page's surround)
+    return TitleBarColour(colour: () => _renderer?.edge ?? Colors.black, changes: _settings, child: PopScope(
       // Back (tablet or remote) closes the controls first, then the book
       canPop: !_menu,
       onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
@@ -878,7 +880,7 @@ class _ReaderScreenState extends State<ReaderScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 
   bool _cursorHidden = false;

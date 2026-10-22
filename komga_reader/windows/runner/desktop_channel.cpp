@@ -1,5 +1,7 @@
 #include "desktop_channel.h"
 
+#include "win32_window.h"
+
 #include <flutter/standard_method_codec.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -164,6 +166,16 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       result->Success();
     } else if (m == "brightness" || m == "getBrightness") {
       result->Success();  // no backlight control on a desktop monitor
+    } else if (m == "titleBar") {
+      // the title bar in the colour under it (0xAARRGGBB)
+      if (args && std::holds_alternative<int64_t>(*args)) {
+        const auto argb = static_cast<uint32_t>(std::get<int64_t>(*args));
+        Win32Window::SetCaptionColour(window_, RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF));
+      } else if (args && std::holds_alternative<int32_t>(*args)) {
+        const auto argb = static_cast<uint32_t>(std::get<int32_t>(*args));
+        Win32Window::SetCaptionColour(window_, RGB((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF));
+      }
+      result->Success();
     } else if (m == "canRotate") {
       result->Success(flutter::EncodableValue(CanRotate()));
     } else if (m == "holdOrientation") {
