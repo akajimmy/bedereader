@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart' show PageData;
 import 'package:komga_reader/reader/comic_renderer.dart';
+import 'package:komga_reader/reader/webtoon_view.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -79,13 +80,43 @@ void main() {
     expect(second.top, first.bottom, reason: 'edge to edge');
   });
 
-  testWidgets('on a screen wider than tall, a centred column as wide as the strip would be held upright (user, '
-      '2026-10-22)', (tester) async {
+  testWidgets("by default at its own size - one picture pixel to a screen pixel, centred (user, 2026-10-22: \"default "
+      'should be to show at native resolution"; it was blown up to the screen held upright); Fit width: edge to edge',
+      (tester) async {
     await open(tester, size: const Size(1600, 1000));
+    Rect first() =>
+        tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
+    expect(first().width, 800, reason: "its own 800 px (the default fit, Fit screen, is a webtoon's own size)");
+    expect(first().center.dx, 800, reason: 'centred');
+    expect(first().height, 1280);
+
+    AppSettings.instance.setDefault(const ReaderPrefs(fit: FitMode.width));
+    await tester.pump();
+    await tester.pump();
+    expect(first().width, 1600, reason: 'Fit width: edge to edge');
+    expect(first().height, 2560, reason: 'in proportion');
+  });
+
+  testWidgets('its own size on a denser screen: 800 picture pixels at 2 screen pixels a point are 400 wide; never '
+      'wider than the screen', (tester) async {
+    tester.view.devicePixelRatio = 2;
+    await open(tester, size: const Size(1600, 2400)); // (physical: 800 x 1200 points)
+    tester.view.devicePixelRatio = 2;
+    await tester.pump();
     final first = tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
-    expect(first.width, 1000, reason: 'the screen held upright: its height');
-    expect(first.center.dx, 800, reason: 'centred');
-    expect(first.height, 1600, reason: '800 x 1280 at 1000 wide');
+    expect(first.width, 400);
+    expect(WebtoonView.columnWidth(const Size(300, 600), fill: false, imageWidth: 800, pixelRatio: 1), 300,
+        reason: 'a narrower screen: its width');
+  });
+
+  testWidgets("Page scrolling: the wheel goes a screen at a time, not by how far it's spun (user, 2026-10-22: Page "
+      'felt like Smooth)', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(webtoonScroll: WebtoonScroll.page));
+    await open(tester);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 100))); // one notch
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(ComicRenderer.pageStep * 1200, 1), reason: 'one notch: a screen');
   });
 
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
@@ -125,18 +156,29 @@ void main() {
     await settle(tester);
     expect(strip(tester).pixels, closeTo(ComicRenderer.pageStep * 1200, 1), reason: 'Page: most of a screen');
 
-    // a held key: its repeats glide on, a little each - no leaps of a screen
-    final before = strip(tester).pixels;
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 40));
-      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+    // a held key: Page - a screen each time the last one has landed, never part of one
+    Future<double> hold() async {
+      final before = strip(tester).pixels;
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+      }
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+      await settle(tester);
+      return strip(tester).pixels - before;
     }
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
-    await settle(tester);
-    final moved = strip(tester).pixels - before;
+
+    final screens = await hold() / (ComicRenderer.pageStep * 1200);
+    expect(screens, closeTo(screens.roundToDouble(), 0.01), reason: 'whole screens: $screens');
+    expect(screens, inInclusiveRange(1, 3), reason: 'one per glide, not one per repeat');
+
+    // Smooth: its repeats glide on, a little each - no leaps of a screen
+    AppSettings.instance.setDisplay(const DisplayPrefs());
+    await tester.pump();
+    final moved = await hold();
     expect(moved, greaterThan(0), reason: 'it scrolled');
-    expect(moved, lessThan(1200 * (ComicRenderer.pageStep + 10 * ComicRenderer.heldStep) + 1),
+    expect(moved, lessThan(1200 * (ComicRenderer.smoothStep + 10 * ComicRenderer.heldStep) + 1),
         reason: 'the first press a step, the repeats a little each');
   });
 
