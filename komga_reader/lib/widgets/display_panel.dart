@@ -396,32 +396,45 @@ class _BrightnessRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = s.display.brightness;
+    const label = Text('Brightness', style: TextStyle(fontSize: 14.5));
+    final auto = FilterChip(
+      label: const Text('Auto'),
+      selected: b == null,
+      visualDensity: VisualDensity.compact,
+      onSelected: (auto) async {
+        if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
+        final now = await getScreenBrightness();
+        s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
+      },
+    );
+    final slider = BrightnessPreview(child: Semantics(
+      label: 'Screen brightness',
+      child: MediaQuery(
+        data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
+        child: Slider(value: (b ?? 0.6).clamp(0.0, 1.0), divisions: 20, // 5% steps
+            onChanged: b == null ? null : (v) => s.setDisplay(s.display.copyWith(brightness: () => v))),
+      ),
+    ));
+    final value = Text(b == null ? 'Auto' : b < DisplayPrefs.dimZone ? 'Extra dim' : '${(b * 100).round()}%',
+        textAlign: TextAlign.right, style: const TextStyle(color: hintColour, fontSize: 12.5));
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
-      child: Row(children: [
-        const SizedBox(width: 92, child: Text('Brightness', style: TextStyle(fontSize: 14.5))),
-        FilterChip(
-          label: const Text('Auto'),
-          selected: b == null,
-          visualDensity: VisualDensity.compact,
-          onSelected: (auto) async {
-            if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
-            final now = await getScreenBrightness();
-            s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
-          },
-        ),
-        Expanded(child: BrightnessPreview(child: Semantics(
-          label: 'Screen brightness',
-          child: MediaQuery(
-            data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
-            child: Slider(value: (b ?? 0.6).clamp(0.0, 1.0), divisions: 20, // 5% steps
-                onChanged: b == null ? null : (v) => s.setDisplay(s.display.copyWith(brightness: () => v))),
-          ),
-        ))),
-        SizedBox(width: 62, child: Text(
-            b == null ? 'Auto' : b < DisplayPrefs.dimZone ? 'Extra dim' : '${(b * 100).round()}%',
-            textAlign: TextAlign.right, style: const TextStyle(color: hintColour, fontSize: 12.5))),
-      ]),
+      child: LayoutBuilder(builder: (context, box) {
+        // a phone's narrow sheet (or a large text size): the label and Auto on a line, the slider and its value under
+        // them - on one line it ran off the edge (320 wide at 130%)
+        if (box.maxWidth < 380) {
+          return Column(children: [
+            Row(children: [const Expanded(child: label), auto]),
+            Row(children: [Expanded(child: slider), SizedBox(width: 62, child: value)]),
+          ]);
+        }
+        return Row(children: [
+          const SizedBox(width: 92, child: label),
+          auto,
+          Expanded(child: slider),
+          SizedBox(width: 62, child: value),
+        ]);
+      }),
     );
   }
 }

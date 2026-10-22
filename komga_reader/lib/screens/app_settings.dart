@@ -97,6 +97,44 @@ class AppSettingsScreen extends StatefulWidget {
 class _AppSettingsScreenState extends State<AppSettingsScreen> {
   late SettingsPage _page = widget.initialPage;
 
+  /// The pages' entries in the side list, for Left from the page (below).
+  final _navNodes = {for (final p in SettingsPage.values) p: FocusNode(debugLabel: 'settings-${p.name}')};
+
+  /// The page beside the list (its controls are under it).
+  final _pageNode = FocusNode(canRequestFocus: false, skipTraversal: true);
+
+  @override
+  void dispose() {
+    for (final n in _navNodes.values) {
+      n.dispose();
+    }
+    _pageNode.dispose();
+    super.dispose();
+  }
+
+  /// The remote's Left on the page: the usual move left while it stays on the page or lands in the side list - else
+  /// back to the page's entry in the list. The slim buttons (2026-10-21) are lower than the list's entries, so a row's
+  /// first control could line up with none of them, and Flutter's move left went to the top bar or nowhere (it goes by
+  /// what's level with it).
+  KeyEventResult _leftToList(FocusNode _, KeyEvent e) {
+    if ((e is! KeyDownEvent && e is! KeyRepeatEvent) || e.logicalKey != LogicalKeyboardKey.arrowLeft) {
+      return KeyEventResult.ignored;
+    }
+    final at = FocusManager.instance.primaryFocus;
+    if (at == null || !at.focusInDirection(TraversalDirection.left)) {
+      _navNodes[_page]!.requestFocus();
+      return KeyEventResult.handled;
+    }
+    // the move takes effect in a microtask: once it has, where did it land?
+    scheduleMicrotask(() {
+      final now = FocusManager.instance.primaryFocus;
+      if (now == null || !(now.ancestors.contains(_pageNode) || _navNodes.containsValue(now))) {
+        _navNodes[_page]!.requestFocus();
+      }
+    });
+    return KeyEventResult.handled;
+  }
+
   List<SettingsPage> get _pages => [
         for (final p in SettingsPage.values)
           if (p != SettingsPage.downloads || Downloads.instance.ready) p,
@@ -119,13 +157,17 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 for (final section in SettingsSection.values) ...[
                   _SectionHeading(section.label),
                   for (final p in _pages)
-                    if (p.section == section) _NavItem(page: p, selected: p == _page, onTap: () => _go(p)),
+                    if (p.section == section)
+                      _NavItem(page: p, selected: p == _page, node: _navNodes[p]!, onTap: () => _go(p)),
                 ],
               ]),
             ),
             const VerticalDivider(width: 1, color: Color(0xFF26282E)),
             Expanded(
-              child: Align(
+              child: Focus(
+                focusNode: _pageNode,
+                onKeyEvent: _leftToList,
+                child: Align(
                 alignment: Alignment.topLeft,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 680),
@@ -133,6 +175,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   // audit, 2026-09-30)
                   child: ListView(key: ValueKey(_page), padding: const EdgeInsets.fromLTRB(24, 16, 24, 40), children: page),
                 ),
+              ),
               ),
             ),
           ]);
@@ -847,9 +890,10 @@ class _SectionHeading extends StatelessWidget {
 
 /// A page in the side list (wide screens).
 class _NavItem extends StatelessWidget {
-  const _NavItem({required this.page, required this.selected, required this.onTap});
+  const _NavItem({required this.page, required this.selected, required this.node, required this.onTap});
   final SettingsPage page;
   final bool selected;
+  final FocusNode node;
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) {
@@ -858,6 +902,7 @@ class _NavItem extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 2),
       child: ListTile(
         dense: true,
+        focusNode: node,
         selected: selected,
         selectedColor: accent,
         selectedTileColor: accent.withValues(alpha: 0.14),
