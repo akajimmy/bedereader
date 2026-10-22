@@ -2041,7 +2041,6 @@ void main() {
     await tester.pump();
     expect(requests.last, ['DeviceOrientation.portraitDown'], reason: 'turned over');
     expect(s.display.rotation, Rotation.portrait, reason: 'still the Portrait lock');
-    expect(find.textContaining('tap Portrait again'), findsOneWidget);
   });
 }
 

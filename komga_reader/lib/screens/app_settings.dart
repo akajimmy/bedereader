@@ -243,8 +243,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Over the page', children: overPageRows(s)),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
-          title: 'Skipping to the next book', // wording: user, 2026-10-07 QA
-          subtitle: 'Mark the one you leave as read?',
+          title: 'Mark read on next book', // (user, 2026-10-21: the question as the title, no description)
           choices: const [Choice(MidBook.markRead, 'Yes'), Choice(MidBook.keep, 'No'), Choice(MidBook.ask, 'Ask')],
           value: d.midBook,
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
@@ -419,7 +418,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsGroup(title: 'Text and colour', children: [
           SegmentRow<double>(
             title: 'Text size',
-            subtitle: 'This app only, on top of the device\'s own',
+            subtitle: "Relative to the device's own",
             choices: [for (final t in DisplayPrefs.textScales) Choice(t, '${(t * 100).round()}%')],
             value: s.display.textScale,
             onChanged: (t) => s.setDisplay(s.display.copyWith(textScale: t)),
@@ -438,11 +437,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ]),
           ),
         ]),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
-          child: Text("The whole app, not just the reader. In the reader, the top bar's moon switches night mode.",
-              style: TextStyle(color: hintColour, fontSize: 12)),
-        ),
       ]);
 
   /// A time (minutes after midnight) as a button that opens the time picker.
@@ -491,7 +485,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         }),
         _librariesShown(),
         const SettingsGroup(title: 'Home sections', children: [
-          NoteRow('Switch on or off; reorder with the arrows or the handle'),
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
         ]),
         ListenableBuilder(
@@ -526,7 +519,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               final h = HiddenLibraries.instance;
               final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
               return SettingsGroup(title: 'Libraries on this device', children: [
-                const NoteRow('Hidden ones are left out everywhere in the app on this device'),
                 for (final l in libs)
                   SwitchRow(
                     title: l['name'] as String? ?? '',
@@ -550,9 +542,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Storage', children: [
         SettingRow(
           title: 'Storage limit',
-          // what the limit does, with it (user, 2026-10-07 QA: it was a line of its own, with no control)
-          subtitle: '${DownloadsScreen.size(d.usedBytes)} used on this device. A book that won\'t fit waits in the '
-              'queue, and carries on when there\'s room.',
+          subtitle: '${DownloadsScreen.size(d.usedBytes)} used', // (user, 2026-10-21: just the amount)
           trailing: DropdownButton<int?>(
             value: choices.contains(current) ? current : 10,
             underline: const SizedBox.shrink(),
@@ -563,19 +553,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         if (canRotate) // Android: a PC has no mobile data to save (the same test: a phone or tablet)
           SwitchRow(
             title: 'Download on Wi-Fi only',
-            subtitle: d.waitingForWifi
-                ? 'Waiting for Wi-Fi - the queue carries on when you are back on it'
-                : 'On mobile data the queue waits, and carries on on Wi-Fi',
+            subtitle: d.waitingForWifi ? 'Waiting for Wi-Fi' : null, // (only while waiting - user, 2026-10-21)
             value: d.wifiOnly,
             onChanged: d.setWifiOnly,
           ),
         SegmentRow<DeleteRead>(
           title: "Delete a downloaded book once it's read",
-          subtitle: switch (d.deleteRead) {
-            DeleteRead.never => 'Downloads stay until you remove them',
-            DeleteRead.ask => 'Asks, once no book is open (read here, offline or elsewhere)',
-            DeleteRead.always => 'Read here, offline or elsewhere; an open book goes when you close it',
-          },
           choices: const [Choice(DeleteRead.never, 'Never'), Choice(DeleteRead.ask, 'Ask'), Choice(DeleteRead.always, 'Always')],
           value: d.deleteRead,
           onChanged: d.setDeleteRead,
@@ -594,16 +577,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     void open(Widget screen) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     return [
       SettingsGroup(title: appName, children: [
-        ActionRow(title: 'About $appName', subtitle: 'Version, author, licence, credits', icon: Icons.info_outline,
-            onTap: () => open(const AboutScreen())),
-        ActionRow(title: "What's new", subtitle: 'What changed in each build', icon: Icons.new_releases_outlined,
-            onTap: () => open(DocumentScreen.whatsNew())),
-        ActionRow(title: 'Read me', subtitle: 'What the app does, getting started, where settings live',
-            icon: Icons.menu_book_outlined, onTap: () => open(DocumentScreen.readMe())),
-        ActionRow(title: 'Third-party software', subtitle: 'Everything the app relies on, and its licences',
-            icon: Icons.extension_outlined, onTap: () => open(DocumentScreen.thirdParty())),
-        ActionRow(title: 'Error log', subtitle: 'The last errors, with their technical details', icon: Icons.report_outlined,
-            onTap: () => open(const ErrorLogScreen())),
+        // the links: titles only (user, 2026-10-21)
+        ActionRow(title: 'About $appName', icon: Icons.info_outline, onTap: () => open(const AboutScreen())),
+        ActionRow(title: "What's new", icon: Icons.new_releases_outlined, onTap: () => open(DocumentScreen.whatsNew())),
+        ActionRow(title: 'Read me', icon: Icons.menu_book_outlined, onTap: () => open(DocumentScreen.readMe())),
+        ActionRow(title: 'Third-party software', icon: Icons.extension_outlined,
+            onTap: () => open(DocumentScreen.thirdParty())),
+        ActionRow(title: 'Error log', icon: Icons.report_outlined, onTap: () => open(const ErrorLogScreen())),
       ]),
       SettingsGroup(title: 'This device', children: [
         ActionRow(
