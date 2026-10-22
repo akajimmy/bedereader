@@ -7,6 +7,24 @@ import 'support/helpers.dart';
 /// The shared setting rows (widgets/setting_rows.dart): how they look and how they lay out. Moved here from
 /// row_nav_test, which is about Up / Down only (test audit, 2026-09-30).
 void main() {
+  testWidgets('slim buttons (user, 2026-10-21: the mock-ups\' A): the choice in force a tint of the accent with light '
+      'accent text, not the solid accent; a lighter outline; lower than before', (tester) async {
+    const accent = Colors.blue;
+    await tester.pumpWidget(MaterialApp(theme: ThemeData(colorScheme: const ColorScheme.dark(primary: accent)),
+        home: Scaffold(body: SettingsGroup(children: [
+          SegmentRow<int>(title: 'Fit', value: 2, onChanged: (_) {},
+              choices: const [Choice(1, 'Screen'), Choice(2, 'Width'), Choice(3, 'Height')]),
+        ]))));
+    final b = tester.widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>));
+    final bg = b.style!.backgroundColor!.resolve({WidgetState.selected})!;
+    expect(bg.a, lessThan(0.5), reason: 'a tint');
+    expect((bg.r, bg.g, bg.b), (accent.r, accent.g, accent.b), reason: 'of the accent');
+    final fg = b.style!.foregroundColor!.resolve({WidgetState.selected})!;
+    expect(fg.computeLuminance(), greaterThan(accent.computeLuminance()), reason: 'lighter than the accent');
+    expect(b.style!.side!.resolve({})!.color, const Color(0xFF4A4D55));
+    expect(tester.getSize(find.byType(SegmentedButton<int>)).height, lessThan(36), reason: 'lower');
+  });
+
   testWidgets('disabled (following the defaults), the choice in force is still highlighted', (tester) async {
     await tester.pumpWidget(MaterialApp(theme: ThemeData(colorScheme: const ColorScheme.dark(primary: Colors.blue)),
         home: Scaffold(body: SettingsGroup(children: [
@@ -17,7 +35,7 @@ void main() {
     expect(b.onSelectionChanged, isNull); // disabled
     final bg = b.style!.backgroundColor!.resolve({WidgetState.selected, WidgetState.disabled});
     expect(bg, isNotNull);
-    expect(bg!.a, greaterThan(0.2)); // a dimmed accent, not nothing
+    expect(bg!.a, greaterThan(0.05)); // a dimmed accent tint, not nothing
     expect(b.style!.backgroundColor!.resolve({WidgetState.disabled}), isNull); // the others as usual
   });
 
@@ -65,8 +83,8 @@ void main() {
     final row = tester.getRect(find.byType(SettingsGroup));
     // the premise, measured in the font in use (SegmentRow's own sum): the long row has no room beside its label
     final ctx = tester.element(find.text('Keep it'));
-    final widest = [for (final c in long) textWidth(ctx, c.label, 13)].reduce((a, b) => a > b ? a : b);
-    final own = long.length * (widest + 28);
+    final widest = [for (final c in long) textWidth(ctx, c.label, 12.5)].reduce((a, b) => a > b ? a : b);
+    final own = long.length * (widest + 18);
     expect(row.width - 28 - own, lessThan(textWidth(ctx, 'Keep it', 14.5) + 12), reason: 'too wide to sit beside');
 
     final buttons = find.byType(SegmentedButton<int>);
@@ -91,9 +109,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: SettingsGroup(children: [seg]))));
     final row = find.byWidget(seg);
     final ctx = tester.element(row);
-    // SegmentRow's sum: every segment as wide as the widest label, plus 28 each; the label gets up to 120, plus 12
-    final widest = [for (final c in seg.choices) textWidth(ctx, c.label, 13)].reduce((a, b) => a > b ? a : b);
-    final own = seg.choices.length * (widest + 28);
+    // SegmentRow's sum: every segment as wide as the widest label, plus 18 each (slim buttons, 2026-10-21); the
+    // label gets up to 120, plus 12
+    final widest = [for (final c in seg.choices) textWidth(ctx, c.label, 12.5)].reduce((a, b) => a > b ? a : b);
+    final own = seg.choices.length * (widest + 18);
     final room = textWidth(ctx, title, 14.5).clamp(0.0, 120.0) + 12;
     final fits = own + room + 28; // the narrowest window where the buttons sit beside the label
 

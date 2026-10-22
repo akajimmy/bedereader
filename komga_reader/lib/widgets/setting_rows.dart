@@ -355,16 +355,16 @@ class SegmentRow<T> extends StatelessWidget {
   final bool markRoom; // room for a mark kept whether one shows or not: the buttons never change size (user)
 
   /// How wide the buttons come out: every segment is as wide as the widest (its text, or an icon), plus padding
-  /// and borders.
+  /// and borders (slim buttons - user, 2026-10-21: 8 a side).
   double _width(BuildContext context) {
     var widest = 0.0;
     for (final c in choices) {
       final w = c.icon != null || c.iconWidget != null
           ? 22.0
-          : textWidth(context, c.label, 13) + (c.mark != null || markRoom ? 22 : 0); // (a mark: 16 and a gap)
+          : textWidth(context, c.label, 12.5) + (c.mark != null || markRoom ? 22 : 0); // (a mark: 16 and a gap)
       if (w > widest) widest = w;
     }
-    return choices.length * (widest + 28);
+    return choices.length * (widest + 18);
   }
 
   @override
@@ -395,22 +395,29 @@ class SegmentRow<T> extends StatelessWidget {
     });
   }
 
+  /// The choice in force, as slim buttons show it: the accent as a tint, its text a light accent (user, 2026-10-21:
+  /// the solid accent buttons were part of the clutter).
+  static Color selectedFill(ColorScheme scheme) => scheme.primary.withValues(alpha: 0.24);
+  static Color selectedText(ColorScheme scheme) => Color.lerp(scheme.primary, Colors.white, 0.5)!;
+
   Widget _buttons(BuildContext context, {bool shrinkLabels = false}) {
     final scheme = Theme.of(context).colorScheme;
     return SegmentedButton<T>(
           expandedInsets: EdgeInsets.zero, // fills its width: every segment as wide as the others
+          // slim buttons (user, 2026-10-21, the mock-ups' A): lower, a lighter outline, the choice in force a tint
           style: ButtonStyle(
-            visualDensity: VisualDensity.compact,
+            visualDensity: const VisualDensity(horizontal: -2, vertical: -3),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13)),
-            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 10)),
+            textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 12.5)),
+            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 8)),
+            side: const WidgetStatePropertyAll(BorderSide(color: Color(0xFF4A4D55))),
             // disabled (a series following the defaults), the choice in force stays highlighted - dimmed - so the
             // value shows; Flutter draws a disabled selection with no highlight at all (user, 2026-09-30)
             backgroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? (s.contains(WidgetState.disabled) ? scheme.primary.withValues(alpha: 0.35) : scheme.primary)
+                ? (s.contains(WidgetState.disabled) ? scheme.primary.withValues(alpha: 0.12) : selectedFill(scheme))
                 : null),
             foregroundColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? (s.contains(WidgetState.disabled) ? Colors.white70 : scheme.onPrimary)
+                ? (s.contains(WidgetState.disabled) ? Colors.white54 : selectedText(scheme))
                 : null),
           ),
           showSelectedIcon: false,
@@ -466,9 +473,10 @@ class SliderRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 2, 14, 2),
       child: LayoutBuilder(builder: (context, box) {
-        // a narrow row (the reader's side sheet): the label and value on a line, the slider the full width under
-        // them - beside a label it got only ~120 px there (tablet bug, 2026-09-30)
-        if (icon == null && box.maxWidth < 440) {
+        // a narrow row (a phone's bottom sheet): the label and value on a line, the slider the full width under
+        // them - beside a label it got only ~120 px there (tablet bug, 2026-09-30). The reader's side panel (460 since
+        // 2026-10-21) keeps it beside its label, on one line.
+        if (icon == null && box.maxWidth < 380) {
           return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Padding(
               padding: const EdgeInsets.only(top: 8),

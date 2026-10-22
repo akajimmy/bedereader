@@ -113,18 +113,34 @@ void main() {
     expect(EpubPrefs.fromJson(const {'paragraphGap': 'large'}).paragraphGap.ems, 1);
   });
 
-  testWidgets("the font choices keep their size in the reader's side sheet (380 wide): they wrap under the label, "
-      'not shrunk to fit beside it (user: shrunk until they could not be read)', (tester) async {
+  testWidgets('font face (user, 2026-10-21: "show current, when tapped, give choice"): the current font in its own '
+      'face; tapped, every font in its own face with a line of sample text, the current one marked; picked, it\'s '
+      'set and the list closes', (tester) async {
+    addTearDown(() => AppSettings.instance.setEpub(const EpubPrefs()));
+    AppSettings.instance.setEpub(const EpubPrefs(font: EpubFont.literata));
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(
-        width: 380,
-        child: Builder(builder: (c) => SingleChildScrollView(
+        width: 460,
+        child: ListenableBuilder(listenable: AppSettings.instance, builder: (c, _) => SingleChildScrollView(
             child: Column(children: epubPanelRows(c, AppSettings.instance)))))))));
     await tester.pump();
+    Text shown(String label) => tester.widget<Text>(find.text(label).first);
+    expect(shown('Literata').style!.fontFamily, 'Literata', reason: 'the current font, in its face');
+    expect(find.text('Lora'), findsNothing, reason: 'the others not listed until asked');
+    await tester.tap(find.byType(FontPicker));
+    await tester.pumpAndSettle();
     for (final f in EpubFont.values) {
-      // on screen (getRect takes in any scaling round it; getSize wouldn't)
-      expect(tester.getRect(find.widgetWithText(ChoiceChip, f.label)).height, greaterThanOrEqualTo(30),
-          reason: '${f.label}: full size');
+      final name = find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.text(f.label));
+      expect(name, findsOneWidget, reason: f.label);
+      expect(tester.widget<Text>(name).style!.fontFamily, f.family, reason: '${f.label} in its own face');
     }
+    expect(find.text('The quick brown fox'), findsNWidgets(EpubFont.values.length), reason: 'sample text');
+    expect(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.byIcon(Icons.check)),
+        findsOneWidget, reason: 'the current one marked');
+    await tester.tap(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.text('Lora')));
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.epub.font, EpubFont.lora);
+    expect(find.byType(PopupMenuItem<EpubFont>), findsNothing, reason: 'closed');
+    expect(shown('Lora').style!.fontFamily, 'Lora');
   });
 
   Future<void> wait(WidgetTester tester, Duration d) async {

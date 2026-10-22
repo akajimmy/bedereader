@@ -64,7 +64,8 @@ Future<void> showReaderPanelFrame(BuildContext context, {required String title,
     _show(context, (side) => _Panel(title: title, side: side, groups: (s) => children(context, s)));
 
 const _sheetColour = Color(0xF2141416);
-const _sideWidth = 380.0;
+// (user, 2026-10-21: 380 broke most rows onto two lines - "the look is cluttered")
+const sideWidth = 460.0;
 
 Future<void> _show(BuildContext context, Widget Function(bool side) panel) {
   if (MediaQuery.sizeOf(context).width < 700) {
@@ -86,7 +87,7 @@ Future<void> _show(BuildContext context, Widget Function(bool side) panel) {
     pageBuilder: (context, _, __) => Align(
       alignment: Alignment.centerRight,
       child: SizedBox(
-        width: _sideWidth,
+        width: sideWidth,
         height: double.infinity,
         child: Material(color: _sheetColour, child: SafeArea(left: false, child: panel(true))),
       ),
@@ -380,28 +381,49 @@ List<Widget> brightnessRows(AppSettings s) {
       )),
     ];
   }
-  return [
-    BrightnessPreview(child: SliderRow(
-      label: 'Screen brightness',
-      divisions: 20, // 5% steps
-      value: d.brightness ?? 0.6,
-      enabled: d.brightness != null,
-      valueText: d.brightness == null
-          ? 'Auto'
-          : d.brightness! < DisplayPrefs.dimZone ? 'Extra dim' : '${(d.brightness! * 100).round()}%',
-      onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v)),
-    )),
-    SwitchRow(
-      title: 'Automatic brightness',
-      value: d.brightness == null,
-      onChanged: (auto) async {
-        if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
-        // start from the current screen level, so nothing jumps until the slider moves
-        final now = await getScreenBrightness();
-        s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
-      },
-    ),
-  ];
+  // one line (user, 2026-10-21: "keep the two, reconsider the layout for compactness"): the label, Auto, the slider
+  // and its value. Auto before the slider: a remote's Left / Right move the slider, so it reaches Auto first (Up /
+  // Down land on a row's first control)
+  return [_BrightnessRow(s)];
+}
+
+/// Screen brightness on one line, with backlight control: [Auto] - the system's own - then the slider, greyed while
+/// Auto is on. Auto off starts from the screen's level now, so nothing jumps until the slider moves.
+class _BrightnessRow extends StatelessWidget {
+  const _BrightnessRow(this.s);
+  final AppSettings s;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = s.display.brightness;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
+      child: Row(children: [
+        const SizedBox(width: 92, child: Text('Brightness', style: TextStyle(fontSize: 14.5))),
+        FilterChip(
+          label: const Text('Auto'),
+          selected: b == null,
+          visualDensity: VisualDensity.compact,
+          onSelected: (auto) async {
+            if (auto) return s.setDisplay(s.display.copyWith(brightness: () => null));
+            final now = await getScreenBrightness();
+            s.setDisplay(s.display.copyWith(brightness: () => now == null ? 0.6 : DisplayPrefs.sliderFor(now)));
+          },
+        ),
+        Expanded(child: BrightnessPreview(child: Semantics(
+          label: 'Screen brightness',
+          child: MediaQuery(
+            data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
+            child: Slider(value: (b ?? 0.6).clamp(0.0, 1.0), divisions: 20, // 5% steps
+                onChanged: b == null ? null : (v) => s.setDisplay(s.display.copyWith(brightness: () => v))),
+          ),
+        ))),
+        SizedBox(width: 62, child: Text(
+            b == null ? 'Auto' : b < DisplayPrefs.dimZone ? 'Extra dim' : '${(b * 100).round()}%',
+            textAlign: TextAlign.right, style: const TextStyle(color: hintColour, fontSize: 12.5))),
+      ]),
+    );
+  }
 }
 
 /// Shows the reader's brightness on the whole screen while [child] (its slider) is in use - a finger on it, or the
