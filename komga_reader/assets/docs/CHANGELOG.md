@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- The page strip is centred when the whole book fits across the screen.
+
 **Changed**
 
 - Settings say less: most lines under a setting are gone (Direction, Dual page mode, Double-tap to zoom, Rotation, Keep the screen on, Chapters start on, Delete once read, Night mode, the Library & Home notes, the About links). "Skipping to the next book" is now "Mark read on next book". Inset page reads "The page as a sheet, the screen round it"; Text size "Relative to the device's own"; Storage limit just the amount used; Wi-Fi only says something only while waiting for Wi-Fi. In the reader's panel, Komga's direction for a series shows on the Auto button's tooltip.

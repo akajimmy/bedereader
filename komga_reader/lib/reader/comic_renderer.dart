@@ -1306,13 +1306,15 @@ class ComicRenderer extends Renderer {
         color: readerBarColour,
         child: LayoutBuilder(builder: (context, box) {
           final w = _tileWidth(box.maxWidth), h = w / _stripAspect;
+          // the whole book fits across: the strip in the middle, not against the start (user, 2026-10-22)
+          final side = math.max(8.0, (box.maxWidth - ((last + 1) * (w + _stripGap) - _stripGap)) / 2);
           return SizedBox(
             height: h + 16 + 10, // room for the way-back mark under a tile
             child: ListView.builder(
               controller: _stripScroll,
               scrollDirection: Axis.horizontal,
               reverse: rtl,
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              padding: EdgeInsets.fromLTRB(side, 8, side, 0),
               itemExtent: w + _stripGap,
               itemCount: last + 1,
               itemBuilder: (context, i) {

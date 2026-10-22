@@ -1606,6 +1606,25 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
       });
 
+      testWidgets('a book whose pages all fit across: the strip in the middle (user, 2026-10-22)', (tester) async {
+        tester.view.physicalSize = const Size(2000, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await openLoaded(tester, pages: 6);
+        await key(tester, LogicalKeyboardKey.enter); // controls
+        await tester.tap(find.byTooltip('Show pages'));
+        await tester.pump();
+        await tester.pump();
+        final screen = tester.getRect(find.byKey(strip));
+        final first = tester.getRect(tile(0)), lastTile = tester.getRect(tile(5));
+        final left = first.left < lastTile.left ? first.left : lastTile.left;
+        final right = first.right > lastTile.right ? first.right : lastTile.right;
+        // (each tile's gap is on its trailing side: the row ends a gap short of its last tile's slot)
+        expect(left - screen.left, closeTo(screen.right - right, 1), reason: 'as far from either edge');
+        expect(left - screen.left, greaterThan(100), reason: 'not against the start');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
       testWidgets('on a phone-width screen the page picked is in the middle of the strip, far into a book too (its '
           'tiles were taken as 2 px wider than they are: ~200 px off by page 100 - code review 2026-10-05, #10)',
           (tester) async {
