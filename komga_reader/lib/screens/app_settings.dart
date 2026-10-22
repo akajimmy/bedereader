@@ -243,7 +243,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Over the page', children: overPageRows(s)),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
-          title: 'Mark read on next book', // (user, 2026-10-21: the question as the title, no description)
+          // (user, 2026-10-21: the question as the title, no description; 2026-10-22: the reader's own Next book icon
+          // in it, "not the emoji")
+          title: 'Mark current read on ${SettingRow.iconHere} (Next Book)',
+          titleIcon: Icons.skip_next,
           choices: const [Choice(MidBook.markRead, 'Yes'), Choice(MidBook.keep, 'No'), Choice(MidBook.ask, 'Ask')],
           value: d.midBook,
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),

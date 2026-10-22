@@ -79,6 +79,22 @@ void main() {
     expect(narrow.width, greaterThan(320 - 2 * 14 - 28 - 1), reason: "the row's width, not shrunk inside it");
   });
 
+  testWidgets("a button's own icon in a title (user, 2026-10-22: Next book's, \"not the emoji\"): drawn inline where "
+      'the title marks it, between the words, not the marker', (tester) async {
+    setView(tester, const Size(1400, 800));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
+      SegmentRow<int>(title: 'a ${SettingRow.iconHere} b', titleIcon: Icons.skip_next, value: 1, onChanged: (_) {},
+          choices: const [Choice(1, 'x'), Choice(2, 'y')]),
+    ]))));
+    final icon = find.byIcon(Icons.skip_next);
+    expect(icon, findsOneWidget);
+    final title = find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().startsWith('a '));
+    expect(tester.widget<RichText>(title).text.toPlainText(), isNot(contains(SettingRow.iconHere)));
+    final t = tester.getRect(title), i = tester.getRect(icon);
+    expect(i.left, greaterThan(t.left), reason: 'after the first word');
+    expect(i.right, lessThan(t.right), reason: 'before the last');
+  });
+
   testWidgets('every choice under its label, the full width of the row - a short one too, with room beside it '
       '(user, 2026-10-22: "all the selection controls go to their own line, full width of the space allowed")',
       (tester) async {
