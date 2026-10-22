@@ -223,6 +223,9 @@ class _ReaderPanel extends StatelessWidget {
                 ),
               ),
           ]),
+        // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
+        // this device's
+        if (readsAsStrip(p, komgaDirection)) SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s)]),
         // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
         // Settings only)
         SettingsGroup(title: 'Screen', children: [
@@ -301,6 +304,12 @@ Widget fitIcon(FitMode f, {double size = 20, Color? color}) => switch (f) {
           style: TextStyle(fontSize: size * 0.55, fontWeight: FontWeight.w800, color: color, height: 1)))),
     };
 
+/// Whether a series with [p] reads as a webtoon's strip: Vertical scroll, or Auto where Komga ([komgaDirection]) says
+/// Webtoon - as the comic reader decides it (ComicRenderer.webtoon).
+bool readsAsStrip(ReaderPrefs p, String? komgaDirection) =>
+    p.direction == ReadingDirection.vertical ||
+    (p.direction == ReadingDirection.auto && komgaDirection == 'WEBTOON');
+
 /// The page layout for [p] (a series, or the defaults): fit, reading direction and background. [icons]: fit and
 /// direction as icons (the reader's narrow sheet).
 List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
@@ -314,8 +323,10 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
   };
   // a webtoon (Vertical scroll, or Auto where Komga says Webtoon): its own size or Fit width - the only two there
   // (user, 2026-10-22)
-  final strip = p.direction == ReadingDirection.vertical ||
-      (p.direction == ReadingDirection.auto && komgaDirection == 'WEBTOON');
+  final strip = readsAsStrip(p, komgaDirection);
+  // in the reader's panel ([icons]) a webtoon has no use for a direction or two pages and a gutter (user,
+  // 2026-10-22: "direction makes no sense, gutter makes no sense") - Settings keeps them, to set a default
+  final paged = !(strip && icons);
   return [
     SegmentRow<FitMode>(
       title: 'Fit',
@@ -331,7 +342,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       onChanged: (f) => setP(p.copyWith(fit: f)),
       enabled: enabled,
     ),
-    SegmentRow<ReadingDirection>(
+    if (paged) SegmentRow<ReadingDirection>(
       title: 'Direction', // (no description - user, 2026-10-21)
       choices: [ // [icons]: a wand for Auto, arrows for the two directions (the names are their tooltips)
         // Auto's tooltip says which way Komga has the series (it was the row's description - user, 2026-10-21)
@@ -347,7 +358,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       enabled: enabled,
     ),
     // two pages side by side (user, 2026-10-16: in the reader's panel, a default a series can override)
-    SegmentRow<TwoPages>(
+    if (paged) SegmentRow<TwoPages>(
       title: 'Dual page mode',
       choices: const [
         Choice(TwoPages.off, 'Off'),
@@ -359,7 +370,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       enabled: enabled,
     ),
     // the space between a pair's pages (user, 2026-10-20; in steps since 2026-10-21), with dual page mode on
-    if (p.twoPages != TwoPages.off)
+    if (paged && p.twoPages != TwoPages.off)
       SegmentRow<double>(
         title: 'Gutter',
         choices: [for (final g in ReaderPrefs.gutters) Choice(g, g == 0 ? 'None' : '${g.round()} px')],
