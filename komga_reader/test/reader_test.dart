@@ -2177,8 +2177,9 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets("rotation (Windows and the rest): one way up, the usual one; the way up isn't asked", (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+  testWidgets("rotation off Android (macOS here; Windows has its own lock - pc_rotation_test): one way up, the usual "
+      "one; the way up isn't asked", (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final (requests, asked) = recordOrientation(tester, () => 'reversePortrait');
     final s = AppSettings.instance;
