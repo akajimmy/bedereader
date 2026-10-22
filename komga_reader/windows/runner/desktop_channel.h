@@ -19,12 +19,16 @@ class DesktopChannel {
   // Called when the window closes: remembers its size/position (the pre-fullscreen one if in fullscreen).
   void SaveWindow();
 
+  // Called once the window is first shown (normal or maximized): a full screen asked for before that is applied now.
+  void WindowShown();
+
  private:
   void SetFullscreen(bool on);
 
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
   HWND window_;
   bool fullscreen_ = false;
+  bool pending_fullscreen_ = false;  // asked for before the window was shown (the one remembered from last time)
   LONG saved_style_ = 0;
   WINDOWPLACEMENT saved_placement_{};
 };

@@ -34,6 +34,7 @@ bool FlutterWindow::OnCreate() {
     } else {
       this->Show();
     }
+    if (desktop_) desktop_->WindowShown();  // a full screen asked for meanwhile, now the window is up
   });
 
   // Flutter can complete the first frame before the "show window" callback is

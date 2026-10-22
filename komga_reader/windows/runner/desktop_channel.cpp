@@ -186,7 +186,7 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       result->Success(flutter::EncodableValue(ok));
     } else if (m == "fullscreen") {
       if (args && std::holds_alternative<bool>(*args)) SetFullscreen(std::get<bool>(*args));
-      result->Success(flutter::EncodableValue(fullscreen_));
+      result->Success(flutter::EncodableValue(fullscreen_ || pending_fullscreen_));
     } else if (m == "storageDir") {
       std::wstring dir = AppDir();
       if (dir.empty()) {
@@ -216,7 +216,7 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       }
       result->Success(flutter::EncodableValue(ok));
     } else if (m == "isFullscreen") {
-      result->Success(flutter::EncodableValue(fullscreen_));
+      result->Success(flutter::EncodableValue(fullscreen_ || pending_fullscreen_));
     } else if (m == "battery") {
       // for the reader's clock: level 0..100 and charging; nothing on a PC without a battery
       SYSTEM_POWER_STATUS s;
@@ -236,6 +236,13 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
 
 // Borderless window covering the whole monitor; leaving restores the previous style and placement.
 void DesktopChannel::SetFullscreen(bool on) {
+  // not shown yet - the full screen remembered from last time is asked for at start, before the first frame: kept
+  // for WindowShown. Applied to the hidden window, the size to come back to was the hidden one's, and showing it
+  // maximized afterwards put the full-screen window back in the work area (code review 2026-10-05, #31)
+  if (!IsWindowVisible(window_)) {
+    pending_fullscreen_ = on;
+    return;
+  }
   if (on == fullscreen_) return;
   if (on) {
     saved_style_ = GetWindowLong(window_, GWL_STYLE);
@@ -252,6 +259,12 @@ void DesktopChannel::SetFullscreen(bool on) {
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
   }
   fullscreen_ = on;
+}
+
+void DesktopChannel::WindowShown() {
+  if (!pending_fullscreen_) return;
+  pending_fullscreen_ = false;
+  SetFullscreen(true);  // from the window as shown (maximized or not): leaving full screen comes back to it
 }
 
 // Remembered in physical screen pixels, restored as they are (code review, 2026-09-30): saving divided by this
