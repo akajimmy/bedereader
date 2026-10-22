@@ -195,11 +195,10 @@ class ReaderSlider extends StatelessWidget {
                         xs: [for (final p in m) xOf(p, width)],
                         thumb: xOf(shown.clamp(0, top), width),
                         rtl: rtl,
-                        // the Slider's own tick colours (Material 3, 2023: its default here)
-                        before: SliderTheme.of(context).activeTickMarkColor ??
-                            Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.38),
-                        after: SliderTheme.of(context).inactiveTickMarkColor ??
-                            Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+                        // the Slider's own tick colours (Material 3, 2023: its default here), stronger - its 38%
+                        // read as too faint for a chapter (user, build 137: "a bit more prominent")
+                        before: Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.6),
+                        after: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
@@ -243,7 +242,9 @@ class SliderMarksPainter extends CustomPainter {
   final Color before, after;
   final bool rtl;
 
-  static const radius = 1.0; // the Slider's: a quarter of the track's height (4)
+  // the Slider's are a quarter of the track's height (4): 1 - too faint for a chapter (user, build 137: "a bit more
+  // prominent" - "just a bit"): 1.5
+  static const radius = 1.5;
   static const thumbRoom = 10.0; // the thumb's radius: no dot shows through it
 
   @override

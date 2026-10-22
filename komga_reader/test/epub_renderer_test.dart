@@ -738,6 +738,11 @@ void main() {
     expect(marks.xs.single, closeTo(inset + chapter1 / (total - 1) * (r.width - 2 * inset), 0.5));
     expect(SliderTheme.of(tester.element(find.byType(Slider))).tickMarkShape, SliderTickMarkShape.noTickMark,
         reason: "the Slider's own dot per page: none");
+    // a bit more prominent than the Slider's own dots (user, build 137): larger than its radius (a quarter of the
+    // track's 4) and stronger than its 38%
+    expect(SliderMarksPainter.radius, greaterThan(4 / 4));
+    expect(marks.before.a, greaterThan(0.38));
+    expect(marks.after.a, greaterThan(0.38));
   });
 
   testWidgets('the slider: the position shown follows the finger while dragging; the page changes when it lifts',
