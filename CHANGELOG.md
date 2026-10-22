@@ -11,6 +11,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- **Fewer settings, fewer steps** (the settings review, step 2):
+  - Gone: Page previews (previews are always on), Page strip as a setting (the Pages button in the reader keeps it),
+    the image's Brightness and Contrast, and the Reset box at the bottom of each Settings page (Reset this device's
+    settings, under About, stays).
+  - Crop edges: Off, 2%, 4%, 6%. Keep the screen on: Off, 10 min, Always. Gutter: comics None, 2, 8, 16 px; eBooks
+    12, 24, 48 px. Line spacing: Tight, Normal, Loose. Paragraph spacing: Book's, None, Normal, Large. Margins: Widest
+    went.
+  - A setting saved at a step that went is back to its default.
 - **Settings and the reader's panels, lighter** (the settings review, step 1) - choices are slimmer buttons, the one
   in force a tint of the accent colour rather than solid; the reader's side panel is wider (460 px), so most rows
   fit on one line; screen brightness is one line - Brightness, Auto, the slider; eBooks' Font face shows the font in
