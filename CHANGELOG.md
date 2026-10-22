@@ -21,6 +21,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Windows: the brightness row is the same as on the tablet - Brightness, Auto, the slider. Auto means no dimming; turned off it starts from full, and the slider dims the screen.
 - A sloppy tap stays a tap: a finger has to move 18 px before a drag turns the page, and a mouse click that wobbles under 12 px is still a click (in comics it used to be lost). A quick movement under 32 px is no flick: it turns only if dragged far enough.
 - Dragging to turn pages works the same for a finger, a mouse and a pen, in comics and eBooks, with Slide or Curl. Any drag that moves sideways (up to about 60 degrees from horizontal; 30 on a page that scrolls up and down) turns the page, wherever it starts. A mouse can now curl or slide a comic page from anywhere on it (before, only from outside the picture). With Curl, the page is taken hold of where you press and follows the pointer up and down too, so a corner drawn down and to the left comes with it. Zoomed in, a drag still moves the page; two fingers still zoom.
 - eBooks: hold to select. A drag that moves at once turns the page; press and hold a moment first to select text, with a finger or a mouse. Double-click still selects a word.

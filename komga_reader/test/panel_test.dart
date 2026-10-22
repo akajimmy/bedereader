@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/screen.dart' show hasBacklightControl;
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
@@ -164,6 +165,26 @@ void main() {
     await tester.tap(auto);
     await tester.pumpAndSettle();
     expect(AppSettings.instance.display.brightness, isNull, reason: 'Auto on: the system again');
+  });
+
+  testWidgets('a PC (no backlight to set): the same brightness row as Android (user, 2026-10-22) - Auto is no '
+      'dimming; off, it starts from full, so nothing changes until the slider moves; the slider dims, with no '
+      '"Extra dim" step', (tester) async {
+    DisplayPrefs.backlightControl = false;
+    addTearDown(() => DisplayPrefs.backlightControl = hasBacklightControl);
+    AppSettings.instance.setDisplay(const DisplayPrefs()); // Auto
+    await openPanel(tester, const Size(1280, 800));
+    final auto = find.widgetWithText(SegmentedButton<bool>, 'Auto');
+    expect(auto, findsOneWidget);
+    expect(AppSettings.instance.display.dimOverlay, 0, reason: 'Auto: no dimming');
+    await tester.tap(auto);
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.display.brightness, 1.0, reason: 'from full');
+    expect(AppSettings.instance.display.dimOverlay, 0, reason: 'nothing changed yet');
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(brightness: () => 0.1));
+    await tester.pump();
+    expect(AppSettings.instance.display.dimOverlay, greaterThan(0.5), reason: 'dimmed');
+    expect(find.text('10%'), findsOneWidget, reason: 'a level, not "Extra dim"');
   });
 
   testWidgets('side sheet: every choice fits inside the sheet (none cut off at the right edge)', (tester) async {
