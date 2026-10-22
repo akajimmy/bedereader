@@ -528,12 +528,13 @@ class ComicRenderer extends Renderer {
   void _webtoonStep(int direction, {required bool held}) {
     final s = _strip;
     if (s == null) return;
-    final share = held
-        ? heldStep
-        : _settings.display.webtoonScroll == WebtoonScroll.page
-            ? pageStep
-            : smoothStep;
-    s.glide(direction * share * s.viewport,
+    if (_settings.display.webtoonScroll == WebtoonScroll.page) {
+      // Page: every press a screen (a strip of it kept) - held, a screen each time the last one has landed
+      if (held && s.gliding) return;
+      s.glide(direction * pageStep * s.viewport, duration: const Duration(milliseconds: 260));
+      return;
+    }
+    s.glide(direction * (held ? heldStep : smoothStep) * s.viewport,
         duration: held ? const Duration(milliseconds: 120) : const Duration(milliseconds: 260));
   }
 
@@ -552,7 +553,20 @@ class ComicRenderer extends Renderer {
   void wheel(double dy) {
     if (host.controlsUp || pc == null) return;
     if (webtoon) {
-      // as far as the wheel spins, gliding (user, 2026-10-22: "smooth scroll, based on wheel spin distance")
+      if (_settings.display.webtoonScroll == WebtoonScroll.page) {
+        // Page: the wheel's notches add up to a screen at a time, as a comic's turn a page (user, 2026-10-22: it
+        // "feels very similar to smooth scroll" - the wheel glided by its spin in both)
+        _wheelAcc += dy;
+        if (_wheelAcc.abs() < 40) return;
+        final down = _wheelAcc > 0;
+        _wheelAcc = 0;
+        final now = DateTime.now();
+        if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
+        _lastWheelTurn = now;
+        _webtoonStep(down ? 1 : -1, held: false);
+        return;
+      }
+      // Smooth: as far as the wheel spins, gliding (user, 2026-10-22: "smooth scroll, based on wheel spin distance")
       _strip?.glide(dy, duration: const Duration(milliseconds: 140));
       return;
     }
@@ -850,6 +864,8 @@ class ComicRenderer extends Renderer {
               controller: strip,
               onPlace: _onStripPlace,
               background: background,
+              fillWidth: WebtoonView.fitOf(prefs.fit) == FitMode.width,
+              onWheel: wheel,
             ),
           ),
         ),
@@ -1048,17 +1064,24 @@ class ComicRenderer extends Renderer {
 
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
   @override
-  List<BarButton> topButtons() => [
-        if (!webtoon) BarButton(
-          fitNode,
-          IconButton(
-            focusNode: fitNode,
-            tooltip: prefs.fit == FitMode.original ? 'Original size' : 'Fit ${prefs.fit.label.toLowerCase()}',
-            onPressed: () => _setFit(FitMode.values[(prefs.fit.index + 1) % FitMode.values.length]),
-            icon: fitIcon(prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
-          ),
+  List<BarButton> topButtons() {
+    // a webtoon: Original size or Fit width, one press the other (user, 2026-10-22)
+    final fit = webtoon ? WebtoonView.fitOf(prefs.fit) : prefs.fit;
+    final next = webtoon
+        ? (fit == FitMode.width ? FitMode.original : FitMode.width)
+        : FitMode.values[(fit.index + 1) % FitMode.values.length];
+    return [
+      BarButton(
+        fitNode,
+        IconButton(
+          focusNode: fitNode,
+          tooltip: fit == FitMode.original ? 'Original size' : 'Fit ${fit.label.toLowerCase()}',
+          onPressed: () => _setFit(next),
+          icon: fitIcon(fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
         ),
-      ];
+      ),
+    ];
+  }
 
   /// The bottom bar's own: the page strip, image settings (a series), reader settings.
   @override

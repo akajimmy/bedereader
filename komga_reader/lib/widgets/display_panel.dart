@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../reader/position_row.dart';
+import '../reader/webtoon_view.dart' show WebtoonView;
 import '../screens/app_settings.dart';
 import '../synced_ids.dart';
 import '../screen.dart';
@@ -311,17 +312,22 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
     null => null,
     _ => 'left to right',
   };
+  // a webtoon (Vertical scroll, or Auto where Komga says Webtoon): its own size or Fit width - the only two there
+  // (user, 2026-10-22)
+  final strip = p.direction == ReadingDirection.vertical ||
+      (p.direction == ReadingDirection.auto && komgaDirection == 'WEBTOON');
   return [
     SegmentRow<FitMode>(
       title: 'Fit',
       choices: [
-        Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
+        if (!strip) Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
         Choice(FitMode.width, icons ? 'Fit width' : 'Width', iconWidget: icons ? fitIcon(FitMode.width) : null),
-        Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
+        if (!strip)
+          Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
         Choice(FitMode.original, icons ? 'Original size' : 'Original',
             iconWidget: icons ? fitIcon(FitMode.original) : null),
       ],
-      value: p.fit,
+      value: strip ? WebtoonView.fitOf(p.fit) : p.fit,
       onChanged: (f) => setP(p.copyWith(fit: f)),
       enabled: enabled,
     ),
