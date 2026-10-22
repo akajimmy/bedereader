@@ -18,12 +18,6 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
       SettingsGroup(title: 'Formatting', synced: true, children: _formattingRows(e, set)),
       SettingsGroup(title: 'Page', synced: true, children: [
         _coloursRow(e, set),
-        SegmentRow<EpubTurn>(
-          title: 'Page turn',
-          choices: const [Choice(EpubTurn.none, 'None'), Choice(EpubTurn.slide, 'Slide'), Choice(EpubTurn.curl, 'Curl')],
-          value: e.turn,
-          onChanged: (v) => set(e.copyWith(turn: v)),
-        ),
         _twoPagesRow(e, set),
         _chapterStartRow(e, set),
         _gutterRow(e, set),
@@ -56,6 +50,14 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
     ]),
   ];
 }
+
+/// eBooks' page turn - this device's (user, 2026-10-21; it was synced), called as comics' is.
+Widget epubTurnRow(AppSettings s) => SegmentRow<EpubTurn>(
+      title: 'Page turn',
+      choices: const [Choice(EpubTurn.none, 'None'), Choice(EpubTurn.slide, 'Slide'), Choice(EpubTurn.curl, 'Curl')],
+      value: s.display.epubTurn,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(epubTurn: v)),
+    );
 
 /// Dual page mode (user, 2026-10-16: eBooks as comics - in the reader's panel, synced).
 Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoPages>(

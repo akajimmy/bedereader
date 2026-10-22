@@ -52,7 +52,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
     // instant turns: the slide's animation doesn't advance on these tests' clock (taps every 50 ms restarted it)
-    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.none));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.none)); addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
     counts = EpubCountStore.instance;
     EpubCountStore.instance = MemoryCountStore(); // each test's books counted afresh, never on disk
   });

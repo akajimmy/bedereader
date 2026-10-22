@@ -234,7 +234,7 @@ void main() {
   testWidgets('the curl, two pages up: the right-hand page turns over onto the left, attached at the spine; the '
       'left-hand one held meanwhile', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
-    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.curl)); addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
@@ -260,7 +260,7 @@ void main() {
   testWidgets('the curl back, two pages up: the left side shows the previous spread at once, under the page lifting '
       'away; only the right side holds the old view until the page lands on it (user, 2026-10-16)', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
-    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.curl)); addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 500));
@@ -282,7 +282,7 @@ void main() {
   testWidgets('the curl with Inset page (user, 2026-10-16: "how are you handling page curl + inset page"): the '
       'right-hand sheet turns, about the middle of the gap, and lands over the left one, the same size', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
-    AppSettings.instance.setEpub(const EpubPrefs(turn: EpubTurn.curl));
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.curl)); addTearDown(() => AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(epubTurn: EpubTurn.slide)));
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();

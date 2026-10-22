@@ -299,10 +299,9 @@ void main() {
       await d.setCap(Downloads.gb);
       await d.setDeleteRead(DeleteRead.always);
     });
-    await conn.setAutoSwitch(true);
     // every setting kept on this device, away from its default (test audit, 2026-09-30)
-    s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 5, nightSchedule: true,
-        textScale: 1.3, accent: Accent.green));
+    s.setDisplay(const DisplayPrefs(night: true, posterSize: PosterSize.large, screenOn: 10, nightSchedule: true,
+        textScale: 1.3, accent: Accent.green, epubTurn: EpubTurn.curl));
     await ReaderKeys.instance.assign(ReaderAction.next, LogicalKeyboardKey.keyN);
     await HiddenLibraries.instance.setHidden('L1', true);
     await HomeSections.instance.set('ondeck', false);
@@ -320,21 +319,19 @@ void main() {
     expect(s.display.night, isTrue); // cancelled: nothing changed
     expect(ReaderKeys.instance.isDefault, isFalse);
     expect(HiddenLibraries.instance.ids, {'L1'});
-    expect(conn.autoSwitch, isTrue);
 
     await tester.tap(find.widgetWithText(TextButton, 'Reset'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, 'Reset').last); // confirm
     await tester.pumpAndSettle();
     final back = s.display;
-    expect([back.night, back.posterSize, back.screenOn, back.nightSchedule, back.textScale, back.accent],
-        [false, PosterSize.medium, 0, false, 1.0, Accent.blue]);
+    expect([back.night, back.posterSize, back.screenOn, back.nightSchedule, back.textScale, back.accent, back.epubTurn],
+        [false, PosterSize.medium, 0, false, 1.0, Accent.blue, EpubTurn.slide]);
     expect(ReaderKeys.instance.isDefault, isTrue, reason: "the reader's keys");
     expect(ReaderKeys.instance.actionFor(LogicalKeyboardKey.keyN), isNull);
     expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');
     expect(HomeSections.instance['ondeck'], isTrue);
     expect(p.getString('view.library.all'), isNull);
-    expect(conn.autoSwitch, isFalse, reason: "If Komga can't be reached: Ask");
     expect(d.capBytes, Downloads.defaultCap);
     expect(d.deleteRead, DeleteRead.never);
     expect(s.series['S9']?.fit, FitMode.width);

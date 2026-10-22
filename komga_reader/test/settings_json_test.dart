@@ -84,7 +84,7 @@ void main() {
   test("this device's settings (DisplayPrefs) survive the saved form; a save without them gets the defaults; a value "
       "that isn't a choice gets the default", () {
     // every setting away from its default at once: (name, read it, the value set, its default)
-    const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl,
+    const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl, epubTurn: EpubTurn.curl,
         comics: KindPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true,
             pageNote: PageNote.off, hiddenSpots: ['left']),
         ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn,
@@ -99,6 +99,7 @@ void main() {
       ('warmth', (d) => d.warmth, 0.3, 0.5),
       ('brightness', (d) => d.brightness, 0.4, null),
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
+      ('epubTurn', (d) => d.epubTurn, EpubTurn.curl, EpubTurn.slide), // eBooks' page turn: this device's (2026-10-21)
       // each kind its own (user, 2026-10-07)
       ('comics pageNote', (d) => d.comics.pageNote, PageNote.off, PageNote.afterTurn),
       ('comics rotation', (d) => d.comics.rotation, Rotation.landscape, Rotation.auto),

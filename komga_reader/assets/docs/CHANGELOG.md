@@ -11,6 +11,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- **Pins always sync** - the Sync pins across devices switch went; every device has the shared list.
+- **Page turn, for comics and eBooks alike** - both called Page turn, both kept on each device (eBooks' was synced:
+  it starts at Slide). eBooks' is in Settings > eBooks > Screen.
+- **Komga out of reach: the app asks, both ways** - "Can't reach Komga" offers Retry or Go offline (no Stay online),
+  and once Komga answers again, "Komga is reachable again" offers Go online or Stay offline - asked once no book is
+  open; closed, it stays offline. The "If Komga can't be reached" setting (and its automatic switch) went.
 - **Fewer settings, fewer steps** (the settings review, step 2):
   - Gone: Page previews (previews are always on), Page strip as a setting (the Pages button in the reader keeps it),
     the image's Brightness and Contrast, and the Reset box at the bottom of each Settings page (Reset this device's

@@ -34,7 +34,7 @@ void main() {
       "no paragraph spacing (Default), slide; a size out of range gets the default", () {
     const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.75, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book, twoPages: TwoPages.always,
+        paragraphGap: EpubParagraphGap.book, twoPages: TwoPages.always,
         chapterStart: ChapterStart.rightPage);
     expect(EpubPrefs.fromJson(changed.toJson()), changed);
     expect(EpubPrefs.fromJson(changed.toJson()).twoPages, TwoPages.always, reason: 'dual page mode (2026-10-16)');
@@ -42,8 +42,12 @@ void main() {
     expect(EpubPrefs.fromJson(changed.toJson()).chapterStart, ChapterStart.rightPage, reason: 'chapters (2026-10-18)');
     expect(EpubPrefs.fromJson(const {}).chapterStart, ChapterStart.nextPage, reason: 'saved before it: the next page');
     final d = EpubPrefs.fromJson(const {});
-    expect((d.font, d.colours, d.align, d.paragraphGap, d.hyphenate, d.turn, d.size), (EpubFont.literata,
-        EpubColours.dark, EpubAlign.justified, EpubParagraphGap.none, true, EpubTurn.slide, 19.0));
+    expect((d.font, d.colours, d.align, d.paragraphGap, d.hyphenate, d.size), (EpubFont.literata,
+        EpubColours.dark, EpubAlign.justified, EpubParagraphGap.none, true, 19.0));
+    // the page turn: this device's since 2026-10-21 (it was synced here): a save of it is left alone
+    expect(EpubPrefs.fromJson(const {'turn': 'curl'}), const EpubPrefs());
+    expect(DisplayPrefs.fromJson(const {'epubTurn': 'curl'}).epubTurn, EpubTurn.curl);
+    expect(const DisplayPrefs().epubTurn, EpubTurn.slide);
     expect(EpubPrefs.fromJson(const {'size': 400}).size, 19);
     // the old "Book's formatting" switch isn't migrated (user, 2026-10-07): ignored, the defaults
     final was = EpubPrefs.fromJson(const {'bookFormatting': true});

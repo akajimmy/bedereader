@@ -167,15 +167,19 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         showUnreachablePrompt(ctx).whenComplete(() => _prompting = false);
       }
     }
-    if (c.reachableAgain && !_wasReachable && !(c.autoSwitch && !_readerOpen)) {
-      _say('Komga is reachable again', action: SnackBarAction(label: 'Go online', onPressed: c.goOnline));
+    // reachable again: asked once no book is open (going online returns to Home)
+    if (c.reachableAgain && !_askedBack && !_readerOpen && !_prompting) {
+      final ctx = _nav.currentContext;
+      if (ctx != null) {
+        _askedBack = _prompting = true;
+        showReachableAgainPrompt(ctx).whenComplete(() => _prompting = false);
+      }
     }
-    _wasReachable = c.reachableAgain;
+    if (!c.reachableAgain) _askedBack = false;
 
     final now = c.offline;
     if (now == _wasOffline) return;
     _wasOffline = now;
-    if (c.autoSwitch && !c.forcedOffline) _say(now ? "Can't reach Komga - showing downloaded books" : 'Back online');
     if (!now && c.online != null) {
       // back online: the account's things from Komga again - changed on another device meanwhile, or never fetched
       // (an offline start loads them from this device only). What changed here is sent first, as at a start (user,
@@ -190,7 +194,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     setState(() {});
   }
 
-  bool _prompting = false, _wasReachable = false;
+  bool _prompting = false, _askedBack = false;
   bool get _readerOpen => Connection.instance.readersOpen > 0;
   final _messenger = GlobalKey<ScaffoldMessengerState>();
 

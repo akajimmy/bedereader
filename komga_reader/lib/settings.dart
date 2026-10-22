@@ -292,6 +292,7 @@ class KindPrefs {
 @immutable
 class DisplayPrefs {
   const DisplayPrefs({this.night = false, this.warmth = 0.5, this.brightness, this.pageTurn = PageTurn.swipe,
+      this.epubTurn = EpubTurn.slide,
       this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.posterSeries = true, this.posterTitle = true, this.posterDate = true,
@@ -336,7 +337,9 @@ class DisplayPrefs {
   static const alwaysOn = -1; // [screenOn]: as long as a book is open
   // (user, 2026-10-21: Off, 10 min, Always - it was 0, 5, 10, 20, 30, Always; another saved value reads as Off)
   static const screenOnChoices = [0, 10, alwaysOn];
-  final PageTurn pageTurn; // comics' page-turn animation (this device)
+  final PageTurn pageTurn; // comics' page turn (this device)
+  // eBooks' page turn - this device's too (user, 2026-10-21: "both on this device"; it was synced, in EpubPrefs)
+  final EpubTurn epubTurn;
   final double warmth; // 0..1, how amber night mode is
   final double? brightness; // null = follow the system; 0..1 where the bottom [dimZone] goes below the minimum
 
@@ -368,6 +371,7 @@ class DisplayPrefs {
 
   /// Each kind's own reading settings are changed with [withKind] (one kind) or [bothKinds].
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
+          EpubTurn? epubTurn,
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
@@ -386,6 +390,7 @@ class DisplayPrefs {
         nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
         night: night ?? this.night, warmth: warmth ?? this.warmth,
         brightness: brightness != null ? brightness() : this.brightness, pageTurn: pageTurn ?? this.pageTurn,
+        epubTurn: epubTurn ?? this.epubTurn,
         doubleTapZoom: doubleTapZoom ?? this.doubleTapZoom, midBook: midBook ?? this.midBook,
         screenOn: screenOn ?? this.screenOn, posterSize: posterSize ?? this.posterSize);
 
@@ -398,7 +403,7 @@ class DisplayPrefs {
       copyWith(comics: change(comics), ebooks: change(ebooks));
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
-      'pageTurn': pageTurn.name, 'doubleTapZoom': doubleTapZoom,
+      'pageTurn': pageTurn.name, 'epubTurn': epubTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'posterSeries': posterSeries, 'posterTitle': posterTitle, 'posterDate': posterDate,
       'ebookPosterTitle': ebookPosterTitle, 'ebookPosterAuthor': ebookPosterAuthor,
@@ -418,6 +423,7 @@ class DisplayPrefs {
         night: j['night'] == true, warmth: (j['warmth'] as num?)?.toDouble() ?? 0.5,
         brightness: (j['brightness'] as num?)?.toDouble(),
         pageTurn: pick(PageTurn.values, j['pageTurn'], PageTurn.swipe),
+        epubTurn: pick(EpubTurn.values, j['epubTurn'], EpubTurn.slide),
         doubleTapZoom: j['doubleTapZoom'] != false,
         midBook: pick(MidBook.values, j['midBook'], MidBook.ask),
         // default Off (user, 2026-09-30): "always on" drained the tablet's battery overnight when they fell asleep reading
@@ -527,7 +533,7 @@ enum EpubAlign {
 class EpubPrefs {
   const EpubPrefs({this.font = EpubFont.literata, this.size = 19, this.lineSpacing = 1.5,
       this.margins = EpubMargins.normal, this.colours = EpubColours.dark, this.align = EpubAlign.justified,
-      this.hyphenate = true, this.turn = EpubTurn.slide,
+      this.hyphenate = true,
       this.paragraphGap = EpubParagraphGap.none, this.twoPages = TwoPages.wideScreen,
       this.chapterStart = ChapterStart.nextPage, this.gutter = defaultGutter});
   final EpubFont font;
@@ -537,7 +543,6 @@ class EpubPrefs {
   final EpubColours colours;
   final EpubAlign align;
   final bool hyphenate;
-  final EpubTurn turn;
   final EpubParagraphGap paragraphGap;
 
   /// Dual page mode: two pages side by side, as an open book (user, 2026-10-16: eBooks as comics - the Aa panel).
@@ -561,17 +566,17 @@ class EpubPrefs {
   static const spacings = [1.25, 1.5, 1.75];
 
   EpubPrefs copyWith({EpubFont? font, double? size, double? lineSpacing, EpubMargins? margins, EpubColours? colours,
-          EpubAlign? align, bool? hyphenate, EpubTurn? turn,
+          EpubAlign? align, bool? hyphenate,
           EpubParagraphGap? paragraphGap, TwoPages? twoPages, ChapterStart? chapterStart, double? gutter}) =>
       EpubPrefs(font: font ?? this.font, size: size ?? this.size, lineSpacing: lineSpacing ?? this.lineSpacing,
           margins: margins ?? this.margins, colours: colours ?? this.colours, align: align ?? this.align,
-          hyphenate: hyphenate ?? this.hyphenate, turn: turn ?? this.turn,
+          hyphenate: hyphenate ?? this.hyphenate,
           paragraphGap: paragraphGap ?? this.paragraphGap, twoPages: twoPages ?? this.twoPages,
           chapterStart: chapterStart ?? this.chapterStart, gutter: gutter ?? this.gutter);
 
   Map<String, dynamic> toJson() => {'font': font.name, 'size': size, 'lineSpacing': lineSpacing,
       'margins': margins.name, 'colours': colours.name, 'align': align.name,
-      'hyphenate': hyphenate, 'turn': turn.name, 'paragraphGap': paragraphGap.name, 'twoPages': twoPages.name,
+      'hyphenate': hyphenate, 'paragraphGap': paragraphGap.name, 'twoPages': twoPages.name,
       'chapterStart': chapterStart.name, 'gutter': gutter};
 
   factory EpubPrefs.fromJson(Map<String, dynamic> j) {
@@ -587,7 +592,6 @@ class EpubPrefs {
       colours: pick(EpubColours.values, j['colours'], EpubColours.dark),
       align: pick(EpubAlign.values, j['align'], EpubAlign.justified),
       hyphenate: j['hyphenate'] != false,
-      turn: pick(EpubTurn.values, j['turn'], EpubTurn.slide),
       paragraphGap: pick(EpubParagraphGap.values, j['paragraphGap'], EpubParagraphGap.none),
       twoPages: pick(TwoPages.values, j['twoPages'], TwoPages.wideScreen),
       chapterStart: pick(ChapterStart.values, j['chapterStart'], ChapterStart.nextPage),

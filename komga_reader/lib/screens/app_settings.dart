@@ -7,7 +7,6 @@ import '../api.dart';
 import '../hidden_libraries.dart';
 import '../home_sections.dart';
 import '../ondeck_hidden.dart';
-import '../pins.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -298,6 +297,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ]),
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
         SettingsGroup(title: 'Screen', children: [
+          epubTurnRow(s),
           insetPageRow(s),
           if (canRotate) rotationRow(s, BookKind.ebooks),
         ]),
@@ -316,26 +316,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onTap: () => _signOut(context),
           ),
         ]),
-        // what goes through Komga, said in one place (user, 2026-10-07)
-        ListenableBuilder(
-          listenable: Pins.instance,
-          builder: (context, _) {
-            final pins = Pins.instance;
-            return SettingsGroup(title: "What's synced through Komga", synced: true, children: [
-              const NoteRow('The same on every device signed in to this account: comics\' Pages and Image defaults and '
-                  "each series' own; eBooks' Text, Formatting and Page settings; what's hidden "
-                  'from On deck; reading progress.'),
-              SwitchRow(
-                title: 'Sync pins across devices',
-                subtitle: pins.sync
-                    ? 'The same pins on every device signed in to this account'
-                    : 'This device has its own pins',
-                value: pins.sync,
-                onChanged: (on) => _setPinSync(context, on),
-              ),
-            ]);
-          },
-        ),
+        // what goes through Komga, said in one place (user, 2026-10-07; one line, and pins always sync - 2026-10-21)
+        const SettingsGroup(title: "What's synced through Komga", synced: true, children: [
+          NoteRow('Synced: reading settings, series settings, pins, On deck, reading progress.'),
+        ]),
         if (Connection.instance.available)
           ListenableBuilder(
             listenable: Connection.instance,
@@ -347,15 +331,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                   subtitle: c.offline ? 'Showing downloaded books only' : 'Connected to Komga',
                   value: c.offline,
                   onChanged: c.setForcedOffline,
-                ),
-                SegmentRow<bool>(
-                  title: "If Komga can't be reached",
-                  subtitle: c.autoSwitch
-                      ? 'Switches to downloaded books and back by itself'
-                      : 'Asks before switching to downloaded books',
-                  choices: const [Choice(false, 'Ask first'), Choice(true, 'Automatic')],
-                  value: c.autoSwitch,
-                  onChanged: c.setAutoSwitch,
                 ),
               ]);
             },
@@ -547,31 +522,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ),
       ];
 
-  /// Sync pins across devices (user, 2026-10-05). Back on, the shared list returns: this device's pins that it
-  /// doesn't have would go - asked first, naming how many.
-  Future<void> _setPinSync(BuildContext context, bool on) async {
-    if (on) {
-      final only = await Pins.instance.deviceOnly();
-      if (only.isNotEmpty && context.mounted) {
-        final n = only.length;
-        final ok = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text('Sync pins across devices?'),
-            content: Text("This device has $n pin${n == 1 ? '' : 's'} the shared list doesn't "
-                "(${only.map((p) => p.name).join(', ')}). Syncing shows the shared list instead - "
-                "${n == 1 ? 'that pin goes' : 'those pins go'} from this device."),
-            actions: [
-              TextButton(autofocus: true, onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-              TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Sync')),
-            ],
-          ),
-        );
-        if (ok != true) return;
-      }
-    }
-    await Pins.instance.setSync(on);
-  }
 
   late final Future<List<dynamic>> _allLibraries = widget.api.libraries();
 
@@ -706,7 +656,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
             "what's shown over the page, rotation), night mode and its schedule, text size and "
             "accent colour, the reader's keys, posters, the libraries shown, Home "
-            "sections, every screen's remembered filter and sort, \"If Komga can't be reached\", and the download "
+            "sections, every screen's remembered filter and sort, and the download "
             'limit and Delete once read.\n\nNot touched: settings synced through Komga (reading defaults, series '
             'settings, pins, On deck), your sign-in and your downloaded books.'),
         actions: [
@@ -722,7 +672,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
-    if (Connection.instance.available) await Connection.instance.setAutoSwitch(false);
     if (Downloads.instance.ready) {
       await Downloads.instance.setCap(Downloads.defaultCap);
       await Downloads.instance.setDeleteRead(DeleteRead.never);

@@ -17,21 +17,16 @@ import 'offline_komga.dart';
 /// Two ways in (user's decisions, 2026-09-28):
 /// - **by hand** (side menu / Settings, remembered across restarts). Manual wins: no checks, no prompts, until
 ///   switched off.
-/// - **when Komga can't be reached**: by default the app *asks* first ([autoSwitch] makes it switch both ways by
-///   itself) ([askPending] -> "Use downloaded books" / Retry / Stay
-///   online). Once offline that way it checks every 30 s and on returning to the app, and when Komga answers it
-///   *offers* to go back ([reachableAgain]) rather than switching by itself.
+/// - **when Komga can't be reached**: the app asks ([askPending] -> Retry / Go offline; user, 2026-10-21: the
+///   automatic switch went). Once offline that way it checks every 30 s and on returning to the app, and when Komga
+///   answers it asks whether to go back online ([reachableAgain]) - once no book is open; dismissed, it stays offline.
 class Connection extends ChangeNotifier with WidgetsBindingObserver {
   Connection._();
   static final Connection instance = Connection._();
 
   static const _key = 'offline.forced';
-  static const _autoKey = 'offline.autoSwitch';
   static const pollEvery = Duration(seconds: 30);
 
-  /// App setting (per device): false = ask before going offline and offer to come back (the default); true = switch
-  /// both ways by itself. Switching back waits until the reader is closed - going online returns to Home.
-  bool autoSwitch = false;
   int _readers = 0; // open reader screens
   int get readersOpen => _readers;
 
@@ -70,7 +65,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     online = onlineApi;
     final prefs = await SharedPreferences.getInstance();
     forcedOffline = prefs.getBool(_key) ?? false;
-    autoSwitch = prefs.getBool(_autoKey) ?? false;
+    if (prefs.containsKey('offline.autoSwitch')) await prefs.remove('offline.autoSwitch'); // (the setting went)
     keyRefused = keyPromptPending = false; // (signed in again: a new key)
     autoOffline = reachableAgain = false;
     Komga.onReachability = _onReachability;
@@ -92,22 +87,12 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  Future<void> setAutoSwitch(bool value) async {
-    autoSwitch = value;
-    await (await SharedPreferences.getInstance()).setBool(_autoKey, value);
-    notifyListeners();
-    if (value && reachableAgain) _autoBack();
-  }
-
-  /// The reader tells us it opened / closed (an automatic switch back waits for it to close).
+  /// The reader tells us it opened / closed (the "reachable again" question waits for it to close: going online
+  /// returns to Home).
   void readerOpened() => _readers++;
   void readerClosed() {
     if (_readers > 0) _readers--;
-    if (reachableAgain) Timer.run(_autoBack); // not from inside the reader's dispose
-  }
-
-  void _autoBack() {
-    if (autoSwitch && _readers == 0 && reachableAgain && !forcedOffline) unawaited(goOnline());
+    if (reachableAgain && _readers == 0) Timer.run(notifyListeners); // now it can ask (not from inside a dispose)
   }
 
   /// The prompt was answered.
@@ -126,7 +111,15 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// "Go online" (Home banner / the "reachable again" message).
+  /// "Stay offline" in the "reachable again" question (or closed): offline it stays, and not asked again until Komga
+  /// goes and comes back.
+  void stayOffline() {
+    reachableAgain = false;
+    _apply(); // (no polling: it was answered)
+    notifyListeners();
+  }
+
+  /// "Go online" (Home banner / the "reachable again" question).
   Future<void> goOnline() async {
     reachableAgain = false;
     autoOffline = false;
@@ -181,15 +174,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
         reachableAgain = true;
         _apply();
         notifyListeners();
-        _autoBack();
       }
     } else if (!offline && !forcedOffline && !_declined && !askPending && available) {
-      if (autoSwitch && hasDownloads) {
-        useDownloads(); // automatic: straight to the downloaded books
-      } else {
-        askPending = true; // ask (or, with nothing downloaded, just say Komga can't be reached)
-        notifyListeners();
-      }
+      askPending = true; // ask (or, with nothing downloaded, just say Komga can't be reached)
+      notifyListeners();
     }
   }
 
@@ -232,7 +220,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _poll?.cancel();
     _poll = null;
     online = null;
-    forcedOffline = autoOffline = askPending = reachableAgain = _declined = autoSwitch = false;
+    forcedOffline = autoOffline = askPending = reachableAgain = _declined = false;
     keyRefused = keyPromptPending = false;
     _readers = 0;
     Komga.onReachability = null;

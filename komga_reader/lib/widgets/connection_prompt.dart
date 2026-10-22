@@ -33,13 +33,33 @@ Future<bool> showKeyRefusedPrompt(BuildContext context) async {
   return false;
 }
 
-/// "Can't reach Komga": Use downloaded books / Retry / Stay online. With nothing downloaded it just says so (Retry /
-/// OK). Closes itself if Komga answers meanwhile.
+/// "Can't reach Komga": Retry / Go offline (user, 2026-10-21: "prompt the user to retry or go offline"). With nothing
+/// downloaded it just says so (Retry / OK). Closes itself if Komga answers meanwhile.
 Future<void> showUnreachablePrompt(BuildContext context) => showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (_) => const _UnreachablePrompt(),
     );
+
+/// Komga is reachable again, while offline after "can't reach Komga": Go online / Stay offline (user, 2026-10-21: "when
+/// back online prompt. if user dismisses prompt, stay in offline mode"). Closed any other way, it stays offline.
+Future<void> showReachableAgainPrompt(BuildContext context) async {
+  final c = Connection.instance;
+  final online = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      icon: const Icon(Icons.cloud_done_outlined, color: Color(0xFF4ADE80)),
+      title: const Text('Komga is reachable again'),
+      content: Text('${displayAddress(c.online?.baseUrl ?? 'The server')} answers again. Go back online?'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Stay offline')),
+        FilledButton(autofocus: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Go online')),
+      ],
+    ),
+  );
+  if (!c.reachableAgain) return; // (gone meanwhile - answered elsewhere, or Komga went again)
+  online == true ? await c.goOnline() : c.stayOffline();
+}
 
 class _UnreachablePrompt extends StatefulWidget {
   const _UnreachablePrompt();
@@ -100,14 +120,14 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
         downloads ? 'Read your downloaded books instead?' : 'Nothing is downloaded on this device to read offline.',
       ].join('\n\n')),
       actions: [
-        TextButton(onPressed: _retrying ? null : () { _close(); c.stayOnline(); }, child: Text(downloads ? 'Stay online' : 'OK')),
+        if (!downloads) TextButton(onPressed: _retrying ? null : () { _close(); c.stayOnline(); }, child: const Text('OK')),
         TextButton(
           onPressed: _retrying ? null : _retry,
           child: _retrying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Retry'),
         ),
         if (downloads)
           FilledButton(autofocus: true, onPressed: _retrying ? null : () { _close(); c.useDownloads(); },
-              child: const Text('Use downloaded books')),
+              child: const Text('Go offline')),
       ],
     );
   }
