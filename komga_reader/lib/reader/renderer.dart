@@ -166,6 +166,10 @@ abstract class Renderer extends ChangeNotifier {
   /// Up / Down step the slider too while scrubbing (comics).
   bool get sliderUpDown => false;
 
+  /// Places marked on the slider instead of a dot per place ([ReaderSlider.marks]; eBooks: where chapters start);
+  /// null: the Slider's own dots (comics: every page).
+  List<int>? get sliderMarks => null;
+
   // ---- what's said
 
   /// The position text's spots for [place] (decision 5: the title or chapter on top, the book's place left).

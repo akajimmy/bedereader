@@ -38,7 +38,7 @@ class ReaderSlider extends StatelessWidget {
   const ReaderSlider({super.key, required this.node, required this.scrub, required this.shown, required this.at,
       required this.last, required this.onJump, required this.changed, this.rtl = false, this.wayBack,
       this.markWayBack = false, this.preview, this.innerNode, this.step = 1, this.upDownStep = false,
-      this.onScrubStart, this.label});
+      this.onScrubStart, this.label, this.marks});
 
   final FocusNode node;
   final FocusNode? innerNode; // the Slider's own (the wrapper takes focus)
@@ -54,6 +54,11 @@ class ReaderSlider extends StatelessWidget {
   final bool upDownStep; // Up / Down step too while scrubbing (the comic reader's)
   final VoidCallback? onScrubStart;
   final String? label;
+
+  /// Places marked on the track with the dots the Slider draws for its steps (comics: every page, the Slider's own) -
+  /// instead of those: an eBook's chapter starts (user, 2026-10-22: "same marks used for chapters"; its pages are too
+  /// many to mark). Null: the Slider's own.
+  final List<int>? marks;
 
   /// A known inset, so the preview can sit over the thumb: the track runs edge to edge inside it.
   static const inset = 20.0;
@@ -132,10 +137,12 @@ class ReaderSlider extends StatelessWidget {
             inactiveTrackColor: Colors.white24,
             showValueIndicator: ShowValueIndicator.never, // the preview / the position text says where
             padding: const EdgeInsets.symmetric(horizontal: inset, vertical: 12),
+            tickMarkShape: marks == null ? null : SliderTickMarkShape.noTickMark,
           ),
           child: LayoutBuilder(builder: (context, box) {
             final width = box.maxWidth;
             final back = wayBack;
+            final m = marks;
             return Stack(clipBehavior: Clip.none, children: [
               Listener(
                 behavior: HitTestBehavior.opaque,
@@ -179,6 +186,24 @@ class ReaderSlider extends StatelessWidget {
                   ),
                 ),
               ),
+              if (m != null && m.isNotEmpty)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CustomPaint(
+                      key: const ValueKey('slider-marks'),
+                      painter: SliderMarksPainter(
+                        xs: [for (final p in m) xOf(p, width)],
+                        thumb: xOf(shown.clamp(0, top), width),
+                        rtl: rtl,
+                        // the Slider's own tick colours (Material 3, 2023: its default here)
+                        before: SliderTheme.of(context).activeTickMarkColor ??
+                            Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.38),
+                        after: SliderTheme.of(context).inactiveTickMarkColor ??
+                            Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.38),
+                      ),
+                    ),
+                  ),
+                ),
               // over the track, under the preview: while scrubbing, and whenever there's a place to go back to
               if (back != null && markWayBack)
                 Positioned(
@@ -203,5 +228,44 @@ class ReaderSlider extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// [ReaderSlider.marks]: a dot at each of [xs], down the middle of the track, as the Slider's own step dots - the
+/// passed ones ([before] the [thumb] in the reading direction) in [before]'s colour, the rest in [after]'s; none
+/// under the thumb.
+@visibleForTesting
+class SliderMarksPainter extends CustomPainter {
+  SliderMarksPainter({required this.xs, required this.thumb, required this.before, required this.after,
+      this.rtl = false});
+  final List<double> xs;
+  final double thumb;
+  final Color before, after;
+  final bool rtl;
+
+  static const radius = 1.0; // the Slider's: a quarter of the track's height (4)
+  static const thumbRoom = 10.0; // the thumb's radius: no dot shows through it
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final y = size.height / 2;
+    final passed = Paint()..color = before, ahead = Paint()..color = after;
+    for (final x in xs) {
+      if ((x - thumb).abs() < thumbRoom) continue;
+      canvas.drawCircle(Offset(x, y), radius, (rtl ? x > thumb : x < thumb) ? passed : ahead);
+    }
+  }
+
+  @override
+  bool shouldRepaint(SliderMarksPainter old) =>
+      old.thumb != thumb || old.before != before || old.after != after || old.rtl != rtl ||
+      !_same(old.xs, xs);
+
+  static bool _same(List<double> a, List<double> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 }

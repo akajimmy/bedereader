@@ -195,6 +195,15 @@ class EpubRenderer extends Renderer {
   int get place => _book == null || !_ready ? 0 : (_end ? _book!.totalPages! : _book!.bookPage(_chapter, _page)!);
   @override
   int get last => _book?.totalPages == null ? 0 : _book!.totalPages! - 1;
+
+  /// The slider's marks: where each chapter after the first starts (user, 2026-10-22: comics' page dots, "same marks
+  /// used for chapters" - a book's pages are too many to mark). None until the book is counted.
+  @override
+  List<int>? get sliderMarks {
+    final b = _book;
+    if (b == null || !_ready || !b.counted) return const [];
+    return {for (var c = 1; c < b.chapterCount; c++) b.bookPage(c, 0)!}.where((p) => p > 0 && p <= last).toList();
+  }
   @override
   int openedAt = 0;
   @override
