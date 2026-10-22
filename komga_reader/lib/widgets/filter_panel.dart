@@ -86,17 +86,13 @@ Future<_Values> _loadValues(FilterScope s) async {
   final v = _Values();
   final kind = safe(s.kind, ViewKind.mixed);
   final writers = safe(s.names(writerRoles, size: 1), const <String>[]);
-  Future<List<String>>? publishers, genres, statuses;
+  Future<List<String>>? publishers, genres;
   if (s.seriesView) {
     publishers = safe(s.api.publishers(libraryId: s.libraryId, collectionId: s.collectionId), const <String>[]);
     genres = safe(s.api.genres(libraryId: s.libraryId, collectionId: s.collectionId), const <String>[]);
-    // Komga has no list of the statuses in a view: one one-series search each
-    statuses = Future.wait([
-      for (final st in seriesStatuses)
-        safe(s.api.filteredSeries(libraryId: s.libraryId, collectionId: s.collectionId,
-            filter: ViewFilter(statuses: [st]), size: 1), const <String, dynamic>{})
-            .then((r) => ((r['totalElements'] as int?) ?? (r['content'] as List?)?.length ?? 0) > 0 ? st : null),
-    ]).then((l) => l.whereType<String>().toList());
+    // all four statuses, always - nothing asked (user, 2026-10-22: Komga has no list of a view's statuses, and the
+    // four one-series searches that found them were dropped; one with no series here just finds nothing)
+    v.statuses = seriesStatuses;
   }
   v.kind = await kind;
   final artists = v.kind.hasArtists ? safe(s.names(artistRoles, size: 1), const <String>[]) : null;
@@ -104,7 +100,6 @@ Future<_Values> _loadValues(FilterScope s) async {
   v.artists = artists != null && (await artists).isNotEmpty;
   if (publishers != null) v.publishers = await publishers;
   if (genres != null) v.genres = await genres;
-  if (statuses != null) v.statuses = await statuses;
   return v;
 }
 
