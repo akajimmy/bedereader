@@ -66,11 +66,6 @@ Widget epubTurnRow(AppSettings s) => SegmentRow<EpubTurn>(
 /// Dual page mode (user, 2026-10-16: eBooks as comics - in the reader's panel, synced).
 Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoPages>(
       title: 'Dual page mode',
-      subtitle: switch (e.twoPages) {
-        TwoPages.off => 'One page at a time',
-        TwoPages.wideScreen => 'Two pages side by side when the screen is wider than tall',
-        TwoPages.always => 'Two pages side by side, a tall screen too',
-      },
       choices: const [
         Choice(TwoPages.off, 'Off'),
         Choice(TwoPages.wideScreen, 'Wide screen'),
@@ -91,9 +86,6 @@ Widget _gutterRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<double
 /// Dual page mode: where a chapter starts (user, 2026-10-18: "A setting") - the next page, or a right-hand one.
 Widget _chapterStartRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<ChapterStart>(
       title: 'Chapters start on',
-      subtitle: e.chapterStart == ChapterStart.nextPage
-          ? 'Two pages up: the next page, left or right'
-          : 'Two pages up: a right-hand page, as in print - the page before it blank as needed',
       choices: const [Choice(ChapterStart.nextPage, 'Next page'), Choice(ChapterStart.rightPage, 'Right-hand page')],
       value: e.chapterStart,
       onChanged: (v) => set(e.copyWith(chapterStart: v)),

@@ -326,10 +326,11 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       enabled: enabled,
     ),
     SegmentRow<ReadingDirection>(
-      title: 'Direction',
-      subtitle: komga == null ? 'Auto follows Komga' : 'Auto follows Komga: $komga',
+      title: 'Direction', // (no description - user, 2026-10-21)
       choices: [ // [icons]: a wand for Auto, arrows for the two directions (the names are their tooltips)
-        Choice(ReadingDirection.auto, 'Auto', icon: icons ? Icons.auto_fix_high : null),
+        // Auto's tooltip says which way Komga has the series (it was the row's description - user, 2026-10-21)
+        Choice(ReadingDirection.auto, icons && komga != null ? 'Auto: $komga' : 'Auto',
+            icon: icons ? Icons.auto_fix_high : null),
         Choice(ReadingDirection.ltr, 'Left to right', icon: icons ? Icons.arrow_forward : null),
         Choice(ReadingDirection.rtl, 'Right to left', icon: icons ? Icons.arrow_back : null),
       ],
@@ -340,11 +341,6 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
     // two pages side by side (user, 2026-10-16: in the reader's panel, a default a series can override)
     SegmentRow<TwoPages>(
       title: 'Dual page mode',
-      subtitle: switch (p.twoPages) {
-        TwoPages.off => 'One page at a time',
-        TwoPages.wideScreen => 'Two pages side by side when the screen is wider than tall',
-        TwoPages.always => 'Two pages side by side, a tall screen too',
-      },
       choices: const [
         Choice(TwoPages.off, 'Off'),
         Choice(TwoPages.wideScreen, 'Wide screen'),
@@ -526,7 +522,6 @@ List<Widget> nightRows(AppSettings s) {
   return [
     SegmentRow<NightMode>(
       title: 'Night mode',
-      subtitle: m == NightMode.scheduled ? 'On and off by itself; the moon in the reader still switches it' : null,
       choices: const [Choice(NightMode.off, 'Off'), Choice(NightMode.on, 'On'), Choice(NightMode.scheduled, 'Scheduled')],
       value: m,
       onChanged: (v) => s.setDisplay(switch (v) {
@@ -574,9 +569,6 @@ Widget rotationRow(AppSettings s) {
   final rotation = s.display.rotation;
   return SegmentRow<Rotation>(
       title: 'Rotation',
-      subtitle: rotation == Rotation.auto
-          ? 'Follow the device, or stay put'
-          : 'Stays put - while reading, tap ${rotation.label} again to turn it upside down',
       // the lock in force marked as a switch: tapped again, it turns over (user, 2026-10-07)
       choices: [
         for (final r in Rotation.values)
@@ -621,12 +613,7 @@ List<Widget> overPageRows(AppSettings s) {
 /// 2026-10-11: on the settings page, not the reader's panel; "inset page", three choices - 2026-10-12).
 Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(
       title: 'Inset page',
-      subtitle: switch (s.display.insetPage) {
-        InsetPage.never => 'The page colour across the whole screen (this device)',
-        InsetPage.wideScreen => 'On a wide screen, the page in the middle, a shade apart from the screen round it '
-            '(this device)',
-        InsetPage.always => 'The page a shade apart from the screen round it, a narrow screen too (this device)',
-      },
+      subtitle: 'The page as a sheet, the screen round it',
       choices: const [
         Choice(InsetPage.never, 'Never'),
         Choice(InsetPage.wideScreen, 'Wide screen'),
@@ -638,7 +625,6 @@ Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(
 
 Widget doubleTapRow(AppSettings s) => SwitchRow(
       title: 'Double-tap to zoom',
-      subtitle: 'Taps wait a moment for a second tap',
       value: s.display.doubleTapZoom,
       onChanged: (v) => s.setDisplay(s.display.copyWith(doubleTapZoom: v)),
     );
@@ -647,11 +633,6 @@ Widget screenOnRow(AppSettings s) {
   final d = s.display;
   return SegmentRow<int>(
     title: 'Keep the screen on',
-    subtitle: d.screenOn == 0
-        ? "The device's own timeout"
-        : d.screenOn == DisplayPrefs.alwaysOn
-            ? 'As long as a book is open'
-            : 'After the last page turn or touch',
     choices: [for (final m in DisplayPrefs.screenOnChoices) Choice(m, screenOnLabel(m))],
     value: d.screenOn,
     onChanged: (m) => s.setDisplay(d.copyWith(screenOn: m)),

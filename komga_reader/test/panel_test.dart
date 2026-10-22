@@ -38,7 +38,7 @@ void main() {
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
     expect(find.text('Settings for Series: Planet Comics'), findsOneWidget);
     expect(find.text('Override defaults'), findsOneWidget);
-    expect(find.text('Auto follows Komga: right to left'), findsOneWidget);
+    expect(find.byTooltip('Auto: right to left'), findsOneWidget); // Komga's direction, on Auto
     expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
     expect(tester.takeException(), isNull);
   });
