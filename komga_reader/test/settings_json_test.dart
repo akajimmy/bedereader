@@ -9,21 +9,39 @@ import 'package:komga_reader/settings.dart';
 /// device settings) and night_schedule_test (schedule, text size, accent) - test audit, 2026-09-30.
 void main() {
   test('the Gutter (user, 2026-10-20): comics 2 px and eBooks 24 by default, saved and read back; the comic one left '
-      'out of the saved form at its default, as the other layout settings; out of range: the most', () {
-    expect(ReaderPrefs.fromJson(const ReaderPrefs(gutter: 10).toJson()).gutter, 10);
+      'out of the saved form at its default, as the other layout settings; a value that isn\'t one of the steps '
+      '(2026-10-21): the default', () {
+    expect(ReaderPrefs.fromJson(const ReaderPrefs(gutter: 8).toJson()).gutter, 8);
     expect(const ReaderPrefs().toJson().containsKey('gut'), isFalse);
     expect(ReaderPrefs.fromJson(const {}).gutter, 2);
-    expect(ReaderPrefs.fromJson(const {'gut': 900}).gutter, ReaderPrefs.maxGutter);
-    expect(const ReaderPrefs(gutter: 10, contrast: 0.2).imageReset().gutter, 10, reason: 'part of the page layout');
-    expect(EpubPrefs.fromJson(const EpubPrefs(gutter: 60).toJson()).gutter, 60);
+    expect(ReaderPrefs.fromJson(const {'gut': 10}).gutter, 2, reason: 'dialled in with the old slider: the default');
+    expect(const ReaderPrefs(gutter: 8, sharpen: true).imageReset().gutter, 8, reason: 'part of the page layout');
+    expect(EpubPrefs.fromJson(const EpubPrefs(gutter: 48).toJson()).gutter, 48);
     expect(EpubPrefs.fromJson(const {}).gutter, 24);
+    expect(EpubPrefs.fromJson(const {'gutter': 60}).gutter, 24);
+  });
+
+  test('the settings review (user, 2026-10-21) - fewer steps; a saved value that is no longer a step reads as the '
+      'default (no migration - user rule): crop, keep the screen on, line spacing, margins, paragraph spacing', () {
+    expect([for (final c in [0, 0.02, 0.04, 0.06, 0.05, 0.1]) ReaderPrefs.fromJson({'x': c}).crop],
+        [0, 0.02, 0.04, 0.06, 0, 0]);
+    expect([for (final m in [0, 10, DisplayPrefs.alwaysOn, 5, 20, 30]) DisplayPrefs.fromJson({'screenOn': m}).screenOn],
+        [0, 10, DisplayPrefs.alwaysOn, 0, 0, 0]);
+    expect([for (final l in [1.25, 1.5, 1.75, 1.0, 2.0, 1.45]) EpubPrefs.fromJson({'lineSpacing': l}).lineSpacing],
+        [1.25, 1.5, 1.75, 1.5, 1.5, 1.5]);
+    expect(EpubPrefs.fromJson(const {'margins': 'widest'}).margins, EpubMargins.normal);
+    expect(EpubPrefs.fromJson(const {'margins': 'wider'}).margins, EpubMargins.wider);
+    // Medium and Extra large keep their gaps as Normal and Large; Small and the old Large went
+    expect([for (final g in ['book', 'none', 'small', 'huge', 'tiny', 'large'])
+      EpubPrefs.fromJson({'paragraphGap': g}).paragraphGap.ems], [null, 0, 0.5, 1.5, 0, 0]);
+    // the image's brightness and contrast went: a save that has them reads without them
+    expect(ReaderPrefs.fromJson(const {'b': 0.2, 'c': -0.1, 's': true}), const ReaderPrefs(sharpen: true));
   });
   test('reader settings (ReaderPrefs) survive the JSON used for Komga sync; older saves read as they meant', () {
     // round trips
-    const p = ReaderPrefs(fit: FitMode.height, brightness: 0.1, contrast: -0.2, sharpen: true, autoLevels: true,
-        crop: 0.05);
+    const p = ReaderPrefs(fit: FitMode.height, sharpen: true, autoLevels: true, crop: 0.04);
     expect(ReaderPrefs.fromJson(p.toJson()), p);
-    expect(ReaderPrefs.fromJson(p.toJson()).crop, 0.05, reason: 'crop edges');
+    expect(ReaderPrefs.fromJson(p.toJson()).crop, 0.04, reason: 'crop edges');
     for (final direction in ReadingDirection.values) {
       expect(ReaderPrefs.fromJson(ReaderPrefs(direction: direction).toJson()).direction, direction,
           reason: 'direction ${direction.name}');
@@ -39,10 +57,10 @@ void main() {
     }
     expect(const ReaderPrefs().toJson().containsKey('tp'), isFalse);
     expect(ReaderPrefs.fromJson({'fit': 'width'}).twoPages, TwoPages.wideScreen, reason: 'saved before: Wide screen');
-    expect(const ReaderPrefs(twoPages: TwoPages.off, contrast: 0.2).imageReset().twoPages, TwoPages.off,
+    expect(const ReaderPrefs(twoPages: TwoPages.off, sharpen: true).imageReset().twoPages, TwoPages.off,
         reason: 'part of the layout: kept by an image reset');
     expect(ReaderPrefs.fromJson({'fit': 'width'}).background, ReaderBackground.black, reason: 'saved before: black');
-    expect(const ReaderPrefs(background: ReaderBackground.white, contrast: 0.2).imageReset().background,
+    expect(const ReaderPrefs(background: ReaderBackground.white, sharpen: true).imageReset().background,
         ReaderBackground.white, reason: 'part of the layout: kept by an image reset');
     final flags = ReaderPrefs.fromJson(const ReaderPrefs(ownLayout: false).toJson());
     expect([flags.ownLayout, flags.ownImage], [false, true], reason: 'the override flags');
@@ -60,7 +78,7 @@ void main() {
     }
 
     // resetting the image settings keeps the direction (part of the layout)
-    expect(const ReaderPrefs(direction: ReadingDirection.rtl, contrast: 0.2).imageReset().direction, ReadingDirection.rtl);
+    expect(const ReaderPrefs(direction: ReadingDirection.rtl, sharpen: true).imageReset().direction, ReadingDirection.rtl);
   });
 
   test("this device's settings (DisplayPrefs) survive the saved form; a save without them gets the defaults; a value "
@@ -72,9 +90,9 @@ void main() {
         ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn,
             progressBar: true, hiddenSpots: ['right', 'centre']),
         doubleTapZoom: false, midBook: MidBook.keep,
-        screenOn: 20, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
+        screenOn: 10, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, posterDate: false, insetPage: InsetPage.never,
+        pageStrip: true, posterDate: false, insetPage: InsetPage.never,
         ebookPosterTitle: false, ebookPosterAuthor: false, ebookPosterSeries: true, ebookPosterDate: true);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
@@ -94,7 +112,7 @@ void main() {
       ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
-      ('screenOn', (d) => d.screenOn, 20, 0),
+      ('screenOn', (d) => d.screenOn, 10, 0),
       ('posterSize', (d) => d.posterSize, PosterSize.small, PosterSize.medium),
       ('posterSeries', (d) => d.posterSeries, false, true),
       ('posterTitle', (d) => d.posterTitle, false, true),
@@ -103,7 +121,6 @@ void main() {
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
       ('textScale', (d) => d.textScale, 1.15, 1.0),
       ('accent', (d) => d.accent, Accent.green, Accent.blue),
-      ('pagePreviews', (d) => d.pagePreviews, false, true),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
       ('posterDate', (d) => d.posterDate, false, true), // release dates on book posters (user, 2026-10-06)
       // eBook posters' own lines (user, 2026-10-18): title and author unless changed

@@ -209,8 +209,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final p = _page;
     return [
       Text(p.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
-      if (p.scope != null)
-        Padding(padding: const EdgeInsets.only(top: 2), child: Text(p.scope!, style: const TextStyle(color: hintColour))),
       const SizedBox(height: 16),
       // the page's segmented choices share one width (a fresh column per page)
       SettingsColumn(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
@@ -249,10 +247,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           onChanged: (m) => s.setDisplay(d.copyWith(midBook: m)),
         ),
       ]),
-      _resetRow(context, 'Reading', 'Screen brightness, Keep the screen on and Next book back to the defaults.', () {
-        const z = DisplayPrefs();
-        s.setDisplay(s.display.copyWith(brightness: () => z.brightness, screenOn: z.screenOn, midBook: z.midBook));
-      }),
     ]);
   }
 
@@ -283,8 +277,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ]),
       SettingsGroup(title: 'Controls', children: [
         positionTextRow(s, BookKind.comics),
-        pagePreviewsRow(s),
-        pageStripRow(s),
       ]),
       if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.comics)]),
       SettingsGroup(title: 'Series with their own settings', synced: true, children: [
@@ -293,13 +285,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           button: n == 0 ? null : TextButton(onPressed: () => _resetSeries(context, n), child: const Text('Reset all')),
         ),
       ]),
-      _resetRow(context, 'Comics', "Every setting on this page back to the defaults - Pages and Image on every device "
-          "(they're synced). Series with their own settings keep them.", () {
-        const z = DisplayPrefs();
-        s.setDefault(const ReaderPrefs());
-        s.setDisplay(s.display.copyWith(pageTurn: z.pageTurn, doubleTapZoom: z.doubleTapZoom,
-            pagePreviews: z.pagePreviews, pageStrip: z.pageStrip, comics: z.comics));
-      }),
     ]);
   }
 
@@ -316,38 +301,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           insetPageRow(s),
           if (canRotate) rotationRow(s, BookKind.ebooks),
         ]),
-        _resetRow(context, 'eBooks', "Every setting on this page back to the defaults - Text, Formatting and Page on "
-            "every device (they're synced).", () {
-          s.setEpub(const EpubPrefs());
-          const z = DisplayPrefs();
-          s.setDisplay(s.display.copyWith(ebooks: z.ebooks, insetPage: z.insetPage));
-        }),
       ]);
 
-  /// A page's reset (user, 2026-10-07: one on each page), asked first: [what] says what goes back.
-  Widget _resetRow(BuildContext context, String page, String what, VoidCallback reset) => SettingsGroup(children: [
-        ActionRow(
-          title: 'Reset to default',
-          icon: Icons.restart_alt,
-          button: TextButton(
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: Text('Reset $page?'),
-                  content: Text(what),
-                  actions: [
-                    TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                    TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset')),
-                  ],
-                ),
-              );
-              if (ok == true) reset();
-            },
-            child: Text('Reset $page'),
-          ),
-        ),
-      ]);
 
   // ---- Server and sync -------------------------------------------------------------------------------------------
   List<Widget> _server(BuildContext context) => [
@@ -524,12 +479,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           child: Text("The whole app, not just the reader. In the reader, the top bar's moon switches night mode.",
               style: TextStyle(color: hintColour, fontSize: 12)),
         ),
-        _resetRow(context, 'Look', 'Night mode, its schedule and warmth, the text size and the accent colour back to '
-            'the defaults.', () {
-          const z = DisplayPrefs();
-          s.setDisplay(s.display.copyWith(night: z.night, nightSchedule: z.nightSchedule, nightFrom: z.nightFrom,
-              nightTo: z.nightTo, warmth: z.warmth, textScale: z.textScale, accent: z.accent));
-        }),
       ]);
 
   /// A time (minutes after midnight) as a button that opens the time picker.
@@ -596,17 +545,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ]);
           },
         ),
-        _resetRow(context, 'Library & Home', "Posters, the libraries shown and Home's sections back to the defaults. "
-            "What's hidden from On deck stays (it's synced).", () {
-          const z = DisplayPrefs();
-          final s = AppSettings.instance;
-          s.setDisplay(s.display.copyWith(posterSize: z.posterSize, posterSeries: z.posterSeries,
-              posterTitle: z.posterTitle, posterDate: z.posterDate, ebookPosterTitle: z.ebookPosterTitle,
-              ebookPosterAuthor: z.ebookPosterAuthor, ebookPosterSeries: z.ebookPosterSeries,
-              ebookPosterDate: z.ebookPosterDate));
-          unawaited(HiddenLibraries.instance.clear());
-          unawaited(HomeSections.instance.reset());
-        }),
       ];
 
   /// Sync pins across devices (user, 2026-10-05). Back on, the shared list returns: this device's pins that it
@@ -709,12 +647,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DownloadsScreen())),
         ),
       ]),
-      _resetRow(context, 'Downloads', 'The storage limit, Wi-Fi only and Delete once read back to the defaults. '
-          'Your downloaded books stay.', () {
-        unawaited(d.setCap(Downloads.defaultCap));
-        unawaited(d.setWifiOnly(false));
-        unawaited(d.setDeleteRead(DeleteRead.never));
-      }),
     ]);
   }
 

@@ -169,18 +169,18 @@ class Levels {
   }
 }
 
-/// Per-channel scale and offset (0..1 units) for levels -> contrast -> brightness.
+/// Per-channel scale and offset (0..1 units) for the levels (Enhance colours). (Brightness and contrast went - user,
+/// 2026-10-21.)
 class Tone {
   const Tone(this.scale, this.offset);
   final List<double> scale, offset;
 
   factory Tone.of(ReaderPrefs p, Levels levels) {
-    final f = math.pow(2, p.contrast * 2).toDouble(); // contrast -0.5..0.5 -> x0.5..x2
     final scale = <double>[], offset = <double>[];
     for (var c = 0; c < 3; c++) {
       final sL = 1 / (levels.hi[c] - levels.lo[c]), oL = -levels.lo[c] * sL;
-      scale.add(sL * f);
-      offset.add((oL - 0.5) * f + 0.5 + p.brightness);
+      scale.add(sL);
+      offset.add(oL);
     }
     return Tone(scale, offset);
   }

@@ -248,11 +248,6 @@ class _ImagePanel extends StatelessWidget {
 void _toast(BuildContext context, String text) =>
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
 
-String _signed(double v) {
-  final n = (v * 100).round();
-  return n == 0 ? '0' : (n > 0 ? '+$n' : '$n');
-}
-
 // ---- rows shared with the Settings screen ---------------------------------------------------------------------------
 
 /// The fit modes' icon: fit screen as the usual frame, fit width and height as double-headed arrows, ↔ and ↕ (user,
@@ -321,16 +316,14 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       onChanged: (t) => setP(p.copyWith(twoPages: t)),
       enabled: enabled,
     ),
-    // the space between a pair's pages (user, 2026-10-20), with dual page mode on
+    // the space between a pair's pages (user, 2026-10-20; in steps since 2026-10-21), with dual page mode on
     if (p.twoPages != TwoPages.off)
-      SliderRow(
-        label: 'Gutter',
-        value: p.gutter,
-        max: ReaderPrefs.maxGutter,
-        divisions: ReaderPrefs.maxGutter.round(),
-        valueText: '${p.gutter.round()} px',
+      SegmentRow<double>(
+        title: 'Gutter',
+        choices: [for (final g in ReaderPrefs.gutters) Choice(g, g == 0 ? 'None' : '${g.round()} px')],
+        value: ReaderPrefs.gutters.contains(p.gutter) ? p.gutter : ReaderPrefs.defaultGutter,
+        onChanged: (g) => setP(p.copyWith(gutter: g)),
         enabled: enabled,
-        onChanged: (v) => setP(p.copyWith(gutter: v.roundToDouble())),
       ),
     // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
     SettingRow(
@@ -350,18 +343,19 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
   ];
 }
 
-/// Enhance and Enhance colours first (the ones actually used), then crop, brightness and contrast.
+/// Enhance and Enhance colours, then Crop edges in four steps (user, 2026-10-21: brightness and contrast went).
 List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true}) => [
       SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
           value: p.sharpen, onChanged: enabled ? (v) => setP(p.copyWith(sharpen: v)) : null),
       SwitchRow(title: 'Enhance colours', subtitle: 'Whiter paper, deeper ink',
           value: p.autoLevels, onChanged: enabled ? (v) => setP(p.copyWith(autoLevels: v)) : null),
-      SliderRow(label: 'Crop edges', enabled: enabled, value: p.crop, min: 0, max: ReaderPrefs.maxCrop, divisions: 10, // 1% steps
-          valueText: p.crop == 0 ? 'Off' : '${(p.crop * 100).round()}%', onChanged: (v) => setP(p.copyWith(crop: v))),
-      SliderRow(label: 'Brightness', enabled: enabled, value: p.brightness, min: -0.3, max: 0.3, divisions: 40, // steps of 5 (-100..+100)
-          valueText: _signed(p.brightness / 0.3), onChanged: (v) => setP(p.copyWith(brightness: v))),
-      SliderRow(label: 'Contrast', enabled: enabled, value: p.contrast, min: -0.5, max: 0.5, divisions: 40, // steps of 5
-          valueText: _signed(p.contrast / 0.5), onChanged: (v) => setP(p.copyWith(contrast: v))),
+      SegmentRow<double>(
+        title: 'Crop edges',
+        choices: [for (final c in ReaderPrefs.crops) Choice(c, c == 0 ? 'Off' : '${(c * 100).round()}%')],
+        value: ReaderPrefs.crops.contains(p.crop) ? p.crop : 0,
+        onChanged: (c) => setP(p.copyWith(crop: c)),
+        enabled: enabled,
+      ),
     ];
 
 /// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
@@ -526,14 +520,6 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
   );
 }
 
-/// The comic reader's page strip (the Pages button) as a setting too (user, 2026-10-07).
-Widget pageStripRow(AppSettings s) => SwitchRow(
-      title: 'Page strip',
-      subtitle: 'Opens with the controls; the Pages button in the reader switches it too',
-      value: s.display.pageStrip,
-      onChanged: (v) => s.setDisplay(s.display.copyWith(pageStrip: v)),
-    );
-
 Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
       title: 'Page turn animation',
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
@@ -582,15 +568,6 @@ Widget progressBarRow(AppSettings s, BookKind kind) => SwitchRow(
       subtitle: 'A thin line along the bottom while the controls are hidden',
       value: s.display.kind(kind).progressBar,
       onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(progressBar: v))),
-    );
-
-Widget pagePreviewsRow(AppSettings s) => SwitchRow(
-      title: 'Page previews',
-      subtitle: s.display.pagePreviews
-          ? 'A picture of the page over the slider while you pick one'
-          : 'Just the page number - for a slow link to your books',
-      value: s.display.pagePreviews,
-      onChanged: (v) => s.setDisplay(s.display.copyWith(pagePreviews: v)),
     );
 
 /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always - this device's own (user,

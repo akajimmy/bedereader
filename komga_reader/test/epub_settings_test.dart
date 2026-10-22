@@ -63,11 +63,11 @@ void main() {
     expect(side(EpubMargins.wide, 360), 360 * EpubMargins.wide.share, reason: 'a phone: the setting\'s share');
   });
 
-  test('wider margins than before (user, 2026-10-08): on the tablet in portrait (800 wide, size 19), Widest leaves '
-      'a quarter of the width each side, against 17% for Wide', () {
+  test('wider margins than before (user, 2026-10-08): on the tablet in portrait (800 wide, size 19), Wider leaves '
+      'a fifth of the width each side, against 17% for Wide (Widest went - 2026-10-21)', () {
     double side(EpubMargins m) => EpubRenderer.sideMargin(EpubPrefs(margins: m), 800);
     expect(side(EpubMargins.wide) / 800, closeTo(0.17, 0.01));
-    expect(side(EpubMargins.widest) / 800, greaterThanOrEqualTo(0.25));
+    expect(side(EpubMargins.wider) / 800, greaterThanOrEqualTo(0.2));
   });
 
   test('Inset page round the text (user, 2026-10-16: "the edges of the inset page should be based on the location of '

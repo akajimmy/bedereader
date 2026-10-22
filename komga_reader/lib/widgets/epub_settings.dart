@@ -74,14 +74,12 @@ Widget _twoPagesRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<TwoP
       onChanged: (t) => set(e.copyWith(twoPages: t)),
     );
 
-/// Dual page mode with Inset page: the space between the two sheets (user, 2026-10-20).
-Widget _gutterRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SliderRow(
-      label: 'Gutter',
-      value: e.gutter,
-      max: EpubPrefs.maxGutter,
-      divisions: EpubPrefs.maxGutter.round(),
-      valueText: '${e.gutter.round()} px',
-      onChanged: (v) => set(e.copyWith(gutter: v.roundToDouble())),
+/// Dual page mode with Inset page: the space between the two sheets (user, 2026-10-20; three steps since 2026-10-21).
+Widget _gutterRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<double>(
+      title: 'Gutter',
+      choices: [for (final g in EpubPrefs.gutters) Choice(g, '${g.round()} px')],
+      value: EpubPrefs.gutters.contains(e.gutter) ? e.gutter : EpubPrefs.defaultGutter,
+      onChanged: (g) => set(e.copyWith(gutter: g)),
     );
 
 /// Dual page mode: where a chapter starts (user, 2026-10-18: "A setting") - the next page, or a right-hand one.
@@ -172,12 +170,10 @@ Widget _sizeRow(EpubPrefs e, ValueChanged<EpubPrefs> set) {
   );
 }
 
-/// Line spacing's five steps; a spacing saved before them (1.45, 1.7) shows as the nearest step and stays as it is
-/// until another is picked (no migration - user rule).
+/// Line spacing's three steps (user, 2026-10-21).
 Widget _lineSpacingRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<double>(
       title: 'Line spacing',
-      choices: const [Choice(1.0, 'Compact'), Choice(1.25, 'Tight'), Choice(1.5, 'Normal'), Choice(1.75, 'Loose'),
-          Choice(2.0, 'Double')],
+      choices: const [Choice(1.25, 'Tight'), Choice(1.5, 'Normal'), Choice(1.75, 'Loose')],
       value: nearestSpacing(e.lineSpacing),
       onChanged: (v) => set(e.copyWith(lineSpacing: v)),
     );

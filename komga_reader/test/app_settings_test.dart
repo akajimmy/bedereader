@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -155,96 +154,6 @@ void main() {
       await tester.tap(control);
       await tester.pumpAndSettle();
       expect(read(), expected, reason: 'step $i (${page.name}): $control');
-    }
-    await tester.pump(const Duration(seconds: 3)); // the settings sync timer
-  });
-
-  testWidgets("a reset on each page (user, 2026-10-07): asked first; it puts back that page's settings and no others",
-      (tester) async {
-    tall(tester);
-    final s = AppSettings.instance;
-    addTearDown(() {
-      s.setDisplay(const DisplayPrefs());
-      s.setEpub(const EpubPrefs());
-      s.setDefault(const ReaderPrefs());
-      s.series.remove('S7');
-    });
-    // every one of this device's settings away from its default (test audit, 2026-10-07: a field left at its default
-    // could be dropped from a reset and nothing failed)
-    const away = DisplayPrefs(night: true, warmth: 0.2, brightness: 0.6, pageTurn: PageTurn.curl, doubleTapZoom: false,
-        midBook: MidBook.keep, screenOn: 5, posterSize: PosterSize.large, posterSeries: false, posterTitle: false,
-        posterDate: false, ebookPosterTitle: false, ebookPosterAuthor: false, ebookPosterSeries: true,
-        ebookPosterDate: true, nightSchedule: true, nightFrom: 1200, nightTo: 360, textScale: 1.3, accent: Accent.green,
-        pagePreviews: false, pageStrip: true, insetPage: InsetPage.always,
-        comics: KindPrefs(pageNote: PageNote.off, rotation: Rotation.landscape, clock: ShowWhen.always,
-            progressBar: true, hiddenSpots: ['left']),
-        ebooks: KindPrefs(pageNote: PageNote.off, rotation: Rotation.portrait, clock: ShowWhen.off, progressBar: true,
-            hiddenSpots: ['right']));
-    const awayEpub = EpubPrefs(font: EpubFont.lora, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
-        colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
-        turn: EpubTurn.none, paragraphGap: EpubParagraphGap.small, twoPages: TwoPages.off,
-        chapterStart: ChapterStart.rightPage, gutter: 40);
-    const awayDefaults = ReaderPrefs(fit: FitMode.width, brightness: 0.1, contrast: 0.1, sharpen: true,
-        autoLevels: true, direction: ReadingDirection.rtl, crop: 0.05, background: ReaderBackground.white,
-        twoPages: TwoPages.always, gutter: 10);
-    // which page's reset puts back each of this device's settings (by its saved name); null: no page's
-    const resetBy = <String, String?>{
-      'brightness': 'Reading', 'screenOn': 'Reading', 'midBook': 'Reading',
-      'pageTurn': 'Comics', 'doubleTapZoom': 'Comics', 'pagePreviews': 'Comics', 'pageStrip': 'Comics',
-      'comics': 'Comics',
-      'ebooks': 'eBooks', 'insetPage': 'eBooks',
-      'night': 'Look', 'nightSchedule': 'Look', 'nightFrom': 'Look', 'nightTo': 'Look', 'warmth': 'Look',
-      'textScale': 'Look', 'accent': 'Look',
-      'posterSize': null, 'posterSeries': null, 'posterTitle': null, 'posterDate': null,
-      'ebookPosterTitle': null, 'ebookPosterAuthor': null, 'ebookPosterSeries': null, 'ebookPosterDate': null,
-    };
-    final none = const DisplayPrefs().toJson(), moved = away.toJson();
-    expect(resetBy.keys.toSet(), moved.keys.toSet(), reason: 'every setting placed in the table');
-    for (final k in moved.keys) {
-      expect(jsonEncode(moved[k]), isNot(jsonEncode(none[k])), reason: '$k: away from its default');
-    }
-    for (final e in const EpubPrefs().toJson().entries) {
-      expect(jsonEncode(awayEpub.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'epub ${e.key}: away');
-    }
-    for (final e in const ReaderPrefs().toJson().entries) {
-      expect(jsonEncode(awayDefaults.toJson()[e.key]), isNot(jsonEncode(e.value)), reason: 'defaults ${e.key}: away');
-    }
-    s.setDisplay(away);
-    s.setEpub(awayEpub);
-    s.setDefault(awayDefaults);
-    s.setSeries('S7', const ReaderPrefs(fit: FitMode.height));
-    final done = <String>{};
-    /// After the resets of [done]: their settings at the defaults, every other one as it was set.
-    void checkAll() {
-      final now = s.display.toJson();
-      for (final k in resetBy.keys) {
-        final back = done.contains(resetBy[k]);
-        expect(jsonEncode(now[k]), jsonEncode(back ? none[k] : moved[k]),
-            reason: '$k: ${back ? 'put back by Reset ${resetBy[k]}' : 'untouched by Reset ${done.join(', ')}'}');
-      }
-      expect(s.defaults, done.contains('Comics') ? const ReaderPrefs() : awayDefaults, reason: 'the comic defaults');
-      expect(s.epub, done.contains('eBooks') ? const EpubPrefs() : awayEpub, reason: 'the EPUB settings');
-      expect(s.series['S7']?.fit, FitMode.height, reason: "a series' own settings stay");
-    }
-    Future<void> reset(String page, {bool confirm = true}) async {
-      await tester.tap(find.widgetWithText(ListTile, page));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.widgetWithText(TextButton, 'Reset $page'), 200,
-          scrollable: find.byType(Scrollable).last);
-      await tester.tap(find.widgetWithText(TextButton, 'Reset $page'));
-      await tester.pumpAndSettle();
-      expect(find.text('Reset $page?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, confirm ? 'Reset' : 'Cancel').last);
-      await tester.pumpAndSettle();
-    }
-
-    await open(tester, page: SettingsPage.reading);
-    await reset('Reading', confirm: false);
-    checkAll(); // cancelled: nothing changed
-    for (final page in ['Reading', 'Comics', 'eBooks', 'Look']) {
-      await reset(page);
-      done.add(page);
-      checkAll();
     }
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
   });
@@ -534,46 +443,5 @@ void main() {
     expect(s.brightnessShown, isFalse, reason: 'never left on with the page gone');
   });
 
-  testWidgets('Library & Home and Downloads have their reset too (user, 2026-10-07): asked first; posters, the '
-      'libraries shown and Home sections back - On deck (synced) untouched; the download settings back - the books stay',
-      (tester) async {
-    tall(tester);
-    final s = AppSettings.instance, d = Downloads.instance;
-    final dir = (await tester.runAsync(() => Directory.systemTemp.createTemp('komga_page_reset')))!;
-    addTearDown(() async {
-      d.store = null;
-      s.setDisplay(const DisplayPrefs());
-      await deleteTemp(dir);
-    });
-    await tester.runAsync(() async {
-      await d.attach(noNetwork(StatusServer.new), root: dir, start: false);
-      await d.setCap(Downloads.gb);
-      await d.setWifiOnly(true);
-      await d.setDeleteRead(DeleteRead.always);
-    });
-    s.setDisplay(const DisplayPrefs(posterSize: PosterSize.large, posterTitle: false, screenOn: 5));
-    await HiddenLibraries.instance.setHidden('L1', true);
-    await HomeSections.instance.set('ondeck', false);
-    Future<void> reset(String page) async {
-      await tester.tap(find.widgetWithText(ListTile, page));
-      await tester.pumpAndSettle();
-      await tester.scrollUntilVisible(find.widgetWithText(TextButton, 'Reset $page'), 200,
-          scrollable: find.byType(Scrollable).last);
-      await tester.tap(find.widgetWithText(TextButton, 'Reset $page'));
-      await tester.pumpAndSettle();
-      expect(find.text('Reset $page?'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Reset').last);
-      await tester.runAsync(pumpEventQueue);
-      await tester.pumpAndSettle();
-    }
 
-    await open(tester, page: SettingsPage.library);
-    await reset('Library & Home');
-    expect((s.display.posterSize, s.display.posterTitle), (PosterSize.medium, true));
-    expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');
-    expect(HomeSections.instance['ondeck'], isTrue);
-    expect(s.display.screenOn, 5, reason: "another page's setting stays");
-    await reset('Downloads');
-    expect((d.capBytes, d.wifiOnly, d.deleteRead), (Downloads.defaultCap, false, DeleteRead.never));
-  });
 }

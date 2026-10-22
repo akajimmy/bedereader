@@ -633,8 +633,7 @@ void main() {
       'and % on the left; a spot tapped hides it - its place stays, tapped to show it again - kept on this device; '
       'picking a page shows it, in the accent colour', (tester) async {
     final s = AppSettings.instance;
-    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(hiddenSpots: const [])).copyWith(pagePreviews: true)));
-    s.setDisplay(s.display.copyWith(pagePreviews: false)); // no page pictures to ask for while picking
+    addTearDown(() => s.setDisplay(s.display.bothKinds((k) => k.copyWith(hiddenSpots: const []))));
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.enter); // the controls
     expect(find.text('Test #1 - T'), findsOneWidget);
@@ -1285,27 +1284,6 @@ void main() {
       await g.up();
       await tester.pump();
       expect(find.byKey(preview), findsNothing);
-      expect(page(tester), 19.0);
-      await tester.pump(const Duration(seconds: 2));
-    });
-
-    testWidgets('Page previews off: just the page number over the thumb, and no pictures asked for', (tester) async {
-      final s = AppSettings.instance;
-      s.setDisplay(s.display.copyWith(pagePreviews: false));
-      addTearDown(() => s.setDisplay(s.display.copyWith(pagePreviews: true)));
-      await openLoaded(tester, pages: 20);
-      await key(tester, LogicalKeyboardKey.enter); // controls
-      final r = tester.getRect(find.byType(Slider));
-      final g = await tester.startGesture(Offset(r.left + 20, r.center.dy));
-      await g.moveTo(Offset(r.right - 20, r.center.dy)); // the last page
-      await tester.pump();
-      expect(find.byKey(const ValueKey('page-label')), findsOneWidget);
-      expect(find.text('Page 20'), findsOneWidget);
-      expect(find.byKey(const ValueKey('page-preview')), findsNothing);
-      await tester.pump();
-      expect((api as ImageKomga).thumbsAsked, isEmpty);
-      await g.up();
-      await tester.pump();
       expect(page(tester), 19.0);
       await tester.pump(const Duration(seconds: 2));
     });
