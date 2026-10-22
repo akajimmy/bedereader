@@ -1,6 +1,8 @@
 // eBooks in Dual page mode (user, 2026-10-16): two pages side by side, each chapter starting on a right-hand page,
 // the sheets meeting at the spine, the curl turning the right-hand page over onto the left, selection on either page.
 // (The pairing itself: spreads_test.dart.)
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -177,16 +179,18 @@ void main() {
   }
 
   testWidgets('Inset page with two pages up: two pages apart (user, 2026-10-16: "two discrete pages, with a gap '
-      'between"), 24 apart, each sheet 60 out from its own text at the sides and 24 above and below', (tester) async {
+      'between"), 24 apart; each sheet the screen\'s height less 24 above and below, 2:3 - narrowed together to fit '
+      'a screen too narrow for two (user, 2026-10-22)', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
-    for (final width in [1600.0, 2400.0]) {
+    for (final width in [1200.0, 1600.0, 2400.0]) {
       await open(tester, size: Size(width, 1000));
       await turn(tester); // a pair: both sides with a page
       final sheets = sheetsOnScreen(tester, width);
       expect(sheets.length, 2, reason: '$width: $sheets');
-      final side = EpubRenderer.sideMargin(AppSettings.instance.epub, width / 2), text = width / 2 - 2 * side;
-      expect(sheets[0].width, closeTo(text + 120, 0.5), reason: '$width: 60 out at the sides');
-      expect((sheets[0].top, sheets[0].bottom), (16, 984), reason: '$width: 24 above and below');
+      // (1200: 2 x 634.7 and the gutter is more than the screen less 24 a side - 564 each)
+      final w = math.min(952 * 2 / 3, (width - 48 - 24) / 2);
+      expect(sheets[0].width, closeTo(w, 0.5), reason: '$width: 2:3, or narrowed to fit');
+      expect((sheets[0].top, sheets[0].bottom), (24, 976), reason: '$width: 24 above and below');
       expect(sheets[1].size, sheets[0].size);
       expect(sheets[0].right, closeTo(width / 2 - 12, 0.5), reason: '$width: 24 apart, about the middle');
       expect(sheets[1].left, closeTo(width / 2 + 12, 0.5));
@@ -206,6 +210,8 @@ void main() {
 
   testWidgets("one page or two, the same page size (1600 wide two up, then an 800-wide window: one): the same place, "
       'not laid out again', (tester) async {
+    // (no Inset page: an 800-wide window has no sheet and a half of 1600 has one - a different page since 2026-10-22)
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
     await open(tester);
     await turn(tester); // (the pair after the first chapter's opening page)
     final two = pages((await spots(tester))!.$1);
@@ -289,8 +295,8 @@ void main() {
     final c = tester.widgetList<CustomPaint>(find.byWidgetPredicate((w) => w is CustomPaint && w.painter is PageCurlPainter))
         .single.painter as PageCurlPainter;
     expect(c.spine, isTrue);
-    final side = EpubRenderer.sideMargin(AppSettings.instance.epub, 800), gap = 24.0;
-    final right = Rect.fromLTWH(800 + gap / 2, 16, 800 - 2 * side + 120, 968);
+    const gap = 24.0;
+    const right = Rect.fromLTWH(800 + gap / 2, 24, 952 * 2 / 3, 952);
     expect(c.page, right, reason: 'the right-hand sheet');
     expect(c.gap, gap, reason: 'its back lands past the gap, over the left sheet');
     // near the end of the turn its edge is its width and the gap past where it was hinged: over the left sheet
