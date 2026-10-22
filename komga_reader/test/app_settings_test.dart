@@ -177,7 +177,8 @@ void main() {
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {
     tall(tester, width: 420);
     await open(tester);
-    expect(find.byType(ChoiceChip), findsNWidgets(8)); // no Downloads here (downloads not set up in tests)
+    // every page but Downloads (downloads not set up in tests)
+    expect(find.byType(ChoiceChip), findsNWidgets(SettingsPage.values.length - 1));
     await tester.tap(find.widgetWithText(ChoiceChip, 'Comics'));
     await tester.pumpAndSettle();
     expect(find.text('Turning pages'), findsOneWidget);

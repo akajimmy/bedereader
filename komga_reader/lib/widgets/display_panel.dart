@@ -26,10 +26,12 @@ import 'setting_rows.dart';
 /// [page]: Save page / Copy page for the page shown (null where there's no page to save, or no way to).
 /// [shiftBook]: two pages up, this book's "Shift pairing by one" ([shift] flips it) - null otherwise.
 /// [api]: for More settings (null: no such row).
+/// [webtoon]: Komga's webtoon - webtoons' own settings and defaults (user, 2026-10-22: "a clean split").
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
-        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift, Komga? api}) =>
+        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift, Komga? api,
+        bool webtoon = false}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
-        bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, api: api, side: side));
+        bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, api: api, side: side, webtoon: webtoon));
 
 /// The panels' last row, "More settings" (user, 2026-10-21: the panels trimmed to what's changed mid-book): closes the
 /// panel and opens Settings at [page] - only the reading pages ([page] and Reading), so nothing there leaves the book
@@ -162,7 +164,8 @@ String _seriesHeading(String? title) => title == null ? 'Settings for this serie
 
 class _ReaderPanel extends StatelessWidget {
   const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page, this.shiftBook,
-      this.shift, this.api, required this.side});
+      this.shift, this.api, required this.side, this.webtoon = false});
+  final bool webtoon; // Komga's webtoon: webtoons' settings
   final Komga? api;
   final PageActions? page;
   final String? shiftBook;
@@ -175,7 +178,7 @@ class _ReaderPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Panel(title: 'Comic settings', side: side, groups: (s) {
+    return _Panel(title: webtoon ? 'Webtoon settings' : 'Comic settings', side: side, groups: (s) {
       final id = seriesId;
       final p = s.prefsFor(id);
       final own = id != null && s.ownsLayout(id);
@@ -208,15 +211,24 @@ class _ReaderPanel extends StatelessWidget {
                 if (v && f != null) s.setSeriesLayout(id, s.prefsFor(id).copyWith(fit: f));
               },
             ),
-            ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
-                enabled: own),
+            // a strip: its own fits and the page colours - no direction, two pages or gutter (user, 2026-10-22)
+            if (readsAsStrip(p, komgaDirection))
+              ...webtoonLayoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, enabled: own)
+            else
+              ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
+                  enabled: own),
             if (own)
               ActionRow(
                 title: 'Use this layout for new series',
                 button: TextButton(
                   onPressed: () {
-                    s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
-                        twoPages: p.twoPages, gutter: p.gutter));
+                    // (a webtoon's: webtoons' defaults)
+                    if (webtoon) {
+                      s.setWebtoonDefault(s.webtoonDefaults.copyWith(fit: p.fit, background: p.background));
+                    } else {
+                      s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
+                          twoPages: p.twoPages, gutter: p.gutter));
+                    }
                     _toast(context, "Series you haven't adjusted will open like this one");
                   },
                   child: const Text('Make default'),
@@ -225,14 +237,15 @@ class _ReaderPanel extends StatelessWidget {
           ]),
         // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
         // this device's
-        if (readsAsStrip(p, komgaDirection)) SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s)]),
+        if (readsAsStrip(p, komgaDirection))
+          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s)]),
         // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
         // Settings only)
         SettingsGroup(title: 'Screen', children: [
           ...brightnessRows(s),
           if (canRotate) rotationRow(s), // locked mid-book, lying down
         ]),
-        if (api != null) moreSettingsRow(context, api!, SettingsPage.comics),
+        if (api != null) moreSettingsRow(context, api!, webtoon ? SettingsPage.webtoons : SettingsPage.comics),
       ];
     });
   }
@@ -321,28 +334,21 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
     null => null,
     _ => 'left to right',
   };
-  // a webtoon (Vertical scroll, or Auto where Komga says Webtoon): its own size or Fit width - the only two there
-  // (user, 2026-10-22)
-  final strip = readsAsStrip(p, komgaDirection);
-  // in the reader's panel ([icons]) a webtoon has no use for a direction or two pages and a gutter (user,
-  // 2026-10-22: "direction makes no sense, gutter makes no sense") - Settings keeps them, to set a default
-  final paged = !(strip && icons);
   return [
     SegmentRow<FitMode>(
       title: 'Fit',
       choices: [
-        if (!strip) Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
+        Choice(FitMode.screen, icons ? 'Fit screen' : 'Screen', icon: icons ? Icons.fit_screen : null),
         Choice(FitMode.width, icons ? 'Fit width' : 'Width', iconWidget: icons ? fitIcon(FitMode.width) : null),
-        if (!strip)
-          Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
+        Choice(FitMode.height, icons ? 'Fit height' : 'Height', iconWidget: icons ? fitIcon(FitMode.height) : null),
         Choice(FitMode.original, icons ? 'Original size' : 'Original',
             iconWidget: icons ? fitIcon(FitMode.original) : null),
       ],
-      value: strip ? WebtoonView.fitOf(p.fit) : p.fit,
+      value: p.fit,
       onChanged: (f) => setP(p.copyWith(fit: f)),
       enabled: enabled,
     ),
-    if (paged) SegmentRow<ReadingDirection>(
+    SegmentRow<ReadingDirection>(
       title: 'Direction', // (no description - user, 2026-10-21)
       choices: [ // [icons]: a wand for Auto, arrows for the two directions (the names are their tooltips)
         // Auto's tooltip says which way Komga has the series (it was the row's description - user, 2026-10-21)
@@ -358,7 +364,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       enabled: enabled,
     ),
     // two pages side by side (user, 2026-10-16: in the reader's panel, a default a series can override)
-    if (paged) SegmentRow<TwoPages>(
+    SegmentRow<TwoPages>(
       title: 'Dual page mode',
       choices: const [
         Choice(TwoPages.off, 'Off'),
@@ -370,7 +376,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
       enabled: enabled,
     ),
     // the space between a pair's pages (user, 2026-10-20; in steps since 2026-10-21), with dual page mode on
-    if (paged && p.twoPages != TwoPages.off)
+    if (p.twoPages != TwoPages.off)
       SegmentRow<double>(
         title: 'Gutter',
         choices: [for (final g in ReaderPrefs.gutters) Choice(g, g == 0 ? 'None' : '${g.round()} px')],
@@ -378,7 +384,33 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
         onChanged: (g) => setP(p.copyWith(gutter: g)),
         enabled: enabled,
       ),
-    // black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series)
+    pageColoursRow(p, setP, enabled: enabled),
+  ];
+}
+
+/// A webtoon's layout (user, 2026-10-22: "original + edge to edge + fit 1 page to screen height"): its fit - its own
+/// size, Fit width, or Fit page height - and the page colours. [icons]: the reader's narrow sheet.
+List<Widget> webtoonLayoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool icons = false,
+        bool enabled = true}) =>
+    [
+      SegmentRow<FitMode>(
+        title: 'Fit',
+        choices: [
+          Choice(FitMode.original, icons ? 'Original size' : 'Original',
+              iconWidget: icons ? fitIcon(FitMode.original) : null),
+          Choice(FitMode.width, icons ? 'Fit width' : 'Width', iconWidget: icons ? fitIcon(FitMode.width) : null),
+          Choice(FitMode.height, icons ? 'Fit page height' : 'Page height',
+              iconWidget: icons ? fitIcon(FitMode.height) : null),
+        ],
+        value: WebtoonView.fitOf(p.fit),
+        onChanged: (f) => setP(p.copyWith(fit: f)),
+        enabled: enabled,
+      ),
+      pageColoursRow(p, setP, enabled: enabled),
+    ];
+
+/// Black, dark grey or white around the page (user, 2026-10-05: a reading default, overridable per series).
+Widget pageColoursRow(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true}) =>
     SettingRow(
       title: 'Page colours', // as eBooks' (user, 2026-10-07: it was "Background")
       trailing: IgnorePointer(
@@ -392,9 +424,7 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
           ]),
         ),
       ),
-    ),
-  ];
-}
+    );
 
 /// Enhance and Enhance colours, then Crop edges in four steps (user, 2026-10-21: brightness and contrast went).
 List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true}) => [
@@ -551,7 +581,7 @@ List<Widget> nightRows(AppSettings s) {
 /// text itself). Comics fill two spots, EPUBs three.
 Widget positionTextRow(AppSettings s, BookKind kind) {
   final k = s.display.kind(kind);
-  final spots = kind == BookKind.comics
+  final spots = kind != BookKind.ebooks
       ? const [(PositionSpot.centre, 'Book title'), (PositionSpot.left, 'Progress')]
       : const [(PositionSpot.right, 'Chapter progress'), (PositionSpot.left, 'Book progress'),
           (PositionSpot.centre, 'Chapter name')];
@@ -575,10 +605,18 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
 /// Webtoons: what one tap at the side or one short key press scrolls - a short glide or most of a screen (user,
 /// 2026-10-22: "a setting between scroll modes: smooth scroll / page scroll"). This device's.
 Widget webtoonScrollRow(AppSettings s) => SegmentRow<WebtoonScroll>(
-      title: 'Webtoon scrolling',
+      title: 'Scrolling',
       choices: const [Choice(WebtoonScroll.smooth, 'Smooth'), Choice(WebtoonScroll.page, 'Page')],
       value: s.display.webtoonScroll,
       onChanged: (w) => s.setDisplay(s.display.copyWith(webtoonScroll: w)),
+    );
+
+/// Webtoons: where a tap scrolls - the left and right thirds, or the top and bottom (user, 2026-10-22). This device's.
+Widget webtoonTapsRow(AppSettings s) => SegmentRow<WebtoonTaps>(
+      title: 'Tap zones',
+      choices: const [Choice(WebtoonTaps.sides, 'Left / right'), Choice(WebtoonTaps.topBottom, 'Top / bottom')],
+      value: s.display.webtoonTaps,
+      onChanged: (t) => s.setDisplay(s.display.copyWith(webtoonTaps: t)),
     );
 
 /// Rotation in the reader (Android only: a PC window doesn't turn). Portrait / Landscape hold the way the tablet is

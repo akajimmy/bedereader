@@ -33,12 +33,16 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     AppSettings.instance.setDisplay(const DisplayPrefs());
     AppSettings.instance.setDefault(const ReaderPrefs());
+    AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart);
+    AppSettings.instance.webtoonSeries.clear();
     ReaderServer.direction = 'WEBTOON';
   });
   tearDown(() {
     ReaderServer.direction = 'LEFT_TO_RIGHT';
     AppSettings.instance.setDisplay(const DisplayPrefs());
     AppSettings.instance.setDefault(const ReaderPrefs());
+    AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart);
+    AppSettings.instance.webtoonSeries.clear();
   });
 
   Future<_Strip> open(WidgetTester tester, {Size size = const Size(800, 1200), int? start}) async {
@@ -91,7 +95,7 @@ void main() {
     expect(first().center.dx, 800, reason: 'centred');
     expect(first().height, 1280);
 
-    AppSettings.instance.setDefault(const ReaderPrefs(fit: FitMode.width));
+    AppSettings.instance.setWebtoonDefault(const ReaderPrefs(fit: FitMode.width));
     await tester.pump();
     await tester.pump();
     expect(first().width, 1600, reason: 'Fit width: edge to edge');
@@ -106,7 +110,7 @@ void main() {
     await tester.pump();
     final first = tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
     expect(first.width, 400);
-    expect(WebtoonView.columnWidth(const Size(300, 600), fill: false, imageWidth: 800, pixelRatio: 1), 300,
+    expect(WebtoonView.columnWidth(const Size(300, 600), fit: FitMode.original, imageWidth: 800, pixelRatio: 1), 300,
         reason: 'a narrower screen: its width');
   });
 
@@ -131,6 +135,49 @@ void main() {
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  testWidgets("a clean split (user, 2026-10-22): Komga's webtoon follows webtoons' defaults, not comics' - and a comic "
+      'series set to Vertical scroll keeps its comic settings', (tester) async {
+    Rect first() =>
+        tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
+    AppSettings.instance.setDefault(const ReaderPrefs(fit: FitMode.width)); // comics: Fit width
+    await open(tester, size: const Size(1600, 1000));
+    expect(first().width, 800, reason: "the webtoon: webtoons' default, its own size - not comics' Fit width");
+    await tester.pumpWidget(const SizedBox());
+
+    // a comic series read as a strip: comics' defaults (Fit width), whatever webtoons' say
+    ReaderServer.direction = 'LEFT_TO_RIGHT';
+    AppSettings.instance.setDefault(const ReaderPrefs(fit: FitMode.width, direction: ReadingDirection.vertical));
+    await open(tester, size: const Size(1600, 1000));
+    expect(find.byType(ListView), findsOneWidget, reason: 'a strip');
+    expect(first().width, 1600, reason: "comics' Fit width");
+  });
+
+  testWidgets('Fit page height: one page - a full slice - as tall as the screen (user, 2026-10-22: "fit 1 page to '
+      'screen height")', (tester) async {
+    AppSettings.instance.setWebtoonDefault(const ReaderPrefs(fit: FitMode.height));
+    await open(tester); // 800 x 1200
+    final first = tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
+    expect(first.height, 1200, reason: "a full page: the screen's height");
+    expect(first.width, 750, reason: '800 x 1280 in proportion');
+  });
+
+  testWidgets('Tap zones Top / bottom: the bottom third scrolls down, the top up, the middle shows the controls (user, '
+      '2026-10-22)', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(webtoonTaps: WebtoonTaps.topBottom));
+    await open(tester);
+    await tester.tapAt(const Offset(400, 1100)); // the bottom, in the middle across
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(ComicRenderer.smoothStep * 1200, 1), reason: 'down');
+    await tester.tapAt(const Offset(400, 100));
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(0, 1), reason: 'back up');
+    expect(find.byType(Slider), findsNothing);
+    await tester.tapAt(const Offset(760, 600)); // the right side, half way down: the middle zone
+    await tester.pump();
+    expect(find.byType(Slider), findsOneWidget, reason: 'the controls');
+    expect(strip(tester).pixels, closeTo(0, 1), reason: 'no scroll');
   });
 
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {

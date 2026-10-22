@@ -16,7 +16,7 @@ import '../settings.dart' show FitMode;
 /// The place is the slice across the middle of the screen ([onPlace]); after the last slice, the end card.
 class WebtoonView extends StatefulWidget {
   const WebtoonView({super.key, required this.sizes, required this.page, required this.endCard,
-      required this.controller, required this.onPlace, required this.background, this.fillWidth = false,
+      required this.controller, required this.onPlace, required this.background, this.fit = FitMode.original,
       this.onWheel});
 
   /// Each slice's size (Komga's - width and height in pixels; a slice with none counts as square).
@@ -30,8 +30,8 @@ class WebtoonView extends StatefulWidget {
   final ValueChanged<int> onPlace;
   final Color background;
 
-  /// Fit width: the strip edge to edge; otherwise its own size ([columnWidth]).
-  final bool fillWidth;
+  /// How wide the strip is: its own size, Fit width (edge to edge) or Fit page height ([columnWidth]).
+  final FitMode fit;
 
   /// The mouse wheel over the strip: the reader's to scroll by (Smooth or Page) - not the list's own scrolling, which
   /// heard it first and moved by the wheel's distance in both modes (user, 2026-10-22: Page "feels very similar to
@@ -43,12 +43,18 @@ class WebtoonView extends StatefulWidget {
   /// screen pixel ([imageWidth] at [pixelRatio]), never wider than the screen (user, 2026-10-22: "default should be
   /// to show at native resolution for webtoons"; it was as wide as the screen held upright - blown up 1.5 times on
   /// the tablet). Pictures of no known width: edge to edge.
-  static double columnWidth(Size area, {required bool fill, required double imageWidth, required double pixelRatio}) =>
-      fill || imageWidth <= 0 ? area.width : math.min(area.width, imageWidth / pixelRatio);
+  /// Fit page height ([FitMode.height]; user, 2026-10-22: "fit 1 page to screen height"): one page - a full slice,
+  /// [pageRatio] wide for its height - as tall as the screen.
+  static double columnWidth(Size area,
+      {required FitMode fit, required double imageWidth, double pageRatio = 0, required double pixelRatio}) {
+    if (fit == FitMode.width || imageWidth <= 0) return area.width;
+    if (fit == FitMode.height && pageRatio > 0) return math.min(area.width, area.height * pageRatio);
+    return math.min(area.width, imageWidth / pixelRatio);
+  }
 
-  /// The fit a webtoon reads in: Fit width, or its own size - every other fit (the default, Fit screen) is its own
-  /// size (user, 2026-10-22: two choices, "Original / Width only").
-  static FitMode fitOf(FitMode f) => f == FitMode.width ? FitMode.width : FitMode.original;
+  /// The fit a strip reads in: Fit width, Fit page height, or its own size - Fit screen (comics' default) is its own
+  /// size (user, 2026-10-22: "original + edge to edge + fit 1 page to screen height").
+  static FitMode fitOf(FitMode f) => f == FitMode.width || f == FitMode.height ? f : FitMode.original;
 
   @override
   State<WebtoonView> createState() => _WebtoonViewState();
@@ -170,9 +176,12 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
         final area = Size(box.maxWidth, box.maxHeight);
+        // (a full page: the tallest - the last slice is often short)
+        final tallest = widget.sizes.fold(Size.zero, (t, s) => s.height > t.height ? s : t);
         final width = WebtoonView.columnWidth(area,
-            fill: widget.fillWidth,
+            fit: widget.fit,
             imageWidth: widget.sizes.fold(0.0, (w, s) => math.max(w, s.width)),
+            pageRatio: tallest.height > 0 ? tallest.width / tallest.height : 0,
             pixelRatio: MediaQuery.devicePixelRatioOf(context));
         final heights = [
           for (final s in widget.sizes) s.width > 0 && s.height > 0 ? s.height * width / s.width : width,

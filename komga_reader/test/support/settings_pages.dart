@@ -11,6 +11,7 @@ import 'status_server.dart';
 String pageName(SettingsPage p) => switch (p) {
       SettingsPage.reading => 'Reading',
       SettingsPage.comics => 'Comics',
+      SettingsPage.webtoons => 'Webtoons',
       SettingsPage.ebooks => 'eBooks',
       SettingsPage.keys => 'Remote and keys',
       SettingsPage.server => 'Server and sync',

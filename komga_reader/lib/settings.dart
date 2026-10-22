@@ -40,6 +40,10 @@ extension ReadingDirectionLabel on ReadingDirection {
 /// in both.
 enum WebtoonScroll { smooth, page }
 
+/// A webtoon's tap zones ([DisplayPrefs.webtoonTaps]; user, 2026-10-22): the left and right thirds (as a comic's), or
+/// the top and bottom thirds - the bottom scrolls down; the middle shows the controls in both.
+enum WebtoonTaps { sides, topBottom }
+
 /// How pages are shown. Saved per series (a new series starts from the global default) and synced through Komga.
 @immutable
 class ReaderPrefs {
@@ -251,7 +255,7 @@ enum TwoPages {
 enum ChapterStart { nextPage, rightPage }
 
 /// The two kinds of book the one Reader reads (a renderer each).
-enum BookKind { comics, ebooks }
+enum BookKind { comics, ebooks, webtoons } // (webtoons: comics' own kind since 2026-10-22 - a clean split)
 
 /// The reading settings each kind of book has its own of: the position text (user, 2026-10-07, settings option A set
 /// apart the page corner, rotation, clock and progress bar too; 2026-10-21: those are one set for both kinds now -
@@ -288,15 +292,18 @@ class DisplayPrefs {
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
-      this.comics = const KindPrefs(), this.ebooks = const KindPrefs(),
+      this.comics = const KindPrefs(), this.ebooks = const KindPrefs(), this.webtoons = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
-      this.webtoonScroll = WebtoonScroll.smooth});
+      this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides});
   final bool night;
 
   /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
   /// turn is.
   final WebtoonScroll webtoonScroll;
+
+  /// A webtoon's tap zones: the sides, or the top and bottom ([WebtoonTaps]) - this device's.
+  final WebtoonTaps webtoonTaps;
 
   // Rotation and what's over the page: one set for comics and eBooks (user, 2026-10-21 - each kind had its own; the
   // defaults are the comics' ones). This device.
@@ -313,8 +320,12 @@ class DisplayPrefs {
   final InsetPage insetPage;
 
   /// The reading settings set apart per kind of book ([KindPrefs]).
-  final KindPrefs comics, ebooks;
-  KindPrefs kind(BookKind k) => k == BookKind.comics ? comics : ebooks;
+  final KindPrefs comics, ebooks, webtoons;
+  KindPrefs kind(BookKind k) => switch (k) {
+        BookKind.comics => comics,
+        BookKind.ebooks => ebooks,
+        BookKind.webtoons => webtoons,
+      };
 
   // (posters' captions: synced since 2026-10-22 - [LibraryPrefs])
   /// reader: the page strip (the Pages button) is open - it stays open, book after book, until closed with the
@@ -372,10 +383,12 @@ class DisplayPrefs {
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pageStrip,
-          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage, Rotation? rotation, PageNote? pageNote,
-          bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll}) =>
+          KindPrefs? comics, KindPrefs? ebooks, KindPrefs? webtoons, InsetPage? insetPage, Rotation? rotation,
+          PageNote? pageNote, bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll,
+          WebtoonTaps? webtoonTaps}) =>
       DisplayPrefs(
-        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
+        comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, webtoons: webtoons ?? this.webtoons,
+        insetPage: insetPage ?? this.insetPage, webtoonTaps: webtoonTaps ?? this.webtoonTaps,
         rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
@@ -390,15 +403,19 @@ class DisplayPrefs {
         screenOn: screenOn ?? this.screenOn, posterSize: posterSize ?? this.posterSize);
 
   /// Kind [k]'s reading settings changed.
-  DisplayPrefs withKind(BookKind k, KindPrefs p) =>
-      k == BookKind.comics ? copyWith(comics: p) : copyWith(ebooks: p);
+  DisplayPrefs withKind(BookKind k, KindPrefs p) => switch (k) {
+        BookKind.comics => copyWith(comics: p),
+        BookKind.ebooks => copyWith(ebooks: p),
+        BookKind.webtoons => copyWith(webtoons: p),
+      };
 
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'epubTurn': epubTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pageStrip': pageStrip,
-      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name,
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'webtoons': webtoons.toJson(),
+      'insetPage': insetPage.name, 'webtoonTaps': webtoonTaps.name,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
       'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name};
@@ -427,6 +444,8 @@ class DisplayPrefs {
         accent: pick(Accent.values, j['accent'], Accent.blue),
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
+        webtoons: kind('webtoons', none.webtoons),
+        webtoonTaps: pick(WebtoonTaps.values, j['webtoonTaps'], WebtoonTaps.sides),
         ebooks: kind('ebooks', none.ebooks),
         insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen),
         rotation: pick(Rotation.values, j['rotation'], none.rotation),
@@ -673,6 +692,20 @@ class AppSettings extends ChangeNotifier {
 
   Komga? _api;
   ReaderPrefs defaults = const ReaderPrefs();
+
+  /// Webtoons' own reading defaults (synced, key "webtoon" - user, 2026-10-22: "a clean split"): at their own size
+  /// unless set otherwise. The series Komga says are webtoons ([webtoonSeries]) follow these, not [defaults].
+  ReaderPrefs webtoonDefaults = webtoonStart;
+  static const webtoonStart = ReaderPrefs(fit: FitMode.original);
+
+  /// The series Komga says are webtoons, as the reader finds them (not kept: learnt again each run) - their settings
+  /// start from [webtoonDefaults]. A comic series set to Vertical scroll in the app isn't one (user, 2026-10-22: it
+  /// "keeps its comic settings").
+  final Set<String> webtoonSeries = {};
+
+  /// The defaults [seriesId] follows: a webtoon's, or a comic's.
+  ReaderPrefs defaultsFor(String? seriesId) =>
+      seriesId != null && webtoonSeries.contains(seriesId) ? webtoonDefaults : defaults;
   final Map<String, ReaderPrefs> series = {};
   DisplayPrefs display = const DisplayPrefs();
 
@@ -705,6 +738,8 @@ class AppSettings extends ChangeNotifier {
   static const _unsentKey = 'readerPrefs.unsent';
   final Set<String> _dirtySeries = {};
   bool _dirtyDefault = false;
+  bool _dirtyWebtoon = false;
+  int _webtoonVersion = 0;
   bool _dirtyEpub = false;
   int _epubVersion = 0;
   bool _dirtyLibrary = false;
@@ -722,7 +757,7 @@ class AppSettings extends ChangeNotifier {
     if (_anyDirty) _syncSoon();
   }
 
-  bool get _anyDirty => _dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub || _dirtyLibrary;
+  bool get _anyDirty => _dirtySeries.isNotEmpty || _dirtyDefault || _dirtyEpub || _dirtyLibrary || _dirtyWebtoon;
 
   void _syncSoon([Duration after = const Duration(seconds: 2)]) {
     _syncTimer?.cancel();
@@ -735,7 +770,8 @@ class AppSettings extends ChangeNotifier {
       await p.remove(_unsentKey);
     } else {
       await p.setString(_unsentKey,
-          jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault, 'epub': _dirtyEpub,
+          jsonEncode({'series': _dirtySeries.toList(), 'default': _dirtyDefault, 'webtoon': _dirtyWebtoon,
+            'epub': _dirtyEpub,
             'library': _dirtyLibrary}));
     }
   }
@@ -747,6 +783,8 @@ class AppSettings extends ChangeNotifier {
     _api = null;
     _loaded = false;
     defaults = const ReaderPrefs();
+    webtoonDefaults = webtoonStart;
+    _dirtyWebtoon = false;
     epub = _withOwn(const EpubPrefs()); // (this device's font and size stay)
     library = const LibraryPrefs();
     _posterLookFollows();
@@ -765,10 +803,11 @@ class AppSettings extends ChangeNotifier {
 
   /// A series' settings as they apply: each part (page layout, image) its own when overridden, else the defaults'.
   ReaderPrefs prefsFor(String? seriesId) {
+    final base = defaultsFor(seriesId); // (a webtoon's, or a comic's)
     final own = seriesId != null ? series[seriesId] : null;
-    if (own == null) return defaults.copyWith(ownLayout: false, ownImage: false);
-    final layout = own.ownLayout ? own : defaults;
-    final image = own.ownImage ? own : defaults;
+    if (own == null) return base.copyWith(ownLayout: false, ownImage: false);
+    final layout = own.ownLayout ? own : base;
+    final image = own.ownImage ? own : base;
     return layout.withImageOf(image).copyWith(ownLayout: own.ownLayout, ownImage: own.ownImage);
   }
 
@@ -821,6 +860,7 @@ class AppSettings extends ChangeNotifier {
         ..clear()
         ..addAll([for (final id in (u['series'] as List? ?? const [])) id as String]);
       _dirtyDefault = u['default'] == true;
+      _dirtyWebtoon = u['webtoon'] == true;
       _dirtyEpub = u['epub'] == true;
       _dirtyLibrary = u['library'] == true;
     } catch (_) {
@@ -921,6 +961,14 @@ class AppSettings extends ChangeNotifier {
     _changedReader();
   }
 
+  /// Webtoons' reading defaults ([webtoonDefaults]). Synced.
+  void setWebtoonDefault(ReaderPrefs prefs) {
+    webtoonDefaults = prefs;
+    _dirtyWebtoon = true;
+    _webtoonVersion++;
+    _changedReader();
+  }
+
   void setDefault(ReaderPrefs prefs) {
     defaults = prefs;
     _dirtyDefault = true;
@@ -1004,6 +1052,8 @@ class AppSettings extends ChangeNotifier {
     final sending = {for (final id in _dirtySeries) id: _versions[id] ?? 0};
     final sendDefault = _dirtyDefault;
     final defaultVersion = _defaultVersion;
+    final sendWebtoon = _dirtyWebtoon;
+    final webtoonVersion = _webtoonVersion;
     final sendEpub = _dirtyEpub;
     final epubVersion = _epubVersion;
     final sendLibrary = _dirtyLibrary;
@@ -1018,6 +1068,7 @@ class AppSettings extends ChangeNotifier {
       merged['v'] = 1;
       merged['series'] = remoteSeries;
       if (sendDefault || merged['default'] == null) merged['default'] = defaults.toJson();
+      if (sendWebtoon) merged['webtoon'] = webtoonDefaults.toJson();
       if (sendEpub) merged['epub'] = epub.syncJson();
       if (sendLibrary) merged['library'] = library.toJson();
       await api.putClientSetting(komgaKey, jsonEncode(merged));
@@ -1026,6 +1077,7 @@ class AppSettings extends ChangeNotifier {
         if ((_versions[e.key] ?? 0) == e.value) _dirtySeries.remove(e.key);
       }
       if (sendDefault && _defaultVersion == defaultVersion) _dirtyDefault = false;
+      if (sendWebtoon && _webtoonVersion == webtoonVersion) _dirtyWebtoon = false;
       if (sendEpub && _epubVersion == epubVersion) _dirtyEpub = false;
       if (sendLibrary && _libraryVersion == libraryVersion) _dirtyLibrary = false;
       await _saveUnsent();
@@ -1052,6 +1104,7 @@ class AppSettings extends ChangeNotifier {
   Map<String, dynamic> _blob() => {
         'v': 1,
         'default': defaults.toJson(),
+        'webtoon': webtoonDefaults.toJson(),
         'epub': epub.syncJson(),
         'library': library.toJson(),
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
@@ -1063,6 +1116,8 @@ class AppSettings extends ChangeNotifier {
   void _applyBlob(Map<String, dynamic> b, {required bool remote}) {
     final d = b['default'];
     if (d is Map<String, dynamic> && !(remote && _dirtyDefault)) defaults = ReaderPrefs.fromJson(d);
+    final w = b['webtoon'];
+    if (w is Map<String, dynamic> && !(remote && _dirtyWebtoon)) webtoonDefaults = ReaderPrefs.fromJson(w);
     final e = b['epub'];
     if (e is Map<String, dynamic> && !(remote && _dirtyEpub)) epub = _withOwn(EpubPrefs.fromJson(e));
     final l = b['library'];
