@@ -302,7 +302,9 @@ void main() {
       expect((c.held!.top, c.held!.bottom), (0, 1000));
       expect(c.held!.right, closeTo(800, 1));
       expect(c.mirror, isFalse);
-      // (user, 2026-10-16: "the following left-hand page should be shown on the back")
+      // (user, 2026-10-16: "the following left-hand page should be shown on the back") - snapshot once the view shows
+      // it, and drawn the frame after
+      await tester.pump();
       expect(curl(tester)!.back, isNotNull, reason: 'its back: the next spread, snapshot once in the view');
       expect(identical(curl(tester)!.back, curl(tester)!.sheet), isFalse, reason: 'not the page turning');
       await tester.pump(const Duration(milliseconds: 500));

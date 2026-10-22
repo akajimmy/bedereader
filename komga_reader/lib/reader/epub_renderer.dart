@@ -652,15 +652,15 @@ class EpubRenderer extends Renderer {
       if (_pc.hasClients) _pc.jumpToPage(v);
     },
     // two pages up: the right-hand page turns, over onto the left, attached at the spine (as comics')
-    pageRect: () => _dual ? _sideRect(later: true) : _sheet ?? Offset.zero & _size,
-    spine: () => _dual,
-    held: (forward) => !_dual
+    pageRect: (_) => _dual ? _sideRect(later: true) : _sheet ?? Offset.zero & _size, // (every spread alike)
+    spine: (_) => _dual,
+    held: (forward, _) => !_dual
         ? null
         : forward
             ? Rect.fromLTWH(0, 0, _size.width, _area.height)
             : Rect.fromLTWH(_size.width, 0, _size.width, _area.height),
     // (the sheets round the text: apart by the margins between the texts, less the gap round each)
-    gap: () => _dual && _sheet != null ? pagesApart : 0,
+    gap: (_) => _dual && _sheet != null ? pagesApart : 0,
     done: ({required turned}) {
       if (turned && _pc.hasClients) host.turned(_placeOf((_pc.page ?? 0).round()));
     },

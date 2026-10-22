@@ -26,7 +26,8 @@ import '../widgets/reader_clock.dart';
 import 'actions.dart';
 import 'open_book.dart' show isEpub;
 
-export '../reader/comic_renderer.dart' show CurlLayer, trimPictures;
+export '../reader/comic_renderer.dart' show trimPictures;
+export '../reader/curl_turns.dart' show CurlLayer;
 
 /// Page reader: full screen on the chosen background (black, dark grey or white), follows the tablet's rotation
 /// (tilt for spreads).
