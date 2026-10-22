@@ -11,6 +11,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- The reader's panels are trimmed to what's changed mid-book. Comic settings: this page, this book, the series' layout, then brightness and rotation. eBook settings: font, size, line spacing and margins; page colours and dual page mode; brightness and rotation. Each ends with More settings, which closes the panel and opens Settings at that kind's page (with Reading beside it); Back returns to the book.
+- Settings > eBooks: Inset page, Dual page mode, Chapters start on and Gutter are together under Two pages. Chapters start on shows only while Dual page mode is on, and Gutter only while Inset page is on too.
 - Rotation and what's shown over the page are now one set for comics and eBooks, in Settings > Reading. A row "With the controls hidden show:" turns the clock, the battery, the page counter and the progress bar on or off, each on its own. While the page counter is on, a small choice under it sets when: after a turn, or always. With the controls up, the time and battery are always on the top bar. These settings start from the defaults (rotation Auto, page counter after a turn, the rest off). The position text stays separate for comics and eBooks, now titled "Over the slider (tap to hide)".
 
 ## 1.4.0

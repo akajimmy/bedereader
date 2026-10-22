@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../api.dart';
 import '../reader/position_row.dart';
+import '../screens/app_settings.dart';
 import '../synced_ids.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -10,9 +12,9 @@ import 'setting_rows.dart';
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Comic settings: Save / Copy page, fit, reading direction and page colours (this series), then what's changed
-///   mid-book (user, 2026-10-07): position text, brightness, rotation, keep the screen on. What's set once is in
-///   Settings > Comics; night mode is the top bar's moon.
+/// * Comic settings: Save / Copy page, this book's pairing, fit, reading direction and page colours (this series),
+///   then the screen: brightness and rotation (user, 2026-10-21: trimmed - the rest is a tap away, "More settings").
+///   Night mode is the top bar's moon.
 /// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
 ///
 /// Each panel's series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off, the series follows the
@@ -22,10 +24,27 @@ import 'setting_rows.dart';
 /// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
 /// [page]: Save page / Copy page for the page shown (null where there's no page to save, or no way to).
 /// [shiftBook]: two pages up, this book's "Shift pairing by one" ([shift] flips it) - null otherwise.
+/// [api]: for More settings (null: no such row).
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
-        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift}) =>
+        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift, Komga? api}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
-        bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, side: side));
+        bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, api: api, side: side));
+
+/// The panels' last row, "More settings" (user, 2026-10-21: the panels trimmed to what's changed mid-book): closes the
+/// panel and opens Settings at [page] - only the reading pages ([page] and Reading), so nothing there leaves the book
+/// (no sign out, no server).
+Widget moreSettingsRow(BuildContext context, Komga api, SettingsPage page) => SettingsGroup(children: [
+      ActionRow(
+        title: 'More settings',
+        subtitle: 'Settings > ${page.label}',
+        onTap: () {
+          final nav = Navigator.of(context);
+          nav.pop(); // the panel
+          nav.push(MaterialPageRoute<void>(builder: (_) => AppSettingsScreen(api: api, onSignOut: () {},
+              initialPage: page, only: [SettingsPage.reading, page])));
+        },
+      ),
+    ]);
 
 /// The reader's Save page and Copy page (user, 2026-10-02): on one line at the top of its panel.
 class PageActions {
@@ -142,7 +161,8 @@ String _seriesHeading(String? title) => title == null ? 'Settings for this serie
 
 class _ReaderPanel extends StatelessWidget {
   const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page, this.shiftBook,
-      this.shift, required this.side});
+      this.shift, this.api, required this.side});
+  final Komga? api;
   final PageActions? page;
   final String? shiftBook;
   final VoidCallback? shift;
@@ -202,13 +222,13 @@ class _ReaderPanel extends StatelessWidget {
                 ),
               ),
           ]),
-        // what's changed mid-book (user, 2026-10-07: not the settings set once - those are in Settings > Comics)
-        SettingsGroup(title: 'Reading', children: [
-          positionTextRow(s, BookKind.comics),
+        // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
+        // Settings only)
+        SettingsGroup(title: 'Screen', children: [
           ...brightnessRows(s),
           if (canRotate) rotationRow(s), // locked mid-book, lying down
-          screenOnRow(s),
         ]),
+        if (api != null) moreSettingsRow(context, api!, SettingsPage.comics),
       ];
     });
   }

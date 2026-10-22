@@ -1104,7 +1104,8 @@ class ComicRenderer extends Renderer {
                 // two pages up: pairs a page off (a scan missing a page, a spread split across two pairs) - this book,
                 // synced (user, 2026-10-22: in the panel, not on the bottom bar)
                 shiftBook: _dual && pages.length > 2 ? _book['id'] as String : null,
-                shift: shiftPairing))),
+                shift: shiftPairing,
+                api: api))),
       ];
 
   /// The top bar's fit button: the series' own fit when it overrides the default layout (saved, synced); otherwise
