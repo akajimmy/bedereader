@@ -490,6 +490,73 @@ void main() {
     }
   });
 
+  testWidgets('a double click on a word in a side third selects it too - one click on the text there turns a moment '
+      'later; a click in the margin turns at once (user, 2026-10-22: a double click on a word there turned the page)',
+      (tester) async {
+    // (a long wait for the second click: a turn made at once is told from one made after it)
+    final wait = EpubRenderer.doubleTapWait;
+    EpubRenderer.doubleTapWait = const Duration(seconds: 2);
+    addTearDown(() => EpubRenderer.doubleTapWait = wait);
+    await open(tester);
+    double page() => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+    // a word in the right third (a click there turns forward) - on a full line of the long paragraph
+    final word = Offset(680, at(tester, 'weather').dy);
+    await tester.tapAt(word, kind: PointerDeviceKind.mouse);
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.tapAt(word, kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(selected(tester), matches(RegExp(r'^[A-Za-z­]+[.,]?$')), reason: 'one word selected');
+    expect(onFirstPage(tester), isTrue, reason: 'no turn');
+    await tester.tapAt(const Offset(400, 40), kind: PointerDeviceKind.mouse); // lets go of it
+    await settle(tester);
+    expect(selected(tester), isNull);
+
+    // one click on the text in the right third: the turn waits for a second click that doesn't come
+    final right = Offset(700, at(tester, 'weather').dy);
+    await tester.tapAt(right, kind: PointerDeviceKind.mouse);
+    await settle(tester); // (a second of the 2 s wait - the next page laid out meanwhile)
+    expect(page(), 0, reason: 'not yet: a second click could come');
+    await tester.pump(EpubRenderer.doubleTapWait);
+    await settle(tester);
+    expect(onFirstPage(tester), isFalse, reason: 'then it turns');
+
+    // a click in the right margin: at once
+    final before = page();
+    await tester.tapAt(Offset(799, at(tester, 'weather').dy), kind: PointerDeviceKind.mouse);
+    await settle(tester); // (the same second: well inside the wait)
+    expect(page(), greaterThan(before), reason: 'the margin: no wait');
+  });
+
+  testWidgets('Windows: a mouse held with a little drift (a hand is never quite still) then dragged selects - the '
+      'first pixels made it a drag, which never turned and selected nothing (user, 2026-10-22)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      // from the end back to the start - leftwards, a forward turn's way
+      final from = box(tester, 'eel').centerRight, to = box(tester, 'Ant').centerLeft;
+      final g = await tester.startGesture(from + const Offset(1, 0), kind: PointerDeviceKind.mouse);
+      await tester.pump(const Duration(milliseconds: 60));
+      await g.moveBy(const Offset(-3, 1)); // the drift
+      await tester.pump(const Duration(milliseconds: 60));
+      await g.moveBy(const Offset(-1, 2));
+      await tester.pump(kLongPressTimeout); // held
+      await g.moveTo(to - const Offset(3, 0));
+      await tester.pump();
+      await g.up();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(selected(tester), 'Ant bee cow.\nDog eel');
+      expect(onFirstPage(tester), isTrue, reason: 'no turn');
+      expect(find.byKey(const ValueKey('epub-selection-pane')), findsOneWidget, reason: 'its pane, once let go');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(copied, 'Ant bee cow.\nDog eel');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('Windows: a mouse drag held first selects, Ctrl+C copies; a click lets go of it', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {

@@ -44,6 +44,14 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
   /// A mouse taken for a drag (so the page's own tap lost it) but let go before it turned: the click it was.
   GestureTapUpCallback? onTap;
 
+  /// A mouse held for [hold] with no more than [holdSlop] of drift - a hand on a mouse is never quite still, and the
+  /// first two pixels made it a drag here, so the page never saw a hold (user, 2026-10-22: "Allow drift during hold"):
+  /// the hold is this recognizer's to report, as it has the pointer. [onHoldStart] where the button went down,
+  /// [onHoldUpdate] as it moves on, [onHoldEnd] at the release. Unset: a held mouse is as any other (comics).
+  ValueChanged<Offset>? onHoldStart, onHoldUpdate;
+  VoidCallback? onHoldEnd;
+  static const holdSlop = 8.0;
+
   // a finger: at the taps' own slop - a tap until then (and under the zoom's 36; level with a scroll's 18, but heard
   // first)
   static const _touchSlop = kTouchSlop;
@@ -57,6 +65,7 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
   bool _accepted = false; // won the arena
   bool _turning = false; // [onStart] called: a turn under way
   bool _dud = false; // a mouse drag taken but too steep: does nothing
+  bool _holding = false; // a mouse held (with its drift): [onHoldUpdate] from here
   VelocityTracker? _velocity;
   Timer? _holdTimer;
 
@@ -72,34 +81,50 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
     super.addAllowedPointer(event);
     _pointer = event.pointer;
     _kind = event.kind;
-    _downGlobal = _lastGlobal = event.position;
+    _downGlobal = _lastGlobal = _lastAt = event.position;
     _downLocal = event.localPosition;
-    _accepted = _turning = _dud = false;
+    _accepted = _turning = _dud = _holding = false;
     _velocity = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.position);
     _holdTimer = Timer(hold, () {
-      if (!_accepted) _giveUp(); // held: a long press, a selection
+      if (!_accepted) {
+        _giveUp(); // held: a long press, a selection
+      } else if (!_turning && !_dud && onHoldStart != null && (_lastAt - _downGlobal).distance <= holdSlop) {
+        // a mouse taken by its drift, but held: the hold it was
+        _holding = true;
+        onHoldStart!(_downGlobal);
+        onHoldUpdate?.call(_lastAt);
+      }
     });
   }
+
+  Offset _lastAt = Offset.zero; // where the pointer is now
 
   @override
   void handleEvent(PointerEvent event) {
     if (event.pointer != _pointer) return;
     if (event is PointerMoveEvent) {
       _velocity?.addPosition(event.timeStamp, event.position);
+      _lastAt = event.position;
+      if (_holding) {
+        onHoldUpdate?.call(event.position);
+        return;
+      }
       final moved = event.position - _downGlobal;
+      final mouse = _kind == PointerDeviceKind.mouse;
       if (!_accepted) {
-        final mouse = _kind == PointerDeviceKind.mouse;
         if (moved.distance < (mouse ? _mouseSlop : _touchSlop)) return;
         if (!mouse && !_sideways(moved)) {
           _giveUp(); // steeper: a scroll, the page's
           return;
         }
         _accepted = true;
-        _holdTimer?.cancel();
+        // (a mouse's hold is still to be told from its drift - [onHoldStart]; a finger's is the page's)
+        if (!mouse || onHoldStart == null) _holdTimer?.cancel();
         resolve(GestureDisposition.accepted);
       }
       if (!_turning && !_dud) {
         if (moved.distance < _judgeAt) return; // (a mouse: its direction a few pixels on)
+        _holdTimer?.cancel(); // (on its way: no hold)
         if (!_sideways(moved)) {
           _dud = true;
           return;
@@ -115,6 +140,12 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
             delta: Offset(delta.dx, 0), primaryDelta: delta.dx, kind: _kind));
       }
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      if (_holding) {
+        onHoldEnd?.call();
+        _reset();
+        stopTrackingPointer(event.pointer);
+        return;
+      }
       final travel = (event.position - _downGlobal).distance;
       if (_turning) {
         // the horizontal part (a turn's speed; Flutter's drag ends carry one axis) - none for a short one
@@ -157,7 +188,7 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
     _holdTimer?.cancel();
     _holdTimer = null;
     _pointer = null;
-    _accepted = _turning = _dud = false;
+    _accepted = _turning = _dud = _holding = false;
     _velocity = null;
   }
 

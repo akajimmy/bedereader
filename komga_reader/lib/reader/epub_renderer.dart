@@ -6,7 +6,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show SelectWordSelectionEvent, SelectionRegistrar;
+import 'package:flutter/rendering.dart'
+    show ClearSelectionEvent, SelectionEdgeUpdateEvent, SelectionHandler, SelectWordSelectionEvent, SelectionRegistrar;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
@@ -166,7 +167,39 @@ class EpubRenderer extends Renderer {
       } else {
         _slide?.cancel();
       }
+    })
+    // a mouse held with a little drift: a selection from where it went down (the selection area never saw the
+    // pointer - the turn had it)
+    ..onHoldStart = _holdSelectStart
+    ..onHoldUpdate = _holdSelectTo
+    ..onHoldEnd = (() {
+      if (_selected.value) _selectionFocus.requestFocus(); // (Esc lets go of it; Ctrl+C copies)
     });
+
+  SelectionRegistrar? _selectionRoot; // the selection area's own container: every page on screen
+
+  /// A held mouse's selection, started at [global] (screen coordinates) - as the selection area's own mouse drag.
+  void _holdSelectStart(Offset global) {
+    final root = _selectionRoot;
+    if (root is! SelectionHandler) return;
+    _clearSelection();
+    _mouseDown = null; // (the release is the selection's end, not a click)
+    final h = root as SelectionHandler;
+    h.dispatchSelectionEvent(const ClearSelectionEvent());
+    h.dispatchSelectionEvent(SelectionEdgeUpdateEvent.forStart(globalPosition: global));
+    _holdSelectTo(global);
+  }
+
+  /// The held mouse's selection, its end at [global].
+  void _holdSelectTo(Offset global) {
+    final root = _selectionRoot;
+    if (root is! SelectionHandler) return;
+    final h = root as SelectionHandler;
+    h.dispatchSelectionEvent(SelectionEdgeUpdateEvent.forEnd(globalPosition: global));
+    _selectedText = h.getSelectedContent()?.plainText ?? '';
+    _selected.value = _selectedText.isNotEmpty;
+    _selectionMoved.value++;
+  }
   bool _disposed = false;
 
   // the book is counted in this layout and the place shown: until then a spinner covers it, with the chapters
@@ -878,11 +911,12 @@ class EpubRenderer extends Renderer {
         }
       }
     }
-    // the middle (the controls' third - the sides turn pages at once, as always): a double click selects the word
-    // (user, 2026-10-12) - so one click there shows the controls once a double click is ruled out. The mouse only: on
-    // a touch screen a word is a long press, and a tap there opens the controls at once (user, build 107: "the
+    // on the text: a double click selects the word (user, 2026-10-12) - so one click there turns, or shows the
+    // controls, once a double click is ruled out; in the margins or round an inset page it does that at once (user,
+    // 2026-10-22: a double click on a word in a side third turned the page - only the middle third waited). The mouse
+    // only: on a touch screen a word is a long press, and a tap opens the controls at once (user, build 107: "the
     // single-word shortcut on touch should be tap and hold")
-    if (!host.controlsUp && x >= 0.33 && x <= 0.67 && d.kind == PointerDeviceKind.mouse) {
+    if (!host.controlsUp && d.kind == PointerDeviceKind.mouse && (page?.textArea?.contains(at) ?? false)) {
       final first = _firstTap;
       _firstTapTimer?.cancel();
       _firstTap = null;
@@ -1392,6 +1426,7 @@ class EpubRenderer extends Renderer {
             },
             child: Builder(builder: (context) {
               final registrar = SelectionContainer.maybeOf(context);
+              _selectionRoot = registrar;
               // fingers and mouse buttons down: the pane waits for them to let go (a selection being made)
               // - and a mouse click is told here, as the button down and up within a few pixels: in the gestures
               // a mouse moved a pixel or two while pressed is a drag, and the selection's drag took it - clicks went
