@@ -251,6 +251,18 @@ Future<String?> getAppVersion() async {
   }
 }
 
+/// Installed app version as (name, build number), e.g. ("1.4.0", 134) - for the update check. Null where unknown.
+Future<(String, int)?> appVersionInfo() async {
+  try {
+    final v = await _channel.invokeMapMethod<String, Object?>('appVersion');
+    final name = v?['name'], code = v?['code'];
+    if (name is! String || code is! num) return null;
+    return (name, code.toInt());
+  } catch (_) {
+    return null;
+  }
+}
+
 /// Opens a link in the device's browser. False if it couldn't.
 Future<bool> openUrl(String url) async {
   try {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../update_check.dart';
 import '../api.dart';
 import '../hidden_libraries.dart';
 import '../errors.dart';
@@ -315,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
               onRefresh: _load,
               child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.only(bottom: 24), children: [
                 if (Connection.instance.offline) const _OfflineBanner(),
+                const UpdateNotice(), // a newer release on GitHub (user, 2026-10-22)
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
                       child: ErrorText(explain(_error!).message, _error!)),

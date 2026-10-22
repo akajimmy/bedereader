@@ -25,6 +25,7 @@ import 'reader_keys.dart';
 import 'settings.dart';
 import 'screen.dart';
 import 'side_menu.dart';
+import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/drawer.dart';
 import 'widgets/refresh_on_return.dart';
@@ -258,6 +259,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
+    unawaited(UpdateCheck.instance.check()); // a newer release on GitHub? (at most once a day; Android, Windows)
     final p = await SharedPreferences.getInstance();
     // the key in plain text from before it was kept encrypted: not used, just removed (signing in once more)
     if (p.containsKey('apiKey')) await p.remove('apiKey');

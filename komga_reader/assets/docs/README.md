@@ -106,7 +106,9 @@ sync, Library & Home, Downloads and Look for the app; About. Groups marked "sync
 
 ## Privacy
 
-- The app talks only to **your own Komga server**. No analytics, no tracking, no accounts, no ads.
+- The app talks only to **your own Komga server** - and, on Android and Windows, to GitHub at most once a day, to
+  see whether a newer BeDeReader has been released (it asks for the latest release and sends nothing about you;
+  GitHub sees your IP address, as with any web request). No analytics, no tracking, no accounts, no ads.
 - Your API key is stored **on the device, encrypted**: with a key held in the Android Keystore on Android, with
   Windows' own data protection (only your Windows account can read it) on a PC. The server address is stored
   unencrypted. Anyone with that API key can use your Komga account:
