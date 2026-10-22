@@ -852,7 +852,9 @@ class ComicRenderer extends Renderer {
           onTapUp: (d) => host.tap(d.localPosition.dx / box.maxWidth),
           // the strip follows a finger, a mouse drag and a pen alike
           child: ScrollConfiguration(
-            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            // (no scroll bar over the strip - user, 2026-10-22: Windows put one there; the slider says where it is)
+            behavior: ScrollConfiguration.of(context)
+                .copyWith(dragDevices: PointerDeviceKind.values.toSet(), scrollbars: false),
             child: WebtoonView(
               key: ValueKey(('webtoon', _book['id'])),
               sizes: [

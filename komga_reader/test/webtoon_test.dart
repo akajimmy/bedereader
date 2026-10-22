@@ -1,5 +1,6 @@
 // Webtoons (user, 2026-10-22 - NOTES, "Webtoon support"): the pages one continuous strip scrolled down - when Komga
 // says Webtoon, or a series set to Vertical scroll; a column on a wide screen; the wheel, taps and keys glide it.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -117,6 +118,19 @@ void main() {
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, 100))); // one notch
     await settle(tester);
     expect(strip(tester).pixels, closeTo(ComicRenderer.pageStep * 1200, 1), reason: 'one notch: a screen');
+  });
+
+  testWidgets('no scroll bar over the strip on Windows (user, 2026-10-22: one appeared; the slider says where you '
+      'are)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is RawScrollbar), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
