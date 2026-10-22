@@ -32,7 +32,7 @@ void main() {
 
   test("saved form: every setting survives it; an older save (none) gets the defaults - Literata, dark, justified, "
       "no paragraph spacing (Default), slide; a size out of range gets the default", () {
-    const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.7, margins: EpubMargins.wide,
+    const changed = EpubPrefs(font: EpubFont.garamond, size: 24, lineSpacing: 1.75, margins: EpubMargins.wide,
         colours: EpubColours.sepia, align: EpubAlign.left, hyphenate: false,
         turn: EpubTurn.none, paragraphGap: EpubParagraphGap.book, twoPages: TwoPages.always,
         chapterStart: ChapterStart.rightPage);
@@ -100,17 +100,17 @@ void main() {
     expect(EpubMargins.topBottom, 40);
   });
 
-  test('line spacing: five steps, 1 to 2; a spacing saved before them shows as the nearest step', () {
-    expect(EpubPrefs.spacings, [1.0, 1.25, 1.5, 1.75, 2.0]);
-    expect(nearestSpacing(1.45), 1.5);
+  test('line spacing: three steps (user, 2026-10-21: Tight, Normal, Loose); another spacing saved reads as Normal', () {
+    expect(EpubPrefs.spacings, [1.25, 1.5, 1.75]);
     expect(nearestSpacing(1.7), 1.75);
-    expect(EpubPrefs.fromJson(const {'lineSpacing': 1.45}).lineSpacing, 1.45, reason: 'kept as saved');
+    expect(EpubPrefs.fromJson(const {'lineSpacing': 1.45}).lineSpacing, 1.5, reason: 'not a step: Normal');
   });
 
-  test("paragraph spacing: the book's, then five steps (user, 2026-10-11); a saved choice keeps its spacing", () {
-    expect([for (final g in EpubParagraphGap.values) g.ems], [null, 0, 0.25, 0.5, 1, 1.5]);
+  test("paragraph spacing: the book's, then None, Normal, Large (user, 2026-10-21); a saved choice keeps its spacing",
+      () {
+    expect([for (final g in EpubParagraphGap.values) g.ems], [null, 0, 0.5, 1.5]);
     expect(EpubPrefs.fromJson(const {'paragraphGap': 'small'}).paragraphGap.ems, 0.5);
-    expect(EpubPrefs.fromJson(const {'paragraphGap': 'large'}).paragraphGap.ems, 1);
+    expect(EpubPrefs.fromJson(const {'paragraphGap': 'huge'}).paragraphGap.ems, 1.5);
   });
 
   testWidgets('font face (user, 2026-10-21: "show current, when tapped, give choice"): the current font in its own '

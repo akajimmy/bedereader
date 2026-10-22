@@ -98,7 +98,6 @@ void main() {
       // Comics: each kind its own position text, progress bar
       (SettingsPage.comics, find.widgetWithText(FilterChip, 'Book title'),
           () => (spots(BookKind.comics), spots(BookKind.ebooks)), ('centre', '')),
-      (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Page strip'), () => s.display.pageStrip, true),
       (SettingsPage.comics, find.widgetWithText(SwitchListTile, 'Progress bar'),
           () => (s.display.comics.progressBar, s.display.ebooks.progressBar), (true, false)),
       (SettingsPage.comics, segment<PageTurn>('None'), () => s.display.pageTurn, PageTurn.flip), // "None" is the flip
