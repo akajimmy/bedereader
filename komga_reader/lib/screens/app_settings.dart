@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -550,7 +551,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
           ),
         ),
-        if (canRotate) // Android: a PC has no mobile data to save (the same test: a phone or tablet)
+        // Android: a PC has no mobile data to save, and iOS doesn't tell the app which network it's on
+        if (defaultTargetPlatform == TargetPlatform.android)
           SwitchRow(
             title: 'Download on Wi-Fi only',
             subtitle: d.waitingForWifi ? 'Waiting for Wi-Fi' : null, // (only while waiting - user, 2026-10-21)

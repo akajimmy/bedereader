@@ -20,8 +20,9 @@ import UIKit
 
 /// The app's own platform channel (lib/screen.dart, "komga_reader/screen"), iOS side. What Android and Windows answer
 /// that matters on an iPad: where the app keeps its files (downloads, eBook page counts), keeping the screen awake
-/// while a book is open, the battery for the reader's clock, and opening a link in the browser. The rest (full
-/// screen, network type, saving pictures) isn't asked for on iOS, or falls back on the Dart side.
+/// while a book is open, the battery for the reader's clock, opening a link in the browser, and the way the screen is
+/// up (the reader's rotation lock, Locked). The rest (full screen, network type, saving pictures) isn't asked for on
+/// iOS, or falls back on the Dart side.
 enum ScreenChannel {
   static func register(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "komga_reader/screen", binaryMessenger: messenger)
@@ -50,9 +51,24 @@ enum ScreenChannel {
         UIApplication.shared.open(url, options: [:]) { opened in result(opened) }
       case "fullscreen":
         result(false)  // an iPad app is always full screen
+      case "currentWayUp":
+        result(currentWayUp())
       default:
         result(FlutterMethodNotImplemented)
       }
+    }
+  }
+
+  /// The way the screen is up now, named as Android's (lib/screen.dart, OrientationLock): portrait,
+  /// reversePortrait, landscape (UIKit's landscapeLeft), reverseLandscape - or nil.
+  private static func currentWayUp() -> String? {
+    let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+    switch scene?.interfaceOrientation {
+    case .portrait: return "portrait"
+    case .portraitUpsideDown: return "reversePortrait"
+    case .landscapeLeft: return "landscape"
+    case .landscapeRight: return "reverseLandscape"
+    default: return nil
     }
   }
 

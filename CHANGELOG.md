@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- iPhone and iPad: a Rotation setting, Auto or Locked. Locked holds the screen the way it is when you choose it or open a book. On the iPad the app now always runs full screen (an iPad app can only lock its rotation that way); whether iPadOS 26 honours it is still to be seen.
+
 **Fixed**
 
 - The page strip is centred when the whole book fits across the screen.
