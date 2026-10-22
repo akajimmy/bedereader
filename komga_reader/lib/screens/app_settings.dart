@@ -209,8 +209,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return [
       Text(p.label, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
       const SizedBox(height: 16),
-      // the page's segmented choices share one width (a fresh column per page)
-      SettingsColumn(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
+      KeyedSubtree(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
         SettingsPage.reading => [_live((s) => _reading(context, s))],
         SettingsPage.comics => [_live((s) => _comics(context, s))],
         SettingsPage.ebooks => [_live((s) => _ebooks(context, s))],
