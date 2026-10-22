@@ -317,14 +317,14 @@ void main() {
     expect(copied, 'cow');
   });
 
-  testWidgets("Windows: the selection's pane shows by itself once a mouse drag lets go - no right-click - and its "
-      'Copy copies', (tester) async {
+  testWidgets("Windows: the selection's pane shows by itself once a mouse drag (held first) lets go - no right-click "
+      '- and its Copy copies', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       await open(tester);
       final g = await tester.startGesture(box(tester, 'Dog').centerLeft + const Offset(1, 0),
           kind: PointerDeviceKind.mouse);
-      await tester.pump();
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50)); // held: to select (2026-10-22)
       await g.moveTo(box(tester, 'eel').centerRight - const Offset(1, 0));
       await tester.pump();
       expect(find.byKey(const ValueKey('epub-selection-pane')), findsNothing, reason: 'not while the button is down');
@@ -470,13 +470,33 @@ void main() {
     expect(find.byTooltip('Contents'), findsOneWidget, reason: 'the controls');
   });
 
-  testWidgets('Windows: a mouse drag selects, Ctrl+C copies; a click lets go of it', (tester) async {
+  testWidgets('Windows: a mouse drag that moves at once, over the text, turns the page and selects nothing (user, '
+      '2026-10-22: hold to select)', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await open(tester);
+      final y = box(tester, 'Dog').center.dy;
+      final g = await tester.startGesture(Offset(700, y), kind: PointerDeviceKind.mouse);
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(Offset(700 - i * 30.0, y));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await g.up();
+      await settle(tester);
+      expect(selected(tester), isNull, reason: 'nothing selected');
+      expect(onFirstPage(tester), isFalse, reason: 'turned');
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('Windows: a mouse drag held first selects, Ctrl+C copies; a click lets go of it', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       await open(tester);
       final from = box(tester, 'Ant').centerLeft, to = box(tester, 'eel').centerRight;
       final g = await tester.startGesture(from - const Offset(3, 0), kind: PointerDeviceKind.mouse);
-      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50)); // held: to select (2026-10-22)
       await g.moveTo(to - const Offset(1, 0));
       await tester.pump();
       await g.up();

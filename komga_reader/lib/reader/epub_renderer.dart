@@ -37,6 +37,7 @@ import 'position_row.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
 import 'spreads.dart';
+import 'turn_drag.dart';
 
 /// An EPUB ready to show (from [EpubRenderer.prepare]).
 class _Prepared {
@@ -123,6 +124,41 @@ class EpubRenderer extends Renderer {
   int _page = 0; // its page
   bool _end = false; // on the end card
   PageController _pc = PageController();
+  Drag? _slide; // Slide: the page view following a drag
+
+  /// A drag that turns the page ([TurnDragRecognizer]); held still first, it's the selection's (user, 2026-10-22:
+  /// "hold to select" - a drag that moves at once turns, mouse or finger). With text selected: a slide turns (and lets
+  /// go of it), a curl doesn't, as before.
+  void _configureTurn(TurnDragRecognizer r) => r
+    ..canTurn = (() => !_curlMode || !_selected.value)
+    ..onStart = (d) {
+      if (_curlMode) {
+        _curl.dragStart(d, pages: _views + 1);
+      } else {
+        _slide = _pc.position.drag(d, () => _slide = null);
+      }
+    }
+    ..onUpdate = ((d) {
+      if (_curlMode) {
+        _curl.dragUpdate(d, _area);
+      } else {
+        _slide?.update(d);
+      }
+    })
+    ..onEnd = ((d) {
+      if (_curlMode) {
+        _curl.dragEnd(d);
+      } else {
+        _slide?.end(d);
+      }
+    })
+    ..onCancel = (() {
+      if (_curlMode) {
+        _curl.dragEnd(DragEndDetails());
+      } else {
+        _slide?.cancel();
+      }
+    });
   bool _disposed = false;
 
   // the book is counted in this layout and the place shown: until then a spinner covers it, with the chapters
@@ -1299,7 +1335,10 @@ class EpubRenderer extends Renderer {
             // on a wide screen the surround, still under the sliding sheets (user, 2026-10-11)
             if (_sheet != null) Positioned.fill(child: ColoredBox(color: surround(_drawn.background))),
             // the page view kept out of the selection (see SelectablePage): only the page on screen takes part
-            SelectionContainer.disabled(child: RepaintBoundary(key: _curl.boundary, child: PageView.builder(
+            // (the page view's own drag off: a drag turns through the turn area, below)
+            SelectionContainer.disabled(child: RepaintBoundary(key: _curl.boundary, child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(dragDevices: const {}),
+              child: PageView.builder(
               controller: _pc,
               // Curl: a drag curls the page instead of sliding it (below)
               physics: _curlMode ? const NeverScrollableScrollPhysics() : null,
@@ -1314,7 +1353,7 @@ class EpubRenderer extends Renderer {
               itemBuilder: (_, v) => RepaintBoundary(child: _dual
                   ? _spreadAt(v, v == here ? registrar : null)
                   : _pageAt(v, size, v == here ? registrar : null)),
-            ))),
+            )))),
             // the page turning over (Curl)
             if (_curlMode) Positioned.fill(child: _curl.overlay()),
             // the mouse wheel turns pages, as with comics (the page view scrolls sideways: it lets a vertical wheel
@@ -1337,14 +1376,13 @@ class EpubRenderer extends Renderer {
                 behavior: HitTestBehavior.translucent,
                 // (a mouse's clicks are told by the Listener above)
                 onTapUp: (d) => d.kind == PointerDeviceKind.mouse ? null : _tap(d, size),
-                onHorizontalDragStart: _curlMode && !selected ? (d) => _curl.dragStart(d, pages: _views + 1) : null,
-                onHorizontalDragUpdate: _curlMode && !selected ? (d) => _curl.dragUpdate(d, size) : null,
-                onHorizontalDragEnd: _curlMode && !selected ? _curl.dragEnd : null,
                 // right-click: the controls, told by the Listener above (any distance); claimed here only so the
                 // selection area doesn't take it to select a word - with text selected it's the selection's
                 onSecondaryTap: selected ? null : () {},
               )),
             ),
+            // a drag that turns the page, told from the selection's before it hears it (on top: heard first)
+            Positioned.fill(child: TurnDragArea(configure: _configureTurn)),
           ]));
             }),
           );
