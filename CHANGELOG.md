@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+### Build 141 - 2026-10-22
+
 **Fixed**
 
 - Webtoons on Windows: no scroll bar over the strip.
@@ -16,8 +20,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 
 - Webtoons, the Comic settings panel: no Direction, Dual page mode or Gutter (they mean nothing in a strip); Webtoon scrolling (Smooth / Page) is there instead.
-
-## 1.5.0
 
 ### Build 140 - 2026-10-22
 
