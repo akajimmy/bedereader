@@ -85,10 +85,8 @@ void main() {
       "that isn't a choice gets the default", () {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl, epubTurn: EpubTurn.curl,
-        comics: KindPrefs(rotation: Rotation.landscape, clock: ShowWhen.always, progressBar: true,
-            pageNote: PageNote.off, hiddenSpots: ['left']),
-        ebooks: KindPrefs(rotation: Rotation.portrait, clock: ShowWhen.off, pageNote: PageNote.afterTurn,
-            progressBar: true, hiddenSpots: ['right', 'centre']),
+        comics: KindPrefs(hiddenSpots: ['left']), ebooks: KindPrefs(hiddenSpots: ['right', 'centre']),
+        rotation: Rotation.landscape, pageNote: PageNote.off, showClock: true, showBattery: true, progressBar: true,
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small, posterSeries: false, posterTitle: false,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
@@ -100,16 +98,14 @@ void main() {
       ('brightness', (d) => d.brightness, 0.4, null),
       ('pageTurn', (d) => d.pageTurn, PageTurn.curl, PageTurn.swipe),
       ('epubTurn', (d) => d.epubTurn, EpubTurn.curl, EpubTurn.slide), // eBooks' page turn: this device's (2026-10-21)
+      // one set for both kinds (user, 2026-10-21), the comics' defaults
+      ('rotation', (d) => d.rotation, Rotation.landscape, Rotation.auto),
+      ('pageNote', (d) => d.pageNote, PageNote.off, PageNote.afterTurn),
+      ('showClock', (d) => d.showClock, true, false),
+      ('showBattery', (d) => d.showBattery, true, false),
+      ('progressBar', (d) => d.progressBar, true, false),
       // each kind its own (user, 2026-10-07)
-      ('comics pageNote', (d) => d.comics.pageNote, PageNote.off, PageNote.afterTurn),
-      ('comics rotation', (d) => d.comics.rotation, Rotation.landscape, Rotation.auto),
-      ('comics clock', (d) => d.comics.clock, ShowWhen.always, ShowWhen.withControls),
-      ('comics progressBar', (d) => d.comics.progressBar, true, false),
       ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(','), 'left', ''),
-      ('ebooks pageNote', (d) => d.ebooks.pageNote, PageNote.afterTurn, PageNote.always),
-      ('ebooks rotation', (d) => d.ebooks.rotation, Rotation.portrait, Rotation.auto),
-      ('ebooks clock', (d) => d.ebooks.clock, ShowWhen.off, ShowWhen.withControls),
-      ('ebooks progressBar', (d) => d.ebooks.progressBar, true, false),
       ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
@@ -152,15 +148,21 @@ void main() {
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
   });
 
-  test("each kind's settings: one saved without some of them gets that kind's defaults for them; one kind changed "
-      'leaves the other as it was', () {
+  test("the kinds' old rotation and over-the-page settings aren't taken over (no migrations): the shared ones start "
+      "from the defaults; each kind's position text stays its own", () {
     const none = DisplayPrefs();
-    // a kind saved without some of its settings: that kind's defaults for them
-    final part = DisplayPrefs.fromJson({'comics': {'clock': 'off'}, 'ebooks': {'clock': 'off'}});
-    expect((part.comics.pageNote, part.ebooks.pageNote), (PageNote.afterTurn, PageNote.always));
-    // each kind set apart: one changed, the other not
+    final old = DisplayPrefs.fromJson({
+      'comics': {'pageNote': 'off', 'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
+          'hiddenSpots': ['left']},
+      'ebooks': {'pageNote': 'always', 'rotation': 'portrait', 'progressBar': true},
+    });
+    expect((old.rotation, old.pageNote, old.showClock, old.showBattery, old.progressBar),
+        (none.rotation, none.pageNote, none.showClock, none.showBattery, none.progressBar));
+    expect(old.comics.hiddenSpots, ['left'], reason: 'the position text: still read');
+    // each kind's position text set apart: one changed, the other not
     final apart = DisplayPrefs.fromJson(
-        none.withKind(BookKind.ebooks, none.ebooks.copyWith(pageNote: PageNote.off)).toJson());
-    expect((apart.comics.pageNote, apart.ebooks.pageNote), (PageNote.afterTurn, PageNote.off));
+        none.withKind(BookKind.ebooks, none.ebooks.copyWith(hiddenSpots: ['right'])).toJson());
+    expect(apart.comics.hiddenSpots, isEmpty);
+    expect(apart.ebooks.hiddenSpots, ['right']);
   });
 }

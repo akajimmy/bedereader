@@ -206,7 +206,7 @@ class _ReaderPanel extends StatelessWidget {
         SettingsGroup(title: 'Reading', children: [
           positionTextRow(s, BookKind.comics),
           ...brightnessRows(s),
-          if (canRotate) rotationRow(s, BookKind.comics), // locked mid-book, lying down
+          if (canRotate) rotationRow(s), // locked mid-book, lying down
           screenOnRow(s),
         ]),
       ];
@@ -531,8 +531,7 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
       : const [(PositionSpot.right, 'Chapter progress'), (PositionSpot.left, 'Book progress'),
           (PositionSpot.centre, 'Chapter name')];
   return ToggleChipsRow(
-    title: 'Position text',
-    subtitle: 'Over the slider - a tap on it there hides it too',
+    title: 'Over the slider (tap to hide)', // (user, 2026-10-21: "(tap to hide)" in the title, no description)
     chips: [
       for (final (spot, label) in spots)
         ToggleChip(label, !k.hiddenSpots.contains(spot.name), (on) => s.setDisplay(s.display.withKind(kind,
@@ -549,47 +548,54 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
     );
 
 /// Rotation in the reader (Android only: a PC window doesn't turn). Portrait / Landscape hold the way the tablet is
-/// held when the lock starts; tapping the one in force again turns it upside down (user, 2026-10-07).
-/// [kind]'s rotation (each kind its own - user, 2026-10-07).
-Widget rotationRow(AppSettings s, BookKind kind) {
-  final k = s.display.kind(kind);
+/// held when the lock starts; tapping the one in force again turns it upside down (user, 2026-10-07). One for both
+/// kinds of book (user, 2026-10-21).
+Widget rotationRow(AppSettings s) {
+  final rotation = s.display.rotation;
   return SegmentRow<Rotation>(
       title: 'Rotation',
-      subtitle: k.rotation == Rotation.auto
+      subtitle: rotation == Rotation.auto
           ? 'Follow the device, or stay put'
-          : 'Stays put - while reading, tap ${k.rotation.label} again to turn it upside down',
+          : 'Stays put - while reading, tap ${rotation.label} again to turn it upside down',
       // the lock in force marked as a switch: tapped again, it turns over (user, 2026-10-07)
       choices: [
         for (final r in Rotation.values)
-          Choice(r, r.label, mark: r != Rotation.auto && r == k.rotation ? Icons.sync : null),
+          Choice(r, r.label, mark: r != Rotation.auto && r == rotation ? Icons.sync : null),
       ],
       markRoom: true, // the buttons the same size, mark or not (user, 2026-10-07: no resizing)
-      value: k.rotation,
-      onChanged: (r) => s.setDisplay(s.display.withKind(kind, k.copyWith(rotation: r))),
+      value: rotation,
+      onChanged: (r) => s.setDisplay(s.display.copyWith(rotation: r)),
       onReselect: (r) {
         if (r != Rotation.auto) OrientationLock.instance.flip(); // (only while a book holds the lock)
       },
     );
 }
 
-Widget clockRow(AppSettings s, BookKind kind) => SegmentRow<ShowWhen>(
-      title: 'Clock and battery',
-      subtitle: switch (s.display.kind(kind).clock) {
-        ShowWhen.off => 'Not shown',
-        ShowWhen.withControls => 'On the top bar when you tap the page',
-        ShowWhen.always => 'Top right, all the time',
-      },
-      choices: [for (final w in ShowWhen.values) Choice(w, w.label)],
-      value: s.display.kind(kind).clock,
-      onChanged: (w) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(clock: w))),
-    );
-
-Widget progressBarRow(AppSettings s, BookKind kind) => SwitchRow(
-      title: 'Progress bar',
-      subtitle: 'A thin line along the bottom while the controls are hidden',
-      value: s.display.kind(kind).progressBar,
-      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(progressBar: v))),
-    );
+/// What's over the page while the controls are hidden, one set for both kinds of book (user, 2026-10-21, the
+/// mock-ups' A): the clock, the battery, the page counter and the progress bar, each on or off; while the page counter
+/// is on, when it shows - after a turn, or always - its own small choice under them.
+List<Widget> overPageRows(AppSettings s) {
+  final d = s.display;
+  return [
+    ToggleChipsRow(
+      title: 'With the controls hidden show:',
+      chips: [
+        ToggleChip('Clock', d.showClock, (v) => s.setDisplay(s.display.copyWith(showClock: v))),
+        ToggleChip('Battery', d.showBattery, (v) => s.setDisplay(s.display.copyWith(showBattery: v))),
+        ToggleChip('Page counter', d.pageNote != PageNote.off,
+            (v) => s.setDisplay(s.display.copyWith(pageNote: v ? PageNote.afterTurn : PageNote.off))),
+        ToggleChip('Progress bar', d.progressBar, (v) => s.setDisplay(s.display.copyWith(progressBar: v))),
+      ],
+    ),
+    if (d.pageNote != PageNote.off)
+      SegmentRow<PageNote>(
+        title: 'Show the page counter',
+        choices: const [Choice(PageNote.afterTurn, 'After a turn'), Choice(PageNote.always, 'Always')],
+        value: d.pageNote,
+        onChanged: (v) => s.setDisplay(s.display.copyWith(pageNote: v)),
+      ),
+  ];
+}
 
 /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always - this device's own (user,
 /// 2026-10-11: on the settings page, not the reader's panel; "inset page", three choices - 2026-10-12).
@@ -608,20 +614,6 @@ Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(
       ],
       value: s.display.insetPage,
       onChanged: (v) => s.setDisplay(s.display.copyWith(insetPage: v)),
-    );
-
-/// The note in the page's bottom-right corner, [kind]'s own - the same note for both kinds: the page of the book's
-/// pages (user, 2026-10-07).
-Widget pageNoteRow(AppSettings s, BookKind kind) => SegmentRow<PageNote>(
-      title: 'Show page counter', // (it was "Page corner" - user, 2026-10-07 QA)
-      subtitle: '"12 / 36" in the corner', // (it wrapped as "12 / / 36" beside the buttons - user, 2026-10-07)
-      choices: const [
-        Choice(PageNote.always, 'Always'),
-        Choice(PageNote.afterTurn, 'After a turn'),
-        Choice(PageNote.off, 'Off'),
-      ],
-      value: s.display.kind(kind).pageNote,
-      onChanged: (v) => s.setDisplay(s.display.withKind(kind, s.display.kind(kind).copyWith(pageNote: v))),
     );
 
 Widget doubleTapRow(AppSettings s) => SwitchRow(

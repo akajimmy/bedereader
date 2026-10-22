@@ -119,7 +119,6 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// position text - user, 2026-10-07: set apart for comics and eBooks).
   @override
   BookKind get readerKind => _renderer?.kind ?? (isEpub(widget.book as Map) ? BookKind.ebooks : BookKind.comics);
-  KindPrefs get _kindPrefs => _settings.display.kind(readerKind);
   String? get _seriesId => _book['seriesId'] as String?;
 
   // ---- what the renderer asks of the Reader (lib/reader/renderer.dart)
@@ -362,7 +361,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     } else {
       _saveTimer = Timer(const Duration(milliseconds: 1500), _saveNow);
     }
-    if (i <= _last && _kindPrefs.pageNote == PageNote.afterTurn) {
+    if (i <= _last && _settings.display.pageNote == PageNote.afterTurn) {
       _flashTimer?.cancel();
       setState(() => _flash = true);
       _flashTimer = Timer(const Duration(milliseconds: 1200), () { if (mounted) setState(() => _flash = false); });
@@ -809,16 +808,17 @@ class _ReaderScreenState extends State<ReaderScreen>
                   ])
                 : Stack(children: [
                     ...r.buildPages(context),
-                    // the page note, "12 / 36": always, or for a moment after a turn (Page corner - each kind its
-                    // own setting, the same corner: bottom right, user 2026-10-07) - not over the controls (they have
-                    // the count) or the end card
-                    if (_kindPrefs.pageNote != PageNote.off)
+                    // the page note, "12 / 36": always, or for a moment after a turn (Page counter - one setting
+                    // for both kinds, the same corner: bottom right, user 2026-10-07) - not over the controls (they
+                    // have the count) or the end card
+                    if (_settings.display.pageNote != PageNote.off)
                     Positioned(
                       right: 14,
                       bottom: 14,
                       child: IgnorePointer(
                         child: AnimatedOpacity(
-                          opacity: (_flash || _kindPrefs.pageNote == PageNote.always) && !_menu && _index <= _last
+                          opacity: (_flash || _settings.display.pageNote == PageNote.always) && !_menu &&
+                                  _index <= _last
                               ? 1 : 0,
                           duration: const Duration(milliseconds: 250),
                           child: Container(
@@ -831,9 +831,9 @@ class _ReaderScreenState extends State<ReaderScreen>
                         ),
                       ),
                     ),
-                    // Clock and battery, Always: top right while the controls are hidden (with them up it's on the top
-                    // bar)
-                    if (!_menu && _kindPrefs.clock == ShowWhen.always)
+                    // the clock and the battery, each as set: top right while the controls are hidden (with them up
+                    // both are on the top bar)
+                    if (!_menu && (_settings.display.showClock || _settings.display.showBattery))
                       Positioned(
                         top: 8,
                         right: 10,
@@ -842,12 +842,13 @@ class _ReaderScreenState extends State<ReaderScreen>
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55),
                                 borderRadius: BorderRadius.circular(10)),
-                            child: const ReaderClock(fontSize: 12),
+                            child: ReaderClock(fontSize: 12, time: _settings.display.showClock,
+                                battery: _settings.display.showBattery),
                           ),
                         ),
                       ),
                     // Progress bar: a thin line along the bottom while the controls are hidden (their slider shows it)
-                    if (!_menu && _kindPrefs.progressBar && _index <= _last)
+                    if (!_menu && _settings.display.progressBar && _index <= _last)
                       Positioned(
                         left: 0,
                         right: 0,
@@ -1001,7 +1002,6 @@ class _ReaderScreenState extends State<ReaderScreen>
     return readerBars(
       onTapOutside: _hideControls,
       top: ReaderTopBar(
-        clock: _kindPrefs.clock,
         closeNode: _ctl[_Ctl.close]!,
         heading: _heading,
         title: _bookName,

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../screen.dart';
-import '../settings.dart';
 import '../widgets/focus_style.dart';
 import '../widgets/reader_clock.dart';
 
@@ -21,16 +20,17 @@ Widget barIcon({required FocusNode node, required IconData icon, required String
 /// [buttons]. On a narrow screen the clock sits just under the bar instead.
 class ReaderTopBar extends StatelessWidget {
   const ReaderTopBar({super.key, required this.closeNode, required this.heading, required this.title,
-      required this.buttons, this.clock = ShowWhen.withControls});
+      required this.buttons});
   final FocusNode closeNode;
-  final ShowWhen clock; // the open kind's Clock and battery
   final String? heading;
   final String title;
   final List<Widget> buttons;
 
   @override
   Widget build(BuildContext context) {
-    final showClock = clock != ShowWhen.off; // with the controls: With the controls / Always
+    // with the controls up, the time and the battery always (user, 2026-10-21: the settings are only for while the
+    // controls are hidden - the system's status bar is hidden all the time)
+    const showClock = true;
     final clockInBar = MediaQuery.sizeOf(context).width >= 700; // a phone's top bar has no room for it
     final head = heading;
     return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [

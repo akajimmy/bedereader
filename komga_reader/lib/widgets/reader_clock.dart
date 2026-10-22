@@ -4,13 +4,15 @@ import 'package:flutter/material.dart';
 
 import '../screen.dart';
 
-/// The time and the battery for the reader (Settings > Comics > Clock and battery): the reader hides the system's
-/// status bar, so this is the only way to see them while reading. The time follows the device's 12/24-hour choice;
-/// the battery is left out where it can't be read (a PC without one).
+/// The time and the battery for the reader (with the controls hidden, each as Settings > Reading has it): the reader
+/// hides the system's status bar, so this is the only way to see them while reading. The time follows the device's
+/// 12/24-hour choice; the battery is left out where it can't be read (a PC without one).
 class ReaderClock extends StatefulWidget {
-  const ReaderClock({super.key, this.colour = Colors.white70, this.fontSize = 13});
+  const ReaderClock({super.key, this.colour = Colors.white70, this.fontSize = 13, this.time = true,
+      this.battery = true});
   final Color colour;
   final double fontSize;
+  final bool time, battery; // which of the two to show
 
   @override
   State<ReaderClock> createState() => _ReaderClockState();
@@ -64,13 +66,14 @@ class _ReaderClockState extends State<ReaderClock> {
   Widget build(BuildContext context) {
     final style = TextStyle(color: widget.colour, fontSize: widget.fontSize, fontFeatures: const [FontFeature.tabularFigures()]);
     final time = TimeOfDay.fromDateTime(_now).format(context);
-    final b = _battery;
+    final b = widget.battery ? _battery : null;
+    final label = [if (widget.time) time, if (b != null) 'battery ${b.$1} percent'].join(', ');
     return Semantics(
-      label: b == null ? time : '$time, battery ${b.$1} percent',
+      label: label,
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Text(time, style: style),
+        if (widget.time) Text(time, style: style),
         if (b != null) ...[
-          const SizedBox(width: 8),
+          if (widget.time) const SizedBox(width: 8),
           Icon(_batteryIcon(b.$1, b.$2), size: widget.fontSize + 3,
               color: b.$1 < 15 && !b.$2 ? const Color(0xFFFF8A80) : widget.colour),
           Text('${b.$1}%', style: style),

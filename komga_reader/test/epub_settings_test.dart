@@ -184,22 +184,23 @@ void main() {
     expect(sent['default'], isNotNull, reason: 'the reading defaults stay');
   });
 
-  testWidgets("the EPUBs' old page corner isn't taken over on load (user, 2026-10-07: no migrations) - each kind "
-      'keeps its own, or its default', (tester) async {
+  testWidgets("the EPUBs' old page corner isn't taken over on load (user, 2026-10-07: no migrations), nor the kinds' "
+      'own (2026-10-21: one for both) - the default, or the shared one', (tester) async {
     final api = noNetwork(() => SettingsServer({}));
-    Future<(PageNote, PageNote)> loaded(Map<String, dynamic> display) async {
+    Future<PageNote> loaded(Map<String, dynamic> display) async {
       SharedPreferences.setMockInitialValues({
         'displayPrefs': jsonEncode(display),
         'readerPrefs': jsonEncode({'v': 1, 'series': {}, 'epub': {'corner': 'off'}}),
       });
       await tester.runAsync(() => AppSettings.instance.load(api, fetch: false));
       final d = AppSettings.instance.display;
-      return (d.comics.pageNote, d.ebooks.pageNote);
+      return d.pageNote;
     }
 
-    expect(await loaded({'pageNumber': true}), (PageNote.afterTurn, PageNote.always), reason: 'the defaults');
-    expect(await loaded({'comics': {'pageNote': 'always'}, 'ebooks': {'pageNote': 'afterTurn'}}),
-        (PageNote.always, PageNote.afterTurn), reason: "each kind's own");
+    expect(await loaded({'pageNumber': true}), PageNote.afterTurn, reason: 'the default');
+    expect(await loaded({'comics': {'pageNote': 'always'}, 'ebooks': {'pageNote': 'off'}}), PageNote.afterTurn,
+        reason: "the kinds' own: left unread");
+    expect(await loaded({'pageNote': 'always'}), PageNote.always, reason: 'the shared one');
   });
 
   testWidgets("a change made while Komga can't be reached stays (Komga's older copy doesn't replace it) and goes "

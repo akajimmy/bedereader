@@ -235,7 +235,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Screen while reading', children: [
         ...brightnessRows(s),
         screenOnRow(s),
+        if (canRotate) rotationRow(s), // comics and eBooks alike (user, 2026-10-21)
       ]),
+      SettingsGroup(title: 'Over the page', children: overPageRows(s)),
       SettingsGroup(title: 'Moving on', children: [
         SegmentRow<MidBook>(
           title: 'Skipping to the next book', // wording: user, 2026-10-07 QA
@@ -268,15 +270,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         pageTurnRow(s),
         doubleTapRow(s),
       ]),
-      SettingsGroup(title: 'Over the page', children: [
-        pageNoteRow(s, BookKind.comics),
-        clockRow(s, BookKind.comics),
-        progressBarRow(s, BookKind.comics),
-      ]),
       SettingsGroup(title: 'Controls', children: [
         positionTextRow(s, BookKind.comics),
       ]),
-      if (canRotate) SettingsGroup(title: 'Screen', children: [rotationRow(s, BookKind.comics)]),
       SettingsGroup(title: 'Series with their own settings', synced: true, children: [
         ActionRow(
           title: n == 0 ? 'Every series follows the defaults' : '$n series ${n == 1 ? 'has its' : 'have their'} own settings',
@@ -289,16 +285,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // ---- eBooks ----------------------------------------------------------------------------------------------------
   Widget _ebooks(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         ...epubSettingRows(context, s.epub, s.setEpub),
-        SettingsGroup(title: 'Over the page', children: [
-          pageNoteRow(s, BookKind.ebooks),
-          clockRow(s, BookKind.ebooks),
-          progressBarRow(s, BookKind.ebooks),
-        ]),
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
         SettingsGroup(title: 'Screen', children: [
           epubTurnRow(s),
           insetPageRow(s),
-          if (canRotate) rotationRow(s, BookKind.ebooks),
         ]),
       ]);
 

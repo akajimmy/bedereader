@@ -160,14 +160,6 @@ extension RotationLabel on Rotation {
   String get label => switch (this) { Rotation.auto => 'Auto', Rotation.portrait => 'Portrait', Rotation.landscape => 'Landscape' };
 }
 
-/// When the reader shows something extra (the clock and battery): never, only with the controls up, or always.
-enum ShowWhen { off, withControls, always }
-
-extension ShowWhenLabel on ShowWhen {
-  String get label =>
-      switch (this) { ShowWhen.off => 'Off', ShowWhen.withControls => 'With the controls', ShowWhen.always => 'Always' };
-}
-
 /// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark
 /// background (the "Rich" set, 2026-09-30 - the first, pale set was too muted). Listed in the order shown; the names
 /// are what's saved, so the original seven keep theirs (purple is now a violet).
@@ -245,41 +237,24 @@ enum ChapterStart { nextPage, rightPage }
 /// The two kinds of book the one Reader reads (a renderer each).
 enum BookKind { comics, ebooks }
 
-/// The reading settings each kind of book has its own of (user, 2026-10-07, settings option A: the page corner,
-/// rotation, clock, progress bar and the position text set apart for comics and for eBooks). This device.
+/// The reading settings each kind of book has its own of: the position text (user, 2026-10-07, settings option A set
+/// apart the page corner, rotation, clock and progress bar too; 2026-10-21: those are one set for both kinds now -
+/// [DisplayPrefs.rotation] and the rest). This device.
 @immutable
 class KindPrefs {
-  const KindPrefs({this.pageNote = PageNote.always, this.rotation = Rotation.auto, this.clock = ShowWhen.withControls,
-      this.progressBar = false, this.hiddenSpots = const []});
+  const KindPrefs({this.hiddenSpots = const []});
 
-  /// The note in the page's bottom-right corner, "12 / 36".
-  final PageNote pageNote;
-  final Rotation rotation; // follow the device, or hold portrait / landscape (Android)
-  final ShowWhen clock; // the time and battery - top right, or on the top bar with the controls up
-  final bool progressBar; // a thin line along the bottom while the controls are hidden (their slider shows it)
   /// The position text's spots not shown ('left', 'centre', 'right' - lib/reader/position_row.dart).
   final List<String> hiddenSpots;
 
-  KindPrefs copyWith({PageNote? pageNote, Rotation? rotation, ShowWhen? clock, bool? progressBar,
-          List<String>? hiddenSpots}) =>
-      KindPrefs(pageNote: pageNote ?? this.pageNote, rotation: rotation ?? this.rotation, clock: clock ?? this.clock,
-          progressBar: progressBar ?? this.progressBar, hiddenSpots: hiddenSpots ?? this.hiddenSpots);
+  KindPrefs copyWith({List<String>? hiddenSpots}) => KindPrefs(hiddenSpots: hiddenSpots ?? this.hiddenSpots);
 
-  Map<String, dynamic> toJson() => {'pageNote': pageNote.name, 'rotation': rotation.name, 'clock': clock.name,
-      'progressBar': progressBar, 'hiddenSpots': hiddenSpots};
+  Map<String, dynamic> toJson() => {'hiddenSpots': hiddenSpots};
 
   /// From [j]; anything it lacks, [fallback]'s (the kind's defaults).
   factory KindPrefs.fromJson(Map<String, dynamic> j, {KindPrefs fallback = const KindPrefs()}) {
-    T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
-        values.firstWhere((v) => v.name == name, orElse: () => fallback);
     final spots = j['hiddenSpots'];
-    return KindPrefs(
-      pageNote: pick(PageNote.values, j['pageNote'], fallback.pageNote),
-      rotation: pick(Rotation.values, j['rotation'], fallback.rotation),
-      clock: pick(ShowWhen.values, j['clock'], fallback.clock),
-      progressBar: j['progressBar'] is bool ? j['progressBar'] as bool : fallback.progressBar,
-      hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : fallback.hiddenSpots,
-    );
+    return KindPrefs(hiddenSpots: spots is List ? [for (final v in spots) if (v is String) v] : fallback.hiddenSpots);
   }
 
   @override
@@ -300,9 +275,20 @@ class DisplayPrefs {
       this.ebookPosterDate = false,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
       this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
-      this.comics = const KindPrefs(pageNote: PageNote.afterTurn), this.ebooks = const KindPrefs(),
-      this.insetPage = InsetPage.wideScreen});
+      this.comics = const KindPrefs(), this.ebooks = const KindPrefs(),
+      this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
+      this.showClock = false, this.showBattery = false, this.progressBar = false});
   final bool night;
+
+  // Rotation and what's over the page: one set for comics and eBooks (user, 2026-10-21 - each kind had its own; the
+  // defaults are the comics' ones). This device.
+  final Rotation rotation; // in the reader: follow the device, or hold portrait / landscape (Android)
+  /// The note in the page's bottom-right corner, "12 / 36" ("Page counter").
+  final PageNote pageNote;
+  /// With the controls hidden: the time and the battery, top right, each on or off (with the controls up both are
+  /// on the top bar).
+  final bool showClock, showBattery;
+  final bool progressBar; // a thin line along the bottom while the controls are hidden (their slider shows it)
 
   /// eBooks: the page as a sheet on a surround - never, on a wide screen, or always ([InsetPage]) - this device's own
   /// (user, 2026-10-11: "per device setting", not in the reader's panel; three choices since 2026-10-15).
@@ -369,16 +355,20 @@ class DisplayPrefs {
     return (dimZone - b) / dimZone * 0.75;
   }
 
-  /// Each kind's own reading settings are changed with [withKind] (one kind) or [bothKinds].
+  /// Each kind's own reading settings are changed with [withKind].
   DisplayPrefs copyWith({bool? night, double? warmth, double? Function()? brightness, PageTurn? pageTurn,
           EpubTurn? epubTurn,
           bool? doubleTapZoom, MidBook? midBook, int? screenOn, PosterSize? posterSize,
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pageStrip, bool? posterSeries, bool? posterTitle, bool? posterDate,
           bool? ebookPosterTitle, bool? ebookPosterAuthor, bool? ebookPosterSeries, bool? ebookPosterDate,
-          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage}) =>
+          KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage, Rotation? rotation, PageNote? pageNote,
+          bool? showClock, bool? showBattery, bool? progressBar}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
+        rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
+        showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
+        progressBar: progressBar ?? this.progressBar,
         pageStrip: pageStrip ?? this.pageStrip,
         posterSeries: posterSeries ?? this.posterSeries, posterTitle: posterTitle ?? this.posterTitle,
         ebookPosterTitle: ebookPosterTitle ?? this.ebookPosterTitle,
@@ -398,10 +388,6 @@ class DisplayPrefs {
   DisplayPrefs withKind(BookKind k, KindPrefs p) =>
       k == BookKind.comics ? copyWith(comics: p) : copyWith(ebooks: p);
 
-  /// Both kinds' reading settings changed the same way.
-  DisplayPrefs bothKinds(KindPrefs Function(KindPrefs k) change) =>
-      copyWith(comics: change(comics), ebooks: change(ebooks));
-
   Map<String, dynamic> toJson() => {'night': night, 'warmth': warmth, 'brightness': brightness,
       'pageTurn': pageTurn.name, 'epubTurn': epubTurn.name, 'doubleTapZoom': doubleTapZoom,
       'midBook': midBook.name, 'screenOn': screenOn, 'posterSize': posterSize.name,
@@ -410,7 +396,10 @@ class DisplayPrefs {
       'ebookPosterSeries': ebookPosterSeries, 'ebookPosterDate': ebookPosterDate,
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pageStrip': pageStrip,
-      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name};
+      'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name,
+      // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
+      'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
+      'progressBar': progressBar};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -444,7 +433,12 @@ class DisplayPrefs {
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         ebooks: kind('ebooks', none.ebooks),
-        insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen));
+        insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen),
+        rotation: pick(Rotation.values, j['rotation'], none.rotation),
+        pageNote: pick(PageNote.values, j['pageNote'], none.pageNote),
+        showClock: j['showClock'] == true,
+        showBattery: j['showBattery'] == true,
+        progressBar: j['progressBar'] == true);
   }
 }
 
