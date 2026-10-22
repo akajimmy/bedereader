@@ -976,7 +976,8 @@ class EpubRenderer extends Renderer {
   Future<void> _settingsPanel() async {
     // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live;
     // the controls stay up behind it, as with comics (user, 2026-10-06: the panels as the comics')
-    await showReaderPanelFrame(host.context, title: 'eBook settings', children: epubPanelRows);
+    await showReaderPanelFrame(host.context, title: 'eBook settings',
+        children: (c, s) => epubPanelRows(c, s, api: api));
   }
 
   // ---- the bars

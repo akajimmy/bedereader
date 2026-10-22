@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
+import 'package:komga_reader/widgets/epub_settings.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/status_server.dart';
 
 /// The reader's Comic settings and Image panels: side sheets on a wide screen, bottom sheets on a narrow one.
 void main() {
@@ -162,13 +166,60 @@ void main() {
     expect(AppSettings.instance.display.brightness, isNull, reason: 'Auto on: the system again');
   });
 
-  testWidgets('side sheet: Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
+  testWidgets('side sheet: every choice fits inside the sheet (none cut off at the right edge)', (tester) async {
     await openPanel(tester, const Size(1280, 800)); // Comic settings, side sheet
-    await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
     final sheet = tester.getRect(find.byType(ListView).last);
-    final choices = tester.getRect(find.widgetWithText(SegmentedButton<int>, 'Always'));
-    expect(choices.right, lessThanOrEqualTo(sheet.right + 0.5)); // not cut off at the right edge
-    expect(find.descendant(of: find.byType(SegmentedButton<int>), matching: find.text('Always')), findsOneWidget);
+    final choices = find.byWidgetPredicate((w) => w is SegmentedButton);
+    expect(choices, findsWidgets);
+    for (final c in choices.evaluate()) {
+      expect(tester.getRect(find.byWidget(c.widget)).right, lessThanOrEqualTo(sheet.right + 0.5));
+    }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('More settings (user, 2026-10-21: the panels trimmed): the panel closes, and Settings opens on the '
+      "book's kind with only it and Reading - nothing there leaves the book", (tester) async {
+    setView(tester, const Size(1280, 800));
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => Center(
+      child: TextButton(
+        onPressed: () => showReaderPanelFrame(context, title: 'eBook settings',
+            children: (c, s) => epubPanelRows(c, s, api: noNetwork(StatusServer.new))),
+        child: const Text('open'),
+      ),
+    )))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('More settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('More settings'));
+    await tester.pumpAndSettle();
+    expect(find.text('eBook settings'), findsNothing, reason: 'the panel closed');
+    final screen = tester.widget<AppSettingsScreen>(find.byType(AppSettingsScreen));
+    expect(screen.initialPage, SettingsPage.ebooks);
+    expect(screen.only, unorderedEquals([SettingsPage.reading, SettingsPage.ebooks]));
+    // the side list: those two pages, no other
+    for (final p in SettingsPage.values) {
+      final listed = find.descendant(of: find.byType(ListView).first, matching: find.text(p.label));
+      expect(listed, p == SettingsPage.reading || p == SettingsPage.ebooks ? findsWidgets : findsNothing,
+          reason: p.name);
+    }
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget, reason: 'back to the book');
+  });
+
+  testWidgets("eBooks' two-page rows (user, 2026-10-21): Chapters start on only with two pages up; the Gutter only "
+      'with two pages up and an inset page', (tester) async {
+    Future<(bool, bool)> shown(TwoPages two, InsetPage inset) async {
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (c) => SingleChildScrollView(child: Column(
+          children: epubSettingRows(c, EpubPrefs(twoPages: two), (_) {}, inset: inset)))))));
+      int count<T>() => tester.widgetList(find.byType(SegmentedButton<T>)).length;
+      return (count<ChapterStart>() == 1, count<double>() == 2); // (the other double: line spacing)
+    }
+
+    expect(await shown(TwoPages.off, InsetPage.wideScreen), (false, false), reason: 'one page');
+    expect(await shown(TwoPages.wideScreen, InsetPage.wideScreen), (true, true));
+    expect(await shown(TwoPages.always, InsetPage.always), (true, true));
+    expect(await shown(TwoPages.always, InsetPage.never), (true, false), reason: 'no sheets, no gutter between them');
   });
 }

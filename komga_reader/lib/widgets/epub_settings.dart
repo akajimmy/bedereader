@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../api.dart';
 import '../screen.dart';
+import '../screens/app_settings.dart' show SettingsPage;
 import '../settings.dart';
 import 'display_panel.dart';
 import 'setting_rows.dart';
 
-/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting and
-/// Page.
-List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set) => [
+/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting, Page
+/// and Two pages. Two pages (user, 2026-10-21: in one group, the rows that don't apply hidden): [insetRow] (this
+/// device's Inset page, as [inset] is set), Dual page mode, then - two pages up - Chapters start on, and with an inset
+/// page the Gutter between the sheets.
+List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set,
+        {Widget? insetRow, InsetPage inset = InsetPage.wideScreen}) => [
       SettingsGroup(title: 'Text', synced: true, children: [
         ..._fontRows(e, set),
         _sizeRow(e, set),
@@ -16,38 +21,37 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
         _marginsRow(e, set),
       ]),
       SettingsGroup(title: 'Formatting', synced: true, children: _formattingRows(e, set)),
-      SettingsGroup(title: 'Page', synced: true, children: [
-        _coloursRow(e, set),
+      SettingsGroup(title: 'Page', synced: true, children: [_coloursRow(e, set)]),
+      SettingsGroup(title: 'Two pages', synced: true, children: [
+        if (insetRow != null) insetRow,
         _twoPagesRow(e, set),
-        _chapterStartRow(e, set),
-        _gutterRow(e, set),
+        if (e.twoPages != TwoPages.off) _chapterStartRow(e, set),
+        if (e.twoPages != TwoPages.off && inset != InsetPage.never) _gutterRow(e, set),
       ]),
     ];
 
-/// The eBook reader's panel, "eBook settings" (user, 2026-10-07): what's changed mid-book - the text, its
-/// formatting, then the page colours, position text and this device's screen.
-List<Widget> epubPanelRows(BuildContext context, AppSettings s) {
+/// The eBook reader's panel, "eBook settings": what's changed mid-book (user, 2026-10-21, trimmed): font, size, line
+/// spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
+/// settings, a tap away).
+List<Widget> epubPanelRows(BuildContext context, AppSettings s, {Komga? api}) {
   final e = s.epub;
   final set = s.setEpub;
   return [
     SettingsGroup(title: 'Text', children: [
-      _sizeRow(e, set),
       ..._fontRows(e, set),
+      _sizeRow(e, set),
       _lineSpacingRow(e, set),
-      _paragraphGapRow(e, set),
       _marginsRow(e, set),
     ]),
-    SettingsGroup(title: 'Formatting', children: _formattingRows(e, set)),
-    SettingsGroup(title: 'Reading', children: [
+    SettingsGroup(title: 'Page', children: [
       _coloursRow(e, set),
       _twoPagesRow(e, set),
-      _chapterStartRow(e, set),
-      _gutterRow(e, set),
-      positionTextRow(s, BookKind.ebooks),
+    ]),
+    SettingsGroup(title: 'Screen', children: [
       ...brightnessRows(s),
       if (canRotate) rotationRow(s),
-      screenOnRow(s),
     ]),
+    if (api != null) moreSettingsRow(context, api, SettingsPage.ebooks),
   ];
 }
 

@@ -84,10 +84,13 @@ extension SettingsPageInfo on SettingsPage {
 /// wide screen, or across the top as a table of contents on a narrow one, under their headings. The rows are the
 /// shared setting rows (widgets/setting_rows.dart), the same as in the reader's panels.
 class AppSettingsScreen extends StatefulWidget {
-  const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading});
+  const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading,
+      this.only});
   final Komga api;
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
+  /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
+  final List<SettingsPage>? only;
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -136,7 +139,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   List<SettingsPage> get _pages => [
         for (final p in SettingsPage.values)
-          if (p != SettingsPage.downloads || Downloads.instance.ready) p,
+          if ((p != SettingsPage.downloads || Downloads.instance.ready) && (widget.only?.contains(p) ?? true)) p,
       ];
 
   @override
@@ -284,12 +287,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   // ---- eBooks ----------------------------------------------------------------------------------------------------
   Widget _ebooks(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        ...epubSettingRows(context, s.epub, s.setEpub),
+        ...epubSettingRows(context, s.epub, s.setEpub, insetRow: insetPageRow(s), inset: s.display.insetPage),
         SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
-        SettingsGroup(title: 'Screen', children: [
-          epubTurnRow(s),
-          insetPageRow(s),
-        ]),
+        SettingsGroup(title: 'Screen', children: [epubTurnRow(s)]),
       ]);
 
 
