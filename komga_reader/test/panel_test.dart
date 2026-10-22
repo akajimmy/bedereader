@@ -193,7 +193,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('More settings'));
     await tester.pumpAndSettle();
-    expect(find.text('eBook settings'), findsNothing, reason: 'the panel closed');
+    expect(find.byType(SettingsGroup, skipOffstage: false).evaluate().where((e) => e.findAncestorWidgetOfExactType<AppSettingsScreen>() == null), isEmpty, reason: 'the panel closed');
     final screen = tester.widget<AppSettingsScreen>(find.byType(AppSettingsScreen));
     expect(screen.initialPage, SettingsPage.ebooks);
     expect(screen.only, unorderedEquals([SettingsPage.reading, SettingsPage.ebooks]));
@@ -206,7 +206,7 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget, reason: 'back to the book');
-    expect(find.text('eBook settings'), findsNothing, reason: 'not to the panel: it closed');
+    expect(find.byType(SettingsGroup), findsNothing, reason: 'not to the panel: it closed');
   });
 
   testWidgets("eBooks' two-page rows (user, 2026-10-21): Chapters start on only with two pages up; the Gutter only "
