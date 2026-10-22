@@ -63,6 +63,22 @@ void main() {
 
   // ---- the order of the buttons (a guard: it mustn't drift view to view) ------------------------------------------
 
+  testWidgets("a narrow window (650 px - Windows test plan, 2026-10-22): each view's title shortens beside the "
+      "buttons rather than overflowing the bar", (tester) async {
+    for (final (name, open) in [
+      ('library', () => library(tester)),
+      ('series', () => seriesView(tester)),
+      ('collection', () => collection(tester)),
+      ('read list', () => list(tester)),
+    ]) {
+      await open();
+      setView(tester, const Size(650, 1000));
+      await tester.pump();
+      await tester.pump();
+      expect(tester.takeException(), isNull, reason: '$name: no overflow');
+    }
+  });
+
   testWidgets('every view has its buttons in the one order, those that do not apply left out', (tester) async {
     for (final (mode, select) in [('series', true), ('books', true), ('collections', false), ('readLists', false)]) {
       SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': mode})});

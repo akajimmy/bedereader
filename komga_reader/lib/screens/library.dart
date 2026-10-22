@@ -236,8 +236,11 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
             const PopupMenuItem(value: null, child: Text('All libraries')),
             for (final l in _libraries) PopupMenuItem(value: l['id'] as String, child: Text(l['name'] as String)),
           ],
+          // a narrow window: the name shortens ("Demo Li...") beside the buttons - it overflowed the bar at 650 px
+          // (Windows test plan, 2026-10-22)
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text(_libraryName), const Icon(Icons.arrow_drop_down),
+            Flexible(child: Text(_libraryName, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis)),
+            const Icon(Icons.arrow_drop_down),
           ]),
         ),
         actions: viewBarActions(
