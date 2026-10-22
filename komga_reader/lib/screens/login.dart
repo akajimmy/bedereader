@@ -18,6 +18,34 @@ String? serverAddress(String typed) {
   return s;
 }
 
+/// The [typed] address sends the API key unencrypted beyond the home network: plain http:// to a host that isn't
+/// local (user, 2026-10-08 / 2026-10-21: a note on the sign-in screen). Local: private and loopback addresses
+/// (10.x, 172.16-31.x, 192.168.x, 127.x, IPv6 fc00::/7, fe80::/10, ::1), localhost, a name without a dot (a home
+/// network's own name, "nick-nas"), .local / .lan / .home.arpa / .internal names - and Tailscale (100.64.0.0/10,
+/// .ts.net), whose tunnel is encrypted already. https never.
+bool sendsKeyInTheClear(String typed) {
+  final address = serverAddress(typed);
+  if (address == null) return false;
+  final uri = Uri.parse(address);
+  if (uri.scheme != 'http') return false;
+  final host = uri.host.toLowerCase();
+  if (host == 'localhost' || !host.contains('.') && !host.contains(':')) return false;
+  for (final end in ['.local', '.lan', '.home.arpa', '.internal', '.ts.net', '.localhost']) {
+    if (host.endsWith(end)) return false;
+  }
+  final v4 = RegExp(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$').firstMatch(host);
+  if (v4 != null) {
+    final a = int.parse(v4.group(1)!), b = int.parse(v4.group(2)!);
+    return !(a == 10 || a == 127 || (a == 172 && b >= 16 && b <= 31) || (a == 192 && b == 168) ||
+        (a == 169 && b == 254) || (a == 100 && b >= 64 && b <= 127));
+  }
+  if (host.contains(':')) {
+    final h = host.replaceAll(RegExp(r'[\[\]]'), '');
+    return !(h == '::1' || RegExp(r'^f[cd]').hasMatch(h) || RegExp(r'^fe[89ab]').hasMatch(h));
+  }
+  return true; // a name on the internet
+}
+
 /// Server address + a Komga API key (create one in the Komga web client: Account settings > API keys).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.onSignedIn, this.client});
@@ -38,6 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _server.addListener(() { if (mounted) setState(() {}); }); // (the http note follows the address as it's typed)
     // signing in again (after Sign out): the last server address is still saved on the device
     SharedPreferences.getInstance().then((p) {
       final last = p.getString('server');
@@ -93,6 +122,18 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(controller: _server, keyboardType: TextInputType.url, autocorrect: false,
                   enableSuggestions: false, // no predictive text: it adds spaces after "192.168.1.10:"
                   decoration: const InputDecoration(labelText: 'Server', hintText: 'http://192.168.1.10:25600')),
+              if (sendsKeyInTheClear(_server.text))
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.lock_open, size: 18, color: Color(0xFFFFB74D)),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(
+                        "This address is outside your home network over plain http: your API key would travel "
+                        'unencrypted. Use https if your server has it.',
+                        style: TextStyle(color: Color(0xFFFFB74D), fontSize: 13))),
+                  ]),
+                ),
               const SizedBox(height: 12),
               TextField(controller: _key, obscureText: true, decoration: const InputDecoration(labelText: 'API key'),
                   onSubmitted: (_) => _connect()),
