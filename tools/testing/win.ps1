@@ -21,6 +21,7 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int hh, bool r);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
@@ -59,7 +60,9 @@ function App {
 # active window), and borrow the active window's input to make it active too (no keystrokes sent anywhere).
 function Front($p) {
     $h = $p.MainWindowHandle
-    [void][W]::ShowWindow($h, 9)
+    # only a minimized window is restored: restoring a full-screen one shrank it to its old size, borderless (user,
+    # 2026-10-22)
+    if ([W]::IsIconic($h)) { [void][W]::ShowWindow($h, 9) }
     [void][W]::SetWindowPos($h, [IntPtr](-1), 0, 0, 0, 0, 0x0003)  # HWND_TOPMOST; SWP_NOSIZE | SWP_NOMOVE
     $fg = [W]::GetForegroundWindow()
     if ($fg -ne $h) {
@@ -149,7 +152,8 @@ switch ($cmd) {
         $vk = @{ ctrl = 0x11; shift = 0x10; alt = 0x12; a = 0x41; c = 0x43; f11 = 0x7A; esc = 0x1B; enter = 0x0D;
                  space = 0x20; left = 0x25; up = 0x26; right = 0x27; down = 0x28; pgup = 0x21; pgdn = 0x22 }
         $names = $a -split '\s+' | Where-Object { $_ }
-        $codes = foreach ($n in $names) { if (-not $vk.ContainsKey($n.ToLower())) { throw "unknown key $n" }; [uint16]$vk[$n.ToLower()] }
+        # (an array always: one key alone was a single value, and its key-up went missing - 2026-10-22)
+        $codes = @(foreach ($n in $names) { if (-not $vk.ContainsKey($n.ToLower())) { throw "unknown key $n" }; [uint16]$vk[$n.ToLower()] })
         $inputs = @(foreach ($k in $codes) { [W]::Key($k, $false) }) + @(foreach ($k in $codes[($codes.Count - 1)..0]) { [W]::Key($k, $true) })
         $sent = [W]::SendInput([uint32]$inputs.Count, $inputs, [Runtime.InteropServices.Marshal]::SizeOf([type][W+INPUT]))
         "pressed $($names -join '+') ($sent events)"
