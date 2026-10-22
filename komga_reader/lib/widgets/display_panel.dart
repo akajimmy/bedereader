@@ -393,30 +393,19 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ena
     ];
 
 /// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
-/// extra dimming on Android, dimming only on a PC. Outside the reader (Settings), the screen takes it while the slider
-/// is being used, so it can be seen ([BrightnessPreview]).
+/// extra dimming on Android and iOS, dimming only on a PC - the same row everywhere (user, 2026-10-22: "match the
+/// brightness row"). Outside the reader (Settings), the screen takes it while the slider is being used, so it can be
+/// seen ([BrightnessPreview]).
 List<Widget> brightnessRows(AppSettings s) {
-  final d = s.display;
-  if (!DisplayPrefs.backlightControl) {
-    // a monitor's backlight can't be set, so the slider only dims (right = no dimming)
-    return [
-      BrightnessPreview(child: SliderRow(
-        label: 'Screen brightness',
-        divisions: 20, // 5% steps
-        value: d.brightness ?? 1,
-        valueText: (d.brightness ?? 1) >= 0.995 ? 'Full' : '${((d.brightness ?? 1) * 100).round()}%',
-        onChanged: (v) => s.setDisplay(s.display.copyWith(brightness: () => v >= 0.995 ? null : v)),
-      )),
-    ];
-  }
   // one line (user, 2026-10-21: "keep the two, reconsider the layout for compactness"): the label, Auto, the slider
   // and its value. Auto before the slider: a remote's Left / Right move the slider, so it reaches Auto first (Up /
   // Down land on a row's first control)
   return [_BrightnessRow(s)];
 }
 
-/// Screen brightness on one line, with backlight control: [Auto] - the system's own - then the slider, greyed while
-/// Auto is on. Auto off starts from the screen's level now, so nothing jumps until the slider moves.
+/// Screen brightness on one line: [Auto] - the system's own - then the slider, greyed while Auto is on. Auto off
+/// starts from the screen's level now, so nothing jumps until the slider moves. A PC (no backlight to set): Auto is no
+/// dimming, the slider dims - Auto off starts from full.
 class _BrightnessRow extends StatelessWidget {
   const _BrightnessRow(this.s);
   final AppSettings s;
@@ -424,6 +413,8 @@ class _BrightnessRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final b = s.display.brightness;
+    final backlight = DisplayPrefs.backlightControl;
+    final off = backlight ? 0.6 : 1.0; // the slider's place while Auto is on (a PC: full - no dimming)
     const label = Text('Brightness', style: TextStyle(fontSize: 14.5));
     // a slim button like every other choice, lit while on (user, 2026-10-22: the chip was "ugly and inconsistent")
     final auto = SegmentedButton<bool>(
@@ -434,19 +425,19 @@ class _BrightnessRow extends StatelessWidget {
       selected: {if (b == null) true},
       onSelectionChanged: (now) async {
         if (now.isNotEmpty) return s.setDisplay(s.display.copyWith(brightness: () => null));
-        final level = await getScreenBrightness();
-        s.setDisplay(s.display.copyWith(brightness: () => level == null ? 0.6 : DisplayPrefs.sliderFor(level)));
+        final level = backlight ? await getScreenBrightness() : null;
+        s.setDisplay(s.display.copyWith(brightness: () => level == null ? off : DisplayPrefs.sliderFor(level)));
       },
     );
     final slider = BrightnessPreview(child: Semantics(
       label: 'Screen brightness',
       child: MediaQuery(
         data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
-        child: Slider(value: (b ?? 0.6).clamp(0.0, 1.0), divisions: 20, // 5% steps
+        child: Slider(value: (b ?? off).clamp(0.0, 1.0), divisions: 20, // 5% steps
             onChanged: b == null ? null : (v) => s.setDisplay(s.display.copyWith(brightness: () => v))),
       ),
     ));
-    final value = Text(b == null ? 'Auto' : b < DisplayPrefs.dimZone ? 'Extra dim' : '${(b * 100).round()}%',
+    final value = Text(b == null ? 'Auto' : backlight && b < DisplayPrefs.dimZone ? 'Extra dim' : '${(b * 100).round()}%',
         textAlign: TextAlign.right, style: const TextStyle(color: hintColour, fontSize: 12.5));
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 4, 14, 4),
