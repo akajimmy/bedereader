@@ -22,6 +22,7 @@ import '../synced_ids.dart';
 import 'reader_bars.dart';
 import 'renderer.dart';
 import 'spreads.dart';
+import 'turn_drag.dart';
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class NoPages implements Exception {}
@@ -698,9 +699,33 @@ class ComicRenderer extends Renderer {
 
   bool get _curlMode => _settings.display.pageTurn == PageTurn.curl && PageCurl.loaded != null;
 
-  /// A horizontal drag curls the page - unless it's moving the page itself (zoomed, pinching, a sideways page).
-  bool get _curlDrag =>
-      _curlMode && !zoomed && _fingers <= 1 && !_sideways.contains(_at) && pc != null && !host.controlsUp;
+  /// A drag may turn the page (Slide or Curl, [TurnDragRecognizer]) - unless it's moving the page itself (zoomed, a
+  /// sideways page); a curl not with the controls up. (A second finger, a pinch: the recognizer stands aside.)
+  bool get _canDragTurn =>
+      !zoomed && !_sideways.contains(_at) && pc != null && !(_curlMode && host.controlsUp);
+
+  /// The page being read scrolls up and down (fit width, original size): only flatter drags turn, the steeper ones
+  /// scroll it.
+  bool get _scrollsDown {
+    final c = _scrolls[_at];
+    return c != null && c.hasClients && c.position.axis == Axis.vertical && c.position.maxScrollExtent > 0;
+  }
+
+  Drag? _slide; // Slide: the page view following a drag
+
+  void _configureTurn(TurnDragRecognizer r) => r
+    ..canTurn = (() => _canDragTurn)
+    ..maxAngle = (() => _scrollsDown ? 30.0 : 60.0)
+    ..onStart = (d) {
+      if (_curlMode) {
+        _curlDragStart(d);
+      } else {
+        _slide = pc?.position.drag(d, () => _slide = null);
+      }
+    }
+    ..onUpdate = ((d) { if (_curlMode) { _curlDragUpdate(d); } else { _slide?.update(d); } })
+    ..onEnd = ((d) { if (_curlMode) { _curlDragEnd(d); } else { _slide?.end(d); } })
+    ..onCancel = (() { if (_curlMode) { _curlDragEnd(DragEndDetails()); } else { _slide?.cancel(); } });
 
   /// Positions in reading-direction space (x from the right edge in a right-to-left book).
   Offset _reading(Offset p) => rtl ? Offset(_area.width - p.dx, p.dy) : p;
@@ -867,8 +892,9 @@ class ComicRenderer extends Renderer {
     final room = c.forward ? s.dx : _area.width - s.dx; // from the start to the edge being dragged towards
     final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
-    // a diagonal drag tilts the page by half its height change (PageCurl.pinned keeps the spine down)
-    final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy) * 0.5;
+    // the grabbed point follows the pointer up and down as well (user, 2026-10-22: "grab the top right corner of the
+    // page and drag it down left"; it went half the way) - PageCurl.pinned keeps the spine down
+    final y = c.grab.dy + (_pagePoint(d.localPosition, c.page).dy - _pagePoint(s0, c.page).dy);
     c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     _curlMoved.value++;
   }
@@ -898,6 +924,7 @@ class ComicRenderer extends Renderer {
           // one page or two, by the screen's shape now (turned, a window resized) and the setting: the page view
           // again after this frame, on the same page
           final dual = pages.isNotEmpty && _twoPagesOn(_area);
+          final scrolls = ScrollConfiguration.of(context); // the pages' own scrolling (the page view's is off)
           if (dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: dual));
           return Listener(
             // wheel over the end card or a loading page (over a page, the page itself takes it)
@@ -928,10 +955,7 @@ class ComicRenderer extends Renderer {
             },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              // 3D page curl: a horizontal drag curls the page (the page view doesn't scroll in that mode)
-              onHorizontalDragStart: _curlDrag ? _curlDragStart : null,
-              onHorizontalDragUpdate: _curlDrag ? _curlDragUpdate : null,
-              onHorizontalDragEnd: _curlDrag ? _curlDragEnd : null,
+              // (drags that turn: the turn area over the pages, below)
               onTapUp: (d) => _onTapUp(d, box.maxWidth),
               child: RepaintBoundary(
                 key: _pagesKey,
@@ -942,6 +966,10 @@ class ComicRenderer extends Renderer {
                   color: background,
                   child: NotificationListener<ScrollNotification>(
                     onNotification: _onPagesScroll,
+                    // the page view's own drag off: a drag turns through the turn area (below), which decides
+                    // it - the page's own (zoom, scrolling) restored inside
+                    child: ScrollConfiguration(
+                    behavior: ScrollConfiguration.of(context).copyWith(dragDevices: const {}),
                     child: PageView.builder(
                       // a fresh page view for each book: kept, it hands the new controller the last book's place
                       // (moving on from an end card opened the next book on its own end card - tablet, 2026-09-30)
@@ -957,7 +985,9 @@ class ComicRenderer extends Renderer {
                           : null,
                       itemCount: _views + 1,
                       onPageChanged: _onPage,
-                      itemBuilder: (context, v) => v == _views ? host.endCard() : _view(context, v),
+                      itemBuilder: (_, v) => ScrollConfiguration(behavior: scrolls,
+                          child: Builder(builder: (context) => v == _views ? host.endCard() : _view(context, v))),
+                    ),
                     ),
                   ),
                 ),
@@ -965,6 +995,8 @@ class ComicRenderer extends Renderer {
             ),
           );
         }),
+        // a drag that turns the page, told from the page's own gestures (the zoom, scrolling) before they hear it
+        Positioned.fill(child: TurnDragArea(configure: _configureTurn)),
         if (_curl != null)
           Positioned.fill(
             child: IgnorePointer(

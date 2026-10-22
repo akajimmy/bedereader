@@ -223,7 +223,9 @@ class CurlTurns {
     final room = c.forward ? s.dx : area.width - s.dx;
     final moved = c.forward ? s.dx - p.dx : p.dx - s.dx;
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
-    final y = c.grab.dy + (p.dy - s.dy) * 0.5; // a diagonal drag tilts the page by half its height change
+    // the grabbed point follows the pointer up and down as well (user, 2026-10-22: a corner taken hold of comes with
+    // it; it went half the way)
+    final y = c.grab.dy + (p.dy - s.dy);
     c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     _moved.value++;
   }

@@ -1,0 +1,192 @@
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/widgets.dart';
+
+/// How a page turn is told from a drag, the same in both readers, for touch, mouse and pen, in every page-turn mode
+/// (user, 2026-10-22: "don't fix these as individual cases but consider what they mean for how page turns should be
+/// captured" - a mouse couldn't curl a comic page at all, a steep diagonal lost to the page's zoom, a corner couldn't
+/// be taken hold of).
+///
+/// The reader decides, not whichever of the page's own gestures claims the pointer first: this sits over the page
+/// (its gestures hear a pointer before the page's - the zoom, the text selection, a page's scrolling) and, with one
+/// pointer down and the page able to turn ([canTurn] at the press: not zoomed, nothing selected...), takes a drag
+/// that has moved a few pixels with a sideways part - up to [maxAngle] degrees from horizontal (a page that scrolls
+/// up and down keeps the steeper ones). Anything else it leaves to the page: a steeper drag, a second finger (a
+/// pinch), and a pointer held still for [hold] before it moves - the eBooks' "hold to select" (user, 2026-10-22).
+///
+/// A mouse: taken at its first couple of pixels (the zoom's pan claims a mouse at two), the direction judged a few
+/// pixels later - steeper than [maxAngle], the drag does nothing.
+class TurnDragRecognizer extends OneSequenceGestureRecognizer {
+  TurnDragRecognizer({super.debugOwner});
+
+  /// At the press: may this drag turn the page at all.
+  bool Function() canTurn = () => true;
+
+  /// The steepest drag that still turns, in degrees from horizontal.
+  double Function() maxAngle = () => 60;
+
+  /// Held still this long, the pointer is the page's (a long press, a selection).
+  Duration hold = kLongPressTimeout;
+
+  /// The turn: [onStart] from where the pointer went down, [onUpdate] as it moves (delta and primaryDelta: the
+  /// horizontal part), [onEnd] with its velocity (primaryVelocity: horizontal); [onCancel] when a second pointer
+  /// lands mid-turn.
+  GestureDragStartCallback? onStart;
+  GestureDragUpdateCallback? onUpdate;
+  GestureDragEndCallback? onEnd;
+  VoidCallback? onCancel;
+
+  static const _touchSlop = 12.0; // under the page's own (the zoom's 36, a scroll's 18): heard first, decided first
+  static const _mouseSlop = 2.0; // the zoom's pan claims a mouse at 2 px
+  static const _judgeAt = 8.0; // a mouse's direction, judged once it's moved this far
+
+  int? _pointer;
+  Offset _downGlobal = Offset.zero, _downLocal = Offset.zero, _lastGlobal = Offset.zero;
+  PointerDeviceKind _kind = PointerDeviceKind.touch;
+  bool _accepted = false; // won the arena
+  bool _turning = false; // [onStart] called: a turn under way
+  bool _dud = false; // a mouse drag taken but too steep: does nothing
+  VelocityTracker? _velocity;
+  Timer? _holdTimer;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (_pointer != null) {
+      // a second pointer: a pinch - the page's
+      if (_turning) onCancel?.call();
+      _giveUp();
+      return;
+    }
+    if (!canTurn()) return;
+    super.addAllowedPointer(event);
+    _pointer = event.pointer;
+    _kind = event.kind;
+    _downGlobal = _lastGlobal = event.position;
+    _downLocal = event.localPosition;
+    _accepted = _turning = _dud = false;
+    _velocity = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.position);
+    _holdTimer = Timer(hold, () {
+      if (!_accepted) _giveUp(); // held: a long press, a selection
+    });
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+    if (event is PointerMoveEvent) {
+      _velocity?.addPosition(event.timeStamp, event.position);
+      final moved = event.position - _downGlobal;
+      if (!_accepted) {
+        final mouse = _kind == PointerDeviceKind.mouse;
+        if (moved.distance < (mouse ? _mouseSlop : _touchSlop)) return;
+        if (!mouse && !_sideways(moved)) {
+          _giveUp(); // steeper: a scroll, the page's
+          return;
+        }
+        _accepted = true;
+        _holdTimer?.cancel();
+        resolve(GestureDisposition.accepted);
+      }
+      if (!_turning && !_dud) {
+        if (moved.distance < _judgeAt) return; // (a mouse: its direction a few pixels on)
+        if (!_sideways(moved)) {
+          _dud = true;
+          return;
+        }
+        _turning = true;
+        onStart?.call(DragStartDetails(globalPosition: _downGlobal, localPosition: _downLocal, kind: _kind));
+        _lastGlobal = _downGlobal;
+      }
+      if (_turning) {
+        final delta = event.position - _lastGlobal;
+        _lastGlobal = event.position;
+        onUpdate?.call(DragUpdateDetails(globalPosition: event.position, localPosition: event.localPosition,
+            delta: Offset(delta.dx, 0), primaryDelta: delta.dx, kind: _kind));
+      }
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      if (_turning) {
+        // the horizontal part (a turn's speed; Flutter's drag ends carry one axis)
+        final vx = event is PointerUpEvent ? _velocity!.getVelocity().pixelsPerSecond.dx : 0.0;
+        onEnd?.call(DragEndDetails(velocity: Velocity(pixelsPerSecond: Offset(vx, 0)), primaryVelocity: vx,
+            globalPosition: event.position, localPosition: event.localPosition));
+      }
+      if (!_accepted) {
+        _giveUp(); // a tap: the page's taps
+      } else {
+        _reset();
+        stopTrackingPointer(event.pointer);
+      }
+    }
+  }
+
+  bool _sideways(Offset moved) {
+    if (moved.dx == 0) return false;
+    final angle = math.atan2(moved.dy.abs(), moved.dx.abs()) * 180 / math.pi;
+    return angle <= maxAngle();
+  }
+
+  /// Stands aside: the pointer is the page's.
+  void _giveUp() {
+    final p = _pointer;
+    _reset();
+    if (p != null) {
+      resolve(GestureDisposition.rejected);
+      stopTrackingPointer(p);
+    }
+  }
+
+  void _reset() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
+    _pointer = null;
+    _accepted = _turning = _dud = false;
+    _velocity = null;
+  }
+
+  @override
+  void acceptGesture(int pointer) {}
+
+  @override
+  void rejectGesture(int pointer) {
+    // another gesture won the pointer first (a double tap's, say): no turn
+    if (pointer == _pointer) {
+      if (_turning) onCancel?.call();
+      _reset();
+      stopTrackingPointer(pointer);
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {}
+
+  @override
+  void dispose() {
+    _holdTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  String get debugDescription => 'page turn drag';
+}
+
+/// The page turn's drag over the whole of [child]'s area, without taking its taps or anything else: put over the page
+/// (last in a Stack), so it hears a pointer before the page does.
+class TurnDragArea extends StatelessWidget {
+  const TurnDragArea({super.key, required this.configure, this.child});
+
+  /// Sets the recognizer's callbacks and tests (run on each build).
+  final void Function(TurnDragRecognizer r) configure;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) => RawGestureDetector(
+        behavior: HitTestBehavior.translucent,
+        gestures: {
+          TurnDragRecognizer: GestureRecognizerFactoryWithHandlers<TurnDragRecognizer>(
+              () => TurnDragRecognizer(debugOwner: this), configure),
+        },
+        child: child ?? const SizedBox.expand(),
+      );
+}

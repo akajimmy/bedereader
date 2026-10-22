@@ -1205,6 +1205,74 @@ void main() {
         tester.widget<InteractiveViewer>(find.byType(InteractiveViewer).first).transformationController!.value
             .getMaxScaleOnAxis();
 
+    group('a drag turns the page by what it means, not by which gesture hears it first (user, 2026-10-22: a mouse '
+        "couldn't curl a page at all; a steep diagonal lost to the page's zoom)", () {
+      Finder curling() => find.byWidgetPredicate((w) => w is CustomPaint && w.painter is CurlLayer);
+
+      /// A slow drag from [from] by [step] each move, [n] moves; whether a curl showed on the way.
+      Future<bool> drag(WidgetTester tester, Offset from, Offset step,
+          {PointerDeviceKind kind = PointerDeviceKind.touch, int n = 20}) async {
+        final g = await tester.startGesture(from, kind: kind);
+        var curled = false;
+        for (var i = 1; i <= n; i++) {
+          await g.moveTo(from + step * i.toDouble());
+          await tester.pump(const Duration(milliseconds: 30));
+          curled = curled || curling().evaluate().isNotEmpty;
+        }
+        await g.up();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 600));
+        await tester.pump();
+        return curled;
+      }
+
+      void turnMode(PageTurn t) {
+        AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: t));
+        addTearDown(() => AppSettings.instance.setDisplay(
+            AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe)));
+      }
+
+      testWidgets('Curl, a mouse: a drag from the middle of the picture curls the page and turns it', (tester) async {
+        turnMode(PageTurn.curl);
+        await openLoaded(tester);
+        final pic = tester.getRect(find.byType(RawImage).first);
+        expect(await drag(tester, pic.center, const Offset(-12, 0), kind: PointerDeviceKind.mouse), isTrue);
+        expect(page(tester), 1.0);
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets("Curl: the picture's top-right corner taken hold of and drawn down-left at 45 degrees curls the page",
+          (tester) async {
+        turnMode(PageTurn.curl);
+        await openLoaded(tester);
+        final pic = tester.getRect(find.byType(RawImage).first);
+        for (final kind in [PointerDeviceKind.touch, PointerDeviceKind.mouse]) {
+          expect(await drag(tester, pic.topRight + const Offset(-4, 4), const Offset(-8, 8), kind: kind, n: 6), isTrue,
+              reason: kind.name);
+          expect(page(tester), 0.0, reason: '${kind.name}: a short pull springs back');
+        }
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets('a drag steeper than 60 degrees is not a turn; one at 55 degrees is (touch)', (tester) async {
+        turnMode(PageTurn.curl);
+        await openLoaded(tester);
+        final pic = tester.getRect(find.byType(RawImage).first);
+        expect(await drag(tester, pic.center, const Offset(-3, 12), n: 6), isFalse, reason: 'about 76 degrees');
+        expect(await drag(tester, pic.center, const Offset(-6, 8.6), n: 6), isTrue, reason: 'about 55 degrees');
+        await tester.pump(const Duration(seconds: 2));
+      });
+
+      testWidgets('Slide, a mouse: a drag across the picture slides to the next page', (tester) async {
+        await openLoaded(tester);
+        final pic = tester.getRect(find.byType(RawImage).first);
+        await drag(tester, pic.center + const Offset(150, 0), const Offset(-25, 0), kind: PointerDeviceKind.mouse);
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(page(tester), 1.0);
+        await tester.pump(const Duration(seconds: 2));
+      });
+    });
+
     testWidgets('the neighbouring pages are kept built (processed before they are turned to)', (tester) async {
       // test audit, 2026-09-30: it only read the page view's allowImplicitScrolling (a constant); now the next page
       // must really be there, built and laid out off screen. One mode: every page turn mode is the same page view,
