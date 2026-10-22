@@ -191,8 +191,24 @@ class SettingsGroup extends StatelessWidget {
 /// wide control (segmented buttons) goes under the label when there isn't room beside it.
 class SettingRow extends StatelessWidget {
   const SettingRow({super.key, required this.title, this.subtitle, this.trailing, this.stackWhenNarrow = false,
-      this.trailingWidth = 240, this.enabled = true});
+      this.trailingWidth = 240, this.enabled = true, this.titleIcon});
   final String title;
+  final IconData? titleIcon; // drawn in the title where it says [iconHere] (a button's own icon, named in the text)
+
+  /// Where [titleIcon] goes in a title.
+  static const iconHere = '{icon}';
+
+  /// [title] as text, [icon] in it where it says [iconHere].
+  static Widget titleText(String title, IconData? icon, TextStyle style) {
+    if (icon == null || !title.contains(iconHere)) return Text(title, style: style);
+    final at = title.indexOf(iconHere);
+    return Text.rich(TextSpan(style: style, children: [
+      TextSpan(text: title.substring(0, at)),
+      WidgetSpan(alignment: PlaceholderAlignment.middle,
+          child: Icon(icon, size: (style.fontSize ?? 14) + 4, color: style.color)),
+      TextSpan(text: title.substring(at + iconHere.length)),
+    ]));
+  }
   final String? subtitle;
   final Widget? trailing;
   final bool stackWhenNarrow;
@@ -206,7 +222,7 @@ class SettingRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      Text(title, style: TextStyle(fontSize: 14.5, color: enabled ? null : const Color(0xFF6A6A6A))),
+      titleText(title, titleIcon, TextStyle(fontSize: 14.5, color: enabled ? null : const Color(0xFF6A6A6A))),
       if (subtitle != null)
         Padding(
           padding: const EdgeInsets.only(top: 2),
@@ -280,15 +296,16 @@ ButtonStyle slimButtonStyle(ColorScheme scheme) {
 /// Under a row's label, the full width of the row: the controls of a page or panel all start and end on the same
 /// lines (user, 2026-10-22: "all the selection controls go to their own line, full width of the space allowed").
 class _UnderLabel extends StatelessWidget {
-  const _UnderLabel({required this.title, this.subtitle, this.enabled = true, required this.control});
+  const _UnderLabel({required this.title, this.subtitle, this.enabled = true, required this.control, this.titleIcon});
   final String title;
+  final IconData? titleIcon;
   final String? subtitle;
   final bool enabled;
   final Widget control;
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingRow(title: title, enabled: enabled, subtitle: subtitle),
+        SettingRow(title: title, enabled: enabled, subtitle: subtitle, titleIcon: titleIcon),
         Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 12), child: control),
       ]);
 }
@@ -375,9 +392,10 @@ class Choice<T> {
 /// A choice between a few options, as compact segmented buttons in the row.
 class SegmentRow<T> extends StatelessWidget {
   const SegmentRow({super.key, required this.title, this.subtitle, required this.choices, required this.value,
-      required this.onChanged, this.enabled = true, this.onReselect, this.markRoom = false});
+      required this.onChanged, this.enabled = true, this.onReselect, this.markRoom = false, this.titleIcon});
   final bool enabled; // off: greyed out, showing the value (a series following the defaults)
   final String title;
+  final IconData? titleIcon; // in the title where it says SettingRow.iconHere
   final String? subtitle;
   final List<Choice<T>> choices;
   final T value;
@@ -405,6 +423,7 @@ class SegmentRow<T> extends StatelessWidget {
     // the buttons keep their height (user, 2026-10-08: shrinking the whole control "just makes it harder to tap")
     return _UnderLabel(
       title: title,
+      titleIcon: titleIcon,
       subtitle: subtitle,
       enabled: enabled,
       control: LayoutBuilder(builder: (context, box) => _buttons(context, shrinkLabels: own > box.maxWidth)),
