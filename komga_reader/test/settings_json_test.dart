@@ -92,7 +92,7 @@ void main() {
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pageStrip: true, insetPage: InsetPage.never);
+        pageStrip: true, insetPage: InsetPage.never, webtoonScroll: WebtoonScroll.page);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -118,7 +118,8 @@ void main() {
       ('textScale', (d) => d.textScale, 1.15, 1.0),
       ('accent', (d) => d.accent, Accent.green, Accent.blue),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
-      ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen), // eBooks' sheet, this device's (2026-10-12)
+      ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen),
+      ('webtoonScroll', (d) => d.webtoonScroll, WebtoonScroll.page, WebtoonScroll.smooth), // (2026-10-22) // eBooks' sheet, this device's (2026-10-12)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
     final none = DisplayPrefs.fromJson({}); // a save with none of them

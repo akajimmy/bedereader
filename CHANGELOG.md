@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- Webtoons: a series Komga marks as Webtoon (or one set to the new Direction choice, Vertical scroll) reads as one continuous strip scrolled down - the full width of a tall screen, a centred column on a wide one. The wheel scrolls as far as it spins, a held key or remote button scrolls steadily, and a tap at the side or one press glides a short way - or most of a screen with Settings > Comics > Webtoon scrolling: Page. The end card follows the last slice, as with any book. (First version: no zoom, Enhance or page curl in the strip yet.)
+
 **Fixed**
 
 - eBooks with a mouse: a double click selects a word anywhere on the text (it only worked in the middle third - elsewhere the first click turned the page). One click on the text now turns (or shows the controls) a moment later; a click in the margins or round an inset page turns at once. Press, hold and drag selects even when the mouse drifts a few pixels during the hold (it used to start a page drag and select nothing).

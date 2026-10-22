@@ -136,9 +136,9 @@ abstract class Renderer extends ChangeNotifier {
   // ---- moving
 
   /// A turn forward or back; from the end card forward is the next book. [snap]: a tap - a turn under way ends at
-  /// once.
-  void forward({bool snap = false});
-  void back({bool snap = false});
+  /// once. [held]: a held key's repeat (a webtoon glides on a little each - user, 2026-10-22).
+  void forward({bool snap = false, bool held = false});
+  void back({bool snap = false, bool held = false});
 
   /// To [place] at once (the slider, another device's place) - not a turn (the Reader knows it's coming).
   void jumpTo(int place);

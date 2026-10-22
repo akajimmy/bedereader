@@ -23,6 +23,7 @@ import 'renderer.dart';
 import 'curl_turns.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
+import 'webtoon_view.dart';
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class NoPages implements Exception {}
@@ -76,7 +77,8 @@ class ComicRenderer extends Renderer {
   /// Two pages side by side now (the setting, on this screen's shape).
   bool get dual => _dual;
 
-  bool _twoPagesOn(Size area) => twoPagesAllowed && prefs.twoPages.on(area); // (the series' own, or the default)
+  bool _twoPagesOn(Size area) =>
+      twoPagesAllowed && !webtoon && prefs.twoPages.on(area); // (the series' own, or the default; never a webtoon)
   bool _dual = false;
   List<Spread> _spreads = const [];
   List<int> _spreadOf = const [];
@@ -164,9 +166,20 @@ class ComicRenderer extends Renderer {
   @override
   bool get rtl => switch (prefs.direction) {
         ReadingDirection.rtl => true,
-        ReadingDirection.ltr => false,
+        ReadingDirection.ltr || ReadingDirection.vertical => false,
         ReadingDirection.auto => _komgaDirection == 'RIGHT_TO_LEFT',
       };
+
+  /// A webtoon: the pages one continuous strip, scrolled down ([WebtoonView]) - the series set to Vertical scroll, or
+  /// on Auto where Komga says Webtoon (user, 2026-10-22).
+  bool get webtoon => switch (prefs.direction) {
+        ReadingDirection.vertical => true,
+        ReadingDirection.auto => _komgaDirection == 'WEBTOON',
+        _ => false,
+      };
+
+  WebtoonController? _strip; // the strip's place and scrolling, while a webtoon is shown
+  bool _wasWebtoon = false; // (paged again: the page view on the place read in the strip)
 
   // ---- opening a book
 
@@ -218,6 +231,7 @@ class ComicRenderer extends Renderer {
     _book = book;
     this.pages = pages;
     index = start;
+    _strip = null; // (a webtoon opens at its place)
     _loader = loader;
     zoomed = false;
     _bookFit = null;
@@ -416,6 +430,10 @@ class ComicRenderer extends Renderer {
   /// To [place] at once (the slider, the strip, another device's page) - not a turn (the Reader knows it's coming).
   @override
   void jumpTo(int place) {
+    if (webtoon) {
+      _strip?.jumpTo(place);
+      return;
+    }
     finishCurlNow();
     pc?.jumpToPage(_viewOf(place));
   }
@@ -427,7 +445,16 @@ class ComicRenderer extends Renderer {
 
   /// Forward: in fit width/height scroll on through the page first, then turn; from the end card, the next book.
   @override
-  void forward({bool snap = false}) {
+  void forward({bool snap = false, bool held = false}) {
+    if (webtoon) {
+      if (pc == null || host.busy) return;
+      if (_strip?.atEnd ?? false) {
+        host.nextBook(); // (the end card showing)
+        return;
+      }
+      _webtoonStep(1, held: held);
+      return;
+    }
     if (_blocked) return;
     if (_at >= _views) {
       host.nextBook();
@@ -448,7 +475,12 @@ class ComicRenderer extends Renderer {
 
   /// Back: scroll back through the page first; the previous page then opens at its end.
   @override
-  void back({bool snap = false}) {
+  void back({bool snap = false, bool held = false}) {
+    if (webtoon) {
+      if (pc == null || host.busy) return;
+      _webtoonStep(-1, held: held);
+      return;
+    }
     if (_blocked) return;
     if (zoomed && (_steppers[_at]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
     final c = _scrolls[_at];
@@ -484,7 +516,32 @@ class ComicRenderer extends Renderer {
   /// A Zoom in / Zoom out step (the keys) - fit screen, the only fit that zooms.
   @override
   void zoomStep(bool zoomIn) {
+    if (webtoon) return;
     if (prefs.fit == FitMode.screen) _zoomSteps[_at]?.call(zoomIn);
+  }
+
+  // ---- a webtoon's scrolling (user, 2026-10-22): one press - a tap at the side, a key - glides a short way (Smooth)
+  // or most of a screen (Page: a strip of it kept on screen); a held key's repeats glide on steadily, a little each,
+  // so a held key scrolls continuously
+  static const smoothStep = 0.25, pageStep = 0.85, heldStep = 0.06; // shares of the screen's height
+
+  void _webtoonStep(int direction, {required bool held}) {
+    final s = _strip;
+    if (s == null) return;
+    final share = held
+        ? heldStep
+        : _settings.display.webtoonScroll == WebtoonScroll.page
+            ? pageStep
+            : smoothStep;
+    s.glide(direction * share * s.viewport,
+        duration: held ? const Duration(milliseconds: 120) : const Duration(milliseconds: 260));
+  }
+
+  /// The strip moved to slice [i] ([pages.length]: the end card).
+  void _onStripPlace(int i) {
+    index = i;
+    if (i <= last) _loader?.around(i, span: 2); // (a screen can show two or three slices)
+    host.pageChanged(i, curling: false);
   }
 
   // ---- the mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise
@@ -494,6 +551,11 @@ class ComicRenderer extends Renderer {
 
   void wheel(double dy) {
     if (host.controlsUp || pc == null) return;
+    if (webtoon) {
+      // as far as the wheel spins, gliding (user, 2026-10-22: "smooth scroll, based on wheel spin distance")
+      _strip?.glide(dy, duration: const Duration(milliseconds: 140));
+      return;
+    }
     final c = _scrolls[_at];
     if (prefs.fit != FitMode.screen && c != null && c.hasClients) {
       final p = c.position;
@@ -734,7 +796,84 @@ class ComicRenderer extends Renderer {
 
   /// The page view, with its gestures and the curl over it - for the Reader's Stack.
   @override
-  List<Widget> buildPages(BuildContext context) => [
+  List<Widget> buildPages(BuildContext context) {
+    if (webtoon) {
+      _wasWebtoon = true;
+      return [_webtoonView(context)];
+    }
+    if (_wasWebtoon) {
+      // paged again (the setting changed): the page view on the place the strip was at
+      _wasWebtoon = false;
+      _strip = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: _dual));
+    }
+    return _pagedView(context);
+  }
+
+  /// A webtoon's strip ([WebtoonView]) with the reader's taps, wheel and right-click.
+  Widget _webtoonView(BuildContext context) {
+    final strip = _strip ??= WebtoonController(index.clamp(0, pages.length));
+    return LayoutBuilder(builder: (context, box) {
+      _area = Size(box.maxWidth, box.maxHeight);
+      return Listener(
+        onPointerSignal: (e) {
+          if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+            GestureBinding.instance.pointerSignalResolver
+                .register(e, (ev) => wheel((ev as PointerScrollEvent).scrollDelta.dy));
+          }
+        },
+        onPointerDown: (e) {
+          host.awake();
+          _rightDown = e.buttons == kSecondaryButton;
+        },
+        onPointerUp: (_) {
+          if (_rightDown) {
+            _rightDown = false;
+            host.toggleControls();
+          }
+        },
+        onPointerCancel: (_) => _rightDown = false,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapUp: (d) => host.tap(d.localPosition.dx / box.maxWidth),
+          // the strip follows a finger, a mouse drag and a pen alike
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            child: WebtoonView(
+              key: ValueKey(('webtoon', _book['id'])),
+              sizes: [
+                for (final p in pages)
+                  Size(((p as Map)['width'] as num?)?.toDouble() ?? 0, (p['height'] as num?)?.toDouble() ?? 0),
+              ],
+              page: _slice,
+              endCard: host.endCard,
+              controller: strip,
+              onPlace: _onStripPlace,
+              background: background,
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  /// Slice [i] of a webtoon, filling its place in the strip (its height is Komga's, ahead of it loading).
+  Widget _slice(BuildContext context, int i) => FutureBuilder<PageData>(
+        future: _loader!.get(i),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(child: IconButton(
+              tooltip: 'Retry',
+              icon: Icon(Icons.broken_image, color: ink(0.4), size: 40),
+              onPressed: _changed,
+            ));
+          }
+          if (!snap.hasData) return Center(child: CircularProgressIndicator(strokeWidth: 2, color: ink(0.3)));
+          return RawImage(image: snap.data!.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium);
+        },
+      );
+
+  List<Widget> _pagedView(BuildContext context) => [
         LayoutBuilder(builder: (context, box) {
           _area = Size(box.maxWidth, box.maxHeight);
           // one page or two, by the screen's shape now (turned, a window resized) and the setting: the page view
@@ -910,7 +1049,7 @@ class ComicRenderer extends Renderer {
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
   @override
   List<BarButton> topButtons() => [
-        BarButton(
+        if (!webtoon) BarButton(
           fitNode,
           IconButton(
             focusNode: fitNode,

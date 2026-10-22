@@ -273,6 +273,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Turning pages', children: [
         pageTurnRow(s),
         doubleTapRow(s),
+        webtoonScrollRow(s),
       ]),
       SettingsGroup(title: 'Controls', children: [
         positionTextRow(s, BookKind.comics),

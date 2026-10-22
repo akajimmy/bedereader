@@ -333,6 +333,8 @@ List<Widget> layoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ic
             icon: icons ? Icons.auto_fix_high : null),
         Choice(ReadingDirection.ltr, 'Left to right', icon: icons ? Icons.arrow_forward : null),
         Choice(ReadingDirection.rtl, 'Right to left', icon: icons ? Icons.arrow_back : null),
+        // a webtoon: one strip scrolled down (user, 2026-10-22)
+        Choice(ReadingDirection.vertical, 'Vertical scroll', icon: icons ? Icons.arrow_downward : null),
       ],
       value: p.direction,
       onChanged: (d) => setP(p.copyWith(direction: d)),
@@ -551,6 +553,15 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
       value: s.display.pageTurn,
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),
+    );
+
+/// Webtoons: what one tap at the side or one short key press scrolls - a short glide or most of a screen (user,
+/// 2026-10-22: "a setting between scroll modes: smooth scroll / page scroll"). This device's.
+Widget webtoonScrollRow(AppSettings s) => SegmentRow<WebtoonScroll>(
+      title: 'Webtoon scrolling',
+      choices: const [Choice(WebtoonScroll.smooth, 'Smooth'), Choice(WebtoonScroll.page, 'Page')],
+      value: s.display.webtoonScroll,
+      onChanged: (w) => s.setDisplay(s.display.copyWith(webtoonScroll: w)),
     );
 
 /// Rotation in the reader (Android only: a PC window doesn't turn). Portrait / Landscape hold the way the tablet is
