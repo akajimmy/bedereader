@@ -25,6 +25,7 @@ import 'reader_keys.dart';
 import 'settings.dart';
 import 'screen.dart';
 import 'side_menu.dart';
+import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/drawer.dart';
 import 'widgets/refresh_on_return.dart';
@@ -273,6 +274,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       unawaited(OnDeckHidden.instance.load(c.api, fetch: online));
       unawaited(PairShift.instance.load(c.api, fetch: online));
     }
+    // a newer release on GitHub? (at most once a day; Android, Windows) - not in offline mode: nothing is sent then
+    if (!Connection.instance.forcedOffline) unawaited(UpdateCheck.instance.check());
     if (!mounted) return;
     setState(() {
       _api = api;
