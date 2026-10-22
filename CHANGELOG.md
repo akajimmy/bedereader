@@ -11,6 +11,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 
+- **eBooks in Dual page mode without Inset page: a darker band down the middle** - a shade drawn down the gutter
+  (since eBooks first had two pages up) read as a different colour from the page. Gone: the two pages are one even
+  colour.
 - **Back held a little long with the controls up closed the book** - the press hid the controls, then Android took
   the rest of the held key as a second Back, which closed the book. A held Back (or Esc) now only hides the
   controls; a fresh press closes the book as before.

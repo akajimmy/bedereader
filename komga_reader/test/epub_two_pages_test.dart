@@ -219,6 +219,18 @@ void main() {
     expect(pages((await spots(tester))!.$1), two, reason: 'two again: the same pair');
   });
 
+  testWidgets('without Inset page the two pages are one even colour across the gutter (user, 2026-10-21: a shade down '
+      'the middle read as a different colour from the page)', (tester) async {
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));
+    await open(tester);
+    await turn(tester); // a pair
+    expect(pages((await spots(tester))!.$1), contains('-'), reason: 'two pages up');
+    // nothing drawn over the pages: no shade (a gradient) down the middle
+    final shades = find.byWidgetPredicate((w) =>
+        w is DecoratedBox && w.decoration is BoxDecoration && (w.decoration as BoxDecoration).gradient != null);
+    expect(shades, findsNothing);
+  });
+
   testWidgets('the curl, two pages up: the right-hand page turns over onto the left, attached at the spine; the '
       'left-hand one held meanwhile', (tester) async {
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.never));

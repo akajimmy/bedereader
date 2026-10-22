@@ -1598,7 +1598,8 @@ class EpubRenderer extends Renderer {
 
   /// Two pages up: spread [v] - the earlier page on the left, the later on the right, each a page wide; a side with
   /// no page (a chapter starts on the right, ends where it ends) blank paper. With sheets (Inset page) two apart, each
-  /// round its text; without, the pages touch, a shade down the gutter.
+  /// round its text; without, the pages touch - one even colour (user, 2026-10-21: the shade once drawn down the
+  /// gutter read as a different colour from the page).
   Widget _spreadAt(int v, SelectionRegistrar? registrar) {
     if (v >= _spreads.length) return host.endCard();
     final s = _spreads[v];
@@ -1611,26 +1612,12 @@ class EpubRenderer extends Renderer {
                 : _pageAt(page, _size, registrar, later ? _shownLater : _shownPage),
           ),
         );
-    return Stack(children: [
-      // (the window just narrowed, one page up from the next frame ([_layout]): the pair clipped till then)
-      ClipRect(child: OverflowBox(
-        alignment: Alignment.topLeft,
-        maxWidth: 2 * _size.width,
-        child: Row(children: [side(s.earlier, later: false), side(s.later, later: true)]),
-      )),
-      // the pages touching (no Inset page): a shade down the gutter; as sheets they're apart (below)
-      if (_sheet == null) Positioned(
-        left: _size.width - 14,
-        width: 28,
-        top: 0,
-        bottom: 0,
-        child: IgnorePointer(child: DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [
-          const Color(0x00000000),
-          Color.fromRGBO(0, 0, 0, _drawn.background.computeLuminance() > 0.3 ? 0.10 : 0.22),
-          const Color(0x00000000),
-        ])))),
-      ),
-    ]);
+    // (the window just narrowed, one page up from the next frame ([_layout]): the pair clipped till then)
+    return ClipRect(child: OverflowBox(
+      alignment: Alignment.topLeft,
+      maxWidth: 2 * _size.width,
+      child: Row(children: [side(s.earlier, later: false), side(s.later, later: true)]),
+    ));
   }
 
   /// Two pages up: side [later]'s page (its sheet, or the whole page) on the page area. With Inset page the two are
