@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.4.1
+
+### Build 138 - 2026-10-22
+
 **Fixed**
 
 - eBooks with a mouse: a double click selects a word anywhere on the text (it only worked in the middle third - elsewhere the first click turned the page). One click on the text now turns (or shows the controls) a moment later; a click in the margins or round an inset page turns at once. Press, hold and drag selects even when the mouse drifts a few pixels during the hold (it used to start a page drag and select nothing).
