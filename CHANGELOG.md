@@ -22,6 +22,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Settings, Moving on: the setting now reads "Mark current read on (Next Book)" with the reader's own Next book icon in it.
 - eBooks, Inset page: the page is now book-shaped - the screen's height less a small gap above and below, two wide for every three high (a trade paperback), narrowed only when the screen is too narrow for it (two pages up, the pair narrowed together). The text is laid out inside it as though it were the screen: the Margins setting applies from the page's own edges, with no line-length limit. Never / Wide screen / Always as before.
 - Windows: in a book the title bar takes the reader's colour - the page colour, or with an inset page the colour round it - with dark text and buttons on a light page, and goes back to the app's own when the book closes.
 - Filters: a series view's Status section always offers all four statuses, so opening the panel no longer sends four extra searches to Komga to find which ones the view has.
