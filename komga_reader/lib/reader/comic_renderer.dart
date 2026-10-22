@@ -715,6 +715,7 @@ class ComicRenderer extends Renderer {
 
   void _configureTurn(TurnDragRecognizer r) => r
     ..canTurn = (() => _canDragTurn)
+    ..onTap = ((d) => _onTapUp(d, _area.width)) // a wobbly click the turn took (a mouse)
     ..maxAngle = (() => _scrollsDown ? 30.0 : 60.0)
     ..onStart = (d) {
       if (_curlMode) {

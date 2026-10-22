@@ -16,8 +16,11 @@ import 'package:flutter/widgets.dart';
 /// up and down keeps the steeper ones). Anything else it leaves to the page: a steeper drag, a second finger (a
 /// pinch), and a pointer held still for [hold] before it moves - the eBooks' "hold to select" (user, 2026-10-22).
 ///
-/// A mouse: taken at its first couple of pixels (the zoom's pan claims a mouse at two), the direction judged a few
-/// pixels later - steeper than [maxAngle], the drag does nothing.
+/// Not a sloppy tap (user, 2026-10-22: "make sure ... it [doesn't count] a sloppy tap that moves a few pixels as a
+/// full drag"): a finger is taken only past the taps' own slop (18 px - until then it's a tap); a mouse is taken at
+/// its first couple of pixels (the zoom's pan claims a mouse at two) but turns only from 12 px - let go before, it's
+/// a click after all ([onTap]); and a turn that travelled less than 32 px is no flick - it turns only if dragged far
+/// enough. A mouse drag steeper than [maxAngle] does nothing.
 class TurnDragRecognizer extends OneSequenceGestureRecognizer {
   TurnDragRecognizer({super.debugOwner});
 
@@ -38,9 +41,15 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
   GestureDragEndCallback? onEnd;
   VoidCallback? onCancel;
 
-  static const _touchSlop = 12.0; // under the page's own (the zoom's 36, a scroll's 18): heard first, decided first
+  /// A mouse taken for a drag (so the page's own tap lost it) but let go before it turned: the click it was.
+  GestureTapUpCallback? onTap;
+
+  // a finger: at the taps' own slop - a tap until then (and under the zoom's 36; level with a scroll's 18, but heard
+  // first)
+  static const _touchSlop = kTouchSlop;
   static const _mouseSlop = 2.0; // the zoom's pan claims a mouse at 2 px
-  static const _judgeAt = 8.0; // a mouse's direction, judged once it's moved this far
+  static const _judgeAt = 12.0; // a mouse: a turn from here (its direction judged); let go before, a click
+  static const _flickAtLeast = 32.0; // a shorter turn has no flick: only how far it was dragged counts
 
   int? _pointer;
   Offset _downGlobal = Offset.zero, _downLocal = Offset.zero, _lastGlobal = Offset.zero;
@@ -106,15 +115,22 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
             delta: Offset(delta.dx, 0), primaryDelta: delta.dx, kind: _kind));
       }
     } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      final travel = (event.position - _downGlobal).distance;
       if (_turning) {
-        // the horizontal part (a turn's speed; Flutter's drag ends carry one axis)
-        final vx = event is PointerUpEvent ? _velocity!.getVelocity().pixelsPerSecond.dx : 0.0;
+        // the horizontal part (a turn's speed; Flutter's drag ends carry one axis) - none for a short one
+        final vx = event is PointerUpEvent && travel >= _flickAtLeast
+            ? _velocity!.getVelocity().pixelsPerSecond.dx
+            : 0.0;
         onEnd?.call(DragEndDetails(velocity: Velocity(pixelsPerSecond: Offset(vx, 0)), primaryVelocity: vx,
             globalPosition: event.position, localPosition: event.localPosition));
       }
       if (!_accepted) {
         _giveUp(); // a tap: the page's taps
       } else {
+        // a mouse taken but let go before it turned: a click (a wobbly one)
+        if (!_turning && !_dud && event is PointerUpEvent) {
+          onTap?.call(TapUpDetails(kind: _kind, globalPosition: event.position, localPosition: event.localPosition));
+        }
         _reset();
         stopTrackingPointer(event.pointer);
       }

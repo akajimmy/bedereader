@@ -1263,6 +1263,53 @@ void main() {
         await tester.pump(const Duration(seconds: 2));
       });
 
+      testWidgets('a sloppy tap is still a tap, not a drag (user, 2026-10-22): a finger sliding 15 px, a mouse '
+          'wobbling 8 px - in the middle, the controls come up and nothing turns', (tester) async {
+        for (final mode in [PageTurn.curl, PageTurn.swipe]) {
+          for (final (kind, wobble) in [(PointerDeviceKind.touch, 15.0), (PointerDeviceKind.mouse, 8.0)]) {
+            AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: mode));
+            await openLoaded(tester);
+            final pic = tester.getRect(find.byType(RawImage).first);
+            final g = await tester.startGesture(pic.center, kind: kind);
+            await tester.pump(const Duration(milliseconds: 20));
+            await g.moveBy(Offset(-wobble / 2, 0));
+            await tester.pump(const Duration(milliseconds: 20));
+            await g.moveBy(Offset(-wobble / 2, 0));
+            await tester.pump(const Duration(milliseconds: 20));
+            await g.up();
+            await tester.pump(const Duration(seconds: 1)); // (past the double-tap wait)
+            final why = '${mode.name}, ${kind.name}';
+            expect(curling(), findsNothing, reason: why);
+            expect(page(tester), 0.0, reason: why);
+            expect(find.byTooltip('Next book'), findsOneWidget, reason: '$why: the controls');
+            await tester.pump(const Duration(seconds: 2));
+            await tester.pumpWidget(const SizedBox());
+          }
+        }
+        AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe));
+      });
+
+      testWidgets('a quick short flick (25 px) turns nothing: under 32 px only how far it went counts', (tester) async {
+        for (final mode in [PageTurn.curl, PageTurn.swipe]) {
+          AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: mode));
+          await openLoaded(tester);
+          final pic = tester.getRect(find.byType(RawImage).first);
+          final g = await tester.startGesture(pic.center);
+          for (var i = 1; i <= 5; i++) { // (the moves' own times: the velocity is worked out from them)
+            await g.moveBy(const Offset(-5, 0), timeStamp: Duration(milliseconds: 8 * i)); // ~600 px/s
+            await tester.pump(const Duration(milliseconds: 8));
+          }
+          await g.up(timeStamp: const Duration(milliseconds: 48));
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 800));
+          await tester.pump();
+          expect(page(tester), 0.0, reason: mode.name);
+          await tester.pump(const Duration(seconds: 2));
+          await tester.pumpWidget(const SizedBox());
+        }
+        AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.swipe));
+      });
+
       testWidgets('Slide, a mouse: a drag across the picture slides to the next page', (tester) async {
         await openLoaded(tester);
         final pic = tester.getRect(find.byType(RawImage).first);
