@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
@@ -111,17 +112,56 @@ void main() {
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
-  testWidgets('side sheet (380 wide): sliders go full width under their label and value, in directional navigation '
-      '(the remote walk in settings_remote_test covers Up / Down off them)',
-      (tester) async {
-    await openPanel(tester, const Size(1280, 800), image: true); // side sheet, 380 wide
+  testWidgets('side sheet 460 wide (user, 2026-10-21: at 380 most rows broke onto two lines): a slider sits beside its '
+      'label, on one line, in directional navigation (the remote walk in settings_remote_test covers Up / Down off '
+      'them)', (tester) async {
+    await openPanel(tester, const Size(1280, 800), image: true);
+    expect(tester.getSize(find.ancestor(of: find.text('Image'), matching: find.byType(SizedBox)).first).width, 460);
     final slider = tester.getRect(find.byType(Slider).at(1)); // Brightness
-    expect(slider.width, greaterThan(300)); // not squeezed beside the label any more
+    final label = tester.getRect(find.text('Brightness'));
+    expect(slider.top, lessThan(label.bottom), reason: 'beside its label, not under it');
+    expect(slider.width, greaterThan(150));
     final mq = tester.widget<MediaQuery>(find.ancestor(of: find.byType(Slider).at(1), matching: find.byType(MediaQuery)).first);
     expect(mq.data.navigationMode, NavigationMode.directional); // Up/Down leave the slider
   });
 
-  testWidgets('side sheet (380 wide): Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
+  testWidgets('screen brightness on one line (user, 2026-10-21: "keep the two, reconsider the layout for compactness"): '
+      'Brightness, Auto, the slider - greyed while Auto is on - and its value; Auto off starts from a level, Auto on '
+      'gives it back to the system', (tester) async {
+    final was = DisplayPrefs.backlightControl;
+    addTearDown(() {
+      DisplayPrefs.backlightControl = was;
+      AppSettings.instance.setDisplay(const DisplayPrefs());
+    });
+    DisplayPrefs.backlightControl = true; // (a tablet: the backlight and Auto)
+    // the screen's level now, as the platform side reports it (lib/screen.dart: getBrightness)
+    const channel = MethodChannel('komga_reader/screen');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    messenger.setMockMethodCallHandler(channel, (call) async => call.method == 'getBrightness' ? 0.5 : null);
+    AppSettings.instance.setDisplay(const DisplayPrefs()); // Auto
+    await openPanel(tester, const Size(1280, 800));
+    final auto = find.widgetWithText(FilterChip, 'Auto');
+    expect(auto, findsOneWidget);
+    expect(find.text('Automatic brightness'), findsNothing, reason: 'no switch row of its own');
+    final slider = find.ancestor(of: find.byType(Slider), matching: find.byType(BrightnessPreview));
+    final s = tester.widget<Slider>(find.descendant(of: slider, matching: find.byType(Slider)));
+    expect(s.onChanged, isNull, reason: 'Auto: the slider greyed');
+    final line = tester.getRect(find.text('Brightness')).center.dy;
+    expect(tester.getRect(auto).center.dy, closeTo(line, 4), reason: 'one line');
+    expect(tester.getRect(slider).center.dy, closeTo(line, 4));
+    expect(tester.getRect(auto).left, lessThan(tester.getRect(slider).left), reason: 'Auto before the slider');
+
+    await tester.tap(auto);
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.display.brightness, isNotNull, reason: 'Auto off: a level of its own');
+    expect(tester.widget<Slider>(find.descendant(of: slider, matching: find.byType(Slider))).onChanged, isNotNull);
+    await tester.tap(auto);
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.display.brightness, isNull, reason: 'Auto on: the system again');
+  });
+
+  testWidgets('side sheet: Keep the screen on fits inside the sheet (all six choices visible)', (tester) async {
     await openPanel(tester, const Size(1280, 800)); // Comic settings, side sheet
     await tester.scrollUntilVisible(find.text('Keep the screen on'), 200, scrollable: find.byType(Scrollable).last);
     final sheet = tester.getRect(find.byType(ListView).last);

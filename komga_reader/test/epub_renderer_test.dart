@@ -16,6 +16,7 @@ import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/display_panel.dart' show sideWidth;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/client_settings.dart';
@@ -588,7 +589,7 @@ void main() {
       expect(find.text('Done'), findsOneWidget, reason: '$title: the comic panels\' Done');
       final sheet = tester.getSize(find.byWidgetPredicate(
           (w) => w is Material && w.color == const Color(0xF2141416))); // the comic panels' sheet colour
-      expect(sheet.width, 380, reason: "$title: the comic panels' side sheet");
+      expect(sheet.width, sideWidth, reason: "$title: the comic panels' side sheet");
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
     }

@@ -95,26 +95,67 @@ Widget _chapterStartRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<
       onChanged: (v) => set(e.copyWith(chapterStart: v)),
     );
 
-// the fonts under the label, full width, wrapping onto more lines as needed - beside it, they were scaled down to fit
-// the side sheet until the names couldn't be read (user, 2026-10-06). One row with its label, so the chips have room
-// above them (user, 2026-10-07: they sat against the line above)
+// the current font, in its own face; a tap (or OK) opens the list - each font drawn in itself with a line of sample
+// text (user, 2026-10-21: "font face doesn't need to display all of them. show current, when tapped, give choice ...
+// not just an ugly dropdown"). The six chips took three lines in the panel.
 List<Widget> _fontRows(EpubPrefs e, ValueChanged<EpubPrefs> set) => [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Font face', style: TextStyle(fontSize: 14.5)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final f in EpubFont.values)
-              ChoiceChip(
-                label: Text(f.label, style: TextStyle(fontFamily: f.family, fontSize: 14)),
-                selected: e.font == f,
-                onSelected: (_) => set(e.copyWith(font: f)),
-              ),
-          ]),
-        ]),
-      ),
+      SettingRow(title: 'Font face', trailing: FontPicker(value: e.font, onChanged: (f) => set(e.copyWith(font: f)))),
     ];
+
+/// The current font as a button in its own face; pressed, the fonts to pick from ([showFontMenu]).
+class FontPicker extends StatelessWidget {
+  const FontPicker({super.key, required this.value, required this.onChanged});
+  final EpubFont value;
+  final ValueChanged<EpubFont> onChanged;
+
+  @override
+  Widget build(BuildContext context) => TextButton(
+        style: TextButton.styleFrom(
+          backgroundColor: const Color(0xFF22242A),
+          foregroundColor: const Color(0xFFDADADA),
+          padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          visualDensity: VisualDensity.compact,
+        ),
+        onPressed: () async {
+          final picked = await showFontMenu(context, value);
+          if (picked != null && picked != value) onChanged(picked);
+        },
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(value.label, style: TextStyle(fontFamily: value.family, fontSize: 15)),
+          const SizedBox(width: 4),
+          const Icon(Icons.expand_more, size: 18, color: hintColour),
+        ]),
+      );
+}
+
+/// The fonts as a list under [context]'s button: each name in its own face beside a line of sample text, the current
+/// one marked. The font picked, or null.
+Future<EpubFont?> showFontMenu(BuildContext context, EpubFont current) {
+  final box = context.findRenderObject()! as RenderBox;
+  final overlay = Navigator.of(context).overlay!.context.findRenderObject()! as RenderBox;
+  final at = box.localToGlobal(Offset(0, box.size.height), ancestor: overlay);
+  final accent = Theme.of(context).colorScheme.primary;
+  return showMenu<EpubFont>(
+    context: context,
+    position: RelativeRect.fromLTRB(at.dx, at.dy, overlay.size.width - at.dx - box.size.width, 0),
+    initialValue: current,
+    color: const Color(0xFF202227),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    items: [
+      for (final f in EpubFont.values)
+        PopupMenuItem(
+          value: f,
+          child: SizedBox(width: 300, child: Row(children: [
+            SizedBox(width: 150, child: Text(f.label, style: TextStyle(fontFamily: f.family, fontSize: 17))),
+            Expanded(child: Text('The quick brown fox', maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontFamily: f.family, fontSize: 13, color: hintColour))),
+            if (f == current) Icon(Icons.check, size: 18, color: accent),
+          ])),
+        ),
+    ],
+  );
+}
 
 Widget _sizeRow(EpubPrefs e, ValueChanged<EpubPrefs> set) {
   final i = EpubPrefs.sizes.indexOf(e.size);

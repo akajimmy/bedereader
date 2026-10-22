@@ -117,7 +117,7 @@ void main() {
       (SettingsPage.ebooks, segment<PageNote>('Off'),
           () => (s.display.comics.pageNote, s.display.ebooks.pageNote), (PageNote.afterTurn, PageNote.off)),
       // eBooks: the EPUB settings (the alignment on its own: user, 2026-10-07)
-      (SettingsPage.ebooks, find.widgetWithText(ChoiceChip, 'Lora'), () => s.epub.font, EpubFont.lora),
+      // (Font face: a picker now - epub_settings_test)
       (SettingsPage.ebooks, find.byTooltip('Larger'), () => s.epub.size, 20),
       (SettingsPage.ebooks, segment<EpubAlign>('Left'), () => s.epub.align, EpubAlign.left),
       (SettingsPage.ebooks, find.widgetWithText(SwitchListTile, 'Auto-hyphenation'), () => s.epub.hyphenate, false),
