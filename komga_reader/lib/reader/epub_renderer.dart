@@ -84,7 +84,7 @@ class EpubRenderer extends Renderer {
   /// Inset page ([InsetPage]) - redone 2026-10-22 (user: "the inset page height should be based on screen height (not
   /// quite full height) and the width should be based on the height (use a common physical book ratio)"): the sheet on
   /// [cell] (the screen, or its half two pages up), [sheetGap] short of the screen's height above and below, [sheetRatio]
-  /// wide for its height (2:3, a trade paperback). A screen too narrow keeps the height and narrows it ([sheetGap] at
+  /// wide for its height (7:10). A screen too narrow keeps the height and narrows it ([sheetGap] at
   /// the sides; two pages up, the pair and the [gutter] between them fit together). Centred on its cell - two pages up,
   /// [_sideShift] brings the pair together. The text is laid out inside it as though it were the screen ([_themeFor]).
   /// Never: none; Wide screen: on a screen wider than tall ([area]); Always: always. Null: no sheet.
@@ -99,8 +99,9 @@ class EpubRenderer extends Renderer {
   }
 
   /// The sheet's distance from the screen's edges (above and below; at the sides when it's narrowed), and its width
-  /// for its height (user, 2026-10-22 quiz: "a small fixed gap", "2:3 - trade paperback").
-  static const sheetGap = 24.0, sheetRatio = 2 / 3;
+  /// for its height (user, 2026-10-22 quiz: "a small fixed gap", "2:3 - trade paperback"; then, tried on the tablet in
+  /// build 135: "a bit wider ratio but it's closer" - 7:10).
+  static const sheetGap = 24.0, sheetRatio = 0.7;
 
   /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
   /// on the tablet; user, 2026-10-20: a setting).
