@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, listEquals;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectWordSelectionEvent, SelectionRegistrar;
@@ -201,7 +201,7 @@ class EpubRenderer extends Renderer {
   EpubTheme get _theme {
     final e = AppSettings.instance.epub;
     final family = e.font.family ?? switch (e.font) {
-      EpubFont.deviceSerif => defaultTargetPlatform == TargetPlatform.windows ? 'Georgia' : 'serif',
+      EpubFont.deviceSerif => deviceSerifFamily,
       _ => null,
     };
     // (Inset page doesn't move the text: its sheet sits round the text where the margins put it - sheetRect)

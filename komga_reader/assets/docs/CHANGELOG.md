@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
+- iPhone and iPad, in line with Android: screen brightness sets the real screen brightness (Auto, the slider, extra dim), and your own level comes back when you leave the reader or the app; Save page (to Photos, asked once) and Copy page; Download on Wi-Fi only; Device serif is Georgia (it showed a sans-serif font).
 - iPhone and iPad: a Rotation setting, Auto or Locked. Locked holds the screen the way it is when you choose it or open a book. On the iPad the app now always runs full screen (an iPad app can only lock its rotation that way); whether iPadOS 26 honours it is still to be seen.
 
 **Fixed**
