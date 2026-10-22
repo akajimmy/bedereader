@@ -13,8 +13,21 @@ bool get isDesktop =>
     defaultTargetPlatform == TargetPlatform.macOS ||
     defaultTargetPlatform == TargetPlatform.linux;
 
-/// Only Android lets the app set the screen's backlight; elsewhere the brightness slider just dims.
-bool get hasBacklightControl => defaultTargetPlatform == TargetPlatform.android;
+/// Android and iOS let the app set the screen's backlight (iOS: its native side puts the person's own level back when
+/// the reader lets go or the app is left - user, 2026-10-22); on a PC the brightness slider just dims.
+bool get hasBacklightControl =>
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+
+/// The device can say whether it's on mobile data (Downloads' "Wi-Fi only"): Android and iOS.
+bool get knowsMobileData =>
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+
+/// The font for eBooks' "Device serif": Georgia on Windows and iOS (iOS has no font called "serif" - it fell back on
+/// its sans), the system's serif on Android.
+String get deviceSerifFamily =>
+    defaultTargetPlatform == TargetPlatform.windows || defaultTargetPlatform == TargetPlatform.iOS
+        ? 'Georgia'
+        : 'serif';
 
 /// Volume keys can turn pages: on Android the app sees them first, and a key it uses doesn't change the volume. On a
 /// PC the system changes the volume whatever the app does, so they're left alone there.
@@ -69,7 +82,7 @@ Future<(int, bool)?> batteryState() async {
 /// Whether the device is on Wi-Fi (or a cable) rather than mobile data - Downloads' "Wi-Fi only". A PC, or a check
 /// that fails, count as Wi-Fi: better a download than a queue stuck for no reason.
 Future<bool> onWifi() async {
-  if (defaultTargetPlatform != TargetPlatform.android) return true;
+  if (!knowsMobileData) return true;
   try {
     final n = await _channel.invokeMethod<String>('network');
     return n == null || n == 'wifi';
@@ -225,9 +238,15 @@ Future<String?> appStorageDir() async {
 
 // ---- Save page / Copy page (the reader, user 2026-10-02): the page's own image file, as Komga sends it ----------
 
-/// Save and Copy are there to be had: Android and Windows.
+/// Save and Copy are there to be had: Android, Windows and iOS (Photos, and the clipboard).
 bool get canSaveCopyPictures =>
-    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows;
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.iOS;
+
+/// The phone or tablet's own side saves and copies the picture as it is (Android, iOS); Windows gets a file path and
+/// pixels.
+bool get _picturesNative =>
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
 
 /// What a picture file is, from its first bytes: (file extension, MIME type). Unknown: a JPEG, as Komga's pages
 /// mostly are.
@@ -244,13 +263,13 @@ bool get canSaveCopyPictures =>
 String safeFileName(String name) =>
     name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').replaceAll(RegExp(r'[. ]+$'), '').trim();
 
-/// Saves a picture where the device keeps pictures - Android: the Pictures/BeDeReader album; Windows:
+/// Saves a picture where the device keeps pictures - Android: the Pictures/BeDeReader album; iOS: Photos; Windows:
 /// Pictures\BeDeReader (" (2)" etc. added if the name is taken). [name] without its extension. Returns where it went,
 /// for the message.
 Future<String> savePicture(Uint8List bytes, String name) async {
   final (ext, mime) = pictureType(bytes);
   final file = '${safeFileName(name)}.$ext';
-  if (defaultTargetPlatform == TargetPlatform.android) {
+  if (_picturesNative) {
     final where = await _channel.invokeMethod<String>('savePicture', {'bytes': bytes, 'name': file, 'mime': mime});
     if (where == null) throw StateError('nowhere to save pictures');
     return where;
@@ -270,7 +289,7 @@ Future<String> savePicture(Uint8List bytes, String name) async {
 /// Android: as an image (shared from the app's cache).
 Future<void> copyPicture(Uint8List bytes, String name) async {
   final (ext, mime) = pictureType(bytes);
-  if (defaultTargetPlatform == TargetPlatform.android) {
+  if (_picturesNative) {
     final ok = await _channel.invokeMethod<bool>('copyPicture',
         {'bytes': bytes, 'name': '${safeFileName(name)}.$ext', 'mime': mime});
     if (ok != true) throw StateError('the clipboard took nothing');
@@ -291,7 +310,7 @@ Future<void> copyPicture(Uint8List bytes, String name) async {
 }
 
 /// Backlight for this app's window only (the rest of the tablet keeps its setting): -1 = follow the system,
-/// else 0.01..1. Android; a no-op elsewhere.
+/// else 0.01..1. Android; iOS (the screen's, put back as it was on -1 or when the app is left); a no-op on a PC.
 Future<void> setScreenBrightness(double value) async {
   try {
     await _channel.invokeMethod('brightness', value);
