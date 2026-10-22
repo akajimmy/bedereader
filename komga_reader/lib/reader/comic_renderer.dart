@@ -50,7 +50,11 @@ class ComicRenderer extends Renderer {
   bool _disposed = false;
 
   @override
-  BookKind get kind => BookKind.comics;
+  BookKind get kind => _komgaWebtoon ? BookKind.webtoons : BookKind.comics;
+
+  /// Komga says the series is a webtoon: its settings are webtoons', not comics' (user, 2026-10-22: "a clean split").
+  /// (A comic series set to Vertical scroll reads as a strip but keeps its comic settings.)
+  bool get _komgaWebtoon => _komgaDirection == 'WEBTOON';
 
   void _changed() {
     if (!_disposed) notifyListeners();
@@ -224,6 +228,11 @@ class ComicRenderer extends Renderer {
     loader.around(start);
     _komgaDirection = prepared.direction;
     _directionSeries = book['seriesId'] as String?;
+    // a webtoon's series follows webtoons' defaults (AppSettings.defaultsFor)
+    final sid = book['seriesId'] as String?;
+    if (sid != null) {
+      prepared.direction == 'WEBTOON' ? _settings.webtoonSeries.add(sid) : _settings.webtoonSeries.remove(sid);
+    }
     // the last book's page shapes (the curl drew the new book's first turn in them - #17) and a page left to open at
     // its end (a later page with that number opened scrolled to its end - #22) go with it
     _pageRects.clear();
@@ -849,7 +858,11 @@ class ComicRenderer extends Renderer {
         onPointerCancel: (_) => _rightDown = false,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTapUp: (d) => host.tap(d.localPosition.dx / box.maxWidth),
+          // the tap zones: the sides (as a comic's), or top and bottom - the bottom third scrolls down, the top up
+          // (user, 2026-10-22)
+          onTapUp: (d) => host.tap(_settings.display.webtoonTaps == WebtoonTaps.topBottom
+              ? _zoneOf(d.localPosition.dy / box.maxHeight)
+              : d.localPosition.dx / box.maxWidth),
           // the strip follows a finger, a mouse drag and a pen alike
           child: ScrollConfiguration(
             // (no scroll bar over the strip - user, 2026-10-22: Windows put one there; the slider says where it is)
@@ -866,7 +879,7 @@ class ComicRenderer extends Renderer {
               controller: strip,
               onPlace: _onStripPlace,
               background: background,
-              fillWidth: WebtoonView.fitOf(prefs.fit) == FitMode.width,
+              fit: WebtoonView.fitOf(prefs.fit),
               onWheel: wheel,
             ),
           ),
@@ -874,6 +887,10 @@ class ComicRenderer extends Renderer {
       );
     });
   }
+
+  /// A tap [along] the screen's height (0 at the top) as the Reader's tap zones, which go across: the bottom third
+  /// as the right (on), the top as the left (back), the middle the middle.
+  static double _zoneOf(double along) => along > 2 / 3 ? 1.0 : along < 1 / 3 ? 0.0 : 0.5;
 
   /// Slice [i] of a webtoon, filling its place in the strip (its height is Komga's, ahead of it loading).
   Widget _slice(BuildContext context, int i) => FutureBuilder<PageData>(
@@ -1069,8 +1086,9 @@ class ComicRenderer extends Renderer {
   List<BarButton> topButtons() {
     // a webtoon: Original size or Fit width, one press the other (user, 2026-10-22)
     final fit = webtoon ? WebtoonView.fitOf(prefs.fit) : prefs.fit;
+    // (a strip: its own size -> Fit width -> Fit page height - user, 2026-10-22)
     final next = webtoon
-        ? (fit == FitMode.width ? FitMode.original : FitMode.width)
+        ? switch (fit) { FitMode.original => FitMode.width, FitMode.width => FitMode.height, _ => FitMode.original }
         : FitMode.values[(fit.index + 1) % FitMode.values.length];
     return [
       BarButton(
@@ -1091,11 +1109,13 @@ class ComicRenderer extends Renderer {
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
-        if (seriesId != null)
+        // (a strip: no Image settings until they apply to it)
+        if (seriesId != null && !webtoon)
           BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
               onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?))),
-        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune, label: 'Comic settings',
-            onPressed: () => showReaderPanel(context,
+        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune,
+            label: _komgaWebtoon ? 'Webtoon settings' : 'Comic settings',
+            onPressed: () => showReaderPanel(context, webtoon: _komgaWebtoon,
                 seriesId: seriesId, seriesTitle: _book['seriesTitle'] as String?,
                 komgaDirection: _komgaDirection, bookFit: _bookFit,
                 page: canSaveCopyPictures && index <= last ? PageActions(save: _savePage, copy: _copyPage) : null,
@@ -1111,7 +1131,7 @@ class ComicRenderer extends Renderer {
   void _setFit(FitMode f) {
     final id = seriesId;
     if (id == null) {
-      _settings.setDefault(_settings.defaults.copyWith(fit: f));
+      _settings.setDefault(_settings.defaults.copyWith(fit: f)); // (no series: not Komga's webtoon - it's a series')
     } else if (_settings.ownsLayout(id)) {
       _settings.setSeriesLayout(id, prefs.copyWith(fit: f));
     } else {

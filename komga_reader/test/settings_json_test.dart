@@ -88,6 +88,7 @@ void main() {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl, epubTurn: EpubTurn.curl,
         comics: KindPrefs(hiddenSpots: ['left']), ebooks: KindPrefs(hiddenSpots: ['right', 'centre']),
+        webtoons: KindPrefs(hiddenSpots: ['centre']), webtoonTaps: WebtoonTaps.topBottom,
         rotation: Rotation.landscape, pageNote: PageNote.off, showClock: true, showBattery: true, progressBar: true,
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small,
@@ -108,6 +109,8 @@ void main() {
       // each kind its own (user, 2026-10-07)
       ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(','), 'left', ''),
       ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
+      ('webtoons hiddenSpots', (d) => d.webtoons.hiddenSpots.join(','), 'centre', ''), // (their own - 2026-10-22)
+      ('webtoonTaps', (d) => d.webtoonTaps, WebtoonTaps.topBottom, WebtoonTaps.sides),
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 10, 0),
@@ -131,7 +134,7 @@ void main() {
       expect(read(onlyTurn), name == 'pageTurn' ? PageTurn.flip : byDefault, reason: '$name, a save with only a turn');
     }
     // the table has every saved setting (a new one fails here until it has a row)
-    expect(settings.length, changed.toJson().length - 2 + changed.comics.toJson().length * 2,
+    expect(settings.length, changed.toJson().length - 3 + changed.comics.toJson().length * 3,
         reason: 'one row per setting (the two kinds a row per field)');
     for (final turn in PageTurn.values) {
       expect(DisplayPrefs.fromJson(DisplayPrefs(pageTurn: turn).toJson()).pageTurn, turn, reason: turn.name);
