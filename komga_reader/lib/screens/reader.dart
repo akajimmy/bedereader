@@ -83,6 +83,11 @@ class _ReaderScreenState extends State<ReaderScreen>
   Renderer? _renderer;
   Renderer get _r => _renderer!;
   bool _menu = false; // controls shown
+
+  /// The key (Esc / Back) that hid the controls, until it's let go: its repeats and its release are the reader's.
+  /// Left unhandled, a held Back went back to Android, which took its release as Back - and Back with the controls
+  /// gone closes the book (user, 2026-10-21: "instead of closing the controls, it closes out of the book").
+  LogicalKeyboardKey? _hidingKey;
   final _scrubber = SliderScrub(); // the page picked on the slider, not jumped to yet (lib/reader/reader_slider.dart)
   int? get _scrub => _scrubber.value;
   // Where the reader was before the slider took them elsewhere - marked on the slider while scrubbing, and a drag near
@@ -679,6 +684,11 @@ class _ReaderScreenState extends State<ReaderScreen>
   // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
   // remote); with the controls hidden, keys go through ReaderKeys.
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    // the rest of the press that hid the controls (a fresh press is a new one: it goes on below)
+    if (e.logicalKey == _hidingKey && e is! KeyDownEvent) {
+      if (e is KeyUpEvent) _hidingKey = null;
+      return KeyEventResult.handled;
+    }
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     awake();
     final k = e.logicalKey;
@@ -739,6 +749,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       }
       return KeyEventResult.handled;
     }
+    if (e is KeyDownEvent && (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack)) _hidingKey = k;
     return controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
   }
 
