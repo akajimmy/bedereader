@@ -110,6 +110,38 @@ bool CopyPicture(HWND window, int width, int height, const std::vector<uint8_t>&
   return ok;
 }
 
+// The screen's rotation on a Windows tablet or 2-in-1 (the reader's rotation lock - user, 2026-10-22): user32's
+// auto-rotation calls, looked up when used (Windows 8 and later).
+using GetAutoRotationStateFn = BOOL(WINAPI*)(int*);
+using SetDisplayAutoRotationPreferencesFn = BOOL(WINAPI*)(int);
+
+FARPROC User32(const char* name) {
+  HMODULE user32 = GetModuleHandleW(L"user32.dll");
+  return user32 ? GetProcAddress(user32, name) : nullptr;
+}
+
+// The screen turns by itself: a rotation sensor, and Windows supports turning it.
+bool CanRotate() {
+  auto get = reinterpret_cast<GetAutoRotationStateFn>(User32("GetAutoRotationState"));
+  if (!get) return false;
+  int state = 0;
+  if (!get(&state)) return false;
+  const int kNoSensor = 0x10, kNotSupported = 0x20;  // AR_NOSENSOR, AR_NOT_SUPPORTED
+  return (state & (kNoSensor | kNotSupported)) == 0;
+}
+
+// Holds the screen one way (portrait, landscape, reversePortrait, reverseLandscape), or lets it turn again (none).
+bool HoldOrientation(const std::string& way) {
+  auto set = reinterpret_cast<SetDisplayAutoRotationPreferencesFn>(User32("SetDisplayAutoRotationPreferences"));
+  if (!set) return false;
+  int preference = 0;  // ORIENTATION_PREFERENCE_NONE
+  if (way == "landscape") preference = 0x1;
+  else if (way == "portrait") preference = 0x2;
+  else if (way == "reverseLandscape") preference = 0x4;
+  else if (way == "reversePortrait") preference = 0x8;
+  return set(preference) != FALSE;
+}
+
 const flutter::EncodableValue* Arg(const flutter::EncodableMap& m, const char* key) {
   auto it = m.find(flutter::EncodableValue(key));
   return it == m.end() ? nullptr : &it->second;
@@ -132,6 +164,11 @@ DesktopChannel::DesktopChannel(flutter::BinaryMessenger* messenger, HWND window)
       result->Success();
     } else if (m == "brightness" || m == "getBrightness") {
       result->Success();  // no backlight control on a desktop monitor
+    } else if (m == "canRotate") {
+      result->Success(flutter::EncodableValue(CanRotate()));
+    } else if (m == "holdOrientation") {
+      std::string way = args && std::holds_alternative<std::string>(*args) ? std::get<std::string>(*args) : "none";
+      result->Success(flutter::EncodableValue(HoldOrientation(way)));
     } else if (m == "appVersion") {
       flutter::EncodableMap v;
       v[flutter::EncodableValue("name")] = flutter::EncodableValue(

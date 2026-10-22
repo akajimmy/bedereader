@@ -48,6 +48,7 @@ void main() {
     ErrorLog.instance.record('Unexpected error', e, st);
     return false; // not handled: reported as usual
   };
+  checkPcRotation(); // Windows: a rotation sensor or not (Settings' Rotation) - answered long before it's looked at
   runApp(const KomgaReaderApp());
 }
 

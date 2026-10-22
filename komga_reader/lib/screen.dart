@@ -61,8 +61,23 @@ Future<bool> setFullscreen(bool on) async {
   }
 }
 
-/// Only a phone or tablet turns; a PC window doesn't, so the reader's rotation lock is Android's and iOS's.
-bool get canRotate => defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+/// A phone or tablet turns - and a Windows PC with a rotation sensor (a tablet, a 2-in-1; user, 2026-10-22: "lock,
+/// where it can"); a desktop's screen doesn't, so no rotation lock there.
+bool get canRotate =>
+    defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS ||
+    (defaultTargetPlatform == TargetPlatform.windows && _pcRotates);
+
+bool _pcRotates = false;
+
+/// Windows, at start: does this PC turn its screen by itself (a rotation sensor)? Asked once.
+Future<void> checkPcRotation() async {
+  if (defaultTargetPlatform != TargetPlatform.windows) return;
+  try {
+    _pcRotates = await _channel.invokeMethod<bool>('canRotate') ?? false;
+  } catch (_) {
+    _pcRotates = false;
+  }
+}
 
 /// iOS: the rotation lock is Auto / Locked - Locked holds the screen the way it is (user, 2026-10-22: "two: auto and
 /// locked"; an app can't switch the device's own lock). Android: Auto / Portrait / Landscape.
@@ -118,6 +133,7 @@ class OrientationLock {
   Future<void> hold({required bool portrait, required bool landscape}) async {
     if (!portrait && !landscape) {
       _portrait = null;
+      if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
       await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       return;
     }
@@ -171,7 +187,18 @@ class OrientationLock {
   /// The book closed: the app follows the device again.
   Future<void> release() async {
     _portrait = null;
+    if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
     await SystemChrome.setPreferredOrientations(const []);
+  }
+
+  /// Windows: Flutter's orientations do nothing there - the runner asks Windows itself (its auto-rotation
+  /// preference: portrait, landscape, their flipped ways, or none).
+  Future<void> _pcHold(String way) async {
+    try {
+      await _channel.invokeMethod('holdOrientation', way);
+    } catch (_) {
+      // no native side: nothing held
+    }
   }
 
   /// The screen is now the other way up of [portrait] / landscape (Android; elsewhere: no).
@@ -187,7 +214,14 @@ class OrientationLock {
 
   // one orientation, exactly (on Android: PORTRAIT / REVERSE_PORTRAIT / LANDSCAPE / REVERSE_LANDSCAPE - fixed, not
   // the sensor's)
-  Future<void> _apply() => SystemChrome.setPreferredOrientations([
+  Future<void> _apply() => defaultTargetPlatform == TargetPlatform.windows
+      ? _pcHold(switch ((_portrait!, _flipped)) {
+          (true, false) => 'portrait',
+          (true, true) => 'reversePortrait',
+          (false, false) => 'landscape',
+          (false, true) => 'reverseLandscape',
+        })
+      : SystemChrome.setPreferredOrientations([
         switch ((_portrait!, _flipped)) {
           (true, false) => DeviceOrientation.portraitUp,
           (true, true) => DeviceOrientation.portraitDown,
