@@ -799,7 +799,7 @@ class EpubRenderer extends Renderer {
   static const _turnCurve = Curves.easeInOut;
 
   @override
-  void forward({bool snap = false}) {
+  void forward({bool snap = false, bool held = false}) {
     if (_end) {
       host.nextBook();
       return;
@@ -808,7 +808,7 @@ class EpubRenderer extends Renderer {
   }
 
   @override
-  void back({bool snap = false}) => unawaited(_turn(-1, snap: snap));
+  void back({bool snap = false, bool held = false}) => unawaited(_turn(-1, snap: snap));
 
   // the wheel: notches added up to a turn, at most one turn a quarter second (a spun wheel doesn't race through the
   // book) - as the comic reader's

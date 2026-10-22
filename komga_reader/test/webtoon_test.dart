@@ -1,0 +1,154 @@
+// Webtoons (user, 2026-10-22 - NOTES, "Webtoon support"): the pages one continuous strip scrolled down - when Komga
+// says Webtoon, or a series set to Vertical scroll; a column on a wide screen; the wheel, taps and keys glide it.
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/page_image.dart' show PageData;
+import 'package:komga_reader/reader/comic_renderer.dart';
+import 'package:komga_reader/screens/reader.dart';
+import 'package:komga_reader/settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'support/helpers.dart';
+import 'support/no_network.dart';
+import 'support/reader_server.dart';
+
+/// A webtoon: ten slices 800 wide, 1280 tall but the last (400), its pages loading at once.
+class _Strip extends ReaderServer {
+  static late Uint8List png;
+  @override
+  Future<List<dynamic>> pages(String bookId) async =>
+      [for (var n = 1; n <= 10; n++) {'number': n, 'width': 800, 'height': n == 10 ? 400 : 1280}];
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) async => png;
+  @override
+  Future<Uint8List> pageThumbBytes(String bookId, int number) async => png;
+}
+
+void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AppSettings.instance.setDisplay(const DisplayPrefs());
+    AppSettings.instance.setDefault(const ReaderPrefs());
+    ReaderServer.direction = 'WEBTOON';
+  });
+  tearDown(() {
+    ReaderServer.direction = 'LEFT_TO_RIGHT';
+    AppSettings.instance.setDisplay(const DisplayPrefs());
+    AppSettings.instance.setDefault(const ReaderPrefs());
+  });
+
+  Future<_Strip> open(WidgetTester tester, {Size size = const Size(800, 1200), int? start}) async {
+    _Strip.png = (await tester.runAsync(() => solidPng(80, 128, const Color(0xFFE0D0B0))))!;
+    setView(tester, size);
+    final api = noNetwork(_Strip.new);
+    if (start != null) api.savedProgress['B1'] = {'page': start, 'completed': false};
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.withProgress(api.theBook)!)));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    return api;
+  }
+
+  ScrollPosition strip(WidgetTester tester) => tester
+      .state<ScrollableState>(find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)))
+      .position;
+
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+  }
+
+  testWidgets('Komga says Webtoon: one strip scrolled down, the slices edge to edge, the full width of a tall screen '
+      '(no page view)', (tester) async {
+    await open(tester);
+    expect(find.byType(PageView), findsNothing);
+    expect(find.byType(ListView), findsOneWidget);
+    // each slice's place in the strip (the second, half on screen, may still be loading)
+    strip(tester).jumpTo(600); // (both slices on screen)
+    await tester.pump();
+    final slices = find.descendant(of: find.byType(ListView), matching: find.byType(FutureBuilder<PageData>),
+        skipOffstage: false);
+    final first = tester.getRect(slices.at(0)), second = tester.getRect(slices.at(1));
+    expect(first.width, 800, reason: 'the width of a tall screen');
+    expect(first.height, 1280, reason: "Komga's size, at that width");
+    expect(second.top, first.bottom, reason: 'edge to edge');
+  });
+
+  testWidgets('on a screen wider than tall, a centred column as wide as the strip would be held upright (user, '
+      '2026-10-22)', (tester) async {
+    await open(tester, size: const Size(1600, 1000));
+    final first = tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
+    expect(first.width, 1000, reason: 'the screen held upright: its height');
+    expect(first.center.dx, 800, reason: 'centred');
+    expect(first.height, 1600, reason: '800 x 1280 at 1000 wide');
+  });
+
+  testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
+    await open(tester, start: 4);
+    expect(strip(tester).pixels, 3 * 1280.0);
+  });
+
+  testWidgets('the wheel glides the strip as far as it spins, and the place follows the slice across the middle',
+      (tester) async {
+    await open(tester);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+    for (var i = 0; i < 20; i++) {
+      await tester.sendEventToBinding(pointer.scroll(const Offset(0, 100)));
+      await tester.pump(const Duration(milliseconds: 30));
+    }
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(2000, 1), reason: '20 notches of 100');
+    // the middle of the screen at 2000 + 600 = 2600: the third slice (from 2560) - on the slider, the controls up
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(tester.widget<Slider>(find.byType(Slider)).value, 2);
+  });
+
+  testWidgets('a tap at the side glides a short way (Smooth) or most of a screen (Page); the other side back; a held '
+      'key glides on steadily', (tester) async {
+    await open(tester);
+    await tester.tapAt(const Offset(760, 600));
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(ComicRenderer.smoothStep * 1200, 1), reason: 'Smooth: a short glide');
+    await tester.tapAt(const Offset(40, 600));
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(0, 1), reason: 'back');
+
+    AppSettings.instance.setDisplay(const DisplayPrefs(webtoonScroll: WebtoonScroll.page));
+    await tester.pump();
+    await tester.tapAt(const Offset(760, 600));
+    await settle(tester);
+    expect(strip(tester).pixels, closeTo(ComicRenderer.pageStep * 1200, 1), reason: 'Page: most of a screen');
+
+    // a held key: its repeats glide on, a little each - no leaps of a screen
+    final before = strip(tester).pixels;
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowDown);
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 40));
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.arrowDown);
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowDown);
+    await settle(tester);
+    final moved = strip(tester).pixels - before;
+    expect(moved, greaterThan(0), reason: 'it scrolled');
+    expect(moved, lessThan(1200 * (ComicRenderer.pageStep + 10 * ComicRenderer.heldStep) + 1),
+        reason: 'the first press a step, the repeats a little each');
+  });
+
+  testWidgets('a series set to Vertical scroll reads as a strip whatever Komga says; Auto on a left-to-right series '
+      'is the page view', (tester) async {
+    ReaderServer.direction = 'LEFT_TO_RIGHT';
+    await open(tester);
+    expect(find.byType(PageView), findsOneWidget, reason: 'Auto, left to right: pages');
+    await tester.pumpWidget(const SizedBox());
+    AppSettings.instance.setDefault(const ReaderPrefs(direction: ReadingDirection.vertical));
+    await open(tester);
+    expect(find.byType(ListView), findsOneWidget, reason: 'Vertical scroll: the strip');
+    expect(find.byType(PageView), findsNothing);
+  });
+}

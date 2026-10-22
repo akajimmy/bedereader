@@ -22,13 +22,23 @@ extension FitModeLabel on FitMode {
       };
 }
 
-/// Page order for a series: follow Komga's reading direction for it (auto), or force one.
-enum ReadingDirection { auto, ltr, rtl }
+/// Page order for a series: follow Komga's reading direction for it (auto), or force one. [vertical]: the pages one
+/// continuous strip, scrolled down (a webtoon - user, 2026-10-22; Auto reads one so where Komga says Webtoon).
+enum ReadingDirection { auto, ltr, rtl, vertical }
 
 extension ReadingDirectionLabel on ReadingDirection {
-  String get label =>
-      switch (this) { ReadingDirection.auto => 'Auto', ReadingDirection.ltr => 'Left to right', ReadingDirection.rtl => 'Right to left' };
+  String get label => switch (this) {
+        ReadingDirection.auto => 'Auto',
+        ReadingDirection.ltr => 'Left to right',
+        ReadingDirection.rtl => 'Right to left',
+        ReadingDirection.vertical => 'Vertical scroll',
+      };
 }
+
+/// How a webtoon's single presses scroll ([DisplayPrefs.webtoonScroll]; user, 2026-10-22: "a setting between scroll
+/// modes: smooth scroll / page scroll"): a short glide, or most of a screen. The wheel and held keys scroll smoothly
+/// in both.
+enum WebtoonScroll { smooth, page }
 
 /// How pages are shown. Saved per series (a new series starts from the global default) and synced through Komga.
 @immutable
@@ -280,8 +290,13 @@ class DisplayPrefs {
       this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
       this.comics = const KindPrefs(), this.ebooks = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
-      this.showClock = false, this.showBattery = false, this.progressBar = false});
+      this.showClock = false, this.showBattery = false, this.progressBar = false,
+      this.webtoonScroll = WebtoonScroll.smooth});
   final bool night;
+
+  /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
+  /// turn is.
+  final WebtoonScroll webtoonScroll;
 
   // Rotation and what's over the page: one set for comics and eBooks (user, 2026-10-21 - each kind had its own; the
   // defaults are the comics' ones). This device.
@@ -358,12 +373,13 @@ class DisplayPrefs {
           bool? nightSchedule, int? nightFrom, int? nightTo, double? textScale, Accent? accent,
           bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, InsetPage? insetPage, Rotation? rotation, PageNote? pageNote,
-          bool? showClock, bool? showBattery, bool? progressBar}) =>
+          bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, insetPage: insetPage ?? this.insetPage,
         rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
+        webtoonScroll: webtoonScroll ?? this.webtoonScroll,
         pageStrip: pageStrip ?? this.pageStrip,
         nightSchedule: nightSchedule ?? this.nightSchedule, nightFrom: nightFrom ?? this.nightFrom,
         nightTo: nightTo ?? this.nightTo, textScale: textScale ?? this.textScale, accent: accent ?? this.accent,
@@ -385,7 +401,7 @@ class DisplayPrefs {
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'insetPage': insetPage.name,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
-      'progressBar': progressBar};
+      'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -417,7 +433,8 @@ class DisplayPrefs {
         pageNote: pick(PageNote.values, j['pageNote'], none.pageNote),
         showClock: j['showClock'] == true,
         showBattery: j['showBattery'] == true,
-        progressBar: j['progressBar'] == true);
+        progressBar: j['progressBar'] == true,
+        webtoonScroll: pick(WebtoonScroll.values, j['webtoonScroll'], WebtoonScroll.smooth));
   }
 }
 

@@ -710,7 +710,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       final repeatWhileSliding = e is KeyRepeatEvent && _r.sliding;
       // Shift+Space goes back, whatever Space is set to do
       if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
-        if (!repeatWhileSliding) _r.back();
+        if (!repeatWhileSliding) _r.back(held: e is KeyRepeatEvent);
         _keyTurned();
         return KeyEventResult.handled;
       }
@@ -731,10 +731,10 @@ class _ReaderScreenState extends State<ReaderScreen>
       switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
-          if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward();
+          if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward(held: e is KeyRepeatEvent);
           _keyTurned();
         case ReaderAction.previous:
-          if (!repeatWhileSliding) _r.back();
+          if (!repeatWhileSliding) _r.back(held: e is KeyRepeatEvent);
           _keyTurned();
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
