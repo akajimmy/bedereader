@@ -52,6 +52,36 @@ void main() {
     sheet.dispose();
   });
 
+  test("the shadow where the page has lifted stays on the page: none past its side (user, 2026-10-22: on an inset "
+      'page it ran on over the surround as a line)', () async {
+    const size = Size(400, 300), page = Rect.fromLTWH(100, 0, 200, 300);
+    final program = (await PageCurl.program())!;
+    final sheet = await solidImage(400, 300, const Color(0xFF808080));
+    Future<int> alphaAt(Offset finger, double x) async {
+      final rec = ui.PictureRecorder();
+      PageCurlPainter(program: program, sheet: sheet, page: page, grab: const Offset(200, 150), finger: finger,
+              mirror: false)
+          .paint(Canvas(rec), size);
+      final img = await rec.endRecording().toImage(400, 300);
+      final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+      img.dispose();
+      return px[(150 * 400 + x.round()) * 4 + 3];
+    }
+
+    // the page just lifting: the shade just past the curl would be beyond the page's right edge
+    // (the shade's band: from the radius out from the fold to 3 radii and 8 - 4 px past the page's edge is in it)
+    final r = PageCurl.radius(200), shadeX = page.right + 4;
+    final lifting = [for (var x = 199.0; x > 0; x--) Offset(x, 150)].firstWhere((finger) {
+      final d = shadeX - (page.left + PageCurl.fold(const Offset(200, 150), finger, r)!.$1.dx);
+      return d > r + 2 && d < 3 * r + 6;
+    });
+    expect(await alphaAt(lifting, shadeX), 0, reason: 'nothing drawn past the page (finger at ${lifting.dx})');
+    // further on, the band inside the page: shaded there
+    final g = PageCurl.fold(const Offset(200, 150), const Offset(60, 150), r)!;
+    expect(await alphaAt(const Offset(60, 150), page.left + g.$1.dx + r + 4), greaterThan(0), reason: 'shaded on it');
+    sheet.dispose();
+  });
+
   test('two pages up, the back of the turning page is the page given (user, 2026-10-16: "the following left-hand '
       'page should be shown on the back"): each point of it shows what lies where it lands, so the landed page is '
       'exactly the page under it - left to right, right to left, and over the gap between two sheets', () async {
