@@ -1,6 +1,6 @@
 # BeDeReader
 
-**A library and reader for [Komga](https://komga.org)** - comics, BD and manga from your own server.
+**A library and reader for [Komga](https://komga.org)** - comics, BD, manga, webtoons and eBooks from your own server.
 
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
@@ -24,8 +24,9 @@ This app shows them and keeps everything in sync.
 **Browsing**
 - **Home**: Continue reading, On deck, pinned views, your libraries, and optional rows for recently read, recently
   added and recent releases - each can be shown, hidden and rearranged.
-- **Libraries, series, books, collections and read lists** as poster grids that load as you scroll, with sorting, a
-  *Hide read* toggle, item counts and pull-to-refresh.
+- **Libraries, series, books, collections and read lists** as poster grids that load as you scroll, with sorting,
+  filters (Show all / Hide read / Hide unread, and Komga's own: status, genre, publisher...), item counts and
+  pull-to-refresh.
 - **Search** across series, books, read lists and collections.
 - **Pins**: save any view (a library, a series, a read list with read books hidden...) to Home under your own name.
 - **Details** for books and series: summary, credits, publisher, genres and more.
@@ -44,7 +45,8 @@ This app shows them and keeps everything in sync.
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
   keeps the screen's own brightness, so it never opens too dark to use), black, grey or white page colours, and the
   screen kept on while reading if you want it (for a few minutes after each page, or always).
-- Comics and eBooks each have their own page counter, clock, progress bar, rotation and position text.
+- A page counter, clock, battery and progress bar over the page, and rotation, set once for every kind of book; each
+  kind has its own position text.
 - At the end of a book: the next one in the series or read list, with its poster - Next book or Close.
 - Comics and EPUBs open in the same reader, with the same controls; a read list that mixes them goes from one to the
   other without leaving it.
@@ -66,6 +68,19 @@ This app shows them and keeps everything in sync.
   the first time, at once after that (the count is kept on the device, per book and per text setting).
 - Pictures at their own resolution; tap a large one to see it full screen.
 - Downloaded EPUBs read offline too, opening at the place you stopped.
+
+**Webtoons**
+- A series Komga marks as Webtoon (or any series set to the Direction *Vertical scroll*) reads as one continuous
+  strip scrolled down: at its own size, as wide as the screen, or one page as tall as the screen. A gutter between
+  pictures can mark the page breaks.
+- Scroll with a finger, the wheel or held keys; a tap or a press glides a short way (Smooth) or most of a screen
+  (Page), with tap zones at the sides or at the top and bottom.
+- **Auto-scroll** at a speed you set: any touch stops it, and the controls come up with a big play button where you
+  touched, to carry on. Keys can be given to start, stop and speed it up or down.
+- Pinch, double-tap or Ctrl+wheel to zoom; the comics' image settings (Enhance, Enhance colours, Crop edges) apply
+  to the strip.
+- Opens again exactly where you stopped on this device. Episodes show the series' cover with an "Ep. N" badge.
+- Webtoons have their own Settings page and their own reading defaults, apart from comics.
 
 **Offline**
 - Download single books, or a series or read list's unread (or all) books, with a storage limit; optionally deleted
@@ -93,16 +108,18 @@ This app shows them and keeps everything in sync.
 ## Where your settings live
 
 - **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, page
-  colours) and image settings and their defaults, the EPUB settings (font, size, spacing, formatting, page
-  colours...), pins (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its
-  own), and what's hidden from On deck.
+  colours, gutter) and image settings and their defaults - comics and webtoons each their own - the EPUB settings
+  (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their order, pins
+  (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its own), and what's
+  hidden from On deck.
 - **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
-  turn animation, taps, keys, what's shown over the page, keeping the screen on), posters, Home's
-  layout, remembered filters and sort orders, downloads and the offline mode switch. Settings > About can reset all
-  of these at once; each Settings page also has its own reset.
+  turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and auto-scroll
+  speed), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the offline
+  mode switch. Settings > About can reset all of these at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, eBooks and Remote and keys for reading; Server and
-sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every device.
+Settings (side menu) has everything in one place: Reading, Comics, Webtoons, eBooks and Remote and keys for reading;
+Server and sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every
+device.
 
 ## Privacy
 
@@ -154,7 +171,7 @@ The rest of this file is about building the app.
 
 - `komga_reader\` - the Flutter app: Dart in `lib\`, shaders in `shaders\`, tests in `test\`, native code in
   `android\` and `windows\`. The reader is one screen (`lib\screens\reader.dart`: controls, keys, progress, moving
-  between books) with a renderer per kind of book (`lib\reader\`: comic pages, EPUB).
+  between books) with a renderer per kind of book (`lib\reader\`: comic pages - and a webtoon's strip - and EPUB).
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
@@ -268,9 +285,10 @@ spelling is displayed, typed, searched and used in file names.
 
 ### Working on changes
 
-- Development happens on a version branch (now `1.2`). One branch per change, off the version branch:
-  `git switch -c feature/two-page-mode 1.2`, commit there, keep `flutter analyze` and `flutter test` green, then merge
-  back into `1.2`.
+- Development happens on a version branch (now `1.5`, the webtoons version); each new version gets its own branch,
+  and the previous one ends at its last release. One branch per change, off the version branch:
+  `git switch -c change/two-page-mode 1.5`, commit there, keep `flutter analyze` and `flutter test` green, then merge
+  back into `1.5`.
 - Versions: every build after a release is a build of the next version (after 1.1, builds show 1.2.0). When a build
   is good enough to be a release candidate, `tools\release.ps1 -Rc 1` tags it `v1.2.0-rc.1`; when one is the
   release, `tools\release.ps1 -Final` tags it `v1.2.0` and moves the version on to 1.3.0 for the next build. Both
