@@ -306,6 +306,8 @@ spelling is displayed, typed, searched and used in file names.
   - fakes of Komga extend `TestKomga` and are built through `noNetwork(...)`, so any call a fake doesn't answer fails
     the test instead of reaching the network;
   - ready-made fakes for the reader, libraries and downloads, Home, and the synced client settings;
+  - epub_reader.dart opens an eBook held in memory in the reader, lets it settle and reads where it is - shared by
+    the eBook reader's test files;
   - `app_shell.dart` runs the whole app (`KomgaReaderApp`) against a recorded fake server;
   - `helpers.dart` holds `setView`, a `waitUntil` that fails loudly, test images, and the shader preload.
 
