@@ -315,18 +315,6 @@ void main() {
     expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
   });
 
-  testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
-      'them)', (tester) async {
-    await openReader(tester);
-    final middle = tester.getCenter(find.byType(ReaderScreen));
-    await tester.tapAt(middle, buttons: kSecondaryButton);
-    await tester.pump();
-    expect(find.byTooltip('Next book'), findsOneWidget, reason: 'shown');
-    await tester.tapAt(middle, buttons: kSecondaryButton);
-    await tester.pump();
-    expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
-  });
-
   testWidgets('back with controls up only hides them; back again closes the book', (tester) async {
     await openReader(tester);
     await key(tester, LogicalKeyboardKey.enter);
@@ -845,16 +833,18 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
-    testWidgets('reader controls fit on ${size.width.toInt()}x${size.height.toInt()} without overflow', (tester) async {
+  testWidgets('reader controls fit without overflow: tall, wide, a phone, a phone on its side', (tester) async {
+    for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
+      final name = '${size.width.toInt()}x${size.height.toInt()}';
       setView(tester, size);
       await openReader(tester);
       await key(tester, LogicalKeyboardKey.enter);
-      expect(find.text('Close'), findsOneWidget);
-      expect(find.byTooltip('Previous book'), findsOneWidget);
-      expect(tester.takeException(), isNull); // a RenderFlex overflow would surface here
-    });
-  }
+      expect(find.text('Close'), findsOneWidget, reason: name);
+      expect(find.byTooltip('Previous book'), findsOneWidget, reason: name);
+      expect(tester.takeException(), isNull, reason: '$name: a RenderFlex overflow would surface here');
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
 
   testWidgets('previous book at the start of the series says so and stays', (tester) async {
     await openReader(tester);

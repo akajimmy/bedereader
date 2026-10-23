@@ -1,3 +1,4 @@
+// row nav keys (test audit, 2026-10-23: row_nav_test.dart folded in).
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,11 +13,16 @@ import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/settings_pages.dart';
 
-/// Settings rows with the remote, as in the release app (user, 2026-10-07: from the rightmost control of "Show the
-/// controls", Down jumped past "Close the book" to "Zoom in"; in the EPUB panel, from Font to Line spacing and from
-/// Margins to Book's formatting). The rows' Up / Down (RowNav) found its rows by their focus nodes' debug labels,
-/// which Flutter keeps in debug builds only: the tests, run in debug mode, passed while the release app skipped rows.
-/// So each scenario here first empties every label, as a release build has them.
+// Settings rows with the remote, as in the release app (user, 2026-10-07: from the rightmost control of "Show the
+// controls", Down jumped past "Close the book" to "Zoom in"; in the EPUB panel, from Font to Line spacing and from
+// Margins to Book's formatting). The rows' Up / Down (RowNav) found its rows by their focus nodes' debug labels,
+// which Flutter keeps in debug builds only: the tests, run in debug mode, passed while the release app skipped rows.
+// So each scenario here first empties every label, as a release build has them.
+
+// ---- from row_nav_test.dart
+// Settings with the remote: Up / Down go row to row, never skipping a row because a wide control sat over a short
+// one (user, 2026-09-30). How the rows look and lay out: setting_rows_test.
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -143,5 +149,76 @@ void main() {
     // and from Zoom in's first control, Up: Close the book's first control - not the row's last (W, or Add on screen)
     await press(LogicalKeyboardKey.arrowUp, chip('='));
     expect(focus(), chip('Esc'), reason: 'Up: the row above, its first control - not ${name(focus())}');
+  });
+
+  group('row nav', () {
+    /// The text of the control with focus (a segment's label, a button's text).
+    String? focusedText() {
+      final f = FocusManager.instance.primaryFocus?.context;
+      if (f == null) return null;
+      final texts = find.descendant(of: find.byWidget(f.widget), matching: find.byType(Text));
+      return texts.evaluate().isEmpty ? null : (texts.evaluate().first.widget as Text).data;
+    }
+
+    // (a page taller than the screen, Down keeping the focused row on screen: settings_remote_test's walk of every
+    // page, and row_nav_keys_test's with Android's navigation bar)
+    testWidgets('Down from a wide choice goes to the next row even when its only control is off to the side; '
+        'then the one after; Up comes back', (tester) async {
+      // The case the rows are for: the wide row's left segment sits straight over the row after next (the page's
+      // choices share one width), and the row in between has only a small button at the far right. Flutter's own
+      // Down goes to what is straight below - the row after next - skipping the button's row. (The old version of this
+      // test started from the far right, over the skipped row's switch, and passed without RowNav - test audit,
+      // 2026-09-30.)
+      setView(tester, const Size(1000, 800));
+      var a = 1, c = 1, pressed = 0;
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: StatefulBuilder(builder: (context, set) =>
+        ListView(children: [
+          SettingsGroup(title: 'G', children: [
+            SegmentRow<int>(title: 'Wide', value: a, onChanged: (v) => set(() => a = v),
+                choices: const [Choice(1, 'One'), Choice(2, 'Two'), Choice(3, 'Three'), Choice(4, 'Four')]),
+            ActionRow(title: 'Short', button: TextButton(onPressed: () => pressed++, child: const Text('Go'))),
+            SegmentRow<int>(title: 'Another', value: c, onChanged: (v) => set(() => c = v),
+                choices: const [Choice(1, 'A'), Choice(2, 'B')]),
+          ]),
+        ]),
+      ))));
+      await tester.pump();
+
+      // the premise: the button is off to the right, and the next row's first choice is straight under the wide one's
+      final one = tester.getRect(find.text('One')), go = tester.getRect(find.text('Go'));
+      expect(go.left, greaterThan(one.right + 100)); // nowhere near under "One"
+      expect(tester.getRect(find.widgetWithText(SegmentedButton<int>, 'A')).left, closeTo(
+          tester.getRect(find.widgetWithText(SegmentedButton<int>, 'One')).left, 0.5));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab); // the first control: the wide row's first segment
+      await tester.pump();
+      expect(focusedText(), 'One');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focusedText(), 'Go', reason: 'the next row - not skipped');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focusedText(), 'A', reason: 'the row after: its first control');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focusedText(), 'Go');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(focusedText(), 'One', reason: "up to the previous row's first control");
+
+      // and from the far end of the wide row too
+      for (var i = 0; i < 3; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pump();
+      }
+      expect(focusedText(), 'Four');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(focusedText(), 'Go');
+      expect(pressed, 0);
+    });
   });
 }
