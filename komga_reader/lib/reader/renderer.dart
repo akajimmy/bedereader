@@ -160,6 +160,10 @@ abstract class Renderer extends ChangeNotifier {
   /// A row of its own over the bottom bar (the comic page strip): drawn, its focus node (the remote's walk), and the
   /// bottom bar's control below it.
   Widget? above(BuildContext context) => null;
+
+  /// Over everything, the controls included (in the Reader's Stack, last): a webtoon's floating play button - under
+  /// the controls, a tap on it closed them instead.
+  List<Widget> overControls(BuildContext context) => const [];
   FocusNode? get rowNode => null;
   FocusNode? get rowBelow => null;
   void rowFocus() {}

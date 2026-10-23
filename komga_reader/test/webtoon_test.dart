@@ -258,48 +258,66 @@ void main() {
     expect(first().width, closeTo(800, 1), reason: 'not under its own size');
   });
 
-  testWidgets('auto-scroll (user, 2026-10-22): the play button scrolls the strip down by itself at its speed and puts '
-      'the controls away; any touch stops it; it stops at the end', (tester) async {
+  testWidgets('auto-scroll (user, 2026-10-22): play scrolls the strip down by itself at its speed and puts the '
+      'controls away; the tap that stops it brings the controls and play where the tap was - which carries on; the '
+      'next tap is a tap (no paused state); it stops at the end', (tester) async {
     AppSettings.instance.setDisplay(const DisplayPrefs(autoScrollSpeed: 100));
     await open(tester);
+    Future<void> run(int frames) async {
+      for (var i = 0; i < frames; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
     await tester.tapAt(const Offset(400, 600)); // the controls
     await tester.pump();
     await tester.tap(find.byTooltip('Auto-scroll'));
     await tester.pump();
     expect(readerSlider(), findsNothing, reason: 'the controls away, to read');
-    for (var i = 0; i < 20; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await run(20);
     expect(strip(tester).pixels, closeTo(100, 10), reason: 'a second at 100 points a second');
 
-    // a touch stops it
-    final g = await tester.startGesture(const Offset(400, 300));
-    await g.up();
+    // the tap that stops it: the controls, and play where the tap was (user, 2026-10-22)
+    await tester.tapAt(const Offset(300, 500));
     await tester.pump();
     final stopped = strip(tester).pixels;
-    for (var i = 0; i < 10; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await run(10);
     expect(strip(tester).pixels, closeTo(stopped, 1), reason: 'stopped');
+    expect(readerSlider(), findsOneWidget, reason: 'the controls');
+    final play = find.byKey(const ValueKey('auto-scroll-play'));
+    expect(play, findsOneWidget);
+    expect((tester.getCenter(play) - const Offset(300, 500)).distance, lessThan(2), reason: 'where the tap was');
+    expect(find.byTooltip('Auto-scroll'), findsOneWidget, reason: "the bar's: play (stopped is stopped)");
+    // it carries on from there: the controls away again
+    await tester.tap(find.byTooltip('Resume auto-scroll'));
+    await tester.pump();
+    await run(10);
+    expect(strip(tester).pixels, greaterThan(stopped + 30), reason: 'on again');
+    expect(readerSlider(), findsNothing);
+    expect(play, findsNothing);
+
+    // stopped again; the next tap elsewhere puts the controls and the play button away - still stopped
+    await tester.tapAt(const Offset(300, 500));
+    await tester.pump();
+    expect(play, findsOneWidget);
+    final still = strip(tester).pixels;
+    await tester.tapAt(const Offset(700, 300)); // (the right side: no step down either)
+    await tester.pump();
+    await run(10);
+    expect(play, findsNothing, reason: 'the play button away');
+    expect(readerSlider(), findsNothing, reason: 'the controls away');
+    expect(strip(tester).pixels, still, reason: 'still stopped');
 
     // the end: it stops there (the end card)
     strip(tester).jumpTo(strip(tester).maxScrollExtent - 50);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600)); // (the controls a tap showed)
-    await tester.tapAt(const Offset(400, 600));
     await tester.pump();
     if (find.byTooltip('Auto-scroll').evaluate().isEmpty) {
       await tester.tapAt(const Offset(400, 600));
       await tester.pump();
     }
     await tester.tap(find.byTooltip('Auto-scroll'));
-    for (var i = 0; i < 30; i++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await run(30);
     expect(strip(tester).pixels, strip(tester).maxScrollExtent, reason: 'at the end');
-    await tester.tapAt(const Offset(400, 600));
-    await tester.pump();
-    expect(find.byTooltip('Auto-scroll'), findsOneWidget, reason: 'not playing any more');
   });
 
   testWidgets("auto-scroll's keys - none by default; given keys, one starts and stops it and the others change its "

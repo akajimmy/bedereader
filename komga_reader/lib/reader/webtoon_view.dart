@@ -146,6 +146,10 @@ class WebtoonController {
   bool get autoOn => _state?._auto.isActive ?? false;
 
   void startAuto() => _state?._startAuto();
+
+  /// The last touch on the strip stopped auto-scroll (the tap it ends in brings the controls and play).
+  bool get touchStoppedAuto => _downStopped;
+  bool _downStopped = false;
   void stopAuto() => _state?._stopAuto(tell: false);
 
   bool get atEnd {
@@ -298,6 +302,7 @@ class _WebtoonViewState extends State<WebtoonView> with TickerProviderStateMixin
 
   void _onDown(PointerDownEvent e) {
     _stopGlide();
+    widget.controller._downStopped = _auto.isActive;
     _stopAuto(); // any touch stops auto-scroll (user, 2026-10-22)
     if (e.kind == PointerDeviceKind.mouse) return;
     _fingers[e.pointer] = e.localPosition;
