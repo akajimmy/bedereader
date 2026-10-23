@@ -16,7 +16,7 @@ import '../settings.dart' show FitMode;
 /// The place is the slice across the middle of the screen ([onPlace]); after the last slice, the end card.
 class WebtoonView extends StatefulWidget {
   const WebtoonView({super.key, required this.sizes, required this.page, required this.endCard,
-      required this.controller, required this.onPlace, required this.background, this.fit = FitMode.original,
+      required this.controller, required this.onPlace, required this.background, this.fit = FitMode.original, this.gutter = 0,
       this.onWheel});
 
   /// Each slice's size (Komga's - width and height in pixels; a slice with none counts as square).
@@ -32,6 +32,10 @@ class WebtoonView extends StatefulWidget {
 
   /// How wide the strip is: its own size, Fit width (edge to edge) or Fit page height ([columnWidth]).
   final FitMode fit;
+
+  /// The space between one picture and the next, points - the page colours showing through, as a page break (user,
+  /// 2026-10-22: "a vertical gutter between images, like page breaks"). None after the last.
+  final double gutter;
 
   /// The mouse wheel over the strip: the reader's to scroll by (Smooth or Page) - not the list's own scrolling, which
   /// heard it first and moved by the wheel's distance in both modes (user, 2026-10-22: Page "feels very similar to
@@ -183,8 +187,12 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
             imageWidth: widget.sizes.fold(0.0, (w, s) => math.max(w, s.width)),
             pageRatio: tallest.height > 0 ? tallest.width / tallest.height : 0,
             pixelRatio: MediaQuery.devicePixelRatioOf(context));
+        final gap = widget.gutter;
+        // each slice's place: its picture and, but for the last, the gutter under it
         final heights = [
-          for (final s in widget.sizes) s.width > 0 && s.height > 0 ? s.height * width / s.width : width,
+          for (final (i, s) in widget.sizes.indexed)
+            (s.width > 0 && s.height > 0 ? s.height * width / s.width : width) +
+                (i < widget.sizes.length - 1 ? gap : 0),
         ];
         final tops = <double>[0];
         for (final h in heights) {
@@ -233,7 +241,9 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
                     }
                   },
                   child: i < heights.length
-                      ? widget.page(context, i)
+                      ? Padding(
+                          padding: EdgeInsets.only(bottom: i < heights.length - 1 ? gap : 0),
+                          child: widget.page(context, i))
                       : OverflowBox(maxWidth: area.width, child: widget.endCard()),
                 ),
               ),

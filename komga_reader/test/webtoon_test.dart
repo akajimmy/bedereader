@@ -69,8 +69,9 @@ void main() {
     }
   }
 
-  testWidgets('Komga says Webtoon: one strip scrolled down, the slices edge to edge, the full width of a tall screen '
-      '(no page view)', (tester) async {
+  testWidgets('Komga says Webtoon: one strip scrolled down, the slices one under the other (the gutter None: edge to '
+      'edge), the full width of a tall screen (no page view)', (tester) async {
+    AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart.copyWith(gutter: 0));
     await open(tester);
     expect(find.byType(PageView), findsNothing);
     expect(find.byType(ListView), findsOneWidget);
@@ -182,7 +183,25 @@ void main() {
 
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
     await open(tester, start: 4);
-    expect(strip(tester).pixels, 3 * 1280.0);
+    expect(strip(tester).pixels, 3 * (1280.0 + ReaderPrefs.defaultGutter), reason: 'three slices and their gutters');
+  });
+
+  testWidgets('the gutter: the page colours between one picture and the next, as a page break - 2 px unless set '
+      '(user, 2026-10-22: "same as comics, starting with 2px")', (tester) async {
+    Future<double> gapAfterFirst() async {
+      strip(tester).jumpTo(600); // (both slices on screen)
+      await tester.pump();
+      final pictures = find.descendant(of: find.byType(ListView), matching: find.byType(FutureBuilder<PageData>),
+          skipOffstage: false);
+      return tester.getRect(pictures.at(1)).top - tester.getRect(pictures.at(0)).bottom;
+    }
+
+    await open(tester);
+    expect(await gapAfterFirst(), 2, reason: 'the default: 2 px');
+    await tester.pumpWidget(const SizedBox());
+    AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart.copyWith(gutter: 16));
+    await open(tester);
+    expect(await gapAfterFirst(), 16);
   });
 
   testWidgets('the wheel glides the strip as far as it spins, and the place follows the slice across the middle',

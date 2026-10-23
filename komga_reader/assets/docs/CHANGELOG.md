@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- Webtoons: a Gutter setting - the space between one picture and the next, in the page colours, like a page break: None, 2 px (the default), 8 px or 16 px. A reading default on the Webtoons page, and per series in Webtoon settings.
+
 ## 1.5.0
 
 ### Build 143 - 2026-10-22
