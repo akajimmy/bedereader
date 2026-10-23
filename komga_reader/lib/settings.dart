@@ -708,10 +708,21 @@ class AppSettings extends ChangeNotifier {
   ReaderPrefs webtoonDefaults = webtoonStart;
   static const webtoonStart = ReaderPrefs(fit: FitMode.original);
 
-  /// The series Komga says are webtoons, as the reader finds them (not kept: learnt again each run) - their settings
-  /// start from [webtoonDefaults]. A comic series set to Vertical scroll in the app isn't one (user, 2026-10-22: it
-  /// "keeps its comic settings").
+  /// The series Komga says are webtoons, as the app comes across them (a series list, a series' page, the reader) -
+  /// kept on this device ([noteDirection]): their settings start from [webtoonDefaults], their episodes' posters are
+  /// the series' cover. A comic series set to Vertical scroll in the app isn't one (user, 2026-10-22: it "keeps its
+  /// comic settings").
   final Set<String> webtoonSeries = {};
+  static const _webtoonSeriesKey = 'webtoon.series';
+
+  /// Komga's reading direction for [seriesId], seen: a webtoon, or not (any more). May be called mid-build.
+  void noteDirection(String seriesId, Object? direction) {
+    final now = direction == 'WEBTOON';
+    if (webtoonSeries.contains(seriesId) == now) return;
+    now ? webtoonSeries.add(seriesId) : webtoonSeries.remove(seriesId);
+    SharedPreferences.getInstance().then((p) => p.setStringList(_webtoonSeriesKey, webtoonSeries.toList()));
+    scheduleMicrotask(notifyListeners);
+  }
 
   /// The defaults [seriesId] follows: a webtoon's, or a comic's.
   ReaderPrefs defaultsFor(String? seriesId) =>
@@ -790,6 +801,7 @@ class AppSettings extends ChangeNotifier {
   /// this device's own display settings stay (code review, 2026-09-30: they carried over to the next account).
   Future<void> clearAccount() async {
     _syncTimer?.cancel();
+    webtoonSeries.clear(); // (another account: other series)
     _api = null;
     _loaded = false;
     defaults = const ReaderPrefs();
@@ -858,6 +870,9 @@ class AppSettings extends ChangeNotifier {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final d = p.getString(_localDisplay);
+    webtoonSeries
+      ..clear()
+      ..addAll(p.getStringList(_webtoonSeriesKey) ?? const []);
     final savedDisplay = d == null ? null : jsonDecode(d) as Map<String, dynamic>;
     if (savedDisplay != null) display = DisplayPrefs.fromJson(savedDisplay);
     _posterLookFollows();

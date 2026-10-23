@@ -346,6 +346,8 @@ Widget seriesTile(BuildContext context, Komga api, dynamic s,
     {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false, Selection? selection}) {
   final selecting = selection != null && selection.active;
   final total = (s['booksCount'] ?? 0) as int;
+  // (a webtoon, Komga says: its episodes' posters are its cover)
+  AppSettings.instance.noteDirection(s['id'] as String, s['metadata']?['readingDirection']);
   return PosterTile(
     api: api, autofocus: autofocus, imageUrl: api.seriesThumb(s['id']),
     title: (s['metadata']?['title'] ?? s['name']) as String,
@@ -388,8 +390,14 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
           if (display.posterTitle) title,
           if (display.posterDate) date,
         ];
+  // a webtoon's episode: the series' cover, an episode badge on it - its first page is just the top of a strip
+  // (user, 2026-10-22: "we're going with series cover")
+  final sid = b['seriesId'] as String?;
+  final episode = sid != null && AppSettings.instance.webtoonSeries.contains(sid);
+  final number = b['metadata']?['number'];
   return PosterTile(
-    api: api, autofocus: autofocus, imageUrl: api.bookThumb(b['id']),
+    api: api, autofocus: autofocus, imageUrl: episode ? api.seriesThumb(sid) : api.bookThumb(b['id']),
+    corner: episode && number != null && '$number'.isNotEmpty ? 'Ep. $number' : null,
     title: lines.isEmpty ? '' : lines[0],
     subtitle: lines.length > 1 ? lines[1] : null,
     caption: lines.length > 2 ? lines[2] : null,
