@@ -9,6 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- Webtoons: Image settings (Enhance, Enhance colours, Crop edges) now apply to the strip, drawn by the same processing as comics' pages - webtoons' own defaults (Settings > Webtoons > Image - defaults) and per series (the Image settings button). Crop edges trims only the sides of a strip, so nothing is lost where one slice runs into the next.
+- Webtoons: double-tap to zoom in on a spot (twice as big, as a comic's page) and double-tap again to zoom out; webtoons' own switch on the Webtoons page and in Webtoon settings.
+
 **Fixed**
 
 - Webtoons: a series' page shows its episodes with the series cover straight away - it checks with Komga itself whether the series is a webtoon (opened from a book or a pin, the episodes kept their first pages until the app had seen the series elsewhere).

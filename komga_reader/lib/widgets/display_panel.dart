@@ -77,8 +77,10 @@ class _PageActionsRow extends StatelessWidget {
       );
 }
 
-Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle}) =>
-    _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side));
+/// [webtoon]: Komga's webtoon - its Make default is webtoons' defaults.
+Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle,
+        bool webtoon = false}) =>
+    _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side, webtoon: webtoon));
 
 /// Any reader panel in the comic reader's look (user, 2026-10-06: the EPUB reader's panels should look like these):
 /// a side sheet on a wide screen, a bottom sheet on a narrow one, [title] and Done, then [children] (rebuilt as
@@ -239,7 +241,8 @@ class _ReaderPanel extends StatelessWidget {
         // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
         // this device's
         if (readsAsStrip(p, komgaDirection))
-          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s)]),
+          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
+            webtoonDoubleTapRow(s)]),
         // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
         // Settings only)
         SettingsGroup(title: 'Screen', children: [
@@ -253,7 +256,8 @@ class _ReaderPanel extends StatelessWidget {
 }
 
 class _ImagePanel extends StatelessWidget {
-  const _ImagePanel({required this.seriesId, this.seriesTitle, required this.side});
+  const _ImagePanel({required this.seriesId, this.seriesTitle, required this.side, this.webtoon = false});
+  final bool webtoon;
   final String seriesId;
   final String? seriesTitle;
   final bool side;
@@ -288,7 +292,7 @@ class _ImagePanel extends StatelessWidget {
                 ),
                 OutlinedButton(
                   onPressed: () {
-                    s.setDefault(s.defaults.withImageOf(p));
+                    webtoon ? s.setWebtoonDefault(s.webtoonDefaults.withImageOf(p)) : s.setDefault(s.defaults.withImageOf(p));
                     _toast(context, "Series you haven't adjusted will use these image settings");
                   },
                   child: const Text('Make default'),
@@ -709,6 +713,13 @@ Widget insetPageRow(AppSettings s) => SegmentRow<InsetPage>(
       ],
       value: s.display.insetPage,
       onChanged: (v) => s.setDisplay(s.display.copyWith(insetPage: v)),
+    );
+
+/// Webtoons' own Double-tap to zoom (user, 2026-10-22; comics' is [doubleTapRow]).
+Widget webtoonDoubleTapRow(AppSettings s) => SwitchRow(
+      title: 'Double-tap to zoom',
+      value: s.display.webtoonDoubleTap,
+      onChanged: (v) => s.setDisplay(s.display.copyWith(webtoonDoubleTap: v)),
     );
 
 Widget doubleTapRow(AppSettings s) => SwitchRow(

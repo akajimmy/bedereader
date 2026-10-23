@@ -638,8 +638,20 @@ class ComicRenderer extends Renderer {
   /// zones (the floating play goes).
   void _stripTap(TapUpDetails d, Size box) {
     if (!host.controlsUp) _playAt = null; // (put away with the controls)
+    final strip = _strip;
+    if (!(strip?.touchStoppedAuto ?? false) && _playAt == null && strip != null && !host.controlsUp) {
+      // a double tap zooms the strip in on the spot, and out again (user, 2026-10-22: as comics' - their tap logic)
+      _tapOrDoubleTap(d,
+          zoom: _settings.display.webtoonDoubleTap ? (_) => strip.toggleZoomAt(d.localPosition) : null,
+          tap: (at) => _stripTapAt(at, box));
+      return;
+    }
+    _stripTapAt(d.localPosition, box);
+  }
+
+  void _stripTapAt(Offset at, Size box) {
     if (_strip?.touchStoppedAuto ?? false) {
-      _playAt = d.localPosition;
+      _playAt = at;
       if (!host.controlsUp) host.tap(0.5); // (the middle: the controls)
       _changed();
       return;
@@ -653,8 +665,8 @@ class ComicRenderer extends Renderer {
       return;
     }
     host.tap(_settings.display.webtoonTaps == WebtoonTaps.topBottom
-        ? _zoneOf(d.localPosition.dy / box.height)
-        : d.localPosition.dx / box.width);
+        ? _zoneOf(at.dy / box.height)
+        : at.dx / box.width);
   }
 
   @override
@@ -738,30 +750,38 @@ class ComicRenderer extends Renderer {
     fwd ? forward() : back();
   }
 
-  // ---- taps: with Double-tap to zoom on (fit screen, a page showing), a tap waits [_doubleTapWait] to see whether a
+  // ---- taps: with Double-tap to zoom on (fit screen, a page showing), a tap waits [doubleTapWait] to see whether a
   // second one follows near it: a double tap zooms in on that spot (again: back out), and no single tap happens. A
   // single tap goes to the Reader's tap zones.
-  static const _doubleTapWait = Duration(milliseconds: 250);
+  /// (zero: no wait - tests that aren't about the double tap; a tap goes at once)
+  @visibleForTesting
+  static Duration doubleTapWait = const Duration(milliseconds: 250);
   static const _doubleTapSlop = 60.0; // how far apart the two taps may be
   Timer? _tapTimer;
   Offset? _firstTap; // waiting for a possible second tap
 
-  void _onTapUp(TapUpDetails d, double width) {
-    final zoomer = _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null;
+  void _onTapUp(TapUpDetails d, double width) => _tapOrDoubleTap(d,
+      zoom: _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null,
+      tap: (at) => host.tap(at.dx / width));
+
+  /// A tap, or two close together: with a [zoom] (Double-tap to zoom), a tap waits [doubleTapWait] for a second
+  /// near it - the pair zooms ([zoom] with the second's place on the screen), a tap alone goes to [tap] (its place in
+  /// the view) a moment later; without, at once. Comics' pages and webtoons' strip alike.
+  void _tapOrDoubleTap(TapUpDetails d, {void Function(Offset global)? zoom, required void Function(Offset at) tap}) {
     final waiting = _firstTap;
     final pending = waiting != null && (_tapTimer?.isActive ?? false);
     _tapTimer?.cancel();
     _firstTap = null;
-    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) host.tap(waiting.dx / width); // not a pair
-    if (zoomer == null) {
-      host.tap(d.localPosition.dx / width);
+    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) tap(waiting); // not a pair
+    if (zoom == null || doubleTapWait == Duration.zero) {
+      tap(d.localPosition);
     } else if (pending && (d.localPosition - waiting).distance <= _doubleTapSlop) {
-      zoomer(d.globalPosition);
+      zoom(d.globalPosition);
     } else {
       _firstTap = d.localPosition;
-      _tapTimer = Timer(_doubleTapWait, () {
+      _tapTimer = Timer(doubleTapWait, () {
         _firstTap = null;
-        if (host.mounted && !host.controlsUp) host.tap(d.localPosition.dx / width);
+        if (host.mounted && !host.controlsUp) tap(d.localPosition);
       });
     }
   }
@@ -1014,7 +1034,9 @@ class ComicRenderer extends Renderer {
               key: ValueKey(('webtoon', _book['id'])),
               sizes: [
                 for (final p in pages)
-                  Size(((p as Map)['width'] as num?)?.toDouble() ?? 0, (p['height'] as num?)?.toDouble() ?? 0),
+                  // (as cropped: Crop edges narrows each slice, its place in the strip with it)
+                  croppedSize(((p as Map)['width'] as num?)?.toInt() ?? 0, (p['height'] as num?)?.toInt() ?? 0,
+                      prefs.crop, sidesOnly: true),
               ],
               page: _slice,
               endCard: host.endCard,
@@ -1080,7 +1102,11 @@ class ComicRenderer extends Renderer {
             ));
           }
           if (!snap.hasData) return Center(child: CircularProgressIndicator(strokeWidth: 2, color: ink(0.3)));
-          return RawImage(image: snap.data!.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium);
+          // the series' image settings, as a comic's page has them (ProcessedPicture) - a crop at the sides only, the
+          // strip running on from slice to slice
+          return LayoutBuilder(builder: (context, box) => ProcessedPicture(data: snap.data!, prefs: prefs,
+              size: Size(box.maxWidth, box.maxHeight), sidesOnly: true, levels: _loader!.bookLevels,
+              levelsNow: () => _loader?.levelsNow));
         },
       );
 
@@ -1294,10 +1320,10 @@ class ComicRenderer extends Renderer {
         if (webtoon && _strip != null)
           BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.stop : Icons.play_arrow,
               label: autoScrolling ? 'Stop auto-scroll' : 'Auto-scroll', onPressed: autoScrollToggle)),
-        // (a strip: no Image settings until they apply to it)
-        if (seriesId != null && !webtoon)
+        if (seriesId != null)
           BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
-              onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?))),
+              onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?,
+                  webtoon: _komgaWebtoon))),
         BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune,
             label: _komgaWebtoon ? 'Webtoon settings' : 'Comic settings',
             onPressed: () => showReaderPanel(context, webtoon: _komgaWebtoon,
