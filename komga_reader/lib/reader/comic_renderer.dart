@@ -1095,7 +1095,12 @@ class ComicRenderer extends Renderer {
         fitNode,
         IconButton(
           focusNode: fitNode,
-          tooltip: fit == FitMode.original ? 'Original size' : 'Fit ${fit.label.toLowerCase()}',
+          // (a strip's height fit: one page to the screen's height - 'Fit page height', as its panel says)
+          tooltip: fit == FitMode.original
+              ? 'Original size'
+              : webtoon && fit == FitMode.height
+                  ? 'Fit page height'
+                  : 'Fit ${fit.label.toLowerCase()}',
           onPressed: () => _setFit(next),
           icon: fitIcon(fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
         ),

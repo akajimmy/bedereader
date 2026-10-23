@@ -605,7 +605,7 @@ Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
 /// Webtoons: what one tap at the side or one short key press scrolls - a short glide or most of a screen (user,
 /// 2026-10-22: "a setting between scroll modes: smooth scroll / page scroll"). This device's.
 Widget webtoonScrollRow(AppSettings s) => SegmentRow<WebtoonScroll>(
-      title: 'Scrolling',
+      title: 'Mode', // (in the Scrolling group - user, 2026-10-22: it said Scrolling twice)
       choices: const [Choice(WebtoonScroll.smooth, 'Smooth'), Choice(WebtoonScroll.page, 'Page')],
       value: s.display.webtoonScroll,
       onChanged: (w) => s.setDisplay(s.display.copyWith(webtoonScroll: w)),
