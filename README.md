@@ -93,26 +93,30 @@ This app shows them and keeps everything in sync.
 Click a picture for the full size. The comics are public-domain books from the 1940s and 50s (Planet Comics and
 others), the eBooks public-domain classics from [Standard Ebooks](https://standardebooks.org).
 
-**Libraries** - comics and eBooks
+**Libraries** - comics and eBooks, and on the PC with the side menu pinned, and search
 
 [![Comics library](docs/images/thumbs/tablet-library.jpg "A comics library as posters")](docs/images/tablet-library.jpg)
 [![eBooks library](docs/images/thumbs/tablet-books.jpg "An eBooks library, the books' own covers")](docs/images/tablet-books.jpg)
+[![Library on the PC](docs/images/thumbs/pc-library.jpg "On the PC, the side menu pinned open")](docs/images/pc-library.jpg)
+[![Search on the PC](docs/images/thumbs/pc-search.jpg "Search: series and books")](docs/images/pc-search.jpg)
 
-**Comics** - a page with its controls, two pages side by side, the page curl, Enhance and Enhance colours
+**Comics** - a page with its controls, two pages side by side, the page curl, Enhance and Enhance colours, and on the PC
 
 [![Reading a comic](docs/images/thumbs/tablet-reader.jpg "A page, with the page strip and the controls")](docs/images/tablet-reader.jpg)
 [![Two pages](docs/images/thumbs/landscape-comic-two-pages.jpg "Two pages side by side")](docs/images/landscape-comic-two-pages.jpg)
 [![Two pages and Comic settings](docs/images/thumbs/landscape-comic-two-pages-settings.jpg "Comic settings over the spread")](docs/images/landscape-comic-two-pages-settings.jpg)
 [![Page curl](docs/images/thumbs/tablet-page-curl.jpg "The page curl, following the finger")](docs/images/tablet-page-curl.jpg)
 [![Enhance](docs/images/thumbs/tablet-reader-enhance.jpg "Enhance and Enhance colours on: whiter paper, deeper ink")](docs/images/tablet-reader-enhance.jpg)
+[![Two pages on the PC](docs/images/thumbs/pc-comic.jpg "Two pages on the PC")](docs/images/pc-comic.jpg)
 
-**eBooks** - a page, two pages with and without Inset page, the settings, Contents
+**eBooks** - a page, two pages with and without Inset page, the settings, Contents, and on the PC
 
 [![An eBook page](docs/images/thumbs/tablet-ebook.jpg "A page of The Wonderful Wizard of Oz")](docs/images/tablet-ebook.jpg)
 [![Two pages, Inset page](docs/images/thumbs/landscape-ebook-two-pages-inset.jpg "Two pages as sheets - Inset page")](docs/images/landscape-ebook-two-pages-inset.jpg)
 [![Two pages](docs/images/thumbs/landscape-ebook-two-pages-no-inset.jpg "Two pages, edge to edge")](docs/images/landscape-ebook-two-pages-no-inset.jpg)
 [![eBook settings](docs/images/thumbs/tablet-ebook-settings.jpg "eBook settings: font, size, spacing, page colours")](docs/images/tablet-ebook-settings.jpg)
 [![Contents](docs/images/thumbs/tablet-ebook-contents.jpg "Contents")](docs/images/tablet-ebook-contents.jpg)
+[![Two pages on the PC](docs/images/thumbs/pc-ebook.jpg "Two pages on the PC")](docs/images/pc-ebook.jpg)
 
 **Settings** - every setting in one place, with a page per kind of book
 
