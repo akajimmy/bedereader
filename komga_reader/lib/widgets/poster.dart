@@ -47,7 +47,7 @@ SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExt
 class PosterTile extends StatelessWidget {
   const PosterTile({super.key, required this.api, required this.imageUrl, required this.title,
       this.subtitle, this.read = false, this.progress, required this.onOpen, this.onMenu, this.autofocus = false,
-      this.image, this.selected, this.badge, this.caption});
+      this.image, this.selected, this.badge, this.caption, this.corner});
 
   final Komga api;
   final String imageUrl;
@@ -61,6 +61,7 @@ class PosterTile extends StatelessWidget {
   final VoidCallback? onMenu;
   final bool autofocus;
   final Widget? badge; // bottom-right corner (what of it is downloaded)
+  final String? corner; // top-left, on the cover: a webtoon episode's number ("Ep. 12")
   /// A last small line (book posters: the release date). Not null = the line is there, even empty (a book with no
   /// date), so every poster in a grid keeps the same cover size.
   final String? caption;
@@ -109,6 +110,18 @@ class PosterTile extends StatelessWidget {
                         shadows: const [Shadow(color: Colors.black, blurRadius: 6)],
                       )),
                     ],
+                    if (corner != null && selected == null)
+                      Positioned(
+                        left: 6,
+                        top: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(10)),
+                          child: Text(corner!, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600,
+                              color: Colors.white)),
+                        ),
+                      ),
                     if (badge != null) Positioned(right: 6, bottom: 9, child: badge!), // clear of the progress bar
                     if (progress != null && !read)
                       Positioned(left: 0, right: 0, bottom: 0,

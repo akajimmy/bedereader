@@ -105,6 +105,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets("a webtoon's episodes (Komga's Webtoon series, as seen in a list) show the series' cover with an "
+      "episode badge - their first page is just the top of a strip (user, 2026-10-22: \"we're going with series "
+      'cover"); other books their own cover, no badge', (tester) async {
+    final api = plainKomga();
+    final s = AppSettings.instance;
+    addTearDown(s.webtoonSeries.clear);
+    Future<PosterTile> tileOf(Map<String, dynamic> b) async {
+      await tester.pumpWidget(MaterialApp(key: UniqueKey(), home: Scaffold(body: Builder(builder: (context) =>
+          SizedBox(width: 150, height: 300, child: bookTile(context, api, b, onOpen: () {}))))));
+      await tester.pump();
+      return tester.widget<PosterTile>(find.byType(PosterTile));
+    }
+
+    final episode = {'id': 'b3', 'seriesId': 'W1', 'seriesTitle': 'Strip', 'metadata': {'number': '3', 'title': 'Ep'}};
+    final comic = {'id': 'c1', 'seriesId': 'C1', 'seriesTitle': 'X-Men', 'metadata': {'number': '4', 'title': 'Y'}};
+    // the series seen as a webtoon (a series list, its page, the reader tell the app)
+    s.noteDirection('W1', 'WEBTOON');
+    s.noteDirection('C1', 'LEFT_TO_RIGHT');
+    final ep = await tileOf(episode);
+    expect(ep.imageUrl, api.seriesThumb('W1'), reason: "the series' cover");
+    expect(ep.corner, 'Ep. 3');
+    expect(find.text('Ep. 3'), findsOneWidget, reason: 'on the cover');
+    final c = await tileOf(comic);
+    expect(c.imageUrl, api.bookThumb('c1'), reason: 'a comic: its own cover');
+    expect(c.corner, isNull);
+    // Komga no longer says Webtoon: its own cover again
+    s.noteDirection('W1', 'VERTICAL');
+    expect((await tileOf(episode)).imageUrl, api.bookThumb('b3'));
+  });
+
   testWidgets("eBook posters have their own lines (user, 2026-10-18: \"Nobody thinks of books in that way\"): title "
       "then author by default, not the series and number; the series and the date if asked; the comics' lines don't "
       'touch them', (tester) async {

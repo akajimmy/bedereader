@@ -257,7 +257,7 @@ class ComicRenderer extends Renderer {
     // a webtoon's series follows webtoons' defaults (AppSettings.defaultsFor)
     final sid = book['seriesId'] as String?;
     if (sid != null) {
-      prepared.direction == 'WEBTOON' ? _settings.webtoonSeries.add(sid) : _settings.webtoonSeries.remove(sid);
+      _settings.noteDirection(sid, prepared.direction);
     }
     // the last book's page shapes (the curl drew the new book's first turn in them - #17) and a page left to open at
     // its end (a later page with that number opened scrolled to its end - #22) go with it
