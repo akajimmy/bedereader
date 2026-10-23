@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
+import '../settings.dart';
 import '../view_filter.dart';
 import '../view_prefs.dart';
 import '../view_sort.dart';
@@ -66,6 +67,23 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
   void initState() {
     super.initState();
     _restore().then((_) { if (mounted) { setState(() {}); _paged.more(); } });
+    _noteWebtoon();
+  }
+
+  /// Whether Komga has this series as a webtoon - its episodes' posters are then its cover (user, 2026-10-22: on
+  /// the tablet the episodes showed their first pages - nothing had told the app yet): from the series as it came
+  /// (Komga's own always has its metadata), else - opened with only its id and name - Komga is asked.
+  Future<void> _noteWebtoon() async {
+    final metadata = widget.series['metadata'] as Map?;
+    Object? direction = metadata?['readingDirection'];
+    if (metadata == null) {
+      try {
+        direction = (await widget.api.oneSeries(_id))?['metadata']?['readingDirection'];
+      } catch (_) {
+        return; // (unknown: as it was)
+      }
+    }
+    if (AppSettings.instance.noteDirection(_id, direction) && mounted) setState(() {});
   }
 
   /// From the pin it was opened from, else this series' remembered view.

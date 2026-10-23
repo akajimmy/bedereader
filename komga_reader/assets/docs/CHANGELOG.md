@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Webtoons: a series' page shows its episodes with the series cover straight away - it checks with Komga itself whether the series is a webtoon (opened from a book or a pin, the episodes kept their first pages until the app had seen the series elsewhere).
+
 ## 1.5.0
 
 ### Build 145 - 2026-10-22
