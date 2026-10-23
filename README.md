@@ -175,38 +175,37 @@ The rest of this file is about building the app.
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
-- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB;
+- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on an Android device over wireless ADB;
   `tools\update-desktop.cmd` - puts the newest Windows build in `Desktop\BeDeReader`; `tools\ios-status.ps1` - how
   a build's iPhone / iPad (TestFlight) build on GitHub is going.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
 - `keytest\` - a page for finding out which keys a remote sends.
 - `dev_setup.py` - downloads and verifies the toolchain.
 
-### Toolchain (this PC)
+### Toolchain
 
-Nothing is on PATH; the build script sets it up itself.
+The app builds on Windows (Android and Windows; iOS builds on GitHub, below). You need:
 
-| What | Where |
+| What | Notes |
 |---|---|
-| Flutter 3.47 | `C:\Dev\flutter` |
-| JDK 17 | `C:\Dev\jdk17` |
-| Android SDK | `C:\Dev\android-sdk` |
-| Visual Studio Build Tools 2022 (C++, with the "C++ ATL" component) | for Windows builds (ATL: the encrypted key storage's Windows part) |
-| Windows Developer Mode | on (needed for plugins) |
+| Flutter 3.47 (stable) | the version the app is built and tested with |
+| JDK 17 | for the Android build (Temurin is fine) |
+| Android SDK (command-line tools) | platform tools, a build-tools and platform matching the app's targetSdk |
+| Visual Studio Build Tools 2022 | the C++ workload with the "C++ ATL" component (the encrypted key storage's Windows part needs ATL) |
+| Windows Developer Mode | on (Flutter's Windows plugins need symlinks) |
+| Python 3 | for dev_setup.py and the icon and docs tools |
 
-For an interactive shell:
+**dev_setup.py** downloads Flutter, the JDK and the Android command-line tools, checks each against its published
+SHA-256 and unpacks them under C:\Dev (C:\Dev\flutter, C:\Dev\jdk17, C:\Dev\android-sdk) - no installers, no PATH
+changes. tools\build.ps1 expects them there: with a toolchain somewhere else, change the two lines near its top that
+set JAVA_HOME and put Flutter on PATH.
 
-```powershell
-$env:JAVA_HOME = 'C:\Dev\jdk17'; $env:PATH = "C:\Dev\flutter\bin;$env:PATH"; Set-Location C:\Claude\KomgaClient\komga_reader
-```
+For an interactive shell, set the same two things (JAVA_HOME to the JDK, Flutter's bin folder on PATH) and work from
+komga_reader\. The everyday commands there:
 
-Everyday commands, from `komga_reader\`:
-
-```powershell
-flutter analyze            # static checks
-flutter test               # the test suite
-flutter run -d windows     # run on this PC with hot reload
-```
+1. **flutter analyze** - static checks (lint findings fail the build)
+2. **flutter test** - the test suite (**flutter test -x slow** for a quicker run while working)
+3. **flutter run -d windows** - run on the PC with hot reload
 
 Checks over real EPUBs live in `tool\epub_checks\`, outside the test suite, and do nothing unless pointed at books
 (run one with `flutter test tool\epub_checks\<file>`): `epub_library_check_test.dart` (every book opens and lays out;
@@ -216,12 +215,10 @@ a tablet; `BEDEREADER_EPUB_LIST` and `BEDEREADER_EPUB_OUT`, or one book with `BE
 
 ### Building
 
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Claude\KomgaClient\tools\build.ps1 -Bump
-```
+From the repository's folder: **powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Bump**
 
-(Windows blocks `.ps1` scripts by default; `-ExecutionPolicy Bypass` lifts that for this one run without changing any
-setting. The same goes for the other scripts in `tools\`.)
+(Windows blocks .ps1 scripts by default; -ExecutionPolicy Bypass lifts that for this one run without changing any
+setting. The same goes for the other scripts in tools\.)
 
 Checks the working tree is committed (before and after `flutter pub get`), runs analyze - lint findings included -
 and the tests (stopping on any failure), raises the build number,
@@ -233,25 +230,26 @@ signed with the release key, and its `build-<n>` tag must not exist yet.
 
 A `-Bump` build then pushes its `build-<n>` tag to GitHub, where `.github\workflows\testflight.yml` builds that same
 commit for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about
-15-20 minutes, while the tablet and the Desktop copy are updated. `tools\ios-status.ps1 -Build <n>` says how it's
-going; `-NoIos` keeps the tag on this PC and skips it.
+15-20 minutes, while the device and the Desktop copy are updated. `tools\ios-status.ps1 -Build <n>` says how it's
+going; `-NoIos` keeps the tag local and skips it. (The workflow signs and uploads with the repository owner's App Store Connect key, kept in the repository's secrets.)
 
 Options: `-Platforms android` (or `windows`) builds one of them; `-Timing` compiles in the EPUB reader's
 timing instruments (a measuring build); `-SkipTests` skips the tests; `-NoInstall`
-skips the tablet and the Desktop copy; `-AllowDirty` allows uncommitted changes. The last two are for throwaway
+skips the device and the Desktop copy; `-AllowDirty` allows uncommitted changes. The last two are for throwaway
 builds: `-Bump` refuses both. Progress is in `dist\build.log`.
 
-After a Windows build the app is unpacked fresh and swapped in as `Desktop\BeDeReader`, the copy used on this PC; the
-copy it replaces is kept beside it as `BeDeReader.previous` (rename it back if a build misbehaves). Your settings and
+After a Windows build the app is unpacked fresh and swapped in as BeDeReader on your Desktop, the copy you use day to
+day; the copy it replaces is kept beside it as BeDeReader.previous (rename it back if a build misbehaves). Your settings and
 downloads aren't in those folders, so nothing is lost. If the app is open from there, that step is skipped and says
 so: close it and run `tools\update-desktop.cmd` (or double-click it).
 
-After an Android build the APK is installed on the paired tablet over wireless ADB. Pairing is a one-time step:
-`& 'C:\Dev\android-sdk\platform-tools\adb.exe' pair <IP>:<port>` with the code from the tablet's Settings > Developer
-options > Wireless debugging > Pair device with pairing code. Wireless debugging must be on for installs (Android
-switches it off whenever the tablet leaves the Wi-Fi); if the tablet can't be reached the build still succeeds and
-says so - install later with `tools\install-android.ps1`. After installing, it checks the tablet reports the new build
-and holds exactly this APK (SHA-256).
+After an Android build the APK is installed on a paired Android device over wireless ADB (with several, set
+ANDROID_SERIAL to the one to use). Pairing is a one-time step: **adb pair IP:PORT** (adb is in the Android SDK's
+platform-tools) with the code from the device's Settings > Developer options > Wireless debugging > Pair device with
+pairing code. Wireless debugging must be on for installs (Android switches it off whenever the device leaves the
+Wi-Fi); if the device can't be reached the build still succeeds and says so - install later with
+tools\install-android.ps1. After installing, it checks the device reports the new build and holds exactly this APK
+(SHA-256).
 
 **Release signing (Android):** `komga_reader\android\key.properties` (copy `key.properties.example`; never
 committed) names the keystore, which lives outside the repository. Its password is kept encrypted with your Windows
@@ -263,7 +261,7 @@ app signed with the same key, so the release key must never change: back up the 
 password manager (the encrypted copy only works for this Windows account on this PC).
 
 Outputs in `dist\<version>\`:
-- `BeDeReader-<ver>-android.apk` - install on the tablet (sideload)
+- `BeDeReader-<ver>-android.apk` - install on an Android device (sideload)
 - `BeDeReader-<ver>-windows.zip` - portable: unzip anywhere, run `BeDeReader.exe`
 
 ### Renaming the app
