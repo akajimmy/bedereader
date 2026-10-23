@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+### Build 143 - 2026-10-22
+
 **Changed**
 
 - Webtoons: the fit button says "Fit page height" for that fit, and the Smooth / Page row is called Mode (it repeated its group's name, Scrolling).
-
-## 1.5.0
 
 ### Build 142 - 2026-10-22
 
