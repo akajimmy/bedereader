@@ -5,7 +5,7 @@ import 'package:komga_reader/widgets/setting_rows.dart';
 import 'support/helpers.dart';
 
 /// The shared setting rows (widgets/setting_rows.dart): how they look and how they lay out. Moved here from
-/// row_nav_test, which is about Up / Down only (test audit, 2026-09-30).
+/// row_nav_test (now a group in row_nav_keys_test), which is about Up / Down only (test audit, 2026-09-30).
 void main() {
   testWidgets('slim buttons: the choice in force the accent itself, its text the accent\'s own text colour (user, '
       '2026-10-22: the tint read as muted); lower than before', (tester) async {

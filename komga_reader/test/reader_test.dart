@@ -2189,7 +2189,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets("rotation off Android (macOS here; Windows has its own lock - pc_rotation_test): one way up, the usual "
+  testWidgets("rotation off Android (macOS here; Windows has its own lock - ios_parity_test's group): one way up, the usual "
       "one; the way up isn't asked", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

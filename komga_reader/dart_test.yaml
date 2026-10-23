@@ -1,5 +1,6 @@
 # The test runner's settings (flutter test reads them too).
 tags:
   # Tests of 1.5 s or more in a full run (test audit, 2026-10-23). While working on a change: flutter test -x slow
-  # (the rest, in about half the time); the build and every merge run them all.
+  # (the other 780 or so, about 49 s against 63 s for all - the files' loading is most of the rest); the build and
+  # every merge run them all.
   slow:
