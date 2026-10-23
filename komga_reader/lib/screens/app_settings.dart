@@ -302,7 +302,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             'settings).', style: TextStyle(color: hintColour)),
       ),
       SettingsGroup(title: 'Pages - defaults', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
-      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s)]),
+      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s)]),
       SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.webtoons)]),
     ]);
   }

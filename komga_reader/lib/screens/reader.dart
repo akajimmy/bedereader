@@ -878,6 +878,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                         ),
                       ),
                     if (_menu) ..._controls(),
+                    ...r.overControls(context), // (over the controls: a webtoon's floating play)
                     // another book loading: this one's pages stay underneath (it's still the current book until the new
                     // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
                     if (_loading)

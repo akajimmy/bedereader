@@ -239,7 +239,7 @@ class _ReaderPanel extends StatelessWidget {
         // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
         // this device's
         if (readsAsStrip(p, komgaDirection))
-          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s)]),
+          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s)]),
         // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
         // Settings only)
         SettingsGroup(title: 'Screen', children: [
@@ -619,6 +619,17 @@ Widget webtoonScrollRow(AppSettings s) => SegmentRow<WebtoonScroll>(
       choices: const [Choice(WebtoonScroll.smooth, 'Smooth'), Choice(WebtoonScroll.page, 'Page')],
       value: s.display.webtoonScroll,
       onChanged: (w) => s.setDisplay(s.display.copyWith(webtoonScroll: w)),
+    );
+
+/// Webtoons: auto-scroll's speed (user, 2026-10-22: "i can't seem to access scroll speed anywhere" - it was only over
+/// the bottom bar). This device's.
+Widget autoScrollSpeedRow(AppSettings s) => SliderRow(
+      label: 'Auto-scroll speed',
+      value: s.display.autoScrollSpeed,
+      min: DisplayPrefs.autoScrollSlowest,
+      max: DisplayPrefs.autoScrollFastest,
+      valueText: '${s.display.autoScrollSpeed.round()} pt/s',
+      onChanged: (v) => s.setDisplay(s.display.copyWith(autoScrollSpeed: v)),
     );
 
 /// Webtoons: where a tap scrolls - the left and right thirds, or the top and bottom (user, 2026-10-22). This device's.

@@ -267,6 +267,7 @@ class ComicRenderer extends Renderer {
     this.pages = pages;
     index = start;
     _strip = null; // (a webtoon opens at its place)
+    _playAt = null;
     _stripPlace = prepared.stripPlace;
     _loader = loader;
     zoomed = false;
@@ -604,6 +605,19 @@ class ComicRenderer extends Renderer {
       _autoStopped();
       return;
     }
+    _autoResume();
+  }
+
+  /// The tap that stops auto-scroll brings the controls and a play button where it was (user, 2026-10-22: "tap
+  /// pauses + control AND adds a floating "play" button where the tap happened"; "there isn't really a pause state" -
+  /// stopped is stopped, and the next tap is a tap).
+  Offset? _playAt; // the floating play button, where the tap that stopped it was
+  static const _playSize = 72.0;
+
+  void _autoResume() {
+    final s = _strip;
+    if (s == null) return;
+    _playAt = null;
     s
       ..autoSpeed = _settings.display.autoScrollSpeed
       ..startAuto();
@@ -618,6 +632,29 @@ class ComicRenderer extends Renderer {
     _autoAwake?.cancel();
     _autoAwake = null;
     _changed();
+  }
+
+  /// A tap on the strip: the one that stopped auto-scroll - the controls, and play where it was; any other, the tap
+  /// zones (the floating play goes).
+  void _stripTap(TapUpDetails d, Size box) {
+    if (!host.controlsUp) _playAt = null; // (put away with the controls)
+    if (_strip?.touchStoppedAuto ?? false) {
+      _playAt = d.localPosition;
+      if (!host.controlsUp) host.tap(0.5); // (the middle: the controls)
+      _changed();
+      return;
+    }
+    if (_playAt != null) {
+      // the tap after it: the controls (and the play button) away - still stopped (user, 2026-10-22: "if I tap
+      // somewhere other than the play button, the controls will close, but it will remain stopped")
+      _playAt = null;
+      host.hideControls();
+      _changed();
+      return;
+    }
+    host.tap(_settings.display.webtoonTaps == WebtoonTaps.topBottom
+        ? _zoneOf(d.localPosition.dy / box.height)
+        : d.localPosition.dx / box.width);
   }
 
   @override
@@ -939,9 +976,10 @@ class ComicRenderer extends Renderer {
   Widget _webtoonView(BuildContext context) {
     // opened on the page it was left on here: just as far into it as then (Komga keeps only the page)
     final kept = _stripPlace;
-    final strip = _strip ??= WebtoonController(index.clamp(0, pages.length),
+    final strip = (_strip ??= WebtoonController(index.clamp(0, pages.length),
         startShare: kept != null && kept.$1 == index ? kept.$2 : 0)
-      ..onAutoStopped = _autoStopped;
+      ..onAutoStopped = _autoStopped)
+      ..autoSpeed = _settings.display.autoScrollSpeed; // (set anywhere - the panel, Settings - it goes at once)
     return LayoutBuilder(builder: (context, box) {
       _area = Size(box.maxWidth, box.maxHeight);
       return Listener(
@@ -966,9 +1004,7 @@ class ComicRenderer extends Renderer {
           behavior: HitTestBehavior.opaque,
           // the tap zones: the sides (as a comic's), or top and bottom - the bottom third scrolls down, the top up
           // (user, 2026-10-22)
-          onTapUp: (d) => host.tap(_settings.display.webtoonTaps == WebtoonTaps.topBottom
-              ? _zoneOf(d.localPosition.dy / box.maxHeight)
-              : d.localPosition.dx / box.maxWidth),
+          onTapUp: (d) => _stripTap(d, Size(box.maxWidth, box.maxHeight)),
           // the strip follows a finger, a mouse drag and a pen alike
           child: ScrollConfiguration(
             // (no scroll bar over the strip - user, 2026-10-22: Windows put one there; the slider says where it is)
@@ -998,6 +1034,34 @@ class ComicRenderer extends Renderer {
         ),
       );
     });
+  }
+
+  /// Auto-scroll stopped by a tap: play, big, where the tap was - a shortcut for the bar's small one, where the finger
+  /// already is (user, 2026-10-22). Over the controls (the tap brought them up), so it takes its own tap.
+  @override
+  List<Widget> overControls(BuildContext context) {
+    final at = _playAt;
+    // (with the controls: a tap elsewhere puts them away, and it goes with them - still stopped)
+    if (!webtoon || at == null || autoScrolling || !host.controlsUp) return const [];
+    return [
+      Positioned(
+        left: (at.dx - _playSize / 2).clamp(0.0, math.max(0.0, _area.width - _playSize)),
+        top: (at.dy - _playSize / 2).clamp(0.0, math.max(0.0, _area.height - _playSize)),
+        width: _playSize,
+        height: _playSize,
+        child: Material(
+          key: const ValueKey('auto-scroll-play'),
+          color: Colors.black.withValues(alpha: 0.6),
+          shape: const CircleBorder(),
+          child: IconButton(
+            iconSize: 48,
+            tooltip: 'Resume auto-scroll',
+            icon: const Icon(Icons.play_arrow, color: Colors.white),
+            onPressed: _autoResume,
+          ),
+        ),
+      ),
+    ];
   }
 
   /// A tap [along] the screen's height (0 at the top) as the Reader's tap zones, which go across: the bottom third
@@ -1228,7 +1292,7 @@ class ComicRenderer extends Renderer {
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
         // a webtoon: auto-scroll, play / pause
         if (webtoon && _strip != null)
-          BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.pause : Icons.play_arrow,
+          BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.stop : Icons.play_arrow,
               label: autoScrolling ? 'Stop auto-scroll' : 'Auto-scroll', onPressed: autoScrollToggle)),
         // (a strip: no Image settings until they apply to it)
         if (seriesId != null && !webtoon)
