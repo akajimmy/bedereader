@@ -10,71 +10,75 @@ import 'package:komga_reader/offline/offline_komga.dart' show NotAvailableOfflin
 import 'package:komga_reader/widgets/error_text.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Errors in plain words (user, 2026-09-29): every message from the agreed catalogue, and never the raw error text.
+/// Errors in plain words (user, 2026-09-29): each failure its catalogue entry, and never the raw error text.
 void main() {
   const home = 'http://192.168.1.10:25600';
   String message(Object e, {bool signIn = false, String thing = 'item'}) =>
       explain(e, signIn: signIn, thing: thing).message;
 
-  group('the catalogue, word for word', () {
-    test('no answer', () {
-      expect(message(KomgaUnreachable(home)),
-          "Can't reach Komga at 192.168.1.10:25600. Check you're on your home network and the server is running.");
-      expect(message(KomgaUnreachable(home), signIn: true),
-          "Can't reach Komga at 192.168.1.10:25600. Check the address and port, and that the server is running.");
+  // each failure gets its kind's entry from the catalogue, with what the app fills in (the address, the thing, the
+  // status, the action) - not the catalogue's words, which may be reworded (user's ruling, 2026-10-23: no wording
+  // tests; this group checked every message word for word)
+  group('the catalogue: each failure its entry', () {
+    ErrorKind kind(Object e, {bool signIn = false}) => explain(e, signIn: signIn).kind;
+
+    test('no answer: the address without http://; on the sign-in screen its own advice', () {
+      expect(kind(KomgaUnreachable(home)), ErrorKind.unreachable);
+      expect(message(KomgaUnreachable(home)), contains('192.168.1.10:25600'));
+      expect(message(KomgaUnreachable(home)), isNot(contains('http://')));
+      expect(message(KomgaUnreachable(home), signIn: true), isNot(message(KomgaUnreachable(home))));
     });
 
-    test('the API key', () {
-      expect(message(KomgaError(401, '/api/v2/users/me'), signIn: true),
-          "Komga didn't accept that API key. Copy it again from Komga (your account > API keys).");
-      expect(message(KomgaError(401, '/api/v1/books')),
-          "Komga no longer accepts this device's API key. It may have been deleted. Create a new one in Komga "
-          '(your account > API keys) and sign in again.');
-      expect(explain(KomgaError(401, '')).kind, ErrorKind.keyRefused);
+    test('the API key: refused, with its own words on the sign-in screen (a key just typed)', () {
+      expect(kind(KomgaError(401, '/api/v2/users/me'), signIn: true), ErrorKind.keyRefused);
+      expect(kind(KomgaError(401, '/api/v1/books')), ErrorKind.keyRefused);
+      expect(message(KomgaError(401, ''), signIn: true), isNot(message(KomgaError(401, ''))));
     });
 
-    test('not allowed, gone, server fault, turned down', () {
-      expect(message(KomgaError(403, '/x')), "Your Komga account isn't allowed to do that.");
-      expect(message(KomgaError(404, '/x'), thing: 'book'),
-          'That book is no longer on Komga. It may have been deleted or moved; pull down to refresh.');
-      expect(message(KomgaError(500, '/x')),
-          "Komga ran into a problem (error 500). Try again; if it keeps happening, Komga's logs will say why.");
-      expect(message(KomgaError(400, '/x')), 'Komga turned that down (error 400).');
+    test('not allowed (with the reason when it is known), gone (naming the thing), server fault, turned down - the '
+        'status shown', () {
+      expect(kind(KomgaError(403, '/x')), ErrorKind.forbidden);
+      expect(explain(KomgaError(403, '/x'), forbidden: deleteNeedsAdmin).reason, deleteNeedsAdmin);
+      expect(kind(KomgaError(404, '/x')), ErrorKind.gone);
+      expect(message(KomgaError(404, '/x'), thing: 'book'), contains('book'));
+      expect(kind(KomgaError(500, '/x')), ErrorKind.serverFault);
+      expect(kind(KomgaError(503, '/x')), ErrorKind.serverFault);
+      expect(message(KomgaError(503, '/x')), contains('503'));
+      expect(kind(KomgaError(400, '/x')), ErrorKind.refused);
+      expect(message(KomgaError(400, '/x')), contains('400'));
     });
 
-    test('something else answered; https not trusted; not an address', () {
-      expect(message(KomgaNotKomga('http://192.168.1.10:8080')),
-          "Something answered at 192.168.1.10:8080, but it isn't Komga. Check the port; Komga's is usually 25600.");
-      expect(message(KomgaCertificate('https://komga.example.org')),
-          "Couldn't make a secure connection to komga.example.org: this device doesn't trust the server's "
-          'certificate. Use http:// at home, or a certificate from a trusted provider.');
-      expect(message(const FormatException('Scheme not starting with alphabetic character')),
-          "That isn't a server address. It should look like 192.168.1.10:25600.");
-      expect(message(ArgumentError("Unsupported scheme 'ftp' in URI ftp://x")),
-          "That isn't a server address. It should look like 192.168.1.10:25600.");
+    test('something else answered (its address); https not trusted (the host); not an address', () {
+      expect(kind(KomgaNotKomga('http://192.168.1.10:8080')), ErrorKind.notKomga);
+      expect(message(KomgaNotKomga('http://192.168.1.10:8080')), contains('192.168.1.10:8080'));
+      expect(kind(KomgaCertificate('https://komga.example.org')), ErrorKind.certificate);
+      expect(message(KomgaCertificate('https://komga.example.org')), contains('komga.example.org'));
+      expect(kind(const FormatException('Scheme not starting with alphabetic character')), ErrorKind.badAddress);
+      expect(kind(ArgumentError("Unsupported scheme 'ftp' in URI ftp://x")), ErrorKind.badAddress);
     });
 
-    test('offline, storage, a page that cannot be shown, anything else', () {
-      expect(message(NotAvailableOffline('Deleting a book')),
-          "Deleting a book needs Komga, and you're using downloaded books only.");
-      expect(message(NotAvailableOffline('Page 3 of this book')), "Page 3 of this book isn't downloaded.");
-      expect(message(const FileSystemException('write failed', '/x', OSError('No space left on device', 28))),
-          'This device is out of storage space. Free some up, then try again.');
-      expect(message(const FileSystemException('write failed', '/x', OSError('Access denied', 13))),
-          "Couldn't save to this device's storage.");
-      expect(message(PageUnreadable(Exception('Invalid image data'))),
-          "This page couldn't be shown: the image file is damaged or in a format this device can't read.");
-      expect(message(StateError('bad state')), 'Something unexpected went wrong.');
+    test('offline (naming what needs Komga; a page or the next book just not downloaded), storage full or not, a page '
+        'that cannot be shown, anything else', () {
+      expect(kind(NotAvailableOffline('Deleting a book')), ErrorKind.offline);
+      expect(message(NotAvailableOffline('Deleting a book')), startsWith('Deleting a book'));
+      expect(message(NotAvailableOffline('Page 3 of this book')), startsWith('Page 3 of this book'));
+      expect(message(NotAvailableOffline('Page 3 of this book')), isNot(contains('needs Komga')),
+          reason: "a page isn't downloaded; it doesn't need Komga");
+      expect(kind(const FileSystemException('write failed', '/x', OSError('No space left on device', 28))),
+          ErrorKind.storageFull);
+      expect(kind(const FileSystemException('write failed', '/x', OSError('There is not enough space', 112))),
+          ErrorKind.storageFull);
+      expect(kind(const FileSystemException('write failed', '/x', OSError('Access denied', 13))), ErrorKind.storage);
+      expect(kind(PageUnreadable(Exception('Invalid image data'))), ErrorKind.unreadablePage);
+      expect(kind(StateError('bad state')), ErrorKind.unexpected);
     });
 
     test('failed actions name the action, then the reason', () {
-      expect(couldnt('mark "Saga #3" as read', KomgaUnreachable(home)), 'Couldn\'t mark "Saga #3" as read: can\'t reach Komga.');
+      final e = KomgaUnreachable(home);
+      expect(couldnt('mark "Saga #3" as read', e), 'Couldn\'t mark "Saga #3" as read: ${explain(e).reason}.');
       expect(couldnt('delete "Saga #3"', KomgaError(403, '/x'), forbidden: deleteNeedsAdmin),
-          'Couldn\'t delete "Saga #3": deleting files needs an admin account in Komga.');
-      expect(stoppedAfter('Marked 4 of 7 as read', KomgaUnreachable(home)),
-          "Marked 4 of 7 as read, then stopped: can't reach Komga.");
-      expect(stoppedAfter('Deleted 2 of 5', KomgaError(500, '/x')),
-          'Deleted 2 of 5, then stopped: Komga ran into a problem (error 500).');
+          'Couldn\'t delete "Saga #3": $deleteNeedsAdmin.');
+      expect(stoppedAfter('Marked 4 of 7 as read', e), 'Marked 4 of 7 as read, then stopped: ${explain(e).reason}.');
     });
 
     test('addresses are shown without http://', () {

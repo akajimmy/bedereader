@@ -180,7 +180,6 @@ void main() {
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    expect(find.byTooltip('Shift pairing by one'), findsNothing, reason: 'no bar button');
     await tester.tap(find.byTooltip('Comic settings'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));

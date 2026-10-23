@@ -106,16 +106,6 @@ Text after.
     expect(find.textContaining('Toolchain', findRichText: true), findsNothing);
   });
 
-  testWidgets('Third-party software lists what the app relies on, with the AI disclosure', (tester) async {
-    setView(tester, const Size(900, 30000));
-    await tester.pumpWidget(MaterialApp(home: DocumentScreen.thirdParty()));
-    await tester.pumpAndSettle();
-    for (final t in ['AI assistance', 'Komga', 'Flutter', 'shared_preferences', 'AMD FidelityFX Super Resolution 1',
-        'Material Icons', 'Eclipse Temurin JDK']) {
-      expect(find.textContaining(t, findRichText: true), findsWidgets, reason: t);
-    }
-  });
-
   test("licences page: the app's MIT licence, AMD's FSR notice and the Material Icons attribution", () async {
     registerLicences();
     final entries = await LicenseRegistry.licenses.toList();

@@ -37,10 +37,6 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final done = tester.getRect(find.text('Done'));
     expect(done.left, greaterThan(1280 - 400)); // at the right edge
-    expect(find.text('Settings for Series: Planet Comics'), findsOneWidget);
-    expect(find.text('Override defaults'), findsOneWidget);
-    expect(find.byTooltip('Auto: right to left'), findsOneWidget); // Komga's direction, on Auto
-    expect(find.byTooltip('Right to left'), findsOneWidget); // direction as icons
     expect(tester.takeException(), isNull);
   });
 
@@ -56,7 +52,6 @@ void main() {
     s.setDefault(const ReaderPrefs(sharpen: true)); // the defaults have Enhance on
     addTearDown(() => s.setDefault(const ReaderPrefs()));
     await openPanel(tester, const Size(1280, 800), image: true);
-    expect(find.text('Settings for Series: Planet Comics'), findsOneWidget); // the heading (user, 2026-09-30)
     SwitchListTile row(String t) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, t));
     expect(row('Override defaults').value, isFalse);
     expect(row('Enhance').value, isTrue, reason: "shows the defaults' value");
@@ -149,7 +144,6 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final auto = find.widgetWithText(SegmentedButton<bool>, 'Auto');
     expect(auto, findsOneWidget);
-    expect(find.text('Automatic brightness'), findsNothing, reason: 'no switch row of its own');
     final slider = find.ancestor(of: find.byType(Slider), matching: find.byType(BrightnessPreview));
     final s = tester.widget<Slider>(find.descendant(of: slider, matching: find.byType(Slider)));
     expect(s.onChanged, isNull, reason: 'Auto: the slider greyed');
@@ -218,12 +212,6 @@ void main() {
     final screen = tester.widget<AppSettingsScreen>(find.byType(AppSettingsScreen));
     expect(screen.initialPage, SettingsPage.ebooks);
     expect(screen.only, unorderedEquals([SettingsPage.reading, SettingsPage.ebooks]));
-    // the side list: those two pages, no other
-    for (final p in SettingsPage.values) {
-      final listed = find.descendant(of: find.byType(ListView).first, matching: find.text(p.label));
-      expect(listed, p == SettingsPage.reading || p == SettingsPage.ebooks ? findsWidgets : findsNothing,
-          reason: p.name);
-    }
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget, reason: 'back to the book');

@@ -68,19 +68,6 @@ void main() {
     expect(conn.reachableAgain, isFalse);
   });
 
-  test('Stay online: no more prompts until Komga has answered again', () async {
-    server.up = false;
-    await conn.check();
-    conn.stayOnline();
-    await conn.check();
-    expect(conn.askPending, isFalse);
-    server.up = true;
-    await conn.check(); // outage over
-    server.up = false;
-    await conn.check(); // a new one
-    expect(conn.askPending, isTrue);
-  });
-
   test('nothing downloaded: still says Komga can\'t be reached (Retry / OK), never switches', () async {
     d.store!.books.clear();
     server.up = false;
@@ -91,12 +78,9 @@ void main() {
   });
 
   test('reachable again, after going offline from the prompt (user, 2026-10-21: no automatic switch - "when back online '
-      'prompt"): offline it stays until answered - asked once no book is open; Stay offline keeps it offline; the old '
-      "switch's saved key goes", () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('offline.autoSwitch', true); // (saved by the setting that went)
+      'prompt"): offline it stays until answered - asked once no book is open; Stay offline keeps it offline',
+      () async {
     await conn.load(server);
-    expect(prefs.containsKey('offline.autoSwitch'), isFalse);
     server.up = false;
     await conn.check();
     expect(conn.askPending, isTrue, reason: 'asked, never switched by itself');
@@ -153,7 +137,6 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text("Can't reach Komga"), findsOneWidget);
-    expect(find.text('Stay online'), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
     await tester.tap(find.text('Go offline'));
     await tester.pumpAndSettle();

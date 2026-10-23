@@ -35,7 +35,6 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   bool autoOffline = false; // accepted the "can't reach Komga" prompt (this run only)
   bool askPending = false; // the prompt should be shown
   bool reachableAgain = false; // offline after the prompt, and Komga answers again: offer to go back
-  bool _declined = false; // "Stay online" for this outage: no more prompts until Komga answers
 
   /// Komga refuses this device's API key (deleted in Komga, say): nothing online works until signing in again. The
   /// app offers the downloaded books (which need no key) and Sign in again ([keyPromptPending]); while it lasts,
@@ -65,7 +64,6 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     online = onlineApi;
     final prefs = await SharedPreferences.getInstance();
     forcedOffline = prefs.getBool(_key) ?? false;
-    if (prefs.containsKey('offline.autoSwitch')) await prefs.remove('offline.autoSwitch'); // (the setting went)
     keyRefused = keyPromptPending = false; // (signed in again: a new key)
     autoOffline = reachableAgain = false;
     Komga.onReachability = _onReachability;
@@ -102,12 +100,6 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     autoOffline = true;
     reachableAgain = false;
     _apply();
-    notifyListeners();
-  }
-
-  void stayOnline() {
-    askPending = false;
-    _declined = true;
     notifyListeners();
   }
 
@@ -163,7 +155,6 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (!identical(api, online)) return; // the offline source, or a sign-in attempt at another server
     if (keyRefused) return; // answering or not, the key is refused: the key prompt covers it
     if (reachable) {
-      _declined = false; // the outage is over
       if (askPending) {
         askPending = false;
         notifyListeners();
@@ -175,7 +166,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
         _apply();
         notifyListeners();
       }
-    } else if (!offline && !forcedOffline && !_declined && !askPending && available) {
+    } else if (!offline && !forcedOffline && !askPending && available) {
       askPending = true; // ask (or, with nothing downloaded, just say Komga can't be reached)
       notifyListeners();
     }
@@ -210,7 +201,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _poll?.cancel();
     _poll = null;
     online = null;
-    autoOffline = askPending = reachableAgain = _declined = false;
+    autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
   }
 
@@ -220,7 +211,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _poll?.cancel();
     _poll = null;
     online = null;
-    forcedOffline = autoOffline = askPending = reachableAgain = _declined = false;
+    forcedOffline = autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
     _readers = 0;
     Komga.onReachability = null;

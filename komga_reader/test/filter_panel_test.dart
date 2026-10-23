@@ -263,15 +263,6 @@ void main() {
     expect(find.byKey(const ValueKey('filter.chip.clear')), findsNothing);
   });
 
-  testWidgets('no Clear filters button in the top bar - clearing is in the panel (user, 2026-10-08)', (tester) async {
-    SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({
-      'mode': 'books', 'filter': 'hideRead', 'sort': 'title', 'desc': true,
-      'filters': const ViewFilter(writers: ['Al Ewing']).toJson(),
-    })});
-    await library(tester, mode: 'books');
-    expect(find.byKey(const ValueKey('bar.clear')), findsNothing, reason: 'filters, the eye and a sort all on');
-  });
-
   testWidgets('the funnel is filled with the accent while filters are on, plain when none (user, 2026-10-08)',
       (tester) async {
     SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({

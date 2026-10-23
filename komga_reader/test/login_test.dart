@@ -20,7 +20,6 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
     await tester.pump();
     expect(field(tester, 'Server').controller!.text, isEmpty);
-    expect(field(tester, 'Server').decoration!.hintText, 'http://192.168.1.10:25600');
   });
 
   testWidgets('signing in again: the last server address is filled in', (tester) async {

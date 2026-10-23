@@ -102,8 +102,10 @@ void main() {
       } else {
         expect(seen, isNot(contains('${chapter1 + 1}')), reason: 'the second chapter beside a page, not alone');
       }
+      // one turn on from the last spread: the end card (it checked for text the app never had - test audit, 2026-10-23)
       await turn(tester);
-      expect(find.text('You finished the book'), findsNothing); // (the end card's own text is the Reader's)
+      await settleEpub(tester);
+      expect(find.text('End of book'), findsOneWidget, reason: '$start: the end card after the last spread');
       await tester.pumpWidget(const SizedBox());
     }
     AppSettings.instance.setEpub(const EpubPrefs());

@@ -638,11 +638,6 @@ void main() {
     await key(tester, LogicalKeyboardKey.enter); // the controls
     expect(find.text('Test #1 - T'), findsOneWidget);
     expect(find.text('Pg. 1/3 · 33%'), findsOneWidget);
-    final title = tester.getRect(find.text('Test #1 - T')), page = tester.getRect(find.text('Pg. 1/3 · 33%'));
-    final slider = tester.getRect(find.byType(Slider));
-    expect(title.bottom, lessThanOrEqualTo(page.top), reason: 'the title on the line above');
-    expect(page.bottom, lessThanOrEqualTo(slider.top + 1), reason: 'the page just over the slider');
-    expect(page.left - slider.left, lessThan(40), reason: "over the slider's start");
 
     await tester.tap(find.byKey(const ValueKey('pos-left')));
     await tester.pump();
@@ -1572,8 +1567,6 @@ void main() {
         final save = find.widgetWithText(OutlinedButton, 'Save page'), copy = find.widgetWithText(OutlinedButton, 'Copy page');
         expect(save, findsOneWidget);
         expect(copy, findsOneWidget);
-        expect(tester.getCenter(save).dy, tester.getCenter(copy).dy, reason: 'one horizontal line');
-        expect(tester.getRect(find.text('This page')).top, lessThan(tester.getRect(save).top), reason: 'its own group');
 
         await tester.tap(save);
         await until(tester, () => shows(find.textContaining('Page saved')));

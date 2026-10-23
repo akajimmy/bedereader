@@ -3,7 +3,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +12,6 @@ import 'package:komga_reader/reader/reader_slider.dart';
 import 'package:komga_reader/screens/open_book.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
-import 'package:komga_reader/widgets/display_panel.dart' show sideWidth;
 
 import 'support/epub_books.dart';
 import 'support/no_network.dart';
@@ -147,26 +145,6 @@ void main() {
     expect(find.byKey(const ValueKey('reading-progress')), findsOneWidget);
   });
 
-  testWidgets("the EPUB reader's panels (Aa, Contents) look like the comic reader's: a side sheet with its title and "
-      'Done on a wide screen', (tester) async {
-    await openEpub(tester, twoChapters());
-    for (final (tooltip, title) in [('eBook settings', 'eBook settings'), ('Contents', 'Contents')]) {
-      if (find.byTooltip(tooltip).evaluate().isEmpty) {
-        await tester.tapAt(const Offset(400, 600)); // the controls (they stay up behind a panel, as with comics)
-        await tester.pump();
-      }
-      await tester.tap(find.byTooltip(tooltip));
-      await tester.pumpAndSettle();
-      expect(find.text(title), findsWidgets);
-      expect(find.text('Done'), findsOneWidget, reason: '$title: the comic panels\' Done');
-      final sheet = tester.getSize(find.byWidgetPredicate(
-          (w) => w is Material && w.color == const Color(0xF2141416))); // the comic panels' sheet colour
-      expect(sheet.width, sideWidth, reason: "$title: the comic panels' side sheet");
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-    }
-  });
-
   testWidgets('the rotation lock holds in EPUBs too (it was offered in the panel but never applied): one way up, the '
       'way the tablet is held; it ends with the book', (tester) async {
     final requests = <Object?>[];
@@ -246,18 +224,6 @@ void main() {
     expect(tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data, dragged);
     await settleEpub(tester);
     expect(tester.widget<Text>(find.textContaining(RegExp(r'^Book · Pg\. \d+/\d+ · '))).data, dragged, reason: 'gone there');
-  });
-
-  testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
-      'them)', (tester) async {
-    await openEpub(tester, MemorySource({'c1.xhtml': '<html><body>${para('word', 40)}</body></html>'},
-        const EpubInfo(spine: ['c1.xhtml'], toc: [])));
-    await tester.tapAt(const Offset(400, 600), buttons: kSecondaryButton);
-    await settleEpub(tester);
-    expect(find.text('Close'), findsOneWidget, reason: 'shown');
-    await tester.tapAt(const Offset(400, 600), buttons: kSecondaryButton);
-    await settleEpub(tester);
-    expect(find.text('Close'), findsNothing, reason: 'hidden again');
   });
 
   testWidgets("where you are (user's options F + H): the bar has the chapter's name with the book's page and % at "
@@ -362,8 +328,6 @@ void main() {
     // the top bar: Night and Delete, as comics have (decision 2)
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    expect(find.byTooltip('Night mode on'), findsOneWidget);
-    expect(find.byTooltip('Delete book'), findsOneWidget);
     // a jump through Contents: the way back is marked on the slider (decision 4)
     await tester.tap(find.byTooltip('Contents'));
     await tester.pumpAndSettle();

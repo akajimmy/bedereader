@@ -77,7 +77,6 @@ void main() {
     await tester.pumpAndSettle();
     final sw = find.widgetWithText(SwitchListTile, 'Offline mode');
     expect(tester.widget<SwitchListTile>(sw).value, isFalse);
-    expect(find.text('Connected to Komga'), findsNothing); // the label says it all (user)
     await tester.tap(find.widgetWithText(SwitchListTile, 'Offline mode'));
     await waitUntil(() => conn.offline, tester: tester, reason: 'offline');
     await tester.pump();

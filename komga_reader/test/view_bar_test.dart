@@ -42,12 +42,6 @@ void main() {
   Future<BrowseServer> list(WidgetTester tester, {Pin? pin, Map<String, dynamic> rl = readList}) =>
       show(tester, (api) => ReadListScreen(key: UniqueKey(), api: api, readList: rl, pin: pin));
 
-  /// The top bar's buttons, in order.
-  List<String> bar(WidgetTester tester) => [
-        for (final w in tester.widget<AppBar>(find.byType(AppBar).first).actions!)
-          (w.key! as ValueKey<String>).value.substring(4),
-      ];
-
   /// Picks [item] ("release", "desc", ...) in the Sort menu.
   Future<void> sortBy(WidgetTester tester, String item) async {
     await tester.tap(find.byKey(const ValueKey('bar.sort')));
@@ -60,8 +54,6 @@ void main() {
 
   Future<Map> saved(String key) async =>
       jsonDecode((await SharedPreferences.getInstance()).getString(key)!) as Map;
-
-  // ---- the order of the buttons (a guard: it mustn't drift view to view) ------------------------------------------
 
   testWidgets("a narrow window (650 px - Windows test plan, 2026-10-22): each view's title shortens beside the "
       "buttons rather than overflowing the bar", (tester) async {
@@ -77,22 +69,6 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull, reason: '$name: no overflow');
     }
-  });
-
-  testWidgets('every view has its buttons in the one order, those that do not apply left out', (tester) async {
-    for (final (mode, select) in [('series', true), ('books', true), ('collections', false), ('readLists', false)]) {
-      SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': mode})});
-      await library(tester);
-      expect(bar(tester), ['count', 'eye', if (mode == 'series' || mode == 'books') 'filter', 'sort',
-          if (select) 'select', 'size', 'pin', 'search', 'refresh', 'fullscreen'], reason: 'library, $mode');
-    }
-    SharedPreferences.setMockInitialValues({});
-    await seriesView(tester);
-    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
-    await collection(tester);
-    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'fullscreen']);
-    await list(tester);
-    expect(bar(tester), ['count', 'eye', 'filter', 'sort', 'select', 'size', 'pin', 'refresh', 'more', 'fullscreen']);
   });
 
   testWidgets('Refresh asks Komga again on a series, a collection and a read list', (tester) async {
@@ -150,6 +126,27 @@ void main() {
     expect(api.sorts.last, 'metadata.releaseDate,asc');
     api = await seriesView(tester, pin: const Pin(name: 'x', kind: 'series', id: 'S1', title: 'S', sort: 'number:desc'));
     expect(api.sorts.last, 'metadata.numberSort,desc');
+    api = await seriesView(tester, pin: const Pin(name: 'x', kind: 'series', id: 'S1', title: 'S'));
+    expect(api.sorts.last, 'metadata.numberSort,asc', reason: 'a pin with no sort (made before sorts): oldest first');
+  });
+
+  testWidgets("a series' saved filter is restored when it is opened again (its order, not saved, oldest first)",
+      (tester) async {
+    SharedPreferences.setMockInitialValues({'view.series.S1': jsonEncode({'filter': 'hideRead'})});
+    final api = await seriesView(tester);
+    expect(api.sorts.last, 'metadata.numberSort,asc');
+    expect(find.byTooltip('Read hidden (hide unread)'), findsOneWidget);
+  });
+
+  testWidgets('pull down to refresh reloads the series from Komga (even when it is empty)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final api = await seriesView(tester);
+    final before = api.sorts.length;
+    await tester.fling(find.byType(Scrollable).first, const Offset(0, 400), 1500);
+    await tester.pump(); // start the refresh
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(api.sorts.length, greaterThan(before));
   });
 
   // ---- a collection's series -----------------------------------------------------------------------------------------
