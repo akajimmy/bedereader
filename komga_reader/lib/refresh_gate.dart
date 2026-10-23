@@ -1,3 +1,4 @@
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 
 /// Fetching a synced thing (pins, reader settings, On deck hidden) from Komga again when Home reloads, so changes
@@ -11,14 +12,14 @@ class RefreshGate {
   Future<void>? _running;
 
   /// Komga was asked just now (a start-up load counts too).
-  void asked() => _at = DateTime.now();
+  void asked() => _at = clock.now();
 
   /// Runs [fetch] unless one is running (that one's answer is shared) or the last ask was within [gap].
   Future<void> run(Future<void> Function() fetch) {
     final running = _running;
     if (running != null) return running;
     final at = _at;
-    if (at != null && DateTime.now().difference(at) < gap) return Future.value();
+    if (at != null && clock.now().difference(at) < gap) return Future.value();
     return _running = fetch().whenComplete(() => _running = null);
   }
 }

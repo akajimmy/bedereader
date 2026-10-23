@@ -86,7 +86,7 @@ void main() {
     expect(await epubLabel(tester), startsWith('Book · Pg. 1/'));
     Future<void> wheel(double dy) async {
       // a turn at most every 250 ms
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pump(const Duration(milliseconds: 300)); // (the test's clock: the renderer reads it through package:clock)
       final pointer = TestPointer(1, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
       await tester.sendEventToBinding(pointer.scroll(Offset(0, dy)));
     }

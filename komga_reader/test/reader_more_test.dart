@@ -546,6 +546,9 @@ void main() {
       Enhancer.holdRuns = null;
       AppSettings.instance.setDefault(const ReaderPrefs());
     });
+    // one screen pixel to a point: Enhance works at the page's size on screen, at the test's default 3 a 1200 x 1800
+    // picture (test audit, 2026-10-23: 5 s of the suite)
+    setView(tester, const Size(800, 600));
     await openLoaded(tester);
     expect(find.descendant(of: current, matching: find.byType(RawImage)), findsOneWidget);
     final hold = Completer<void>();
