@@ -745,6 +745,12 @@ class _ReaderScreenState extends State<ReaderScreen>
           _r.zoomStep(true);
         case ReaderAction.zoomOut:
           _r.zoomStep(false);
+        case ReaderAction.autoScroll: // a webtoon's auto-scroll (2026-10-22)
+          if (e is KeyDownEvent) _r.autoScrollToggle();
+        case ReaderAction.scrollFaster:
+          _r.autoScrollSpeed(faster: true);
+        case ReaderAction.scrollSlower:
+          _r.autoScrollSpeed(faster: false);
         case ReaderAction.openMenu: // not the reader's (no side menu here)
         case null:
           return KeyEventResult.ignored;

@@ -144,6 +144,12 @@ abstract class Renderer extends ChangeNotifier {
   void jumpTo(int place);
   void zoomStep(bool zoomIn) {}
 
+  /// Auto-scroll on or off (a webtoon's; nothing elsewhere) - its key ([ReaderAction.autoScroll]).
+  void autoScrollToggle() {}
+
+  /// Auto-scroll faster or slower - its keys.
+  void autoScrollSpeed({required bool faster}) {}
+
   // ---- drawing
 
   /// The pages (and their gestures), filling the Reader's stack.

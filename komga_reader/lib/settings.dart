@@ -295,7 +295,8 @@ class DisplayPrefs {
       this.comics = const KindPrefs(), this.ebooks = const KindPrefs(), this.webtoons = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
-      this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides});
+      this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides,
+      this.autoScrollSpeed = autoScrollStart});
   final bool night;
 
   /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
@@ -304,6 +305,10 @@ class DisplayPrefs {
 
   /// A webtoon's tap zones: the sides, or the top and bottom ([WebtoonTaps]) - this device's.
   final WebtoonTaps webtoonTaps;
+
+  /// A webtoon's auto-scroll speed, screen points a second - the last one set (its slider, its keys), this device's.
+  final double autoScrollSpeed;
+  static const autoScrollStart = 60.0, autoScrollSlowest = 10.0, autoScrollFastest = 400.0;
 
   // Rotation and what's over the page: one set for comics and eBooks (user, 2026-10-21 - each kind had its own; the
   // defaults are the comics' ones). This device.
@@ -385,10 +390,11 @@ class DisplayPrefs {
           bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, KindPrefs? webtoons, InsetPage? insetPage, Rotation? rotation,
           PageNote? pageNote, bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll,
-          WebtoonTaps? webtoonTaps}) =>
+          WebtoonTaps? webtoonTaps, double? autoScrollSpeed}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, webtoons: webtoons ?? this.webtoons,
         insetPage: insetPage ?? this.insetPage, webtoonTaps: webtoonTaps ?? this.webtoonTaps,
+        autoScrollSpeed: autoScrollSpeed ?? this.autoScrollSpeed,
         rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
@@ -415,7 +421,7 @@ class DisplayPrefs {
       'nightSchedule': nightSchedule, 'nightFrom': nightFrom, 'nightTo': nightTo, 'textScale': textScale,
       'accent': accent.name, 'pageStrip': pageStrip,
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'webtoons': webtoons.toJson(),
-      'insetPage': insetPage.name, 'webtoonTaps': webtoonTaps.name,
+      'insetPage': insetPage.name, 'webtoonTaps': webtoonTaps.name, 'autoScrollSpeed': autoScrollSpeed,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
       'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name};
@@ -446,6 +452,10 @@ class DisplayPrefs {
         comics: kind('comics', none.comics),
         webtoons: kind('webtoons', none.webtoons),
         webtoonTaps: pick(WebtoonTaps.values, j['webtoonTaps'], WebtoonTaps.sides),
+        autoScrollSpeed: switch (j['autoScrollSpeed']) {
+          final num v when v >= autoScrollSlowest && v <= autoScrollFastest => v.toDouble(),
+          _ => autoScrollStart,
+        },
         ebooks: kind('ebooks', none.ebooks),
         insetPage: pick(InsetPage.values, j['insetPage'], InsetPage.wideScreen),
         rotation: pick(Rotation.values, j['rotation'], none.rotation),

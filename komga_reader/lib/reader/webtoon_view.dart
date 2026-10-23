@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../settings.dart' show FitMode;
 
@@ -133,6 +134,20 @@ class WebtoonController {
   /// How far it's zoomed in (1: not).
   double get zoom => _state?._zoom ?? 1;
 
+  // ---- auto-scroll (user, 2026-10-22: "sounds kinda neat")
+
+  /// Auto-scroll's speed, screen points a second (zoomed in, the strip moves past as fast on the screen).
+  double autoSpeed = 60;
+
+  /// Auto-scroll stopped by itself: a touch on the strip, or the end reached.
+  VoidCallback? onAutoStopped;
+
+  /// The strip scrolling down by itself.
+  bool get autoOn => _state?._auto.isActive ?? false;
+
+  void startAuto() => _state?._startAuto();
+  void stopAuto() => _state?._stopAuto(tell: false);
+
   bool get atEnd {
     final p = position;
     return p != null && p.pixels >= p.maxScrollExtent - 1;
@@ -144,7 +159,7 @@ class WebtoonController {
   }
 }
 
-class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStateMixin {
+class _WebtoonViewState extends State<WebtoonView> with TickerProviderStateMixin {
   ScrollController? _scroll;
   double _width = 0;
   int _place = -1;
@@ -163,11 +178,40 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
 
   Timer? _settle; // the place kept a moment after the strip stops
 
+  // auto-scroll: a frame at a time, as far as the speed says for the time since the last
+  late final Ticker _auto = createTicker(_autoTick);
+  Duration _autoLast = Duration.zero;
+
+  void _startAuto() {
+    _stopGlide();
+    if (_auto.isActive) return;
+    _autoLast = Duration.zero;
+    _auto.start();
+  }
+
+  void _stopAuto({bool tell = true}) {
+    if (!_auto.isActive) return;
+    _auto.stop();
+    if (tell) widget.controller.onAutoStopped?.call();
+  }
+
+  void _autoTick(Duration elapsed) {
+    final s = _scroll;
+    final dt = (elapsed - _autoLast).inMicroseconds / 1e6;
+    _autoLast = elapsed;
+    if (s == null || !s.hasClients) return;
+    final p = s.position;
+    final to = p.pixels + widget.controller.autoSpeed * dt / _zoom;
+    s.jumpTo(math.min(to, p.maxScrollExtent));
+    if (to >= p.maxScrollExtent) _stopAuto(); // the end card: it stops there
+  }
+
   @override
   void dispose() {
     if (identical(widget.controller._state, this)) widget.controller._state = null;
     _settled(); // (closed mid-way: where it was)
     _settle?.cancel();
+    _auto.dispose();
     _anim.dispose();
     _scroll?.dispose();
     super.dispose();
@@ -254,6 +298,7 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
 
   void _onDown(PointerDownEvent e) {
     _stopGlide();
+    _stopAuto(); // any touch stops auto-scroll (user, 2026-10-22)
     if (e.kind == PointerDeviceKind.mouse) return;
     _fingers[e.pointer] = e.localPosition;
     if (_fingers.length == 2) {
