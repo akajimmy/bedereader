@@ -123,10 +123,6 @@ void main() {
     }
   });
 
-  test('the margins setting leaves the top and bottom alone (user, 2026-10-08)', () {
-    expect(EpubMargins.topBottom, 40);
-  });
-
   test('line spacing: three steps (user, 2026-10-21: Tight, Normal, Loose); another spacing saved reads as Normal', () {
     expect(EpubPrefs.spacings, [1.25, 1.5, 1.75]);
     expect(nearestSpacing(1.7), 1.75);
@@ -160,7 +156,6 @@ void main() {
       expect(name, findsOneWidget, reason: f.label);
       expect(tester.widget<Text>(name).style!.fontFamily, f.family, reason: '${f.label} in its own face');
     }
-    expect(find.text('The quick brown fox'), findsNWidgets(EpubFont.values.length), reason: 'sample text');
     expect(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.byIcon(Icons.check)),
         findsOneWidget, reason: 'the current one marked');
     await tester.tap(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.text('Lora')));

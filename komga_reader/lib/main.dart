@@ -263,8 +263,6 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
-    // the key in plain text from before it was kept encrypted: not used, just removed (signing in once more)
-    if (p.containsKey('apiKey')) await p.remove('apiKey');
     final url = p.getString('server'), key = await KeyStore.read();
     final api = url != null && key != null ? Komga(url, key) : null;
     if (api != null) {

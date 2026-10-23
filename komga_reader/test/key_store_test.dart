@@ -51,18 +51,4 @@ void main() {
     expect(komga.requests, isNotEmpty);
     await frames(tester);
   });
-
-  testWidgets('a key left in plain text from before is not used, and is removed: the sign-in screen shows',
-      (tester) async {
-    appStorage(tester);
-    SharedPreferences.setMockInitialValues({'server': url, 'apiKey': 'old-plain-key'});
-    FlutterSecureStorage.setMockInitialValues({});
-    await ShellKomga().pumpApp(tester);
-    await waitUntil(() => shows(find.byType(LoginScreen)), tester: tester, reason: 'the sign-in screen');
-    await frames(tester);
-
-    final p = await SharedPreferences.getInstance();
-    expect(p.containsKey('apiKey'), isFalse, reason: 'the plain-text key is gone from the device');
-    expect(find.text(url), findsOneWidget, reason: 'the address is kept, filled in');
-  });
 }

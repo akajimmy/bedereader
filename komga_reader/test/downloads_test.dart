@@ -61,6 +61,9 @@ void main() {
     for (var n = 1; n <= 3; n++) {
       expect(await d.store!.file('B1/pages/000$n.jpg').length(), 100);
     }
+    final pageFiles = Directory(d.store!.file('B1/pages').path).listSync().map((f) => f.path).toList();
+    expect(pageFiles.where((p) => p.endsWith('.part')), isEmpty, reason: 'pages written whole: no half-written ones');
+    expect(pageFiles, hasLength(3));
     expect(await d.store!.file('B1/thumb.jpg').exists(), isTrue);
     expect(await d.store!.file('series/S1.jpg').exists(), isTrue);
     expect(await d.store!.file('readlists/RL1.jpg').exists(), isTrue);
@@ -363,15 +366,6 @@ void main() {
     await d.keep(['B1']); // the answer
     d.bookFinished('B1'); // the read reaching Komga later says so again
     expect(d.askPending, isEmpty);
-  });
-
-  test('pages are written whole: no half-written page files are left behind', () async {
-    await d.attach(server(), root: dir);
-    await d.add([book('B1', 1)]);
-    await settle(d);
-    final files = Directory(d.store!.file('B1/pages').path).listSync().map((f) => f.path).toList();
-    expect(files.where((p) => p.endsWith('.part')), isEmpty);
-    expect(files.length, 3);
   });
 
   test('Wi-Fi only: off (the default), mobile data downloads as before; on, on mobile data the queue waits and says '

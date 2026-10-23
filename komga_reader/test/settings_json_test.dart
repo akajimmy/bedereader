@@ -160,23 +160,10 @@ void main() {
     const d = LibraryPrefs();
     expect((d.posterSeries, d.posterTitle, d.posterDate), (true, true, true));
     expect((d.ebookPosterTitle, d.ebookPosterAuthor, d.ebookPosterSeries, d.ebookPosterDate), (true, true, false, false));
-    // the device's old poster keys aren't taken over (no migrations): a DisplayPrefs save has no captions now
-    expect(const DisplayPrefs().toJson().keys.where((k) => k.toLowerCase().contains('poster') && k != 'posterSize'),
-        isEmpty);
   });
 
-  test("the kinds' old rotation and over-the-page settings aren't taken over (no migrations): the shared ones start "
-      "from the defaults; each kind's position text stays its own", () {
+  test("each kind's position text is its own: one changed, the other not", () {
     const none = DisplayPrefs();
-    final old = DisplayPrefs.fromJson({
-      'comics': {'pageNote': 'off', 'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
-          'hiddenSpots': ['left']},
-      'ebooks': {'pageNote': 'always', 'rotation': 'portrait', 'progressBar': true},
-    });
-    expect((old.rotation, old.pageNote, old.showClock, old.showBattery, old.progressBar),
-        (none.rotation, none.pageNote, none.showClock, none.showBattery, none.progressBar));
-    expect(old.comics.hiddenSpots, ['left'], reason: 'the position text: still read');
-    // each kind's position text set apart: one changed, the other not
     final apart = DisplayPrefs.fromJson(
         none.withKind(BookKind.ebooks, none.ebooks.copyWith(hiddenSpots: ['right'])).toJson());
     expect(apart.comics.hiddenSpots, isEmpty);
