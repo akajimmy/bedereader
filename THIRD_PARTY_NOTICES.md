@@ -30,6 +30,7 @@ This application was developed with the aid of AI coding tools, but was designed
 | `path_provider` Linux / Windows parts, `xdg_directories` | 2.2.2 / 2.3.0, 1.1.0 | BSD-3-Clause | Where settings are stored (desktop) |
 | `flutter_secure_storage` and its Windows part | 11.2.0 / 4.2.2 | BSD-3-Clause | The API key, stored encrypted |
 | `path_provider` and its Android part, `win32`, `jni`, `jni_flutter`, `jni_util`, `crypto`, `logging` | 2.1.6 / 2.3.1, 6.4.0, 1.1.0, 1.0.4, 1.0.0, 3.0.7, 1.3.0 | BSD-3-Clause | Used by the encrypted storage |
+| flutter_secure_storage_darwin, path_provider_foundation, objective_c | 0.4.3, 2.6.0, 9.5.0 | BSD-3-Clause | The encrypted key storage and file locations on iPhone and iPad |
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
 | async, characters, collection, ffi, file, http_parser, meta, path, platform, plugin_platform_interface, source_span, string_scanner, term_glyph, typed_data, vector_math | various | BSD-3-Clause | Supporting libraries used by the above |
 | clock | 1.1.3 | BSD-3-Clause | The time for page-turn and refresh timing (testable) |
@@ -47,6 +48,9 @@ licence); both covered by Flutter's notices.
 | kotlinx.coroutines (core, android) | 1.7.3 | Apache-2.0 |
 | Google Tink (tink-android), brought in by the encrypted storage | 1.23.0 | Apache-2.0 |
 
+**iPhone / iPad version** - also the Flutter engine (Flutter.framework) and the Apple parts of the settings, file
+location and encrypted storage packages (the rows above); all covered by Flutter's and those packages' notices.
+
 Flutter gathers the full licence texts of the framework, engine and Dart packages into every build; they're shown
 in the app under About > *Licences of included open-source software*, together with the app's own licence, AMD's
 notice, the Material Icons attribution, the reading fonts' Open Font Licences, the hyphenation patterns' notices, the dictionary's licences and
@@ -62,7 +66,10 @@ notice, the Material Icons attribution, the reading fonts' Open Font Licences, t
 | Eclipse Temurin JDK | 17.0.20.1 | GPL-2.0 with Classpath Exception | Running the Android build tools |
 | Visual Studio Build Tools 2022 (MSVC, CMake) | 2022 | Microsoft licence | Windows builds |
 | Git, Git for Windows | 2.55 | GPL-2.0 | Version control |
-| GitHub, GitHub Actions (`actions/checkout`, `subosito/flutter-action`); GitHub CLI | -; v7, v2; 2.101 | GitHub terms; MIT | Hosting, the automatic checks on every push, publishing |
+| GitHub, GitHub Actions (actions/checkout, subosito/flutter-action, actions/upload-artifact); GitHub CLI | -; v7, v2, v4; 2.101 | GitHub terms; MIT | Hosting, the automatic checks on every push, the iPhone / iPad builds, publishing; Dependabot and secret scanning (on since 2026-10-23) |
+| Xcode and CocoaPods, on GitHub's macOS runners | Xcode 26 | Apple licence; MIT | iPhone and iPad builds |
+| codemagic-cli-tools | latest (0.70 on 2026-10-23) | GPL-3.0-or-later | Signing the iPhone / iPad build and uploading it to TestFlight |
+| App Store Connect, TestFlight | - | Apple terms | Distributing the iPhone / iPad test builds |
 | Windows PowerShell | 5.1 | Microsoft | The build and install scripts |
 | Python, with Pillow | 3.13, 12.3 | PSF; MIT-CMU | Icon generation (`tools\make_icon.py`), toolchain setup (`dev_setup.py`) |
 | Claude Code (Anthropic) | - | Anthropic terms | AI coding assistant (see *AI assistance*) |
