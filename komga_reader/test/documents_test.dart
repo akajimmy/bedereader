@@ -97,6 +97,29 @@ Text after.
     expect(tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels, 1500);
   });
 
+  test('a document cut off at a heading, and a section left out up to the next heading of its level', () {
+    const text = '# T\nintro\n## Shots\n**Group**\n![a](a.png)\n### Sub\nmore\n## Next\nkept\n## Dev\ngone\n';
+    expect(DocumentScreen.trimmed(text, stopAt: '## Dev', leaveOut: ['## Shots']), '# T\nintro\n## Next\nkept');
+    expect(DocumentScreen.trimmed(text, leaveOut: ['## Next']), '# T\nintro\n## Shots\n**Group**\n![a](a.png)\n'
+        '### Sub\nmore\n## Dev\ngone\n');
+    expect(DocumentScreen.trimmed('a\n## Last\nb\n', leaveOut: ['## Last']), 'a\n', reason: 'the last section');
+    expect(DocumentScreen.trimmed(text, leaveOut: ['## Missing']), text, reason: 'no such section: unchanged');
+  });
+
+  test("Read me from the repository's README: nothing that's only for GitHub - no picture, and no label of a group "
+      'of pictures (the screenshot gallery, 2026-10-23)', () {
+    final readMe = DocumentScreen.readMe();
+    final shown = DocumentScreen.trimmed(File('../README.md').readAsStringSync(),
+        stopAt: readMe.stopAt, leaveOut: readMe.leaveOut);
+    final images = RegExp(r'!\[[^\]]*\]\(([^)]*)\)');
+    // every picture left in is on a line of its own, which the viewer skips (a badge, the picture at the top)
+    for (final line in shown.split('\n').where(images.hasMatch)) {
+      expect(line.trim(), matches(RegExp(r'^\[?!\[[^\]]*\]\([^)]*\)(\]\([^)]*\))?$')), reason: line);
+    }
+    expect(images.allMatches(shown).map((m) => m.group(1)).where((p) => p!.contains('thumbs/')), isEmpty,
+        reason: "the gallery's section is left out");
+  });
+
   testWidgets('Read me shows the README up to the developer part', (tester) async {
     setView(tester, const Size(800, 20000)); // everything built, so "not there" means not there
     await tester.pumpWidget(MaterialApp(home: DocumentScreen.readMe()));
