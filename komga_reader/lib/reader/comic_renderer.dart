@@ -1013,10 +1013,16 @@ class ComicRenderer extends Renderer {
           host.awake();
           _rightDown = e.buttons == kSecondaryButton;
         },
-        onPointerUp: (_) {
+        onPointerUp: (e) {
           if (_rightDown) {
             _rightDown = false;
-            host.toggleControls();
+            // the right-click that stopped auto-scroll: as the tap that does - the controls, and play where it was
+            // (user, 2026-10-23)
+            if (_strip?.touchStoppedAuto ?? false) {
+              _stripTapAt(e.localPosition, Size(box.maxWidth, box.maxHeight));
+            } else {
+              host.toggleControls();
+            }
           }
         },
         onPointerCancel: (_) => _rightDown = false,
