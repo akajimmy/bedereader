@@ -322,6 +322,32 @@ void main() {
     expect(strip(tester).pixels, strip(tester).maxScrollExtent, reason: 'at the end');
   });
 
+  testWidgets('a right-click that stops auto-scroll brings the controls and play where it was, as a tap does (user, '
+      '2026-10-23)', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(autoScrollSpeed: 100));
+    await open(tester);
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pump();
+    await tester.tap(find.byTooltip('Auto-scroll'));
+    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(readerSlider(), findsNothing);
+
+    await tester.tapAt(const Offset(300, 500), buttons: kSecondaryButton, kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    final stopped = strip(tester).pixels;
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(stopped, 1), reason: 'stopped');
+    expect(readerSlider(), findsOneWidget, reason: 'the controls');
+    final play = find.byKey(const ValueKey('auto-scroll-play'));
+    expect(play, findsOneWidget);
+    expect((tester.getCenter(play) - const Offset(300, 500)).distance, lessThan(2), reason: 'where the click was');
+  });
+
   testWidgets("auto-scroll's keys - none by default; given keys, one starts and stops it and the others change its "
       'speed (user, 2026-10-22: "create new empty hotkeys for scroll speed")', (tester) async {
     for (final a in [ReaderAction.autoScroll, ReaderAction.scrollFaster, ReaderAction.scrollSlower]) {
