@@ -181,6 +181,77 @@ void main() {
     expect(strip(tester).pixels, closeTo(0, 1), reason: 'no scroll');
   });
 
+  testWidgets('opened again, just where it was left - not the top of that page (user, 2026-10-22: "1 ... for sure"; '
+      'Komga keeps only the page)', (tester) async {
+    final api = await open(tester);
+    const at = 3 * (1280.0 + ReaderPrefs.defaultGutter) + 500; // part way down the fourth slice
+    strip(tester).jumpTo(at);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600)); // (kept once it rests)
+    await tester.pumpWidget(const SizedBox()); // closed
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    // Komga's page: the slice across the middle (at + 600 - the fourth), as the reader saved it
+    api.savedProgress['B1'] = {'page': 4, 'completed': false};
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.withProgress(api.theBook)!)));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(at, 1), reason: 'the same spot');
+
+    // another device moved on to page 6: its top, as before
+    await tester.pumpWidget(const SizedBox());
+    api.savedProgress['B1'] = {'page': 6, 'completed': false};
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.withProgress(api.theBook)!)));
+    for (var i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(5 * (1280.0 + ReaderPrefs.defaultGutter), 1), reason: "page 6's top");
+  });
+
+  testWidgets('two fingers zoom the strip about the point between them, one then moves it across; Ctrl + the wheel '
+      'zooms too (user, 2026-10-22: pinch to zoom, "for sure")', (tester) async {
+    await open(tester); // 800 x 1200, the strip 800 wide
+    Rect first() =>
+        tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(RawImage)).first);
+    expect(first().width, 800);
+    final a = await tester.startGesture(const Offset(300, 400), pointer: 7);
+    final b = await tester.startGesture(const Offset(500, 400), pointer: 8);
+    await tester.pump();
+    for (var i = 1; i <= 10; i++) {
+      await a.moveTo(Offset(300 - i * 10.0, 400));
+      await b.moveTo(Offset(500 + i * 10.0, 400));
+      await tester.pump();
+    }
+    await a.up();
+    await b.up();
+    await tester.pump();
+    await tester.pump();
+    // 200 apart to 400: twice the size, the point between the fingers (400 across) where it was
+    expect(first().width, closeTo(1600, 1), reason: 'zoomed in twice');
+    // (within a few points: the test moves one finger, then the other - the point between them wobbles)
+    expect(first().left, closeTo(-400, 5), reason: 'about the middle');
+    // one finger across: the strip follows it
+    final g = await tester.startGesture(const Offset(400, 600));
+    await g.moveBy(const Offset(150, 0));
+    await tester.pump();
+    await g.up();
+    await tester.pump();
+    expect(first().left, closeTo(-250, 5), reason: 'moved across');
+
+    // Ctrl + the wheel down: back out
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    final mouse = TestPointer(9, PointerDeviceKind.mouse)..hover(const Offset(400, 600));
+    for (var i = 0; i < 8; i++) {
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 100)));
+      await tester.pump();
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(first().width, closeTo(800, 1), reason: 'not under its own size');
+  });
+
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
     await open(tester, start: 4);
     expect(strip(tester).pixels, 3 * (1280.0 + ReaderPrefs.defaultGutter), reason: 'three slices and their gutters');
