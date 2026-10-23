@@ -73,6 +73,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }
     d.paused = false;
+    await d.store?.written; // an index save still on its way (a book deleted once read) loses its folder otherwise
     await deleteTemp(dir);
   });
 
