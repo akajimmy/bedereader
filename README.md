@@ -1,6 +1,6 @@
 # BeDeReader
 
-**A library and reader for [Komga](https://komga.org)** - comics, BD and manga from your own server.
+**A library and reader for [Komga](https://komga.org)** - comics, BD, manga and eBooks from your own server.
 
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
@@ -11,21 +11,16 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 BeDeReader is a client: your comics, reading progress, read lists and collections all stay on the Komga server.
 This app shows them and keeps everything in sync.
 
-![A library of 19 series, as poster grids](docs/images/library.jpg)
-
-![Reading Planet Comics #1 (1940)](docs/images/reader.jpg)
-
-![The same page with Enhance and Enhance colours on, and the image settings open](docs/images/reader-enhance.jpg)
-
-*The screenshots show public-domain comics from the 1940s and 50s (Planet Comics, Web of Mystery and others).*
+[![Two pages of Planet Comics #1 (1940) side by side on a tablet](docs/images/hero-two-pages.jpg)](#screenshots)
 
 ## What it does
 
 **Browsing**
 - **Home**: Continue reading, On deck, pinned views, your libraries, and optional rows for recently read, recently
   added and recent releases - each can be shown, hidden and rearranged.
-- **Libraries, series, books, collections and read lists** as poster grids that load as you scroll, with sorting, a
-  *Hide read* toggle, item counts and pull-to-refresh.
+- **Libraries, series, books, collections and read lists** as poster grids that load as you scroll, with sorting,
+  filters (Show all / Hide read / Hide unread, and Komga's own: status, genre, publisher...), item counts and
+  pull-to-refresh.
 - **Search** across series, books, read lists and collections.
 - **Pins**: save any view (a library, a series, a read list with read books hidden...) to Home under your own name.
 - **Details** for books and series: summary, credits, publisher, genres and more.
@@ -44,7 +39,8 @@ This app shows them and keeps everything in sync.
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
   keeps the screen's own brightness, so it never opens too dark to use), black, grey or white page colours, and the
   screen kept on while reading if you want it (for a few minutes after each page, or always).
-- Comics and eBooks each have their own page counter, clock, progress bar, rotation and position text.
+- A page counter, clock, battery and progress bar over the page, and rotation, set once for every kind of book; each
+  kind has its own position text.
 - At the end of a book: the next one in the series or read list, with its poster - Next book or Close.
 - Comics and EPUBs open in the same reader, with the same controls; a read list that mixes them goes from one to the
   other without leaving it.
@@ -79,6 +75,36 @@ This app shows them and keeps everything in sync.
 - Right-click menus, keyboard shortcuts (Esc goes back a screen), remembered window size and position, full screen
   (F11) that stays on across books.
 
+## Screenshots
+
+Click a picture for the full size. The comics are public-domain books from the 1940s and 50s (Planet Comics and
+others), the eBooks public-domain classics from [Standard Ebooks](https://standardebooks.org).
+
+**Libraries** - comics and eBooks, and on the PC with the side menu pinned, and search
+
+[![Comics library](docs/images/thumbs/tablet-library.jpg "A comics library as posters")](docs/images/tablet-library.jpg)
+[![eBooks library](docs/images/thumbs/tablet-books.jpg "An eBooks library, the books' own covers")](docs/images/tablet-books.jpg)
+[![Library on the PC](docs/images/thumbs/pc-library.jpg "On the PC, the side menu pinned open")](docs/images/pc-library.jpg)
+[![Search on the PC](docs/images/thumbs/pc-search.jpg "Search: series and books")](docs/images/pc-search.jpg)
+
+**Comics** - a page with its controls, two pages side by side, the page curl, Enhance and Enhance colours, and on the PC
+
+[![Reading a comic](docs/images/thumbs/tablet-reader.jpg "A page, with the page strip and the controls")](docs/images/tablet-reader.jpg)
+[![Two pages](docs/images/thumbs/landscape-comic-two-pages.jpg "Two pages side by side")](docs/images/landscape-comic-two-pages.jpg)
+[![Two pages and Comic settings](docs/images/thumbs/landscape-comic-two-pages-settings.jpg "Comic settings over the spread")](docs/images/landscape-comic-two-pages-settings.jpg)
+[![Page curl](docs/images/thumbs/tablet-page-curl.jpg "The page curl, following the finger")](docs/images/tablet-page-curl.jpg)
+[![Enhance](docs/images/thumbs/tablet-reader-enhance.jpg "Enhance and Enhance colours on: whiter paper, deeper ink")](docs/images/tablet-reader-enhance.jpg)
+[![Two pages on the PC](docs/images/thumbs/pc-comic.jpg "Two pages on the PC")](docs/images/pc-comic.jpg)
+
+**eBooks** - a page, two pages with and without Inset page, the settings, Contents, and on the PC
+
+[![An eBook page](docs/images/thumbs/tablet-ebook.jpg "A page of The Wonderful Wizard of Oz")](docs/images/tablet-ebook.jpg)
+[![Two pages, Inset page](docs/images/thumbs/landscape-ebook-two-pages-inset.jpg "Two pages as sheets - Inset page")](docs/images/landscape-ebook-two-pages-inset.jpg)
+[![Two pages](docs/images/thumbs/landscape-ebook-two-pages-no-inset.jpg "Two pages, edge to edge")](docs/images/landscape-ebook-two-pages-no-inset.jpg)
+[![eBook settings](docs/images/thumbs/tablet-ebook-settings.jpg "eBook settings: font, size, spacing, page colours")](docs/images/tablet-ebook-settings.jpg)
+[![Contents](docs/images/thumbs/tablet-ebook-contents.jpg "Contents")](docs/images/tablet-ebook-contents.jpg)
+[![Two pages on the PC](docs/images/thumbs/pc-ebook.jpg "Two pages on the PC")](docs/images/pc-ebook.jpg)
+
 ## Getting started
 
 1. In Komga's web interface, create an API key: your account (top right) > API keys > Create.
@@ -93,16 +119,17 @@ This app shows them and keeps everything in sync.
 ## Where your settings live
 
 - **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, page
-  colours) and image settings and their defaults, the EPUB settings (font, size, spacing, formatting, page
-  colours...), pins (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its
-  own), and what's hidden from On deck.
+  colours, gutter) and image settings and their defaults, the EPUB settings
+  (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their order, pins
+  (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its own), and what's
+  hidden from On deck.
 - **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
-  turn animation, taps, keys, what's shown over the page, keeping the screen on), posters, Home's
-  layout, remembered filters and sort orders, downloads and the offline mode switch. Settings > About can reset all
-  of these at once; each Settings page also has its own reset.
+  turn animation, taps, keys, what's shown over the page, keeping the screen on), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the offline
+  mode switch. Settings > About can reset all of these at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, eBooks and Remote and keys for reading; Server and
-sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every device.
+Settings (side menu) has everything in one place: Reading, Comics, eBooks and Remote and keys for reading;
+Server and sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every
+device.
 
 ## Privacy
 
@@ -158,38 +185,37 @@ The rest of this file is about building the app.
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
-- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on the tablet over wireless ADB;
+- `tools\build.ps1` - the build pipeline; `tools\install-android.ps1` - installs on an Android device over wireless ADB;
   `tools\update-desktop.cmd` - puts the newest Windows build in `Desktop\BeDeReader`; `tools\ios-status.ps1` - how
   a build's iPhone / iPad (TestFlight) build on GitHub is going.
 - `tools\make_icon.py` - draws every app icon from one set of shapes.
 - `keytest\` - a page for finding out which keys a remote sends.
 - `dev_setup.py` - downloads and verifies the toolchain.
 
-### Toolchain (this PC)
+### Toolchain
 
-Nothing is on PATH; the build script sets it up itself.
+The app builds on Windows (Android and Windows; iOS builds on GitHub, below). You need:
 
-| What | Where |
+| What | Notes |
 |---|---|
-| Flutter 3.47 | `C:\Dev\flutter` |
-| JDK 17 | `C:\Dev\jdk17` |
-| Android SDK | `C:\Dev\android-sdk` |
-| Visual Studio Build Tools 2022 (C++, with the "C++ ATL" component) | for Windows builds (ATL: the encrypted key storage's Windows part) |
-| Windows Developer Mode | on (needed for plugins) |
+| Flutter 3.47 (stable) | the version the app is built and tested with |
+| JDK 17 | for the Android build (Temurin is fine) |
+| Android SDK (command-line tools) | platform tools, a build-tools and platform matching the app's targetSdk |
+| Visual Studio Build Tools 2022 | the C++ workload with the "C++ ATL" component (the encrypted key storage's Windows part needs ATL) |
+| Windows Developer Mode | on (Flutter's Windows plugins need symlinks) |
+| Python 3 | for dev_setup.py and the icon and docs tools |
 
-For an interactive shell:
+**dev_setup.py** downloads Flutter, the JDK and the Android command-line tools, checks each against its published
+SHA-256 and unpacks them under C:\Dev (C:\Dev\flutter, C:\Dev\jdk17, C:\Dev\android-sdk) - no installers, no PATH
+changes. tools\build.ps1 expects them there: with a toolchain somewhere else, change the two lines near its top that
+set JAVA_HOME and put Flutter on PATH.
 
-```powershell
-$env:JAVA_HOME = 'C:\Dev\jdk17'; $env:PATH = "C:\Dev\flutter\bin;$env:PATH"; Set-Location C:\Claude\KomgaClient\komga_reader
-```
+For an interactive shell, set the same two things (JAVA_HOME to the JDK, Flutter's bin folder on PATH) and work from
+komga_reader\. The everyday commands there:
 
-Everyday commands, from `komga_reader\`:
-
-```powershell
-flutter analyze            # static checks
-flutter test               # the test suite
-flutter run -d windows     # run on this PC with hot reload
-```
+1. **flutter analyze** - static checks (lint findings fail the build)
+2. **flutter test** - the test suite
+3. **flutter run -d windows** - run on the PC with hot reload
 
 Checks over real EPUBs live in `tool\epub_checks\`, outside the test suite, and do nothing unless pointed at books
 (run one with `flutter test tool\epub_checks\<file>`): `epub_library_check_test.dart` (every book opens and lays out;
@@ -199,12 +225,10 @@ a tablet; `BEDEREADER_EPUB_LIST` and `BEDEREADER_EPUB_OUT`, or one book with `BE
 
 ### Building
 
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Claude\KomgaClient\tools\build.ps1 -Bump
-```
+From the repository's folder: **powershell -ExecutionPolicy Bypass -File tools\build.ps1 -Bump**
 
-(Windows blocks `.ps1` scripts by default; `-ExecutionPolicy Bypass` lifts that for this one run without changing any
-setting. The same goes for the other scripts in `tools\`.)
+(Windows blocks .ps1 scripts by default; -ExecutionPolicy Bypass lifts that for this one run without changing any
+setting. The same goes for the other scripts in tools\.)
 
 Checks the working tree is committed (before and after `flutter pub get`), runs analyze - lint findings included -
 and the tests (stopping on any failure), raises the build number,
@@ -216,25 +240,26 @@ signed with the release key, and its `build-<n>` tag must not exist yet.
 
 A `-Bump` build then pushes its `build-<n>` tag to GitHub, where `.github\workflows\testflight.yml` builds that same
 commit for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about
-15-20 minutes, while the tablet and the Desktop copy are updated. `tools\ios-status.ps1 -Build <n>` says how it's
-going; `-NoIos` keeps the tag on this PC and skips it.
+15-20 minutes, while the device and the Desktop copy are updated. `tools\ios-status.ps1 -Build <n>` says how it's
+going; `-NoIos` keeps the tag local and skips it. (The workflow signs and uploads with the repository owner's App Store Connect key, kept in the repository's secrets.)
 
 Options: `-Platforms android` (or `windows`) builds one of them; `-Timing` compiles in the EPUB reader's
 timing instruments (a measuring build); `-SkipTests` skips the tests; `-NoInstall`
-skips the tablet and the Desktop copy; `-AllowDirty` allows uncommitted changes. The last two are for throwaway
+skips the device and the Desktop copy; `-AllowDirty` allows uncommitted changes. The last two are for throwaway
 builds: `-Bump` refuses both. Progress is in `dist\build.log`.
 
-After a Windows build the app is unpacked fresh and swapped in as `Desktop\BeDeReader`, the copy used on this PC; the
-copy it replaces is kept beside it as `BeDeReader.previous` (rename it back if a build misbehaves). Your settings and
+After a Windows build the app is unpacked fresh and swapped in as BeDeReader on your Desktop, the copy you use day to
+day; the copy it replaces is kept beside it as BeDeReader.previous (rename it back if a build misbehaves). Your settings and
 downloads aren't in those folders, so nothing is lost. If the app is open from there, that step is skipped and says
 so: close it and run `tools\update-desktop.cmd` (or double-click it).
 
-After an Android build the APK is installed on the paired tablet over wireless ADB. Pairing is a one-time step:
-`& 'C:\Dev\android-sdk\platform-tools\adb.exe' pair <IP>:<port>` with the code from the tablet's Settings > Developer
-options > Wireless debugging > Pair device with pairing code. Wireless debugging must be on for installs (Android
-switches it off whenever the tablet leaves the Wi-Fi); if the tablet can't be reached the build still succeeds and
-says so - install later with `tools\install-android.ps1`. After installing, it checks the tablet reports the new build
-and holds exactly this APK (SHA-256).
+After an Android build the APK is installed on a paired Android device over wireless ADB (with several, set
+ANDROID_SERIAL to the one to use). Pairing is a one-time step: **adb pair IP:PORT** (adb is in the Android SDK's
+platform-tools) with the code from the device's Settings > Developer options > Wireless debugging > Pair device with
+pairing code. Wireless debugging must be on for installs (Android switches it off whenever the device leaves the
+Wi-Fi); if the device can't be reached the build still succeeds and says so - install later with
+tools\install-android.ps1. After installing, it checks the device reports the new build and holds exactly this APK
+(SHA-256).
 
 **Release signing (Android):** `komga_reader\android\key.properties` (copy `key.properties.example`; never
 committed) names the keystore, which lives outside the repository. Its password is kept encrypted with your Windows
@@ -246,7 +271,7 @@ app signed with the same key, so the release key must never change: back up the 
 password manager (the encrypted copy only works for this Windows account on this PC).
 
 Outputs in `dist\<version>\`:
-- `BeDeReader-<ver>-android.apk` - install on the tablet (sideload)
+- `BeDeReader-<ver>-android.apk` - install on an Android device (sideload)
 - `BeDeReader-<ver>-windows.zip` - portable: unzip anywhere, run `BeDeReader.exe`
 
 ### Renaming the app
@@ -268,9 +293,10 @@ spelling is displayed, typed, searched and used in file names.
 
 ### Working on changes
 
-- Development happens on a version branch (now `1.2`). One branch per change, off the version branch:
-  `git switch -c feature/two-page-mode 1.2`, commit there, keep `flutter analyze` and `flutter test` green, then merge
-  back into `1.2`.
+- Development happens on a version branch (now `1.5`, the webtoons version); each new version gets its own branch,
+  and the previous one ends at its last release. One branch per change, off the version branch:
+  `git switch -c change/two-page-mode 1.5`, commit there, keep `flutter analyze` and `flutter test` green, then merge
+  back into `1.5`.
 - Versions: every build after a release is a build of the next version (after 1.1, builds show 1.2.0). When a build
   is good enough to be a release candidate, `tools\release.ps1 -Rc 1` tags it `v1.2.0-rc.1`; when one is the
   release, `tools\release.ps1 -Final` tags it `v1.2.0` and moves the version on to 1.3.0 for the next build. Both
