@@ -59,7 +59,7 @@ void main() {
     if (start != null) api.savedProgress['B1'] = {'page': start, 'completed': false};
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.withProgress(api.theBook)!)));
     for (var i = 0; i < 20; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
       await tester.pump(const Duration(milliseconds: 50));
     }
     return api;
@@ -72,7 +72,7 @@ void main() {
 
   Future<void> settle(WidgetTester tester) async {
     for (var i = 0; i < 10; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
       await tester.pump(const Duration(milliseconds: 60));
     }
   }

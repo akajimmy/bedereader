@@ -31,7 +31,8 @@ This application was developed with the aid of AI coding tools, but was designed
 | `flutter_secure_storage` and its Windows part | 11.2.0 / 4.2.2 | BSD-3-Clause | The API key, stored encrypted |
 | `path_provider` and its Android part, `win32`, `jni`, `jni_flutter`, `jni_util`, `crypto`, `logging` | 2.1.6 / 2.3.1, 6.4.0, 1.1.0, 1.0.4, 1.0.0, 3.0.7, 1.3.0 | BSD-3-Clause | Used by the encrypted storage |
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
-| `async`, `characters`, `collection`, `ffi`, `file`, `http_parser`, `meta`, `path`, `platform`, `plugin_platform_interface`, `source_span`, `string_scanner`, `term_glyph`, `typed_data`, `vector_math` | various | BSD-3-Clause | Supporting libraries used by the above |
+| async, characters, collection, ffi, file, http_parser, meta, path, platform, plugin_platform_interface, source_span, string_scanner, term_glyph, typed_data, vector_math | various | BSD-3-Clause | Supporting libraries used by the above |
+| clock | 1.1.3 | BSD-3-Clause | The time for page-turn and refresh timing (testable) |
 
 **Windows version** - also `flutter_windows.dll` (the Flutter engine) and ICU Unicode data (`icudtl.dat`, Unicode
 licence); both covered by Flutter's notices.

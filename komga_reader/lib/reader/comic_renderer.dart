@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -720,7 +721,7 @@ class ComicRenderer extends Renderer {
         if (_wheelAcc.abs() < 40) return;
         final down = _wheelAcc > 0;
         _wheelAcc = 0;
-        final now = DateTime.now();
+        final now = clock.now();
         if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
         _lastWheelTurn = now;
         _webtoonStep(down ? 1 : -1, held: false);
@@ -744,7 +745,7 @@ class ComicRenderer extends Renderer {
     if (_wheelAcc.abs() < 40) return;
     final fwd = _wheelAcc > 0;
     _wheelAcc = 0;
-    final now = DateTime.now();
+    final now = clock.now();
     if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
     _lastWheelTurn = now;
     fwd ? forward() : back();
@@ -1686,7 +1687,7 @@ class ComicRenderer extends Renderer {
       return b;
     }
     final failed = _thumbsFailed[i];
-    if (failed != null && DateTime.now().difference(failed) < _thumbRetry) return null;
+    if (failed != null && clock.now().difference(failed) < _thumbRetry) return null;
     if (!_thumbsLoading.contains(i)) {
       if (queued) {
         _thumbQueue
@@ -1735,7 +1736,7 @@ class ComicRenderer extends Renderer {
       (b) => done(() => _thumbs[i] = b),
       onError: (Object e) => done(() {
         if (e is KomgaUnreachable) {
-          _thumbsFailed[i] = DateTime.now(); // too slow, or no answer: try again a little later, not never
+          _thumbsFailed[i] = clock.now(); // too slow, or no answer: try again a little later, not never
         } else {
           _thumbs[i] = null; // Komga answered: there's no picture to be had
         }

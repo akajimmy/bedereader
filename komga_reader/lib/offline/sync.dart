@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api.dart';
@@ -66,7 +67,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) return;
     final l = _lastRun;
-    if (l == null || DateTime.now().difference(l) > refreshGap || _unsentToTry) unawaited(run());
+    if (l == null || clock.now().difference(l) > refreshGap || _unsentToTry) unawaited(run());
   }
 
   /// Books whose last send Komga refused (a 403, a 400... - not "can't reach"), with the progress record that was
@@ -94,7 +95,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     final store = _store, api = _conn.online;
     if (running || store == null || api == null || _conn.offline) return;
     running = true;
-    _lastRun = DateTime.now();
+    _lastRun = clock.now();
     notifyListeners();
     var sent = 0, gone = 0;
     final conflicts = <ProgressConflict>[];
@@ -175,7 +176,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       final Map<String, dynamic> r;
       // progress saved here after this moment is newer than Komga's answer (#11: a page read online while the
       // refresh was on its way was put back to the page before, and the next sync said Komga had changed too)
-      final asked = DateTime.now();
+      final asked = clock.now();
       try {
         r = await api.seriesBooks(entry.key);
       } on KomgaUnreachable {

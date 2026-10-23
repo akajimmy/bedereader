@@ -90,11 +90,16 @@ Future<void> openEpub(WidgetTester tester, MemorySource source, {Komga? api, Siz
   addTearDown(tester.view.reset);
   await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api ?? noNetwork(() => EndKomga(null)),
       book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source, saveProgress: false)));
-  // loading, laying out and counting run on real futures: until the pages show and the book is counted
+  await bookShown(tester);
+}
+
+/// Until the Reader just pumped shows the book's pages - loading, laying out and counting run on real futures (it
+/// shows once counted) - and a couple of frames more, for the chapters fetched after the count.
+Future<void> bookShown(WidgetTester tester) async {
   for (var i = 0; i < 200; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
     await tester.pump();
-    if (find.byType(PageView).evaluate().isNotEmpty && i > 10) break;
+    if (find.byType(PageView).evaluate().isNotEmpty && i > 1) break;
   }
   expect(find.byType(PageView), findsOneWidget, reason: 'the book opened; on screen: '
       '${tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).toList()} '
@@ -114,7 +119,7 @@ Future<String> epubLabel(WidgetTester tester) async {
 /// Lets the reader's real work (chapters loading, laying out, counting) run, with frames between.
 Future<void> settleEpub(WidgetTester tester) async {
   for (var i = 0; i < 10; i++) {
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
     await tester.pump(const Duration(milliseconds: 100));
   }
 }

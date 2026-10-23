@@ -264,7 +264,7 @@ void main() {
       SpreadBook.real = true;
       addTearDown(() => SpreadBook.real = false);
       await open(tester);
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
     }
 
@@ -280,7 +280,7 @@ void main() {
       await turn(tester, back: rtl);
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // decoded, joined
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // decoded, joined
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 3-4/9'));
@@ -378,7 +378,7 @@ void main() {
       }
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 7/9'));
@@ -394,7 +394,7 @@ void main() {
       await tester.pump();
       expect(await position(tester), startsWith('Pg. 8-9/9'));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
@@ -431,7 +431,7 @@ void main() {
       // 40 px: the pages 40 apart (the pair narrower to make room - fit screen keeps it on the screen)
       AppSettings.instance.setDefault(const ReaderPrefs(gutter: 40));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // joined again
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined again
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -467,7 +467,7 @@ void main() {
       await turn(tester); // [1] then [2], alone, before the pair 3|4
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 2/9'));
@@ -496,7 +496,7 @@ void main() {
       // back onto it the same way (user, 2026-10-17: "cover the reverse turn the same way"): its made-up right half
       // comes back over the pair's right-hand page, which stays until it lands
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
