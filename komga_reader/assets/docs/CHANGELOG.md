@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+### Build 147 - 2026-10-23
+
 **Fixed**
 
 - Webtoons: a right-click that stops auto-scroll now brings the floating play button where it was, as a tap does.
-
-## 1.5.0
 
 ### Build 146 - 2026-10-22
 
