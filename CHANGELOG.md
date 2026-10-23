@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Webtoons, auto-scroll: a tap on the strip while it scrolls stops it and brings up the controls, with a big play button right where you tapped to carry on (the bar's button is play when stopped, stop while it runs). Tap anywhere else and the controls close, still stopped. The speed is now also in Settings > Webtoons and the Webtoon settings panel.
+
 ## 1.5.0
 
 ### Build 144 - 2026-10-22
