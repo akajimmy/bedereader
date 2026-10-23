@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Webtoons in the library: an episode's poster is the series' cover with an "Ep. N" badge, not a cut-off piece of its first page. Give the series a cover in Komga (the series' Edit > Poster) and every episode shows it. The app learns which series are webtoons as it meets them (a series list, a series' page, the reader) and remembers them on this device.
 - Webtoons, auto-scroll: a tap on the strip while it scrolls stops it and brings up the controls, with a big play button right where you tapped to carry on (the bar's button is play when stopped, stop while it runs). Tap anywhere else and the controls close, still stopped. The speed is now also in Settings > Webtoons and the Webtoon settings panel.
 
 ## 1.5.0
