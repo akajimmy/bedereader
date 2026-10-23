@@ -302,7 +302,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             'settings).', style: TextStyle(color: hintColour)),
       ),
       SettingsGroup(title: 'Pages - defaults', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
-      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s)]),
+      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+        ...imageRows(p, s.setWebtoonDefault),
+        ActionRow(title: 'Image settings back to the original',
+            button: TextButton(onPressed: () => s.setWebtoonDefault(p.imageReset()), child: const Text('Reset to original'))),
+      ]),
+      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
+        webtoonDoubleTapRow(s)]),
       SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.webtoons)]),
     ]);
   }

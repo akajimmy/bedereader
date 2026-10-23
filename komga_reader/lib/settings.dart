@@ -296,7 +296,7 @@ class DisplayPrefs {
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
       this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides,
-      this.autoScrollSpeed = autoScrollStart});
+      this.autoScrollSpeed = autoScrollStart, this.webtoonDoubleTap = true});
   final bool night;
 
   /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
@@ -305,6 +305,9 @@ class DisplayPrefs {
 
   /// A webtoon's tap zones: the sides, or the top and bottom ([WebtoonTaps]) - this device's.
   final WebtoonTaps webtoonTaps;
+
+  /// A webtoon's double tap: zooms in on the spot, and out again (user, 2026-10-22) - comics' own is [doubleTapZoom].
+  final bool webtoonDoubleTap;
 
   /// A webtoon's auto-scroll speed, screen points a second - the last one set (its slider, its keys), this device's.
   final double autoScrollSpeed;
@@ -390,11 +393,12 @@ class DisplayPrefs {
           bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, KindPrefs? webtoons, InsetPage? insetPage, Rotation? rotation,
           PageNote? pageNote, bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll,
-          WebtoonTaps? webtoonTaps, double? autoScrollSpeed}) =>
+          WebtoonTaps? webtoonTaps, double? autoScrollSpeed, bool? webtoonDoubleTap}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, webtoons: webtoons ?? this.webtoons,
         insetPage: insetPage ?? this.insetPage, webtoonTaps: webtoonTaps ?? this.webtoonTaps,
         autoScrollSpeed: autoScrollSpeed ?? this.autoScrollSpeed,
+        webtoonDoubleTap: webtoonDoubleTap ?? this.webtoonDoubleTap,
         rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
@@ -422,6 +426,7 @@ class DisplayPrefs {
       'accent': accent.name, 'pageStrip': pageStrip,
       'comics': comics.toJson(), 'ebooks': ebooks.toJson(), 'webtoons': webtoons.toJson(),
       'insetPage': insetPage.name, 'webtoonTaps': webtoonTaps.name, 'autoScrollSpeed': autoScrollSpeed,
+      'webtoonDoubleTap': webtoonDoubleTap,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
       'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name};
@@ -452,6 +457,7 @@ class DisplayPrefs {
         comics: kind('comics', none.comics),
         webtoons: kind('webtoons', none.webtoons),
         webtoonTaps: pick(WebtoonTaps.values, j['webtoonTaps'], WebtoonTaps.sides),
+        webtoonDoubleTap: j['webtoonDoubleTap'] != false,
         autoScrollSpeed: switch (j['autoScrollSpeed']) {
           final num v when v >= autoScrollSlowest && v <= autoScrollFastest => v.toDouble(),
           _ => autoScrollStart,

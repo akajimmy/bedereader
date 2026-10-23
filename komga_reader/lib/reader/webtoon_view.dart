@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/scheduler.dart' show Ticker;
 
+import '../page_image.dart' show PageCanvas;
 import '../settings.dart' show FitMode;
 
 
@@ -133,6 +134,11 @@ class WebtoonController {
 
   /// How far it's zoomed in (1: not).
   double get zoom => _state?._zoom ?? 1;
+
+  /// A double tap at [local] (in the view): zoomed in about it, as a comic's page is ([PageCanvas.doubleTapScale]) -
+  /// or, zoomed in, back out.
+  void toggleZoomAt(Offset local) =>
+      _state?._zoomTo(zoom > 1.01 ? 1 : PageCanvas.doubleTapScale, local);
 
   // ---- auto-scroll (user, 2026-10-22: "sounds kinda neat")
 

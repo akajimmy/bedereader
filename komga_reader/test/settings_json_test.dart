@@ -88,7 +88,7 @@ void main() {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl, epubTurn: EpubTurn.curl,
         comics: KindPrefs(hiddenSpots: ['left']), ebooks: KindPrefs(hiddenSpots: ['right', 'centre']),
-        webtoons: KindPrefs(hiddenSpots: ['centre']), webtoonTaps: WebtoonTaps.topBottom, autoScrollSpeed: 120,
+        webtoons: KindPrefs(hiddenSpots: ['centre']), webtoonTaps: WebtoonTaps.topBottom, autoScrollSpeed: 120, webtoonDoubleTap: false,
         rotation: Rotation.landscape, pageNote: PageNote.off, showClock: true, showBattery: true, progressBar: true,
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small,
@@ -112,6 +112,7 @@ void main() {
       ('webtoons hiddenSpots', (d) => d.webtoons.hiddenSpots.join(','), 'centre', ''), // (their own - 2026-10-22)
       ('webtoonTaps', (d) => d.webtoonTaps, WebtoonTaps.topBottom, WebtoonTaps.sides),
       ('autoScrollSpeed', (d) => d.autoScrollSpeed, 120.0, DisplayPrefs.autoScrollStart),
+      ('webtoonDoubleTap', (d) => d.webtoonDoubleTap, false, true), // (webtoons' own - 2026-10-22)
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 10, 0),

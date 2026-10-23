@@ -5,7 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/page_image.dart' show PageData;
+import 'package:komga_reader/page_image.dart' show PageCanvas, PageData, ProcessedPicture;
 import 'package:komga_reader/reader/comic_renderer.dart';
 import 'package:komga_reader/reader_keys.dart';
 import 'package:komga_reader/reader/webtoon_view.dart';
@@ -41,9 +41,11 @@ void main() {
     AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart);
     AppSettings.instance.webtoonSeries.clear();
     ReaderServer.direction = 'WEBTOON';
+    ComicRenderer.doubleTapWait = Duration.zero; // (a tap at once - but in the double tap's own test)
   });
   tearDown(() {
     ReaderServer.direction = 'LEFT_TO_RIGHT';
+    ComicRenderer.doubleTapWait = const Duration(milliseconds: 250);
     AppSettings.instance.setDisplay(const DisplayPrefs());
     AppSettings.instance.setDefault(const ReaderPrefs());
     AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart);
@@ -350,6 +352,59 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(strip(tester).pixels, at, reason: 'off');
+  });
+
+  testWidgets("a double tap zooms the strip in about the spot - as far as a comic's page - and out again; a tap "
+      'alone waits for a second, then is a tap (user, 2026-10-22: double-tap to zoom, as comics have it)',
+      (tester) async {
+    ComicRenderer.doubleTapWait = const Duration(milliseconds: 250);
+    await open(tester); // 800 x 1200, the strip 800 wide
+    Rect first() =>
+        tester.getRect(find.descendant(of: find.byType(ListView), matching: find.byType(ProcessedPicture)).first);
+    Future<void> doubleTap(Offset at) async {
+      await tester.tapAt(at);
+      await tester.pump(const Duration(milliseconds: 80));
+      await tester.tapAt(at);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await doubleTap(const Offset(400, 300));
+    expect(first().width, closeTo(800 * PageCanvas.doubleTapScale, 1), reason: 'zoomed in');
+    expect(readerSlider(), findsNothing, reason: 'no controls: a pair is a zoom');
+    await doubleTap(const Offset(400, 300));
+    expect(first().width, closeTo(800, 1), reason: 'and out');
+
+    // one tap in the middle: the controls, once a second tap is ruled out
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(readerSlider(), findsNothing, reason: 'not yet');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(readerSlider(), findsOneWidget, reason: 'then the controls');
+
+    // switched off (Settings > Webtoons): a tap at once
+    await tester.tapAt(const Offset(400, 600)); // (the controls away)
+    await tester.pump();
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(webtoonDoubleTap: false));
+    await tester.pump();
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(readerSlider(), findsOneWidget, reason: 'no wait');
+  });
+
+  testWidgets("webtoons' image settings (user, 2026-10-22): the slices drawn as a comic's pages are "
+      '(ProcessedPicture - Enhance, Enhance colours, Crop edges); a crop takes the sides only, the strip running on',
+      (tester) async {
+    AppSettings.instance.setWebtoonDefault(AppSettings.webtoonStart.copyWith(crop: 0.04));
+    await open(tester); // 800 x 1200
+    final pictures = find.descendant(of: find.byType(ListView), matching: find.byType(ProcessedPicture));
+    expect(pictures, findsWidgets, reason: "the comics' processing");
+    final p = tester.widget<ProcessedPicture>(pictures.first);
+    expect((p.prefs.crop, p.sidesOnly), (0.04, true), reason: 'the crop, sides only');
+    final r = tester.getRect(pictures.first);
+    // 800 wide less 4% each side: 736 at its own size; the full 1280 tall - the top and bottom kept
+    expect(r.width, closeTo(736, 1));
+    expect(r.height, closeTo(1280, 1));
   });
 
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
