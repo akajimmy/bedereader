@@ -175,8 +175,9 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
     for (final entry in bySeries.entries) {
       final Map<String, dynamic> r;
       // progress saved here after this moment is newer than Komga's answer (#11: a page read online while the
-      // refresh was on its way was put back to the page before, and the next sync said Komga had changed too)
-      final asked = clock.now();
+      // refresh was on its way was put back to the page before, and the next sync said Komga had changed too). The
+      // store's own time, not package:clock's: it's compared with the times the store writes (DateTime.now())
+      final asked = DateTime.now();
       try {
         r = await api.seriesBooks(entry.key);
       } on KomgaUnreachable {

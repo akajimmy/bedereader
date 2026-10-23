@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
@@ -251,6 +252,16 @@ void main() {
     await conn.setForcedOffline(false); // going back online runs it
     await Future<void>.delayed(const Duration(milliseconds: 20));
     expect(server.writes, ['B2 page 2']);
+  });
+
+  test("a refresh compares Komga's answer with the times the store wrote, on the same clock - whatever package:clock "
+      'says (test audit, 2026-10-23: under a test\'s fixed clock the refresh took every page saved here for newer)',
+      () async {
+    Komga.onProgressWritten!(server, const ProgressWrite(bookId: 'B2', page: 1)); // read online here, a moment ago
+    server.rp['B2'] = {'page': 2, 'completed': false}; // then further on the web
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await withClock(Clock.fixed(DateTime.utc(2015)), () => sync.run()); // (a widget test's clock is 2015)
+    expect(d.store!.readProgressOf('B2')!['page'], 2, reason: "the refresh brought Komga's newer page");
   });
 
   test('downloaded copies follow Komga: reading elsewhere (refresh) and reading online here (mirror)', () async {
