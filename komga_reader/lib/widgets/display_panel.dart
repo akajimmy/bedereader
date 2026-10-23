@@ -224,7 +224,8 @@ class _ReaderPanel extends StatelessWidget {
                   onPressed: () {
                     // (a webtoon's: webtoons' defaults)
                     if (webtoon) {
-                      s.setWebtoonDefault(s.webtoonDefaults.copyWith(fit: p.fit, background: p.background));
+                      s.setWebtoonDefault(
+                          s.webtoonDefaults.copyWith(fit: p.fit, background: p.background, gutter: p.gutter));
                     } else {
                       s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
                           twoPages: p.twoPages, gutter: p.gutter));
@@ -404,6 +405,15 @@ List<Widget> webtoonLayoutRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {
         ],
         value: WebtoonView.fitOf(p.fit),
         onChanged: (f) => setP(p.copyWith(fit: f)),
+        enabled: enabled,
+      ),
+      // the space between the pictures, as a page break - comics' steps (user, 2026-10-22: "same as comics, starting
+      // with 2px")
+      SegmentRow<double>(
+        title: 'Gutter',
+        choices: [for (final g in ReaderPrefs.gutters) Choice(g, g == 0 ? 'None' : '${g.round()} px')],
+        value: ReaderPrefs.gutters.contains(p.gutter) ? p.gutter : ReaderPrefs.defaultGutter,
+        onChanged: (g) => setP(p.copyWith(gutter: g)),
         enabled: enabled,
       ),
       pageColoursRow(p, setP, enabled: enabled),

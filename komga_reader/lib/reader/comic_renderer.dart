@@ -880,6 +880,7 @@ class ComicRenderer extends Renderer {
               onPlace: _onStripPlace,
               background: background,
               fit: WebtoonView.fitOf(prefs.fit),
+              gutter: prefs.gutter,
               onWheel: wheel,
             ),
           ),
