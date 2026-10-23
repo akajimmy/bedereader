@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -9,15 +10,16 @@ import '../settings.dart' show FitMode;
 
 
 /// A webtoon read as one continuous vertical strip (user, 2026-10-22 - NOTES, "Webtoon support"): the book's pages,
-/// slices of one long strip, stacked edge to edge in a column and scrolled through. On a tall screen the column fills
-/// the width - or at its own size: [columnWidth]
-/// centred. Each slice keeps its place from Komga's page sizes before it has loaded, so the scroll never jumps.
+/// slices of one long strip, stacked in a column (a [gutter] between them) and scrolled through, at the width its fit
+/// gives ([columnWidth]), centred. Each slice keeps its place from Komga's page sizes before it has loaded, so the
+/// scroll never jumps. Two fingers zoom it (Ctrl + the wheel, the zoom keys - [WebtoonController.zoomBy]).
 ///
-/// The place is the slice across the middle of the screen ([onPlace]); after the last slice, the end card.
+/// The place is the slice across the middle of the screen ([onPlace]); after the last slice, the end card. Where in
+/// that slice the screen is ([onSettled]) is kept, to open there again ([WebtoonController.startShare]).
 class WebtoonView extends StatefulWidget {
   const WebtoonView({super.key, required this.sizes, required this.page, required this.endCard,
-      required this.controller, required this.onPlace, required this.background, this.fit = FitMode.original, this.gutter = 0,
-      this.onWheel});
+      required this.controller, required this.onPlace, required this.background, this.fit = FitMode.original,
+      this.gutter = 0, this.onWheel, this.onSettled});
 
   /// Each slice's size (Komga's - width and height in pixels; a slice with none counts as square).
   final List<Size> sizes;
@@ -42,13 +44,16 @@ class WebtoonView extends StatefulWidget {
   /// smooth scroll").
   final ValueChanged<double>? onWheel;
 
-  /// The column on an [area]: the width, or on a screen wider than tall its height (the width held upright).
-  /// The strip's width on an [area]: edge to edge ([fill] - Fit width), or its own size - one picture pixel to a
-  /// screen pixel ([imageWidth] at [pixelRatio]), never wider than the screen (user, 2026-10-22: "default should be
-  /// to show at native resolution for webtoons"; it was as wide as the screen held upright - blown up 1.5 times on
-  /// the tablet). Pictures of no known width: edge to edge.
-  /// Fit page height ([FitMode.height]; user, 2026-10-22: "fit 1 page to screen height"): one page - a full slice,
-  /// [pageRatio] wide for its height - as tall as the screen.
+  /// The strip came to rest: the slice across the middle, and how far into it the top of the screen is - a share of
+  /// that slice's height (negative: above it) - to open at exactly there again (user, 2026-10-22: "1 ... for sure" -
+  /// a page number alone opened up to a screen and a half off).
+  final void Function(int slice, double share)? onSettled;
+
+  /// The strip's width on an [area]: edge to edge (Fit width), its own size - one picture pixel to a screen pixel
+  /// ([imageWidth] at [pixelRatio]), never wider than the screen (user, 2026-10-22: "default should be to show at
+  /// native resolution for webtoons") - or Fit page height ([FitMode.height]; "fit 1 page to screen height"): one
+  /// page - a full slice, [pageRatio] wide for its height - as tall as the screen. Pictures of no known width: edge to
+  /// edge.
   static double columnWidth(Size area,
       {required FitMode fit, required double imageWidth, double pageRatio = 0, required double pixelRatio}) {
     if (fit == FitMode.width || imageWidth <= 0) return area.width;
@@ -60,20 +65,24 @@ class WebtoonView extends StatefulWidget {
   /// size (user, 2026-10-22: "original + edge to edge + fit 1 page to screen height").
   static FitMode fitOf(FitMode f) => f == FitMode.width || f == FitMode.height ? f : FitMode.original;
 
+  /// How far the strip zooms in (user, 2026-10-22: pinch to zoom, "for sure").
+  static const maxZoom = 4.0;
+
   @override
   State<WebtoonView> createState() => _WebtoonViewState();
 }
 
 /// Where the strip is and what moves it - the renderer's handle on the view ([WebtoonView]).
 class WebtoonController {
-  WebtoonController(this.start);
+  WebtoonController(this.start, {this.startShare = 0});
 
-  /// The slice to open at (its top at the top of the screen).
+  /// The slice to open at, and how far into it the top of the screen is (a share of its height; 0: its top).
   final int start;
+  final double startShare;
 
   ScrollController? _scroll;
   List<double> _tops = const []; // each slice's top, and the end card's, in the strip
-  double _view = 0; // the screen's height
+  double _view = 0; // the height the screen shows of the strip (zoomed in: less)
 
   bool get ready => _scroll?.hasClients ?? false;
   ScrollPosition? get position => ready ? _scroll!.position : null;
@@ -81,6 +90,9 @@ class WebtoonController {
 
   /// The top of slice [i] (the end card's: [i] = the slices' count).
   double topOf(int i) => _tops.isEmpty ? 0 : _tops[i.clamp(0, _tops.length - 1)];
+
+  /// Slice [i]'s height in the strip (its gutter included).
+  double heightOf(int i) => i < 0 || i + 1 >= _tops.length ? 0 : _tops[i + 1] - _tops[i];
 
   /// The slice across [y] (a point in the strip).
   int sliceAt(double y) {
@@ -115,6 +127,12 @@ class WebtoonController {
   /// A glide under way.
   bool get gliding => _state?._anim.isAnimating ?? false;
 
+  /// Zooms in ([factor] over 1) or out, about the middle of the screen - the zoom keys, Ctrl + the wheel.
+  void zoomBy(double factor) => _state?._zoomBy(factor);
+
+  /// How far it's zoomed in (1: not).
+  double get zoom => _state?._zoom ?? 1;
+
   bool get atEnd {
     final p = position;
     return p != null && p.pixels >= p.maxScrollExtent - 1;
@@ -130,15 +148,26 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
   ScrollController? _scroll;
   double _width = 0;
   int _place = -1;
+  Size _area = Size.zero;
 
   // a glide, moved here a frame at a time: the list's own animateTo has its pictures ignore the pointer while it runs,
   // so the wheel's next notch went past the reader to the list - half a spun wheel was lost
   late final AnimationController _anim = AnimationController(vsync: this)..addListener(_glideFrame);
   double _from = 0, _to = 0;
 
+  // zoom: the strip [_zoom] times bigger, [_panX] across from centred (a finger, zoomed in, moves it sideways)
+  double _zoom = 1, _panX = 0;
+  final Map<int, Offset> _fingers = {}; // fingers on the strip (two: a pinch)
+  double? _pinchFrom; // the fingers' distance as the pinch began
+  double _zoomFrom = 1;
+
+  Timer? _settle; // the place kept a moment after the strip stops
+
   @override
   void dispose() {
     if (identical(widget.controller._state, this)) widget.controller._state = null;
+    _settled(); // (closed mid-way: where it was)
+    _settle?.cancel();
     _anim.dispose();
     _scroll?.dispose();
     super.dispose();
@@ -175,11 +204,90 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
       _place = i;
       widget.onPlace(i);
     }
+    _settle?.cancel();
+    _settle = Timer(const Duration(milliseconds: 400), _settled);
+  }
+
+  /// Where the strip is: the slice across the middle, and the top of the screen as a share of it.
+  void _settled() {
+    final s = _scroll, done = widget.onSettled;
+    if (s == null || !s.hasClients || done == null) return;
+    final c = widget.controller, p = s.position;
+    final i = c.sliceAt(p.pixels + p.viewportDimension / 2);
+    final h = c.heightOf(i);
+    if (h <= 0) return; // (the end card)
+    done(i, (p.pixels - c.topOf(i)) / h);
+  }
+
+  // ---- zoom
+
+  /// Sets the zoom to [z] keeping the strip's point under [focus] (on the screen) where it is.
+  void _zoomTo(double z, Offset focus) {
+    final s = _scroll;
+    z = z.clamp(1.0, WebtoonView.maxZoom);
+    if (s == null || !s.hasClients || z == _zoom) return;
+    final old = _zoom, left = _left(old);
+    // down the strip: the point under the focus stays (the list's offset is in the strip's own points)
+    final y = s.position.pixels + focus.dy / old;
+    // across: the same
+    final x = (focus.dx - left) / old;
+    setState(() {
+      _zoom = z;
+      _panX = 0;
+      _panX = _clampPan(focus.dx - x * z - _left(z));
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && s.hasClients) s.jumpTo((y - focus.dy / z).clamp(0.0, s.position.maxScrollExtent));
+    });
+  }
+
+  void _zoomBy(double factor) => _zoomTo(_zoom * factor, _area.center(Offset.zero));
+
+  /// The strip's left edge on the screen at zoom [z] (centred, then panned).
+  double _left(double z) => (_area.width - _width * z) / 2 + _panX;
+
+  /// [pan] kept so the zoomed strip covers the screen's width where it's wider (centred where it isn't).
+  double _clampPan(double pan) {
+    final spare = (_width * _zoom - _area.width) / 2;
+    return spare <= 0 ? 0 : pan.clamp(-spare, spare);
+  }
+
+  void _onDown(PointerDownEvent e) {
+    _stopGlide();
+    if (e.kind == PointerDeviceKind.mouse) return;
+    _fingers[e.pointer] = e.localPosition;
+    if (_fingers.length == 2) {
+      final f = _fingers.values.toList();
+      _pinchFrom = (f[0] - f[1]).distance;
+      _zoomFrom = _zoom;
+      setState(() {}); // (the list stops following the fingers - below)
+    }
+  }
+
+  void _onMove(PointerMoveEvent e) {
+    if (!_fingers.containsKey(e.pointer)) return;
+    final before = _fingers[e.pointer]!;
+    _fingers[e.pointer] = e.localPosition;
+    final from = _pinchFrom;
+    if (_fingers.length >= 2 && from != null && from > 0) {
+      final f = _fingers.values.toList();
+      _zoomTo(_zoomFrom * (f[0] - f[1]).distance / from, (f[0] + f[1]) / 2);
+    } else if (_fingers.length == 1 && _zoom > 1) {
+      // zoomed in, one finger: sideways moves the strip across (down the strip is the list's)
+      final pan = _clampPan(_panX + e.localPosition.dx - before.dx);
+      if (pan != _panX) setState(() => _panX = pan);
+    }
+  }
+
+  void _onUp(PointerEvent e) {
+    if (_fingers.remove(e.pointer) == null) return;
+    if (_fingers.length < 2 && _pinchFrom != null) setState(() => _pinchFrom = null);
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, box) {
         final area = Size(box.maxWidth, box.maxHeight);
+        _area = area;
         // (a full page: the tallest - the last slice is often short)
         final tallest = widget.sizes.fold(Size.zero, (t, s) => s.height > t.height ? s : t);
         final width = WebtoonView.columnWidth(area,
@@ -198,12 +306,15 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
         for (final h in heights) {
           tops.add(tops.last + h);
         }
+        final view = area.height / _zoom; // (zoomed in, the screen shows less of the strip)
         final c = widget.controller
           .._tops = tops
-          .._view = area.height;
+          .._view = view;
         if (_scroll == null) {
-          // opened at the place: its slice's top at the top of the screen
-          _scroll = ScrollController(initialScrollOffset: tops[c.start.clamp(0, tops.length - 1)])
+          // opened at the place: as far into its slice as when it was left (else its top) at the top of the screen
+          final start = c.start.clamp(0, tops.length - 1);
+          final h = start + 1 < tops.length ? tops[start + 1] - tops[start] : 0.0;
+          _scroll = ScrollController(initialScrollOffset: math.max(0, tops[start] + c.startShare * h))
             ..addListener(_onScroll);
           _place = c.start;
         } else if (width != _width && _scroll!.hasClients && _width > 0) {
@@ -215,41 +326,69 @@ class _WebtoonViewState extends State<WebtoonView> with SingleTickerProviderStat
           });
         }
         _width = width;
+        _panX = _clampPan(_panX);
         c
           .._scroll = _scroll
           .._state = this;
-        return Listener(
-          onPointerDown: (_) => _stopGlide(),
-          child: ColoredBox(
-          color: widget.background,
-          child: Center(
-            child: SizedBox(
-              width: width,
-              child: ListView.builder(
-                controller: _scroll,
-                // every slice's height known ahead (Komga's sizes): no jumps as they load
-                itemExtentBuilder: (i, _) => i < heights.length ? heights[i] : area.height,
-                itemCount: heights.length + 1, // + the end card
-                scrollCacheExtent: ScrollCacheExtent.pixels(area.height), // a screen's worth ready either side
-                // (each item hears the wheel before the list does: the wheel is the reader's - [onWheel])
-                itemBuilder: (context, i) => Listener(
-                  onPointerSignal: (e) {
-                    final wheel = widget.onWheel;
-                    if (wheel != null && e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
-                      GestureBinding.instance.pointerSignalResolver
-                          .register(e, (ev) => wheel((ev as PointerScrollEvent).scrollDelta.dy));
-                    }
-                  },
-                  child: i < heights.length
-                      ? Padding(
-                          padding: EdgeInsets.only(bottom: i < heights.length - 1 ? gap : 0),
-                          child: widget.page(context, i))
-                      : OverflowBox(maxWidth: area.width, child: widget.endCard()),
-                ),
-              ),
-            ),
+        final list = ListView.builder(
+          controller: _scroll,
+          // two fingers on it: a pinch, not a scroll
+          physics: _pinchFrom != null ? const NeverScrollableScrollPhysics() : null,
+          // every slice's height known ahead (Komga's sizes): no jumps as they load
+          itemExtentBuilder: (i, _) => i < heights.length ? heights[i] : area.height,
+          itemCount: heights.length + 1, // + the end card
+          scrollCacheExtent: ScrollCacheExtent.pixels(area.height), // a screen's worth ready either side
+          // (each item hears the wheel before the list does: the wheel is the reader's - [onWheel]; with Ctrl, a zoom)
+          itemBuilder: (context, i) => Listener(
+            onPointerSignal: (e) {
+              if (e is! PointerScrollEvent) return;
+              if (HardwareKeyboard.instance.isControlPressed) {
+                GestureBinding.instance.pointerSignalResolver.register(e, (ev) {
+                  final dy = (ev as PointerScrollEvent).scrollDelta.dy;
+                  final at = _localOf(ev.position); // (the pointer, on the screen)
+                  _zoomTo(_zoom * (dy < 0 ? 1.15 : 1 / 1.15), at);
+                });
+                return;
+              }
+              final wheel = widget.onWheel;
+              if (wheel != null) {
+                GestureBinding.instance.pointerSignalResolver
+                    .register(e, (ev) => wheel((ev as PointerScrollEvent).scrollDelta.dy));
+              }
+            },
+            child: i < heights.length
+                ? Padding(
+                    padding: EdgeInsets.only(bottom: i < heights.length - 1 ? gap : 0),
+                    child: widget.page(context, i))
+                : OverflowBox(maxWidth: area.width / _zoom, child: widget.endCard()),
           ),
+        );
+        return Listener(
+          onPointerDown: _onDown,
+          onPointerMove: _onMove,
+          onPointerUp: _onUp,
+          onPointerCancel: _onUp,
+          child: ColoredBox(
+            color: widget.background,
+            child: ClipRect(
+              child: Stack(children: [
+                // the column, [_zoom] times bigger from its top-left corner, placed centred (then panned)
+                Positioned(
+                  left: _left(_zoom),
+                  top: 0,
+                  width: width,
+                  height: view,
+                  child: Transform.scale(scale: _zoom, alignment: Alignment.topLeft, child: list),
+                ),
+              ]),
+            ),
           ),
         );
       });
+
+  /// [global] (the screen) in this view's own terms.
+  Offset _localOf(Offset global) {
+    final box = context.findRenderObject() as RenderBox?;
+    return box == null ? global : box.globalToLocal(global);
+  }
 }

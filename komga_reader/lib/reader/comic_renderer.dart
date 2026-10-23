@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api.dart';
 import '../book_title.dart';
 import '../errors.dart';
@@ -30,9 +32,30 @@ class NoPages implements Exception {}
 
 /// A comic's pages loaded for showing (from [ComicRenderer.prepare]).
 class ComicPages {
-  const ComicPages(this.pages, this.direction);
+  const ComicPages(this.pages, this.direction, {this.stripPlace});
   final List<dynamic> pages;
   final String? direction; // the series' reading direction in Komga
+
+  /// A webtoon: where in the strip it was left on this device ([StripPlaces]) - null: nowhere kept.
+  final (int, double)? stripPlace;
+}
+
+/// Where in a webtoon's strip each book was left, on this device: the slice across the middle of the screen and how
+/// far into it the top of the screen was (a share of its height) - Komga keeps only the page, which opened up to a
+/// screen and a half off (user, 2026-10-22: "1 ... for sure"). Used when Komga's page is still that slice (another
+/// device that moved on wins).
+class StripPlaces {
+  static String _key(String bookId) => 'strip.place.$bookId';
+
+  static Future<(int, double)?> load(String bookId) async {
+    final v = (await SharedPreferences.getInstance()).getString(_key(bookId))?.split(':');
+    final page = v == null || v.length != 2 ? null : int.tryParse(v[0]);
+    final share = v == null || v.length != 2 ? null : double.tryParse(v[1]);
+    return page == null || share == null ? null : (page, share);
+  }
+
+  static Future<void> save(String bookId, int page, double share) async =>
+      (await SharedPreferences.getInstance()).setString(_key(bookId), '$page:${share.toStringAsFixed(4)}');
 }
 
 /// The comic renderer (the one Reader, user 2026-10-07): a book's page images - the page view and its turns (wipe,
@@ -183,6 +206,7 @@ class ComicRenderer extends Renderer {
       };
 
   WebtoonController? _strip; // the strip's place and scrolling, while a webtoon is shown
+  (int, double)? _stripPlace; // where in the strip the book was left here (opening it)
   bool _wasWebtoon = false; // (paged again: the page view on the place read in the strip)
 
   // ---- opening a book
@@ -202,7 +226,9 @@ class ComicRenderer extends Renderer {
         direction = null; // unknown: left to right
       }
     }
-    return ComicPages(pages, direction);
+    // a webtoon: where in the strip it was left here
+    final place = direction == 'WEBTOON' ? await StripPlaces.load(book['id'] as String) : null;
+    return ComicPages(pages, direction, stripPlace: place);
   }
 
   /// The page [book] opens at: where its progress is (a finished one: the start).
@@ -241,6 +267,7 @@ class ComicRenderer extends Renderer {
     this.pages = pages;
     index = start;
     _strip = null; // (a webtoon opens at its place)
+    _stripPlace = prepared.stripPlace;
     _loader = loader;
     zoomed = false;
     _bookFit = null;
@@ -525,7 +552,10 @@ class ComicRenderer extends Renderer {
   /// A Zoom in / Zoom out step (the keys) - fit screen, the only fit that zooms.
   @override
   void zoomStep(bool zoomIn) {
-    if (webtoon) return;
+    if (webtoon) {
+      _strip?.zoomBy(zoomIn ? 1.25 : 1 / 1.25);
+      return;
+    }
     if (prefs.fit == FitMode.screen) _zoomSteps[_at]?.call(zoomIn);
   }
 
@@ -835,7 +865,10 @@ class ComicRenderer extends Renderer {
 
   /// A webtoon's strip ([WebtoonView]) with the reader's taps, wheel and right-click.
   Widget _webtoonView(BuildContext context) {
-    final strip = _strip ??= WebtoonController(index.clamp(0, pages.length));
+    // opened on the page it was left on here: just as far into it as then (Komga keeps only the page)
+    final kept = _stripPlace;
+    final strip = _strip ??= WebtoonController(index.clamp(0, pages.length),
+        startShare: kept != null && kept.$1 == index ? kept.$2 : 0);
     return LayoutBuilder(builder: (context, box) {
       _area = Size(box.maxWidth, box.maxHeight);
       return Listener(
@@ -882,6 +915,11 @@ class ComicRenderer extends Renderer {
               fit: WebtoonView.fitOf(prefs.fit),
               gutter: prefs.gutter,
               onWheel: wheel,
+              onSettled: (slice, share) {
+                final id = _book['id'] as String?;
+                if (id != null) unawaited(StripPlaces.save(id, slice, share));
+                _stripPlace = (slice, share);
+              },
             ),
           ),
         ),
