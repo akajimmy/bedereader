@@ -152,7 +152,7 @@ void main() {
     await tester.tap(find.text('Reset keys'));
     await tester.pumpAndSettle();
     expect(k.isDefault, isTrue);
-  });
+  }, tags: 'slow');
 
   testWidgets('Settings: + Add takes Volume down (and any key) even with the focus outside the dialog - on the '
       'tablet the dialog never got a key (user, build 92: "it does not let me set the volume keys")', (tester) async {

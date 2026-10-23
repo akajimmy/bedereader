@@ -136,7 +136,7 @@ void main() {
     expect(find.text('Silver Surfer'), findsOneWidget);
     expect(find.text('Spider-Man'), findsOneWidget);
     expect(find.text('2'), findsOneWidget); // header count: 2 series downloaded
-  });
+  }, tags: 'slow');
 
   group('offline filter', () {
     late Directory dir;

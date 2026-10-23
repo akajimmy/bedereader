@@ -178,7 +178,7 @@ void main() {
       await tester.pumpWidget(const SizedBox()); // closed without a turn
       expect(api.saves, isEmpty, reason: '$why: opening at the saved page is not a turn');
     }
-  });
+  }, tags: 'slow');
 
   // ---- 2
   testWidgets('Mark read / Mark unread in the controls: Komga is told, the tick follows, and the page save after a turn '

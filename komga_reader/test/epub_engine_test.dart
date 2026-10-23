@@ -133,7 +133,7 @@ void main() {
     }
     expect(pagesChecked, greaterThan(300));
     expect(broken, 0, reason: 'pages ending "ea-"');
-  });
+  }, tags: 'slow');
 
   test("paginator: long text runs over several pages, none of them empty; pages know the chapter position they start "
       'at: rising, the first at 0; a position finds its page, at any text size', () {

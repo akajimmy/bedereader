@@ -89,7 +89,7 @@ void main() {
       await settle(tester);
     }
     expect(Pins.instance.items, hasLength(3));
-  });
+  }, tags: 'slow');
 
   testWidgets('collections have a menu: a right-click on one in the library opens it', (tester) async {
     final api = await server();

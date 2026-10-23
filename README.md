@@ -298,6 +298,9 @@ spelling is displayed, typed, searched and used in file names.
 - GitHub runs `flutter analyze` and the tests on every push and pull request (`.github\workflows\checks.yml`).
   Analyze fails on lint findings too, including a Future left un-awaited (`unawaited_futures`): await it, or wrap it
   in `unawaited(...)` when it's meant to run on its own.
+- While working on a change, flutter test -x slow runs everything but the tests tagged slow (dart_test.yaml); the
+  build runs them all. Time the app's logic depends on (throttles, gaps, retries) is read through package:clock, so
+  a widget test moves it on with its own clock instead of waiting.
 - New behaviour gets a test in `test\`, and a fix gets a test that fails without it. Shared test code is in
   `test\support\`:
   - fakes of Komga extend `TestKomga` and are built through `noNetwork(...)`, so any call a fake doesn't answer fails

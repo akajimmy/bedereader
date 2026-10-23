@@ -214,7 +214,7 @@ void main() {
     await run(tester, const Duration(milliseconds: 300));
     expect(api.puts, isEmpty, reason: 'nothing turned: nothing saved, not even on closing (another device\'s place '
         'stays)');
-  });
+  }, tags: 'slow');
 
   testWidgets('a turn is saved once the page has been on screen 1.5 s (quick turns: only the last); the end card '
       'marks the book read', (tester) async {

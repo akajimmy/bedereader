@@ -235,7 +235,7 @@ void main() {
     expect(focused('reader-keys'), isTrue); // Down from the bottom bar = nothing selected
     await key(tester, LogicalKeyboardKey.enter);
     expect(find.byTooltip('Next book'), findsNothing); // OK with nothing selected hides
-  });
+  }, tags: 'slow');
 
   testWidgets('remote: OK on a control presses it (fit button cycles the fit mode)', (tester) async {
     await openReader(tester);
@@ -1606,7 +1606,7 @@ void main() {
         expect(find.text('Page copied'), findsOneWidget);
         await clearMessages(tester);
         debugDefaultTargetPlatformOverride = null;
-      });
+      }, tags: 'slow');
 
       testWidgets("saving that fails says so; on the end card there's no page, so no Save / Copy", (tester) async {
         answer = (c) => c.method == 'savePicture' ? throw PlatformException(code: 'save', message: 'disk full') : null;
@@ -1746,7 +1746,7 @@ void main() {
         final screen = tester.getRect(find.byKey(strip));
         expect(picked.center.dx, closeTo(screen.center.dx, 2), reason: 'page 100 in the middle: $picked in $screen');
         await tester.pump(const Duration(seconds: 2));
-      });
+      }, tags: 'slow');
 
       testWidgets('scrubbing the slider moves the strip with it, to the page being picked; letting go, it stays on '
           'the page gone to (user, 2026-10-03)', (tester) async {
