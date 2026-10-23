@@ -60,4 +60,24 @@ void main() {
     expect(saved['page'], 4);
     expect(saved['place'], place);
   });
+
+  test('written waits for the saves still on their way, so a test can delete the folder after it (a book deleted '
+      "once read: its index save lost the folder mid-write - build 144's run, 2026-10-22); a failed save doesn't "
+      'fail it', () async {
+    final s = OfflineStore(dir);
+    s.books['B1'] = {'book': {'id': 'B1'}, 'pages': [], 'state': 'done'};
+    final first = s.save(); // not awaited, as Downloads' delete-once-read isn't
+    s.books['B2'] = {'book': {'id': 'B2'}, 'pages': [], 'state': 'done'};
+    final second = s.save();
+    await s.written;
+    expect(((jsonDecode(await f('index.json').readAsString()) as Map)['books'] as Map).keys, ['B1', 'B2']);
+    expect(await f('index.json.tmp').exists(), isFalse, reason: 'nothing left half-done');
+    await Future.wait([first, second]);
+
+    final blocker = await Directory('${dir.path}${Platform.pathSeparator}index.json.tmp').create();
+    final failed = s.save();
+    await expectLater(failed, throwsA(isA<FileSystemException>()));
+    await s.written; // completes
+    await blocker.delete();
+  });
 }
