@@ -5,13 +5,13 @@ import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
 import '../view_filter.dart';
-import '../view_prefs.dart';
 import '../view_sort.dart';
 import '../widgets/breadcrumb.dart';
 import '../widgets/drawer.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/poster.dart';
 import '../widgets/refresh_on_return.dart';
+import '../widgets/remembered_view.dart';
 import '../widgets/selection.dart';
 import '../widgets/view_bar.dart';
 import 'actions.dart';
@@ -28,16 +28,21 @@ class SeriesScreen extends StatefulWidget {
   State<SeriesScreen> createState() => _SeriesScreenState();
 }
 
-class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshOnReturn, ViewFilters {
+class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshOnReturn, ViewFilters, RememberedView {
   @override
   void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
 
-  ReadFilter _filter = ReadFilter.all;
-  ViewSort _sort = ViewSort.first(seriesBookSorts); // issue order: oldest first unless changed
-  late final Paged _paged = Paged((page, size) => seriesBooksPage(widget.api, _id, _sort,
-      read: _filter, filter: filters, page: page, size: size));
+  @override
+  List<SortField> get sorts => seriesBookSorts; // issue order: oldest first unless changed
+  @override
+  Pin? get pin => widget.pin;
+  @override
+  Paged get paged => _paged;
+  late final Paged _paged = Paged((page, size) => seriesBooksPage(widget.api, _id, sort,
+      read: readFilter, filter: filters, page: page, size: size));
   String get _id => widget.series['id'] as String;
-  String get _viewKey => 'view.series.${widget.series['id']}';
+  @override
+  String get viewKey => 'view.series.${widget.series['id']}';
 
   // ---- the filter panel: book filters
   @override
@@ -52,21 +57,15 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
   @override
   FilterScope filterScope(Future<ViewKind> kind) => FilterScope(api: widget.api, seriesView: false, seriesId: _id,
       kind: kind, count: (draft) => countOf((page, size) =>
-          seriesBooksPage(widget.api, _id, _sort, read: _filter, filter: draft, page: page, size: size)));
+          seriesBooksPage(widget.api, _id, sort, read: readFilter, filter: draft, page: page, size: size)));
 
-  @override
-  void applyFilters(ViewFilter f) {
-    setState(() => filters = f);
-    _save();
-    _paged.reset();
-  }
   final _sel = Selection();
   late final Future<String?> _library = widget.api.libraryName(widget.series['libraryId'] as String?); // breadcrumb
 
   @override
   void initState() {
     super.initState();
-    _restore().then((_) { if (mounted) { setState(() {}); _paged.more(); } });
+    openView();
     _noteWebtoon();
   }
 
@@ -84,36 +83,6 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
       }
     }
     if (AppSettings.instance.noteDirection(_id, direction) && mounted) setState(() {});
-  }
-
-  /// From the pin it was opened from, else this series' remembered view.
-  Future<void> _restore() async {
-    final pin = widget.pin;
-    if (pin != null) {
-      _filter = pin.readFilter;
-      _sort = ViewSort.fromPin(seriesBookSorts, pin.sort); // "number:desc": newest first; none: oldest first
-      filters = pin.filters;
-    } else {
-      final v = await ViewPrefs.load(_viewKey);
-      _filter = ReadFilterApi.fromName(v['filter']);
-      _sort = ViewSort.of(seriesBookSorts, v['sort'], v['desc']);
-      filters = ViewPrefs.filtersOf(v);
-    }
-  }
-
-  void _save() => ViewPrefs.save(_viewKey,
-      ViewPrefs.withFilters({'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc}, filters));
-
-  void _setFilter(ReadFilter f) {
-    setState(() => _filter = f);
-    _save();
-    _paged.reset();
-  }
-
-  void _setSort(ViewSort s) {
-    setState(() => _sort = s);
-    _save();
-    _paged.reset();
   }
 
   @override
@@ -144,17 +113,17 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
         bottom: filterChips(),
         actions: viewBarActions(
           paged: _paged,
-          filter: _filter, onFilter: _setFilter,
+          filter: readFilter, onFilter: setReadFilter,
           filters: filterButton(),
-          sort: SortMenuButton(fields: seriesBookSorts, value: _sort, onChanged: _setSort),
+          sort: SortMenuButton(fields: seriesBookSorts, value: sort, onChanged: setViewSort),
           select: _sel,
           pin: Pin(
-            name: [title, if (_filter.shows != null) _filter.shows!, if (_sort.words(seriesBookSorts) != null)
-                _sort.words(seriesBookSorts)!, ...filterWords()].join(' · '),
+            name: [title, if (readFilter.shows != null) readFilter.shows!, if (sort.words(seriesBookSorts) != null)
+                sort.words(seriesBookSorts)!, ...filterWords()].join(' · '),
             kind: 'series', id: s['id'] as String, title: title,
-            filter: _filter.name, filters: activeFilters,
+            filter: readFilter.name, filters: activeFilters,
             // null = oldest first, as pins made before sorts have; "number:desc" newest first, as it always was
-            sort: _sort.isDefault(seriesBookSorts) ? null : _sort.pinValue,
+            sort: sort.isDefault(seriesBookSorts) ? null : sort.pinValue,
           ),
           onRefresh: _paged.refresh,
           onMore: () => showSeriesActions(context, widget.api, s, onChanged: _paged.refresh, inSeries: true),
@@ -166,7 +135,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
         itemBuilder: (context, b, i) => bookTile(context, widget.api, b, autofocus: i == 0, onChanged: _paged.refresh,
             selection: _sel, showViewSeries: false, onOpen: () async {
           await Navigator.of(context).push(MaterialPageRoute(builder: (_) => readerFor(widget.api, b,
-              skipRead: _filter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
+              skipRead: readFilter == ReadFilter.hideRead))); // coming back loads afresh: refreshView
         }),
       )),
     )));
@@ -184,15 +153,20 @@ class SeriesListScreen extends StatefulWidget {
   State<SeriesListScreen> createState() => _SeriesListScreenState();
 }
 
-class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, RefreshOnReturn, ViewFilters {
+class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, RefreshOnReturn, ViewFilters, RememberedView {
   @override
   void refreshView() => _paged.refresh(); // back on top, however it got there (lib/widgets/refresh_on_return.dart)
 
-  ReadFilter _filter = ReadFilter.all;
-  ViewSort _sort = ViewSort.first(collectionSeriesSorts);
-  late final Paged _paged = Paged((page, size) => collectionSeriesPage(widget.api, widget.collectionId, _sort,
-      read: _filter, filter: filters, page: page, size: size));
-  String get _viewKey => 'view.collection.${widget.collectionId}';
+  @override
+  List<SortField> get sorts => collectionSeriesSorts;
+  @override
+  Pin? get pin => widget.pin;
+  @override
+  Paged get paged => _paged;
+  late final Paged _paged = Paged((page, size) => collectionSeriesPage(widget.api, widget.collectionId, sort,
+      read: readFilter, filter: filters, page: page, size: size));
+  @override
+  String get viewKey => 'view.collection.${widget.collectionId}';
   final _sel = Selection();
 
   // ---- the filter panel: series filters
@@ -212,50 +186,14 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
   FilterScope filterScope(Future<ViewKind> kind) => FilterScope(api: widget.api, seriesView: true,
       collectionId: widget.collectionId, kind: kind, count: (draft) => countOf((page, size) =>
           // counted by title: the same series, without the whole collection that its own order needs
-          collectionSeriesPage(widget.api, widget.collectionId, const ViewSort('title', false), read: _filter,
+          collectionSeriesPage(widget.api, widget.collectionId, const ViewSort('title', false), read: readFilter,
               filter: draft, page: page, size: size)));
 
-  @override
-  void applyFilters(ViewFilter f) {
-    setState(() => filters = f);
-    _save();
-    _paged.reset();
-  }
 
   @override
   void initState() {
     super.initState();
-    _restore().then((_) { if (mounted) { setState(() {}); _paged.more(); } });
-  }
-
-  /// From the pin it was opened from, else this collection's remembered view.
-  Future<void> _restore() async {
-    final pin = widget.pin;
-    if (pin != null) {
-      _filter = pin.readFilter;
-      _sort = ViewSort.fromPin(collectionSeriesSorts, pin.sort);
-      filters = pin.filters;
-    } else {
-      final v = await ViewPrefs.load(_viewKey);
-      _filter = ReadFilterApi.fromName(v['filter']);
-      _sort = ViewSort.of(collectionSeriesSorts, v['sort'], v['desc']);
-      filters = ViewPrefs.filtersOf(v);
-    }
-  }
-
-  void _save() => ViewPrefs.save(_viewKey,
-      ViewPrefs.withFilters({'filter': _filter.name, 'sort': _sort.key, 'desc': _sort.desc}, filters));
-
-  void _setFilter(ReadFilter f) {
-    setState(() => _filter = f);
-    _save();
-    _paged.reset();
-  }
-
-  void _setSort(ViewSort s) {
-    setState(() => _sort = s);
-    _save();
-    _paged.reset();
+    openView();
   }
 
   @override
@@ -279,17 +217,17 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
           bottom: filterChips(),
           actions: viewBarActions(
             paged: _paged,
-            filter: _filter, onFilter: _setFilter,
+            filter: readFilter, onFilter: setReadFilter,
             filters: filterButton(),
-            sort: SortMenuButton(fields: collectionSeriesSorts, value: _sort, onChanged: _setSort),
+            sort: SortMenuButton(fields: collectionSeriesSorts, value: sort, onChanged: setViewSort),
             select: _sel,
             pin: Pin(
-              name: [widget.title, if (_filter.shows != null) _filter.shows!,
-                  if (_sort.words(collectionSeriesSorts) != null) _sort.words(collectionSeriesSorts)!,
+              name: [widget.title, if (readFilter.shows != null) readFilter.shows!,
+                  if (sort.words(collectionSeriesSorts) != null) sort.words(collectionSeriesSorts)!,
                   ...filterWords()].join(' · '),
-              kind: 'collection', id: widget.collectionId, title: widget.title, filter: _filter.name,
+              kind: 'collection', id: widget.collectionId, title: widget.title, filter: readFilter.name,
               filters: activeFilters,
-              sort: _sort.isDefault(collectionSeriesSorts) ? null : _sort.pinValue, // null: as pins made before sorts
+              sort: sort.isDefault(collectionSeriesSorts) ? null : sort.pinValue, // null: as pins made before sorts
             ),
             onRefresh: _paged.refresh,
           )),
