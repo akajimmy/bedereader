@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
+- Webtoons: auto-scroll. A play button on the bottom bar scrolls the strip down by itself and puts the controls away; any touch stops it, and it stops at the end. Its speed is a slider over the bottom bar (kept on this device). Settings > Remote and keys has three new actions with no key by default: Auto-scroll on / off, Auto-scroll faster, Auto-scroll slower.
 - Webtoons open again exactly where you left them on this device, not at the top of that page (Komga keeps only the page; if another device has moved on to a different page, it opens at that page's top as before).
 - Webtoons: pinch to zoom (up to 4 times, about the point between your fingers); zoomed in, one finger moves the strip across. On the PC, Ctrl + the wheel and the zoom keys zoom too. Each book opens unzoomed.
 - Webtoons: a Gutter setting - the space between one picture and the next, in the page colours, like a page break: None, 2 px (the default), 8 px or 16 px. A reading default on the Webtoons page, and per series in Webtoon settings.

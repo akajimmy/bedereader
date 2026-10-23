@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart' show PageData;
 import 'package:komga_reader/reader/comic_renderer.dart';
+import 'package:komga_reader/reader_keys.dart';
 import 'package:komga_reader/reader/webtoon_view.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -27,6 +28,10 @@ class _Strip extends ReaderServer {
   @override
   Future<Uint8List> pageThumbBytes(String bookId, int number) async => png;
 }
+
+/// The reader's own slider (a webtoon also shows auto-scroll's speed).
+Finder readerSlider() =>
+    find.byWidgetPredicate((w) => w is Slider && w.key != const ValueKey('auto-scroll-speed'));
 
 void main() {
   setUp(() {
@@ -59,7 +64,8 @@ void main() {
   }
 
   ScrollPosition strip(WidgetTester tester) => tester
-      .state<ScrollableState>(find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)))
+      // (the strip's own - the end card can hold another)
+      .state<ScrollableState>(find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first)
       .position;
 
   Future<void> settle(WidgetTester tester) async {
@@ -174,10 +180,10 @@ void main() {
     await tester.tapAt(const Offset(400, 100));
     await settle(tester);
     expect(strip(tester).pixels, closeTo(0, 1), reason: 'back up');
-    expect(find.byType(Slider), findsNothing);
+    expect(readerSlider(), findsNothing);
     await tester.tapAt(const Offset(760, 600)); // the right side, half way down: the middle zone
     await tester.pump();
-    expect(find.byType(Slider), findsOneWidget, reason: 'the controls');
+    expect(readerSlider(), findsOneWidget, reason: 'the controls');
     expect(strip(tester).pixels, closeTo(0, 1), reason: 'no scroll');
   });
 
@@ -252,6 +258,82 @@ void main() {
     expect(first().width, closeTo(800, 1), reason: 'not under its own size');
   });
 
+  testWidgets('auto-scroll (user, 2026-10-22): the play button scrolls the strip down by itself at its speed and puts '
+      'the controls away; any touch stops it; it stops at the end', (tester) async {
+    AppSettings.instance.setDisplay(const DisplayPrefs(autoScrollSpeed: 100));
+    await open(tester);
+    await tester.tapAt(const Offset(400, 600)); // the controls
+    await tester.pump();
+    await tester.tap(find.byTooltip('Auto-scroll'));
+    await tester.pump();
+    expect(readerSlider(), findsNothing, reason: 'the controls away, to read');
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(100, 10), reason: 'a second at 100 points a second');
+
+    // a touch stops it
+    final g = await tester.startGesture(const Offset(400, 300));
+    await g.up();
+    await tester.pump();
+    final stopped = strip(tester).pixels;
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(stopped, 1), reason: 'stopped');
+
+    // the end: it stops there (the end card)
+    strip(tester).jumpTo(strip(tester).maxScrollExtent - 50);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600)); // (the controls a tap showed)
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    if (find.byTooltip('Auto-scroll').evaluate().isEmpty) {
+      await tester.tapAt(const Offset(400, 600));
+      await tester.pump();
+    }
+    await tester.tap(find.byTooltip('Auto-scroll'));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, strip(tester).maxScrollExtent, reason: 'at the end');
+    await tester.tapAt(const Offset(400, 600));
+    await tester.pump();
+    expect(find.byTooltip('Auto-scroll'), findsOneWidget, reason: 'not playing any more');
+  });
+
+  testWidgets("auto-scroll's keys - none by default; given keys, one starts and stops it and the others change its "
+      'speed (user, 2026-10-22: "create new empty hotkeys for scroll speed")', (tester) async {
+    for (final a in [ReaderAction.autoScroll, ReaderAction.scrollFaster, ReaderAction.scrollSlower]) {
+      expect(ReaderKeys.defaults[a], isEmpty, reason: '${a.name}: no key by default');
+    }
+    addTearDown(ReaderKeys.instance.reset);
+    await ReaderKeys.instance.assign(ReaderAction.autoScroll, LogicalKeyboardKey.keyA);
+    await ReaderKeys.instance.assign(ReaderAction.scrollFaster, LogicalKeyboardKey.keyF);
+    await ReaderKeys.instance.assign(ReaderAction.scrollSlower, LogicalKeyboardKey.keyS);
+    AppSettings.instance.setDisplay(const DisplayPrefs(autoScrollSpeed: 100));
+    await open(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.pump();
+    expect(AppSettings.instance.display.autoScrollSpeed, closeTo(125, 0.01), reason: 'faster, and kept');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.pump();
+    expect(AppSettings.instance.display.autoScrollSpeed, closeTo(80, 0.01), reason: 'slower');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA); // on
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, closeTo(80, 10), reason: 'a second at 80');
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA); // off
+    await tester.pump();
+    final at = strip(tester).pixels;
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(strip(tester).pixels, at, reason: 'off');
+  });
+
   testWidgets('opens at the page its progress is on - that slice at the top', (tester) async {
     await open(tester, start: 4);
     expect(strip(tester).pixels, 3 * (1280.0 + ReaderPrefs.defaultGutter), reason: 'three slices and their gutters');
@@ -288,7 +370,7 @@ void main() {
     // the middle of the screen at 2000 + 600 = 2600: the third slice (from 2560) - on the slider, the controls up
     await tester.tapAt(const Offset(400, 600));
     await tester.pump();
-    expect(tester.widget<Slider>(find.byType(Slider)).value, 2);
+    expect(tester.widget<Slider>(readerSlider()).value, 2);
   });
 
   testWidgets('a tap at the side glides a short way (Smooth) or most of a screen (Page); the other side back; a held '

@@ -296,7 +296,15 @@ class ComicRenderer extends Renderer {
 
   // ---- the strip as the Reader's row over the bottom bar; the slider's Up / Down
   @override
-  Widget? above(BuildContext context) => stripShown ? strip(context) : null;
+  Widget? above(BuildContext context) {
+    // a webtoon: auto-scroll's speed, over the bar its button is on
+    if (webtoon && _strip != null) {
+      return stripShown
+          ? Column(mainAxisSize: MainAxisSize.min, children: [_autoSpeedRow(context), strip(context)])
+          : _autoSpeedRow(context);
+    }
+    return stripShown ? strip(context) : null;
+  }
   @override
   FocusNode? get rowNode => stripShown ? stripNode : null;
   @override
@@ -402,6 +410,8 @@ class ComicRenderer extends Renderer {
   void dispose() {
     _disposed = true;
     _tapTimer?.cancel();
+    _autoAwake?.cancel();
+    autoNode.dispose();
     _curl.dispose();
     _idle?.complete(); // nothing left waiting
     pc?.dispose();
@@ -578,6 +588,68 @@ class ComicRenderer extends Renderer {
   }
 
   /// The strip moved to slice [i] ([pages.length]: the end card).
+  // ---- a webtoon's auto-scroll (user, 2026-10-22): the play button (the bottom bar), its speed slider over it, its
+  // keys; any touch on the strip stops it, as does the end
+  final autoNode = FocusNode(debugLabel: 'ctl-auto');
+  Timer? _autoAwake; // the screen kept on while it scrolls by itself (no page turns to count)
+
+  bool get autoScrolling => _strip?.autoOn ?? false;
+
+  @override
+  void autoScrollToggle() {
+    final s = _strip;
+    if (!webtoon || s == null) return;
+    if (s.autoOn) {
+      s.stopAuto();
+      _autoStopped();
+      return;
+    }
+    s
+      ..autoSpeed = _settings.display.autoScrollSpeed
+      ..startAuto();
+    host.awake();
+    _autoAwake?.cancel();
+    _autoAwake = Timer.periodic(const Duration(seconds: 20), (_) => host.awake());
+    host.hideControls(); // (to read)
+    _changed();
+  }
+
+  void _autoStopped() {
+    _autoAwake?.cancel();
+    _autoAwake = null;
+    _changed();
+  }
+
+  @override
+  void autoScrollSpeed({required bool faster}) {
+    if (!webtoon) return;
+    _setAutoSpeed(_settings.display.autoScrollSpeed * (faster ? 1.25 : 1 / 1.25));
+  }
+
+  void _setAutoSpeed(double v) {
+    final speed = v.clamp(DisplayPrefs.autoScrollSlowest, DisplayPrefs.autoScrollFastest).toDouble();
+    _strip?.autoSpeed = speed;
+    _settings.setDisplay(_settings.display.copyWith(autoScrollSpeed: speed));
+  }
+
+  /// The speed over the bottom bar, a webtoon's (its play button is on the bar).
+  Widget _autoSpeedRow(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(children: [
+          const Icon(Icons.speed, color: Colors.white70, size: 20),
+          Expanded(
+            child: Slider(
+              key: const ValueKey('auto-scroll-speed'),
+              min: DisplayPrefs.autoScrollSlowest,
+              max: DisplayPrefs.autoScrollFastest,
+              value: _settings.display.autoScrollSpeed,
+              label: 'Auto-scroll speed',
+              onChanged: _setAutoSpeed,
+            ),
+          ),
+        ]),
+      );
+
   void _onStripPlace(int i) {
     index = i;
     if (i <= last) _loader?.around(i, span: 2); // (a screen can show two or three slices)
@@ -868,7 +940,8 @@ class ComicRenderer extends Renderer {
     // opened on the page it was left on here: just as far into it as then (Komga keeps only the page)
     final kept = _stripPlace;
     final strip = _strip ??= WebtoonController(index.clamp(0, pages.length),
-        startShare: kept != null && kept.$1 == index ? kept.$2 : 0);
+        startShare: kept != null && kept.$1 == index ? kept.$2 : 0)
+      ..onAutoStopped = _autoStopped;
     return LayoutBuilder(builder: (context, box) {
       _area = Size(box.maxWidth, box.maxHeight);
       return Listener(
@@ -1153,6 +1226,10 @@ class ComicRenderer extends Renderer {
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
+        // a webtoon: auto-scroll, play / pause
+        if (webtoon && _strip != null)
+          BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.pause : Icons.play_arrow,
+              label: autoScrolling ? 'Stop auto-scroll' : 'Auto-scroll', onPressed: autoScrollToggle)),
         // (a strip: no Image settings until they apply to it)
         if (seriesId != null && !webtoon)
           BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
