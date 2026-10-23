@@ -103,7 +103,7 @@ void main() {
       await settleEpub(tester);
       expect(await epubLabel(tester), startsWith('Book · Pg. 1/'), reason: '$input: back');
     }
-  });
+  }, tags: 'slow');
 
   testWidgets("the pages either side are built ahead, as the comic reader's are: a tap's turn doesn't build the "
       'incoming page in its first frame (tap turns missed a refresh there - tablet, build 76)', (tester) async {
@@ -133,7 +133,7 @@ void main() {
       await settleEpub(tester);
     }
     expect(await epubLabel(tester), before, reason: 'back at the first size: the same page');
-  });
+  }, tags: 'slow');
 
   testWidgets('contents: jumps to a chapter; turning on from the last page of a chapter goes into the next; the end '
       'card after the last page', (tester) async {
@@ -232,7 +232,7 @@ void main() {
     await tester.fling(find.byType(PageView), const Offset(-500, 0), 2000);
     await settleEpub(tester);
     expect(await inChapter(tester), startsWith('Chapter 2 '));
-  });
+  }, tags: 'slow');
 
   testWidgets('a held Right key keeps turning pages, one each time the slide ends (user, build 82, Windows: it crept '
       'and never turned - each repeat restarted the slide)', (tester) async {

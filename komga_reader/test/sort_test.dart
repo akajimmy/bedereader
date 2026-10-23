@@ -45,7 +45,7 @@ void main() {
     final saved = jsonDecode((await SharedPreferences.getInstance()).getString('view.library.L1')!) as Map;
     expect(saved['sort'], 'added');
     expect(saved['desc'], false);
-  });
+  }, tags: 'slow');
 
   testWidgets("a saved view without a direction opens in its sort's natural one", (tester) async {
     SharedPreferences.setMockInitialValues({'view.library.L1': jsonEncode({'mode': 'series', 'sort': 'updated'})});
@@ -80,5 +80,5 @@ void main() {
         }
       }
     }
-  });
+  }, tags: 'slow');
 }

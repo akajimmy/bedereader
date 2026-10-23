@@ -62,7 +62,7 @@ void main() {
     await waitUntil(() => !conn.offline, tester: tester, reason: 'back online');
     await tester.pump();
     expect(banner, findsNothing);
-  });
+  }, tags: 'slow');
 
   testWidgets('side menu has the Offline mode switch', (tester) async {
     final online = noNetwork(LibraryServer.new);

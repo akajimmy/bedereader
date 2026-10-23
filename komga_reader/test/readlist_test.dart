@@ -104,5 +104,5 @@ void main() {
     expect(api.asked, ['all p0', 'all p1'], reason: 'nearing the end of page 0 loads page 1, once');
     await tester.scrollUntilVisible(find.text('150 shown'), 600, scrollable: grid);
     expect(find.text('S #u149'), findsOneWidget); // the last book, from the second page
-  });
+  }, tags: 'slow');
 }

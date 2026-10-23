@@ -109,7 +109,7 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     }
     AppSettings.instance.setEpub(const EpubPrefs());
-  });
+  }, tags: 'slow');
 
   testWidgets('chapters set to start elsewhere while reading: the book paired again, on the same page', (tester) async {
     await open(tester);

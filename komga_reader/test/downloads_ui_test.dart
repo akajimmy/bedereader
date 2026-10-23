@@ -77,7 +77,7 @@ void main() {
     await quiet(tester);
     final saving = File('${dir.path}${Platform.pathSeparator}queue.json.tmp');
     await until(tester, () => !saving.existsSync(), 'the last queue save done (its file would hold the folder)');
-  });
+  }, tags: 'slow');
 
   testWidgets('failed downloads say why and offer Retry: Retry tries that book again (the other stays failed), Retry '
       'all in the top bar the rest - and they download', (tester) async {
@@ -114,7 +114,7 @@ void main() {
     expect(find.textContaining('Failed:'), findsNothing);
     expect(find.text('Manage · 2'), findsOneWidget);
     await quiet(tester);
-  });
+  }, tags: 'slow');
 
   testWidgets('multi-select: Download queues the ticked books in the order picked', (tester) async {
     final api = noNetwork(LibraryServer.new);

@@ -163,7 +163,7 @@ void main() {
     expect(AppSettings.instance.epub.font, EpubFont.lora);
     expect(find.byType(PopupMenuItem<EpubFont>), findsNothing, reason: 'closed');
     expect(shown('Lora').style!.fontFamily, 'Lora');
-  });
+  }, tags: 'slow');
 
   Future<void> wait(WidgetTester tester, Duration d) async {
     for (var t = Duration.zero; t < d; t += const Duration(milliseconds: 250)) {

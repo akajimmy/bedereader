@@ -93,7 +93,7 @@ void main() {
     expect(api.finished, isNotEmpty, reason: 'the last pair shown: read to the end');
     await turn(tester, back: true);
     expect((await position(tester)).split(' ·').first, 'Pg. 7/9', reason: 'back a spread');
-  });
+  }, tags: 'slow');
 
   testWidgets('a tall screen (Wide screen, the default): one page at a time; Always: two there too; Off: one on a wide '
       'screen too', (tester) async {
@@ -157,7 +157,7 @@ void main() {
     expect(await position(tester), startsWith('Pg. 4/9'), reason: 'one page: the page being read');
     await turn(tester);
     expect(await position(tester), startsWith('Pg. 5/9'));
-  });
+  }, tags: 'slow');
 
   testWidgets('turned from wide to tall mid-book: the same page, now alone; and back: its pair', (tester) async {
     await open(tester);

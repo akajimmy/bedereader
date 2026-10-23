@@ -39,7 +39,7 @@ void main() {
 
     await openEpub(tester, twoChapters());
     expect(surroundBox(), findsNothing, reason: '800 wide: the page fills the screen');
-  });
+  }, tags: 'slow');
 
   testWidgets("the sheet on wide screens switched off on this device (user, 2026-10-11): the page's colour across the "
       'screen, no surround; the text laid out across the screen again (the sheet is the screen\'s now, the text inside '

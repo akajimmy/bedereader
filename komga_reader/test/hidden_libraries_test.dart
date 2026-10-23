@@ -82,5 +82,5 @@ void main() {
     final last = tester.widget<SwitchListTile>(
         find.descendant(of: find.widgetWithText(SwitchRow, 'Ongoing'), matching: find.byType(SwitchListTile)));
     expect(last.onChanged, isNull); // Ongoing is the last one shown
-  });
+  }, tags: 'slow');
 }

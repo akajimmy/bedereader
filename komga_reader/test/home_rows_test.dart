@@ -227,7 +227,7 @@ void main() {
     expect((l.libraryId, jsonEncode(l.pin)), ('L1', jsonEncode(library)));
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Books')).selected, isTrue, reason: 'its mode');
     expect(find.byTooltip('Read hidden (hide unread)'), findsOneWidget, reason: 'its filter');
-  });
+  }, tags: 'slow');
 
   testWidgets("a pin to something deleted from the server: nothing opens; it says so, and offers to unpin it (Komga's "
       'copy too)', (tester) async {

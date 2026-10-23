@@ -117,6 +117,6 @@ void main() {
       await esc();
       expect(find.byType(HomeScreen), findsOneWidget, reason: 'nowhere to go back to from Home');
       expect(tester.takeException(), isNull);
-    });
+    }, tags: 'slow');
   });
 }

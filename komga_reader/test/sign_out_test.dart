@@ -86,7 +86,7 @@ void main() {
     expect(AppSettings.instance.display.accent, Accent.green);
     expect(p.getInt('downloads.capBytes'), 5 * 1024 * 1024 * 1024);
     expect(find.byType(HomeScreen), findsNothing);
-  });
+  }, tags: 'slow');
 
   // Bug found 2026-09-30 (missing-tests audit): sign-out left the connection and the download queue on the old
   // client, so returning to the app checked Komga (GET users/me) with the removed key. Fixed in main.dart _signOut.

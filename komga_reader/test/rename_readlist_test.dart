@@ -88,7 +88,7 @@ void main() {
     expect(find.text('Infinity'), findsNothing);
     expect([for (final p in Pins.instance.items) '${p.id} ${p.name}'], ['RL1 Secret Wars · Unread', 'RL2 Infinity'],
         reason: "this list's pins only");
-  });
+  }, tags: 'slow');
 
   testWidgets('nothing is sent when cancelled, left the same, or emptied', (tester) async {
     final api = await open(tester);

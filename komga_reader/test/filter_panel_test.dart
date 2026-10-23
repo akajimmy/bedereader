@@ -204,7 +204,7 @@ void main() {
     for (final c in ['writer', 'publisher', 'status', 'years']) {
       expect(find.byKey(ValueKey('filter.chip.$c')), findsOneWidget, reason: 'its chip under the bar');
     }
-  });
+  }, tags: 'slow');
 
   testWidgets('Cancel and Back close the panel without applying anything', (tester) async {
     final api = await library(tester);
@@ -222,7 +222,7 @@ void main() {
     expect(find.byKey(const ValueKey('filter.show')), findsNothing);
     expect(api.listings.length, before);
     expect(find.byKey(const ValueKey('filter.chip.publisher')), findsNothing);
-  });
+  }, tags: 'slow');
 
   testWidgets('the live count asks Komga with the draft (one item), as it changes', (tester) async {
     final api = await library(tester);
@@ -242,7 +242,7 @@ void main() {
     await openPanel(tester);
     final last = api.asked.lastWhere((a) => a.size == 1 && a.filter.statuses.isEmpty);
     expect(last.read, ReadFilter.hideRead);
-  });
+  }, tags: 'slow');
 
   // ---- the chips ----------------------------------------------------------------------------------------------------
 
@@ -317,7 +317,7 @@ void main() {
     await tester.scrollUntilVisible(find.byKey(const ValueKey('filter.pick.Writer 49')), 300, scrollable: list);
     await tester.pump();
     expect(find.byKey(const ValueKey('filter.pickMore')), findsNothing, reason: 'all 50 are there');
-  });
+  }, tags: 'slow');
 
   // ---- which sections ----------------------------------------------------------------------------------------------
 
@@ -348,7 +348,7 @@ void main() {
     await show(tester, c, SeriesListScreen(key: UniqueKey(), api: c, title: 'Cosmic', collectionId: 'C1'));
     await openPanel(tester);
     expect(section('publisher'), isTrue, reason: 'a collection lists series');
-  });
+  }, tags: 'slow');
 
   testWidgets('a filter with fewer than two values in the view is left out (writer / artist: any; years: always)',
       (tester) async {
@@ -403,7 +403,7 @@ void main() {
     await tapKey(tester, 'filter.show');
     expect(api.listings.last.filter, ViewFilter(fromYear: lastYear, toYear: thisYear),
         reason: 'a To already after From stays: a range');
-  });
+  }, tags: 'slow');
 
   testWidgets('no Artist for eBooks; the kind is asked once', (tester) async {
     await library(tester, api: server((s) => s.kind = ViewKind.ebooks));
@@ -463,7 +463,7 @@ void main() {
     r = server();
     await show(tester, r, ReadListScreen(key: UniqueKey(), api: r, readList: readList));
     expect(r.listings.first.filter, ViewFilter(fromYear: lastYear, toYear: thisYear));
-  });
+  }, tags: 'slow');
 
   testWidgets('a pin keeps the filters, and opening it applies them', (tester) async {
     final api = await library(tester, mode: 'books');

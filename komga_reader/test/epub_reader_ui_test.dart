@@ -112,7 +112,7 @@ void main() {
     await g.moveTo(Offset(r.left + 20 + (r.width - 40) / 5, r.center.dy));
     await g.up();
     await settleEpub(tester);
-  });
+  }, tags: 'slow');
 
   testWidgets("on a wide screen the preview draws the whole sheet's page, its ground under all of it (audit, "
       '2026-10-11: drawn at the sheet\'s size, it covered only part)', (tester) async {
@@ -350,7 +350,7 @@ void main() {
     expect(find.byType(ReaderScreen), findsOneWidget, reason: 'the same Reader');
     expect(tester.widget<Text>(find.byKey(const ValueKey('page-corner'))).data, '1 / 3', reason: "the comic's pages");
     await tester.pump(const Duration(seconds: 5));
-  });
+  }, tags: 'slow');
 
   testWidgets("opened from a read list, the next and previous books are the read list's (user, 2026-10-07: "
       "Hitchhiker's Guide from the NPR Top 100 list went on to its series' book 2, not Ender's Game); opened from "

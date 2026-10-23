@@ -335,7 +335,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining('no longer on Komga'), findsNothing, reason: 'the mark and its filter gone');
     expect(find.textContaining('3 pages · 0.0 MB'), findsNWidgets(2));
-  });
+  }, tags: 'slow');
 
   test('a single downloaded book deleted on Komga (its series still there) is marked "no longer on Komga" too',
       () async {

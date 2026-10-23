@@ -180,7 +180,7 @@ void main() {
     // bug found 2026-09-30 (missing-tests audit): on Library & Home the library switches came after Home sections in
     // RowNav's order (the focus tree's: they're added once the libraries arrive); RowNav now goes by screen position
     for (final p in SettingsPage.values) {
-      testWidgets(pageName(p), (tester) => walk(tester, p));
+      testWidgets(pageName(p), (tester) => walk(tester, p), tags: 'slow');
     }
   });
 

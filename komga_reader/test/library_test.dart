@@ -73,7 +73,7 @@ void main() {
     final again = await open(tester); // next time
     expect(again.requests, ['books p0 all']);
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Books')).selected, isTrue);
-  });
+  }, tags: 'slow');
 
   testWidgets('the eye: Hide read asks Komga for unread and in-progress only, Hide unread for read only, the grid and '
       'its count follow; a third tap shows everything', (tester) async {
