@@ -715,13 +715,15 @@ class AppSettings extends ChangeNotifier {
   final Set<String> webtoonSeries = {};
   static const _webtoonSeriesKey = 'webtoon.series';
 
-  /// Komga's reading direction for [seriesId], seen: a webtoon, or not (any more). May be called mid-build.
-  void noteDirection(String seriesId, Object? direction) {
+  /// Komga's reading direction for [seriesId], seen: a webtoon, or not (any more). May be called mid-build. True: it
+  /// changed.
+  bool noteDirection(String seriesId, Object? direction) {
     final now = direction == 'WEBTOON';
-    if (webtoonSeries.contains(seriesId) == now) return;
+    if (webtoonSeries.contains(seriesId) == now) return false;
     now ? webtoonSeries.add(seriesId) : webtoonSeries.remove(seriesId);
     SharedPreferences.getInstance().then((p) => p.setStringList(_webtoonSeriesKey, webtoonSeries.toList()));
     scheduleMicrotask(notifyListeners);
+    return true;
   }
 
   /// The defaults [seriesId] follows: a webtoon's, or a comic's.
