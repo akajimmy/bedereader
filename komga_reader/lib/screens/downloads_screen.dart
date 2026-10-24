@@ -53,7 +53,7 @@ class _Item {
 class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProviderStateMixin {
   final d = Downloads.instance;
   late final TabController _tabs =
-      TabController(length: 2, vsync: this, initialIndex: d.queue.isNotEmpty ? 0 : 1)..addListener(_onTab);
+      TabController(length: 2, vsync: this, initialIndex: d.shownQueue.isNotEmpty ? 0 : 1)..addListener(_onTab);
 
   ManageFilter _filter = ManageFilter.all;
   ManageSort _sort = ManageSort.name;
@@ -99,7 +99,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
     if (store == null) return const [];
     return [
       for (final e in store.books.entries)
-        if (e.value['state'] == 'done') _Item(e.key, e.value, store.progress[e.key]),
+        if (e.value['state'] == 'done' && e.value['cache'] != true) _Item(e.key, e.value, store.progress[e.key]),
     ];
   }
 
@@ -171,7 +171,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                 const FullscreenExit(),
               ],
               bottom: TabBar(controller: _tabs, tabs: [
-                Tab(text: d.queue.isEmpty ? 'Queue' : 'Queue · ${d.queue.length}'),
+                Tab(text: d.shownQueue.isEmpty ? 'Queue' : 'Queue · ${d.shownQueue.length}'),
                 Tab(text: 'Manage · ${all.length}'),
               ]),
             ),
@@ -190,7 +190,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
   // ---- Queue ----------------------------------------------------------------------------------------------------
 
   List<Widget> _queueActions() {
-    final queue = d.queue;
+    final queue = d.shownQueue;
     final failed = queue.where((j) => j.state == JobState.failed).length;
     return [
       if (queue.isNotEmpty)
@@ -222,7 +222,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
   }
 
   Widget _queueTab() {
-    final queue = d.queue;
+    final queue = d.shownQueue;
     return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
       const _PendingProgress(),
       if (queue.isNotEmpty)
