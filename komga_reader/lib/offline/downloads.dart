@@ -198,7 +198,9 @@ class Downloads extends ChangeNotifier implements LocalPages {
   // ---- the cache (user, 2026-10-24): a book opened online is downloaded in the background as it's read - read
   // from the device from then on, and offline too. Up to [cacheCap] on disk: the books opened longest ago go first to
   // make room; a book finished goes as soon as it's left. Not a download: not on the Downloads screen, not in its limit.
-  static const cacheCap = 512 * 1024 * 1024;
+  static const defaultCacheCap = 512 * 1024 * 1024; // (user, 2026-10-24: "let's call the cache size 512 megabytes")
+  @visibleForTesting
+  static int cacheCap = defaultCacheCap;
   int get cacheBytes => _bytes(cached: true);
   bool isCached(String bookId) {
     final e = store?.books[bookId];
@@ -926,6 +928,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
         if (!job.cache) entry..remove('cache')..remove('cachedAt'); // (downloaded on purpose meanwhile)
         await s.put(job.bookId, entry);
         queue.remove(job);
+        // (its real size now: the cache back under its limit if Komga's sizes were short)
+        if (job.cache) await _cacheRoom(0, job.bookId);
       }
     } catch (e, st) {
       if (gone()) {
