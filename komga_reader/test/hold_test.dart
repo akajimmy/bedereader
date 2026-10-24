@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,6 +120,34 @@ void main() {
     await until(tester, () => shows(find.byType(RawImage)), 'the coloured page');
     expect(find.byType(RawImage), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsNothing);
+  });
+
+  testWidgets('Enhance: a page resized (a rotation passes through several sizes) is enhanced again once the size has '
+      'stayed put - not for each size on the way; the picture made before stays on screen meanwhile (user, '
+      '2026-10-24: Android closed the app for memory turning the tablet)', (tester) async {
+    final img = await testImage(tester, 40, 60, const Color(0xFFD8C8A8));
+    final asked = <Size>[];
+    Enhancer.onRun = (w, h) => asked.add(Size(w.toDouble(), h.toDouble()));
+    addTearDown(() => Enhancer.onRun = null);
+    final dpr = tester.view.devicePixelRatio;
+    final data = PageData(img, Uint8List(0)); // the same page throughout
+    Future<void> show(Size size) => tester.pumpWidget(MaterialApp(home: Center(child: ProcessedPicture(
+        data: data, prefs: const ReaderPrefs(sharpen: true), size: size))));
+    await show(const Size(200, 300));
+    await until(tester, () => shows(find.byType(RawImage)), 'the enhanced page');
+    expect(asked, [const Size(200, 300) * dpr]);
+
+    await show(const Size(160, 240)); // turning...
+    await tester.pump(const Duration(milliseconds: 100));
+    await show(const Size(120, 180)); // ...turned
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(asked, hasLength(1), reason: 'nothing made while the size changes');
+    expect(find.byType(RawImage), findsOneWidget, reason: 'the page made before, scaled');
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    await tester.pump(ProcessedPicture.settle);
+    expect(asked, [const Size(200, 300) * dpr, const Size(120, 180) * dpr], reason: 'the size it settled at only');
+    await until(tester, () => tester.widget<RawImage>(find.byType(RawImage)).image!.width == (120 * dpr).round(),
+        'the page enhanced at its new size');
   });
 
   testWidgets('a page off screen waits for the page turn to finish before its colours are made', (tester) async {

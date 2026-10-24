@@ -420,6 +420,7 @@ class ComicRenderer extends Renderer {
   @override
   void dispose() {
     _disposed = true;
+    _settleTimer?.cancel();
     _tapTimer?.cancel();
     _autoAwake?.cancel();
     autoNode.dispose();
@@ -938,8 +939,8 @@ class ComicRenderer extends Renderer {
   /// together at height [h] (picture pixels): how the fit will scale the picture on this screen.
   double _gapPixels(double h, double w0) {
     final gap = prefs.gutter;
-    if (gap <= 0 || _area.isEmpty || h <= 0 || w0 <= 0) return 0;
-    final a = _area;
+    if (gap <= 0 || _settled.isEmpty || h <= 0 || w0 <= 0) return 0;
+    final a = _settled; // (the layout's area: the pair joined once a rotation has settled)
     double byHeight() => gap * h / a.height; // the picture as tall as the screen
     double byWidth() => gap * w0 / math.max(1.0, a.width - gap); // as wide (the gap included)
     return switch (prefs.fit) {
@@ -1127,12 +1128,37 @@ class ComicRenderer extends Renderer {
         },
       );
 
+  /// The page area the layout follows (one page or two, the pairs' pictures): [_area] once it has stayed put for
+  /// [settle]. Meanwhile the pages showing stay as they are, fitted to the new shape - a rotation passes through
+  /// several sizes, and a tilt can turn the screen and back within a second; each rebuilt every page near the one
+  /// being read, and Android closed the app for memory (user, 2026-10-24: "can we just be smarter about how and when
+  /// images are generated").
+  Size _settled = Size.zero;
+  Timer? _settleTimer;
+  @visibleForTesting
+  static const settle = Duration(milliseconds: 500);
+
+  void _areaNow(Size area) {
+    _area = area;
+    if (_settled.isEmpty) {
+      _settled = area;
+    } else if (area == _settled) {
+      _settleTimer?.cancel(); // back as it was (turned and back): nothing to redo
+    } else {
+      _settleTimer?.cancel();
+      _settleTimer = Timer(settle, () {
+        _settled = _area;
+        _changed();
+      });
+    }
+  }
+
   List<Widget> _pagedView(BuildContext context) => [
         LayoutBuilder(builder: (context, box) {
-          _area = Size(box.maxWidth, box.maxHeight);
-          // one page or two, by the screen's shape now (turned, a window resized) and the setting: the page view
-          // again after this frame, on the same page
-          final dual = pages.isNotEmpty && _twoPagesOn(_area);
+          _areaNow(Size(box.maxWidth, box.maxHeight));
+          // one page or two, by the screen's shape (turned, a window resized - once it's settled) and the setting:
+          // the page view again after this frame, on the same page
+          final dual = pages.isNotEmpty && _twoPagesOn(_settled);
           final scrolls = ScrollConfiguration.of(context); // the pages' own scrolling (the page view's is off)
           if (dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: dual));
           return Listener(
@@ -1226,7 +1252,7 @@ class ComicRenderer extends Renderer {
     // the pair showing and one turn either way (the page view builds no further) - each is two pages wide
     _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 1);
     final crop = prefs.crop;
-    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _area, background);
+    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _settled, background);
     // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as
     // the bars move, and each pair was joined again for each, every copy kept - two full pages wide each; user,
     // 2026-10-24: the app died turning the tablet with two pages up)

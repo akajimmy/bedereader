@@ -167,12 +167,41 @@ void main() {
     expect(await position(tester), startsWith('Pg. 3-4/9'));
     tester.view.physicalSize = const Size(1000, 1600);
     await tester.pump();
+    await tester.pump(ComicRenderer.settle); // (once the turn has settled)
     await tester.pump();
     expect(await position(tester), startsWith('Pg. 4/9'), reason: 'the later page of the pair, the page being read');
     tester.view.physicalSize = const Size(1600, 1000);
     await tester.pump();
+    await tester.pump(ComicRenderer.settle);
     await tester.pump();
     expect(await position(tester), startsWith('Pg. 3-4/9'));
+  });
+
+  testWidgets('turned and back within half a second (a tilt): the pair stays as it was, nothing rebuilt; turned for '
+      'good: one page, once the turn has settled (user, 2026-10-24: Android closed the app for memory, each flip '
+      'rebuilding every page near the one read)', (tester) async {
+    await open(tester);
+    await turn(tester);
+    await turn(tester); // 3|4
+    PageController controller() => tester.widget<PageView>(find.byType(PageView)).controller!;
+    final before = controller();
+    tester.view.physicalSize = const Size(1000, 1600); // tall
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'still the pair, fitted to the new shape');
+    tester.view.physicalSize = const Size(1600, 1000); // and back
+    await tester.pump();
+    await tester.pump(ComicRenderer.settle * 2);
+    expect(identical(controller(), before), isTrue, reason: 'the page view not rebuilt');
+    expect(await position(tester), startsWith('Pg. 3-4/9'));
+
+    tester.view.physicalSize = const Size(1000, 1600); // tall, for good
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'not settled yet');
+    await tester.pump(ComicRenderer.settle);
+    await tester.pump();
+    expect(await position(tester), startsWith('Pg. 4/9'), reason: 'settled: one page');
   });
 
   testWidgets('"Shift pairing by one" in the Comic settings panel (user, 2026-10-22: not on the bottom bar; two pages up '
