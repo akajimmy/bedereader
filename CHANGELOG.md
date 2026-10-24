@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Comics: a page curl that starts with the finger held still for a moment now turns the page - it was taken for a long press, which comic pages don't use, and the drag did nothing. eBooks keep a held finger for selecting text.
+
 **Changed**
 
 - Comics and webtoons: Enhance, Enhance colours and Crop edges are back in the series' settings in the reader (Comic settings, or Webtoon settings), under the same Override defaults as the fit, direction and page colours - one switch for all of it, and Make default takes all of it. The separate Image settings button and panel are gone. A series that already had only its layout or only its image settings of its own keeps them; the other part follows the defaults until you change it.
