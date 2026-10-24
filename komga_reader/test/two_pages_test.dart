@@ -464,6 +464,22 @@ void main() {
       expect(await position(tester), startsWith('Pg. 3-4/9'));
     });
 
+    testWidgets('joined pairs are kept for the pair showing and one turn either way only (user, 2026-10-24: killed for '
+        'memory, two pages up)', (tester) async {
+      await openReal(tester);
+      await toPair(tester); // 3|4
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      for (var t = 0; t < 3; t++) { // 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined
+          await tester.pump();
+        }
+      }
+      expect(await position(tester), startsWith('Pg. 8-9/9'));
+      expect(ComicRenderer.latest!.joinedKept, 1, reason: '5|6, two turns back, let go (the spread alone is no pair)');
+    });
+
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
       await openReal(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);

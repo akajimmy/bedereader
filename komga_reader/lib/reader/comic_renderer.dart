@@ -1223,7 +1223,8 @@ class ComicRenderer extends Renderer {
   final Map<(int, double, bool, double, FitMode, Size, Color), Future<PageData>> _joined = {};
 
   Future<PageData> _joinedAt(int v, Spread s) {
-    _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 2);
+    // the pair showing and one turn either way (the page view builds no further) - each is two pages wide
+    _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 1);
     final crop = prefs.crop;
     final key = (v, crop, rtl, prefs.gutter, prefs.fit, _area, background);
     // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as

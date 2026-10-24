@@ -25,11 +25,15 @@ class PageLoader {
   final Komga api;
   final String bookId;
   final List<int> pageNumbers; // index -> Komga page number (1-based)
-  final Map<int, Future<PageData>> _cache = {};
-  final Map<int, Uint8List> _loaded = {}; // the pages in [_cache] that have arrived
+  final Map<int, Future<PageData>> _cache = {}; // decoded: the pages a turn either way can need
+  final Map<int, Uint8List> _loaded = {}; // the files that have arrived - kept a little further than [_cache]
 
   /// A page already here (the one showing, its neighbours): the slider's preview uses it rather than asking Komga.
   Uint8List? loadedBytes(int i) => _loaded[i];
+
+  /// The pages held decoded, and those whose files are held.
+  @visibleForTesting
+  (Set<int>, Set<int>) get held => (_cache.keys.toSet(), _loaded.keys.toSet());
 
   Future<PageData> get(int i) {
     final have = _cache[i];
@@ -37,7 +41,8 @@ class PageLoader {
     late final Future<PageData> load;
     load = () async {
       try {
-        final bytes = await api.pageBytes(bookId, pageNumbers[i]);
+        // (its file still here - a page come back to: decoded again, not asked for again)
+        final bytes = _loaded[i] ?? await api.pageBytes(bookId, pageNumbers[i]);
         final ui.FrameInfo frame;
         try {
           frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
@@ -59,13 +64,16 @@ class PageLoader {
   }
 
   /// Called on every page change: preload ahead, forget pages far away (the GC frees them). [span]: pages a turn
-  /// moves (two pages up: 2 - the window twice as wide).
+  /// moves (two pages up: 2 - the window twice as wide). Decoded, a page takes the most memory (a 2000 x 3000 scan
+  /// about 24 MB): only one turn back and two ahead are kept so; the files (a few MB) two back and three ahead, so a
+  /// page come back to is only decoded again (user, 2026-10-24: the app was killed for memory on a 2.5 GB tablet,
+  /// two pages up - 11 pages were kept decoded).
   void around(int i, {int span = 1}) {
     for (var j = i + 1; j <= i + 2 * span; j++) {
       if (j < pageNumbers.length) get(j).ignore();
     }
-    _cache.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
-    _loaded.removeWhere((k, _) => !_cache.containsKey(k));
+    _cache.removeWhere((k, _) => k < i - span || k > i + 2 * span);
+    _loaded.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
   }
 
   Future<Levels>? _bookLevels;
