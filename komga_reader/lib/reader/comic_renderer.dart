@@ -68,7 +68,16 @@ class StripPlaces {
 class ComicRenderer extends Renderer {
   ComicRenderer(super.host) {
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
+    latest = this;
   }
+
+  /// The comic renderer made last (tests look inside it).
+  @visibleForTesting
+  static ComicRenderer? latest;
+
+  /// Joined pairs held ([_joinedAt]).
+  @visibleForTesting
+  int get joinedKept => _joined.length;
 
   AppSettings get _settings => AppSettings.instance;
   bool _disposed = false;
@@ -1217,6 +1226,10 @@ class ComicRenderer extends Renderer {
     _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 2);
     final crop = prefs.crop;
     final key = (v, crop, rtl, prefs.gutter, prefs.fit, _area, background);
+    // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as
+    // the bars move, and each pair was joined again for each, every copy kept - two full pages wide each; user,
+    // 2026-10-24: the app died turning the tablet with two pages up)
+    _joined.removeWhere((k, _) => k.$1 == v && k != key);
     return _joined.putIfAbsent(key, () async {
       try {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);

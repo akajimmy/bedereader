@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
+import 'package:komga_reader/reader/comic_renderer.dart' show ComicRenderer;
 import 'package:komga_reader/reader/spreads.dart' show twoPagesAllowed;
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -442,6 +443,25 @@ void main() {
       expect(curl(tester)!.finger.dx, closeTo(-c.page.width - 40, 6), reason: 'landing past the 40 px gutter');
       await tester.pump(const Duration(milliseconds: 230));
       await tester.pump();
+    });
+
+    testWidgets('a rotation passing through several sizes keeps one joined picture per pair, not one per size (user, '
+        '2026-10-24: the app died turning the tablet with two pages up)', (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      final r = ComicRenderer.latest!;
+      final before = r.joinedKept;
+      expect(before, greaterThan(0), reason: 'pairs joined');
+      for (final size in const [Size(1580, 1000), Size(1560, 990), Size(1600, 960), Size(1600, 1000)]) {
+        tester.view.physicalSize = size; // (the bars moving as it turns: two pages up all along)
+        await tester.pump();
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined again
+          await tester.pump();
+        }
+      }
+      expect(r.joinedKept, before, reason: "the older sizes' pictures let go");
+      expect(await position(tester), startsWith('Pg. 3-4/9'));
     });
 
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
