@@ -18,6 +18,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Android, Rotation on Auto: the app turns the screen itself instead of following every move of the tablet. With the tablet's auto-rotate on, the screen turns once the tablet has clearly turned (not near a diagonal, not lying flat) and stayed so for 0.7 s - a tilt and back turns nothing. With the tablet's auto-rotate off, the screen stays as the tablet's lock holds it (it used to turn anyway). Portrait, Landscape and Locked are as before.
 - Comics and webtoons: Enhance, Enhance colours and Crop edges are back in the series' settings in the reader (Comic settings, or Webtoon settings), under the same Override defaults as the fit, direction and page colours - one switch for all of it, and Make default takes all of it. The separate Image settings button and panel are gone. A series that already had only its layout or only its image settings of its own keeps them; the other part follows the defaults until you change it.
 
 ## 1.5.0 - in development
