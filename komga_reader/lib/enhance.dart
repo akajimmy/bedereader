@@ -27,6 +27,10 @@ class Enhancer {
   @visibleForTesting
   static Future<void>? holdRuns;
 
+  /// Tests: told of every run asked for, with its size.
+  @visibleForTesting
+  static void Function(int width, int height)? onRun;
+
   static Future<_Programs?> _load() => _programs ??= () async {
         try {
           final r = await Future.wait([
@@ -45,6 +49,7 @@ class Enhancer {
 
   /// [src] processed to [width] x [height] physical pixels, or null if the shaders can't run here (then draw plain).
   static Future<ui.Image?> run(ui.Image src, int width, int height) async {
+    onRun?.call(width, height);
     if (failWith != null) throw failWith!;
     if (holdRuns != null) await holdRuns;
     final p = await _load();

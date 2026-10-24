@@ -667,6 +667,10 @@ class ProcessedPicture extends StatefulWidget {
   final Future<void> Function()? idle; // off screen: the passes wait for no page turn ([PageCanvas.idle])
   final bool sidesOnly;
 
+  /// A page's new size (turned, a window resized) is enhanced again once it has stayed put this long.
+  @visibleForTesting
+  static const settle = Duration(milliseconds: 500);
+
   @override
   State<ProcessedPicture> createState() => _ProcessedPictureState();
 }
@@ -804,9 +808,13 @@ class _ProcessedPictureState extends State<ProcessedPicture> {
   /// Makes the enhanced picture for [physical] (after this frame; the page shows plain until it's ready).
   void _enhance(Size physical, ui.Image img) {
     if (_enhancedFor == physical) return;
+    // a new size for a page already made (turned, a window resized): once the size has stayed put - a rotation
+    // passes through several, each a full Enhance otherwise (user, 2026-10-24: closed for memory turning the tablet);
+    // the one made before stays, scaled, meanwhile
+    final resized = _enhancedFor != null && _enhanced != null;
     _enhancedFor = physical; // requested: don't ask again for this size
     final run = ++_enhanceRun;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    Future<void> make() async {
       if (run != _enhanceRun || !mounted) return;
       await widget.idle?.call(); // off screen: not during a page turn
       if (run != _enhanceRun || !mounted) return;
@@ -825,7 +833,13 @@ class _ProcessedPictureState extends State<ProcessedPicture> {
         _enhanced?.dispose();
         _enhanced = out;
       });
-    });
+    }
+
+    if (resized) {
+      Timer(ProcessedPicture.settle, make); // (a size after it, sooner: this run is stale, nothing done)
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => make()); // (after this frame)
+    }
   }
 
   @override
