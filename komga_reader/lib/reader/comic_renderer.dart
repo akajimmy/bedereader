@@ -959,6 +959,7 @@ class ComicRenderer extends Renderer {
 
   void _configureTurn(TurnDragRecognizer r) => r
     ..canTurn = (() => _canDragTurn)
+    ..hold = null // nothing on a comic page takes a hold: a finger held first still turns
     ..onTap = ((d) => _onTapUp(d, _area.width)) // a wobbly click the turn took (a mouse)
     ..maxAngle = (() => _scrollsDown ? 30.0 : 60.0)
     ..onStart = (d) {

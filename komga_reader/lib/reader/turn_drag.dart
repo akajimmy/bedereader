@@ -30,8 +30,10 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
   /// The steepest drag that still turns, in degrees from horizontal.
   double Function() maxAngle = () => 60;
 
-  /// Held still this long, the pointer is the page's (a long press, a selection).
-  Duration hold = kLongPressTimeout;
+  /// Held still this long, the pointer is the page's (a long press, a selection). Null: a page with nothing to do on a
+  /// hold (comics) - a finger held before it moves still turns (user, 2026-10-24: a curl held a moment first "doesn't
+  /// seem to register most of the time").
+  Duration? hold = kLongPressTimeout;
 
   /// The turn: [onStart] from where the pointer went down, [onUpdate] as it moves (delta and primaryDelta: the
   /// horizontal part), [onEnd] with its velocity (primaryVelocity: horizontal); [onCancel] when a second pointer
@@ -85,6 +87,8 @@ class TurnDragRecognizer extends OneSequenceGestureRecognizer {
     _downLocal = event.localPosition;
     _accepted = _turning = _dud = _holding = false;
     _velocity = VelocityTracker.withKind(event.kind)..addPosition(event.timeStamp, event.position);
+    final hold = this.hold;
+    if (hold == null) return;
     _holdTimer = Timer(hold, () {
       if (!_accepted) {
         _giveUp(); // held: a long press, a selection

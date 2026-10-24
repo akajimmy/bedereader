@@ -1006,6 +1006,26 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('a finger held still a moment before it drags still curls the page (user, 2026-10-24: "if I hold my tap '
+        "for a moment before beginning to drag, it doesn't seem to register\")", (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height / 2;
+      final g = await tester.startGesture(Offset(size.width * 0.9, y));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 300)); // held
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(Offset(size.width * 0.9 - i * size.width * 0.04, y));
+        await tester.pump(const Duration(milliseconds: 50));
+        if (i == 5) expect(curling(), findsOneWidget, reason: 'the page follows the finger');
+      }
+      await g.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('a curl let go before halfway leaves no trace; a tap while it springs back does nothing',
         (tester) async {
       // code review, 2026-09-30: the cancelled curl saved progress (un-reading a finished book); a tap during the
