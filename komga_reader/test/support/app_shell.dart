@@ -16,12 +16,14 @@ import 'helpers.dart';
 /// every request recorded in [requests] ("GET /api/v1/libraries"). Nothing reaches a network.
 class ShellKomga {
   final requests = <String>[];
+  bool down = false; // Komga gone: every request fails as an unreachable server's does
 
   http.Response _json(Object body) =>
       http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
 
   http.Client client() => MockClient((r) async {
         requests.add('${r.method} ${r.url.path}');
+        if (down) throw http.ClientException('Connection refused', r.url);
         final p = r.url.path;
         if (r.method != 'GET') return http.Response('', 204);
         if (p == '/api/v2/users/me') return _json({'id': 'U1', 'email': 'nick@test'});

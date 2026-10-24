@@ -40,7 +40,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('a page waiting on Komga'), findsOneWidget);
 
-    // Komga stops answering: a request finds it gone
+    // Komga stops answering: a request finds it gone (and the check that follows, too)
+    komga.down = true;
     Komga.onReachability!(Connection.instance.online!, false);
     await tester.pump();
     await tester.pump();
