@@ -266,6 +266,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         _openedAt = r.openedAt; _turned = false;
         // as Komga has it now: a change elsewhere is from here on
         _known[fresh['id'] as String] = r.openedProgress;
+        _ours.remove(fresh['id']);
         _loading = false;
       });
       onOpened?.call();
@@ -379,11 +380,11 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!_turned || r == null || !r.opened || !r.savesProgress) return;
     final id = _book['id'] as String;
     // what's saved, and how Komga's progress is read, captured now: the save may run once another book has opened
-    final save = r.progressSaver(_index), read = r.progressReader();
+    final save = r.progressSaver(_index), read = r.progressReader(), saving = r.progressSaving(_index);
     // one at a time, in order; one queued before the reader went to another device's page is dropped (it waited for
     // the question's answer, then saved this reader's page over theirs - #5)
     final wentElsewhere = _wentElsewhere;
-    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, r, save, read, ask: ask) : null);
+    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, r, save, read, saving, ask: ask) : null);
   }
 
   // ---- progress moved on another device while this book was open (user, 2026-10-05: read on the PC, then the
@@ -395,6 +396,11 @@ class _ReaderScreenState extends State<ReaderScreen>
   // per book (a book left for the next one is saved after that one has opened): Komga's progress as this reader last
   // loaded, saved or accepted - the renderer's kind (comics: page and finished; EPUBs: a place in the book)
   final Map<String, Object?> _known = {};
+  // per book, this visit: every progress this reader saved or sent to be saved. On a flaky connection a save can get
+  // to Komga with its answer lost, and the next ones not get there at all: Komga then has one of this reader's older
+  // pages, which is no other device's (user, 2026-10-24: lost the connection on page 8, back on page 11 - asked about
+  // page 8 "on another device")
+  final Map<String, List<Object?>> _ours = {};
   Future<void> _saves = Future.value();
   Future<bool>? _question; // the question on screen: a second asker waits for its answer
   int _wentElsewhere = 0; // times the reader went with another device's progress (saves queued before: dropped)
@@ -406,14 +412,21 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (Connection.instance.offline || !_known.containsKey(id)) return null;
     try {
       final now = await read();
-      return r.sameProgress(now, _known[id]) ? null : (now: now);
+      final ours = r.sameProgress(now, _known[id]) || (_ours[id] ?? const []).any((p) => r.sameProgress(now, p));
+      return ours ? null : (now: now);
     } catch (_) {
       return null;
     }
   }
 
+  void _noteOurs(String id, Object? progress) {
+    final l = _ours[id] ??= [];
+    l.add(progress);
+    if (l.length > 200) l.removeAt(0);
+  }
+
   Future<void> _save(String id, Renderer r, Future<Object?> Function() save, Future<Object?> Function() read,
-      {required bool ask}) async {
+      Object? saving, {required bool ask}) async {
     final moved = await _movedElsewhere(id, r, read);
     if (moved != null) {
       if (!ask || !mounted || _book['id'] != id) return; // closing, or another book by now: theirs stands
@@ -422,8 +435,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     // known as this reader's page once Komga has it: noted before, a save that failed (a network blip) left Komga on
     // the earlier page, and the next save asked about this reader's own page as if another device had moved it
     // (code review 2026-10-05, #4). A failed save stays silent: the next one carries the newer page.
+    if (saving != null) _noteOurs(id, saving); // (sent: if it gets there, it's this reader's - answered or not)
     try {
-      _known[id] = await save();
+      final saved = _known[id] = await save();
+      _noteOurs(id, saved);
     } catch (_) {}
   }
 
@@ -461,6 +476,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
     _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
     if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
+    _ours.remove(_book['id']); // the other device's from here: this reader's earlier pages are no longer its own
     _saveTimer?.cancel();
     _wentElsewhere++;
     _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's

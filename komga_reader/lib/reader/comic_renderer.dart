@@ -386,6 +386,12 @@ class ComicRenderer extends Renderer {
   }
 
   @override
+  Object? progressSaving(int place) {
+    final page = math.min(place, last);
+    return (page + 1, page >= last); // as [progressSaver] saves it
+  }
+
+  @override
   Future<Object?> progressAfterMark(Map fresh) async => progressOf(fresh);
 
   @override
@@ -396,7 +402,11 @@ class ComicRenderer extends Renderer {
     final (page, finished) = moved as (int?, bool);
     final at = math.min(here, last) + 1;
     return (
-      title: finished ? 'Finished on another device' : 'Read further on another device',
+      title: finished
+          ? 'Finished on another device'
+          : page != null && page < at
+              ? 'Read on another device' // (behind this one: not "further" - user, 2026-10-24)
+              : 'Read further on another device',
       text: finished
           ? 'This book was read to the end on another device.'
           : page == null

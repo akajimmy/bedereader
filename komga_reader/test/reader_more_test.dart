@@ -41,6 +41,7 @@ class BookServer extends ReaderServer {
   @override
   Future<Uint8List> pageThumbBytes(String bookId, int number) => Completer<Uint8List>().future;
   bool failSaves = false; // Komga refuses saves (a network blip)
+  bool loseReplies = false; // a save reaches Komga, but its answer never comes back (a flaky connection)
   Completer<void>? holdSave; // a save on its way, until completed
 
   @override
@@ -49,6 +50,7 @@ class BookServer extends ReaderServer {
     await holdSave?.future;
     await super.setProgress(bookId, page, completed: completed);
     progress = {'page': page, 'completed': completed};
+    if (loseReplies) throw KomgaUnreachable(baseUrl);
   }
 
   @override
@@ -458,6 +460,37 @@ void main() {
       await turnAndWait(tester); // page 4
       expect(find.text('Read further on another device'), findsNothing);
       expect(api.progress, {'page': 4, 'completed': false});
+    });
+
+    testWidgets("a flaky connection: a save that reached Komga but whose answer was lost, then saves that didn't get "
+        "there - back on, no question: Komga's page is one this reader saved (user, 2026-10-24: lost the connection "
+        'on page 8, back on page 11, asked about page 8 as if read on another device)', (tester) async {
+      final api = await reading(tester);
+      api.loseReplies = true;
+      await turnAndWait(tester); // page 3: got there, its answer lost
+      expect(api.progress, {'page': 3, 'completed': false});
+      api.loseReplies = false;
+      api.failSaves = true;
+      await turnAndWait(tester); // page 4: didn't get there
+      await turnAndWait(tester); // page 5: nor that
+      api.failSaves = false;
+      await turnAndWait(tester); // page 6: back on
+      expect(find.text('Read further on another device'), findsNothing);
+      expect(find.textContaining('another device'), findsNothing);
+      expect(api.progress, {'page': 6, 'completed': false});
+    });
+
+    testWidgets('another device behind this one: asked, but not as "further"', (tester) async {
+      final api = await reading(tester);
+      await turnAndWait(tester); // page 3
+      await turnAndWait(tester); // page 4
+      api.progress = {'page': 1, 'completed': false}; // the PC, on page 1
+      await turnAndWait(tester); // page 5
+      expect(find.text('On another device this book is on page 1.'), findsOneWidget);
+      expect(find.text('Read further on another device'), findsNothing);
+      await tester.tap(find.text('Stay on page 5'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
     });
 
     testWidgets('coming back to the app while a save is on its way: no question (#4)', (tester) async {

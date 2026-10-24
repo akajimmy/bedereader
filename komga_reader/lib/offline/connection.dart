@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../errors.dart' show ErrorLog;
 import '../ondeck_hidden.dart';
 import '../synced_ids.dart';
 import '../pins.dart';
@@ -128,13 +130,47 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   Future<bool> check() async {
     final api = online;
     if (api == null || forcedOffline) return false;
+    _checks++;
     try {
       await api.me();
       return true;
     } catch (_) {
       return false;
+    } finally {
+      _checks--;
     }
   }
+
+  // A request that failed asks only once Komga is clearly gone (user, 2026-10-24: on a flaky connection the prompt
+  // came "every few seconds" - each failed request asked, each one that got through closed it): first a check of its
+  // own ([check] - a failed check is the answer); and after the question closed because Komga answered, none for
+  // [quietAfterBack].
+  int _checks = 0; // checks under way: their failure is the confirmation
+  bool _confirming = false;
+  DateTime? _quietUntil;
+  static const quietAfterBack = Duration(seconds: 30);
+
+  Future<void> _confirmGone() async {
+    if (_confirming) return;
+    _confirming = true;
+    final failure = Komga.lastFailure; // the request's
+    try {
+      // (its answer comes back through [_onReachability]; answering, a request failed on a connection that works:
+      // noted in the error log - at most once a minute - so a flaky one shows there)
+      if (await check()) {
+        final now = clock.now(), last = _flakyNoted;
+        if (last == null || now.difference(last) >= const Duration(minutes: 1)) {
+          _flakyNoted = now;
+          ErrorLog.instance.record('A request to Komga failed, but Komga answered right after (a flaky connection?)',
+              failure ?? 'not known');
+        }
+      }
+    } finally {
+      _confirming = false;
+    }
+  }
+
+  DateTime? _flakyNoted;
 
   void _onKeyRefused(Komga api) {
     if (!identical(api, online) || keyRefused) return; // a sign-in attempt says so itself
@@ -157,6 +193,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (reachable) {
       if (askPending) {
         askPending = false;
+        _quietUntil = clock.now().add(quietAfterBack); // back: not asked again straight away
         notifyListeners();
       }
       // offline by hand stays offline: no offer to go back (missing-tests audit, 2026-09-30: the switch after the
@@ -167,7 +204,14 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
       }
     } else if (!offline && !forcedOffline && !askPending && available) {
+      if (_checks == 0) {
+        // a request failed: asked only if a check fails too, and not just after Komga came back
+        final quiet = _quietUntil;
+        if (quiet == null || !clock.now().isBefore(quiet)) unawaited(_confirmGone());
+        return;
+      }
       askPending = true; // ask (or, with nothing downloaded, just say Komga can't be reached)
+      ErrorLog.instance.record("Can't reach Komga (asked whether to go offline)", Komga.lastFailure ?? 'not known');
       notifyListeners();
     }
   }
@@ -213,6 +257,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     online = null;
     forcedOffline = autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
+    _quietUntil = null;
     _readers = 0;
     Komga.onReachability = null;
     Komga.onKeyRefused = null;

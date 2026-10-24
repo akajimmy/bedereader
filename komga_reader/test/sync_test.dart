@@ -36,6 +36,12 @@ class ProgressServer extends LibraryServer {
   }
 
   @override
+  Future<Map<String, dynamic>?> me() async {
+    if (down) _reach(); // (gone for the reachability check too)
+    return super.me();
+  }
+
+  @override
   Future<Map<String, dynamic>?> book(String id) async {
     bookCalls++;
     onBook?.call(id);
