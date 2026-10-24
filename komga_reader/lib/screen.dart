@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'rotation.dart';
+
 const _channel = MethodChannel('komga_reader/screen');
 
 /// Windows / macOS / Linux app (mouse, keyboard, resizable window) rather than a phone or tablet.
@@ -134,6 +136,7 @@ class OrientationLock {
     if (!portrait && !landscape) {
       _portrait = null;
       if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
+      if (defaultTargetPlatform == TargetPlatform.android) return AutoRotation.instance.follow(); // (the app's own)
       await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       return;
     }
@@ -188,6 +191,7 @@ class OrientationLock {
   Future<void> release() async {
     _portrait = null;
     if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
+    if (defaultTargetPlatform == TargetPlatform.android) return AutoRotation.instance.follow();
     await SystemChrome.setPreferredOrientations(const []);
   }
 
@@ -214,7 +218,13 @@ class OrientationLock {
 
   // one orientation, exactly (on Android: PORTRAIT / REVERSE_PORTRAIT / LANDSCAPE / REVERSE_LANDSCAPE - fixed, not
   // the sensor's)
-  Future<void> _apply() => defaultTargetPlatform == TargetPlatform.windows
+  Future<void> _apply() async {
+    if (defaultTargetPlatform == TargetPlatform.android) await AutoRotation.instance.stop(); // the lock's now
+    if (_portrait == null) return; // let go meanwhile
+    await _hold();
+  }
+
+  Future<void> _hold() => defaultTargetPlatform == TargetPlatform.windows
       ? _pcHold(switch ((_portrait!, _flipped)) {
           (true, false) => 'portrait',
           (true, true) => 'reversePortrait',

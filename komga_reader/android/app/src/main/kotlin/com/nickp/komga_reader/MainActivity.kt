@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Intent
 import android.content.res.Configuration
+import android.database.ContentObserver
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -12,8 +13,11 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.provider.Settings
+import android.view.OrientationEventListener
 import android.view.Surface
 import android.view.View
 import android.view.ViewGroup
@@ -42,6 +46,79 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         window.decorView.post { noFocusHighlight(window.decorView) }
+        resumed = true
+        updateListening()
+    }
+
+    override fun onPause() {
+        resumed = false
+        updateListening()
+        super.onPause()
+    }
+
+    // ---- Auto rotation, the app's own (lib/rotation.dart, user 2026-10-24: "the app should handle the rotation so
+    // it's not turning every time the tablet turns"): the tablet's tilt and its auto-rotate setting are read here and
+    // sent to the app, which decides when to turn. Only while the app asks for it and is in front.
+    private var rotationChannel: MethodChannel? = null
+    private var followWanted = false
+    private var resumed = false
+    private var tiltListener: OrientationEventListener? = null
+    private var autoRotateObserver: ContentObserver? = null
+    private var lastTilt = Int.MIN_VALUE
+
+    private fun systemAutoRotate() =
+        Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+
+    private fun updateListening() {
+        val on = followWanted && resumed
+        if (on && tiltListener == null) {
+            val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    rotationChannel?.invokeMethod("systemAutoRotate", systemAutoRotate())
+                }
+            }
+            contentResolver.registerContentObserver(
+                Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, observer)
+            autoRotateObserver = observer
+            val listener = object : OrientationEventListener(this) {
+                override fun onOrientationChanged(angle: Int) {
+                    val way = tiltWay(angle)
+                    // only a change worth telling (the sensor reports several times a second)
+                    if (way == lastTilt || (way >= 0 && lastTilt >= 0 && Math.abs(way - lastTilt) in 1..2)) return
+                    lastTilt = way
+                    rotationChannel?.invokeMethod("tilt", way)
+                }
+            }
+            if (listener.canDetectOrientation()) listener.enable()
+            tiltListener = listener
+            lastTilt = Int.MIN_VALUE
+            // (back in front: the setting may have changed meanwhile)
+            rotationChannel?.invokeMethod("systemAutoRotate", systemAutoRotate())
+        } else if (!on && tiltListener != null) {
+            tiltListener?.disable()
+            tiltListener = null
+            autoRotateObserver?.let { contentResolver.unregisterContentObserver(it) }
+            autoRotateObserver = null
+        }
+    }
+
+    /// The display rotation now (Surface.ROTATION_*), and whether the device's natural orientation is portrait.
+    private fun rotationNow(): Pair<Int, Boolean> {
+        @Suppress("DEPRECATION")
+        val rotation = if (Build.VERSION.SDK_INT >= 30) display?.rotation ?: Surface.ROTATION_0
+            else windowManager.defaultDisplay.rotation
+        val portraitNow = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+        val upright = rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180
+        return Pair(rotation, upright == portraitNow)
+    }
+
+    /// The sensor's angle (0 = the device upright as it naturally is, 90 = its left side up...) as the way up it
+    /// leans to, in degrees: 0 portrait, 90 landscape, 180 portrait upside down, 270 landscape the other way (as
+    /// currentWayUp names them); -1 lying flat.
+    private fun tiltWay(angle: Int): Int {
+        if (angle == OrientationEventListener.ORIENTATION_UNKNOWN) return -1
+        val rotation = (360 - angle) % 360 // the display rotation that would keep it upright
+        return (rotation + if (rotationNow().second) 0 else 90) % 360
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -59,6 +136,19 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        rotationChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/rotation").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    // the app's Auto: tilt readings wanted (true) or not; answers the tablet's auto-rotate setting
+                    "follow" -> {
+                        followWanted = call.arguments == true
+                        updateListening()
+                        result.success(systemAutoRotate())
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         // Keep the screen on while the reader is open (lib/screen.dart). The flag only lives as long as the window,
         // so nothing is left behind if the app is closed while reading.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/screen").setMethodCallHandler { call, result ->
@@ -67,12 +157,7 @@ class MainActivity : FlutterActivity() {
                 // lock starts the way the tablet is held. The display's rotation counts from the device's natural
                 // orientation, so that is worked out first (portrait now at 0 or 180 degrees = a natural portrait).
                 "currentWayUp" -> {
-                    @Suppress("DEPRECATION")
-                    val rotation = if (Build.VERSION.SDK_INT >= 30) display?.rotation ?: Surface.ROTATION_0
-                        else windowManager.defaultDisplay.rotation
-                    val portraitNow = resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-                    val upright = rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_180
-                    val naturalPortrait = upright == portraitNow
+                    val (rotation, naturalPortrait) = rotationNow()
                     result.success(if (naturalPortrait) when (rotation) {
                         Surface.ROTATION_0 -> "portrait"
                         Surface.ROTATION_90 -> "landscape"

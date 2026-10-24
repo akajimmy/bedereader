@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show PlatformDispatcher;
 
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,6 +51,7 @@ void main() {
     return false; // not handled: reported as usual
   };
   checkPcRotation(); // Windows: a rotation sensor or not (Settings' Rotation) - answered long before it's looked at
+  if (defaultTargetPlatform == TargetPlatform.android) OrientationLock.instance.release(); // Auto, the app's own
   runApp(const KomgaReaderApp());
 }
 
