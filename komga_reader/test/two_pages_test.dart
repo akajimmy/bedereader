@@ -509,6 +509,31 @@ void main() {
       expect(ComicRenderer.latest!.joinedKept, 1, reason: '5|6, two turns back, let go (the spread alone is no pair)');
     });
 
+    testWidgets("a joined pair's picture is freed once it's let go of (not left for the garbage collector), the one "
+        'showing never (user, 2026-10-24: graphics memory grew about 40 MB a page turn until Android closed the app)',
+        (tester) async {
+      final made = <ui.Image>[];
+      ComicRenderer.onJoined = made.add;
+      addTearDown(() => ComicRenderer.onJoined = null);
+      await openReal(tester);
+      await toPair(tester); // 3|4 (and 5|6 ahead)
+      final first = made.first;
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      for (var t = 0; t < 3; t++) { // 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+          await tester.pump();
+        }
+      }
+      await tester.pump(); // (two frames on)
+      await tester.pump();
+      expect(first.debugDisposed, isTrue, reason: '3|4, two turns back: freed');
+      final shown = [for (final r in tester.widgetList<RawImage>(find.byType(RawImage))) r.image];
+      expect(shown, isNotEmpty);
+      expect(shown.where((i) => i?.debugDisposed ?? false), isEmpty, reason: 'nothing on screen freed');
+    });
+
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
       await openReal(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);

@@ -2,6 +2,7 @@
 // same page with it (code review 2026-10-05, #18: the page was downloaded again).
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
@@ -78,6 +79,29 @@ void main() {
       await loader.get(8);
       expect(api.asked.length, asked, reason: 'decoded again from its file - not asked for again');
     });
+  });
+
+  testWidgets('pages let go of are freed (after a moment) where the reader says so; the ones kept are not '
+      '(user, 2026-10-24: graphics memory grew with every page turn until Android closed the app)', (tester) async {
+    final loader = PageLoader(noNetwork(CountedPages.new), 'B1', List.generate(30, (i) => i + 1));
+    final images = <int, ui.Image>{};
+    await tester.runAsync(() async {
+      for (var i = 0; i <= 3; i++) {
+        images[i] = (await loader.get(i)).image;
+      }
+    });
+    loader.around(10, span: 2, free: true); // read on: 0-3 let go
+    for (var f = 0; f < 3; f++) {
+      await tester.runAsync(() => Future<void>.delayed(Duration.zero)); // (the pages were loaded for real)
+      await tester.pump(); // (two frames on)
+    }
+    expect([for (var i = 0; i <= 3; i++) images[i]!.debugDisposed], everyElement(isTrue));
+
+    final kept = (await tester.runAsync(() => loader.get(10)))!.image;
+    loader.around(10, span: 2, free: true);
+    await tester.pump(); // (two frames on)
+    await tester.pump();
+    expect(kept.debugDisposed, isFalse, reason: 'the page being read');
   });
 
   testWidgets('a slow failing load of a page leaves the newer load of it in place', (tester) async {
