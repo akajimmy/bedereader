@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Comics: the app no longer runs out of memory as you read - pictures it's done with (two pages joined, pages left behind, a closed book's) are freed straight away instead of waiting for Android to need the room. With two pages up, memory grew about 40 MB a page turn until Android closed the app.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
