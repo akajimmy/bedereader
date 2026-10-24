@@ -8,6 +8,7 @@ import '../api.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
+import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../epub/source.dart';
 import '../reader/comic_renderer.dart';
@@ -271,6 +272,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       });
       onOpened?.call();
       _keys.requestFocus();
+      // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
+      if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
       if (!mounted || run != _openRun) return;

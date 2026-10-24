@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +20,8 @@ enum DeleteRead { never, ask, always }
 /// One book in the download queue. Visible on the Downloads screen, page by page (the user asked for a real queue
 /// view with progress - CDisplayEx never had one).
 class DownloadJob {
-  DownloadJob({required this.bookId, required this.title, this.state = JobState.queued, this.error});
+  DownloadJob({required this.bookId, required this.title, this.state = JobState.queued, this.error,
+      this.cache = false});
   final String bookId;
   final String title; // "Series #n"
   JobState state;
@@ -29,13 +31,18 @@ class DownloadJob {
   String? error;
   bool _cancel = false;
 
-  Map<String, dynamic> toJson() => {'bookId': bookId, 'title': title, 'state': state.name, 'error': error};
+  /// A book opened, cached in the background ([Downloads.cacheBook]) - not one downloaded on purpose.
+  bool cache;
+
+  Map<String, dynamic> toJson() =>
+      {'bookId': bookId, 'title': title, 'state': state.name, 'error': error, if (cache) 'cache': true};
   factory DownloadJob.fromJson(Map<String, dynamic> j) => DownloadJob(
         bookId: j['bookId'] as String,
         title: j['title'] as String? ?? '',
         // an interrupted download simply queues again (pages already on disk are skipped)
         state: j['state'] == 'failed' ? JobState.failed : (j['state'] == 'paused' ? JobState.paused : JobState.queued),
         error: j['error'] as String?,
+        cache: j['cache'] == true,
       );
 }
 
@@ -175,8 +182,74 @@ class Downloads extends ChangeNotifier implements LocalPages {
 
   /// The worker is running (including its final saves after a book finishes or pauses).
   bool get busy => _running;
-  int get usedBytes => store?.books.values.fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0)) ?? 0;
-  bool isDownloaded(String bookId) => store?.books[bookId]?['state'] == 'done';
+  /// Downloads' room used (the cache's own is [cacheBytes]).
+  int get usedBytes => _bytes(cached: false);
+  int _bytes({required bool cached}) => store?.books.values
+          .where((e) => (e['cache'] == true) == cached)
+          .fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0)) ??
+      0;
+
+  /// Downloaded on purpose (a cached copy isn't: [isCached]).
+  bool isDownloaded(String bookId) {
+    final e = store?.books[bookId];
+    return e?['state'] == 'done' && e?['cache'] != true;
+  }
+
+  // ---- the cache (user, 2026-10-24): a book opened online is downloaded in the background as it's read - read
+  // from the device from then on, and offline too. Up to [cacheCap] on disk: the books opened longest ago go first to
+  // make room; a book finished goes as soon as it's left. Not a download: not on the Downloads screen, not in its limit.
+  static const defaultCacheCap = 512 * 1024 * 1024; // (user, 2026-10-24: "let's call the cache size 512 megabytes")
+  @visibleForTesting
+  static int cacheCap = defaultCacheCap;
+  int get cacheBytes => _bytes(cached: true);
+  bool isCached(String bookId) {
+    final e = store?.books[bookId];
+    return e?['state'] == 'done' && e?['cache'] == true;
+  }
+
+  /// The queue as the Downloads screen shows it (the cache's books aren't downloads).
+  List<DownloadJob> get shownQueue => [for (final j in queue) if (!j.cache) j];
+
+  /// A book opened in the reader (online): cached in the background - first in the queue - unless it's here already
+  /// (then it counts as opened now, the last to go).
+  Future<void> cacheBook(Map book) async {
+    final s = store;
+    if (s == null || _hold) return;
+    final id = book['id'] as String;
+    final e = s.books[id];
+    if (e != null && e['cache'] == true) {
+      e['cachedAt'] = clock.now().toIso8601String();
+      await s.put(id, e);
+      return;
+    }
+    if (e != null || jobFor(id) != null) return; // downloaded, or on its way
+    final size = (book['sizeBytes'] as num?)?.toInt() ?? 0;
+    if (size > cacheCap) return; // bigger than the whole cache
+    final firstWaiting = queue.indexWhere((j) => j.state != JobState.downloading);
+    final job = DownloadJob(bookId: id, title: bookTitle(book), cache: true);
+    firstWaiting < 0 ? queue.add(job) : queue.insert(firstWaiting, job);
+    await _saveQueue();
+    notifyListeners();
+    unawaited(_pump());
+  }
+
+  /// Room for [bytes] more in the cache: the books opened longest ago go (never [keep], the one being cached).
+  Future<bool> _cacheRoom(int bytes, String keep) async {
+    final s = store!;
+    final cached = [
+      for (final e in s.books.entries)
+        if (e.value['cache'] == true && e.key != keep) e,
+    ]..sort((a, b) => '${a.value['cachedAt'] ?? ''}'.compareTo('${b.value['cachedAt'] ?? ''}'));
+    var used = cacheBytes - ((s.books[keep]?['bytes'] as num?)?.toInt() ?? 0);
+    final gone = <String>[];
+    for (final e in cached) {
+      if (used + bytes <= cacheCap) break;
+      used -= (e.value['bytes'] as num?)?.toInt() ?? 0;
+      gone.add(e.key);
+    }
+    if (gone.isNotEmpty) await _deleteFiles(gone);
+    return used + bytes <= cacheCap;
+  }
 
   /// Downloaded books per series / read list (for the tile badges) - worked out once per change, not per tile.
   int downloadedInSeries(String seriesId) => _counts().$1[seriesId] ?? 0;
@@ -185,7 +258,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   (Map<String, int>, Map<String, int>) _counts() => _countCache ??= () {
         final series = <String, int>{}, lists = <String, int>{};
         for (final e in store?.books.values ?? const <Map<String, dynamic>>[]) {
-          if (e['state'] != 'done') continue;
+          if (e['state'] != 'done' || e['cache'] == true) continue;
           final s = (e['book'] as Map?)?['seriesId'] as String?;
           if (s != null) series[s] = (series[s] ?? 0) + 1;
           for (final rl in (e['readLists'] as List?) ?? const []) {
@@ -382,6 +455,18 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// goes (a book still open in the reader, once the reader closes). Ask: it's added to the books to ask about. Books
   /// that were already read when downloaded aren't touched: this only follows a book becoming read.
   void bookFinished(String bookId) {
+    // the cache's: finished, it goes - whatever Delete once read says (user, 2026-10-24: "a book that is finished
+    // reading should immediately delete the cache"); one still being cached stops
+    final job = jobFor(bookId);
+    if (job != null && job.cache) {
+      unawaited(cancel(bookId));
+      return;
+    }
+    if (isCached(bookId)) {
+      _finished.add(bookId); // (its pages may be on screen: once no book is open)
+      if (_readers == 0) unawaited(_deleteFinished());
+      return;
+    }
     if (deleteRead == DeleteRead.never || !isDownloaded(bookId)) return;
     if (deleteRead == DeleteRead.ask) {
       if (keptRead.contains(bookId)) return; // asked already: Keep
@@ -409,7 +494,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// Removes several downloads together ("Delete" in answer to Ask; Manage: a selection, a series, everything read)
   /// - the downloads record written once, not once per book.
   Future<void> removeAll(Iterable<String> ids) async {
-    final gone = [for (final id in ids) if (isDownloaded(id)) id];
+    final gone = [for (final id in ids) if (isDownloaded(id) || isCached(id)) id];
     if (gone.isEmpty) return;
     await _deleteFiles(gone);
     await _roomAgain(); // room freed: books that stopped for lack of it carry on (and the listeners hear of it)
@@ -483,6 +568,21 @@ class Downloads extends ChangeNotifier implements LocalPages {
     var added = 0;
     for (final b in books) {
       final id = b['id'] as String;
+      // a book in the cache, downloaded on purpose: a download from now on (kept until deleted)
+      final cachedJob = jobFor(id);
+      if (cachedJob != null && cachedJob.cache) {
+        cachedJob.cache = false;
+        added++;
+        continue;
+      }
+      final e = store!.books[id];
+      if (e != null && e['cache'] == true) {
+        e.remove('cache');
+        e.remove('cachedAt');
+        await store!.put(id, e);
+        added++;
+        continue;
+      }
       if (isDownloaded(id) || jobFor(id) != null) continue;
       queue.add(DownloadJob(bookId: id, title: bookTitle(b)));
       added++;
@@ -541,6 +641,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// downloading stops after its current page and is cleaned up. Finished downloads are untouched.
   Future<void> cancelAll() async {
     for (final j in List<DownloadJob>.of(queue)) {
+      if (j.cache) continue; // (the cache's: not on the Downloads screen, not its to cancel)
       if (j.state == JobState.downloading) {
         j._cancel = true; // the worker removes it
       } else {
@@ -668,7 +769,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
       final estimate = pageSizes > 0 ? pageSizes : ((book['sizeBytes'] as num?)?.toInt() ?? 0);
       final alreadyHere = (s.books[job.bookId]?['bytes'] as num?)?.toInt() ?? 0;
       final cap = capBytes;
-      if (cap != null && usedBytes - alreadyHere + estimate > cap) {
+      if (job.cache) {
+        // the cache's own room: the books opened longest ago go; too big for it all, it isn't cached
+        if (!await _cacheRoom(estimate - alreadyHere, job.bookId)) {
+          queue.remove(job);
+          await _deleteFiles([job.bookId]);
+          return;
+        }
+      } else if (cap != null && usedBytes - alreadyHere + estimate > cap) {
         throw Exception('not enough room: the download limit is ${_gb(cap)} and ${_gb(usedBytes)} is used '
             '(raise it in Settings)');
       }
@@ -718,6 +826,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
       final entry = <String, dynamic>{
         'book': book, 'series': series, 'library': {'id': library['id'], 'name': library['name']},
         'readLists': readLists, 'collections': collections, 'pages': plan, 'bytes': 0, 'state': 'partial',
+        if (job.cache) 'cache': true,
+        if (job.cache) 'cachedAt': clock.now().toIso8601String(),
         if (nextKnown) 'nextId': nextId,
         if (epub) 'epubFile': 'book.epub',
         if (epub) 'positions': positions,
@@ -815,8 +925,11 @@ class Downloads extends ChangeNotifier implements LocalPages {
         entry
           ..['bytes'] = bytes
           ..['state'] = 'done';
+        if (!job.cache) entry..remove('cache')..remove('cachedAt'); // (downloaded on purpose meanwhile)
         await s.put(job.bookId, entry);
         queue.remove(job);
+        // (its real size now: the cache back under its limit if Komga's sizes were short)
+        if (job.cache) await _cacheRoom(0, job.bookId);
       }
     } catch (e, st) {
       if (gone()) {

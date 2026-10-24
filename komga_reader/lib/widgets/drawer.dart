@@ -133,7 +133,7 @@ class _AppDrawerState extends State<AppDrawer> {
             ListenableBuilder(
               listenable: Downloads.instance,
               builder: (context, _) {
-                final q = Downloads.instance.queue.length;
+                final q = Downloads.instance.shownQueue.length;
                 return ListTile(
                   leading: const Icon(Icons.download_outlined),
                   title: const Text('Downloads'),
