@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- A book opened from Komga is also kept on the device in the background as you read it (comics and eBooks), so it reads from the device from then on - and offline too. The cache takes up to 512 MB: when it's full, the books opened longest ago go first; a book finished goes as soon as you leave it. It isn't a download: it's not on the Downloads screen or in its limit, and downloading a cached book makes it a normal download, kept until you delete it.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
