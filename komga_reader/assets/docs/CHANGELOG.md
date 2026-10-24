@@ -9,14 +9,16 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0 - in development
+
+Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
+
+### Build 149 - 2026-10-24
+
 **Fixed**
 
 - A flaky connection: "Can't reach Komga" no longer comes up every few seconds - a request that fails is followed by a check, and the question comes only if that fails too; after Komga answers again, it isn't asked for 30 s. Each such failure goes in the error log, with how it failed (no answer in time, refused...).
 - Comics: after a flaky connection, the reader no longer takes one of its own earlier pages on Komga for another device's ("On another device this book is on page 8" while reading page 11) - a save that reached Komga with its answer lost still counts as this reader's. Asked about another device's page that is behind this one, it no longer says "Read further".
-
-## 1.5.0 - in development
-
-Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
 
 ### Build 148 - 2026-10-24
 
