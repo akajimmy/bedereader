@@ -13,19 +13,17 @@ import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/status_server.dart';
 
-/// The reader's Comic settings and Image panels: side sheets on a wide screen, bottom sheets on a narrow one.
+/// The reader's Comic settings panel: a side sheet on a wide screen, a bottom sheet on a narrow one.
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() => AppSettings.instance.series.clear());
 
-  Future<void> openPanel(WidgetTester tester, Size size, {bool image = false, FitMode? bookFit}) async {
+  Future<void> openPanel(WidgetTester tester, Size size, {FitMode? bookFit}) async {
     setView(tester, size);
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(builder: (context) => Center(
       child: TextButton(
-        onPressed: () => image
-            ? showImagePanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics')
-            : showReaderPanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics', komgaDirection: 'RIGHT_TO_LEFT',
-                bookFit: bookFit),
+        onPressed: () => showReaderPanel(context, seriesId: 'S1', seriesTitle: 'Planet Comics',
+            komgaDirection: 'RIGHT_TO_LEFT', bookFit: bookFit),
         child: const Text('open'),
       ),
     )))));
@@ -46,31 +44,58 @@ void main() {
     expect(tester.takeException(), isNull); // nothing overflows at phone width
   });
 
-  testWidgets('Image: off, the controls are greyed out showing the defaults; on, they can be set; off again follows '
-      'the defaults', (tester) async {
+  testWidgets('Enhance and Enhance colours in the series group, under its one Override (user, 2026-10-23: "back to '
+      'the per series override section"): off, greyed out showing the defaults; on, the layout and the image both the '
+      "series' own, starting from the defaults; Make default takes them; off again follows the defaults", (tester) async {
     final s = AppSettings.instance;
     s.setDefault(const ReaderPrefs(sharpen: true)); // the defaults have Enhance on
     addTearDown(() => s.setDefault(const ReaderPrefs()));
-    await openPanel(tester, const Size(1280, 800), image: true);
+    await openPanel(tester, const Size(1280, 1400));
     SwitchListTile row(String t) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, t));
     expect(row('Override defaults').value, isFalse);
     expect(row('Enhance').value, isTrue, reason: "shows the defaults' value");
     expect(row('Enhance').onChanged, isNull, reason: 'greyed out');
-    expect(find.text('Reset to original'), findsNothing); // only with the override on
+    expect(row('Enhance colours').onChanged, isNull, reason: 'greyed out');
 
     await tester.tap(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.pumpAndSettle();
-    expect(s.ownsImage('S1'), isTrue);
-    expect(s.ownsLayout('S1'), isFalse, reason: 'the layout part is separate');
+    expect((s.ownsLayout('S1'), s.ownsImage('S1')), (true, true), reason: 'one override: both parts');
     expect(row('Enhance').value, isTrue, reason: 'starts from the defaults: nothing jumps');
     await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance'));
     await tester.pumpAndSettle();
-    expect(s.prefsFor('S1').sharpen, isFalse); // the series' own now
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance colours'));
+    await tester.pumpAndSettle();
+    expect((s.prefsFor('S1').sharpen, s.prefsFor('S1').autoLevels), (false, true), reason: "the series' own now");
+    expect(s.defaults.sharpen, isTrue, reason: 'the defaults untouched');
 
+    await tester.ensureVisible(find.text('Make default'));
+    await tester.tap(find.text('Make default'));
+    await tester.pumpAndSettle();
+    expect((s.defaults.sharpen, s.defaults.autoLevels), (false, true), reason: 'Make default takes the image settings too');
+
+    await tester.ensureVisible(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.tap(find.widgetWithText(SwitchListTile, 'Override defaults'));
     await tester.pumpAndSettle();
-    expect(s.hasOwn('S1'), isFalse, reason: 'neither part overridden: the series follows the defaults entirely');
-    expect(s.prefsFor('S1').sharpen, isTrue);
+    expect(s.hasOwn('S1'), isFalse, reason: 'off: the series follows the defaults entirely');
+    await tester.pump(const Duration(seconds: 5)); // the settings sync timer
+  });
+
+  testWidgets("a series that overrides only its layout (saved before the one switch): Override shows on, Enhance follows "
+      "the defaults until it's changed - then it's the series' own", (tester) async {
+    final s = AppSettings.instance;
+    s.setDefault(const ReaderPrefs(sharpen: true));
+    addTearDown(() => s.setDefault(const ReaderPrefs()));
+    s.setOverride('S1', layout: true);
+    expect(s.ownsImage('S1'), isFalse);
+    await openPanel(tester, const Size(1280, 1400));
+    SwitchListTile row(String t) => tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, t));
+    expect(row('Override defaults').value, isTrue);
+    expect(row('Enhance').value, isTrue, reason: "the defaults' - nothing changed for it");
+    expect(row('Enhance').onChanged, isNotNull, reason: 'can be set');
+    await tester.tap(find.widgetWithText(SwitchListTile, 'Enhance'));
+    await tester.pumpAndSettle();
+    expect(s.ownsImage('S1'), isTrue);
+    expect(s.prefsFor('S1').sharpen, isFalse);
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
@@ -144,6 +169,8 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final auto = find.widgetWithText(SegmentedButton<bool>, 'Auto');
     expect(auto, findsOneWidget);
+    await tester.ensureVisible(auto); // (below the series group's rows)
+    await tester.pumpAndSettle();
     final slider = find.ancestor(of: find.byType(Slider), matching: find.byType(BrightnessPreview));
     final s = tester.widget<Slider>(find.descendant(of: slider, matching: find.byType(Slider)));
     expect(s.onChanged, isNull, reason: 'Auto: the slider greyed');
@@ -170,6 +197,8 @@ void main() {
     await openPanel(tester, const Size(1280, 800));
     final auto = find.widgetWithText(SegmentedButton<bool>, 'Auto');
     expect(auto, findsOneWidget);
+    await tester.ensureVisible(auto); // (below the series group's rows)
+    await tester.pumpAndSettle();
     expect(AppSettings.instance.display.dimOverlay, 0, reason: 'Auto: no dimming');
     await tester.tap(auto);
     await tester.pumpAndSettle();

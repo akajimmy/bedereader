@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Comics and webtoons: Enhance, Enhance colours and Crop edges are back in the series' settings in the reader (Comic settings, or Webtoon settings), under the same Override defaults as the fit, direction and page colours - one switch for all of it, and Make default takes all of it. The separate Image settings button and panel are gone. A series that already had only its layout or only its image settings of its own keeps them; the other part follows the defaults until you change it.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
