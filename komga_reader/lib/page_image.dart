@@ -19,6 +19,14 @@ class PageData {
   final Uint8List bytes;
 }
 
+/// Runs [f] [frames] frames from now (one is asked for, so it comes): a picture let go of in this frame's build may
+/// still be drawn by it - freed after, it's no longer anywhere.
+void afterFrames(VoidCallback f, [int frames = 2]) {
+  final b = WidgetsBinding.instance;
+  b.addPostFrameCallback((_) => frames <= 1 ? f() : afterFrames(f, frames - 1));
+  b.scheduleFrame();
+}
+
 /// Loads a book's pages once each and keeps the few around the current page (and the next two, preloaded).
 class PageLoader {
   PageLoader(this.api, this.bookId, this.pageNumbers);
@@ -68,12 +76,31 @@ class PageLoader {
   /// about 24 MB): only one turn back and two ahead are kept so; the files (a few MB) two back and three ahead, so a
   /// page come back to is only decoded again (user, 2026-10-24: the app was killed for memory on a 2.5 GB tablet,
   /// two pages up - 11 pages were kept decoded).
-  void around(int i, {int span = 1}) {
+  ///
+  /// [free]: the pictures let go of are freed too, two frames on (the frame being built may still draw them) - left to the
+  /// garbage collector, graphics memory piled up as pages were turned and Android closed the app (user, 2026-10-24).
+  /// Only where nothing beyond these pages can be showing one (the paged view; a webtoon's strip keeps slices further
+  /// out on screen).
+  void around(int i, {int span = 1, bool free = false}) {
     for (var j = i + 1; j <= i + 2 * span; j++) {
       if (j < pageNumbers.length) get(j).ignore();
     }
-    _cache.removeWhere((k, _) => k < i - span || k > i + 2 * span);
+    for (final k in [for (final k in _cache.keys) if (k < i - span || k > i + 2 * span) k]) {
+      final gone = _cache.remove(k)!;
+      if (free) _free(gone);
+    }
     _loaded.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
+  }
+
+  static void _free(Future<PageData> page) =>
+      page.then((d) => afterFrames(d.image.dispose), onError: (Object _) {});
+
+  /// The book closed: every picture freed (two frames on).
+  void freeAll() {
+    for (final f in _cache.values) {
+      _free(f);
+    }
+    _cache.clear();
   }
 
   Future<Levels>? _bookLevels;

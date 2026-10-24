@@ -154,7 +154,7 @@ class ComicRenderer extends Renderer {
     _scrolls.clear();
     _sideways.clear();
     _pageRects.clear();
-    _joined.clear();
+    _freeAllJoined();
     _spineAt.clear();
     _startAtEnd = null;
     zoomed = false;
@@ -279,6 +279,7 @@ class ComicRenderer extends Renderer {
     _strip = null; // (a webtoon opens at its place)
     _playAt = null;
     _stripPlace = prepared.stripPlace;
+    if (!identical(_loader, loader)) _loader?.freeAll(); // (the last book's pictures)
     _loader = loader;
     zoomed = false;
     _bookFit = null;
@@ -287,7 +288,7 @@ class ComicRenderer extends Renderer {
     final area = _area.isEmpty && host.mounted ? MediaQuery.sizeOf(host.context) : _area;
     _dual = !area.isEmpty && _twoPagesOn(area);
     _pair();
-    _joined.clear();
+    _freeAllJoined();
     _spineAt.clear();
     _at = _viewOf(start);
     pc = PageController(initialPage: _at, keepPage: false); // (a kept page would be the last book's)
@@ -430,6 +431,8 @@ class ComicRenderer extends Renderer {
   @override
   void dispose() {
     _disposed = true;
+    _freeAllJoined();
+    _loader?.freeAll();
     _settleTimer?.cancel();
     _tapTimer?.cancel();
     _autoAwake?.cancel();
@@ -489,7 +492,7 @@ class ComicRenderer extends Renderer {
     index = i;
     zoomed = false;
     // (two pages: the window of pages kept and preloaded twice as wide - a turn moves two)
-    if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1);
+    if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1, free: true);
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
     host.pageChanged(i, curling: _curl.active);
@@ -1260,31 +1263,70 @@ class ComicRenderer extends Renderer {
 
   Future<PageData> _joinedAt(int v, Spread s) {
     // the pair showing and one turn either way (the page view builds no further) - each is two pages wide
-    _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 1);
+    for (final k in [for (final k in _joined.keys) if ((k.$1 - _at).abs() > 1) k]) {
+      _freeJoined(_joined.remove(k)!);
+    }
     final crop = prefs.crop;
     final key = (v, crop, rtl, prefs.gutter, prefs.fit, _settled, background);
     // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as
     // the bars move, and each pair was joined again for each, every copy kept - two full pages wide each; user,
     // 2026-10-24: the app died turning the tablet with two pages up)
-    _joined.removeWhere((k, _) => k.$1 == v && k != key);
-    return _joined.putIfAbsent(key, () async {
+    final older = [for (final k in _joined.keys) if (k.$1 == v && k != key) k];
+    final made = _joined.putIfAbsent(key, () async {
       try {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
-        final images = [for (final p in pair) crop > 0 ? await cropEdges(p.image, crop) : p.image];
-        final onScreen = rtl ? images.reversed.toList() : images;
-        // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
-        final h = math.max(onScreen[0].height, onScreen[1].height);
-        double w(ui.Image i) => i.width * h / i.height;
-        final w0 = w(onScreen[0]) + w(onScreen[1]), gap = _gapPixels(h.toDouble(), w0);
-        _spineAt[v] = (w(onScreen[0]) + gap / 2) / (w0 + gap);
-        _gapAt[v] = gap / (w0 + gap);
-        return PageData(await joinPages(onScreen, gap: gap, fill: background), Uint8List(0));
+        // its own hold on the two pages (the loader frees its own once they're far behind - PageLoader.around)
+        final own = [for (final p in pair) p.image.clone()];
+        final cut = crop > 0 ? [for (final i in own) await cropEdges(i, crop)] : null;
+        try {
+          final images = cut ?? own;
+          final onScreen = rtl ? images.reversed.toList() : images;
+          // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
+          final h = math.max(onScreen[0].height, onScreen[1].height);
+          double w(ui.Image i) => i.width * h / i.height;
+          final w0 = w(onScreen[0]) + w(onScreen[1]), gap = _gapPixels(h.toDouble(), w0);
+          _spineAt[v] = (w(onScreen[0]) + gap / 2) / (w0 + gap);
+          _gapAt[v] = gap / (w0 + gap);
+          final joined = await joinPages(onScreen, gap: gap, fill: background);
+          onJoined?.call(joined);
+          return PageData(joined, Uint8List(0));
+        } finally {
+          for (final i in [...own, ...?cut]) {
+            i.dispose();
+          }
+        }
       } catch (_) {
         _joined.remove(key)?.ignore(); // Retry joins them again
         rethrow;
       }
     });
+    // (the older one shows until this one is in: freed after it)
+    for (final k in older) {
+      _freeJoined(_joined.remove(k)!, after: made);
+    }
+    return made;
   }
+
+  /// A joined pair let go of: its picture freed once nothing can still be drawing it - two frames on, and after
+  /// [after] (its replacement) is in. Left to the garbage collector, these two-pages-wide pictures piled up as pages
+  /// were turned - about 40 MB a turn, never given back - and Android closed the app (user, 2026-10-24).
+  void _freeJoined(Future<PageData> joined, {Future<void>? after}) {
+    joined.then((d) async {
+      await after?.then((_) {}, onError: (Object _) {});
+      afterFrames(d.image.dispose);
+    }, onError: (Object _) {});
+  }
+
+  void _freeAllJoined() {
+    for (final f in _joined.values) {
+      _freeJoined(f);
+    }
+    _joined.clear();
+  }
+
+  /// Tests: told of each joined pair's picture as it's made.
+  @visibleForTesting
+  static void Function(ui.Image)? onJoined;
 
   Widget _page(BuildContext context, int i, Future<PageData> data, {ReaderPrefs? prefs}) {
     return FutureBuilder<PageData>(
