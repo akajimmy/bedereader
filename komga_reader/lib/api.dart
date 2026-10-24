@@ -70,18 +70,24 @@ class Komga {
       if (e.status == 401) onKeyRefused?.call(this); // before "it answered": the connection mustn't offer to go back
       onReachability?.call(this, true); // it answered, with an error
       rethrow;
-    } on KomgaNotKomga {
+    } on KomgaNotKomga catch (e) {
+      lastFailure = e;
       onReachability?.call(this, false); // something answered, but nothing this app can use
       rethrow;
     } on TimeoutException {
-      if (!slowIsNotDown) onReachability?.call(this, false);
+      if (!slowIsNotDown) {
+        lastFailure = 'no answer within ${limit.inSeconds} s';
+        onReachability?.call(this, false);
+      }
       throw KomgaUnreachable(baseUrl);
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      lastFailure = e; // (its message says how: refused, no route, network unreachable...)
       onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl); // package:http wraps socket errors (refused, no route) in this
     } catch (e) {
       // https with a certificate this device doesn't trust (a TLS handshake error, which package:http passes on raw)
       if ('${e.runtimeType}'.contains('Handshake') || '$e'.contains('CERTIFICATE_VERIFY_FAILED')) {
+        lastFailure = e;
         onReachability?.call(this, false);
         throw KomgaCertificate(baseUrl);
       }
@@ -91,6 +97,9 @@ class Komga {
 
   /// Told after every server call whether Komga answered (the connection uses it to offer offline mode).
   static void Function(Komga api, bool reachable)? onReachability;
+
+  /// How the last call that didn't reach Komga failed (no answer in time, refused, no route...) - for the error log.
+  static Object? lastFailure;
 
   /// Told when Komga refuses the API key (HTTP 401) - it was deleted, say (the connection offers downloaded books
   /// and signing in again).

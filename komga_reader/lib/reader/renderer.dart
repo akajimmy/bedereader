@@ -210,6 +210,10 @@ abstract class Renderer extends ChangeNotifier {
   /// reader's). [place] past the last page: the book is read.
   Future<Object?> Function() progressSaver(int place);
 
+  /// What saving [place] will make Komga's progress, when known before the save's answer (comics: the page) - a save
+  /// that got there but whose answer was lost is still this reader's; null: only the answer says (EPUBs).
+  Object? progressSaving(int place) => null;
+
   /// Komga's progress after this reader marked the book read or unread; [fresh]: the book as Komga has it now.
   Future<Object?> progressAfterMark(Map fresh) => progressReader()();
 
