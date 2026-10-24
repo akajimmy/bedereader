@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 
+- Comics: less memory while reading - pages are kept decoded only one turn back and two ahead (two pages up, 11 pages were), with their files kept a little further so going back doesn't download them again; joined pairs only for the pair showing and one turn either way. Android was closing the app for lack of memory on the tablet, two pages up.
 - Comics, two pages up: turning the tablet no longer piles up copies of the joined pairs in memory - each in-between size of a rotation joined every pair near the page again and kept all the copies (a likely cause of the app closing after a rotation; not yet confirmed from the tablet's crash record).
 - Comics: a page curl that starts with the finger held still for a moment now turns the page - it was taken for a long press, which comic pages don't use, and the drag did nothing. eBooks keep a held finger for selecting text.
 
