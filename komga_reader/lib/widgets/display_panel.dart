@@ -9,18 +9,18 @@ import '../screen.dart';
 import '../settings.dart';
 import 'setting_rows.dart';
 
-/// The reader's two settings panels, opened from its bottom bar: side sheets on a wide screen (the page stays in
+/// The reader's settings panel, opened from its bottom bar: side sheets on a wide screen (the page stays in
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Comic settings: Save / Copy page, this book's pairing, fit, reading direction and page colours (this series),
-///   then the screen: brightness and rotation (user, 2026-10-21: trimmed - the rest is a tap away, "More settings").
-///   Night mode is the top bar's moon.
-/// * Image: Enhance, Enhance colours, crop, brightness, contrast (this series); Reset to original and Make default.
+/// * Comic settings (Webtoon settings for a webtoon): Save / Copy page, this book's pairing, then this series' fit,
+///   reading direction, page colours, Enhance, Enhance colours and Crop edges, then the screen: brightness and rotation
+///   (user, 2026-10-21: trimmed - the rest is a tap away, "More settings"). Night mode is the top bar's moon.
 ///
-/// Each panel's series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off, the series follows the
-/// defaults for that part (page layout, or image) and its controls are greyed out showing the default values; on,
-/// they're the series' own - starting from the defaults, so nothing jumps. The two parts are separate.
+/// The series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off,
+/// the series follows the defaults and its controls are greyed out showing the default values; on, they're the
+/// series' own - starting from the defaults, so nothing jumps. One switch for the page layout and the image settings
+/// (user, 2026-10-23: the Image panel went, its settings back in this group).
 ///
 /// The row builders below are shared with the Settings screen, so a setting looks the same in both places.
 /// [page]: Save page / Copy page for the page shown (null where there's no page to save, or no way to).
@@ -76,11 +76,6 @@ class _PageActionsRow extends StatelessWidget {
         ),
       );
 }
-
-/// [webtoon]: Komga's webtoon - its Make default is webtoons' defaults.
-Future<void> showImagePanel(BuildContext context, {required String seriesId, String? seriesTitle,
-        bool webtoon = false}) =>
-    _show(context, (side) => _ImagePanel(seriesId: seriesId, seriesTitle: seriesTitle, side: side, webtoon: webtoon));
 
 /// Any reader panel in the comic reader's look (user, 2026-10-06: the EPUB reader's panels should look like these):
 /// a side sheet on a wide screen, a bottom sheet on a narrow one, [title] and Done, then [children] (rebuilt as
@@ -161,7 +156,7 @@ class _Panel extends StatelessWidget {
   }
 }
 
-/// "Settings for Series: *name*" - both panels' series group (user, 2026-09-30).
+/// "Settings for Series: *name*" - the panel's series group (user, 2026-09-30).
 String _seriesHeading(String? title) => title == null ? 'Settings for this series' : 'Settings for Series: $title';
 
 class _ReaderPanel extends StatelessWidget {
@@ -183,7 +178,10 @@ class _ReaderPanel extends StatelessWidget {
     return _Panel(title: webtoon ? 'Webtoon settings' : 'Comic settings', side: side, groups: (s) {
       final id = seriesId;
       final p = s.prefsFor(id);
-      final own = id != null && s.ownsLayout(id);
+      // one override for the series' page layout and its image settings (user, 2026-10-23: Enhance and Enhance colours
+      // "need to go back to the per series override section"; the Image panel went) - on if either part is the
+      // series' own (a part not yet set keeps following the defaults until it's changed)
+      final own = id != null && (s.ownsLayout(id) || s.ownsImage(id));
       return [
         if (page != null) SettingsGroup(title: 'This page', children: [_PageActionsRow(page!)]),
         // two pages up: this book's pairing, a page off (user, 2026-10-22: "does not need to be a top level button" -
@@ -207,7 +205,7 @@ class _ReaderPanel extends StatelessWidget {
               title: 'Override defaults',
               value: own,
               onChanged: (v) {
-                s.setOverride(id, layout: v);
+                s.setOverride(id, layout: v, image: v);
                 // on: it starts from what's on screen, including a fit picked for this book - nothing moves (review)
                 final f = bookFit;
                 if (v && f != null) s.setSeriesLayout(id, s.prefsFor(id).copyWith(fit: f));
@@ -219,18 +217,19 @@ class _ReaderPanel extends StatelessWidget {
             else
               ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
                   enabled: own),
+            ...imageRows(p, (n) => s.setSeriesImage(id, n), enabled: own),
             if (own)
               ActionRow(
-                title: 'Use this layout for new series',
+                title: 'Use these settings for new series',
                 button: TextButton(
                   onPressed: () {
                     // (a webtoon's: webtoons' defaults)
                     if (webtoon) {
-                      s.setWebtoonDefault(
-                          s.webtoonDefaults.copyWith(fit: p.fit, background: p.background, gutter: p.gutter));
+                      s.setWebtoonDefault(s.webtoonDefaults
+                          .copyWith(fit: p.fit, background: p.background, gutter: p.gutter).withImageOf(p));
                     } else {
                       s.setDefault(s.defaults.copyWith(fit: p.fit, direction: p.direction, background: p.background,
-                          twoPages: p.twoPages, gutter: p.gutter));
+                          twoPages: p.twoPages, gutter: p.gutter).withImageOf(p));
                     }
                     _toast(context, "Series you haven't adjusted will open like this one");
                   },
@@ -252,56 +251,6 @@ class _ReaderPanel extends StatelessWidget {
         if (api != null) moreSettingsRow(context, api!, webtoon ? SettingsPage.webtoons : SettingsPage.comics),
       ];
     });
-  }
-}
-
-class _ImagePanel extends StatelessWidget {
-  const _ImagePanel({required this.seriesId, this.seriesTitle, required this.side, this.webtoon = false});
-  final bool webtoon;
-  final String seriesId;
-  final String? seriesTitle;
-  final bool side;
-
-  @override
-  Widget build(BuildContext context) {
-    return _Panel(
-      title: 'Image',
-      side: side,
-      groups: (s) {
-        final p = s.prefsFor(seriesId);
-        final own = s.ownsImage(seriesId);
-        return [
-          SettingsGroup(title: _seriesHeading(seriesTitle), children: [
-            // on: this series' own image settings; off: the defaults', greyed out (user, 2026-09-30)
-            SwitchRow(
-              title: 'Override defaults',
-              value: own,
-              onChanged: (v) => s.setOverride(seriesId, image: v),
-            ),
-            ...imageRows(p, (n) => s.setSeriesImage(seriesId, n), enabled: own),
-          ]),
-          // the actions as buttons (user, 2026-09-30: not a ⋮ menu) - only with the override on
-          if (own)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Wrap(spacing: 8, runSpacing: 8, children: [
-                OutlinedButton(
-                  // the untouched scan for this series (fit and direction are left alone)
-                  onPressed: () => s.setSeriesImage(seriesId, p.imageReset()),
-                  child: const Text('Reset to original'),
-                ),
-                OutlinedButton(
-                  onPressed: () {
-                    webtoon ? s.setWebtoonDefault(s.webtoonDefaults.withImageOf(p)) : s.setDefault(s.defaults.withImageOf(p));
-                    _toast(context, "Series you haven't adjusted will use these image settings");
-                  },
-                  child: const Text('Make default'),
-                ),
-              ]),
-            ),
-        ];
-      },
-    );
   }
 }
 

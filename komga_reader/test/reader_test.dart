@@ -221,10 +221,10 @@ void main() {
     }
     expect(focused('ctl-delete'), isTrue); // stops at the right end
     await key(tester, LogicalKeyboardKey.arrowDown);
-    // same position in the bottom bar (5th of 6: previous book, slider, pages, image, reader, next book)
-    expect(focused('ctl-reader'), isTrue);
+    // same position in the bottom bar (5th of 5: previous book, slider, pages, reader settings, next book)
+    expect(focused('ctl-nextBook'), isTrue);
     await key(tester, LogicalKeyboardKey.arrowLeft);
-    expect(focused('ctl-image'), isTrue);
+    expect(focused('ctl-reader'), isTrue);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focused('ctl-read'), isTrue); // back up, same position (4th)
     await key(tester, LogicalKeyboardKey.arrowUp);

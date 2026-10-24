@@ -422,7 +422,7 @@ class ComicRenderer extends Renderer {
     }
     _scrolls.clear();
     _stripScroll.dispose();
-    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode]) {
+    for (final n in [fitNode, pagesNode, readerNode, stripNode]) {
       n.dispose();
     }
     super.dispose();
@@ -1286,7 +1286,6 @@ class ComicRenderer extends Renderer {
 
   final fitNode = FocusNode(debugLabel: 'ctl-fit');
   final pagesNode = FocusNode(debugLabel: 'ctl-pages');
-  final imageNode = FocusNode(debugLabel: 'ctl-image');
   final readerNode = FocusNode(debugLabel: 'ctl-reader');
   final stripNode = FocusNode(debugLabel: 'ctl-strip');
 
@@ -1317,7 +1316,7 @@ class ComicRenderer extends Renderer {
     ];
   }
 
-  /// The bottom bar's own: the page strip, image settings (a series), reader settings.
+  /// The bottom bar's own: the page strip, auto-scroll (a webtoon), the reader's settings (the image settings in them).
   @override
   List<BarButton> bottomButtons(BuildContext context) => [
         if (pages.length > 1)
@@ -1327,10 +1326,6 @@ class ComicRenderer extends Renderer {
         if (webtoon && _strip != null)
           BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.stop : Icons.play_arrow,
               label: autoScrolling ? 'Stop auto-scroll' : 'Auto-scroll', onPressed: autoScrollToggle)),
-        if (seriesId != null)
-          BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
-              onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?,
-                  webtoon: _komgaWebtoon))),
         BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune,
             label: _komgaWebtoon ? 'Webtoon settings' : 'Comic settings',
             onPressed: () => showReaderPanel(context, webtoon: _komgaWebtoon,
