@@ -39,6 +39,11 @@ class AutoRotation {
     }
     _channel.setMethodCallHandler(_onCall);
     _following = true;
+    await SystemChrome.setPreferredOrientations(const []); // the tablet's own way, until its setting is known
+    unawaited(_ask()); // (not waited for: nothing that lets go of a lock waits on the tablet's answer)
+  }
+
+  Future<void> _ask() async {
     bool? auto;
     try {
       auto = await _channel.invokeMethod<bool>('follow', true);
@@ -53,9 +58,7 @@ class AutoRotation {
     if (!_following) return;
     _following = false;
     _wait(null);
-    try {
-      await _channel.invokeMethod('follow', false);
-    } catch (_) {}
+    unawaited(_channel.invokeMethod('follow', false).then((_) {}, onError: (Object _) {})); // (not waited for)
   }
 
   Future<void> _onCall(MethodCall call) async {
