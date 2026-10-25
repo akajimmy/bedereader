@@ -9,6 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0 - in development
+
+Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
+
+### Build 158 - 2026-10-25
+
 **Fixed**
 
 - iPad and iPhone: downloaded books are no longer included in iCloud backups. The app's folder was backed up like any other, so every download counted against your iCloud storage; the books are on Komga anyway.
@@ -16,10 +22,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 
 - The app log says more: page turns, how a book was closed, keys pressed in the reader and what they did, the screen turning and the rotation lock, brightness, pages saved or copied, the image shaders, Wi-Fi only holding downloads, and a page slow to download. On the PC it no longer logs every switch to another window.
-
-## 1.5.0 - in development
-
-Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
 
 ### Build 157 - 2026-10-25
 
