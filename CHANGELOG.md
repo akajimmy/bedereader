@@ -13,6 +13,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 - iPad and iPhone: the app knows its own version. iOS never gave it, so About showed none, the update check couldn't compare, and eBook layouts kept from an older build weren't redone after an update.
 - Turning the remote log on also sends what the app logged earlier in that run, its start-up lines included - before, only what came after was sent.
+- The app log says when a book was closed with the reader's Close button, apart from Back (which on the iPhone and iPad is also the swipe from the left edge).
 
 ## 1.5.0 - in development
 
