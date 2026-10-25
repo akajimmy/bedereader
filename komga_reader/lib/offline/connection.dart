@@ -134,7 +134,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     try {
       await api.me();
       return true;
-    } catch (_) {
+    } catch (e) {
+      // the check's own failure decides, not another request's that fails meanwhile (code review, 2026-10-24: one
+      // failing during a check asked at once, though the check itself was answered)
+      if (identical(api, online) && (e is KomgaUnreachable || e is KomgaNotKomga || e is KomgaCertificate)) _gone();
       return false;
     } finally {
       _checks--;
@@ -145,7 +148,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   // came "every few seconds" - each failed request asked, each one that got through closed it): first a check of its
   // own ([check] - a failed check is the answer); and after the question closed because Komga answered, none for
   // [quietAfterBack].
-  int _checks = 0; // checks under way: their failure is the confirmation
+  int _checks = 0; // checks under way: a request failing meanwhile waits for their answer
   bool _confirming = false;
   DateTime? _quietUntil;
   static const quietAfterBack = Duration(seconds: 30);
@@ -203,17 +206,19 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
         _apply();
         notifyListeners();
       }
-    } else if (!offline && !forcedOffline && !askPending && available) {
-      if (_checks == 0) {
-        // a request failed: asked only if a check fails too, and not just after Komga came back
-        final quiet = _quietUntil;
-        if (quiet == null || !clock.now().isBefore(quiet)) unawaited(_confirmGone());
-        return;
-      }
-      askPending = true; // ask (or, with nothing downloaded, just say Komga can't be reached)
-      ErrorLog.instance.record("Can't reach Komga (asked whether to go offline)", Komga.lastFailure ?? 'not known');
-      notifyListeners();
+    } else if (!offline && !forcedOffline && !askPending && available && _checks == 0) {
+      // a request failed: asked only if a check fails too ([check] asks), and not just after Komga came back
+      final quiet = _quietUntil;
+      if (quiet == null || !clock.now().isBefore(quiet)) unawaited(_confirmGone());
     }
+  }
+
+  /// A check couldn't reach Komga: ask (or, with nothing downloaded, just say Komga can't be reached).
+  void _gone() {
+    if (keyRefused || offline || forcedOffline || askPending || !available) return;
+    askPending = true;
+    ErrorLog.instance.record("Can't reach Komga (asked whether to go offline)", Komga.lastFailure ?? 'not known');
+    notifyListeners();
   }
 
   @override

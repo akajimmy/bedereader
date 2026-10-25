@@ -272,6 +272,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       });
       onOpened?.call();
       _keys.requestFocus();
+      Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
       if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
@@ -399,10 +400,10 @@ class _ReaderScreenState extends State<ReaderScreen>
   // per book (a book left for the next one is saved after that one has opened): Komga's progress as this reader last
   // loaded, saved or accepted - the renderer's kind (comics: page and finished; EPUBs: a place in the book)
   final Map<String, Object?> _known = {};
-  // per book, this visit: every progress this reader saved or sent to be saved. On a flaky connection a save can get
-  // to Komga with its answer lost, and the next ones not get there at all: Komga then has one of this reader's older
-  // pages, which is no other device's (user, 2026-10-24: lost the connection on page 8, back on page 11 - asked about
-  // page 8 "on another device")
+  // per book: the progress this reader sent to be saved since the last save Komga answered. On a flaky connection a
+  // save can get to Komga with its answer lost, and the next ones not get there at all: Komga then has one of this
+  // reader's older pages, which is no other device's (user, 2026-10-24: lost the connection on page 8, back on page 11
+  // - asked about page 8 "on another device")
   final Map<String, List<Object?>> _ours = {};
   Future<void> _saves = Future.value();
   Future<bool>? _question; // the question on screen: a second asker waits for its answer
@@ -440,8 +441,10 @@ class _ReaderScreenState extends State<ReaderScreen>
     // (code review 2026-10-05, #4). A failed save stays silent: the next one carries the newer page.
     if (saving != null) _noteOurs(id, saving); // (sent: if it gets there, it's this reader's - answered or not)
     try {
-      final saved = _known[id] = await save();
-      _noteOurs(id, saved);
+      _known[id] = await save();
+      // answered: Komga has this one, so the ones sent before it no longer count - another device can be on one of
+      // those pages now (code review, 2026-10-24: every page sent this visit counted as this reader's)
+      _ours.remove(id);
     } catch (_) {}
   }
 

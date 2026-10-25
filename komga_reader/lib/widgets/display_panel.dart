@@ -14,8 +14,9 @@ import 'setting_rows.dart';
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
 /// * Comic settings (Webtoon settings for a webtoon): Save / Copy page, this book's pairing, then this series' fit,
-///   reading direction, page colours, Enhance, Enhance colours and Crop edges, then the screen: brightness and rotation
-///   (user, 2026-10-21: trimmed - the rest is a tap away, "More settings"). Night mode is the top bar's moon.
+///   reading direction, page colours, Enhance, Enhance colours and Crop edges (Reset to original, Make default), then
+///   the screen: brightness and rotation (user, 2026-10-21: trimmed - the rest is a tap away, "More settings"). Night
+///   mode is the top bar's moon.
 ///
 /// The series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off,
 /// the series follows the defaults and its controls are greyed out showing the default values; on, they're the
@@ -218,6 +219,13 @@ class _ReaderPanel extends StatelessWidget {
               ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
                   enabled: own),
             ...imageRows(p, (n) => s.setSeriesImage(id, n), enabled: own),
+            // (lost with the Image panel - code review, 2026-10-24; fit and direction are left alone)
+            if (own)
+              ActionRow(
+                title: "This series' image settings back to the original scan",
+                button: TextButton(
+                    onPressed: () => s.setSeriesImage(id, p.imageReset()), child: const Text('Reset to original')),
+              ),
             if (own)
               ActionRow(
                 title: 'Use these settings for new series',

@@ -480,6 +480,20 @@ void main() {
       expect(api.progress, {'page': 6, 'completed': false});
     });
 
+    testWidgets('another device on a page this reader saved earlier (each save answered): asked - only pages sent '
+        'since the last answered save count as this reader\'s (code review, 2026-10-24)', (tester) async {
+      final api = await reading(tester);
+      await turnAndWait(tester); // page 3
+      await turnAndWait(tester); // page 4
+      await turnAndWait(tester); // page 5
+      api.progress = {'page': 3, 'completed': false}; // the PC, back on page 3
+      await turnAndWait(tester); // page 6
+      expect(find.text('On another device this book is on page 3.'), findsOneWidget);
+      await tester.tap(find.text('Stay on page 6'));
+      await frames(tester);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     testWidgets('another device behind this one: asked, but not as "further"', (tester) async {
       final api = await reading(tester);
       await turnAndWait(tester); // page 3

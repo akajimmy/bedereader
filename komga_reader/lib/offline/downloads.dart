@@ -210,6 +210,13 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// The queue as the Downloads screen shows it (the cache's books aren't downloads).
   List<DownloadJob> get shownQueue => [for (final j in queue) if (!j.cache) j];
 
+  /// [bookId]'s download on its way - not the cache's (code review, 2026-10-24: a book being cached showed "In the
+  /// download queue", and its tile a download's progress).
+  DownloadJob? downloadJob(String bookId) {
+    final j = jobFor(bookId);
+    return j == null || j.cache ? null : j;
+  }
+
   /// A book opened in the reader (online): cached in the background - first in the queue - unless it's here already
   /// (then it counts as opened now, the last to go).
   Future<void> cacheBook(Map book) async {
@@ -222,7 +229,16 @@ class Downloads extends ChangeNotifier implements LocalPages {
       await s.put(id, e);
       return;
     }
-    if (e != null || jobFor(id) != null) return; // downloaded, or on its way
+    final had = jobFor(id);
+    if (had != null && had.cache && had.state == JobState.failed) {
+      // (one that failed before this build's fix stayed in the queue: tried again)
+      had.state = JobState.queued;
+      had.error = null;
+      await _saveQueue();
+      unawaited(_pump());
+      return;
+    }
+    if (e != null || had != null) return; // downloaded, or on its way
     final size = (book['sizeBytes'] as num?)?.toInt() ?? 0;
     if (size > cacheCap) return; // bigger than the whole cache
     final firstWaiting = queue.indexWhere((j) => j.state != JobState.downloading);
@@ -233,13 +249,17 @@ class Downloads extends ChangeNotifier implements LocalPages {
     unawaited(_pump());
   }
 
-  /// Room for [bytes] more in the cache: the books opened longest ago go (never [keep], the one being cached).
+  /// Room in the cache for [keep], the book being cached, at [bytes] in all: the books opened longest ago go - never
+  /// [keep], nor the book open in the reader ([reading]: its pages are read from these files).
   Future<bool> _cacheRoom(int bytes, String keep) async {
     final s = store!;
+    final open = _readers > 0 ? _reading : null;
     final cached = [
       for (final e in s.books.entries)
-        if (e.value['cache'] == true && e.key != keep) e,
+        if (e.value['cache'] == true && e.key != keep && e.key != open) e,
     ]..sort((a, b) => '${a.value['cachedAt'] ?? ''}'.compareTo('${b.value['cachedAt'] ?? ''}'));
+    // the others' (code review, 2026-10-24: [keep]'s bytes so far were taken off twice, and its real size left out
+    // once it was in - the cache went past its limit)
     var used = cacheBytes - ((s.books[keep]?['bytes'] as num?)?.toInt() ?? 0);
     final gone = <String>[];
     for (final e in cached) {
@@ -430,6 +450,10 @@ class Downloads extends ChangeNotifier implements LocalPages {
   final Set<String> _finished = {}; // Always: read while a book was open - deleted once the reader closes
   final Set<String> askPending = {}; // Ask: finished, waiting to be asked about once no book is open
   int _readers = 0;
+  String? _reading; // the book the reader shows ([reading]): its cached copy isn't made room with
+
+  /// The reader shows [bookId] now (online or not): a cached copy of it stays while it's open ([_cacheRoom]).
+  void reading(String bookId) => _reading = bookId;
 
   /// Ask, answered Keep: not asked about again (the read reaching Komga later asked a second time - code review,
   /// 2026-09-30). Remembered until the download goes.
@@ -480,6 +504,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   void readerOpened() => _readers++;
   void readerClosed() {
     if (_readers > 0) _readers--;
+    if (_readers == 0) _reading = null;
     if (_readers == 0 && _finished.isNotEmpty) unawaited(_deleteFinished());
     if (_readers == 0 && askPending.isNotEmpty) notifyListeners(); // time to ask
   }
@@ -513,6 +538,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     _wifiTimer?.cancel();
     _wifiTimer = null;
     _readers = 0;
+    _reading = null;
     _finished.clear();
     askPending.clear();
     keptRead.clear();
@@ -771,9 +797,12 @@ class Downloads extends ChangeNotifier implements LocalPages {
       final cap = capBytes;
       if (job.cache) {
         // the cache's own room: the books opened longest ago go; too big for it all, it isn't cached
-        if (!await _cacheRoom(estimate - alreadyHere, job.bookId)) {
+        if (!await _cacheRoom(estimate, job.bookId)) {
           queue.remove(job);
           await _deleteFiles([job.bookId]);
+          // (saved: left in queue.json, it came back at every start - code review, 2026-10-24)
+          await _saveQueue();
+          notifyListeners();
           return;
         }
       } else if (cap != null && usedBytes - alreadyHere + estimate > cap) {
@@ -929,7 +958,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
         await s.put(job.bookId, entry);
         queue.remove(job);
         // (its real size now: the cache back under its limit if Komga's sizes were short)
-        if (job.cache) await _cacheRoom(0, job.bookId);
+        if (job.cache) await _cacheRoom(bytes, job.bookId);
       }
     } catch (e, st) {
       if (gone()) {
@@ -944,6 +973,12 @@ class Downloads extends ChangeNotifier implements LocalPages {
         waitingForServer = true;
         _serverTimer?.cancel();
         _serverTimer = Timer(serverRecheck, _pump);
+      } else if (job.cache) {
+        // the cache's: dropped, tried again when the book is next opened (code review, 2026-10-24: kept as failed, out
+        // of sight on the Downloads screen, it stopped the book from ever being cached)
+        queue.remove(job);
+        await _deleteFiles([job.bookId]);
+        ErrorLog.instance.record('Caching "${job.title}" failed.', e, st);
       } else {
         // plain words for the Downloads screen ("Failed: this book is no longer on Komga."); the room message is
         // already plain

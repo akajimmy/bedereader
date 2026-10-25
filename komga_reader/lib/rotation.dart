@@ -80,7 +80,10 @@ class AutoRotation {
       await SystemChrome.setPreferredOrientations(const []); // the tablet's own way: its lock
       return;
     }
-    _way = await _wayNow();
+    final way = await _wayNow();
+    // a lock of the reader's taken over meanwhile: it stands (code review, 2026-10-24: the way up applied after it)
+    if (!_following || !_systemAuto) return;
+    _way = way;
     if (_way == null) {
       await SystemChrome.setPreferredOrientations(const []);
     } else {

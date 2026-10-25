@@ -69,6 +69,16 @@ void main() {
     expect(log.first.detail, contains('Connection refused'));
   });
 
+  test("another request failing while a check is on its way: the check's answer decides - answered, not asked "
+      '(code review, 2026-10-24)', () async {
+    final checking = conn.check(); // on its way
+    Komga.onReachability!(server, false); // a page request fails meanwhile
+    expect(conn.askPending, isFalse);
+    expect(await checking, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(conn.askPending, isFalse, reason: 'Komga answered the check');
+  });
+
   test('the question closed because Komga answered: a failure in the next 30 s asks nothing (no check either); '
       'after that, as before', () async {
     var now = DateTime(2026, 10, 24, 14);

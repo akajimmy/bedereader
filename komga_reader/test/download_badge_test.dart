@@ -75,6 +75,14 @@ void main() {
     expect(tester.getSize(find.byType(DownloadBadge)), Size.zero);
   });
 
+  testWidgets("a book being cached (opened in the reader) isn't a download: no badge (code review, 2026-10-24)",
+      (tester) async {
+    d.queue.add(DownloadJob(bookId: 'b9', title: 'x', state: JobState.failed, cache: true));
+    await show(tester, const DownloadBadge.book('b9'));
+    expect(find.descendant(of: find.byType(DownloadBadge), matching: find.byType(Icon)), findsNothing);
+    expect(d.downloadJob('b9'), isNull, reason: 'the book sheet offers Download, not "In the download queue"');
+  });
+
   test('the counts follow changes to the store', () {
     expect(d.downloadedInSeries('s1'), 2);
     d.store!.books['b3']!['state'] = 'done';

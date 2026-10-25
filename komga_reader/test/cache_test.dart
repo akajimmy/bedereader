@@ -2,6 +2,7 @@
 // to immediately opening the book, start downloading it in the background. The app should maintain a specific amount
 // of hard drive space maximum for cached issues. And a book that is finished reading should immediately delete the
 // cache. Aside from that, when maximum size is reached, delete the oldest cache book. ... 512 megabytes".
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:clock/clock.dart';
@@ -16,8 +17,17 @@ import 'support/settle.dart';
 
 Map<String, dynamic> book(String id) => {'id': id, 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '1'}};
 
+/// Komga's page sizes a tenth of the real ones (the room is judged by them before a book is cached).
+class ShortSizes extends LibraryServer {
+  ShortSizes([super.baseUrl]);
+  @override
+  Future<List<dynamic>> pages(String bookId) async =>
+      [for (final p in await super.pages(bookId)) {...p as Map<String, dynamic>, 'sizeBytes': 10}];
+}
+
 void main() {
   late Directory dir;
+  late LibraryServer server;
   final d = Downloads.instance;
   var now = DateTime(2026, 10, 24, 18);
 
@@ -25,7 +35,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     d.reset();
     dir = await Directory.systemTemp.createTemp('komga_cache_test');
-    await d.attach(noNetwork(LibraryServer.new), root: dir);
+    server = noNetwork(LibraryServer.new);
+    await d.attach(server, root: dir);
   });
   tearDown(() async {
     Downloads.cacheCap = Downloads.defaultCacheCap;
@@ -82,6 +93,66 @@ void main() {
     expect(d.isCached('B2'), isTrue, reason: 'its pages may still be on screen');
     d.readerClosed();
     await waitUntil(() => !d.store!.books.containsKey('B2'), reason: 'deleted once the reader closed');
+  });
+
+  // code review, 2026-10-24: the room check took a resumed book's bytes so far off twice, and the check once a book
+  // was in left its real size out - the cache went past its limit
+  test('a book cached in two goes (paused partway): the cache stays within its limit', () async {
+    Downloads.cacheCap = 550; // B1 and B2 (300 each) don't both fit
+    await open('B1');
+    server.onPage = (n) {
+      if (n == 1) d.pauseAll(); // B2 stops after its first page
+    };
+    await withClock(Clock.fixed(now = now.add(const Duration(minutes: 1))), () => d.cacheBook(book('B2')));
+    await waitUntil(() => !d.busy && d.jobFor('B2')?.state == JobState.paused);
+    server.onPage = null;
+    d.resumeAll();
+    await waitUntil(() => !d.busy && d.isCached('B2'));
+    expect((d.isCached('B1'), d.cacheBytes), (false, 300), reason: 'B1, the older, went to make room');
+  });
+
+  test("Komga's sizes short of the real ones: once the book is in, the cache is brought back within its limit",
+      () async {
+    await d.attach(noNetwork(ShortSizes.new), root: dir);
+    Downloads.cacheCap = 500;
+    await open('B1');
+    await open('B2'); // judged 30 bytes, really 300
+    await waitUntil(() => !d.busy);
+    expect((d.isCached('B1'), d.isCached('B2'), d.cacheBytes), (false, true, 300));
+  });
+
+  test('a cached copy failing goes from the queue - the book is cached when next opened', () async {
+    server.booksFail = true;
+    await open('B1');
+    await waitUntil(() => !d.busy);
+    expect(d.jobFor('B1'), isNull, reason: 'not left in the queue, out of sight, as failed');
+    server.booksFail = false;
+    await open('B1');
+    await waitUntil(() => !d.busy);
+    expect(d.isCached('B1'), isTrue);
+  });
+
+  test('a book too big for the cache: its job is gone from the saved queue too (not back at the next start)',
+      () async {
+    Downloads.cacheCap = 200;
+    await open('B1'); // 300 bytes
+    await waitUntil(() => !d.busy);
+    expect(d.jobFor('B1'), isNull);
+    await d.store!.written;
+    final saved = jsonDecode(await d.store!.file('queue.json').readAsString()) as List;
+    expect([for (final j in saved) j['bookId']], isNot(contains('B1')));
+  });
+
+  test("making room never takes the book open in the reader (its pages are read from the cache's files)", () async {
+    Downloads.cacheCap = 700; // two books
+    d.readerOpened();
+    await open('B1');
+    await open('B2');
+    d.reading('B1'); // back to B1 - read from the device
+    await open('B3'); // B1 is the oldest opened...
+    await waitUntil(() => !d.busy);
+    expect([for (final id in ['B1', 'B2', 'B3']) d.isCached(id)], [true, false, true], reason: '...but open: B2 went');
+    d.readerClosed();
   });
 
   test('a cached book downloaded on purpose is a download from then on: kept when finished', () async {

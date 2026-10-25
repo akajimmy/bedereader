@@ -378,18 +378,19 @@ class ComicRenderer extends Renderer {
 
   @override
   Future<Object?> Function() progressSaver(int place) {
-    // the end card counts as the last page: finished
-    final page = math.min(place, last), id = _book['id'] as String, completed = page >= last;
+    final id = _book['id'] as String;
+    final (page, completed) = progressSaving(place);
     return () async {
-      await api.setProgress(id, page + 1, completed: completed);
-      return (page + 1, completed);
+      await api.setProgress(id, page, completed: completed);
+      return (page, completed);
     };
   }
 
+  /// Komga's page (1-based) and finished for [place] - the end card counts as the last page: finished.
   @override
-  Object? progressSaving(int place) {
+  (int, bool) progressSaving(int place) {
     final page = math.min(place, last);
-    return (page + 1, page >= last); // as [progressSaver] saves it
+    return (page + 1, page >= last);
   }
 
   @override
