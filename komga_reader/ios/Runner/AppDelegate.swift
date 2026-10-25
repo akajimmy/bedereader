@@ -252,6 +252,17 @@ enum ScreenChannel {
         result(true)
       case "storageDir":
         result(storageDir())
+      case "appVersion":
+        // as Android and Windows answer (lib/screen.dart): the version and the build number - About, the update
+        // check, the EPUB layouts' cache key, the remote log (never answered on iOS before: user, 2026-10-25)
+        let info = Bundle.main.infoDictionary
+        guard let name = info?["CFBundleShortVersionString"] as? String,
+          let code = Int(info?["CFBundleVersion"] as? String ?? "")
+        else {
+          result(nil)
+          return
+        }
+        result(["name": name, "code": code])
       case "excludeFromBackup":
         // the folder (and all in it) left out of iCloud and computer backups (lib/screen.dart, appStorageDir)
         guard let path = call.arguments as? String else {

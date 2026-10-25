@@ -48,8 +48,23 @@ class AppLog extends ChangeNotifier {
   final List<LogLine> recent = [];
   final List<LogLine> outbox = [];
 
-  /// Lines also go to [outbox] (the remote log is on).
-  bool collecting = false;
+  /// Lines also go to [outbox] (the remote log is on). Turned on during a run, this run's lines so far go too - the
+  /// start-up ones above all ("started", "kept out of iCloud backup"), which came before anyone could turn it on
+  /// (user, 2026-10-25) - each line once however often it's turned on and off; earlier runs' lines don't.
+  bool get collecting => _collecting;
+  set collecting(bool on) {
+    if (on && !_collecting) {
+      for (final l in recent) {
+        if (_thisRun.contains(l) && _queued.add(l)) outbox.add(l);
+      }
+      _trim();
+      _saveSoon();
+    }
+    _collecting = on;
+  }
+
+  bool _collecting = false;
+  final _thisRun = Set<LogLine>.identity(), _queued = Set<LogLine>.identity();
 
   Directory? _dir;
   bool _writing = false, _again = false;
@@ -79,7 +94,11 @@ class AppLog extends ChangeNotifier {
     final line = LogLine(clock.now(), level, tag,
         msg.length > maxMessage ? '${msg.substring(0, maxMessage)}… (${msg.length} characters)' : msg);
     recent.add(line);
-    if (collecting) outbox.add(line);
+    _thisRun.add(line);
+    if (_collecting) {
+      outbox.add(line);
+      _queued.add(line);
+    }
     _trim();
     notifyListeners();
     _saveSoon();
@@ -93,13 +112,24 @@ class AppLog extends ChangeNotifier {
       return;
     }
     _writing = true;
-    save().whenComplete(() {
+    _pending = save().whenComplete(() {
       _writing = false;
       if (_again) {
         _again = false;
         _saveSoon();
       }
     });
+  }
+
+  Future<void>? _pending;
+
+  /// Tests: once every write asked for so far is done (a folder can then be deleted).
+  @visibleForTesting
+  Future<void> get written async {
+    while (_writing) {
+      await _pending;
+      await Future<void>.delayed(Duration.zero); // (a write asked for meanwhile starts after this one)
+    }
   }
 
   /// The app left or come back to ("to the background", "back") - on a phone or tablet only, where the system may
@@ -127,7 +157,12 @@ class AppLog extends ChangeNotifier {
   }
 
   void _trim() {
-    if (recent.length > keep) recent.removeRange(0, recent.length - keep);
+    if (recent.length > keep) {
+      final gone = recent.sublist(0, recent.length - keep);
+      recent.removeRange(0, gone.length);
+      _thisRun.removeAll(gone); // (only what's still shown can be queued later)
+      _queued.removeAll(gone);
+    }
     if (outbox.length > outboxCap) outbox.removeRange(0, outbox.length - outboxCap);
   }
 
@@ -178,7 +213,9 @@ class AppLog extends ChangeNotifier {
     _dir = null;
     recent.clear();
     outbox.clear();
-    collecting = false;
+    _collecting = false;
+    _thisRun.clear();
+    _queued.clear();
     _writing = _again = false;
   }
 }
