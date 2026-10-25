@@ -1,5 +1,5 @@
-import 'dart:io';
 // The page curl's drawing (lib/page_curl.dart, shaders/curl.frag): the back of the turning page in the colour given.
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -91,10 +91,12 @@ void main() {
       'line along the fold)', () {
     final src = File('shaders/curl.frag').readAsStringSync();
     final main = src.substring(src.indexOf('void main()'));
-    final firstBranch = main.indexOf(RegExp(r'\n\s*if \('));
+    // (the mirroring before it is the same for every pixel; the choosing starts here)
+    final choosing = main.indexOf('if (d > uRadius)');
+    expect(choosing, greaterThan(0));
     final reads = RegExp(r'\b(sheet|backOf|texture)\(').allMatches(main).map((m) => m.start).toList();
     expect(reads, isNotEmpty);
-    expect(reads.where((at) => at > firstBranch), isEmpty, reason: 'a read after the first if');
+    expect(reads.where((at) => at > choosing), isEmpty, reason: 'a read inside the choosing');
   });
 
   test('no lighter band where the page starts to curl (user, 2026-10-24: "every book, every page, every curl" - '
