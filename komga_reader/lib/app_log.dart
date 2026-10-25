@@ -102,6 +102,16 @@ class AppLog extends ChangeNotifier {
     });
   }
 
+  /// The app left or come back to ("to the background", "back") - on a phone or tablet only, where the system may
+  /// then freeze or end the app (a gap in the log, a failure just after coming back, a run that ended without a
+  /// crash). On Windows it's only the window losing or getting the focus, a line each time the user switches windows
+  /// (user, 2026-10-25: "drop it on windows").
+  void lifecycle(String what) {
+    if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android) {
+      info('app', what);
+    }
+  }
+
   /// The first [n] lines of [outbox] were sent.
   void sent(int n) {
     outbox.removeRange(0, n.clamp(0, outbox.length));

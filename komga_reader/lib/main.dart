@@ -117,10 +117,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     // left (another app, the home screen, locked): the log kept, and what's queued sent while it still can be
     _lifecycle = AppLifecycleListener(
       onPause: () {
-        AppLog.instance.info('app', 'to the background');
+        AppLog.instance.lifecycle('to the background');
         RemoteLog.instance.sendNow();
       },
-      onResume: () => AppLog.instance.info('app', 'back'),
+      onResume: () => AppLog.instance.lifecycle('back'),
     );
     NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time
