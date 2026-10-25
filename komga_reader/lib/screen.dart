@@ -310,11 +310,35 @@ Future<bool> openUrl(String url) async {
 /// platform side can't say.
 Future<String?> appStorageDir() async {
   try {
-    return await _channel.invokeMethod<String>('storageDir');
+    final dir = await _channel.invokeMethod<String>('storageDir');
+    if (dir != null && defaultTargetPlatform == TargetPlatform.iOS && !_backupAsked) {
+      _backupAsked = true;
+      await _keepOutOfBackup(dir);
+    }
+    return dir;
   } catch (_) {
     return null;
   }
 }
+
+/// iOS: the app's folder (the downloads, a few GB maybe) kept out of iCloud backup - iOS backs up Application Support
+/// unless told not to, against the person's iCloud storage, and the books are on Komga anyway (backlog, 2026-10-25:
+/// "left out of iCloud backup" was never done). Asked once a run (a folder made again is marked again); said in the
+/// app's log.
+Future<void> _keepOutOfBackup(String dir) async {
+  try {
+    final ok = await _channel.invokeMethod<bool>('excludeFromBackup', dir);
+    AppLog.instance.info('storage', ok == true ? 'kept out of iCloud backup' : 'could not be kept out of iCloud backup');
+  } catch (e) {
+    AppLog.instance.warn('storage', 'could not be kept out of iCloud backup: $e');
+  }
+}
+
+bool _backupAsked = false;
+
+/// Tests: as at start-up, not asked yet this run.
+@visibleForTesting
+void resetBackupAsked() => _backupAsked = false;
 
 // ---- Save page / Copy page (the reader, user 2026-10-02): the page's own image file, as Komga sends it ----------
 

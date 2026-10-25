@@ -31,6 +31,24 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
   });
 
+  test("the app's folder (the downloads) is kept out of iCloud backup: iOS is asked once a run, for that folder - not "
+      'on Android or Windows', () async {
+    addTearDown(resetBackupAsked);
+    resetBackupAsked();
+    answer = (c) => c.method == 'storageDir' ? '/var/mobile/Containers/Data/App/Library/Application Support/BeDeReader'
+        : true;
+    expect(await appStorageDir(), endsWith('BeDeReader'));
+    await appStorageDir();
+    expect(calls.map((c) => c.method), ['storageDir', 'excludeFromBackup', 'storageDir'], reason: 'once a run');
+    expect(calls[1].arguments, endsWith('BeDeReader'));
+
+    calls.clear();
+    resetBackupAsked();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await appStorageDir();
+    expect(calls.map((c) => c.method), ['storageDir']);
+  });
+
   test('brightness: the backlight is set, as on Android (the Auto + slider row), not just dimmed', () async {
     expect(hasBacklightControl, isTrue);
     await setScreenBrightness(0.4);
