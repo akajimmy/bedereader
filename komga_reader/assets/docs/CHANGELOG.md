@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
+- Sign in with your Komga email and password: the sign-in screen has Password and API key tabs, Password first. The password is used once to make an API key for this device (named "BeDeReader on Android", with the date, under your account's API keys in Komga) and only the key is kept. A server that won't make keys for the account (a restricted or demo account) keeps the email and password instead, encrypted like a key. The email is filled in again after Sign out. The sign-in screen also scrolls now when it doesn't fit (a phone on its side, the keyboard up).
 - A book opened from Komga is also kept on the device in the background as you read it (comics and eBooks), so it reads from the device from then on - and offline too. The cache takes up to 512 MB: when it's full, the books opened longest ago go first; a book finished goes as soon as you leave it. It isn't a download: it's not on the Downloads screen or in its limit, and downloading a cached book makes it a normal download, kept until you delete it.
 
 ## 1.5.0 - in development
