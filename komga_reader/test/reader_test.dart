@@ -2182,6 +2182,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     for (final turnsOver in [false, true]) {
+      SharedPreferences.setMockInitialValues({}); // (no way kept from a lock before: the way it is now)
       var wayUp = 'reverseLandscape';
       final (requests, _) = recordOrientation(tester, () => wayUp);
       final s = AppSettings.instance;
