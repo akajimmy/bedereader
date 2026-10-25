@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Comics: turning a page no longer decodes the pages you just left a second time. Each turn redid the page that had dropped out of memory (two pages up, the whole spread you'd left), so a curl through big modern pages decoded four of them instead of two, while the page was turning.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
