@@ -44,20 +44,49 @@ void main() {
   test('lines are queued to send only while the remote log is on; the log and the queue are kept across runs',
       () async {
     final dir = await Directory.systemTemp.createTemp('app_log');
-    addTearDown(() => dir.delete(recursive: true));
+    addTearDown(() async {
+      await log.written;
+      await dir.delete(recursive: true);
+    });
     await log.load(dir);
     log.info('app', 'before');
     expect(log.outbox, isEmpty, reason: 'off: nothing leaves the device');
     await configure();
     log.warn('reader', 'queued');
     log.add(LogLevel.crash, 'app', 'x' * 3000);
-    expect(log.outbox.map((l) => l.msg.length), [6, lessThan(2100)], reason: 'a long message cut');
+    expect(log.outbox.map((l) => l.msg.length), [6, 6, lessThan(2100)],
+        reason: "this run's line from before it was on too; a long message cut");
     await log.save();
 
     log.reset();
     await log.load(dir);
     expect(log.recent.map((l) => l.tag), ['app', 'reader', 'app']);
-    expect(log.outbox.map((l) => l.level), [LogLevel.warn, LogLevel.crash], reason: 'unsent: still to send');
+    expect(log.outbox.map((l) => l.level), [LogLevel.info, LogLevel.warn, LogLevel.crash], reason: 'unsent: still to send');
+  });
+
+  test("turned on during a run, this run's lines so far are sent too - the start-up ones came before it could be "
+      "turned on - each once, however often it's turned on and off; earlier runs' lines are not", () async {
+    final dir = await Directory.systemTemp.createTemp('app_log_run');
+    addTearDown(() async {
+      await log.written;
+      await dir.delete(recursive: true);
+    });
+    log.info('app', 'last run');
+    await log.save(); // (no folder yet: nothing written)
+    await log.load(dir);
+    log.info('app', 'old');
+    await log.save();
+    log.reset();
+    await log.load(dir); // a new run: "old" is an earlier run's
+    log.info('app', 'started');
+    log.info('storage', 'kept out of iCloud backup');
+    expect(log.outbox, isEmpty, reason: 'off');
+    await configure();
+    expect(log.outbox.map((l) => l.msg), ['started', 'kept out of iCloud backup']);
+    await remote.set(on: false);
+    await remote.set(on: true);
+    log.info('app', 'later');
+    expect(log.outbox.map((l) => l.msg), ['started', 'kept out of iCloud backup', 'later'], reason: 'not twice');
   });
 
   test('leaving the app and coming back are logged on a phone or tablet only - on Windows they are just the window '
