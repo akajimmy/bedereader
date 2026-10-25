@@ -39,7 +39,7 @@ String _sentence(String clause) => '${clause[0].toUpperCase()}${clause.substring
 /// [e] in plain words. [signIn]: said on the sign-in screen (checking the address, a key just typed). [thing]: what
 /// a missing item is ("book", "series"...). [forbidden]: why this particular action isn't allowed, when that's known
 /// (deleting files needs an admin account).
-Explained explain(Object e, {bool signIn = false, String thing = 'item', String? forbidden}) {
+Explained explain(Object e, {bool signIn = false, bool password = false, String thing = 'item', String? forbidden}) {
   if (e is KomgaUnreachable) {
     final at = displayAddress(e.baseUrl);
     return Explained(ErrorKind.unreachable,
@@ -63,6 +63,14 @@ Explained explain(Object e, {bool signIn = false, String thing = 'item', String?
   }
   if (e is KomgaError) {
     final s = e.status;
+    if (s == 401 && password) {
+      return signIn
+          ? const Explained(ErrorKind.keyRefused, "Komga didn't accept that email and password.",
+              "Komga didn't accept that email and password")
+          : const Explained(ErrorKind.keyRefused,
+              "Komga no longer accepts this device's password. It may have been changed: sign in again.",
+              "Komga no longer accepts this device's password");
+    }
     if (s == 401) {
       return signIn
           ? const Explained(ErrorKind.keyRefused,
