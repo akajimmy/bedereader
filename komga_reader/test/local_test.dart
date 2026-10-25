@@ -149,6 +149,46 @@ void main() {
       expect(again['readProgress']?['page'], 1, reason: 'added back: its progress with it');
     });
 
+    test("a comic's ComicInfo.xml: its title, number, release date, people and summary for the book; publisher, "
+        'genres, book count and right to left for the series; its pages\' sizes', () async {
+      final f = File('${root.path}${Platform.pathSeparator}Berserk (1990)${Platform.pathSeparator}Berserk v01.cbz');
+      await f.parent.create();
+      await f.writeAsBytes(zipOf({
+        '01.png': png, '02.png': png, '03.png': png,
+        'comicinfo.xml': '<?xml version="1.0"?><ComicInfo><Title>The Black Swordsman</Title><Number>1</Number>'
+            '<Summary>Guts &amp; Puck.</Summary><Year>1990</Year><Month>11</Month><Day>26</Day>'
+            '<Writer>Kentaro Miura</Writer><Penciller>Kentaro Miura, Studio Gaga</Penciller>'
+            '<Publisher>Hakusensha</Publisher><Genre>Dark Fantasy, Seinen</Genre><Count>41</Count>'
+            '<Manga>YesAndRightToLeft</Manga><Pages><Page Image="0" ImageWidth="1200" ImageHeight="1800"/>'
+            '<Page Image="1" ImageWidth="2400" ImageHeight="1800"/><Page Image="2" ImageWidth="1200" ImageHeight="1800"/>'
+            '</Pages></ComicInfo>',
+      }));
+      final api = await open();
+      final book = ((await api.searchBooks('Black Swordsman'))['content'] as List).single as Map;
+      final m = book['metadata'] as Map;
+      expect((m['title'], m['number'], m['releaseDate'], m['summary']),
+          ('The Black Swordsman', '1', '1990-11-26', 'Guts & Puck.'));
+      expect([for (final a in m['authors'] as List) '${a['name']}/${a['role']}'],
+          ['Kentaro Miura/writer', 'Kentaro Miura/penciller', 'Studio Gaga/penciller']);
+      final s = (await api.oneSeries(book['seriesId'] as String))!['metadata'] as Map;
+      expect((s['publisher'], s['totalBookCount'], s['readingDirection']), ('Hakusensha', 41, 'RIGHT_TO_LEFT'));
+      expect(s['genres'], ['Dark Fantasy', 'Seinen']);
+      expect([for (final p in await api.pages(book['id'] as String)) '${p['width']}x${p['height']}'],
+          ['1200x1800', '2400x1800', '1200x1800'], reason: 'page 2 a spread');
+    });
+
+    test("pages with no sizes given: read from the pictures themselves when the book is opened, and kept", () async {
+      var api = await open();
+      final saga = ((await api.searchBooks('Saga #10'))['content'] as List).single as Map;
+      expect((api.store.books[saga['id']]!['pages'] as List).first['width'], isNull, reason: 'not read by the scan');
+      expect([for (final p in await api.pages(saga['id'] as String)) '${p['width']}x${p['height']}'],
+          ['4x6', '4x6', '4x6'], reason: "the PNGs' own sizes");
+      await api.rescan();
+      api = await open(); // the next start: kept
+      expect((api.store.books[saga['id']]!['pages'] as List).first['width'], 4);
+      await api.rescan();
+    });
+
     test('a library folder that isn\'t there: no books, nothing thrown', () async {
       final api = await FolderKomga.open([LocalLibrary.at(r'Z:\nowhere\at\all')], dataDir: data);
       expect(api.isEmpty, isTrue);

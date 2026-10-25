@@ -56,8 +56,22 @@ class FileZip {
     }
   }
 
+  /// The entry named so, ignoring case ("ComicInfo.xml" is written every which way); null if there's none.
+  String? find(String name) {
+    final lower = name.toLowerCase();
+    for (final n in _entries.keys) {
+      if (n.toLowerCase() == lower) return n;
+    }
+    return null;
+  }
+
   /// An entry's contents (null if there's none of that name).
-  Future<Uint8List?> read(String name) async {
+  Future<Uint8List?> read(String name) => _read(name, null);
+
+  /// The start of an entry - about [bytes] of it (a picture's size is in its first few KB).
+  Future<Uint8List?> head(String name, int bytes) => _read(name, bytes);
+
+  Future<Uint8List?> _read(String name, int? limit) async {
     final e = _entries[name];
     if (e == null) return null;
     final (method, size, local) = e;
@@ -70,14 +84,77 @@ class FileZip {
         throw const FormatException('Damaged zip entry');
       }
       await raf.setPosition(local + 30 + h.getUint16(26, Endian.little) + h.getUint16(28, Endian.little));
-      final data = await raf.read(size);
+      final data = await raf.read(limit == null ? size : (limit < size ? limit : size));
       return switch (method) {
         0 => data,
-        8 => Uint8List.fromList(ZLibDecoder(raw: true).convert(data)),
+        8 when limit == null => Uint8List.fromList(ZLibDecoder(raw: true).convert(data)),
+        8 => _inflatePart(data),
         _ => throw FormatException('Unsupported zip compression ($method)'),
       };
     } finally {
       await raf.close();
     }
   }
+
+  /// As much of a deflated stream as [data] (its start) holds.
+  static Uint8List _inflatePart(Uint8List data) {
+    final f = RawZLibFilter.inflateFilter(raw: true)..process(data, 0, data.length);
+    final out = BytesBuilder(copy: false);
+    try {
+      for (List<int>? chunk; (chunk = f.processed(flush: false)) != null;) {
+        out.add(chunk!);
+      }
+    } catch (_) {
+      // the stream cut short: what came out so far
+    }
+    return out.takeBytes();
+  }
+}
+
+/// A picture's width and height from the start of its file (JPEG, PNG, GIF, WebP); null if it can't tell.
+(int, int)? imageSizeOf(Uint8List b) {
+  final d = ByteData.sublistView(b);
+  if (b.length >= 24 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4e && b[3] == 0x47) {
+    return (d.getUint32(16), d.getUint32(20)); // PNG: IHDR
+  }
+  if (b.length >= 10 && b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) {
+    return (d.getUint16(6, Endian.little), d.getUint16(8, Endian.little)); // GIF
+  }
+  if (b.length >= 30 && b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 && b[8] == 0x57 && b[9] == 0x45) {
+    final kind = String.fromCharCodes(b.sublist(12, 16)); // WebP
+    if (kind == 'VP8 ') return (d.getUint16(26, Endian.little) & 0x3fff, d.getUint16(28, Endian.little) & 0x3fff);
+    if (kind == 'VP8L') {
+      final v = d.getUint32(21, Endian.little);
+      return ((v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1);
+    }
+    if (kind == 'VP8X') {
+      int u24(int at) => b[at] | (b[at + 1] << 8) | (b[at + 2] << 16);
+      return (u24(24) + 1, u24(27) + 1);
+    }
+    return null;
+  }
+  if (b.length >= 4 && b[0] == 0xff && b[1] == 0xd8) {
+    // JPEG: the frame header (SOF0-15, not DHT/JPG/DAC)
+    var p = 2;
+    while (p + 9 < b.length) {
+      if (b[p] != 0xff) {
+        p++;
+        continue;
+      }
+      final m = b[p + 1];
+      if (m == 0xff) {
+        p++;
+        continue;
+      }
+      if (m == 0xd8 || m == 0x01 || (m >= 0xd0 && m <= 0xd7)) {
+        p += 2;
+        continue;
+      }
+      if (m >= 0xc0 && m <= 0xcf && m != 0xc4 && m != 0xc8 && m != 0xcc) {
+        return (d.getUint16(p + 7), d.getUint16(p + 5));
+      }
+      p += 2 + d.getUint16(p + 2);
+    }
+  }
+  return null;
 }

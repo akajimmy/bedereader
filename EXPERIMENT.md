@@ -64,6 +64,12 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 - The page curl felt laggier here than in 1.5: measured (perf.log), the same through Komga as from a folder - not local mode. A GPU-heavy game was running meanwhile, and 1.5 then felt laggy too (user, 2026-10-25). On hold until measured without it (main backlog).
 
+### Slice 3 - ComicInfo.xml and page sizes (2026-10-25)
+
+- **ComicInfo.xml** (inside the CBZ, as Komga reads it): the book's title, number, summary, release date (year, month, day), writers, artists and the rest by role; the series' publisher, genres, book count, and manga read right to left. In the first 400 Ongoing books, 155 have one: all with a year, 42 with a full date, only 11 with a writer.
+- **Page sizes** (two pages up, a wide page is a spread, alone; a webtoon's strip is laid out by them): from ComicInfo when it lists them (37 of the 400), else read from the start of each picture the first time the book is opened - 0.2 to 0.4 s for a 26-page book on the NAS - and kept. Catwoman #81's 3976-wide spread found so.
+- A scan made before this reads its books again once (what's kept from inside a file has a version).
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.

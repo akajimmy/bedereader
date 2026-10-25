@@ -137,6 +137,47 @@ class FolderKomga extends OfflineKomga {
     return z;
   }
 
+  /// A comic's pages with their sizes (two pages up, a wide page is a spread, alone; a webtoon's strip is laid out
+  /// by them): from its ComicInfo.xml when the scan found them there, else read from the start of each picture the
+  /// first time the book is opened - and kept.
+  @override
+  Future<List<dynamic>> pages(String bookId) async {
+    final e = store.books[bookId];
+    final list = (e?['pages'] as List?) ?? const [];
+    if (e != null && e['epub'] != true && list.any((p) => (p as Map)['width'] == null)) {
+      try {
+        await _measure(bookId, e);
+      } catch (_) {
+        // sizes not known: each page shown alone, as before
+      }
+    }
+    return super.pages(bookId);
+  }
+
+  Future<void> _measure(String bookId, Map<String, dynamic> e) async {
+    final zip = await _zip(bookId);
+    final pages = [for (final p in e['pages'] as List) p as Map];
+    final kept = ((e['inside'] as Map?)?['pages'] as List?) ?? const []; // (what a rescan keeps)
+    var next = 0;
+    Future<void> worker() async {
+      while (next < pages.length) {
+        final i = next++;
+        final p = pages[i];
+        if (p['width'] != null) continue;
+        var size = imageSizeOf(await zip.head(p['file'] as String, 64 * 1024) ?? Uint8List(0));
+        size ??= imageSizeOf(await zip.head(p['file'] as String, 1024 * 1024) ?? Uint8List(0)); // (a big header)
+        if (size == null) continue;
+        for (final m in [p, if (i < kept.length) kept[i] as Map]) {
+          m['width'] = size.$1;
+          m['height'] = size.$2;
+        }
+      }
+    }
+
+    await Future.wait([for (var k = 0; k < 8; k++) worker()]);
+    await store.save();
+  }
+
   @override
   Future<Uint8List> pageBytes(String bookId, int number) async {
     final page = ((store.books[bookId]?['pages'] as List?) ?? []).firstWhere((p) => p['number'] == number,

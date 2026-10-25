@@ -214,14 +214,20 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
           for (final a in ((b['book']['metadata'] as Map)['authors'] as List)) '${a['name']}|${a['role']}': a,
       }.values.toList();
       final created = [for (final b in books) b['book']['created'] as String]..sort();
+      // the series' own metadata from its books' ComicInfo.xml (the latest book's, where they differ)
+      final infos = [for (final b in books.reversed) if ((b['inside'] as Map)['info'] case final Map i) i];
+      T? first<T>(String key) => infos.map((i) => i[key]).whereType<T>().firstOrNull;
+      final genres = {for (final i in infos) ...((i['genres'] as List?) ?? const []).cast<String>()}.toList();
       final series = <String, dynamic>{
         'id': seriesId, 'libraryId': lib.id, 'name': seriesName, 'url': where,
         'created': created.first, 'lastModified': created.last, 'fileLastModified': created.last,
         'booksCount': books.length, 'booksReadCount': 0, 'booksUnreadCount': books.length, 'booksInProgressCount': 0,
         'metadata': {
-          'status': 'ONGOING', 'title': seriesName, 'titleSort': seriesName, 'summary': '', 'readingDirection': '',
-          'publisher': '', 'ageRating': null, 'language': '', 'genres': <String>[], 'tags': <String>[],
-          'totalBookCount': null, 'links': <dynamic>[], 'alternateTitles': <dynamic>[],
+          'status': 'ONGOING', 'title': seriesName, 'titleSort': seriesName, 'summary': '',
+          'readingDirection': first<bool>('rightToLeft') == true ? 'RIGHT_TO_LEFT' : '',
+          'publisher': first<String>('publisher') ?? '', 'ageRating': null, 'language': '', 'genres': genres,
+          'tags': <String>[], 'totalBookCount': first<int>('count'), 'links': <dynamic>[],
+          'alternateTitles': <dynamic>[],
         },
         'booksMetadata': {'authors': authors, 'tags': <String>[], 'releaseDate': dates.firstOrNull, 'summary': ''},
         'deleted': false, 'oneshot': oneshot,
@@ -249,7 +255,8 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
   // what's read from inside the file (its pages, an EPUB's title, author and cover): kept from the last scan if the
   // file hasn't changed since - only new and changed files are opened
   final was = known[f.path];
-  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == stat.size && was['inside'] is Map;
+  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == stat.size && was['inside'] is Map &&
+      (was['inside'] as Map)['v'] == _insideVersion;
   final inside = reuse ? (was['inside'] as Map).cast<String, dynamic>() : await _readInside(f, epub);
   final pages = [for (final p in (inside['pages'] as List)) (p as Map).cast<String, dynamic>()];
   if (!epub && pages.isEmpty) throw const FormatException('no pages');
@@ -257,6 +264,14 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
   final authors = <Map<String, dynamic>>[
     if (inside['author'] is String) {'name': inside['author'], 'role': 'writer'},
   ];
+  // a comic's ComicInfo.xml, where it has one: its own title, number, date, people and summary over the file name's
+  final info = (inside['info'] as Map?)?.cast<String, dynamic>();
+  if (info?['title'] case final String t) title = t;
+  if (info?['authors'] case final List a) authors.addAll([for (final x in a) (x as Map).cast<String, dynamic>()]);
+  final infoNumber = double.tryParse('${info?['number'] ?? ''}');
+  final shownNumber = info?['number'] is String && !oneshot ? info!['number'] as String : _numberText(number);
+  final sortNumber = infoNumber != null && !oneshot ? infoNumber : number;
+  final releaseDate = info?['releaseDate'] as String? ?? (parsed.year == null ? null : '${parsed.year}-01-01');
   final cover = inside['cover'] as String?;
   final book = <String, dynamic>{
     'id': 'B${stableId(_normPath(f.path))}', 'seriesId': seriesId, 'seriesTitle': seriesName, 'libraryId': lib.id,
@@ -268,8 +283,8 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
       'pagesCount': epub ? 100 : pages.length, 'comment': '', 'mediaProfile': epub ? 'EPUB' : 'DIVINA',
     },
     'metadata': {
-      'title': title, 'summary': '', 'number': _numberText(number), 'numberSort': number,
-      'releaseDate': parsed.year == null ? null : '${parsed.year}-01-01', 'authors': authors, 'tags': <String>[],
+      'title': title, 'summary': info?['summary'] ?? '', 'number': shownNumber, 'numberSort': sortNumber,
+      'releaseDate': releaseDate, 'authors': authors, 'tags': <String>[],
       'isbn': '', 'links': <dynamic>[],
     },
     'readProgress': null, 'deleted': false, 'oneshot': oneshot,
@@ -293,15 +308,75 @@ Future<void> _inParallel<T>(List<T> items, int n, Future<void> Function(T item) 
   await Future.wait([for (var k = 0; k < n; k++) worker()]);
 }
 
-/// Opens the book: a comic's pages (its pictures, in order), an EPUB's own title, author and cover.
+/// What's kept from inside a file: read again when this changes (a scan from an older version had less in it).
+const _insideVersion = 2;
+
+/// Opens the book: a comic's pages (its pictures, in order - their sizes too where its ComicInfo.xml gives them) and
+/// its ComicInfo.xml; an EPUB's own title, author and cover.
 Future<Map<String, dynamic>> _readInside(File f, bool epub) async {
   if (epub) {
     final meta = epubMetadata(Zip(await f.readAsBytes()));
-    return {'pages': const [], 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
+    return {'v': _insideVersion, 'pages': const [], 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
   }
-  final names = comicPages((await FileZip.open(f)).names);
+  final zip = await FileZip.open(f);
+  final names = comicPages(zip.names);
+  final infoName = zip.find('ComicInfo.xml');
+  final info = infoName == null ? null : comicInfo(utf8.decode(await zip.read(infoName) ?? const [], allowMalformed: true));
+  final sizes = (info?['pageSizes'] as List?) ?? const [];
   return {
-    'pages': [for (final (i, n) in names.indexed) {'number': i + 1, 'file': n, 'mediaType': imageType(n)}],
+    'v': _insideVersion,
+    'pages': [
+      for (final (i, n) in names.indexed)
+        {
+          'number': i + 1, 'file': n, 'mediaType': imageType(n),
+          // (ComicInfo lists a page for each picture, in the same order, when it's whole)
+          if (sizes.length == names.length && sizes[i] != null) 'width': sizes[i][0],
+          if (sizes.length == names.length && sizes[i] != null) 'height': sizes[i][1],
+        },
+    ],
     'cover': names.firstOrNull,
+    if (info != null) 'info': info..remove('pageSizes'),
+  };
+}
+
+/// A ComicInfo.xml (the comic's own metadata, as Komga reads it): the fields kept - title, number, summary, the
+/// release date, who made it, publisher, genres, the series' book count, manga read right to left, and each page's size.
+Map<String, dynamic> comicInfo(String xml) {
+  String? field(String name) {
+    final m = RegExp('<$name>([^<]*)</$name>', caseSensitive: false).firstMatch(xml);
+    final v = m == null ? null : _unescape(m[1]!).trim();
+    return v == null || v.isEmpty ? null : v;
+  }
+
+  int? number(String name) => int.tryParse(field(name) ?? '');
+  // the people: Komga's roles, from ComicInfo's fields (comma-separated names)
+  const roles = {
+    'Writer': 'writer', 'Penciller': 'penciller', 'Inker': 'inker', 'Colorist': 'colorist', 'Letterer': 'letterer',
+    'CoverArtist': 'cover', 'Editor': 'editor',
+  };
+  final authors = [
+    for (final MapEntry(key: tag, value: role) in roles.entries)
+      for (final name in (field(tag) ?? '').split(','))
+        if (name.trim().isNotEmpty) {'name': name.trim(), 'role': role},
+  ];
+  final year = number('Year'), month = number('Month'), day = number('Day');
+  String two(int v) => '$v'.padLeft(2, '0');
+  final pageSizes = [
+    for (final m in RegExp(r'<Page\b[^>]*>', caseSensitive: false).allMatches(xml))
+      () {
+        final w = int.tryParse(RegExp(r'ImageWidth="(\d+)"').firstMatch(m[0]!)?[1] ?? '');
+        final h = int.tryParse(RegExp(r'ImageHeight="(\d+)"').firstMatch(m[0]!)?[1] ?? '');
+        return w != null && h != null && w > 0 && h > 0 ? [w, h] : null;
+      }(),
+  ];
+  final manga = field('Manga')?.toLowerCase();
+  return {
+    'title': field('Title'), 'number': field('Number'), 'summary': field('Summary'),
+    if (year != null && year > 0)
+      'releaseDate': '$year-${two(month != null && month > 0 ? month : 1)}-${two(day != null && day > 0 ? day : 1)}',
+    'authors': authors, 'publisher': field('Publisher'),
+    'genres': [for (final g in (field('Genre') ?? '').split(',')) if (g.trim().isNotEmpty) g.trim()],
+    'count': number('Count'), if (manga == 'yesandrighttoleft') 'rightToLeft': true,
+    'pageSizes': pageSizes,
   };
 }
