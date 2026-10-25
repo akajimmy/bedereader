@@ -118,7 +118,6 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     _lifecycle = AppLifecycleListener(
       onPause: () {
         AppLog.instance.info('app', 'to the background');
-        AppLog.instance.save();
         RemoteLog.instance.sendNow();
       },
       onResume: () => AppLog.instance.info('app', 'back'),

@@ -52,7 +52,7 @@ class AppLog extends ChangeNotifier {
   bool collecting = false;
 
   Directory? _dir;
-  Timer? _flush;
+  bool _writing = false, _again = false;
 
   /// The log kept in [dir] (the app's storage, logs\): what was there before this run read back.
   Future<void> load(Directory dir) async {
@@ -82,9 +82,23 @@ class AppLog extends ChangeNotifier {
     if (collecting) outbox.add(line);
     _trim();
     notifyListeners();
-    _flush ??= Timer(const Duration(seconds: 3), () {
-      _flush = null;
-      save();
+    _saveSoon();
+  }
+
+  /// Written now, or right after the write under way (lines come a few a minute; no timer to leave behind).
+  void _saveSoon() {
+    if (_dir == null) return; // (kept nowhere: nothing to write)
+    if (_writing) {
+      _again = true;
+      return;
+    }
+    _writing = true;
+    save().whenComplete(() {
+      _writing = false;
+      if (_again) {
+        _again = false;
+        _saveSoon();
+      }
     });
   }
 
@@ -92,14 +106,14 @@ class AppLog extends ChangeNotifier {
   void sent(int n) {
     outbox.removeRange(0, n.clamp(0, outbox.length));
     notifyListeners();
-    save();
+    _saveSoon();
   }
 
   /// The lines on screen are cleared (the unsent ones stay queued).
   void clear() {
     recent.clear();
     notifyListeners();
-    save();
+    _saveSoon();
   }
 
   void _trim() {
@@ -151,11 +165,10 @@ class AppLog extends ChangeNotifier {
   /// Tests: empty, kept nowhere, not collecting.
   @visibleForTesting
   void reset() {
-    _flush?.cancel();
-    _flush = null;
     _dir = null;
     recent.clear();
     outbox.clear();
     collecting = false;
+    _writing = _again = false;
   }
 }
