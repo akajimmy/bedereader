@@ -9,14 +9,15 @@ import '../offline/connection.dart';
 Future<bool> showKeyRefusedPrompt(BuildContext context) async {
   final c = Connection.instance;
   final downloads = c.hasDownloads;
+  final password = c.online?.usesPassword ?? false;
   final signIn = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
     builder: (ctx) => AlertDialog(
       icon: const Icon(Icons.key_off, color: Color(0xFFFACC15)),
-      title: const Text('API key not accepted'),
+      title: Text(password ? 'Password not accepted' : 'API key not accepted'),
       content: Text([
-        explain(KomgaError(401, '')).message,
+        explain(KomgaError(401, ''), password: password).message,
         if (downloads) 'Your downloaded books can still be read meanwhile.',
       ].join('\n\n')),
       actions: [

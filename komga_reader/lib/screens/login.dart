@@ -1,3 +1,5 @@
+import 'package:clock/clock.dart';
+import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,7 +20,7 @@ String? serverAddress(String typed) {
   return s;
 }
 
-/// The [typed] address sends the API key unencrypted beyond the home network: plain http:// to a host that isn't
+/// The [typed] address sends the API key or password unencrypted beyond the home network: plain http:// to a host that isn't
 /// local (user, 2026-10-08 / 2026-10-21: a note on the sign-in screen). Local: private and loopback addresses
 /// (10.x, 172.16-31.x, 192.168.x, 127.x, IPv6 fc00::/7, fe80::/10, ::1), localhost, a name without a dot (a home
 /// network's own name, "nick-nas"), .local / .lan / .home.arpa / .internal names - and Tailscale (100.64.0.0/10,
@@ -46,7 +48,25 @@ bool sendsKeyInTheClear(String typed) {
   return true; // a name on the internet
 }
 
-/// Server address + a Komga API key (create one in the Komga web client: Account settings > API keys).
+/// The name of the API key a password sign-in makes: the app, the device kind and when (Komga lists it under the
+/// account's API keys; dated, so signing in again on the same device never repeats a name).
+String apiKeyName() {
+  final kind = switch (defaultTargetPlatform) {
+    TargetPlatform.android => 'Android',
+    TargetPlatform.iOS => 'iOS',
+    TargetPlatform.windows => 'Windows',
+    TargetPlatform.macOS => 'macOS',
+    _ => defaultTargetPlatform.name,
+  };
+  final t = clock.now();
+  String two(int n) => '$n'.padLeft(2, '0');
+  return '$appName on $kind, ${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
+}
+
+/// Server address, then either the account's email and password or a Komga API key (user, 2026-10-24: "Password |
+/// API key" tabs, Password first). A password sign-in makes an API key for this device and keeps only that; when
+/// the server won't make one (a restricted or demo account), the email and password are kept instead (encrypted,
+/// like a key). The email is filled in again after Sign out; the password and key never are.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.onSignedIn, this.client});
   final Future<void> Function(Komga api) onSignedIn;
@@ -60,17 +80,22 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _server = TextEditingController();
   final _key = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _byPassword = true;
   Object? _error; // shown through lib/errors.dart
+  bool _errorWithPassword = false; // (the error came from a password sign-in: said in those words)
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _server.addListener(() { if (mounted) setState(() {}); }); // (the http note follows the address as it's typed)
-    // signing in again (after Sign out): the last server address is still saved on the device
+    // signing in again (after Sign out): the last server address and email are still saved on the device
     SharedPreferences.getInstance().then((p) {
-      final last = p.getString('server');
+      final last = p.getString('server'), email = p.getString('email');
       if (last != null && mounted && _server.text.isEmpty) _server.text = last;
+      if (email != null && mounted && _email.text.isEmpty) _email.text = email;
     });
   }
 
@@ -78,7 +103,32 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _server.dispose();
     _key.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
+  }
+
+  Komga _client(String server, String credential) => (widget.client ?? Komga.new)(server, credential);
+
+  /// Signs in with the email and password: Komga is asked who they are, then for an API key for this device. The
+  /// key is what's kept; a server that won't make one (4xx) keeps the password client instead.
+  Future<Komga> _withPassword(String server) async {
+    final byPassword = _client(server, Komga.basic(_email.text.trim(), _password.text));
+    try {
+      if (await byPassword.me() == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga there
+      final String key;
+      try {
+        key = await byPassword.createApiKey(apiKeyName());
+      } on KomgaError catch (e) {
+        if (e.status >= 500) rethrow;
+        return byPassword; // this server won't make a key for this account: the password it is
+      }
+      byPassword.close();
+      return _client(server, key);
+    } catch (_) {
+      byPassword.close();
+      rethrow;
+    }
   }
 
   Future<void> _connect() async {
@@ -89,18 +139,25 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
     _server.text = server; // show what's actually used
+    final byPassword = _byPassword;
     setState(() { _busy = true; _error = null; });
-    final api = (widget.client ?? Komga.new)(server, _key.text.trim());
+    Komga? api;
     var handedOver = false;
     try {
-      final me = await api.me();
-      if (me == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga at that address
+      if (byPassword) {
+        api = await _withPassword(server);
+      } else {
+        api = _client(server, _key.text.trim());
+        final me = await api.me();
+        if (me == null) throw KomgaNotKomga(server); // no user from /users/me: not Komga at that address
+      }
+      if (byPassword) await (await SharedPreferences.getInstance()).setString('email', _email.text.trim());
       handedOver = true;
       await widget.onSignedIn(api);
     } catch (e) {
       // this attempt's connection isn't used again: its client goes (code review 2026-10-05, #50: one left per try)
-      if (!handedOver) api.close();
-      if (mounted) setState(() => _error = e);
+      if (!handedOver) api?.close();
+      if (mounted) setState(() { _error = e; _errorWithPassword = byPassword; });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -112,35 +169,53 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
+          child: SingleChildScrollView( // (a short screen: a phone on its side, the keyboard up)
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(appName, style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 4),
               const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
               const SizedBox(height: 24),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text('Password')),
+                  ButtonSegment(value: false, label: Text('API key')),
+                ],
+                selected: {_byPassword},
+                showSelectedIcon: false,
+                onSelectionChanged: _busy ? null : (s) => setState(() { _byPassword = s.single; _error = null; }),
+              ),
+              const SizedBox(height: 12),
               TextField(controller: _server, keyboardType: TextInputType.url, autocorrect: false,
                   enableSuggestions: false, // no predictive text: it adds spaces after "192.168.1.10:"
                   decoration: const InputDecoration(labelText: 'Server', hintText: 'http://192.168.1.10:25600')),
               if (sendsKeyInTheClear(_server.text))
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
                   child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Icon(Icons.lock_open, size: 18, color: Color(0xFFFFB74D)),
-                    SizedBox(width: 8),
+                    const Icon(Icons.lock_open, size: 18, color: Color(0xFFFFB74D)),
+                    const SizedBox(width: 8),
                     Expanded(child: Text(
-                        "This address is outside your home network over plain http: your API key would travel "
-                        'unencrypted. Use https if your server has it.',
-                        style: TextStyle(color: Color(0xFFFFB74D), fontSize: 13))),
+                        'This address is outside your home network over plain http: your '
+                        '${_byPassword ? 'password' : 'API key'} would travel unencrypted. Use https if your server '
+                        'has it.',
+                        style: const TextStyle(color: Color(0xFFFFB74D), fontSize: 13))),
                   ]),
                 ),
               const SizedBox(height: 12),
-              TextField(controller: _key, obscureText: true, decoration: const InputDecoration(labelText: 'API key'),
-                  onSubmitted: (_) => _connect()),
+              if (_byPassword) ...[
+                TextField(controller: _email, keyboardType: TextInputType.emailAddress, autocorrect: false,
+                    enableSuggestions: false, decoration: const InputDecoration(labelText: 'Email')),
+                const SizedBox(height: 12),
+                TextField(controller: _password, obscureText: true,
+                    decoration: const InputDecoration(labelText: 'Password'), onSubmitted: (_) => _connect()),
+              ] else
+                TextField(controller: _key, obscureText: true, decoration: const InputDecoration(labelText: 'API key'),
+                    onSubmitted: (_) => _connect()),
               const SizedBox(height: 20),
               FilledButton(onPressed: _busy ? null : _connect, child: Text(_busy ? 'Connecting…' : 'Connect')),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
-                  child: ErrorText(explain(_error!, signIn: true).message, _error!)),
+                  child: ErrorText(explain(_error!, signIn: true, password: _errorWithPassword).message, _error!)),
             ]),
           ),
         ),

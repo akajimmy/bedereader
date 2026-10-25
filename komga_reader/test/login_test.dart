@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/widgets/error_text.dart';
@@ -27,7 +31,17 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
     await tester.pump();
     expect(field(tester, 'Server').controller!.text, 'http://nas.local:25600');
+    expect(field(tester, 'Password').controller!.text, isEmpty); // never kept
+    await tester.tap(find.text('API key'));
+    await tester.pump();
     expect(field(tester, 'API key').controller!.text, isEmpty); // never kept
+  });
+
+  testWidgets('signing in again: the email last signed in with is filled in too', (tester) async {
+    SharedPreferences.setMockInitialValues({'server': 'http://nas.local:25600', 'email': 'nick@example.com'});
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
+    await tester.pump();
+    expect(field(tester, 'Email').controller!.text, 'nick@example.com');
   });
 
   test('the API key in the clear (user, 2026-10-21: a note at sign-in): plain http to a host outside the home '
@@ -48,7 +62,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
     await tester.pump();
-    final note = find.textContaining('your API key would travel unencrypted');
+    final note = find.byIcon(Icons.lock_open);
     expect(note, findsNothing);
     await tester.enterText(find.widgetWithText(TextField, 'Server'), 'http://komga.example.com:25600');
     await tester.pump();
@@ -98,6 +112,8 @@ void main() {
     await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
         '192.168.1.10: 25600');
+    await tester.tap(find.text('API key'));
+    await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'API key'),
         ' key1 ');
     await tester.tap(find.text('Connect'));
@@ -126,6 +142,8 @@ void main() {
     await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
         'http://nas:25600');
+    await tester.tap(find.text('API key'));
+    await tester.pump();
     final key = find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'API key');
     await tester.enterText(key, 'key1');
     await tester.showKeyboard(key);
@@ -140,6 +158,123 @@ void main() {
     await tester.pump();
   });
 
+  // ---- password sign-in (user, 2026-10-24: "Password | API key" tabs, Password first; the password makes an API
+  // key for this device and only the key is kept - the password kept only when the server won't make one)
+
+  /// Signs in on the Password tab with [makeKey] as the server's answer to "an API key, please".
+  Future<(List<_PasswordKomga>, Komga?)> signIn(WidgetTester tester, Future<String> Function() makeKey,
+      {Map<String, dynamic>? me = const {'id': 'U1'}}) async {
+    SharedPreferences.setMockInitialValues({});
+    final built = <_PasswordKomga>[];
+    Komga? signedIn;
+    await tester.pumpWidget(MaterialApp(home: LoginScreen(
+      onSignedIn: (api) async => signedIn = api,
+      client: (server, credential) {
+        final api = noNetwork(() => _PasswordKomga(server, credential, makeKey, me));
+        built.add(api);
+        return api;
+      },
+    )));
+    await tester.pump();
+    await tester.enterText(find.widgetWithText(TextField, 'Server'), 'http://nas:25600');
+    await tester.enterText(find.widgetWithText(TextField, 'Email'), ' nick@example.com ');
+    await tester.enterText(find.widgetWithText(TextField, 'Password'), 'p4ss word');
+    await tester.tap(find.text('Connect'));
+    await tester.pump();
+    await tester.pump();
+    return (built, signedIn);
+  }
+
+  testWidgets('a password sign-in makes an API key for this device and keeps only the key; the email is kept for '
+      'next time', (tester) async {
+    final (built, signedIn) = await signIn(tester, () async => 'made-key');
+    expect(built, hasLength(2));
+    final byPassword = built.first;
+    expect(byPassword.apiKey, Komga.basic('nick@example.com', 'p4ss word'), reason: 'the email trimmed, not the password');
+    expect(byPassword.usesPassword, isTrue);
+    expect(byPassword.meCalls, 1, reason: 'Komga asked who this is');
+    expect(byPassword.keyNames.single, startsWith('BeDeReader on '));
+    expect(byPassword.closed, isTrue, reason: 'the password client is dropped');
+    expect(signedIn, same(built.last));
+    expect((signedIn!.apiKey, signedIn.usesPassword), ('made-key', false));
+    expect((await SharedPreferences.getInstance()).getString('email'), 'nick@example.com');
+  });
+
+  testWidgets("a server that won't make a key (a restricted or demo account): the password is what's kept",
+      (tester) async {
+    final (built, signedIn) = await signIn(tester, () async => throw KomgaError(403, '/api/v2/users/me/api-keys'));
+    expect(built, hasLength(1));
+    expect(signedIn, same(built.single));
+    expect(signedIn!.usesPassword, isTrue);
+    expect(built.single.closed, isFalse);
+  });
+
+  testWidgets('a wrong password: no key asked for, nobody signed in, an error shown, the email not kept',
+      (tester) async {
+    final (built, signedIn) = await signIn(tester, () async => 'made-key', me: null);
+    expect(built.single.keyNames, isEmpty);
+    expect(signedIn, isNull);
+    expect(built.single.closed, isTrue);
+    expect(find.byType(ErrorText), findsOneWidget);
+    expect((await SharedPreferences.getInstance()).getString('email'), isNull);
+  });
+
+  test('the key name says which device and when - never the same twice on one device', () {
+    final a = withClock(Clock.fixed(DateTime(2026, 10, 24, 9, 5, 7)), apiKeyName);
+    final b = withClock(Clock.fixed(DateTime(2026, 10, 24, 9, 5, 8)), apiKeyName);
+    expect(a, endsWith('2026-10-24 09:05:07'));
+    expect(a, isNot(b));
+  });
+
+  test('a password credential goes to Komga as HTTP Basic, a key as X-API-Key - on every request, pages too',
+      () async {
+    final seen = <Map<String, String>>[];
+    Komga client(String credential) => http.runWithClient(() => Komga('http://komga.test', credential),
+        () => MockClient((r) async {
+              seen.add(r.headers);
+              return http.Response(r.url.path.endsWith('api-keys') ? '{"key":"k2"}' : '{"id":"U1"}', 200);
+            }));
+    final byPassword = client(Komga.basic('a@b.c', 'pw'));
+    await byPassword.me();
+    expect(await byPassword.createApiKey('BeDeReader on test'), 'k2');
+    await byPassword.pageBytes('B1', 1).then((_) {}, onError: (_) {});
+    for (final h in seen) {
+      expect(h['Authorization'], 'Basic ${base64Encode(utf8.encode('a@b.c:pw'))}');
+      expect(h.containsKey('X-API-Key'), isFalse);
+    }
+    seen.clear();
+    await client('k1').me();
+    expect((seen.single['X-API-Key'], seen.single.containsKey('Authorization')), ('k1', false));
+  });
+}
+
+/// Komga signed in to by password: answers /users/me with [meAnswer] (null: wrong password, here as no user) and
+/// "an API key, please" with [makeKey]; notes the key names asked for and whether it was closed.
+class _PasswordKomga extends Komga {
+  _PasswordKomga(super.baseUrl, super.apiKey, this.makeKey, this.meAnswer);
+  final Future<String> Function() makeKey;
+  final Map<String, dynamic>? meAnswer;
+  int meCalls = 0;
+  final keyNames = <String>[];
+  bool closed = false;
+  @override
+  Future<Map<String, dynamic>?> me() async {
+    meCalls++;
+    if (meAnswer == null) throw KomgaError(401, '/api/v2/users/me');
+    return meAnswer;
+  }
+
+  @override
+  Future<String> createApiKey(String comment) {
+    keyNames.add(comment);
+    return makeKey();
+  }
+
+  @override
+  void close() {
+    closed = true;
+    super.close();
+  }
 }
 
 /// Komga at the address typed, answering /users/me (no network: anything else fails the test).
