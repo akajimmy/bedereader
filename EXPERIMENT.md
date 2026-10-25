@@ -101,7 +101,7 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Slices 5 and 6 tried by the user on the tablet (2026-10-25):** in No server mode, connected to the NAS (\\nick-nas, found as nick-nas.local), browsed to the folder, and read from it - "successfully connected, browsed and read".
 
 - **The tablet's own storage, tried over adb (2026-10-25):** the test library copied to /storage/emulated/0/BeDeReader-TestLibrary (31 files, 648 MB). Add a library > This device asked for All files access, Open Settings went straight to the app's page there, and after "I've allowed it" the storage listed (the second time, no asking). Ongoing and Books added: 3 and 5 series; Absolute Batman #10 read (a wide spread shown alone, as measured), Frankenstein's EPUB read. No errors in the log.
-- Seen meanwhile, both cosmetic: the browser's title at the storage's top reads "0" (the last part of /storage/emulated/0) instead of the place's name; Settings in No server mode shows the connection's Retry button, with nothing to retry.
+- Seen meanwhile, both cosmetic (fixed the same day): the browser's title at the storage's top reads "0" (the last part of /storage/emulated/0) instead of the place's name; Settings in No server mode shows the connection's Retry button, with nothing to retry.
 
 ### Still to do
 
