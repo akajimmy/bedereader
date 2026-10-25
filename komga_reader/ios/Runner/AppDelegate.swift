@@ -138,7 +138,9 @@ enum RemoteLog {
     volume = nil
     for o in observers { NotificationCenter.default.removeObserver(o) }
     observers = []
-    for c in GCController.controllers() { c.physicalInputProfile.valueDidChangeHandler = nil }
+    if #available(iOS 16.0, *) {
+      for c in GCController.controllers() { c.physicalInputProfile.valueDidChangeHandler = nil }
+    }
     GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
     UIApplication.shared.endReceivingRemoteControlEvents()
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -147,10 +149,13 @@ enum RemoteLog {
   private static func watch(_ c: GCController) {
     let name = c.vendorName ?? "?"
     log("game controller: \(name), \(c.productCategory)")
-    c.physicalInputProfile.valueDidChangeHandler = { _, element in
-      var value = ""
-      if let b = element as? GCControllerButtonInput { value = " \(b.value)" }
-      log("game controller \(name): \(element.localizedName ?? "?")\(value)")
+    // (its buttons watched from iPadOS 16: before, only that it's there is reported)
+    if #available(iOS 16.0, *) {
+      c.physicalInputProfile.valueDidChangeHandler = { _, element in
+        var value = ""
+        if let b = element as? GCControllerButtonInput { value = " \(b.value)" }
+        log("game controller \(name): \(element.localizedName ?? "?")\(value)")
+      }
     }
   }
 
