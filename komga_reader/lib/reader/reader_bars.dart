@@ -20,8 +20,9 @@ Widget barIcon({required FocusNode node, required IconData icon, required String
 /// [buttons]. On a narrow screen the clock sits just under the bar instead.
 class ReaderTopBar extends StatelessWidget {
   const ReaderTopBar({super.key, required this.closeNode, required this.heading, required this.title,
-      required this.buttons});
+      required this.buttons, this.onClose});
   final FocusNode closeNode;
+  final VoidCallback? onClose; // Close (null: the route popped)
   final String? heading;
   final String title;
   final List<Widget> buttons;
@@ -49,7 +50,7 @@ class ReaderTopBar extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                     textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: onClose ?? () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.arrow_back, size: 24),
                   label: const Text('Close'),
                 ),

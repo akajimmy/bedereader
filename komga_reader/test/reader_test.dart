@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/offline/offline_komga.dart' show NotAvailableOffline;
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
@@ -830,6 +831,21 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(find.byType(ReaderScreen), findsNothing, reason: 'closed');
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("the top bar's Close says so in the app log - told apart from Back, which is also iOS's swipe from the "
+      'left edge (user, 2026-10-25: a book closed with Close looked like a swipe)', (tester) async {
+    AppLog.instance.reset();
+    addTearDown(AppLog.instance.reset);
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.text('Close'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'closed');
+    expect(AppLog.instance.recent.map((l) => l.msg).where((m) => m.startsWith('closed')),
+        ['closed "Test #1" by the Close button']);
     await tester.pump(const Duration(seconds: 5));
   });
 
