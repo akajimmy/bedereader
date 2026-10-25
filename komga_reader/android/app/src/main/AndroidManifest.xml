@@ -1,6 +1,12 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- talks to the Komga server on the home network -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- local libraries (experimental/sources): folders on the tablet read as plain paths - All files access (Android
+         11+, granted in Settings; Google Play restricts it - an APK installed by hand only), the storage permission
+         before that -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
     <!-- Downloads' "Wi-Fi only": is this Wi-Fi or mobile data (a normal permission, granted at install) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- android:label is the display name only; the app ID (com.nickp.komga_reader, build.gradle.kts) never

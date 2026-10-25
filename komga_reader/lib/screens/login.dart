@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../app_identity.dart';
 import '../errors.dart';
+import '../local/access.dart';
 import '../local/folder_komga.dart';
 import '../local/folder_scan.dart';
 import '../local/mixed_komga.dart';
@@ -127,6 +128,12 @@ class _LoginScreenState extends State<LoginScreen> {
     }
     setState(() { _busy = true; _localError = null; _error = null; });
     try {
+      // each folder reachable: a share's login, the tablet's All files access (tests open their own folders)
+      if (widget.openLocal == null) {
+        for (final l in libraries) {
+          if (!await FolderAccess.ensure(context, l.path)) return;
+        }
+      }
       final api = await (widget.openLocal ?? _openInStorage)(libraries);
       if (api.isEmpty) {
         if (mounted) setState(() => _localError = 'No CBZ or EPUB books found in ${libraries.length == 1 ? 'that folder' : 'those folders'}.');
@@ -255,8 +262,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.white60)),
                 const SizedBox(height: 12),
                 TextField(controller: _folders, minLines: 2, maxLines: 6, autocorrect: false, enableSuggestions: false,
-                    decoration: const InputDecoration(labelText: 'Library folders, one per line',
-                        hintText: r'C:\Comics\Ongoing')),
+                    decoration: InputDecoration(labelText: 'Library folders, one per line',
+                        // (a share works on every device: \\server\share\folder - the tablet asks for its login)
+                        hintText: defaultTargetPlatform == TargetPlatform.android
+                            ? '/storage/emulated/0/Comics\n\\\\server\\share\\Comics'
+                            : 'C:\\Comics\\Ongoing\n\\\\server\\share\\Comics')),
                 const SizedBox(height: 20),
                 FilledButton(onPressed: _busy ? null : _openLocal, child: Text(!_busy ? 'Open' : _scanned == null ? 'Reading folders…' : 'Reading folders… $_scanned books')),
                 if (_localError != null) Padding(padding: const EdgeInsets.only(top: 12),

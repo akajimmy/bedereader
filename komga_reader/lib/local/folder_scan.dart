@@ -1,8 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 
 import '../epub/source.dart' show Zip;
 import 'file_zip.dart';
+import 'storage.dart';
 
 /// A local library: a folder on this device (or a share it can reach), one folder per series inside it.
 class LocalLibrary {
@@ -170,18 +170,26 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
   final out = <String, Map<String, dynamic>>{};
   var done = 0;
   for (final lib in libraries) {
-    final root = Directory(lib.path);
-    if (!await root.exists()) continue;
+    final fs = Storage.instance.of(lib.path); // this device's files, or a share through the app's SMB client
+    try {
+      if (!await fs.exists(lib.path)) continue;
+    } catch (_) {
+      continue;
+    }
+    final rootPath = lib.path.replaceAll(RegExp(r'[\\/]+$'), '');
     // series: each folder with books in it; a _oneshots folder's books and books loose in the library each their own
-    final groups = <(String, bool), List<File>>{}; // (series folder or file, oneshot) -> its books
-    await for (final e in root.list(recursive: true, followLinks: false)) {
-      if (e is! File) continue;
-      final ext = _ext(e.path);
-      if (!_comicExt.contains(ext) && !_bookExt.contains(ext)) continue;
-      final parent = e.parent.path;
-      final oneshot = parent.replaceAll(RegExp(r'[\\/]+$'), '') == root.path.replaceAll(RegExp(r'[\\/]+$'), '') ||
-          oneshotFolders.contains(_base(parent).toLowerCase());
-      groups.putIfAbsent(oneshot ? (e.path, true) : (parent, false), () => []).add(e);
+    final groups = <(String, bool), List<FsEntry>>{}; // (series folder or file, oneshot) -> its books
+    try {
+      await for (final e in fs.list(lib.path)) {
+        final ext = _ext(e.path);
+        if (!_comicExt.contains(ext) && !_bookExt.contains(ext)) continue;
+        final parent = e.path.substring(0, e.path.lastIndexOf(RegExp(r'[\\/]'))).replaceAll(RegExp(r'[\\/]+$'), '');
+        final oneshot = parent.toLowerCase() == rootPath.toLowerCase() ||
+            oneshotFolders.contains(_base(parent).toLowerCase());
+        groups.putIfAbsent(oneshot ? (e.path, true) : (parent, false), () => []).add(e);
+      }
+    } catch (_) {
+      continue; // the folder couldn't be read through: as if it weren't there (its books don't show this time)
     }
     // the books read several at a time: on a network share, opening each file is mostly waiting for the network
     final made = <String, Map<String, dynamic>>{}; // file path -> its entry
@@ -193,8 +201,8 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
     await _inParallel(jobs, 8, (j) async {
       final (f, i, where, oneshot) = j;
       try {
-        made[f.path] = await _bookEntry(f, i, 'S${stableId(_normPath(where))}', oneshot ? _stem(where) : _base(where),
-            lib, oneshot, known);
+        made[f.path] = await _bookEntry(fs, f, i, 'S${stableId(_normPath(where))}',
+            oneshot ? _stem(where) : _base(where), lib, oneshot, known);
       } catch (_) {
         // a damaged or unreadable file: left out
       }
@@ -241,9 +249,8 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
   return out;
 }
 
-Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, String seriesName, LocalLibrary lib,
+Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, String seriesId, String seriesName, LocalLibrary lib,
     bool oneshot, Map<String, Map<String, dynamic>> known) async {
-  final stat = await f.stat();
   final stem = _stem(f.path);
   final epub = _bookExt.contains(_ext(f.path));
   final parsed = parseBookName(stem, oneshot ? '' : seriesName);
@@ -251,13 +258,13 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
   // its own title: what follows the number, else the name without its tags ("(2025) (Digital) (Shan-Empire)")
   final untagged = stem.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   var title = oneshot ? stem : (parsed.title ?? (untagged.isEmpty ? stem : untagged));
-  final modified = stat.modified.toIso8601String();
+  final modified = f.modified.toIso8601String();
   // what's read from inside the file (its pages, an EPUB's title, author and cover): kept from the last scan if the
   // file hasn't changed since - only new and changed files are opened
   final was = known[f.path];
-  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == stat.size && was['inside'] is Map &&
+  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == f.size && was['inside'] is Map &&
       (was['inside'] as Map)['v'] == _insideVersion;
-  final inside = reuse ? (was['inside'] as Map).cast<String, dynamic>() : await _readInside(f, epub);
+  final inside = reuse ? (was['inside'] as Map).cast<String, dynamic>() : await _readInside(fs, f.path, epub);
   final pages = [for (final p in (inside['pages'] as List)) (p as Map).cast<String, dynamic>()];
   if (!epub && pages.isEmpty) throw const FormatException('no pages');
   if (inside['title'] is String) title = inside['title'] as String;
@@ -276,7 +283,7 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
   final book = <String, dynamic>{
     'id': 'B${stableId(_normPath(f.path))}', 'seriesId': seriesId, 'seriesTitle': seriesName, 'libraryId': lib.id,
     'name': stem, 'url': f.path, 'number': index + 1, 'created': modified, 'lastModified': modified,
-    'fileLastModified': modified, 'sizeBytes': stat.size, 'size': '${(stat.size / 1048576).toStringAsFixed(1)} MiB',
+    'fileLastModified': modified, 'sizeBytes': f.size, 'size': '${(f.size / 1048576).toStringAsFixed(1)} MiB',
     'media': {
       'status': 'READY', 'mediaType': epub ? 'application/epub+zip' : 'application/zip',
       // an EPUB: progress as a share of the book, out of 100 (Komga counts its positions)
@@ -291,7 +298,7 @@ Future<Map<String, dynamic>> _bookEntry(File f, int index, String seriesId, Stri
   };
   return {
     'book': book, 'library': {'id': lib.id, 'name': lib.name}, 'readLists': <dynamic>[], 'collections': <dynamic>[],
-    'pages': pages, 'state': 'done', 'path': f.path, 'bytes': stat.size, if (cover != null) 'cover': cover,
+    'pages': pages, 'state': 'done', 'path': f.path, 'bytes': f.size, if (cover != null) 'cover': cover,
     if (epub) 'epub': true, 'fileModified': modified, 'inside': inside,
   };
 }
@@ -313,12 +320,12 @@ const _insideVersion = 2;
 
 /// Opens the book: a comic's pages (its pictures, in order - their sizes too where its ComicInfo.xml gives them) and
 /// its ComicInfo.xml; an EPUB's own title, author and cover.
-Future<Map<String, dynamic>> _readInside(File f, bool epub) async {
+Future<Map<String, dynamic>> _readInside(LibraryFs fs, String path, bool epub) async {
   if (epub) {
-    final meta = epubMetadata(Zip(await f.readAsBytes()));
+    final meta = epubMetadata(Zip(await fs.readAll(path)));
     return {'v': _insideVersion, 'pages': const [], 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
   }
-  final zip = await FileZip.open(f);
+  final zip = await FileZip.open(fs, path);
   final names = comicPages(zip.names);
   final infoName = zip.find('ComicInfo.xml');
   final info = infoName == null ? null : comicInfo(utf8.decode(await zip.read(infoName) ?? const [], allowMalformed: true));

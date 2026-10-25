@@ -91,11 +91,14 @@ class KomgaEpubSource implements EpubSource {
 
 /// The book from its .epub file (a zip): the container, the package (OPF), the EPUB 3 contents page or EPUB 2 NCX.
 class FileEpubSource implements EpubSource {
-  FileEpubSource(this.file);
-  final File file;
+  FileEpubSource(File file) : _read = file.readAsBytes;
+
+  /// The book's bytes from [read] - a local library's EPUB, on this device or a share (experimental/sources).
+  FileEpubSource.reading(Future<Uint8List> Function() read) : _read = read;
+  final Future<Uint8List> Function() _read;
   Zip? _zip;
 
-  Future<Zip> get _open async => _zip ??= Zip(await file.readAsBytes());
+  Future<Zip> get _open async => _zip ??= Zip(await _read());
 
   @override
   Future<Uint8List> resource(String path) async {

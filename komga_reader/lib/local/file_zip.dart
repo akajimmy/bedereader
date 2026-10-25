@@ -2,25 +2,28 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-/// A zip on disk read in place (a CBZ can be 100 MB: not loaded whole, unlike the EPUB reader's Zip): its central
-/// directory once, then each entry's bytes as they're asked for. Stored or deflated entries; no zip64, no encryption.
-class FileZip {
-  FileZip._(this.file, this._entries);
+import 'storage.dart';
 
-  final File file;
-  final Map<String, (int, int, int)> _entries; // name -> (method, compressed size, local header offset)
+/// A zip read in place (a CBZ can be 100 MB: not loaded whole, unlike the EPUB reader's Zip) - on this device or an
+/// SMB share ([LibraryFs]): its central directory once, then each entry's bytes as they're asked for, in one read
+/// each. Stored or deflated entries; no zip64, no encryption.
+class FileZip {
+  FileZip._(this.fs, this.path, this._entries);
+
+  final LibraryFs fs;
+  final String path;
+  // name -> (method, compressed size, local header offset, name length)
+  final Map<String, (int, int, int, int)> _entries;
 
   /// The entries' names, in the zip's own order.
   Iterable<String> get names => _entries.keys;
 
-  static Future<FileZip> open(File file) async {
-    final raf = await file.open();
-    try {
-      final length = await raf.length();
+  static Future<FileZip> open(LibraryFs fs, String path) async {
+    {
+      final length = await fs.length(path);
       // the end-of-central-directory record: in the last 64 KB + 22 bytes
       final tailLen = length < 65557 ? length : 65557;
-      await raf.setPosition(length - tailLen);
-      final tail = await raf.read(tailLen);
+      final tail = await fs.readRange(path, length - tailLen, tailLen);
       final td = ByteData.sublistView(tail);
       var eocd = -1;
       for (var i = tail.length - 22; i >= 0; i--) {
@@ -33,10 +36,13 @@ class FileZip {
       final count = td.getUint16(eocd + 10, Endian.little);
       final dirSize = td.getUint32(eocd + 12, Endian.little);
       final dirStart = td.getUint32(eocd + 16, Endian.little);
-      await raf.setPosition(dirStart);
-      final dir = await raf.read(dirSize);
+      // (the directory already in the tail read, usually: no second read)
+      final tailStart = length - tail.length;
+      final dir = dirStart >= tailStart && dirStart + dirSize <= length
+          ? Uint8List.sublistView(tail, dirStart - tailStart, dirStart - tailStart + dirSize)
+          : await fs.readRange(path, dirStart, dirSize);
       final d = ByteData.sublistView(dir);
-      final entries = <String, (int, int, int)>{};
+      final entries = <String, (int, int, int, int)>{};
       var p = 0;
       for (var n = 0; n < count && p + 46 <= dir.length; n++) {
         if (d.getUint32(p, Endian.little) != 0x02014b50) throw const FormatException('Damaged zip directory');
@@ -47,12 +53,10 @@ class FileZip {
         final commentLen = d.getUint16(p + 32, Endian.little);
         final local = d.getUint32(p + 42, Endian.little);
         final name = utf8.decode(dir.sublist(p + 46, p + 46 + nameLen), allowMalformed: true);
-        entries[name] = (method, compressed, local);
+        entries[name] = (method, compressed, local, nameLen);
         p += 46 + nameLen + extraLen + commentLen;
       }
-      return FileZip._(file, entries);
-    } finally {
-      await raf.close();
+      return FileZip._(fs, path, entries);
     }
   }
 
@@ -74,26 +78,26 @@ class FileZip {
   Future<Uint8List?> _read(String name, int? limit) async {
     final e = _entries[name];
     if (e == null) return null;
-    final (method, size, local) = e;
-    final raf = await file.open();
-    try {
-      await raf.setPosition(local);
-      final header = await raf.read(30);
-      final h = ByteData.sublistView(header);
-      if (header.length < 30 || h.getUint32(0, Endian.little) != 0x04034b50) {
-        throw const FormatException('Damaged zip entry');
-      }
-      await raf.setPosition(local + 30 + h.getUint16(26, Endian.little) + h.getUint16(28, Endian.little));
-      final data = await raf.read(limit == null ? size : (limit < size ? limit : size));
-      return switch (method) {
-        0 => data,
-        8 when limit == null => Uint8List.fromList(ZLibDecoder(raw: true).convert(data)),
-        8 => _inflatePart(data),
-        _ => throw FormatException('Unsupported zip compression ($method)'),
-      };
-    } finally {
-      await raf.close();
+    final (method, size, local, nameLen) = e;
+    final want = limit == null ? size : (limit < size ? limit : size);
+    // the local header, its name and (usually) its extra field, and the data, in one read - a second only if the
+    // extra field is longer than allowed for
+    const slack = 256;
+    final chunk = await fs.readRange(path, local, 30 + nameLen + slack + want);
+    final h = ByteData.sublistView(chunk);
+    if (chunk.length < 30 || h.getUint32(0, Endian.little) != 0x04034b50) {
+      throw const FormatException('Damaged zip entry');
     }
+    final start = 30 + h.getUint16(26, Endian.little) + h.getUint16(28, Endian.little);
+    final data = start + want <= chunk.length
+        ? Uint8List.sublistView(chunk, start, start + want)
+        : await fs.readRange(path, local + start, want);
+    return switch (method) {
+      0 => data,
+      8 when limit == null => Uint8List.fromList(ZLibDecoder(raw: true).convert(data)),
+      8 => _inflatePart(data),
+      _ => throw FormatException('Unsupported zip compression ($method)'),
+    };
   }
 
   /// As much of a deflated stream as [data] (its start) holds.

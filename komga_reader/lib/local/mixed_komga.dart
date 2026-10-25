@@ -40,7 +40,7 @@ class MixedKomga extends Komga {
   @override
   bool isLocal(String id) => local?.isLocal(id) ?? false;
   @override
-  File? localEpubFile(String bookId) => _of(bookId)?.epubFile(bookId);
+  Future<Uint8List> Function()? localEpub(String bookId) => _of(bookId)?.localEpub(bookId);
   @override
   Listenable? get localChanges => local?.changed;
 

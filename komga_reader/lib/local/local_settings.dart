@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import '../widgets/setting_rows.dart';
+import 'access.dart';
 import 'folder_komga.dart';
 import 'folder_scan.dart';
 
@@ -69,10 +68,8 @@ class LocalLibrariesGroup extends StatelessWidget {
       messenger?.showSnackBar(const SnackBar(content: Text('That folder is a library already')));
       return;
     }
-    if (!await Directory(lib.path).exists()) {
-      messenger?.showSnackBar(SnackBar(content: Text("Can't find the folder ${lib.path}")));
-      return;
-    }
+    // reachable: a share's login asked for and tried, the tablet's All files access (each said in a dialog if not)
+    if (!await FolderAccess.ensure(context, lib.path)) return;
     await api.setLibraries([...api.folders, lib]);
   }
 

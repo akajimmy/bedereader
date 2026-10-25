@@ -149,6 +149,33 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        // Local libraries (experimental/sources, lib/local/android_files.dart): "All files access", so the folders
+        // on the tablet read as plain paths. Android 11+: the special permission, granted on its Settings page; before
+        // that, the storage permission asked for in place.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/files").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "hasAllFiles" -> result.success(
+                    if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
+                    else checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED)
+                "askAllFiles" -> {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        try {
+                            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                Uri.parse("package:$packageName")))
+                        } catch (_: Exception) {
+                            startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        }
+                    } else {
+                        requestPermissions(arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE), 41)
+                    }
+                    result.success(null)
+                }
+                // where the tablet's own storage starts (/storage/emulated/0): for the folder field's hint
+                "storageRoot" -> result.success(Environment.getExternalStorageDirectory().absolutePath)
+                else -> result.notImplemented()
+            }
+        }
         // Keep the screen on while the reader is open (lib/screen.dart). The flag only lives as long as the window,
         // so nothing is left behind if the app is closed while reading.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/screen").setMethodCallHandler { call, result ->

@@ -79,6 +79,14 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 - **Slices 3 and 4 tried by the user on the PC (2026-10-25):** "looks good".
 
+### Slice 5 - storage: SMB shares and the tablet's own files (2026-10-25)
+
+- **Decided (quiz):** SMB through **dart_smb2** (BSD-3-Clause; a Dart binding of libsmb2, LGPL-2.1; SMB 2.02 to 3.1.1; its build fetches the libsmb2 binary for each platform from the package's GitHub release, checked against pinned SHA-256s). The tablet's folders through **All files access** (an Android permission granted once in Settings: plain paths, the existing code; Google Play restricts it). Share passwords **kept encrypted** on the device, one login per share.
+- **One way to write a share everywhere:** \\host\share\folder. Windows reads it itself (with its own login, as before); Android (and iOS later) through the app's SMB client. The same path on every device gives the same book ids - ready for progress shared later.
+- **lib\local\storage.dart:** LibraryFs - the device's files (LocalFs) or a share (SmbFs, one connection pool per share). The scan lists through it (a share's listing gives sizes and dates: no stat per file); the CBZ reader reads its directory in one read and each page in one more (round trips matter on a share); EPUBs read whole.
+- **Getting at a folder (lib\local\access.dart):** adding a share with no login kept tries it as a guest first (a share open to anyone needs none - user, 2026-10-25); refused, it asks for a user name and password, tries them, and says so if the share refuses those; adding a tablet folder asks for All files access (Open Settings, then "I've allowed it") if it isn't granted.
+- The NAS refuses the SMB client without a login (access denied) - the client itself loads and reaches it from Windows.
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.

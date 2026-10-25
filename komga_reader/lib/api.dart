@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File;
+
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show Listenable;
@@ -672,8 +672,8 @@ class Komga {
   /// The item ([id]: a book, series or library) is in a local library - a file here, not Komga's.
   bool isLocal(String id) => false;
 
-  /// A local EPUB's own file (null: not a local one).
-  File? localEpubFile(String bookId) => null;
+  /// A local EPUB, read whole when the reader opens it - from this device or a share (null: not a local one).
+  Future<Uint8List> Function()? localEpub(String bookId) => null;
 
   /// Told when the local libraries change (one added or removed, a scan found changes); null: no local libraries.
   Listenable? get localChanges => null;

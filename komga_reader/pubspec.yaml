@@ -13,6 +13,7 @@ dependencies:
   flutter_secure_storage: ^11.2.0
   http: ^1.2.2
   shared_preferences: ^2.3.2
+  dart_smb2: ^0.2.3
 
 dev_dependencies:
   flutter_test:

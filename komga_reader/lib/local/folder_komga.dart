@@ -12,6 +12,7 @@ import '../offline/offline_komga.dart';
 import '../offline/store.dart';
 import 'file_zip.dart';
 import 'folder_scan.dart';
+import 'storage.dart';
 
 /// Local mode (experimental/sources): Komga as if it were a few folders on this device - no server at all. The
 /// libraries are folders ([LocalLibrary]), scanned into entries shaped as downloads' ([scanLibraries]), and answered
@@ -52,6 +53,7 @@ class FolderKomga extends OfflineKomga {
   /// (scanned again in the background), else a first scan, waited for - [onBook] told how far it has got.
   static Future<FolderKomga> open(List<LocalLibrary> libraries, {required Directory dataDir,
       void Function(int books)? onBook}) async {
+    await Storage.instance.load(); // (the shares' logins)
     final store = OfflineStore(dataDir);
     await dataDir.create(recursive: true);
     await store.load(); // the last scan, and the progress kept here
@@ -96,7 +98,12 @@ class FolderKomga extends OfflineKomga {
   int _seriesAt = -1;
 
   @override
-  File? localEpubFile(String bookId) => epubFile(bookId);
+  Future<Uint8List> Function()? localEpub(String bookId) {
+    final e = store.books[bookId];
+    if (e?['epub'] != true) return null;
+    final path = e!['path'] as String;
+    return () => Storage.instance.of(path).readAll(path);
+  }
 
   Future<void>? _scan;
 
@@ -152,7 +159,7 @@ class FolderKomga extends OfflineKomga {
     if (have != null) return _zips[bookId] = have; // (the newest last)
     final path = store.books[bookId]?['path'] as String?;
     if (path == null) throw NotAvailableOffline('This book');
-    final z = await FileZip.open(File(path));
+    final z = await FileZip.open(Storage.instance.of(path), path);
     _zips[bookId] = z;
     while (_zips.length > 4) {
       _zips.remove(_zips.keys.first);
@@ -259,7 +266,7 @@ class FolderKomga extends OfflineKomga {
           _makingNow++;
           try {
             final Uint8List? bytes = e['epub'] == true
-                ? Zip(await File(e['path'] as String).readAsBytes()).read(cover)
+                ? Zip(await Storage.instance.of(e['path'] as String).readAll(e['path'] as String)).read(cover)
                 : await (await _zip(id)).read(cover);
             if (bytes == null) return false;
             final codec = await ui.instantiateImageCodec(bytes, targetWidth: 320);
