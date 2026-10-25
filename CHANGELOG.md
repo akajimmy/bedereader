@@ -9,6 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- The cache of books opened from Komga stays within its 512 MB: a book cached in two goes, or one bigger than Komga said, could take it past the limit. A book that failed to cache is tried again when you next open it (it used to stay stuck, with a red mark on its tile); a book being cached no longer shows as "In the download queue" or with a download's progress on its tile, so it can be downloaded; and the book you're reading is never removed to make room.
+- The question whether to go offline: a request failing while the app is checking Komga no longer asks straight away - the check's answer decides.
+- Reading progress: another device on a page you'd read past here is asked about again. Only pages sent while the connection was failing count as this device's own.
+- Rotation (Android): Portrait or Landscape set in the reader just as the tablet's auto-rotate changed could be undone straight away by the app's own Auto rotation.
+- Comic and Webtoon settings: Reset to original is back for a series' image settings (Enhance, Enhance colours, Crop edges), as it was in the Image panel. The fit and direction are left alone.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
