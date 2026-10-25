@@ -1,4 +1,6 @@
+import AVFoundation
 import Flutter
+import GameController
 import Network
 import Photos
 import UIKit
@@ -16,6 +18,181 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderScreen") {
       ScreenChannel.register(messenger: registrar.messenger())
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderRemote") {
+      RemoteLog.register(messenger: registrar.messenger())
+    }
+  }
+}
+
+/// The app itself (Info.plist NSPrincipalClass): every event the system sends the app passes here first, before any
+/// screen or Flutter - so Settings > Remote and keys > Test the remote can tell "the system gave the app nothing"
+/// from "the app was given it and lost it" (user, 2026-10-25: the Chromecast remote on the iPad). Touches and the
+/// pointer's hovering aren't reported; nothing is changed or held back.
+@objc(ReaderApplication)
+class ReaderApplication: UIApplication {
+  override func sendEvent(_ event: UIEvent) {
+    if RemoteLog.on && event.type != .touches && event.type != .hover {
+      switch event.type {
+      case .presses:
+        if let presses = (event as? UIPressesEvent)?.allPresses {
+          for p in presses {
+            RemoteLog.log("app press \(RemoteLog.phase(p.phase)): \(RemoteLog.describe(p))")
+          }
+        }
+      case .remoteControl:
+        RemoteLog.log("app remote-control event, subtype \(event.subtype.rawValue)")
+      default:
+        RemoteLog.log("app event of type \(event.type.rawValue), subtype \(event.subtype.rawValue)")
+      }
+    }
+    super.sendEvent(event)
+  }
+}
+
+/// The Flutter screen (Main.storyboard): its button presses reported before Flutter has them - Flutter drops a press
+/// that has no keyboard key (an arrow or select from a TV remote, say), so the test sees what it would have missed.
+class ReaderViewController: FlutterViewController {
+  override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    for p in presses { RemoteLog.log("screen press began: \(RemoteLog.describe(p))") }
+    super.pressesBegan(presses, with: event)
+  }
+
+  override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+    for p in presses { RemoteLog.log("screen press ended: \(RemoteLog.describe(p))") }
+    super.pressesEnded(presses, with: event)
+  }
+}
+
+/// Test the remote's iOS side ("komga_reader/remote", lib/screens/remote_test.dart): while the screen is open
+/// ("start" to "stop"), what the system gives the app - its events, the screen's presses (above), game controllers
+/// and a keyboard as the GameController framework sees them, remote-control events, the volume - each sent to the
+/// screen as a line. Off, nothing is watched or sent.
+enum RemoteLog {
+  static var on = false
+  private static var channel: FlutterMethodChannel?
+  private static var volume: NSKeyValueObservation?
+  private static var observers: [NSObjectProtocol] = []
+
+  static func register(messenger: FlutterBinaryMessenger) {
+    let c = FlutterMethodChannel(name: "komga_reader/remote", binaryMessenger: messenger)
+    c.setMethodCallHandler { call, result in
+      switch call.method {
+      case "start":
+        start()
+        result(nil)
+      case "stop":
+        stop()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    channel = c
+  }
+
+  static func log(_ text: String) {
+    guard on else { return }
+    if Thread.isMainThread {
+      channel?.invokeMethod("event", arguments: text)
+    } else {
+      DispatchQueue.main.async { channel?.invokeMethod("event", arguments: text) }
+    }
+  }
+
+  private static func start() {
+    on = true
+    UIApplication.shared.beginReceivingRemoteControlEvents()
+    let session = AVAudioSession.sharedInstance()
+    // (ambient, mixed: any music playing goes on; the volume can only be watched with a session active)
+    try? session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+    try? session.setActive(true)
+    volume = session.observe(\.outputVolume, options: [.new]) { _, change in
+      log("volume now \(change.newValue ?? -1)")
+    }
+    let controllers = GCController.controllers()
+    log("listening: volume \(session.outputVolume), game controllers \(controllers.count)"
+      + ", keyboard \(GCKeyboard.coalesced != nil ? "connected" : "none")")
+    for c in controllers { watch(c) }
+    if let k = GCKeyboard.coalesced { watch(k) }
+    let center = NotificationCenter.default
+    observers = [
+      center.addObserver(forName: .GCControllerDidConnect, object: nil, queue: .main) { n in
+        if let c = n.object as? GCController {
+          log("game controller connected")
+          watch(c)
+        }
+      },
+      center.addObserver(forName: .GCKeyboardDidConnect, object: nil, queue: .main) { n in
+        if let k = n.object as? GCKeyboard {
+          log("keyboard connected (GameController)")
+          watch(k)
+        }
+      },
+    ]
+  }
+
+  private static func stop() {
+    on = false
+    volume?.invalidate()
+    volume = nil
+    for o in observers { NotificationCenter.default.removeObserver(o) }
+    observers = []
+    for c in GCController.controllers() { c.physicalInputProfile.valueDidChangeHandler = nil }
+    GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = nil
+    UIApplication.shared.endReceivingRemoteControlEvents()
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  private static func watch(_ c: GCController) {
+    let name = c.vendorName ?? "?"
+    log("game controller: \(name), \(c.productCategory)")
+    c.physicalInputProfile.valueDidChangeHandler = { _, element in
+      var value = ""
+      if let b = element as? GCControllerButtonInput { value = " \(b.value)" }
+      log("game controller \(name): \(element.localizedName ?? "?")\(value)")
+    }
+  }
+
+  private static func watch(_ k: GCKeyboard) {
+    k.keyboardInput?.keyChangedHandler = { _, _, code, pressed in
+      log("keyboard (GameController) key 0x\(String(code.rawValue, radix: 16)) \(pressed ? "down" : "up")")
+    }
+  }
+
+  static func describe(_ p: UIPress) -> String {
+    var s = "type \(p.type.rawValue) (\(typeName(p.type)))"
+    if let k = p.key {
+      s += ", keyboard key 0x\(String(k.keyCode.rawValue, radix: 16)) \"\(k.charactersIgnoringModifiers)\""
+    } else {
+      s += ", no keyboard key"
+    }
+    return s
+  }
+
+  static func phase(_ phase: UIPress.Phase) -> String {
+    switch phase {
+    case .began: return "began"
+    case .changed: return "changed"
+    case .stationary: return "stationary"
+    case .ended: return "ended"
+    case .cancelled: return "cancelled"
+    @unknown default: return "phase \(phase.rawValue)"
+    }
+  }
+
+  private static func typeName(_ t: UIPress.PressType) -> String {
+    switch t {
+    case .upArrow: return "up arrow"
+    case .downArrow: return "down arrow"
+    case .leftArrow: return "left arrow"
+    case .rightArrow: return "right arrow"
+    case .select: return "select"
+    case .menu: return "menu"
+    case .playPause: return "play/pause"
+    case .pageUp: return "page up"
+    case .pageDown: return "page down"
+    default: return "other"
     }
   }
 }

@@ -22,6 +22,7 @@ import '../widgets/setting_rows.dart';
 import 'about.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
+import 'remote_test.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
@@ -372,6 +373,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       // the screens with a side menu (Home, the libraries, a series...) - no key by default (user, 2026-10-12)
       SettingsGroup(title: 'Anywhere else', children: [
         _KeyRow(action: ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
+      ]),
+      // what a remote sends, and where it's lost (user, 2026-10-25: the Chromecast remote on the iPad)
+      SettingsGroup(title: 'Remote', children: [
+        ActionRow(title: 'Test the remote', icon: Icons.settings_remote_outlined,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RemoteTestScreen()))),
       ]),
     ]);
   }
