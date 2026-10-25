@@ -4,6 +4,7 @@ import 'package:komga_reader/screens/book_details.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/poster.dart';
+import 'package:komga_reader/widgets/poster_row.dart';
 
 import 'support/no_network.dart';
 
@@ -71,8 +72,39 @@ void main() {
     await show();
     expect(find.text('13 Mar 2024'), findsNothing);
     final off = [for (final e in find.byType(ClipRRect).evaluate()) e.size!.height];
-    expect(off[0], greaterThan(h[0]), reason: 'without the line the cover gets its room back');
+    expect(off[0], h[0], reason: 'the cover keeps its shape, line or not');
   });
+
+  // Home's rows were a fixed height and the grids' tiles a fixed shape: a larger text size (Settings > Look) took its
+  // room from the cover, which (filling its box) lost its top and bottom (user, 2026-10-25: X-Factor #3 on On deck)
+  for (final (scale, size) in const [(1.0, PosterSize.medium), (1.3, PosterSize.medium), (1.3, PosterSize.small),
+      (1.15, PosterSize.large)]) {
+    testWidgets('a cover keeps its shape at any text size - in a row and in a grid (text $scale, ${size.name} '
+        'posters)', (tester) async {
+      final api = plainKomga();
+      final s = AppSettings.instance;
+      addTearDown(() => s.setDisplay(const DisplayPrefs()));
+      s.setDisplay(s.display.copyWith(posterSize: size));
+      Widget tile(BuildContext _, int i) => PosterTile(api: api, imageUrl: 'http://test/$i', title: 'X-Factor #$i',
+          subtitle: 'The Big Bang', caption: '13 Mar 2024', onOpen: () {});
+      final shapes = <String, double>{}; // the cover box's width / height
+      for (final list in [
+        PosterRow(title: 'On deck', itemCount: 3, itemBuilder: tile),
+        PosterGrid(itemCount: 6, itemBuilder: tile),
+      ]) {
+        await tester.pumpWidget(MediaQuery(
+          data: MediaQueryData(size: const Size(1200, 900), textScaler: TextScaler.linear(scale)),
+          child: MaterialApp(key: UniqueKey(), home: Scaffold(body: list is PosterRow
+              ? SingleChildScrollView(child: list) : list)),
+        ));
+        await tester.pump();
+        final cover = tester.getSize(find.byType(ClipRRect).first);
+        shapes['${list.runtimeType}'] = cover.width / cover.height;
+        expect(tester.takeException(), isNull, reason: 'no overflow');
+      }
+      expect(shapes, {for (final k in shapes.keys) k: closeTo(PosterTile.coverAspect, 0.003)});
+    });
+  }
 
   testWidgets('book posters: any of three lines - series #, title, release date - always in that order (user, '
       '2026-10-07: no title = the series # over the date)', (tester) async {

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
@@ -37,10 +38,31 @@ class PosterSizeButton extends StatelessWidget {
       );
 }
 
-/// Grid columns for the chosen poster size (Settings > Library & Home): about 170 px wide at Medium.
-SliverGridDelegate posterGridDelegate() => SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: 170 * AppSettings.instance.display.posterSize.scale,
-    childAspectRatio: 0.52, mainAxisSpacing: 10, crossAxisSpacing: 8);
+/// Grid columns for the chosen poster size (Settings > Library & Home): about 170 px wide at Medium. Each row as tall
+/// as a tile of that width needs ([PosterTile.heightFor]) - a fixed shape let a larger text size take its room from
+/// the cover, cropped top and bottom (user, 2026-10-25).
+SliverGridDelegate posterGridDelegate(BuildContext context) => _PosterGridDelegate(
+    170 * AppSettings.instance.display.posterSize.scale, PosterTile.textBlockHeight(context, caption: true));
+
+class _PosterGridDelegate extends SliverGridDelegate {
+  const _PosterGridDelegate(this.maxWidth, this.text);
+  final double maxWidth, text;
+  static const _across = 8.0, _down = 10.0;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    // the columns as SliverGridDelegateWithMaxCrossAxisExtent counts them
+    final n = (constraints.crossAxisExtent / (maxWidth + _across)).ceil().clamp(1, 1 << 20);
+    final width = ((constraints.crossAxisExtent - _across * (n - 1)) / n).clamp(0.0, double.infinity);
+    final height = PosterTile.heightOf(width, text);
+    return SliverGridRegularTileLayout(crossAxisCount: n, mainAxisStride: height + _down,
+        crossAxisStride: width + _across, childMainAxisExtent: height, childCrossAxisExtent: width,
+        reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection));
+  }
+
+  @override
+  bool shouldRelayout(_PosterGridDelegate old) => old.maxWidth != maxWidth || old.text != text;
+}
 
 /// One focusable grid item: poster (Komga thumbnail, incl. custom cover crops) + title + small status line.
 /// Works with touch and with the remote: D-pad moves focus between tiles, OK activates.
@@ -73,6 +95,17 @@ class PosterTile extends StatelessWidget {
     return t.scale(13) * 1.2 * 2 + t.scale(11) * 1.3 * (caption ? 2 : 1) + 2;
   }
 
+  /// The cover's shape, width to height: a comic page's (6.625 x 10.25 in print, 1988 x 3056 digital).
+  static const coverAspect = 0.65;
+
+  /// How tall a tile [width] wide is, the cover at [coverAspect] with room for every text line (a caption too) at the
+  /// text size now: rows and grids are sized by it, so the text never takes height from the cover.
+  static double heightFor(BuildContext context, double width) =>
+      heightOf(width, textBlockHeight(context, caption: true));
+
+  static double heightOf(double width, double text) => _frame + (width - _frame) / coverAspect + 6 + text;
+  static const _frame = 12.0; // the focus frame: 4 padding and a 2 border, each side
+
   @override
   Widget build(BuildContext context) {
     final accent = Theme.of(context).colorScheme.primary;
@@ -89,7 +122,11 @@ class PosterTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(6),
             focusColor: Colors.transparent,
             child: _FocusFrame(accent: accent, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Expanded(
+              // the cover keeps its shape: the full width, unless the tile is too short (then narrower, never
+              // cropped); any spare height goes under the text
+              Flexible(
+                child: Align(alignment: Alignment.topCenter, heightFactor: 1, child: AspectRatio(
+                aspectRatio: coverAspect,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Stack(fit: StackFit.expand, children: [
@@ -128,7 +165,7 @@ class PosterTile extends StatelessWidget {
                           child: LinearProgressIndicator(value: progress, minHeight: 3, color: accent, backgroundColor: Colors.black54)),
                   ]),
                 ),
-              ),
+              ))),
               const SizedBox(height: 6),
               // Fixed-height text block (always room for a 2-line title + the subtitle), so a long title never takes
               // height from the cover: every cover in a grid or row stays the same size.
@@ -320,7 +357,7 @@ class PosterGrid extends StatelessWidget {
         builder: (context, _) => GridView.builder(
           controller: controller,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-          gridDelegate: posterGridDelegate(),
+          gridDelegate: posterGridDelegate(context),
           itemCount: itemCount,
           itemBuilder: itemBuilder,
         ),
@@ -370,7 +407,7 @@ class PagedPosterGrid extends StatelessWidget {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
             sliver: SliverGrid.builder(
-              gridDelegate: posterGridDelegate(),
+              gridDelegate: posterGridDelegate(context),
               itemCount: paged.items.length,
               itemBuilder: (context, i) {
                 if (i >= paged.items.length - 30 && paged.hasMore && !paged.loading && paged.error == null) {
