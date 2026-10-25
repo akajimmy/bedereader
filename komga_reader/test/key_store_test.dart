@@ -31,6 +31,8 @@ void main() {
     await waitUntil(() => shows(find.byType(LoginScreen)), tester: tester, reason: 'the sign-in screen');
 
     await tester.enterText(find.widgetWithText(TextField, 'Server'), url);
+    await tester.tap(find.text('API key')); // (the API key tab: Password is first)
+    await tester.pump();
     await tester.enterText(find.widgetWithText(TextField, 'API key'), 'secret-key');
     // the sign-in's connection is made as Connect is pressed: it gets the test's Komga
     await http.runWithClient(() => tester.tap(find.widgetWithText(FilledButton, 'Connect')), komga.client);

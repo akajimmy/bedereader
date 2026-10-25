@@ -158,6 +158,8 @@ void main() {
     await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'Server'),
         'http://nas:25600');
+    await tester.tap(find.text('API key')); // (the API key tab: Password is first)
+    await tester.pump();
     await tester.enterText(find.byWidgetPredicate((w) => w is TextField && w.decoration?.labelText == 'API key'),
         'wrong');
     await tester.tap(find.byType(FilledButton));

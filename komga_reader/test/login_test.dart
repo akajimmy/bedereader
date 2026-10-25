@@ -196,7 +196,7 @@ void main() {
     expect(byPassword.keyNames.single, startsWith('BeDeReader on '));
     expect(byPassword.closed, isTrue, reason: 'the password client is dropped');
     expect(signedIn, same(built.last));
-    expect((signedIn!.apiKey, signedIn!.usesPassword), ('made-key', false));
+    expect((signedIn!.apiKey, signedIn.usesPassword), ('made-key', false));
     expect((await SharedPreferences.getInstance()).getString('email'), 'nick@example.com');
   });
 
