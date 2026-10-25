@@ -4,6 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'app_log.dart';
+
 /// "Enhance" (Image settings, per series; replaces the old Sharpen): the page is cleaned up, scaled and sharpened on
 /// the GPU once, at the exact size it's shown at, and that picture is drawn 1:1. Tuned by the user in the image lab (a local tuning page)
 /// on two test pages (a soft 1999 JPEG scan enlarged, a 1984 paper scan shrunk), 2026-09-29:
@@ -40,9 +42,11 @@ class Enhancer {
             ui.FragmentProgram.fromAsset('shaders/colours.frag'),
             ui.FragmentProgram.fromAsset('shaders/easu.frag'),
           ]);
+          AppLog.instance.info('enhance', 'shaders loaded'); // (the sharpen shader unchecked on iOS - backlog)
           return _Programs(r[0], r[1], r[2], r[3], r[4]);
         } catch (e) {
           debugPrint('enhance: shaders unavailable ($e) - pages are drawn plain');
+          AppLog.instance.error('enhance', 'shaders unavailable - pages are drawn plain: $e');
           return null;
         }
       }();
@@ -89,8 +93,15 @@ class Enhancer {
     });
     scaled.dispose();
     debugPrint('enhance: ${sw}x$sh -> ${width}x$height in ${watch.elapsedMilliseconds} ms');
+    // the first few of a run in the app's log: that it works here, and how long it takes (not every page)
+    if (_logged < 3) {
+      _logged++;
+      AppLog.instance.info('enhance', 'page ${sw}x$sh -> ${width}x$height in ${watch.elapsedMilliseconds} ms');
+    }
     return out;
   }
+
+  static int _logged = 0;
 
   /// "Enhance colours": [src] with auto-levels ([lo]/[hi] per channel, 0..1), then Whiten paper and Deepen ink at
   /// full strength (the user's pick in the image lab (a local tuning page)), at the page's own size. Null if the shaders can't run here.

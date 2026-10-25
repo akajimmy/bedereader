@@ -41,7 +41,7 @@ class AppLog extends ChangeNotifier {
   AppLog._();
   static final AppLog instance = AppLog._();
 
-  static const keep = 1000;
+  static const keep = 2000; // (a page turn is a line: a few hours of reading)
   static const outboxCap = 5000; // a collector out of reach for days: the oldest unsent lines go first
   static const maxMessage = 2000;
 
@@ -100,6 +100,16 @@ class AppLog extends ChangeNotifier {
         _saveSoon();
       }
     });
+  }
+
+  /// The app left or come back to ("to the background", "back") - on a phone or tablet only, where the system may
+  /// then freeze or end the app (a gap in the log, a failure just after coming back, a run that ended without a
+  /// crash). On Windows it's only the window losing or getting the focus, a line each time the user switches windows
+  /// (user, 2026-10-25: "drop it on windows").
+  void lifecycle(String what) {
+    if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android) {
+      info('app', what);
+    }
   }
 
   /// The first [n] lines of [outbox] were sent.

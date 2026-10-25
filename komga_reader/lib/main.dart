@@ -59,6 +59,27 @@ void main() {
   runApp(const KomgaReaderApp());
 }
 
+/// The screen turning between portrait and landscape, in the app's log (rotation and an eBook turned unchecked on iOS -
+/// backlog). Phones and tablets only: on Windows it would be the window being resized.
+class _ScreenTurns with WidgetsBindingObserver {
+  bool? _landscape;
+
+  @override
+  void didChangeMetrics() {
+    if (defaultTargetPlatform != TargetPlatform.iOS && defaultTargetPlatform != TargetPlatform.android) return;
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    if (views.isEmpty) return;
+    final v = views.first, size = v.physicalSize / v.devicePixelRatio;
+    if (size.isEmpty) return;
+    final landscape = size.width > size.height;
+    if (_landscape != null && landscape != _landscape) {
+      AppLog.instance.info('rotation', 'the screen is now ${landscape ? 'landscape' : 'portrait'} '
+          '(${size.width.round()} x ${size.height.round()})');
+    }
+    _landscape = landscape;
+  }
+}
+
 /// The app's log (Settings > About > App log), kept with the app's files, and the remote log's settings; the first
 /// line says what's running where.
 Future<void> _startLog() async {
@@ -106,6 +127,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   final _nav = GlobalKey<NavigatorState>();
   bool _wasOffline = false;
   late final AppLifecycleListener _lifecycle;
+  final _turns = _ScreenTurns();
 
   @override
   void initState() {
@@ -114,13 +136,14 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
+    WidgetsBinding.instance.addObserver(_turns);
     // left (another app, the home screen, locked): the log kept, and what's queued sent while it still can be
     _lifecycle = AppLifecycleListener(
       onPause: () {
-        AppLog.instance.info('app', 'to the background');
+        AppLog.instance.lifecycle('to the background');
         RemoteLog.instance.sendNow();
       },
-      onResume: () => AppLog.instance.info('app', 'back'),
+      onResume: () => AppLog.instance.lifecycle('back'),
     );
     NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time
@@ -170,6 +193,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     ProgressSync.instance.removeListener(_onSync);
     Downloads.instance.removeListener(_onDownloads);
     _lifecycle.dispose();
+    WidgetsBinding.instance.removeObserver(_turns);
     super.dispose();
   }
 

@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_log.dart';
 import 'rotation.dart';
 
 const _channel = MethodChannel('komga_reader/screen');
@@ -165,6 +167,7 @@ class OrientationLock {
     await Future<void>.delayed(const Duration(milliseconds: 800));
     if (_portrait == null) return; // let go meanwhile
     final now = await _wayUp();
+    AppLog.instance.info('rotation', 'Locked: the screen was $way, a moment later ${now ?? 'not known'}');
     if (now != null && now == _opposite(way)) {
       _flipped = !_flipped;
       await _apply();
@@ -189,6 +192,7 @@ class OrientationLock {
 
   /// The book closed: the app follows the device again.
   Future<void> release() async {
+    if (_portrait != null) AppLog.instance.info('rotation', 'let go: the device turns the screen');
     _portrait = null;
     if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
     if (defaultTargetPlatform == TargetPlatform.android) return AutoRotation.instance.follow();
@@ -224,7 +228,13 @@ class OrientationLock {
     await _hold();
   }
 
-  Future<void> _hold() => defaultTargetPlatform == TargetPlatform.windows
+  Future<void> _hold() {
+    // (rotation Locked unchecked on iOS - backlog)
+    AppLog.instance.info('rotation', 'held ${_portrait! ? 'portrait' : 'landscape'}${_flipped ? ', the other way up' : ''}');
+    return _holdNow();
+  }
+
+  Future<void> _holdNow() => defaultTargetPlatform == TargetPlatform.windows
       ? _pcHold(switch ((_portrait!, _flipped)) {
           (true, false) => 'portrait',
           (true, true) => 'reversePortrait',
@@ -386,5 +396,18 @@ Future<void> setScreenBrightness(double value) async {
     await _channel.invokeMethod('brightness', value);
   } catch (_) {
     // no native side on this platform
+    return;
   }
+  // in the app's log (brightness unchecked on iOS - backlog): following the system, or a level - a slider being
+  // dragged once every 2 s at most, with what the screen says it's at
+  final now = clock.now();
+  if (value >= 0 && _brightnessLogged != null && now.difference(_brightnessLogged!) < const Duration(seconds: 2)) {
+    return;
+  }
+  _brightnessLogged = value < 0 ? null : now;
+  final screen = await getScreenBrightness();
+  AppLog.instance.info('brightness', '${value < 0 ? 'the system\'s own' : 'set to ${value.toStringAsFixed(2)}'}'
+      '${screen == null ? '' : ' - the screen says ${screen.toStringAsFixed(2)}'}');
 }
+
+DateTime? _brightnessLogged;

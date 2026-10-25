@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../page_curl.dart';
@@ -1497,6 +1498,7 @@ class ComicRenderer extends Renderer {
       final f = await _pageFile();
       if (f == null) return;
       final where = await savePicture(f.$1, f.$2);
+      AppLog.instance.info('reader', 'page saved: $where'); // (Save page unchecked on iOS - backlog)
       messenger // a message for each save, the last one shown at once (not queued behind the one before)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text('Page saved: $where')));
@@ -1512,6 +1514,7 @@ class ComicRenderer extends Renderer {
       final f = await _pageFile();
       if (f == null) return;
       await copyPicture(f.$1, f.$2);
+      AppLog.instance.info('reader', 'page copied');
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(content: Text('Page copied')));

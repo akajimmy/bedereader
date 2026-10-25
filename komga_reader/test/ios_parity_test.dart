@@ -34,8 +34,10 @@ void main() {
   test('brightness: the backlight is set, as on Android (the Auto + slider row), not just dimmed', () async {
     expect(hasBacklightControl, isTrue);
     await setScreenBrightness(0.4);
-    expect(calls.single.method, 'brightness');
-    expect(calls.single.arguments, 0.4);
+    expect(calls.first.method, 'brightness');
+    expect(calls.first.arguments, 0.4);
+    expect(calls.skip(1).map((c) => c.method), everyElement('getBrightness'),
+        reason: 'only read back after (for the app log)');
   });
 
   test('Wi-Fi only: iOS is asked which network it is on - mobile data waits, Wi-Fi goes', () async {

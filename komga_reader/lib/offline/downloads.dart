@@ -162,12 +162,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
     if (!wifiOnly || await isOnWifi()) {
       if (waitingForWifi) {
         waitingForWifi = false;
+        AppLog.instance.info('downloads', 'on Wi-Fi again: the queue goes on');
         notifyListeners();
       }
       return true;
     }
     if (!waitingForWifi) {
       waitingForWifi = true;
+      AppLog.instance.info('downloads', 'Wi-Fi only, and not on Wi-Fi: the queue waits');
       notifyListeners();
     }
     _wifiTimer?.cancel();
@@ -907,7 +909,13 @@ class Downloads extends ChangeNotifier implements LocalPages {
         if (await f.exists() && await f.length() > 0) {
           bytes += await f.length();
         } else {
+          final page = Stopwatch()..start();
           final data = await api.pageBytes(job.bookId, p['number'] as int);
+          // a page that took long: the app was likely in the background meanwhile (frozen by iOS) - for the log
+          // (downloads in the background, unchecked on iOS - backlog)
+          if (page.elapsed > const Duration(seconds: 10)) {
+            AppLog.instance.warn('downloads', '"${job.title}" page ${i + 1} took ${page.elapsed.inSeconds} s');
+          }
           await f.parent.create(recursive: true);
           // to a .part file first, renamed once it's all there: the app killed mid-write left a cut-off page that the
           // next run counted as downloaded - unreadable for good (code review, 2026-09-30)

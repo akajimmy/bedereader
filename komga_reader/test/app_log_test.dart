@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -57,6 +58,16 @@ void main() {
     await log.load(dir);
     expect(log.recent.map((l) => l.tag), ['app', 'reader', 'app']);
     expect(log.outbox.map((l) => l.level), [LogLevel.warn, LogLevel.crash], reason: 'unsent: still to send');
+  });
+
+  test('leaving the app and coming back are logged on a phone or tablet only - on Windows they are just the window '
+      'losing and getting the focus (user, 2026-10-25: "drop it on windows")', () {
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    for (final p in [TargetPlatform.windows, TargetPlatform.iOS, TargetPlatform.android]) {
+      debugDefaultTargetPlatformOverride = p;
+      log.lifecycle('back');
+    }
+    expect(log.recent.length, 2, reason: 'iOS and Android, not Windows');
   });
 
   test("sent oldest first in batches; what's stored leaves the queue, and the device's name is made clean", () async {
