@@ -834,6 +834,26 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets("iOS: a swipe from the left edge doesn't close the book (user, 2026-10-25: it did - iOS's own Back "
+      'gesture); Back still does', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+    await openReader(tester);
+    final gesture = await tester.startGesture(const Offset(2, 400));
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(const Offset(40, 0));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsOneWidget, reason: 'still open');
+
+    await tester.binding.handlePopRoute(); // the device's Back
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'Back closes it');
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets("the top bar's Close says so in the app log - told apart from Back, which is also iOS's swipe from the "
       'left edge (user, 2026-10-25: a book closed with Close looked like a swipe)', (tester) async {
     AppLog.instance.reset();

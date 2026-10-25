@@ -818,9 +818,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     final bg = r?.background ?? Colors.black;
     // Windows: the title bar in what's along the top of the reader (the page colour, or an inset page's surround)
     return TitleBarColour(colour: () => _renderer?.edge ?? Colors.black, changes: _settings, child: PopScope(
-      // Back (tablet or remote) closes the controls first, then the book
-      canPop: !_menu,
-      onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
+      // Back (tablet or remote) closes the controls first, then the book - always through here, never popped by the
+      // system: on iOS a route that can pop takes a swipe from the left edge as Back, and it closed the book where a
+      // page turn was meant (user, 2026-10-25)
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _menu ? _hideControls() : Navigator.of(context).pop();
+      },
       child: Scaffold(
         backgroundColor: bg,
         // the reader has no text box: a keyboard coming up (Search's, under it, as Back closes the book) leaves the

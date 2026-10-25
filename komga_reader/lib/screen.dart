@@ -156,14 +156,19 @@ class OrientationLock {
     await _apply();
   }
 
-  /// iOS's Locked: the screen held the way it is now. Looked at again a moment later: if the screen turned over instead
-  /// (iOS may name its two landscapes the other way round from Android's - not checkable here), the other one.
-  Future<void> holdNow() async {
-    final way = await _wayUp();
+  /// iOS's Locked. [chosen] (Locked picked just now): the screen held the way it is now, and that way kept on this
+  /// device. A book opened with Locked on: the way kept - locked in landscape, the next book opened with the iPad
+  /// upright was held upright (user, 2026-10-25); the way it is now only if none is kept yet. Looked at again a moment
+  /// after it's chosen: if the screen turned over instead (iOS may name its two landscapes the other way round from
+  /// Android's - not checkable here), the other one.
+  Future<void> holdNow({bool chosen = true}) async {
+    final kept = chosen ? null : (await SharedPreferences.getInstance()).getString(lockedKey);
+    final way = kept ?? await _wayUp();
     if (way == null) return; // not known: nothing held
     _portrait = way == 'portrait' || way == 'reversePortrait';
     _flipped = way.startsWith('reverse');
     await _apply();
+    if (kept != null) return; // (kept as it was found to be, the check below done then)
     await Future<void>.delayed(const Duration(milliseconds: 800));
     if (_portrait == null) return; // let go meanwhile
     final now = await _wayUp();
@@ -172,7 +177,17 @@ class OrientationLock {
       _flipped = !_flipped;
       await _apply();
     }
+    final held = switch ((_portrait!, _flipped)) {
+      (true, false) => 'portrait',
+      (true, true) => 'reversePortrait',
+      (false, false) => 'landscape',
+      (false, true) => 'reverseLandscape',
+    };
+    await (await SharedPreferences.getInstance()).setString(lockedKey, held);
   }
+
+  /// The way iOS's Locked was last chosen in (this device).
+  static const lockedKey = 'rotation.lockedWay';
 
   static String _opposite(String way) => switch (way) {
         'portrait' => 'reversePortrait',

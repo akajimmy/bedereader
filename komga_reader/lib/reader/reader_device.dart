@@ -74,9 +74,10 @@ mixin ReaderDevice<T extends StatefulWidget> on State<T> {
   void _applyRotation() {
     final r = _settings.display.rotation;
     if (r == _rotation) return;
+    final opening = _rotation == null; // (the book opening with it on, not Locked chosen just now)
     _rotation = r;
     if (r == Rotation.locked) {
-      OrientationLock.instance.holdNow(); // iOS: the way it is now
+      OrientationLock.instance.holdNow(chosen: !opening); // iOS: the way it was locked in - chosen now, the way it is
     } else {
       OrientationLock.instance.hold(portrait: r == Rotation.portrait, landscape: r == Rotation.landscape);
     }

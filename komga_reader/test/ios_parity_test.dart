@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // iOS brought in line with Android (user, 2026-10-22: "brightness like Android, Save / Copy page, Wi-Fi only
 // downloads, Device serif = Georgia"): the Dart side asks iOS's native side as it asks Android's.
@@ -29,6 +30,38 @@ void main() {
   tearDown(() {
     debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+  });
+
+  test('Locked keeps the way it was locked in: locked in landscape, the next book opened with the iPad upright is held '
+      'in landscape (user, 2026-10-25: it was held upright); chosen again, the way the iPad is held then', () async {
+    SharedPreferences.setMockInitialValues({});
+    final held = <Object?>[];
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+      if (c.method == 'SystemChrome.setPreferredOrientations') held.add((c.arguments as List).join(','));
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    var way = 'landscape';
+    answer = (c) => c.method == 'currentWayUp' ? way : null;
+    final lock = OrientationLock.instance;
+
+    await lock.holdNow(); // Locked chosen, the iPad on its side
+    await lock.release(); // the book closed
+    way = 'portrait'; // the iPad upright
+    held.clear();
+    await lock.holdNow(chosen: false); // the next book opens with Locked on
+    expect(held, ['DeviceOrientation.landscapeLeft'], reason: 'as it was locked');
+
+    held.clear();
+    await lock.holdNow(); // Locked chosen again, now upright
+    expect(held.first, 'DeviceOrientation.portraitUp');
+    await lock.release();
+    way = 'landscape';
+    held.clear();
+    await lock.holdNow(chosen: false);
+    expect(held, ['DeviceOrientation.portraitUp']);
+    await lock.release();
   });
 
   test("the app's folder (the downloads) is kept out of iCloud backup: iOS is asked once a run, for that folder - not "
