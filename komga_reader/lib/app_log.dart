@@ -41,7 +41,7 @@ class AppLog extends ChangeNotifier {
   AppLog._();
   static final AppLog instance = AppLog._();
 
-  static const keep = 1000;
+  static const keep = 2000; // (a page turn is a line: a few hours of reading)
   static const outboxCap = 5000; // a collector out of reach for days: the oldest unsent lines go first
   static const maxMessage = 2000;
 

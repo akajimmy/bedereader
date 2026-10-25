@@ -181,7 +181,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
-    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}"');
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? 'Back (the back arrow, the '
+        "device's Back, or iOS's swipe from the left edge)"}');
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     closeDevice();
@@ -367,7 +368,17 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
   /// counts as read (user, 2026-09-30) - and the page number flashes.
+  /// The book closed by the reader's own [via] (a key, Close, the end card) - for the app's log; closed any other way
+  /// it was Back: the back arrow, the device's Back, or iOS's swipe from the left edge.
+  void _close(String via) {
+    _closedVia = via;
+    Navigator.of(context).maybePop();
+  }
+
+  String? _closedVia;
+
   void _pageTurned(int i) {
+    AppLog.instance.info('reader', 'at ${i + 1}'); // (the left-edge swipe against iOS's swipe-back - backlog)
     if (i != _openedAt) _turned = true;
     _saveTimer?.cancel();
     // saved at once at the place that finishes the book (comics: the last page; EPUBs: the end card) - once
@@ -725,7 +736,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final k = e.logicalKey;
     if (_renderer == null || !_r.ready) {
       // nothing to read yet (loading, an EPUB being laid out): only closing (Back goes through the route)
-      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) Navigator.of(context).maybePop();
+      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) _close('a key');
       return KeyEventResult.ignored;
     }
     if (!_menu) {
@@ -753,12 +764,18 @@ class _ReaderScreenState extends State<ReaderScreen>
           return KeyEventResult.handled;
         }
         if (isOkKey(k)) {
-          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _r.forward();
+          if (e is KeyDownEvent) _endClose.hasFocus ? _close('OK on the end card') : _r.forward();
           return KeyEventResult.handled;
         }
       }
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
-      switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
+      final action = ReaderKeys.instance.actionFor(k, rtl: _rtl);
+      // a key's press in the app's log, what it does or that it does nothing (a keyboard or remote on the iPad -
+      // backlog); not its repeats
+      if (e is KeyDownEvent) {
+        AppLog.instance.info('keys', '${ReaderKeys.nameOf(k)}: ${action?.label ?? 'nothing set'}');
+      }
+      switch (action) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
           if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward(held: e is KeyRepeatEvent);
@@ -769,7 +786,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
-          if (e is KeyDownEvent) Navigator.of(context).maybePop();
+          if (e is KeyDownEvent) _close('a key');
         case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
           _r.zoomStep(true);
         case ReaderAction.zoomOut:
@@ -832,7 +849,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                 child: const Text('Next book'))
                           else
                             TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
-                          TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+                          TextButton(onPressed: () => _close('Close'), child: const Text('Close')),
                         ])),
                   ))
                 : r == null || !r.opened
@@ -1018,7 +1035,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         nextNode: _endNext,
         closeNode: _endClose,
         onNext: _nextBook,
-        onClose: () => Navigator.of(context).maybePop(),
+        onClose: () => _close('the end card'),
       );
 
   final _endNext = FocusNode(debugLabel: 'end-next');
