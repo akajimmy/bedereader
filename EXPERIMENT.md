@@ -87,6 +87,17 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Getting at a folder (lib\local\access.dart):** adding a share with no login kept tries it as a guest first (a share open to anyone needs none - user, 2026-10-25); refused, it asks for a user name and password, tries them, and says so if the share refuses those; adding a tablet folder asks for All files access (Open Settings, then "I've allowed it") if it isn't granted.
 - The NAS refuses the SMB client without a login (access denied) - the client itself loads and reaches it from Windows.
 
+### Found trying slice 5 on the tablet (2026-10-25)
+
+- \\nick-nas couldn't be found: the network's DNS (the ISP's) doesn't know the NAS; Windows finds it by asking the local network, Android only by DNS - except a .local name (mDNS), which the NAS answers. A bare name DNS doesn't know is now tried as name.local (nick-nas.local, 10.0.0.226 - pinged from the tablet).
+
+### Slice 6 - browsing for a library folder (2026-10-25)
+
+- **Browse for a folder…** on the No server screen (adds a line), and Settings' Add a library opens the browser (with Type a folder… for a typed path).
+- **Places:** Android - the device's storage and any card or USB drive (/storage/XXXX-XXXX), after All files access; Windows - the drives; iOS - the app's own folder, which the Files app shows as BeDeReader (Info.plist: UIFileSharingEnabled, LSSupportsOpeningDocumentsInPlace); and the servers the libraries are on, plus Connect to a server….
+- **A server's shares:** Android and iOS through the app's SMB client (a guest first; refused, the login is asked for and also used for the share picked); Windows through net view, with Windows's own login.
+- **Folders:** the system's own left out (hidden, @Recycle, #recycle, $RECYCLE.BIN); each folder says how many folders and books are in it. Up stops at the place it started from; a share's top goes up to its server's shares.
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.

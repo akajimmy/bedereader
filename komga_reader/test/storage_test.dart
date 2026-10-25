@@ -25,6 +25,9 @@ class MemoryFs implements LibraryFs {
   }
 
   @override
+  Future<FolderLook> look(String folder) async => const FolderLook([], 0);
+
+  @override
   Future<int> length(String path) async => files[path]!.length;
   @override
   Future<Uint8List> readAll(String path) async {

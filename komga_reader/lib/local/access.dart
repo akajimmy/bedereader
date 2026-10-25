@@ -48,7 +48,8 @@ class FolderAccess {
         var login = storage.loginFor(path);
         if (asked || problem != null) {
           if (!context.mounted) return false;
-          login = await _askLogin(context, path, login, problem);
+          final (host, share, _) = splitUnc(path)!;
+          login = await askLogin(context, '\\\\$host\\$share', login, problem);
           if (login == null) return false;
           await storage.setLogin(path, login);
         }
@@ -70,6 +71,21 @@ class FolderAccess {
         }
       }
     }
+    if (!context.mounted || !await allFiles(context)) return false;
+    if (await Directory(path).exists()) return true;
+    if (context.mounted) {
+      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text("Can't find that folder"),
+        content: Text(path),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+      ));
+    }
+    return false;
+  }
+
+  /// Android: All files access, asked for until it's granted (Open Settings, then "I've allowed it"); false:
+  /// cancelled. Elsewhere: nothing to grant.
+  static Future<bool> allFiles(BuildContext context) async {
     if (defaultTargetPlatform == TargetPlatform.android) {
       while (!await hasAllFiles()) {
         if (!context.mounted) return false;
@@ -96,54 +112,65 @@ class FolderAccess {
         if (go != true) return false;
       }
     }
-    if (await Directory(path).exists()) return true;
-    if (context.mounted) {
-      await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
-        title: const Text("Can't find that folder"),
-        content: Text(path),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
-      ));
-    }
-    return false;
+    return true;
   }
 
-  /// The share's user name and password (and domain, rarely needed); null: cancelled.
-  static Future<SmbLogin?> _askLogin(BuildContext context, String path, SmbLogin? was, String? problem) async {
-    final (host, share, _) = splitUnc(path)!;
-    final user = TextEditingController(text: was?.user ?? '');
-    final password = TextEditingController();
-    final domain = TextEditingController(text: was?.domain ?? '');
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Sign in to \\\\$host\\$share'),
+  /// A user name and password (and domain, rarely needed) for [where] (\\host\share, or \\host to list its
+  /// shares); null: cancelled.
+  static Future<SmbLogin?> askLogin(BuildContext context, String where, SmbLogin? was, String? problem) =>
+      showDialog<SmbLogin>(context: context, builder: (_) => _LoginDialog(where, was, problem));
+}
+
+/// The fields are the dialog's own: let go when it's gone, not while it's still closing (they're drawn until then).
+class _LoginDialog extends StatefulWidget {
+  const _LoginDialog(this.where, this.was, this.problem);
+  final String where;
+  final SmbLogin? was;
+  final String? problem;
+
+  @override
+  State<_LoginDialog> createState() => _LoginDialogState();
+}
+
+class _LoginDialogState extends State<_LoginDialog> {
+  late final _user = TextEditingController(text: widget.was?.user ?? '');
+  final _password = TextEditingController();
+  late final _domain = TextEditingController(text: widget.was?.domain ?? '');
+
+  @override
+  void dispose() {
+    _user.dispose();
+    _password.dispose();
+    _domain.dispose();
+    super.dispose();
+  }
+
+  void _done() {
+    final user = _user.text.trim(), domain = _domain.text.trim();
+    Navigator.pop(context, user.isEmpty ? null : SmbLogin(user, _password.text, domain: domain.isEmpty ? null : domain));
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text('Sign in to ${widget.where}'),
         content: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            if (problem != null) Padding(padding: const EdgeInsets.only(bottom: 12),
-                child: Text(problem, style: const TextStyle(color: Color(0xFFFF8A80)))),
-            TextField(controller: user, autofocus: true, autocorrect: false, enableSuggestions: false,
+            if (widget.problem != null) Padding(padding: const EdgeInsets.only(bottom: 12),
+                child: Text(widget.problem!, style: const TextStyle(color: Color(0xFFFF8A80)))),
+            TextField(controller: _user, autofocus: true, autocorrect: false, enableSuggestions: false,
                 decoration: const InputDecoration(labelText: 'User name')),
-            TextField(controller: password, obscureText: true,
+            TextField(controller: _password, obscureText: true,
                 decoration: const InputDecoration(labelText: 'Password'),
-                onSubmitted: (_) => Navigator.pop(ctx, true)),
-            TextField(controller: domain, autocorrect: false, enableSuggestions: false,
+                onSubmitted: (_) => _done()),
+            TextField(controller: _domain, autocorrect: false, enableSuggestions: false,
                 decoration: const InputDecoration(labelText: 'Domain (usually empty)')),
             const Padding(padding: EdgeInsets.only(top: 10), child: Text(
-                'Kept encrypted on this device, for this share only.', style: TextStyle(fontSize: 12))),
+                'Kept encrypted on this device, for this server only.', style: TextStyle(fontSize: 12))),
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign in')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: _done, child: const Text('Sign in')),
         ],
-      ),
-    );
-    final login = ok == true && user.text.trim().isNotEmpty
-        ? SmbLogin(user.text.trim(), password.text, domain: domain.text.trim().isEmpty ? null : domain.text.trim())
-        : null;
-    user.dispose();
-    password.dispose();
-    domain.dispose();
-    return login;
-  }
+      );
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/setting_rows.dart';
 import 'access.dart';
+import 'folder_browser.dart';
 import 'folder_komga.dart';
 import 'folder_scan.dart';
 
@@ -59,8 +60,8 @@ class LocalLibrariesGroup extends StatelessWidget {
   }
 
   Future<void> _add(BuildContext context) async {
-    final path = await _ask(context, title: 'Add a library', label: 'Folder', hint: r'\\server\share\Comics',
-        action: 'Add');
+    // browsed for (this device, a drive, a share), or typed from the browser's "Type a folder…"
+    final path = await pickFolder(context);
     if (path == null || path.trim().isEmpty || !context.mounted) return;
     final lib = LocalLibrary.at(path);
     final messenger = ScaffoldMessenger.maybeOf(context);

@@ -28,7 +28,37 @@ abstract class LibraryFs {
 
   /// [length] bytes from [offset] (fewer at the end of the file).
   Future<Uint8List> readRange(String path, int offset, int length);
+
+  /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
+  /// and how many books.
+  Future<FolderLook> look(String folder);
 }
+
+/// A folder's own folders and its count of books (CBZ, EPUB), as the folder browser shows them.
+class FolderLook {
+  const FolderLook(this.folders, this.books);
+  final List<String> folders;
+  final int books;
+
+  /// From the names directly in a folder: ([name], is a folder).
+  factory FolderLook.of(Iterable<(String, bool)> names) {
+    final folders = [for (final (n, dir) in names) if (dir && shownFolder(n)) n]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return FolderLook(folders, names.where((e) => !e.$2 && isBookFile(e.$1)).length);
+  }
+}
+
+/// A file the scan reads as a book.
+bool isBookFile(String name) {
+  final n = name.toLowerCase();
+  return n.endsWith('.cbz') || n.endsWith('.epub');
+}
+
+/// Shown in the folder browser: not a system's own folder - hidden ones (.x), a NAS's (@Recycle, #recycle,
+/// @eaDir) or Windows's (\$RECYCLE.BIN, System Volume Information).
+bool shownFolder(String name) =>
+    !name.startsWith('.') && !name.startsWith('@') && !name.startsWith('#') && !name.startsWith(r'$') &&
+    name != 'System Volume Information';
 
 /// The device's own files (and, on Windows, a share by its \\host\share path - Windows reaches it itself).
 class LocalFs implements LibraryFs {
@@ -45,6 +75,12 @@ class LocalFs implements LibraryFs {
       yield FsEntry(e.path, s.size, s.modified);
     }
   }
+
+  @override
+  Future<FolderLook> look(String folder) async => FolderLook.of([
+        await for (final e in Directory(folder).list(followLinks: false))
+          (e.path.substring(e.path.lastIndexOf(RegExp(r'[\\/]')) + 1), e is Directory),
+      ]);
 
   @override
   Future<int> length(String path) => File(path).length();
@@ -113,6 +149,12 @@ class SmbFs implements LibraryFs {
   }
 
   @override
+  Future<FolderLook> look(String folder) async => FolderLook.of([
+        for (final e in await (await _connected).listDirectory(_inShare(folder)))
+          if (e.name != '.' && e.name != '..' && !e.stat.isHidden) (e.name, e.isDirectory),
+      ]);
+
+  @override
   Future<int> length(String path) async => (await _connected).fileSize(_inShare(path));
   @override
   Future<Uint8List> readAll(String path) async => (await _connected).readFile(_inShare(path));
@@ -152,6 +194,18 @@ Future<String> hostAddress(String host) async {
     }
   }
   return host;
+}
+
+/// The folder shares in what Windows's `net view \\host /all` prints: the rows under its dashed line, of type Disk,
+/// the hidden ones (ending in $) left out.
+List<String> netViewShares(String output) {
+  final lines = output.split(RegExp(r'\r?\n'));
+  final start = lines.indexWhere((l) => l.startsWith('-----'));
+  if (start < 0) return [];
+  return [
+    for (final l in lines.skip(start + 1))
+      if (RegExp(r'^(.+?)\s+Disk(\s|$)').firstMatch(l) case final m? when !m[1]!.trim().endsWith(r'$')) m[1]!.trim(),
+  ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 }
 
 /// A share's user name and password (the password kept encrypted on the device).
@@ -216,6 +270,32 @@ class Storage {
 
   /// Reached through the app's SMB client (not the system).
   bool viaSmb(String path) => _smb && shareOf(path) != null;
+
+  /// A login kept for any share on [host] (the folder browser lists a server's shares with it); null: none.
+  SmbLogin? loginForHost(String host) {
+    final h = '${host.toLowerCase()}\\';
+    for (final e in _logins.entries) {
+      if (e.key.startsWith(h)) return e.value;
+    }
+    return null;
+  }
+
+  /// The folder shares on [host] (its hidden ones, C$ and the like, left out). Windows asks the system (`net view`,
+  /// with Windows's own login, as it reads the shares); elsewhere the app's SMB client, with [login] (null: as a
+  /// guest). A refused login throws an [Smb2Exception] (elsewhere) or a [FileSystemException] (Windows).
+  Future<List<String>> sharesOn(String host, SmbLogin? login) async {
+    if (!_smb) {
+      final r = await Process.run('net', ['view', '\\\\$host', '/all']);
+      if (r.exitCode != 0) {
+        throw FileSystemException('${r.stdout}${r.stderr}'.trim().replaceAll(RegExp(r'\s+'), ' '), '\\\\$host');
+      }
+      return netViewShares('${r.stdout}');
+    }
+    final shares = await Smb2Pool.listSharesOn(host: await hostAddress(host), user: login?.user,
+        password: login?.password, domain: login?.domain);
+    return [for (final s in shares) if (s.isDisk && !s.isHidden) s.name]
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  }
 
   LibraryFs of(String path) {
     if (!viaSmb(path)) return const LocalFs();

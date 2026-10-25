@@ -9,6 +9,7 @@ import '../api.dart';
 import '../app_identity.dart';
 import '../errors.dart';
 import '../local/access.dart';
+import '../local/folder_browser.dart';
 import '../local/folder_komga.dart';
 import '../local/folder_scan.dart';
 import '../local/mixed_komga.dart';
@@ -267,7 +268,21 @@ class _LoginScreenState extends State<LoginScreen> {
                         hintText: defaultTargetPlatform == TargetPlatform.android
                             ? '/storage/emulated/0/Comics\n\\\\server\\share\\Comics'
                             : 'C:\\Comics\\Ongoing\n\\\\server\\share\\Comics')),
-                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.folder_outlined),
+                    label: const Text('Browse for a folder…'),
+                    onPressed: _busy ? null : () async {
+                      final path = await pickFolder(context); // (added as a line of its own)
+                      if (path == null || !mounted) return;
+                      final lines = [for (final l in _folders.text.split('\n')) if (l.trim().isNotEmpty) l.trim()];
+                      if (!lines.any((l) => l.toLowerCase() == path.toLowerCase())) lines.add(path);
+                      setState(() => _folders.text = lines.join('\n'));
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
                 FilledButton(onPressed: _busy ? null : _openLocal, child: Text(!_busy ? 'Open' : _scanned == null ? 'Reading folders…' : 'Reading folders… $_scanned books')),
                 if (_localError != null) Padding(padding: const EdgeInsets.only(top: 12),
                     child: ErrorText(_localError!, _localError!)),
