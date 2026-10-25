@@ -82,6 +82,37 @@ void main() {
     sheet.dispose();
   });
 
+  test('no lighter band where the page starts to curl (user, 2026-10-24: "every book, every page, every curl" - '
+      'the flat part was shaded darker right up to the fold, the curl began at full light): the shading runs on '
+      'across the fold, front and back, straight or at an angle', () async {
+    const size = Size(400, 300), grey = Color(0xFF808080);
+    final program = (await PageCurl.program())!;
+    final sheet = await solidImage(400, 300, grey);
+    // the step in lightness across the fold (where the page starts to curl) along row [y]: 2 px either side
+    Future<int> stepAtFold(Offset finger, int y) async {
+      final rec = ui.PictureRecorder();
+      // (the back the sheet's own grey: only the light and shade differ)
+      PageCurlPainter(program: program, sheet: sheet, page: Offset.zero & size, grab: const Offset(400, 150),
+              finger: finger, mirror: false, paper: grey)
+          .paint(Canvas(rec), size);
+      final img = await rec.endRecording().toImage(400, 300);
+      final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+      img.dispose();
+      final (at, n) = PageCurl.fold(const Offset(400, 150), finger, PageCurl.radius(400))!;
+      final x = (at.dx - (y - at.dy) * n.dy / n.dx).round();
+      int light(int x) => px[(y * 400 + x) * 4];
+      return (light(x - 2) - light(x + 2)).abs();
+    }
+
+    // (just lifting: the front going up from the fold, nothing over yet; further on: the back coming over it)
+    for (final (finger, y) in [(const Offset(385, 150), 150), (const Offset(360, 170), 150),
+        (const Offset(200, 150), 150), (const Offset(120, 150), 150),
+        (const Offset(200, 260), 200), (const Offset(150, 40), 100)]) {
+      expect(await stepAtFold(finger, y), lessThanOrEqualTo(4), reason: 'finger $finger, row $y');
+    }
+    sheet.dispose();
+  });
+
   test('two pages up, the back of the turning page is the page given (user, 2026-10-16: "the following left-hand '
       'page should be shown on the back"): each point of it shows what lies where it lands, so the landed page is '
       'exactly the page under it - left to right, right to left, and over the gap between two sheets', () async {
