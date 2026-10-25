@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show Listenable;
 import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
@@ -665,6 +667,16 @@ class Komga {
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'thumbnail');
         return r.bodyBytes;
       });
+
+  // ---- local libraries (experimental/sources): folders on this device, beside or instead of Komga's ----------------
+  /// The item ([id]: a book, series or library) is in a local library - a file here, not Komga's.
+  bool isLocal(String id) => false;
+
+  /// A local EPUB's own file (null: not a local one).
+  File? localEpubFile(String bookId) => null;
+
+  /// Told when the local libraries change (one added or removed, a scan found changes); null: no local libraries.
+  Listenable? get localChanges => null;
 
   // ---- delete (removes the files on the server - callers must confirm first)
   Future<void> deleteBookFile(String bookId) => _send('DELETE', '/api/v1/books/$bookId/file');

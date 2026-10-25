@@ -70,6 +70,13 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Page sizes** (two pages up, a wide page is a spread, alone; a webtoon's strip is laid out by them): from ComicInfo when it lists them (37 of the 400), else read from the start of each picture the first time the book is opened - 0.2 to 0.4 s for a 26-page book on the NAS - and kept. Catwoman #81's 3976-wide spread found so.
 - A scan made before this reads its books again once (what's kept from inside a file has a version).
 
+### Slice 4 - local libraries beside Komga's (2026-10-25)
+
+- **Signed in to Komga**, the local libraries (the same ones as local mode's, kept on this device) show beside Komga's: in the side menu, Home's Libraries, the library picker. Settings > Server and sync lists them above Komga's settings, to add, rename, remove and scan.
+- **MixedKomga** (lib\local\mixed_komga.dart): the Komga client, with the local libraries answered from their folders. A call about one book, series or library goes to whichever has it - a local book's pages, progress, next book never reach Komga. A view across every library (All libraries, Home's rows, search, the filter panel's lists) asks both and merges them in the order asked for; Komga is asked for everything up to the page shown, so the merged page is right.
+- A local book is never downloaded or cached (it's on this device already), nor deleted from the app.
+- **Not yet:** offline mode shows the downloads only - the local libraries go with Komga; read lists and collections are Komga's only; pins and series settings on local series sync through Komga to other devices, where those series don't exist.
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.

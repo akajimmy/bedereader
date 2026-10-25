@@ -54,6 +54,10 @@ class OfflineKomga extends Komga {
 
   static num _numberSort(Map b) => ((b['metadata'] as Map?)?['numberSort'] as num?) ?? 0;
 
+  /// [list] sorted as Komga sorts by [sort] ("field,dir", the fields the app uses) - lists from two sources merged
+  /// (local libraries beside Komga's: lib/local/mixed_komga.dart).
+  static void sortItems(List<dynamic> list, String sort) => _sort(list, sort, (m) => _sortKey(sort, m));
+
   /// Sorts by a Komga sort param "field,dir" for the fields the app uses.
   static void _sort(List<dynamic> list, String sort, dynamic Function(Map item) key) {
     final desc = sort.endsWith(',desc');

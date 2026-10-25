@@ -15,6 +15,7 @@ import 'hidden_libraries.dart';
 import 'key_store.dart';
 import 'licences.dart';
 import 'local/folder_komga.dart';
+import 'local/mixed_komga.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -269,10 +270,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = await KeyStore.read();
     final local = url == FolderKomga.address ? await _openLocal() : null; // no server: local libraries
-    final api = local ?? (url != null && key != null && url != FolderKomga.address ? Komga(url, key) : null);
+    final api = local ?? (url != null && key != null && url != FolderKomga.address ? MixedKomga(url, key) : null);
     if (local != null) {
       await _startLocal(local);
     } else if (api != null) {
+      await (api as MixedKomga).attachLocal(); // this device's local libraries, beside Komga's
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
       // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
       await _startDownloads(api);
@@ -322,6 +324,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       return;
     }
     await KeyStore.write(api.apiKey);
+    if (api is MixedKomga) await api.attachLocal(); // this device's local libraries, beside Komga's
     setState(() => _api = api);
     // in the background: each shows its local copy at once and its own sync problems
     unawaited(AppSettings.instance.load(api));

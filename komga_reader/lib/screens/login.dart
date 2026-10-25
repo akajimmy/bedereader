@@ -10,6 +10,7 @@ import '../app_identity.dart';
 import '../errors.dart';
 import '../local/folder_komga.dart';
 import '../local/folder_scan.dart';
+import '../local/mixed_komga.dart';
 import '../screen.dart' show appStorageDir;
 import '../widgets/error_text.dart';
 
@@ -163,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  Komga _client(String server, String credential) => (widget.client ?? Komga.new)(server, credential);
+  Komga _client(String server, String credential) => (widget.client ?? MixedKomga.new)(server, credential);
 
   /// Signs in with the email and password: Komga is asked who they are, then for an API key for this device. The
   /// key is what's kept; a server that won't make one (4xx) keeps the password client instead.

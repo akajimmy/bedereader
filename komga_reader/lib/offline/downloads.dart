@@ -223,6 +223,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     final s = store;
     if (s == null || _hold) return;
     final id = book['id'] as String;
+    if (_api?.isLocal(id) ?? false) return; // a local library's: on this device already
     final e = s.books[id];
     if (e != null && e['cache'] == true) {
       e['cachedAt'] = clock.now().toIso8601String();
@@ -594,6 +595,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     var added = 0;
     for (final b in books) {
       final id = b['id'] as String;
+      if (_api?.isLocal(id) ?? false) continue; // a local library's: on this device already
       // a book in the cache, downloaded on purpose: a download from now on (kept until deleted)
       final cachedJob = jobFor(id);
       if (cachedJob != null && cachedJob.cache) {

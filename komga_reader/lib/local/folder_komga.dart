@@ -75,6 +75,29 @@ class FolderKomga extends OfflineKomga {
   /// Counts up each time a scan has changed what's listed (screens showing the libraries look again).
   final changed = ValueNotifier<int>(0);
 
+  @override
+  Listenable? get localChanges => changed;
+
+  /// A book, series or library of these folders.
+  @override
+  bool isLocal(String id) =>
+      store.books.containsKey(id) || _folders.any((l) => l.id == id) || _seriesIds.contains(id);
+
+  // the series' ids, worked out again after each change (asked about for every tile beside Komga's)
+  Set<String> get _seriesIds {
+    if (_seriesAt != changed.value || _seriesIdsKept == null) {
+      _seriesAt = changed.value;
+      _seriesIdsKept = {for (final e in store.books.values) (e['book'] as Map)['seriesId'] as String};
+    }
+    return _seriesIdsKept!;
+  }
+
+  Set<String>? _seriesIdsKept;
+  int _seriesAt = -1;
+
+  @override
+  File? localEpubFile(String bookId) => epubFile(bookId);
+
   Future<void>? _scan;
 
   /// The folders scanned again: new and changed files opened, the rest kept from the last scan; books whose files

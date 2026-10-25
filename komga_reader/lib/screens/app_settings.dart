@@ -7,6 +7,7 @@ import '../api.dart';
 import '../hidden_libraries.dart';
 import '../local/folder_komga.dart';
 import '../local/local_settings.dart';
+import '../local/mixed_komga.dart';
 import '../ondeck_hidden.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
@@ -339,6 +340,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ]),
         ]
       : [
+        // folders on this device as libraries, beside Komga's (experimental/sources)
+        if (widget.api case MixedKomga(:final local?)) LocalLibrariesGroup(api: local),
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
           Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),

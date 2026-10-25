@@ -122,7 +122,9 @@ class EpubRenderer extends Renderer {
   /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
   /// still go to Komga as before); else Komga.
   static EpubSource sourceFor(Komga api, String id) {
-    final file = api is OfflineKomga ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
+    final file = api is OfflineKomga
+        ? api.epubFile(id)
+        : api.localEpubFile(id) ?? Downloads.instance.epubFileOf(api.baseUrl, id); // (a local library's own file)
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
 

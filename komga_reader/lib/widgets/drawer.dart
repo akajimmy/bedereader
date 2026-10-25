@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../hidden_libraries.dart';
-import '../local/folder_komga.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../screens/app_settings.dart';
@@ -35,11 +34,10 @@ class _AppDrawerState extends State<AppDrawer> {
   void initState() {
     super.initState();
     HiddenLibraries.instance.addListener(_loadLibraries); // shown / hidden in Settings
-    _local?.changed.addListener(_loadLibraries); // local mode: libraries added or removed in Settings, kept pinned
+    widget.api.localChanges?.addListener(_loadLibraries); // local libraries added or removed in Settings, kept pinned
     _loadLibraries();
   }
 
-  FolderKomga? get _local => widget.api is FolderKomga ? widget.api as FolderKomga : null;
 
   // the kept list (fetched again when the app comes back to the foreground - Connection), hidden ones left out
   void _loadLibraries() =>
@@ -48,7 +46,7 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   void dispose() {
     HiddenLibraries.instance.removeListener(_loadLibraries);
-    _local?.changed.removeListener(_loadLibraries);
+    widget.api.localChanges?.removeListener(_loadLibraries);
     super.dispose();
   }
 
