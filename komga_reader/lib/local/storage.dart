@@ -71,8 +71,9 @@ class SmbFs implements LibraryFs {
   final SmbLogin? login;
   Future<Smb2Pool>? _pool;
 
-  Future<Smb2Pool> get _connected => _pool ??= Smb2Pool.connect(host: host, share: share, user: login?.user,
-          password: login?.password, domain: login?.domain, workers: 4)
+  Future<Smb2Pool> get _connected => _pool ??= hostAddress(host)
+      .then((address) => Smb2Pool.connect(host: address, share: share, user: login?.user,
+          password: login?.password, domain: login?.domain, workers: 4))
       .catchError((Object e) {
         _pool = null; // (asked again next time)
         throw e;
@@ -127,6 +128,30 @@ class SmbFs implements LibraryFs {
   final m = RegExp(r'^(?:\\\\|//|smb://)([^\\/]+)[\\/]+([^\\/]+)[\\/]*(.*)$', caseSensitive: false).firstMatch(path.trim());
   if (m == null) return null;
   return (m[1]!, m[2]!, m[3]!.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), ''));
+}
+
+/// Looks a host name up (tests replace it).
+@visibleForTesting
+Future<List<InternetAddress>> Function(String host) lookupHost = InternetAddress.lookup;
+
+/// The address to connect to for [host]. A bare name (no dot) that DNS doesn't know is tried as name.local: the NAS
+/// answers to that on the local network (mDNS), which Android and iOS look up - Windows finds the bare name that way
+/// by itself, they don't (user, 2026-10-25: \\nick-nas "Can not resolve into IPv4/v6" on the tablet). Not found
+/// either way: [host] as it is, for the SMB client to say so.
+Future<String> hostAddress(String host) async {
+  if (host.contains('.') || host.contains(':')) return host; // a full name, or an address
+  for (final name in [host, '$host.local']) {
+    try {
+      final found = await lookupHost(name);
+      if (found.isNotEmpty) {
+        // IPv4 first: an IPv6 address the NAS also has may be one this device can't reach
+        return found.firstWhere((a) => a.type == InternetAddressType.IPv4, orElse: () => found.first).address;
+      }
+    } catch (_) {
+      // not found that way
+    }
+  }
+  return host;
 }
 
 /// A share's user name and password (the password kept encrypted on the device).

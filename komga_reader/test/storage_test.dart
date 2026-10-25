@@ -1,5 +1,6 @@
 // Where a local library's files are read from (experimental/sources, lib/local/storage.dart): share paths, which
 // storage reads them, and a zip read through any storage in one read a page.
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -46,6 +47,24 @@ void main() {
     expect(splitUnc(r'C:\Comics'), isNull);
     expect(splitUnc('/storage/emulated/0/Comics'), isNull);
     expect(Storage.shareOf(r'\\Nick-NAS\Nas-Share\x'), r'nick-nas\nas-share', reason: 'one login per share, any case');
+  });
+
+  test(r'a share named without a dot (\\nick-nas) that DNS does not know is looked up as name.local - the NAS answers '
+      'to that on the local network; a full name or an address is used as it is', () async {
+    addTearDown(() => lookupHost = InternetAddress.lookup);
+    final asked = <String>[];
+    lookupHost = (name) async {
+      asked.add(name);
+      if (name == 'nick-nas.local') {
+        return [InternetAddress('fdb9:2361:e9ba:1773:265e:beff:fe6d:25c0'), InternetAddress('10.0.0.226')];
+      }
+      throw const SocketException('Failed host lookup');
+    };
+    expect(await hostAddress('nick-nas'), '10.0.0.226', reason: 'the IPv4 address first');
+    expect(asked, ['nick-nas', 'nick-nas.local']);
+    expect(await hostAddress('nas.example.org'), 'nas.example.org');
+    expect(await hostAddress('10.0.0.226'), '10.0.0.226');
+    expect(await hostAddress('elsewhere'), 'elsewhere', reason: "not found: the name, for the SMB client's own error");
   });
 
   test("a share's path goes through the app's own SMB client where the system can't open it (Android, iOS); on "
