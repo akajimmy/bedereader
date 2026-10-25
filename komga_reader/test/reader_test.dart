@@ -837,15 +837,10 @@ void main() {
   testWidgets("iOS: a swipe from the left edge doesn't close the book (user, 2026-10-25: it did - iOS's own Back "
       'gesture); Back still does', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
     await openReader(tester);
-    final gesture = await tester.startGesture(const Offset(2, 400));
-    for (var i = 0; i < 10; i++) {
-      await gesture.moveBy(const Offset(40, 0));
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    await gesture.up();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(ReaderScreen), findsOneWidget, reason: 'still open');
+    await tester.pump(const Duration(seconds: 1)); // (the route's own animation done)
+    // what iOS's edge swipe asks before it takes over (a drag here goes to the page, so the test can't swipe it)
+    final route = ModalRoute.of(tester.element(find.byType(ReaderScreen)))!;
+    expect(route.popGestureEnabled, isFalse, reason: "the system's swipe-back refused, controls hidden");
 
     await tester.binding.handlePopRoute(); // the device's Back
     await tester.pump();
