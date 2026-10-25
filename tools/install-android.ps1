@@ -19,12 +19,12 @@
 .EXAMPLE
     .\tools\install-android.ps1
 #>
-param([string]$Apk, [int]$ExpectedBuild = 0)
+param([string]$Apk, [int]$ExpectedBuild = 0, [string]$Package = 'com.nickp.komga_reader')
 
 $ErrorActionPreference = 'Stop'
 $adb = 'C:\Dev\android-sdk\platform-tools\adb.exe'
 $root = Split-Path -Parent $PSScriptRoot
-$package = 'com.nickp.komga_reader'
+$package = $Package
 
 function Say([string]$text) { Write-Host ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $text) }
 function Adb([string]$arguments) { cmd /c "`"$adb`" $arguments 2>&1" }

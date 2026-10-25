@@ -94,12 +94,12 @@ BEGIN
             // FileDescription (Task Manager) and the window title (main.cpp). ProductName keeps the app's old name,
             // "Komga Reader", for that reason (renamed BeDeReader on 2026-09-29).
             VALUE "CompanyName", "com.nickp" "\0"
-            VALUE "FileDescription", "BeDeReader" "\0"
+            VALUE "FileDescription", "BeDeReader Exp" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "BeDeReader" "\0"
             VALUE "LegalCopyright", "Copyright (c) 2026 Nick Perusse. MIT licence." "\0"
             VALUE "OriginalFilename", "BeDeReader.exe" "\0"
-            VALUE "ProductName", "Komga Reader" "\0"
+            VALUE "ProductName", "Komga Reader Exp" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
