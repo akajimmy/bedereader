@@ -7,9 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
 import 'package:komga_reader/screens/login.dart';
+import 'package:komga_reader/widgets/server_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
+import 'support/no_network.dart';
 import 'support/zip_writer.dart';
 
 String _epub(String title, String author) => '<?xml version="1.0"?><package><metadata>'
@@ -238,5 +240,21 @@ void main() {
       expect(given, same(full));
       expect([for (final l in await FolderKomga.savedLibraries()) l.path], [r'C:\Comics\Ongoing', r'D:\Golden Age']);
     });
+  });
+
+  testWidgets("Settings' server status: with no server, no Retry - nothing to check again; with Komga, Retry",
+      (tester) async {
+    late FolderKomga local;
+    await tester.runAsync(() async {
+      final data = await Directory.systemTemp.createTemp('local_status');
+      addTearDown(() => deleteTemp(data));
+      local = await FolderKomga.open(const [], dataDir: data);
+    });
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ServerStatus(api: local))));
+    await tester.pump();
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ServerStatus(api: plainKomga()))));
+    await tester.pump();
+    expect(find.byIcon(Icons.refresh), findsOneWidget);
   });
 }

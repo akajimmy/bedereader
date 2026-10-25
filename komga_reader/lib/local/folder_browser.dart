@@ -148,6 +148,7 @@ class _Folder extends _Level {
 class _FolderBrowserState extends State<FolderBrowser> {
   String? _path; // null: the places
   String? _root; // the place a device folder was entered from (Up from there: the places)
+  String? _rootLabel; // its name ("This device"), the title there - not the path's last part ("0")
   _Level? _level;
   Object? _error;
   int _loads = 0;
@@ -212,6 +213,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
   Future<void> _openPlace(Place p) async {
     if (!p.server && !await widget.source.openDevice(context)) return;
     _root = p.server ? null : p.path;
+    _rootLabel = p.label;
     await _go(p.path);
   }
 
@@ -252,7 +254,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
     final books = level is _Folder ? level.look.books : 0;
     return Scaffold(
       appBar: AppBar(
-        title: Text(p == null ? 'Choose a library folder' : _name(p)),
+        title: Text(p == null ? 'Choose a library folder' : p == _root ? _rootLabel ?? _name(p) : _name(p)),
         actions: [
           if (p != null)
             IconButton(tooltip: 'Up', icon: const Icon(Icons.arrow_upward), onPressed: () {

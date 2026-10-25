@@ -85,12 +85,15 @@ class _ServerStatusState extends State<ServerStatus> {
           ]),
         ),
       ),
-      const SizedBox(width: 10),
-      FilledButton.tonalIcon(
-        onPressed: _state == ServerState.checking ? null : _check,
-        icon: const Icon(Icons.refresh),
-        label: const Text('Retry'),
-      ),
+      // no server, nothing to check again
+      if (widget.api is! FolderKomga) ...[
+        const SizedBox(width: 10),
+        FilledButton.tonalIcon(
+          onPressed: _state == ServerState.checking ? null : _check,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Retry'),
+        ),
+      ],
     ]);
   }
 }

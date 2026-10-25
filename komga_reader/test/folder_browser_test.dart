@@ -110,9 +110,12 @@ void main() {
     await tester.tap(find.text('This device'));
     await tester.pumpAndSettle();
     expect(source.deviceOpened, 1);
+    String title() => (tester.widget<AppBar>(find.byType(AppBar)).title! as Text).data!;
+    expect(title(), 'This device', reason: "the place's name at its top, not the path's last part (\"0\")");
     await tester.tap(find.text('Comics'));
     await tester.pumpAndSettle();
     expect(source.looked.last, '/storage/emulated/0/Comics');
+    expect(title(), 'Comics');
     await tester.tap(up);
     await tester.pumpAndSettle();
     expect(source.looked.last, '/storage/emulated/0');
