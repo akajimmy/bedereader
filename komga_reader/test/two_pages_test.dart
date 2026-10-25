@@ -535,6 +535,46 @@ void main() {
       expect(shown.where((i) => i?.debugDisposed ?? false), isEmpty, reason: 'nothing on screen freed');
     });
 
+    testWidgets('curling forward through the book decodes each page once: the spread just left is not decoded again '
+        '(measured 2026-10-25: each curl decoded four big pages, two of them the spread left behind)', (tester) async {
+      final decoded = <int>[];
+      PageLoader.onDecode = decoded.add;
+      addTearDown(() => PageLoader.onDecode = null);
+      await openReal(tester);
+      for (var t = 0; t < 5; t++) { // the cover, 2 alone, 3|4, 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // decoded, joined
+          await tester.pump();
+        }
+        await tester.pump(const Duration(seconds: 1)); // (the curl played out)
+      }
+      expect(await position(tester), startsWith('Pg. 8-9/9'));
+      final twice = {for (final i in decoded) if (decoded.where((d) => d == i).length > 1) i + 1};
+      expect(twice, isEmpty, reason: 'pages (from 1) decoded more than once: $decoded');
+    });
+
+    testWidgets('one page at a time, the same: curling forward decodes each page once', (tester) async {
+      final decoded = <int>[];
+      PageLoader.onDecode = decoded.add;
+      addTearDown(() => PageLoader.onDecode = null);
+      SpreadBook.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
+      SpreadBook.real = true;
+      addTearDown(() => SpreadBook.real = false);
+      await open(tester, size: const Size(800, 1200)); // tall: one page at a time
+      for (var t = 0; t < 6; t++) {
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+          await tester.pump();
+        }
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(await position(tester), startsWith('Pg. 7/9'));
+      final twice = {for (final i in decoded) if (decoded.where((d) => d == i).length > 1) i + 1};
+      expect(twice, isEmpty, reason: 'pages (from 1) decoded more than once: $decoded');
+    });
+
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
       await openReal(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);

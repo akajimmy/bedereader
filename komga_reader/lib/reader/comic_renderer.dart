@@ -1252,6 +1252,10 @@ class ComicRenderer extends Renderer {
   /// The page view's item [v]: a page - or, two pages up, a spread: a pair joined side by side as one picture (fit,
   /// zoom, pan and Enhance work on it as on a page), or a page alone, centred (user, 2026-10-16).
   Widget _view(BuildContext context, int v) {
+    // more than a turn away: the page view's neighbour from before a turn, built once more before the view moves (the
+    // place moves first) - off screen and about to go; loading it decoded again the pages just let go of, two pages up
+    // the spread just left (measured 2026-10-25: four big decodes a curl, two of them that)
+    if ((v - _at).abs() > 1) return const SizedBox.shrink();
     if (!_dual) return _page(context, v, _loader!.get(v));
     final s = _spreads[v];
     if (s.pages.length == 1) return _page(context, v, _loader!.get(s.first));
