@@ -115,8 +115,8 @@ void main() {
       if (call.method != 'currentWayUp') return null;
       return ++wayUpCalls == 1 ? asked.future : 'portrait'; // the first answer is slow
     });
-    tester.binding.defaultBinaryMessenger.handlePlatformMessage(rotation.name,
-        const StandardMethodCodec().encodeMethodCall(const MethodCall('systemAutoRotate', true)), (_) {});
+    unawaited(tester.binding.defaultBinaryMessenger.handlePlatformMessage(rotation.name,
+        const StandardMethodCodec().encodeMethodCall(const MethodCall('systemAutoRotate', true)), (_) {}));
     await tester.pump(); // auto-rotate switched on: the way up asked for...
     await OrientationLock.instance.hold(portrait: true, landscape: false); // ...and the reader locks meanwhile
     await tester.pump();
