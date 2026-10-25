@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
@@ -180,6 +181,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}"');
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     closeDevice();
@@ -239,6 +241,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// 2026-09-30: closing mid-load saved the old book's page to the new one). [onOpened] runs once it has loaded.
   Future<void> _open(dynamic book, {VoidCallback? onOpened}) async {
     final run = ++_openRun;
+    final took = Stopwatch()..start(); // (for the app's log)
     setState(() { _loading = true; _menu = false; _openError = null; });
     // the book's kind: the renderer open goes on (comics), or a new one takes over once the book has loaded
     final old = _renderer;
@@ -271,12 +274,16 @@ class _ReaderScreenState extends State<ReaderScreen>
         _loading = false;
       });
       onOpened?.call();
+      AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
       if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
+      AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');
       if (!mounted || run != _openRun) return;
       final empty = e is NoPages;
       final message = empty
