@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import '../api.dart';
 import '../hidden_libraries.dart';
+import '../local/folder_komga.dart';
+import '../local/local_settings.dart';
 import '../ondeck_hidden.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
@@ -322,7 +324,21 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
 
   // ---- Server and sync -------------------------------------------------------------------------------------------
-  List<Widget> _server(BuildContext context) => [
+  List<Widget> _server(BuildContext context) => widget.api is FolderKomga
+      ? [
+          // local mode (experimental/sources): the folders, and the way back to signing in
+          LocalLibrariesGroup(api: widget.api as FolderKomga),
+          SettingsGroup(title: 'No server', children: [
+            Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
+            ActionRow(
+              title: 'Sign out / use a Komga server',
+              icon: Icons.logout,
+              subtitle: 'Your local libraries are kept for next time',
+              onTap: () => _signOut(context),
+            ),
+          ]),
+        ]
+      : [
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
           Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),

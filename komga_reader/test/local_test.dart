@@ -90,7 +90,10 @@ void main() {
       expect((novel['metadata']['title'], novel['metadata']['authors'].single['name'], novel['media']['mediaProfile']),
           ('Frankenstein', 'Mary Shelley', 'EPUB'));
       expect(api.epubFile(novel['id'] as String)?.path, endsWith('Frankenstein - Mary Shelley.epub'));
-      expect(await File(api.bookThumb(novel['id'] as String)).exists(), isTrue, reason: 'its cover, made small');
+      final poster = api.bookThumb(novel['id'] as String);
+      expect(await File(poster).exists(), isFalse, reason: 'not made until a tile asks for it');
+      expect(await api.thumbAt(poster), isTrue);
+      expect(await File(poster).exists(), isTrue, reason: 'its cover, made small');
     });
 
     test('reading progress is kept on the device, and found again after the folders are scanned again (the same '
@@ -107,6 +110,43 @@ void main() {
       expect(again[saga.last['id']]['readProgress']['completed'], isTrue);
       final read = (await api.series(readStatus: ['IN_PROGRESS']))['content'] as List;
       expect([for (final s in read) s['name']], ['Saga (2012)'], reason: 'one read, one started: in progress');
+      await api.rescan(); // (the start's own, in the background, done first)
+    });
+
+    test('the next start shows the last scan at once, then scans again: a book added appears, one changed is read '
+        'again, one deleted goes', () async {
+      await (await open()).rescan(); // (the first start's scan, done)
+      final saga = '${root.path}${Platform.pathSeparator}Saga (2012)${Platform.pathSeparator}';
+      await File('${saga}Saga #2 (2012).cbz').delete();
+      await File('${saga}Saga #11 (2014).cbz').writeAsBytes(zipOf({'1.jpg': png}));
+      final ten = File('${saga}Saga #10 (2014).cbz');
+      await ten.writeAsBytes(zipOf({'1.jpg': png, '2.jpg': png, '3.jpg': png, '4.jpg': png}));
+      await ten.setLastModified(DateTime(2030));
+      final api = await open();
+      Future<List<String>> numbers() async => [
+            for (final b in (await api.searchBooks('Saga'))['content'] as List) '${b['metadata']['number']}'
+          ]..sort();
+      expect(await numbers(), ['10', '2'], reason: 'the last scan, at once');
+      await api.rescan();
+      expect(await numbers(), ['10', '11']);
+      final tenNow = ((await api.searchBooks('Saga #10'))['content'] as List).single as Map;
+      expect(tenNow['media']['pagesCount'], 4, reason: 'changed: read again');
+    });
+
+    test('libraries renamed, added and removed in Settings: the books follow, reading progress stays with the '
+        'folder', () async {
+      final api = await open();
+      final lib = api.folders.single;
+      final sagaBook = ((await api.searchBooks('Saga'))['content'] as List).first as Map;
+      await api.setProgress(sagaBook['id'] as String, 1);
+      await api.setLibraries([LocalLibrary('Comics', lib.path)]);
+      expect((await api.libraries()).single['name'], 'Comics');
+      await api.setLibraries(const []);
+      expect(api.isEmpty, isTrue);
+      expect(await FolderKomga.savedLibraries(), isEmpty);
+      await api.setLibraries([lib]);
+      final again = ((await api.searchBooks('Saga'))['content'] as List).first as Map;
+      expect(again['readProgress']?['page'], 1, reason: 'added back: its progress with it');
     });
 
     test('a library folder that isn\'t there: no books, nothing thrown', () async {

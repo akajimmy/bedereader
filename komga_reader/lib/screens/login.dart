@@ -140,10 +140,17 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  static Future<FolderKomga> _openInStorage(List<LocalLibrary> libraries) async {
+  int? _scanned; // books read so far by the first scan
+
+  Future<FolderKomga> _openInStorage(List<LocalLibrary> libraries) async {
     final dir = await appStorageDir();
     if (dir == null) throw StateError("this device's app storage isn't known");
-    return FolderKomga.open(libraries, dataDir: Directory('$dir${Platform.pathSeparator}local'));
+    try {
+      return await FolderKomga.open(libraries, dataDir: Directory('$dir${Platform.pathSeparator}local'),
+          onBook: (n) { if (mounted) setState(() => _scanned = n); });
+    } finally {
+      _scanned = null;
+    }
   }
 
   @override
@@ -250,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: const InputDecoration(labelText: 'Library folders, one per line',
                         hintText: r'C:\Comics\Ongoing')),
                 const SizedBox(height: 20),
-                FilledButton(onPressed: _busy ? null : _openLocal, child: Text(_busy ? 'Reading folders…' : 'Open')),
+                FilledButton(onPressed: _busy ? null : _openLocal, child: Text(!_busy ? 'Open' : _scanned == null ? 'Reading folders…' : 'Reading folders… $_scanned books')),
                 if (_localError != null) Padding(padding: const EdgeInsets.only(top: 12),
                     child: ErrorText(_localError!, _localError!)),
                 if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),

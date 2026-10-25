@@ -46,4 +46,16 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Settings:** stay on the device (nothing to sync with).
 - **The test library:** 31 books scanned and all posters made in 1.5 s.
 - **Tried by the user on the PC (2026-10-24):** browsed eBooks and comics, pinned a series, changed settings - no problems seen. The page curl felt a bit laggy against the main build (not measured yet).
-- **Not yet:** rescanning while the app runs (it rescans at each start), changing the libraries without signing out, two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, and local libraries beside Komga's.
+- **Not yet (then):** rescanning while the app runs, changing the libraries without signing out - both done in slice 2.
+
+### Slice 2 - the NAS, and libraries in Settings (2026-10-24)
+
+- **Ongoing on the NAS** (\\nick-nas\nas-share\COMICS\Ongoing, read only): 1,644 CBZs in 376 series. The first scan took 70 to 109 s reading one book at a time; read 8 at a time it takes **11 s**. A rescan opens only new and changed files (same size and date: what was read last time is kept): **1.5 s**.
+- **A start** shows the last scan at once (kept in index.json) and scans again in the background. The first scan of a library shows its count on the sign-in button ("Reading folders… 640 books").
+- **Posters** are made when a tile first shows (3 at a time), not all at the start.
+- **Settings > Server and sync**, in local mode: the libraries listed with Rename and Remove, Add a library (a folder; a UNC path works), and Scan again with its count while it runs. Removing a library takes it out of the app only; adding the folder back brings back its progress.
+- **Not yet:** screens already open don't refresh by themselves when a background scan finds changes (going back to them, or Home's refresh, shows them).
+
+### Still to do
+
+- Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.
