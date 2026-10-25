@@ -20,6 +20,7 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - **First folders:** a folder on the NAS and a folder on the PC.
 - **Formats:** CBZ and EPUB to stand it up. CBR matters and comes soon after. PDF not asked for.
 - **Placement:** local libraries sit beside Komga's, in one library list. Komga stays the main source.
+- **A completely local mode is a requirement** (user, 2026-10-24): the app must work with no Komga at all, on local libraries only - not only as an add-on to a Komga server.
 - **Progress:** kept on the device first. A progress file in the folder itself (shared by the tablet and the PC) comes later.
 
 ## Ideas
