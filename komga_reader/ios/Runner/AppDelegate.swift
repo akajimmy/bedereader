@@ -252,6 +252,21 @@ enum ScreenChannel {
         result(true)
       case "storageDir":
         result(storageDir())
+      case "excludeFromBackup":
+        // the folder (and all in it) left out of iCloud and computer backups (lib/screen.dart, appStorageDir)
+        guard let path = call.arguments as? String else {
+          result(false)
+          return
+        }
+        var url = URL(fileURLWithPath: path, isDirectory: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        do {
+          try url.setResourceValues(values)
+          result(true)
+        } catch {
+          result(false)
+        }
       case "keepOn":
         UIApplication.shared.isIdleTimerDisabled = (call.arguments as? Bool) ?? false
         result(nil)
