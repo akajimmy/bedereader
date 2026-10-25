@@ -28,7 +28,7 @@ class DownloadBadge extends StatelessWidget {
         final id = bookId;
         if (id != null) {
           if (d.isDownloaded(id)) return _disc(const Icon(Icons.download_done, size: 18, color: Colors.white), _done);
-          final job = d.jobFor(id);
+          final job = d.downloadJob(id); // (the cache's own: no badge)
           if (job == null) return const SizedBox.shrink();
           return switch (job.state) {
             JobState.failed => _disc(const Icon(Icons.priority_high, size: 18, color: Colors.white), const Color(0xFFD64545)),

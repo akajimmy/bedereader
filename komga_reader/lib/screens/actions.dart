@@ -38,7 +38,7 @@ Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
               ? ListTile(leading: const Icon(Icons.download_done), title: const Text('Remove download'),
                   subtitle: const Text('Frees the space on this device; the book stays on the server'),
                   onTap: () => Navigator.pop(ctx, 'undownload'))
-              : dl.jobFor(b['id'] as String) != null
+              : dl.downloadJob(b['id'] as String) != null
                   ? const ListTile(enabled: false, leading: Icon(Icons.downloading), title: Text('In the download queue'))
                   : ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download'),
                       onTap: () => Navigator.pop(ctx, 'download')),

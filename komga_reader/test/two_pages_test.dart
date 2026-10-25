@@ -143,6 +143,7 @@ void main() {
     expect(s.prefsFor('S1').twoPages, TwoPages.off, reason: "the series' own");
     expect(s.defaults.twoPages, TwoPages.wideScreen, reason: 'the default unchanged');
     await tester.ensureVisible(find.text('Make default'));
+    await tester.pump(); // (scrolled there: below the sheet's bottom since Reset to original came back)
     await tester.tap(find.text('Make default'));
     await tester.pump();
     expect(s.defaults.twoPages, TwoPages.off, reason: "Make default: the series' layout, dual page mode with it");

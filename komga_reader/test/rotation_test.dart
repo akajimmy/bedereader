@@ -1,6 +1,8 @@
 // Auto rotation on Android, the app's own (lib/rotation.dart - user, 2026-10-24: "the app should handle the rotation
 // so it's not turning every time the tablet turns. We're just using the tablet setting to determine whether or not we
 // should rotate"). The Android side's readings are played in here as it sends them.
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/rotation.dart';
@@ -101,6 +103,28 @@ void main() {
     await fromAndroid(tester, 'systemAutoRotate', false);
     await tester.pump();
     expect(requests.last, isEmpty);
+  });
+
+  testWidgets("a reader's lock set while the screen's way up is still being asked: the lock stands (code review, "
+      '2026-10-24: the way up was applied after it)', (tester) async {
+    systemAuto = false;
+    await start(tester);
+    final asked = Completer<String>();
+    var wayUpCalls = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(screen, (call) async {
+      if (call.method != 'currentWayUp') return null;
+      return ++wayUpCalls == 1 ? asked.future : 'portrait'; // the first answer is slow
+    });
+    unawaited(tester.binding.defaultBinaryMessenger.handlePlatformMessage(rotation.name,
+        const StandardMethodCodec().encodeMethodCall(const MethodCall('systemAutoRotate', true)), (_) {}));
+    await tester.pump(); // auto-rotate switched on: the way up asked for...
+    await OrientationLock.instance.hold(portrait: true, landscape: false); // ...and the reader locks meanwhile
+    await tester.pump();
+    final held = requests.last;
+    expect(held, portrait);
+    asked.complete('landscape');
+    await tester.pump();
+    expect(requests.last, held, reason: 'the lock holds');
   });
 
   testWidgets("a reader's lock (Portrait, Landscape) takes over: no readings wanted, the tablet turning doesn't move "

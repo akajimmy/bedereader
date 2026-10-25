@@ -80,6 +80,22 @@ void main() {
     await tester.pump(const Duration(seconds: 5)); // the settings sync timer
   });
 
+  testWidgets("Reset to original: the series' image settings back to the plain scan, its fit left alone (code review, "
+      '2026-10-24: lost with the Image panel)', (tester) async {
+    final s = AppSettings.instance;
+    s.setOverride('S1', layout: true, image: true);
+    s.setSeriesLayout('S1', s.prefsFor('S1').copyWith(fit: FitMode.width));
+    s.setSeriesImage('S1', s.prefsFor('S1').copyWith(sharpen: true, autoLevels: true, crop: 0.05));
+    await openPanel(tester, const Size(1280, 1400));
+    await tester.ensureVisible(find.text('Reset to original'));
+    await tester.tap(find.text('Reset to original'));
+    await tester.pumpAndSettle();
+    final p = s.prefsFor('S1');
+    expect((p.sharpen, p.autoLevels, p.crop), (false, false, 0.0));
+    expect(p.fit, FitMode.width);
+    await tester.pump(const Duration(seconds: 5)); // the settings sync timer
+  });
+
   testWidgets("a series that overrides only its layout (saved before the one switch): Override shows on, Enhance follows "
       "the defaults until it's changed - then it's the series' own", (tester) async {
     final s = AppSettings.instance;
