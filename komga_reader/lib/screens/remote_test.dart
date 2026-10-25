@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_log.dart';
+
 /// Settings > Remote and keys > Test the remote: every press the app is given, as it's given - to find out what a
 /// remote sends, and where on the way it's lost (user, 2026-10-25: the Chromecast remote pairs with the iPad, but
 /// the reader sees none of its buttons).
@@ -52,6 +54,7 @@ class _RemoteTestScreenState extends State<RemoteTestScreen> {
 
   void _add(String line) {
     if (!mounted) return;
+    AppLog.instance.info('remote test', line); // (so the remote log carries it too)
     final t = DateTime.now().difference(_start);
     setState(() {
       _lines.insert(0, '${(t.inMilliseconds / 1000).toStringAsFixed(2).padLeft(7)}  $line');

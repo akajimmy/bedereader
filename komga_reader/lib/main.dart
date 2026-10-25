@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'app_log.dart';
 import 'book_title.dart';
 import 'app_identity.dart';
 import 'errors.dart';
@@ -23,6 +25,7 @@ import 'ondeck_hidden.dart';
 import 'synced_ids.dart';
 import 'pins.dart';
 import 'reader_keys.dart';
+import 'remote_log.dart';
 import 'settings.dart';
 import 'screen.dart';
 import 'side_menu.dart';
@@ -43,16 +46,28 @@ void main() {
   // trace to go on - user, build 65); they're still reported as before
   final flutterError = FlutterError.onError;
   FlutterError.onError = (d) {
-    ErrorLog.instance.record('Unexpected error (${d.library ?? 'the app'})', d.exception, d.stack);
+    // (a crash line in the app's log too)
+    ErrorLog.instance.record('Unexpected error (${d.library ?? 'the app'})', d.exception, d.stack, LogLevel.crash);
     flutterError?.call(d);
   };
   PlatformDispatcher.instance.onError = (e, st) {
-    ErrorLog.instance.record('Unexpected error', e, st);
+    ErrorLog.instance.record('Unexpected error', e, st, LogLevel.crash);
     return false; // not handled: reported as usual
   };
   checkPcRotation(); // Windows: a rotation sensor or not (Settings' Rotation) - answered long before it's looked at
   if (defaultTargetPlatform == TargetPlatform.android) OrientationLock.instance.release(); // Auto, the app's own
   runApp(const KomgaReaderApp());
+}
+
+/// The app's log (Settings > About > App log), kept with the app's files, and the remote log's settings; the first
+/// line says what's running where.
+Future<void> _startLog() async {
+  final dir = await appStorageDir();
+  if (dir != null) await AppLog.instance.load(Directory('$dir${Platform.pathSeparator}logs'));
+  await RemoteLog.instance.load();
+  final v = await appVersionInfo();
+  AppLog.instance.info('app', 'started: ${v?.$1 ?? '?'} (build ${v?.$2 ?? '?'}) on ${defaultTargetPlatform.name} '
+      '${Platform.operatingSystemVersion}');
 }
 
 /// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the
@@ -90,6 +105,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   bool _loaded = false;
   final _nav = GlobalKey<NavigatorState>();
   bool _wasOffline = false;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
@@ -97,6 +113,16 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
+    _startLog();
+    // left (another app, the home screen, locked): the log kept, and what's queued sent while it still can be
+    _lifecycle = AppLifecycleListener(
+      onPause: () {
+        AppLog.instance.info('app', 'to the background');
+        AppLog.instance.save();
+        RemoteLog.instance.sendNow();
+      },
+      onResume: () => AppLog.instance.info('app', 'back'),
+    );
     NightSchedule.instance.start(); // night mode on a schedule, once the settings are in
     restoreFullscreen(); // desktop: left in full screen last time
     if (isDesktop) HardwareKeyboard.instance.addHandler(_onF11);
@@ -144,6 +170,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     Connection.instance.removeListener(_onConnection);
     ProgressSync.instance.removeListener(_onSync);
     Downloads.instance.removeListener(_onDownloads);
+    _lifecycle.dispose();
     super.dispose();
   }
 
@@ -186,6 +213,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
     final now = c.offline;
     if (now == _wasOffline) return;
+    AppLog.instance.info('connection', now ? 'offline (${c.forcedOffline ? 'switched by hand' : "Komga out of reach"})'
+        : 'online');
     _wasOffline = now;
     if (!now && c.online != null) {
       // back online: the account's things from Komga again - changed on another device meanwhile, or never fetched

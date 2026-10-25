@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
@@ -776,6 +777,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
       ..error = null
       ..pagesDone = 0;
     notifyListeners();
+    final took = Stopwatch()..start(); // (for the app's log)
+    AppLog.instance.info('downloads', '${job.cache ? 'caching' : 'downloading'} "${job.title}"');
     try {
       final book = await api.book(job.bookId);
       if (book == null) throw KomgaError(404, '/api/v1/books/${job.bookId}'); // gone from Komga
@@ -957,6 +960,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
         if (!job.cache) entry..remove('cache')..remove('cachedAt'); // (downloaded on purpose meanwhile)
         await s.put(job.bookId, entry);
         queue.remove(job);
+        AppLog.instance.info('downloads', '"${job.title}" done: ${(bytes / 1048576).toStringAsFixed(1)} MB in '
+            '${(took.elapsedMilliseconds / 1000).toStringAsFixed(1)} s');
         // (its real size now: the cache back under its limit if Komga's sizes were short)
         if (job.cache) await _cacheRoom(bytes, job.bookId);
       }
@@ -971,6 +976,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
           ..state = JobState.queued
           ..error = null;
         waitingForServer = true;
+        AppLog.instance.warn('downloads', '"${job.title}" waits: Komga out of reach ($e)');
         _serverTimer?.cancel();
         _serverTimer = Timer(serverRecheck, _pump);
       } else if (job.cache) {
@@ -990,6 +996,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
               ? '$e'.replaceFirst('Exception: ', '')
               : ex.kind == ErrorKind.gone ? 'this book is no longer on Komga' : ex.reason;
         if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
+        if (room) AppLog.instance.warn('downloads', '"${job.title}" failed: ${job.error}');
       }
     }
     await _saveQueue();

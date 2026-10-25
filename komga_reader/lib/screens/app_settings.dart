@@ -20,6 +20,7 @@ import '../widgets/home_sections_editor.dart';
 import '../widgets/server_status.dart';
 import '../widgets/setting_rows.dart';
 import 'about.dart';
+import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
 import 'remote_test.dart';
@@ -620,7 +621,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ActionRow(title: 'Third-party software', icon: Icons.extension_outlined,
             onTap: () => open(DocumentScreen.thirdParty())),
         ActionRow(title: 'Error log', icon: Icons.report_outlined, onTap: () => open(const ErrorLogScreen())),
+        ActionRow(title: 'App log', icon: Icons.description_outlined, onTap: () => open(const AppLogScreen())),
       ]),
+      const RemoteLogGroup(),
       SettingsGroup(title: 'This device', children: [
         ActionRow(
           title: "Reset this device's settings",
