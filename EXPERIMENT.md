@@ -77,6 +77,8 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - A local book is never downloaded or cached (it's on this device already), nor deleted from the app.
 - **Not yet:** offline mode shows the downloads only - the local libraries go with Komga; read lists and collections are Komga's only; pins and series settings on local series sync through Komga to other devices, where those series don't exist.
 
+- **Slices 3 and 4 tried by the user on the PC (2026-10-25):** "looks good".
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.
