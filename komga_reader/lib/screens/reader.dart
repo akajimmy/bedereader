@@ -181,8 +181,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
-    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? 'Back (the back arrow, the '
-        "device's Back, or iOS's swipe from the left edge)"}');
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
+        "iOS's swipe from the left edge)"}');
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     closeDevice();
@@ -366,17 +366,18 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!curling) _pageTurned(i);
   }
 
-  /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
-  /// counts as read (user, 2026-09-30) - and the page number flashes.
   /// The book closed by the reader's own [via] (a key, Close, the end card) - for the app's log; closed any other way
-  /// it was Back: the back arrow, the device's Back, or iOS's swipe from the left edge.
-  void _close(String via) {
+  /// it was Back: the device's Back, or iOS's swipe from the left edge.
+  /// [now]: closed even with the controls up (the top bar's Close) - otherwise as Back, which hides them first.
+  void _close(String via, {bool now = false}) {
     _closedVia = via;
-    Navigator.of(context).maybePop();
+    now ? Navigator.of(context).pop() : Navigator.of(context).maybePop();
   }
 
   String? _closedVia;
 
+  /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
+  /// counts as read (user, 2026-09-30) - and the page number flashes.
   void _pageTurned(int i) {
     AppLog.instance.info('reader', 'at ${i + 1}'); // (the left-edge swipe against iOS's swipe-back - backlog)
     if (i != _openedAt) _turned = true;
@@ -1060,6 +1061,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       onTapOutside: _hideControls,
       top: ReaderTopBar(
         closeNode: _ctl[_Ctl.close]!,
+        onClose: () => _close('the Close button', now: true), // (the log: told from iOS's swipe from the left edge)
         heading: _heading,
         title: _bookName,
         buttons: [
