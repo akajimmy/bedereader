@@ -15,9 +15,21 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - Windows: Desktop\BeDeReader-Exp, window title "BeDeReader Exp", data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp.
 - Changed for that (and so not to be copied back to 1.5): android\app\build.gradle.kts (applicationId), AndroidManifest.xml (label), windows\runner Runner.rc, main.cpp and desktop_channel.cpp, tools\build.ps1 (no -Bump), tools\install-android.ps1 (-Package), tools\build-exp.ps1 (new).
 
+## Decided (2026-10-24 quiz)
+
+- **First folders:** a folder on the NAS and a folder on the PC.
+- **Formats:** CBZ and EPUB to stand it up. CBR matters and comes soon after. PDF not asked for.
+- **Placement:** local libraries sit beside Komga's, in one library list. Komga stays the main source.
+- **Progress:** kept on the device first. A progress file in the folder itself (shared by the tablet and the PC) comes later.
+
 ## Ideas
 
-(to be filled in as we go)
+- A "FolderKomga": a stand-in for Komga answering from a folder, as OfflineKomga does for downloads, so the screens work unchanged.
+- Layout: library folder, then one folder per series, then the books. Later: nested folders, loose books, a folder of images as a book.
+- Metadata from file names first; then ComicInfo.xml inside the CBZ (title, number, summary, year, manga read right to left) and the EPUB's own. Covers from the first page, cached.
+- Scan when the library is added, rescan on refresh, keep the index cached.
+- First slice: Windows only, one library added by path, CBZ and EPUB, names only, progress on the device.
+- Later sources: OPDS (Kavita, Calibre-Web, Komga itself).
 
 ## Findings
 
