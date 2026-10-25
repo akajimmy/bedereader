@@ -43,9 +43,14 @@ class PageLoader {
   @visibleForTesting
   (Set<int>, Set<int>) get held => (_cache.keys.toSet(), _loaded.keys.toSet());
 
+  /// Tests: told of each page decoded (its index), as it's asked for.
+  @visibleForTesting
+  static void Function(int i)? onDecode;
+
   Future<PageData> get(int i) {
     final have = _cache[i];
     if (have != null) return have;
+    onDecode?.call(i);
     late final Future<PageData> load;
     load = () async {
       try {
