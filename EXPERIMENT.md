@@ -23,6 +23,10 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - **A completely local mode is a requirement** (user, 2026-10-24): the app must work with no Komga at all, on local libraries only - not only as an add-on to a Komga server.
 - **Progress:** kept on the device first. A progress file in the folder itself (shared by the tablet and the PC) comes later.
 
+## Test library
+
+C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from the NAS - the NAS only read). Four libraries, one folder per series: Ongoing (modern digital: Absolute Batman, Absolute Martian Manhunter, the one-book Absolute Evil), Golden Age (Atomic Mouse, Plastic Man, Space Western), Spider-Man (Spider-Island - Cloak & Dagger, Spider-Verse Team-Up, The Amazing Spider-Man 1963), Books (EPUBs: Dune, Hitchhiker's Guide, and a _oneshots folder of single novels, as on the NAS - Komga's convention: each file there is its own series).
+
 ## Ideas
 
 - A "FolderKomga": a stand-in for Komga answering from a folder, as OfflineKomga does for downloads, so the screens work unchanged.
