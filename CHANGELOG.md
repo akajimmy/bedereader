@@ -9,17 +9,30 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- iPad and iPhone: downloaded books are no longer included in iCloud backups. The app's folder was backed up like any other, so every download counted against your iCloud storage; the books are on Komga anyway.
+
+**Changed**
+
+- The app log says more: page turns, how a book was closed, keys pressed in the reader and what they did, the screen turning and the rotation lock, brightness, pages saved or copied, the image shaders, Wi-Fi only holding downloads, and a page slow to download. On the PC it no longer logs every switch to another window.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
+
+### Build 157 - 2026-10-25
+
+**New**
+
+- Settings > About > **App log**: what the app did - started, books opened and closed (and how long they took), going offline and back, downloads, errors and crashes - kept on the device, with Copy.
+- Settings > About > **Remote log** (off by default): the app log sent to a log collector of yours, so problems on a device - the iPad above all - can be looked into from elsewhere. Its address, key and the device's name are set on each device; the key is kept encrypted. Unsent lines wait for the collector, also across restarts.
 
 ### Build 155 - 2026-10-25
 
 **New**
 
 - Settings > Remote and keys > **Test the remote**: press a remote's buttons and see what the app is given, as it comes. On the iPad it also shows what iPadOS hands the app before the reader sees it, to find out why a remote that pairs does nothing.
-- Settings > About > **App log**: what the app did - started, books opened and closed (how long they took to open, and how they were closed), page turns, keys pressed in the reader and what they did, the screen turning and the rotation lock, brightness, pages saved or copied, the image shaders, going offline and back, leaving the app and coming back (phones and tablets), downloads (and Wi-Fi only holding them), errors and crashes - kept on the device, with Copy.
-- Settings > About > **Remote log** (off by default): the app log sent to a log collector of yours, so problems on a device - the iPad above all - can be looked into from elsewhere. Its address, key and the device's name are set on each device; the key is kept encrypted. Unsent lines wait for the collector, also across restarts.
 
 ### Build 154 - 2026-10-25
 
