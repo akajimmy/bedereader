@@ -98,14 +98,14 @@ void main() {
   // code review, 2026-10-24: the room check took a resumed book's bytes so far off twice, and the check once a book
   // was in left its real size out - the cache went past its limit
   test('a book cached in two goes (paused partway): the cache stays within its limit', () async {
-    Downloads.cacheCap = 550; // B1 and B2 (300 each) don't both fit
     await open('B1');
     server.onPage = (n) {
-      if (n == 1) d.pauseAll(); // B2 stops after its first page
+      if (n == 1) d.pauseAll(); // B2 stops after its first page - room enough for it then
     };
     await withClock(Clock.fixed(now = now.add(const Duration(minutes: 1))), () => d.cacheBook(book('B2')));
     await waitUntil(() => !d.busy && d.jobFor('B2')?.state == JobState.paused);
     server.onPage = null;
+    Downloads.cacheCap = 550; // now B1 and B2 (300 each) don't both fit
     d.resumeAll();
     await waitUntil(() => !d.busy && d.isCached('B2'));
     expect((d.isCached('B1'), d.cacheBytes), (false, 300), reason: 'B1, the older, went to make room');
