@@ -45,4 +45,5 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Progress:** kept on the device (%LOCALAPPDATA%\KomgaReaderExp\local), found again after a rescan: ids come from the file paths.
 - **Settings:** stay on the device (nothing to sync with).
 - **The test library:** 31 books scanned and all posters made in 1.5 s.
+- **Tried by the user on the PC (2026-10-24):** browsed eBooks and comics, pinned a series, changed settings - no problems seen. The page curl felt a bit laggy against the main build (not measured yet).
 - **Not yet:** rescanning while the app runs (it rescans at each start), changing the libraries without signing out, two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, and local libraries beside Komga's.
