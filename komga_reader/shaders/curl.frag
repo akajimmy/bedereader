@@ -61,11 +61,13 @@ void main() {
     float th = asin(clamp(d / uRadius, -1.0, 1.0));
     vec2 qBack = p + uNormal * ((PI * uRadius - uRadius * th) - d);
     vec2 qFront = p + uNormal * (uRadius * th - d);
+    // (each starts at the fold as the flat part next to it ends - 0.88 and 0.82 below: from full light, the curl's
+    // edge showed as a lighter band - user, 2026-10-24)
     if (inside(qBack)) {
-      float light = 0.78 + 0.22 * cos(th);
+      float light = 0.78 + 0.10 * cos(th);
       o = vec4(backOf(qBack) * light, 1.0);
     } else if (inside(qFront)) {
-      float dark = 1.0 - 0.45 * (d / uRadius) * (d / uRadius);
+      float dark = 0.82 - 0.27 * (d / uRadius) * (d / uRadius);
       o = vec4(sheet(qFront) * dark, 1.0);
     }
   } else {

@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Page curl (comics and eBooks): no lighter band along the edge where the page starts to curl. The flat page was shaded darker right up to the fold and the curl started at full light, so every curl showed a brighter strip there.
+
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`).
