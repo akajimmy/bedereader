@@ -38,4 +38,11 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 ## Findings
 
-(what was tried, what worked, what didn't)
+### Slice 1 - local mode on Windows (2026-10-24)
+
+- **How it works:** the sign-in screen has a third choice, **No server**: library folders, one per line. Each folder is a library; the folders in it are series (a _oneshots folder's files, and books loose in the library, are each a series of their own). The app then runs on **FolderKomga** (lib\local), a stand-in for Komga built on the offline source that serves downloads, so the screens work unchanged: browsing, filters, sort, search, reading, progress.
+- **Scan:** CBZ and EPUB. Issue numbers from file names (after #, else after the series' own name, else the first number), the year from "(2025)", a title after the number ("Dune 02 - Dune Messiah"). EPUBs: title, author and cover from their own metadata. Pages: the CBZ's pictures in natural order, read out of the file where it is (not loaded whole). Posters: each book's first page or cover, made small and kept.
+- **Progress:** kept on the device (%LOCALAPPDATA%\KomgaReaderExp\local), found again after a rescan: ids come from the file paths.
+- **Settings:** stay on the device (nothing to sync with).
+- **The test library:** 31 books scanned and all posters made in 1.5 s.
+- **Not yet:** rescanning while the app runs (it rescans at each start), changing the libraries without signing out, two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, and local libraries beside Komga's.

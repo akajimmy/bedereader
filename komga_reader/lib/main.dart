@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
@@ -13,6 +14,7 @@ import 'errors.dart';
 import 'hidden_libraries.dart';
 import 'key_store.dart';
 import 'licences.dart';
+import 'local/folder_komga.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -266,8 +268,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = await KeyStore.read();
-    final api = url != null && key != null ? Komga(url, key) : null;
-    if (api != null) {
+    final local = url == FolderKomga.address ? await _openLocal() : null; // no server: local libraries
+    final api = local ?? (url != null && key != null && url != FolderKomga.address ? Komga(url, key) : null);
+    if (local != null) {
+      await _startLocal(local);
+    } else if (api != null) {
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
       // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
       await _startDownloads(api);
@@ -286,9 +291,36 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     });
   }
 
+  /// Local mode's libraries, scanned again (null: none saved, or this device's storage unknown).
+  Future<FolderKomga?> _openLocal() async {
+    final libraries = await FolderKomga.savedLibraries();
+    final dir = await appStorageDir();
+    if (libraries.isEmpty || dir == null) return null;
+    try {
+      return await FolderKomga.open(libraries, dataDir: Directory('$dir${Platform.pathSeparator}local'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// No server: nothing to download from, no key; the connection only so the screens find their source. The
+  /// settings, pins and the rest stay on this device ([FolderKomga.clientSettings]).
+  Future<void> _startLocal(FolderKomga api) async {
+    await Connection.instance.load(api);
+    unawaited(AppSettings.instance.load(api));
+    unawaited(Pins.instance.load(api));
+    unawaited(OnDeckHidden.instance.load(api));
+    unawaited(PairShift.instance.load(api));
+  }
+
   Future<void> _signIn(Komga api) async {
     final p = await SharedPreferences.getInstance();
     await p.setString('server', api.baseUrl);
+    if (api is FolderKomga) {
+      setState(() => _api = api);
+      await _startLocal(api);
+      return;
+    }
     await KeyStore.write(api.apiKey);
     setState(() => _api = api);
     // in the background: each shows its local copy at once and its own sync problems
@@ -309,6 +341,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _signOut() async {
     await KeyStore.delete();
+    // local mode left: the next start asks again (the folders stay filled in)
+    if (_api is FolderKomga) await (await SharedPreferences.getInstance()).remove('server');
     // nothing more goes to Komga with the old key (a return to the app used to check with it)
     Connection.instance.signedOut();
     Downloads.instance.detach();

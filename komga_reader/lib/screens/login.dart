@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
@@ -6,6 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api.dart';
 import '../app_identity.dart';
 import '../errors.dart';
+import '../local/folder_komga.dart';
+import '../local/folder_scan.dart';
+import '../screen.dart' show appStorageDir;
 import '../widgets/error_text.dart';
 
 /// The server field tidied up: spaces removed (the tablet keyboard puts one after the colon), http:// added when no
@@ -68,11 +73,14 @@ String apiKeyName() {
 /// the server won't make one (a restricted or demo account), the email and password are kept instead (encrypted,
 /// like a key). The email is filled in again after Sign out; the password and key never are.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn, this.client});
+  const LoginScreen({super.key, required this.onSignedIn, this.client, this.openLocal});
   final Future<void> Function(Komga api) onSignedIn;
 
   /// Builds the client Connect tries (tests: a fake); null = the real [Komga].
   final Komga Function(String server, String apiKey)? client;
+
+  /// Opens local mode on these libraries (tests: a folder of their own); null = [FolderKomga] in the app's storage.
+  final Future<FolderKomga> Function(List<LocalLibrary> libraries)? openLocal;
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
@@ -82,7 +90,10 @@ class _LoginScreenState extends State<LoginScreen> {
   final _key = TextEditingController();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _folders = TextEditingController();
   bool _byPassword = true;
+  bool _local = false; // no server: local libraries (experimental/sources)
+  String? _localError; // (said as it is: not one of lib/errors.dart's)
   Object? _error; // shown through lib/errors.dart
   bool _errorWithPassword = false; // (the error came from a password sign-in: said in those words)
   bool _busy = false;
@@ -97,6 +108,42 @@ class _LoginScreenState extends State<LoginScreen> {
       if (last != null && mounted && _server.text.isEmpty) _server.text = last;
       if (email != null && mounted && _email.text.isEmpty) _email.text = email;
     });
+    FolderKomga.savedLibraries().then((libs) {
+      if (libs.isNotEmpty && mounted && _folders.text.isEmpty) _folders.text = [for (final l in libs) l.path].join('\n');
+    });
+  }
+
+  /// Local mode: the folders typed (one per line) scanned as libraries - started if any books are found.
+  Future<void> _openLocal() async {
+    if (_busy) return;
+    final libraries = [
+      for (final line in _folders.text.split('\n'))
+        if (line.trim().isNotEmpty) LocalLibrary.at(line),
+    ];
+    if (libraries.isEmpty) {
+      setState(() => _localError = 'Type the folder of a library: one folder per series in it.');
+      return;
+    }
+    setState(() { _busy = true; _localError = null; _error = null; });
+    try {
+      final api = await (widget.openLocal ?? _openInStorage)(libraries);
+      if (api.isEmpty) {
+        if (mounted) setState(() => _localError = 'No CBZ or EPUB books found in ${libraries.length == 1 ? 'that folder' : 'those folders'}.');
+        return;
+      }
+      await FolderKomga.saveLibraries(libraries);
+      await widget.onSignedIn(api);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  static Future<FolderKomga> _openInStorage(List<LocalLibrary> libraries) async {
+    final dir = await appStorageDir();
+    if (dir == null) throw StateError("this device's app storage isn't known");
+    return FolderKomga.open(libraries, dataDir: Directory('$dir${Platform.pathSeparator}local'));
   }
 
   @override
@@ -105,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _key.dispose();
     _email.dispose();
     _password.dispose();
+    _folders.dispose();
     super.dispose();
   }
 
@@ -176,16 +224,38 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 4),
               const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
               const SizedBox(height: 24),
-              SegmentedButton<bool>(
+              SegmentedButton<String>(
                 segments: const [
-                  ButtonSegment(value: true, label: Text('Password')),
-                  ButtonSegment(value: false, label: Text('API key')),
+                  ButtonSegment(value: 'password', label: Text('Password')),
+                  ButtonSegment(value: 'key', label: Text('API key')),
+                  ButtonSegment(value: 'local', label: Text('No server')),
                 ],
-                selected: {_byPassword},
+                selected: {_local ? 'local' : _byPassword ? 'password' : 'key'},
                 showSelectedIcon: false,
-                onSelectionChanged: _busy ? null : (s) => setState(() { _byPassword = s.single; _error = null; }),
+                onSelectionChanged: _busy
+                    ? null
+                    : (s) => setState(() {
+                          _local = s.single == 'local';
+                          if (!_local) _byPassword = s.single == 'password';
+                          _error = _localError = null;
+                        }),
               ),
               const SizedBox(height: 12),
+              if (_local) ...[
+                const Text('Read books from folders on this device or your network, with no Komga server. Each '
+                    'folder is a library, with one folder per series in it (CBZ and EPUB files).',
+                    style: TextStyle(color: Colors.white60)),
+                const SizedBox(height: 12),
+                TextField(controller: _folders, minLines: 2, maxLines: 6, autocorrect: false, enableSuggestions: false,
+                    decoration: const InputDecoration(labelText: 'Library folders, one per line',
+                        hintText: r'C:\Comics\Ongoing')),
+                const SizedBox(height: 20),
+                FilledButton(onPressed: _busy ? null : _openLocal, child: Text(_busy ? 'Reading folders…' : 'Open')),
+                if (_localError != null) Padding(padding: const EdgeInsets.only(top: 12),
+                    child: ErrorText(_localError!, _localError!)),
+                if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
+                    child: ErrorText(explain(_error!).message, _error!)),
+              ] else ...[
               TextField(controller: _server, keyboardType: TextInputType.url, autocorrect: false,
                   enableSuggestions: false, // no predictive text: it adds spaces after "192.168.1.10:"
                   decoration: const InputDecoration(labelText: 'Server', hintText: 'http://192.168.1.10:25600')),
@@ -216,6 +286,7 @@ class _LoginScreenState extends State<LoginScreen> {
               FilledButton(onPressed: _busy ? null : _connect, child: Text(_busy ? 'Connecting…' : 'Connect')),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
                   child: ErrorText(explain(_error!, signIn: true, password: _errorWithPassword).message, _error!)),
+              ],
             ]),
           ),
         ),
