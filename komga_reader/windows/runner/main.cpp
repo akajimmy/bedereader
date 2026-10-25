@@ -32,9 +32,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   bool created;
   if (LoadSavedWindow(&saved)) {
     window.SetStartMaximized(saved.maximized);
-    created = window.CreateAt(L"BeDeReader", saved.screen);
+    created = window.CreateAt(L"BeDeReader Exp", saved.screen);
   } else {
-    created = window.Create(L"BeDeReader", Win32Window::Point(10, 10), Win32Window::Size(1280, 800));
+    created = window.Create(L"BeDeReader Exp", Win32Window::Point(10, 10), Win32Window::Size(1280, 800));
   }
   if (!created) {
     return EXIT_FAILURE;
