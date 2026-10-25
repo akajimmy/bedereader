@@ -87,6 +87,7 @@ void main() {
       s.setDisplay(s.display.copyWith(posterSize: size));
       Widget tile(BuildContext _, int i) => PosterTile(api: api, imageUrl: 'http://test/$i', title: 'X-Factor #$i',
           subtitle: 'The Big Bang', caption: '13 Mar 2024', onOpen: () {});
+      final shapes = <String, double>{}; // the cover box's width / height
       for (final list in [
         PosterRow(title: 'On deck', itemCount: 3, itemBuilder: tile),
         PosterGrid(itemCount: 6, itemBuilder: tile),
@@ -98,10 +99,10 @@ void main() {
         ));
         await tester.pump();
         final cover = tester.getSize(find.byType(ClipRRect).first);
-        expect(cover.width / cover.height, closeTo(PosterTile.coverAspect, 0.005),
-            reason: '${list.runtimeType}: the cover box $cover');
+        shapes['${list.runtimeType}'] = cover.width / cover.height;
         expect(tester.takeException(), isNull, reason: 'no overflow');
       }
+      expect(shapes, {for (final k in shapes.keys) k: closeTo(PosterTile.coverAspect, 0.003)});
     });
   }
 
