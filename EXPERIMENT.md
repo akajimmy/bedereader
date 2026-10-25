@@ -62,6 +62,8 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - A pin to a series in a removed library stayed ("0 books"): hidden now in local mode, as offline. The pinned side menu kept removed libraries: reloads now on library changes.
 - Books sorted by Date added looked jumbled: the sort is by the file's date (when it was put on the NAS), but the tiles show the release date - and from a file name only the year is known, so every release date shows as 1 January of its year. Real dates need ComicInfo.xml (Year, Month, Day); without one, the tile should show the year only.
 
+- The page curl felt laggier here than in 1.5: measured (perf.log), the same through Komga as from a folder - not local mode. A GPU-heavy game was running meanwhile, and 1.5 then felt laggy too (user, 2026-10-25). On hold until measured without it (main backlog).
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.
