@@ -56,6 +56,12 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **Settings > Server and sync**, in local mode: the libraries listed with Rename and Remove, Add a library (a folder; a UNC path works), and Scan again with its count while it runs. Removing a library takes it out of the app only; adding the folder back brings back its progress.
 - **Not yet:** screens already open don't refresh by themselves when a background scan finds changes (going back to them, or Home's refresh, shows them).
 
+### Found trying slice 2 (2026-10-24)
+
+- The Remove and Add a library icons didn't show: those two glyphs were left out of the icon font the build ships (the other 111 icons used are in it). Now the delete and add icons the app uses elsewhere.
+- A pin to a series in a removed library stayed ("0 books"): hidden now in local mode, as offline. The pinned side menu kept removed libraries: reloads now on library changes.
+- Books sorted by Date added looked jumbled: the sort is by the file's date (when it was put on the NAS), but the tiles show the release date - and from a file name only the year is known, so every release date shows as 1 January of its year. Real dates need ComicInfo.xml (Year, Month, Day); without one, the tile should show the year only.
+
 ### Still to do
 
 - Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.

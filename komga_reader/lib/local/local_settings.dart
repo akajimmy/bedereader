@@ -26,11 +26,11 @@ class LocalLibrariesGroup extends StatelessWidget {
                 subtitle: Text(l.path, style: const TextStyle(fontSize: 12, color: hintColour)),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(context, l)),
-                  IconButton(tooltip: 'Remove', icon: const Icon(Icons.remove_circle_outline),
+                  IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline),
                       onPressed: () => _remove(context, l)),
                 ]),
               ),
-            ActionRow(title: 'Add a library', icon: Icons.create_new_folder_outlined, onTap: () => _add(context)),
+            ActionRow(title: 'Add a library', icon: Icons.add, onTap: () => _add(context)),
             ActionRow(
               title: scanned == null ? 'Scan again' : 'Scanning… $scanned books',
               subtitle: 'New and changed files are read; books whose files went are taken off',

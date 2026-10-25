@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
+import 'perf_log.dart';
 import 'errors.dart' show PageUnreadable;
 import 'enhance.dart';
 import 'settings.dart';
@@ -50,13 +51,17 @@ class PageLoader {
     load = () async {
       try {
         // (its file still here - a page come back to: decoded again, not asked for again)
+        final watch = Stopwatch()..start();
         final bytes = _loaded[i] ?? await api.pageBytes(bookId, pageNumbers[i]);
+        final readMs = watch.elapsedMilliseconds;
         final ui.FrameInfo frame;
         try {
           frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
         } catch (e) {
           throw PageUnreadable(e); // arrived, but can't be decoded: damaged, or a format this device can't read
         }
+        PerfLog.instance.page('${api.baseUrl} $bookId', pageNumbers[i], readMs: readMs, decodeMs: watch.elapsedMilliseconds - readMs,
+            bytes: bytes.length); // (experimental/sources: measuring the curl)
         if (identical(_cache[i], load)) _loaded[i] = bytes; // not if it was forgotten (or asked for again) meanwhile
         return PageData(frame.image, bytes);
       } catch (_) {

@@ -7,6 +7,7 @@ import '../api.dart';
 import '../hidden_libraries.dart';
 import '../errors.dart';
 import '../home_sections.dart';
+import '../local/folder_komga.dart';
 import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     Pins.instance.addListener(_checkOfflinePins);
     OnDeckHidden.instance.addListener(_onHiddenChanged);
     HiddenLibraries.instance.addListener(_load); // a library shown or hidden on this device: every row changes
+    _local?.changed.addListener(_load); // local mode: a scan found changes, or a library came or went
     _sections.load().then((_) => _load());
   }
 
@@ -70,8 +72,16 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     Pins.instance.removeListener(_checkOfflinePins);
     OnDeckHidden.instance.removeListener(_onHiddenChanged);
     HiddenLibraries.instance.removeListener(_load);
+    _local?.changed.removeListener(_load);
     super.dispose();
   }
+
+  FolderKomga? get _local => api is FolderKomga ? api as FolderKomga : null;
+
+  /// Pins leading to nothing are hidden: offline (nothing downloaded there), and in local mode (a library removed, its
+  /// files gone - user, 2026-10-24: a series pinned in a library since removed stayed, "0 books"). Kept, not deleted:
+  /// the books may come back.
+  bool get _hidesEmptyPins => Connection.instance.offline || _local != null;
 
   /// Hidden from On deck (here or on another screen): filter again now; fetch again if showing it back needs more.
   void _onHiddenChanged() {
@@ -186,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   /// Offline, a pin leading to an empty view is hidden (user's call). Each pin's own view is asked - the same query
   /// its screen would run, filter included - against the downloaded books.
   Future<void> _checkOfflinePins() async {
-    if (!Connection.instance.offline) {
+    if (!_hidesEmptyPins) {
       if (_offlinePins != null && mounted) setState(() => _offlinePins = null);
       return;
     }
@@ -247,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
             listenable: Pins.instance,
             builder: (context, _) {
               final offlineKeep = _offlinePins;
-              final pins = Connection.instance.offline
+              final pins = _hidesEmptyPins
                   ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
                   : Pins.instance.items;
               if (pins.isEmpty) return const SizedBox.shrink();
