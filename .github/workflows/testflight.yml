@@ -13,12 +13,15 @@
 #   ASC_KEY_P8               the whole text of the AuthKey_XXXX.p8 file
 #   APPLE_TEAM_ID            the team ID (Membership details on developer.apple.com)
 #   CERTIFICATE_PRIVATE_KEY  an RSA private key (PEM) for the distribution certificate - made once by the user
-name: TestFlight
+#
+# THE EXPERIMENT'S COPY (branch experimental/sources): builds "BeDeReader Exp", its own app (bundle ID
+# com.nickp.bedereader.exp, its own App Store Connect record), from an exp-build-<n> tag - never the real app's build-<n>
+# tags, so the two never meet. The build number is the tag's <n>, numbered on its own (TestFlight wants each one higher).
+name: TestFlight (experiment)
 
 on:
-  workflow_dispatch:
   push:
-    tags: ['build-*']
+    tags: ['exp-build-*']
 
 jobs:
   testflight:
@@ -77,7 +80,7 @@ jobs:
           CERTIFICATE_PRIVATE_KEY: ${{ secrets.CERTIFICATE_PRIVATE_KEY }}
         run: |
           keychain initialize
-          app-store-connect fetch-signing-files com.nickp.bedereader --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files com.nickp.bedereader.exp --type IOS_APP_STORE --create
           keychain add-certificates
           xcode-project use-profiles --project ios/Runner.xcodeproj
 
@@ -85,7 +88,10 @@ jobs:
       # (Builds pushed from the ios branch before 2026-10-17 were numbered 1000 + the run number: 1.3.0 (1005).)
       - name: Build and sign (.ipa)
         if: steps.ready.outputs.go == 'true'
-        run: flutter build ipa --release --export-options-plist="$HOME/export_options.plist"
+        run: |
+          n="${GITHUB_REF_NAME#exp-build-}"
+          case "$n" in ''|*[!0-9]*) echo "::error::not an exp-build-<n> tag: $GITHUB_REF_NAME"; exit 1;; esac
+          flutter build ipa --release --build-number "$n" --export-options-plist="$HOME/export_options.plist"
 
       - name: Upload to App Store Connect
         if: steps.ready.outputs.go == 'true'
