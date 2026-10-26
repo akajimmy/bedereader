@@ -11,14 +11,17 @@ enum BookSource { local, network, komga }
 /// [id]'s source, a book or series of [api]'s: a local library on this device, one on a network share (\\host\share),
 /// or Komga (its downloads too - they're Komga's books).
 BookSource sourceOf(Komga api, String id) {
-  final FolderKomga? local = switch (api) {
-    final FolderKomga f => f,
-    final LocalBeside m when m.isLocal(id) => m.local,
-    _ => null,
-  };
+  final local = localSourceOf(api, id);
   if (local == null) return BookSource.komga;
   return local.onShare(id) ? BookSource.network : BookSource.local;
 }
+
+/// The local libraries [id] is in (a book, series or library of theirs) - null: Komga's.
+FolderKomga? localSourceOf(Komga api, String id) => switch (api) {
+      final FolderKomga f => f,
+      final LocalBeside m when m.isLocal(id) => m.local,
+      _ => null,
+    };
 
 /// The source icon for a poster of [id] - or none, with the setting off (Settings > Library & Home, this device's).
 Widget? sourceBadgeFor(Komga api, String id) =>

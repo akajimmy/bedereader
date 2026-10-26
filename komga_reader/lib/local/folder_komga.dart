@@ -175,6 +175,24 @@ class FolderKomga extends OfflineKomga {
     return path != null && Storage.shareOf(path) != null;
   }
 
+  /// A library's folder (book details: a book's path from it - user, 2026-10-26).
+  String? libraryPath(String? libraryId) => _folders.where((l) => l.id == libraryId).firstOrNull?.path;
+
+  /// [bookId]'s file is gone - deleted or moved since the last scan, or its library's folder missing (book details'
+  /// Not Found, user 2026-10-26). A share out of reach isn't "gone": false.
+  Future<bool> fileGone(String bookId) async {
+    final path = store.books[bookId]?['path'] as String?;
+    if (path == null) return false;
+    final lib = (store.books[bookId]?['library'] as Map?)?['id'];
+    if (toAsk.value.any((l) => l.id == lib)) return true;
+    try {
+      await Storage.instance.of(path).length(path);
+      return false;
+    } catch (e) {
+      return troubleOf(e) == FileTrouble.gone;
+    }
+  }
+
   // the series' ids, and each one's library, worked out again after each change (asked about for every tile beside
   // Komga's)
   Map<String, String> get _seriesLibrary {
