@@ -224,6 +224,29 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
+  koni_archive_core:
+    dependency: "direct main"
+    description:
+      name: koni_archive_core
+      sha256: f323296866d6224725839e2b8ef25dfeba5e0c2476877fa7726f4b966a4c7a84
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.0"
+  koni_codecs:
+    dependency: transitive
+    description:
+      name: koni_codecs
+      sha256: "0a0ffa23f62f627bc50db6de79e88a6a41e019d3a21c6a455ac5ae7c1677a8bd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.0"
+  koni_rar:
+    dependency: "direct main"
+    description:
+      path: "third_party/koni_rar"
+      relative: true
+    source: path
+    version: "0.9.0+bedereader"
   leak_tracker:
     dependency: transitive
     description:

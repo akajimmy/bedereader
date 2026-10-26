@@ -14,6 +14,9 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.2
   dart_smb2: ^0.2.3
+  koni_archive_core: ^0.9.0
+  koni_rar: # CBR (RAR4 and RAR5), pure Dart - vendored with one addition (third_party/koni_rar/pubspec.yaml)
+    path: third_party/koni_rar
 
 dev_dependencies:
   flutter_test:
