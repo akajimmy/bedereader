@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../page_curl.dart';
-import '../perf_log.dart';
 
 /// The 3D page curl turn for a page view - both readers' (eBooks since 2026-10-11; comics, whose own came first, moved
 /// onto it 2026-10-22 - user: "move comic reader to the shared code"): a turn jumps the page view to the target page
@@ -122,7 +121,6 @@ class CurlTurns {
     // the view shows it
     if (c.spine && !next) c.back = now;
     _curl = c;
-    PerfLog.instance.curlStarted('${next ? 'forward' : 'back'} to $target${c.spine ? ', two pages' : ''}');
     jump(target); // (while the turn is set: a renderer can tell this jump from a reader's turn - active)
     _moved.value++;
     if (c.spine && next) _snapBack(c);
@@ -190,7 +188,6 @@ class CurlTurns {
     final back = cancel || !c.completing;
     if (back) jump(c.from); // (still active: not a reader's turn)
     _curl = null;
-    PerfLog.instance.curlEnded();
     _moved.value++;
     done(turned: !back);
     WidgetsBinding.instance.addPostFrameCallback((_) => c.dispose());
