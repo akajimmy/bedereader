@@ -50,11 +50,12 @@ void main() {
     expect(await a.read('nothing.png'), isNull);
   });
 
-  test('compressed: RAR5 pages and a RAR4 file through its filter - the start alone is the same as the start of the '
+  test('compressed: RAR5 pages, a RAR4 file through its filter, one in a solid RAR4 - the start alone is the same as the start of the '
       'whole', () async {
     for (final (name, entry, size) in [
       ('synthetic_comic.cbr', 'comic/page002.png', 1032),
       ('filter_e8.rar', 'x86call.bin', 12016),
+      ('solid_rar4.rar', 'solidbig/part3.txt', 3305), // (solid: each file follows on from the one before)
     ]) {
       final a = await ComicArchive.open(fs, '$fixtures$sep$name');
       addTearDown(a.close);
