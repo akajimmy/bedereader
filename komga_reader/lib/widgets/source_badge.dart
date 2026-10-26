@@ -64,11 +64,12 @@ class SourceIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colour = IconTheme.of(context).color ?? Colors.white;
-    // (drawn a little inside the box, as a Material icon is: its 24 holds about 20 of drawing)
+    // (drawn nearly to the box's edge: measured on the tablet, a 10% margin left them about 10% smaller than the
+    // Material icons beside them; at 2% the folder spans what Material's own folder does, 83% of the box)
     return SizedBox.square(
       dimension: size,
       child: Padding(
-        padding: EdgeInsets.all(size * 0.1),
+        padding: EdgeInsets.all(size * 0.02),
         child: CustomPaint(painter: _SourcePainter(source, colour)),
       ),
     );
