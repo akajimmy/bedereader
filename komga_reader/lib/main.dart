@@ -18,6 +18,7 @@ import 'licences.dart';
 import 'local/folder_komga.dart';
 import 'local/missing_prompt.dart';
 import 'local/mixed_komga.dart';
+import 'local/storage.dart' show LocalNames;
 import 'night_schedule.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -57,6 +58,7 @@ void main() {
     ErrorLog.instance.record('Unexpected error', e, st, LogLevel.crash);
     return false; // not handled: reported as usual
   };
+  HttpOverrides.global = LocalNames(); // a bare server name found as name.local, as the shares are (storage.dart)
   checkPcRotation(); // Windows: a rotation sensor or not (Settings' Rotation) - answered long before it's looked at
   if (defaultTargetPlatform == TargetPlatform.android) OrientationLock.instance.release(); // Auto, the app's own
   runApp(const KomgaReaderApp());

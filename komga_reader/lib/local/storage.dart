@@ -219,6 +219,30 @@ Future<String> hostAddress(String host) async {
   return host;
 }
 
+/// Every HttpClient the app makes - Komga's requests, its posters and pages - finds a bare host name the way
+/// [hostAddress] does: as name.local when DNS doesn't know it (user, 2026-10-26: http://nick-nas:25600 "Can't reach
+/// Komga" on the tablet - the shares found it, through [hostAddress], Komga didn't). Plain http only: https connects
+/// by the name as given, so its certificate is checked against it. Set once at the start (main.dart).
+class LocalNames extends HttpOverrides {
+  final Map<String, String> _found = {}; // bare names found this run (one not found is asked again next time)
+
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    final client = super.createHttpClient(context);
+    client.connectionFactory = (uri, proxyHost, proxyPort) async {
+      // (the app trusts only certificates the device does: no bad-certificate callback to pass on)
+      if (uri.scheme == 'https') return SecureSocket.startConnect(uri.host, uri.port, context: context);
+      var address = _found[uri.host];
+      if (address == null) {
+        address = await hostAddress(uri.host);
+        if (address != uri.host) _found[uri.host] = address;
+      }
+      return Socket.startConnect(address, uri.port);
+    };
+    return client;
+  }
+}
+
 /// The folder shares in what Windows's `net view \\host /all` prints: the rows under its dashed line, of type Disk,
 /// the hidden ones (ending in $) left out.
 List<String> netViewShares(String output) {
