@@ -12,6 +12,8 @@ import '../offline/connection.dart';
 import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../epub/source.dart';
+import '../local/folder_komga.dart';
+import '../local/mixed_komga.dart';
 import '../reader/comic_renderer.dart';
 import '../reader/epub_renderer.dart';
 import '../reader/end_card.dart';
@@ -31,6 +33,17 @@ import 'open_book.dart' show isEpub;
 
 export '../reader/comic_renderer.dart' show trimPictures;
 export '../reader/curl_turns.dart' show CurlLayer;
+
+/// Where a book opened in the reader came from, for the app log: a local library (No server mode, or one beside
+/// Komga's or the downloads), Komga, or the downloads offline. (The log said "from Komga" for local books - tablet,
+/// 2026-10-25: in No server mode the folders are the app's "online" source.)
+@visibleForTesting
+String readerSource(Komga api, String bookId, Komga? online) => switch (api) {
+      FolderKomga() => 'from a local library',
+      final LocalBeside m when m.isLocal(bookId) => 'from a local library',
+      _ when identical(api, online) => 'from Komga',
+      _ => 'offline',
+    };
 
 /// Page reader: full screen on the chosen background (black, dark grey or white), follows the tablet's rotation
 /// (tilt for spreads).
@@ -295,7 +308,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       });
       onOpened?.call();
       AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
-          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${readerSource(api, fresh['id'] as String, Connection.instance.online)}) '
           'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)

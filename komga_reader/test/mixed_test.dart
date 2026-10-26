@@ -16,6 +16,7 @@ import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/screens/reader.dart' show readerSource;
 import 'package:komga_reader/widgets/connection_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,6 +93,14 @@ void main() {
     expect((await api.book(b['id'] as String))!['readProgress']['completed'], isTrue);
     expect(await api.nextBook(b['id'] as String), isNull);
     expect(asked, isEmpty);
+  });
+
+  test("the reader's log names a local book's source as a local library - signed in, and in No server mode (it said "
+      '"from Komga" - tablet, 2026-10-25); a Komga book from Komga', () async {
+    final local = api.local!.store.books.keys.single;
+    expect(readerSource(api, local, api), 'from a local library');
+    expect(readerSource(api.local!, local, api.local), 'from a local library', reason: 'No server mode');
+    expect(readerSource(api, '0X', api), 'from Komga');
   });
 
   test("signed in to Komga, the start doesn't wait for the local libraries' first scan (code review, 2026-10-25: Home "
