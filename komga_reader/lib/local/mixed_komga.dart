@@ -11,13 +11,23 @@ import '../view_filter.dart';
 import 'folder_komga.dart';
 
 /// Signed in to Komga, with local libraries beside its own (experimental/sources): the Komga client, with the folders
-/// this device has as libraries ([local], the same ones as local mode's) answered from them. A call about one book,
-/// series or library goes to whichever has it; a call across every library asks both and merges what they give, in
-/// the order asked for.
-class MixedKomga extends Komga {
+/// this device has as libraries ([LocalBeside.local], the same ones as local mode's) answered from them.
+class MixedKomga extends Komga with LocalBeside {
   MixedKomga(super.baseUrl, super.apiKey, {super.client});
+}
 
-  /// The local libraries (none until [attachLocal]).
+/// Offline (Komga out of reach, or switched off by hand): the downloaded books, with the same local libraries
+/// beside them - a folder on the device, or a share that answers, doesn't need Komga (user, 2026-10-25: "local
+/// libraries should always be available ... any combination should be possible").
+class OfflineBeside extends OfflineKomga with LocalBeside {
+  OfflineBeside(super.store, {super.baseUrl});
+}
+
+/// The local libraries beside another source - Komga ([MixedKomga]) or the downloads offline ([OfflineBeside]): a
+/// call about one book, series or library goes to whichever has it; a call across every library asks both and
+/// merges what they give, in the order asked for. (`super` is the other source.)
+mixin LocalBeside on Komga {
+  /// The local libraries (none until [attachLocal], or given).
   FolderKomga? local;
 
   /// The local libraries saved on this device, opened (their last scan at once; scanned again in the background) -

@@ -290,7 +290,7 @@ void main() {
     expect(conn.offline, isFalse);
   });
 
-  testWidgets('the key prompt: the message, Use downloaded books, Sign in again', (tester) async {
+  testWidgets('the key prompt: the message, Read offline, Sign in again', (tester) async {
     Komga.onKeyRefused!(server);
     bool? signIn;
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
@@ -299,7 +299,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('API key not accepted'), findsOneWidget);
     expect(find.textContaining("Komga no longer accepts this device's API key."), findsOneWidget);
-    expect(find.text('Use downloaded books'), findsOneWidget); // B1 is downloaded
+    expect(find.text('Read offline'), findsOneWidget); // B1 is downloaded
     expect(conn.keyPromptPending, isTrue);
     await tester.tap(find.text('Sign in again'));
     await tester.pumpAndSettle();

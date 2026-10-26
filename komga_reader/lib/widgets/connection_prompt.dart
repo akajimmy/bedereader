@@ -4,11 +4,17 @@ import '../api.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 
+/// What there is to read without Komga: "your downloaded books", "your local libraries", or both.
+String offlineBooks(Connection c) => [
+      if (c.hasDownloads) 'your downloaded books',
+      if (c.hasLocal) 'your local libraries',
+    ].join(' and ');
+
 /// Komga refuses this device's API key: say so, and offer the downloaded books (which need no key) or signing in
 /// again. Returns true for Sign in again. With nothing downloaded, Sign in again is the only way on.
 Future<bool> showKeyRefusedPrompt(BuildContext context) async {
   final c = Connection.instance;
-  final downloads = c.hasDownloads;
+  final downloads = c.hasDownloads || c.hasLocal; // (something to read offline)
   final password = c.online?.usesPassword ?? false;
   final signIn = await showDialog<bool>(
     context: context,
@@ -18,10 +24,10 @@ Future<bool> showKeyRefusedPrompt(BuildContext context) async {
       title: Text(password ? 'Password not accepted' : 'API key not accepted'),
       content: Text([
         explain(KomgaError(401, ''), password: password).message,
-        if (downloads) 'Your downloaded books can still be read meanwhile.',
+        if (downloads) '${offlineBooks(c)[0].toUpperCase()}${offlineBooks(c).substring(1)} can still be read meanwhile.',
       ].join('\n\n')),
       actions: [
-        if (downloads) TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Use downloaded books')),
+        if (downloads) TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Read offline')),
         FilledButton(autofocus: !downloads, onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign in again')),
       ],
     ),
@@ -114,7 +120,7 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
 
   @override
   Widget build(BuildContext context) {
-    final downloads = c.hasDownloads;
+    final downloads = c.hasDownloads || c.hasLocal; // (something to read offline: downloads, or local libraries)
     return AlertDialog(
       icon: const Icon(Icons.cloud_off, color: Color(0xFFFACC15)),
       title: const Text("Can't reach Komga"),
@@ -122,7 +128,7 @@ class _UnreachablePromptState extends State<_UnreachablePrompt> {
         "No answer from ${displayAddress(c.online?.baseUrl ?? 'the server')}. Check you're on your home network and "
             'the server is running.',
         if (_stillDown) 'Still no answer.',
-        downloads ? 'Read your downloaded books instead?' : 'Nothing is downloaded on this device to read offline.',
+        downloads ? 'Read ${offlineBooks(c)} instead?' : 'Nothing is downloaded on this device to read offline.',
       ].join('\n\n')),
       actions: [
         // nothing to read either way: offline, and back to Home (the page behind is waiting on Komga)

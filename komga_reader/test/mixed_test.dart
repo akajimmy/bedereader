@@ -13,6 +13,10 @@ import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
 import 'package:komga_reader/local/mixed_komga.dart';
 import 'package:komga_reader/local/storage.dart';
+import 'package:komga_reader/offline/connection.dart';
+import 'package:komga_reader/offline/downloads.dart';
+import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/widgets/connection_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -114,6 +118,50 @@ void main() {
     gate.complete();
     await read.future.timeout(const Duration(seconds: 5));
     expect(fresh.local!.isEmpty, isFalse, reason: 'the scan done: its books are in');
+  });
+
+  // user, 2026-10-25: "local library should always be available ... and Komga libraries should be available when
+  // Komga is reachable. All of those should be independent of each other"
+  group('offline (Komga out of reach, or offline by hand): the local libraries are still there', () {
+    late Directory store;
+    final conn = Connection.instance, d = Downloads.instance;
+    setUp(() async {
+      store = await Directory.systemTemp.createTemp('mixed_dl');
+      d.reset();
+      await d.attach(api, root: store, start: false);
+      d.store!.books['0X'] = {'book': book('0X', 'Batman', '2024-05-01'), 'series': {...series('BatmanS', 'Batman')},
+          'readLists': [], 'state': 'done'};
+      await conn.load(api);
+      await Future<void>.delayed(Duration.zero); // (the start-up check)
+      await conn.setForcedOffline(true);
+    });
+    tearDown(() async {
+      conn.reset();
+      d.reset();
+      await deleteTemp(store);
+    });
+
+    test('the downloads and the local books side by side; a local book read and its place saved, Komga not asked',
+        () async {
+      final offline = conn.api;
+      expect(offline, isA<OfflineKomga>());
+      asked.clear();
+      expect([for (final s in (await offline.series())['content'] as List) s['name']], ['Batman', 'Saga (2012)']);
+      final saga = ((await offline.series())['content'] as List).firstWhere((s) => s['name'] == 'Saga (2012)') as Map;
+      final b = ((await offline.seriesBooks(saga['id'] as String))['content'] as List).single as Map;
+      expect(await offline.pages(b['id'] as String), hasLength(1));
+      expect((await offline.pageBytes(b['id'] as String, 1)).length, greaterThan(0));
+      await offline.setProgress(b['id'] as String, 1, completed: true);
+      expect((await api.local!.book(b['id'] as String))!['readProgress']['completed'], isTrue);
+      expect(asked, isEmpty);
+    });
+
+    test('nothing downloaded, local books only: going offline is still offered', () {
+      d.store!.books.clear();
+      expect(conn.hasDownloads, isFalse);
+      expect(conn.hasLocal, isTrue);
+      expect(offlineBooks(conn), 'your local libraries');
+    });
   });
 }
 

@@ -11,6 +11,8 @@ import '../synced_ids.dart';
 import '../pins.dart';
 import '../settings.dart';
 import 'downloads.dart';
+import '../local/folder_komga.dart';
+import '../local/mixed_komga.dart';
 import 'offline_komga.dart';
 
 /// Online or offline. Offline, the whole app runs on [OfflineKomga] - the downloaded books only - and nothing
@@ -43,7 +45,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   /// Komga answering doesn't count as "reachable again" - it would only refuse the key again (user, 2026-09-29).
   bool keyRefused = false;
   bool keyPromptPending = false;
-  OfflineKomga? _offline;
+  OfflineBeside? _offline;
   Timer? _poll;
   bool _observing = false;
 
@@ -54,11 +56,20 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   /// Downloaded books to fall back on (the prompt only offers them if there are some).
   bool get hasDownloads => Downloads.instance.store?.books.values.any((e) => e['state'] == 'done') ?? false;
 
-  /// The connection every screen should use right now.
+  /// The local libraries (experimental/sources): there offline as online - they don't need Komga.
+  FolderKomga? get _local => switch (online) { final LocalBeside m => m.local, _ => null };
+
+  /// Something in the local libraries to read offline (the prompt offers going offline for them too).
+  bool get hasLocal => !(_local?.isEmpty ?? true);
+
+  /// The connection every screen should use right now. Offline: the downloads, with the local libraries beside them
+  /// (user, 2026-10-25: each source there whenever it can be reached, whatever the others do).
   Komga get api {
     final store = Downloads.instance.store;
     if (!offline || store == null) return online!;
-    if (_offline == null || _offline!.store != store) _offline = OfflineKomga(store, baseUrl: online?.baseUrl ?? 'offline');
+    if (_offline == null || _offline!.store != store || _offline!.local != _local) {
+      _offline = OfflineBeside(store, baseUrl: online?.baseUrl ?? 'offline')..local = _local;
+    }
     return _offline!;
   }
 

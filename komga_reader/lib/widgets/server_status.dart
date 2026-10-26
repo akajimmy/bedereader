@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../local/folder_komga.dart';
+import '../local/mixed_komga.dart';
 import '../offline/offline_komga.dart';
 
 enum ServerState { checking, ok, warning, down }
@@ -32,7 +33,11 @@ class _ServerStatusState extends State<ServerStatus> {
       return;
     }
     if (widget.api is OfflineKomga) {
-      setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing downloaded books'; });
+      final local = switch (widget.api) { final LocalBeside m => !(m.local?.isEmpty ?? true), _ => false };
+      setState(() {
+        _state = ServerState.warning;
+        _detail = 'Offline mode - showing downloaded books${local ? ' and the local libraries' : ''}';
+      });
       return;
     }
     setState(() { _state = ServerState.checking; _detail = 'Checking…'; });
