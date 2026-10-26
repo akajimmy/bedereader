@@ -11,6 +11,7 @@ import '../screens/downloads_screen.dart';
 import '../screens/about.dart';
 import '../screens/library.dart';
 import '../side_menu.dart';
+import 'source_badge.dart' show libraryIcon;
 
 /// Side navigation: Home, each library, sign out. Home is always the root route, so every entry first pops back to it.
 class AppDrawer extends StatefulWidget {
@@ -119,7 +120,7 @@ class _AppDrawerState extends State<AppDrawer> {
           ListTile(leading: const Icon(Icons.collections_bookmark_outlined), title: const Text('All libraries'),
               onTap: () => _go(null)),
           for (final l in _libraries)
-            ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
+            ListTile(leading: libraryIcon(widget.api, l['id'] as String), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
           const Divider(height: 1),
           if (Connection.instance.available)

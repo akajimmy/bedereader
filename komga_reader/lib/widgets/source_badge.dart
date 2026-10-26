@@ -44,25 +44,51 @@ class SourceBadge extends StatelessWidget {
           height: size,
           alignment: Alignment.center,
           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.72), shape: BoxShape.circle),
-          child: CustomPaint(size: const Size.square(icon), painter: _SourcePainter(source)),
+          child: CustomPaint(size: const Size.square(icon), painter: _SourcePainter(source, Colors.white)),
         ),
       );
 }
 
-class _SourcePainter extends CustomPainter {
-  _SourcePainter(this.source);
-  final BookSource source;
+/// A library's icon: its source's (Settings > Library & Home, Show source icon - user, 2026-10-26: Komga's libraries
+/// and local ones of the same name looked alike in the side menu), else the plain folder.
+Widget libraryIcon(Komga api, String libraryId, {double size = 24}) => AppSettings.instance.display.sourceIcon
+    ? SourceIcon(sourceOf(api, libraryId), size: size)
+    : Icon(Icons.folder_outlined, size: size);
 
-  static final _white = Paint()..color = Colors.white;
+/// A source's icon on its own, in the colour icons have where it is (a library in a list, a button).
+class SourceIcon extends StatelessWidget {
+  const SourceIcon(this.source, {super.key, this.size = 24});
+  final BookSource source;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = IconTheme.of(context).color ?? Colors.white;
+    // (drawn a little inside the box, as a Material icon is: its 24 holds about 20 of drawing)
+    return SizedBox.square(
+      dimension: size,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.1),
+        child: CustomPaint(painter: _SourcePainter(source, colour)),
+      ),
+    );
+  }
+}
+
+class _SourcePainter extends CustomPainter {
+  _SourcePainter(this.source, this.colour) : _white = Paint()..color = colour;
+  final BookSource source;
+  final Color colour;
+  final Paint _white; // (white on a poster's badge; the icon colour elsewhere)
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width;
     switch (source) {
       case BookSource.local:
-        _folder(canvas, Rect.fromLTWH(s * 0.07, s * 0.16, s * 0.86, s * 0.68));
+        _folder(canvas, Rect.fromLTWH(s * 0.07, s * 0.16, s * 0.86, s * 0.68), _white);
       case BookSource.network:
-        _folder(canvas, Rect.fromLTWH(s * 0.10, s * 0.07, s * 0.80, s * 0.52));
+        _folder(canvas, Rect.fromLTWH(s * 0.10, s * 0.07, s * 0.80, s * 0.52), _white);
         final stem = s * 0.09, barY = s * 0.84, barH = s * 0.09;
         canvas.drawRect(Rect.fromLTRB(s / 2 - stem / 2, s * 0.58, s / 2 + stem / 2, barY), _white);
         canvas.drawRRect(
@@ -76,10 +102,10 @@ class _SourcePainter extends CustomPainter {
   }
 
   /// A folder: a tab top left, the body under it, softly rounded.
-  static void _folder(Canvas canvas, Rect r) {
+  static void _folder(Canvas canvas, Rect r, Paint paint) {
     final w = r.width, h = r.height, rad = Radius.circular(w * 0.08);
     final tabW = w * 0.42, tabH = h * 0.16;
-    canvas.drawRRect(RRect.fromLTRBR(r.left, r.top, r.left + tabW, r.top + tabH * 2, rad), _white);
+    canvas.drawRRect(RRect.fromLTRBR(r.left, r.top, r.left + tabW, r.top + tabH * 2, rad), paint);
     canvas.drawPath(
         Path()
           ..addPolygon([
@@ -87,12 +113,12 @@ class _SourcePainter extends CustomPainter {
             Offset(r.left + tabW + tabH, r.top + tabH),
             Offset(r.left + tabW - w * 0.08, r.top + tabH),
           ], true),
-        _white);
-    canvas.drawRRect(RRect.fromLTRBR(r.left, r.top + tabH, r.right, r.bottom, rad), _white);
+        paint);
+    canvas.drawRRect(RRect.fromLTRBR(r.left, r.top + tabH, r.right, r.bottom, rad), paint);
   }
 
   @override
-  bool shouldRepaint(_SourcePainter old) => old.source != source;
+  bool shouldRepaint(_SourcePainter old) => old.source != source || old.colour != colour;
 }
 
 /// Komga's K in a unit box: the outline of path824 in komga-tray/src/main/resources/icons/komga-gray-minimal.svg

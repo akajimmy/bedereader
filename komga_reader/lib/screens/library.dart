@@ -235,7 +235,12 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           onSelected: _switchLibrary,
           itemBuilder: (_) => [
             const PopupMenuItem(value: null, child: Text('All libraries')),
-            for (final l in _libraries) PopupMenuItem(value: l['id'] as String, child: Text(l['name'] as String)),
+            for (final l in _libraries)
+              PopupMenuItem(value: l['id'] as String, child: Row(children: [
+                libraryIcon(api, l['id'] as String, size: 20), // (same names on Komga and here: told apart)
+                const SizedBox(width: 12),
+                Flexible(child: Text(l['name'] as String)),
+              ])),
           ],
           // a narrow window: the name shortens ("Demo Li...") beside the buttons - it overflowed the bar at 650 px
           // (Windows test plan, 2026-10-22)

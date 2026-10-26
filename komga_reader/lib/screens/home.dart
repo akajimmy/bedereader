@@ -13,6 +13,7 @@ import '../ondeck_hidden.dart';
 import '../pins.dart';
 import '../settings.dart';
 import '../widgets/connection_prompt.dart' show offlineBooks;
+import '../widgets/source_badge.dart' show libraryIcon;
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
@@ -276,9 +277,9 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Wrap(spacing: 10, runSpacing: 10, children: [
                     for (final l in _libraries)
-                      _LibraryButton(label: l['name'] as String, autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
+                      _LibraryButton(label: l['name'] as String, icon: libraryIcon(api, l['id'] as String), autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
                           onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: l['id'] as String))),
-                    _LibraryButton(label: 'All libraries', icon: Icons.collections_bookmark_outlined,
+                    _LibraryButton(label: 'All libraries', icon: const Icon(Icons.collections_bookmark_outlined),
                         onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut))),
                   ]),
                 ),
@@ -360,17 +361,17 @@ class _Empty extends StatelessWidget {
 }
 
 class _LibraryButton extends StatelessWidget {
-  const _LibraryButton({required this.label, required this.onTap, this.icon = Icons.folder_outlined, this.autofocus = false});
+  const _LibraryButton({required this.label, required this.onTap, required this.icon, this.autofocus = false});
   final String label;
   final VoidCallback onTap;
-  final IconData icon;
+  final Widget icon; // a library's: its source's, or the plain folder (libraryIcon)
   final bool autofocus;
   @override
   Widget build(BuildContext context) => FilledButton.tonalIcon(
         autofocus: autofocus,
         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
         onPressed: onTap,
-        icon: Icon(icon),
+        icon: icon,
         label: Text(label),
       );
 }

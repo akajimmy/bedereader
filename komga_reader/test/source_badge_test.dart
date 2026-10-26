@@ -60,6 +60,19 @@ void main() {
     expect(sourceOf(Komga('http://komga.test', 'key'), 'B1'), BookSource.komga, reason: 'no local libraries');
   });
 
+  testWidgets("a library's icon (side menu, Home, the picker): with the setting on, its source's - Komga's and local "
+      'libraries of the same name told apart (user, 2026-10-26); off, the plain folder', (tester) async {
+    final mixed = MixedKomga('http://komga.test', 'key', client: MockClient((_) async => http.Response('', 404)))
+      ..local = local;
+    expect(libraryIcon(mixed, here.id), isA<Icon>(), reason: 'off');
+    AppSettings.instance.display = const DisplayPrefs(sourceIcon: true);
+    final icons = [for (final id in [here.id, share.id, 'KomgaLib']) libraryIcon(mixed, id)];
+    expect([for (final i in icons) (i as SourceIcon).source], [BookSource.local, BookSource.network, BookSource.komga]);
+    await tester.pumpWidget(MaterialApp(home: Material(child: Column(children: icons))));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(SourceIcon), findsNWidgets(3));
+  });
+
   testWidgets('the setting off: no icon; on: the icon, on the poster', (tester) async {
     expect(sourceBadgeFor(local, 'B2'), isNull, reason: 'off by default');
     AppSettings.instance.display = const DisplayPrefs(sourceIcon: true);

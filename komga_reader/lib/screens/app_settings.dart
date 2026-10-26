@@ -551,7 +551,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             // where each book and series comes from, on its poster (user, 2026-10-26) - this device's
             SwitchRow(
               title: 'Show source icon',
-              subtitle: 'On each poster: on this device, on a network share, or from Komga',
+              subtitle: 'On each poster and library: on this device, on a network share, or from Komga',
               value: d.sourceIcon,
               onChanged: (v) => s.setDisplay(d.copyWith(sourceIcon: v)),
             ),
