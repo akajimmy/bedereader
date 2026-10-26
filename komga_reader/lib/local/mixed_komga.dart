@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -104,10 +105,11 @@ mixin LocalBeside on Komga {
 
   static const _all = 100000;
 
-  /// A grid's pages across every library, one after the other ([series], [books]): Komga's pages and the local items
-  /// merged item by item in [sort]'s order - each page asks Komga for its next page only. Page 0 starts again; a page
-  /// asked out of turn (not the next) is made the old way ([_merged]: Komga asked for everything up to it). Before
-  /// this (punch list 8, review finding 4), every page asked Komga again for all the pages before it.
+  /// A grid's pages across every library, one after the other ([series], [books], [filteredSeries], [filteredBooks]):
+  /// Komga's pages and the local items merged item by item in [sort]'s order - each page asks Komga for its next page
+  /// only. Page 0 starts again; a page asked out of turn (not the next) is worked up to from the start, a page at a
+  /// time. Before this (punch list 8, review finding 4), every page asked Komga again for all the pages before it, in
+  /// one request - which Komga cuts at 2,000 (tablet, 2026-10-26: its books past that went missing).
   Future<Map<String, dynamic>> _paged(String key, Future<Map<String, dynamic>> Function(int page, int size) komga,
       Future<Map<String, dynamic>> Function() mine, String sort, int page, int size) {
     var m = _merges[key];
@@ -116,53 +118,83 @@ mixin LocalBeside on Komga {
     }
     final merge = m;
     final out = merge.busy.then((_) async {
-      if (page != merge.next || !identical(_merges[key], merge)) {
-        return _merged((n) => komga(0, n), mine, sort, page, size);
-      }
       final took = Stopwatch()..start();
       var asked = 0;
-      merge.local ??= ((await mine())['content'] as List? ?? const []).toList()..sort(merge.compare);
-      final local = merge.local!;
-      final items = <dynamic>[];
-      while (items.length < size) {
-        if (merge.ki >= merge.komga.length && !merge.komgaDone) {
-          final r = await komga(merge.komgaPage, size);
-          asked++;
-          final got = (r['content'] as List? ?? const []);
-          merge
-            ..komga.addAll(got)
-            ..komgaPage += 1
-            ..komgaTotal = (r['totalElements'] as num?)?.toInt() ?? merge.komga.length
-            ..komgaDone = r['last'] == true || got.length < size;
-        }
-        final k = merge.ki < merge.komga.length, l = merge.li < local.length;
-        if (!k && !l) break;
-        if (k && (!l || merge.compare(merge.komga[merge.ki], local[merge.li]) <= 0)) {
-          items.add(merge.komga[merge.ki++]);
-        } else {
-          items.add(local[merge.li++]);
-        }
+      var at = merge;
+      if (page != at.next) {
+        at = _Merge(sort, size); // (out of turn: from the start, its pages before this one dropped)
+        if (identical(_merges[key], merge)) _merges[key] = at;
       }
-      merge.next++;
-      final total = (merge.komgaTotal ?? 0) + local.length;
+      Map<String, dynamic> result = const {};
+      while (at.next <= page) {
+        final (r, n) = await _nextPage(at, komga, mine, size);
+        result = r;
+        asked += n;
+      }
       AppLog.instance.info('merge', 'page $page (sort $sort): Komga asked $asked time(s) for $size; page done in '
           '${took.elapsedMilliseconds} ms');
-      return <String, dynamic>{
-        'content': items,
-        'totalElements': total,
-        'last': merge.ki >= merge.komga.length && merge.komgaDone && merge.li >= local.length,
-      };
+      return result;
     });
     merge.busy = out.then((_) {}, onError: (_) {}); // (the next page waits for this one)
     return out;
   }
 
+  /// [merge]'s next page: [size] items, Komga's and the local ones in order; and how many times Komga was asked.
+  Future<(Map<String, dynamic>, int)> _nextPage(_Merge merge, Future<Map<String, dynamic>> Function(int, int) komga,
+      Future<Map<String, dynamic>> Function() mine, int size) async {
+    var asked = 0;
+    merge.local ??= ((await mine())['content'] as List? ?? const []).toList()..sort(merge.compare);
+    final local = merge.local!;
+    final items = <dynamic>[];
+    while (items.length < size) {
+      if (merge.ki >= merge.komga.length && !merge.komgaDone) {
+        final r = await komga(merge.komgaPage, size);
+        asked++;
+        final got = (r['content'] as List? ?? const []);
+        merge
+          ..komga.addAll(got)
+          ..komgaPage += 1
+          ..komgaTotal = (r['totalElements'] as num?)?.toInt() ?? merge.komga.length
+          ..komgaDone = r['last'] == true || got.length < size;
+      }
+      final k = merge.ki < merge.komga.length, l = merge.li < local.length;
+      if (!k && !l) break;
+      if (k && (!l || merge.compare(merge.komga[merge.ki], local[merge.li]) <= 0)) {
+        items.add(merge.komga[merge.ki++]);
+      } else {
+        items.add(local[merge.li++]);
+      }
+    }
+    merge.next++;
+    return (
+      <String, dynamic>{
+        'content': items,
+        'totalElements': (merge.komgaTotal ?? 0) + local.length,
+        'last': merge.ki >= merge.komga.length && merge.komgaDone && merge.li >= local.length,
+      },
+      asked,
+    );
+  }
+
   final Map<String, _Merge> _merges = {}; // the grids being paged: where each one is in Komga's and the local items
+
+  static final _komgaZone = Object();
+
+  /// [f] with the merging listings ([series], [books]) handing straight to Komga: Komga's own filtered listings call
+  /// them inside (filteredBooks with no filter is [books]). Merged in there too, a grid's local books came twice, and
+  /// each page asked Komga for everything up to it - past 2,000 Komga stops (its largest page), and its books from
+  /// there on were missing (tablet, 2026-10-26). A zone, so it holds across the awaits in between.
+  Future<T> _komgaOnly<T>(Future<T> Function() f) => runZoned(f, zoneValues: {_komgaZone: true});
+  bool get _inKomgaOnly => Zone.current[_komgaZone] == true;
 
   @override
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) {
     final l = _of(libraryId);
+    if (_inKomgaOnly) {
+      return super.series(libraryId: libraryId, collectionId: collectionId, readStatus: readStatus, sort: sort,
+          page: page, size: size);
+    }
     if (l != null) {
       return l.series(libraryId: libraryId, readStatus: readStatus, sort: sort, page: page, size: size);
     }
@@ -178,6 +210,9 @@ mixin LocalBeside on Komga {
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) {
     final l = _of(libraryId);
+    if (_inKomgaOnly) {
+      return super.books(libraryId: libraryId, readStatus: readStatus, sort: sort, page: page, size: size);
+    }
     if (l != null) return l.books(libraryId: libraryId, readStatus: readStatus, sort: sort, page: page, size: size);
     if (libraryId != null || _alone) {
       return super.books(libraryId: libraryId, readStatus: readStatus, sort: sort, page: page, size: size);
@@ -235,7 +270,8 @@ mixin LocalBeside on Komga {
       return super.filteredSeries(libraryId: libraryId, collectionId: collectionId, read: read, filter: filter,
           sort: sort, page: page, size: size);
     }
-    return _merged((n) => super.filteredSeries(read: read, filter: filter, sort: sort, size: n),
+    return _paged('fseries $sort $read $filter',
+        (p, n) => _komgaOnly(() => super.filteredSeries(read: read, filter: filter, sort: sort, page: p, size: n)),
         () => local!.filteredSeries(read: read, filter: filter, sort: sort, size: _all), sort, page, size);
   }
 
@@ -253,7 +289,8 @@ mixin LocalBeside on Komga {
           filter: filter, sort: sort, page: page, size: size);
     }
     final s = sort ?? 'metadata.releaseDate,desc', n = size ?? 60;
-    return _merged((k) => super.filteredBooks(read: read, filter: filter, sort: s, size: k),
+    return _paged('fbooks $s $read $filter',
+        (p, k) => _komgaOnly(() => super.filteredBooks(read: read, filter: filter, sort: s, page: p, size: k)),
         () => local!.filteredBooks(read: read, filter: filter, sort: s, size: _all), s, page, n);
   }
 

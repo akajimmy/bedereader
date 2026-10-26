@@ -133,6 +133,42 @@ void main() {
     expect([for (final s in third['content'] as List) s['name']], expected.sublist(60, 80));
   });
 
+  test("the Books grid's own listing (filteredBooks) paged the same way: every book once, none missing past Komga's "
+      "largest page, each page one normal request (tablet, 2026-10-26: the local books came twice, and Komga's past "
+      '2,000 went missing)', () async {
+    // local: Saga (2012) plus two more with years of their own
+    for (final (name, year) in [('Lone', 1999), ('Late', 2077)]) {
+      final d = Directory('${root.path}${Platform.pathSeparator}$name ($year)');
+      await d.create();
+      await File('${d.path}${Platform.pathSeparator}$name #1 ($year).cbz').writeAsBytes(zipOf({'1.png': await solidPng(2, 3)}));
+    }
+    await api.local!.rescan();
+    // Komga: 150 books, one a year from 1950, and like the real one it gives at most so many a page (2,000 there)
+    const cap = 50;
+    final komga = [for (var i = 0; i < 150; i++) book('K$i', 'K${1950 + i}', '${1950 + i}-06-15')];
+    komga.sort((a, b) => '${b['metadata']['releaseDate']}'.compareTo('${a['metadata']['releaseDate']}'));
+    final sizes = <int>[];
+    final paged = MixedKomga('http://komga.test', 'key', client: MockClient((r) async {
+      if (r.url.path != '/api/v1/books') return http.Response('', 404);
+      final page = int.parse(r.url.queryParameters['page'] ?? '0'), size = int.parse(r.url.queryParameters['size']!);
+      sizes.add(size);
+      final n = size < cap ? size : cap;
+      final items = komga.skip(page * n).take(n).toList();
+      return http.Response(jsonEncode({'content': items, 'totalElements': komga.length,
+          'last': (page + 1) * n >= komga.length}), 200, headers: {'content-type': 'application/json'});
+    }))..local = api.local;
+
+    final titles = <String>[];
+    for (var page = 0; ; page++) {
+      final r = await paged.filteredBooks(sort: 'metadata.releaseDate,desc', page: page, size: 20);
+      titles.addAll([for (final b in r['content'] as List) '${b['metadata']['releaseDate']}'.substring(0, 4)]);
+      if (r['last'] == true) break;
+    }
+    final years = [for (var y = 1950; y < 2100; y++) '$y', '1999', '2012', '2077']..sort((a, b) => b.compareTo(a));
+    expect(titles, years, reason: 'each book once, newest first');
+    expect(sizes, everyElement(20), reason: 'a normal page each time: $sizes');
+  });
+
   test("the reader's log names a local book's source as a local library - signed in, and in No server mode (it said "
       '"from Komga" - tablet, 2026-10-25); a Komga book from Komga', () async {
     final local = api.local!.store.books.keys.single;
