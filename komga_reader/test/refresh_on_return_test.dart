@@ -78,4 +78,16 @@ void main() {
     await tester.pump();
     expect(counts, {'series': 1});
   });
+
+  testWidgets('what the views show changed by itself (a local library\'s scan, punch list 5): the view on top loads '
+      'again at once; the one underneath, once it\'s back on top', (tester) async {
+    await start(tester);
+    await push(tester, 'series');
+    contentChanged.value++;
+    await tester.pump();
+    expect(counts, {'series': 1}, reason: 'on top: at once; Home underneath: not yet');
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect(counts, {'series': 1, 'home': 1}, reason: 'Home back on top');
+  });
 }

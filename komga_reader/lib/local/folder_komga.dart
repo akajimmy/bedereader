@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_log.dart';
 import '../epub/source.dart' show Zip;
+import '../widgets/refresh_on_return.dart' show contentChanged;
 import '../offline/offline_komga.dart';
 import '../offline/store.dart';
 import 'file_zip.dart';
@@ -194,11 +195,17 @@ class FolderKomga extends OfflineKomga {
           if (failed.contains((e['library'] as Map?)?['id'])) fresh.putIfAbsent(id, () => e);
         }
         unreadable = failed;
+        final same = _signature(store.books) == _signature(fresh);
         store.books
           ..clear()
           ..addAll(fresh);
         await store.save();
-        changed.value++;
+        // the screens look again only when something did change (every start's scan finds nothing new, mostly):
+        // Home and the side menu ([changed]); the library views open, the one on top at once (punch list 5)
+        if (!same) {
+          changed.value++;
+          contentChanged.value++;
+        }
       } finally {
         scanning.value = null;
       }
@@ -206,6 +213,13 @@ class FolderKomga extends OfflineKomga {
     _scan = run;
     return run;
   }
+
+  /// What a scan's result is, for telling whether it changed anything: each book's id, its file's date and size, its
+  /// library's name.
+  static int _signature(Map<String, Map<String, dynamic>> books) => Object.hashAllUnordered([
+        for (final MapEntry(key: id, value: e) in books.entries)
+          Object.hash(id, e['fileModified'], e['bytes'], (e['library'] as Map?)?['name']),
+      ]);
 
   /// The libraries changed (Settings): kept, and scanned again.
   Future<void> setLibraries(List<LocalLibrary> libraries) async {
@@ -219,6 +233,7 @@ class FolderKomga extends OfflineKomga {
       e['library'] = {'id': l.id, 'name': l.name};
     }
     changed.value++;
+    contentChanged.value++; // (a library added, renamed or removed: the views open look again too)
     await rescan();
   }
 

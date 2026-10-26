@@ -36,17 +36,29 @@ class ReturnObserver extends NavigatorObserver {
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) => _back(route, previousRoute);
 }
 
+/// What the library views show changed by itself, while they're open (experimental/sources: a local library's
+/// background scan found books added, changed or gone): the view on top loads again at once ([RefreshOnReturn]),
+/// the others as they come back on top - as they do anyway.
+final contentChanged = ValueNotifier<int>(0);
+
 /// A library view (Home, a library, a series, a read list...) that loads afresh whenever it's shown again: back on
-/// top after another screen, or the app brought back into view. Not live - nothing changes while you look at it.
+/// top after another screen, or the app brought back into view - and, on top, when what it shows changed by itself
+/// ([contentChanged]).
 mixin RefreshOnReturn<T extends StatefulWidget> on State<T> {
   /// Load again, keeping the scroll position.
   void refreshView();
 
   Route<dynamic>? _route;
   AppLifecycleListener? _life;
+  bool _listening = false;
 
   void _returned() {
     if (mounted) refreshView();
+  }
+
+  // only the view on top: the others load again when they're back on top
+  void _changed() {
+    if (_route?.isCurrent ?? true) _returned();
   }
 
   @override
@@ -62,12 +74,17 @@ mixin RefreshOnReturn<T extends StatefulWidget> on State<T> {
     _life ??= AppLifecycleListener(onShow: () {
       if (_route?.isCurrent ?? true) _returned();
     });
+    if (!_listening) {
+      _listening = true;
+      contentChanged.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     if (_route != null) ReturnObserver.instance._remove(_route!, _returned);
     _life?.dispose();
+    contentChanged.removeListener(_changed);
     super.dispose();
   }
 }

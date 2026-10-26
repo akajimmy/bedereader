@@ -12,6 +12,7 @@ import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/missing_prompt.dart';
 import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/screens/login.dart';
+import 'package:komga_reader/widgets/refresh_on_return.dart' show contentChanged;
 import 'package:komga_reader/widgets/server_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -244,6 +245,19 @@ void main() {
       down.readsFail = false;
       await api.rescan();
       expect(await names(api), all, reason: "read again; the broken one left out - it isn't a zip");
+    });
+
+    test('a scan that changed something tells the views open to load again; one that found nothing new, the views '
+        'are left alone (every start scans again: they reloaded each time)', () async {
+      final api = await open();
+      await api.rescan();
+      final before = contentChanged.value;
+      await api.rescan();
+      expect(contentChanged.value, before, reason: 'nothing new');
+      await File('${root.path}${Platform.pathSeparator}Saga (2012)${Platform.pathSeparator}Saga #3 (2013).cbz')
+          .writeAsBytes(zipOf({'1.png': png}));
+      await api.rescan();
+      expect(contentChanged.value, before + 1, reason: 'a book added');
     });
 
     Future<void> putBroken(int n) async {

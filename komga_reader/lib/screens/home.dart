@@ -62,7 +62,6 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     Pins.instance.addListener(_checkOfflinePins);
     OnDeckHidden.instance.addListener(_onHiddenChanged);
     HiddenLibraries.instance.addListener(_load); // a library shown or hidden on this device: every row changes
-    api.localChanges?.addListener(_load); // local libraries: a scan found changes, or a library came or went
     _sections.load().then((_) => _load());
   }
 
@@ -72,7 +71,6 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
     Pins.instance.removeListener(_checkOfflinePins);
     OnDeckHidden.instance.removeListener(_onHiddenChanged);
     HiddenLibraries.instance.removeListener(_load);
-    api.localChanges?.removeListener(_load);
     super.dispose();
   }
 
