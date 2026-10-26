@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../errors.dart';
+import '../settings.dart';
 import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
@@ -38,6 +39,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   Future<void> _load() async {
     try {
       final fresh = await api.oneSeries(_series['id'] as String);
+      if (fresh != null) AppSettings.instance.noteDirection(_series['id'] as String, fresh['metadata']?['readingDirection']);
       if (mounted) setState(() { if (fresh != null) _series = fresh; _error = null; });
     } catch (e) {
       if (mounted) setState(() => _error = e);

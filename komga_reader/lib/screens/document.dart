@@ -11,29 +11,43 @@ import '../widgets/markdown.dart';
 /// What's new (CHANGELOG.md), Read me (README.md - the part before "For developers") and Third-party software
 /// (THIRD_PARTY_NOTICES.md).
 class DocumentScreen extends StatefulWidget {
-  const DocumentScreen({super.key, required this.title, required this.asset, this.stopAt});
+  const DocumentScreen({super.key, required this.title, required this.asset, this.stopAt, this.leaveOut = const []});
   final String title;
   final String asset;
   final String? stopAt; // a heading line where the document is cut off (the developer part of the README)
+  final List<String> leaveOut; // heading lines whose sections are left out (the README's screenshots: no images here)
 
   static DocumentScreen whatsNew() =>
       const DocumentScreen(title: "What's new", asset: 'assets/docs/CHANGELOG.md');
   static DocumentScreen thirdParty() =>
       const DocumentScreen(title: 'Third-party software', asset: 'assets/docs/THIRD_PARTY_NOTICES.md');
-  static DocumentScreen readMe() =>
-      const DocumentScreen(title: 'Read me', asset: 'assets/docs/README.md', stopAt: '## For developers');
+  static DocumentScreen readMe() => const DocumentScreen(title: 'Read me', asset: 'assets/docs/README.md',
+      stopAt: '## For developers', leaveOut: ['## Screenshots']);
+
+  /// [text] cut off at the heading line [stopAt], with the sections under the heading lines [leaveOut] taken out
+  /// (each up to the next heading of the same level).
+  static String trimmed(String text, {String? stopAt, List<String> leaveOut = const []}) {
+    text = text.replaceAll('\r\n', '\n'); // (the README is kept with Windows line ends)
+    if (stopAt != null) {
+      final at = text.indexOf('\n$stopAt');
+      if (at >= 0) text = text.substring(0, at);
+    }
+    for (final heading in leaveOut) {
+      final at = text.indexOf('\n$heading\n');
+      if (at < 0) continue;
+      final level = heading.substring(0, heading.indexOf(' ') + 1); // "## "
+      final next = text.indexOf('\n$level', at + heading.length + 1);
+      text = text.substring(0, at) + (next < 0 ? '\n' : text.substring(next));
+    }
+    return text;
+  }
 
   Future<String> _load() async {
     // decoded here, not by loadString: past 50 KB that hands the decoding to a background isolate (the changelog
     // passed it on 2026-10-06, and What's new stayed on its spinner in the tests); a few dozen KB is nothing to decode
     final data = await rootBundle.load(asset);
-    var text = utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
-    final stop = stopAt;
-    if (stop != null) {
-      final at = text.indexOf('\n$stop');
-      if (at >= 0) text = text.substring(0, at);
-    }
-    return text;
+    return trimmed(utf8.decode(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes)),
+        stopAt: stopAt, leaveOut: leaveOut);
   }
 
   @override

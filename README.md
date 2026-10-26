@@ -1,6 +1,6 @@
 # BeDeReader
 
-**A library and reader for [Komga](https://komga.org)** - comics, BD, manga and eBooks from your own server.
+**A library and reader for [Komga](https://komga.org)** - comics, BD, manga, webtoons and eBooks from your own server.
 
 [![AI assisted](https://img.shields.io/badge/AI-assisted-5b8def)](#credits-and-licence)
 [![Licence: MIT](https://img.shields.io/badge/licence-MIT-2ea44f)](LICENSE)
@@ -63,6 +63,19 @@ This app shows them and keeps everything in sync.
 - Pictures at their own resolution; tap a large one to see it full screen.
 - Downloaded EPUBs read offline too, opening at the place you stopped.
 
+**Webtoons**
+- A series Komga marks as Webtoon (or any series set to the Direction *Vertical scroll*) reads as one continuous
+  strip scrolled down: at its own size, as wide as the screen, or one page as tall as the screen. A gutter between
+  pictures can mark the page breaks.
+- Scroll with a finger, the wheel or held keys; a tap or a press glides a short way (Smooth) or most of a screen
+  (Page), with tap zones at the sides or at the top and bottom.
+- **Auto-scroll** at a speed you set: any touch stops it, and the controls come up with a big play button where you
+  touched, to carry on. Keys can be given to start, stop and speed it up or down.
+- Pinch, double-tap or Ctrl+wheel to zoom; the comics' image settings (Enhance, Enhance colours, Crop edges) apply
+  to the strip.
+- Opens again exactly where you stopped on this device. Episodes show the series' cover with an "Ep. N" badge.
+- Webtoons have their own Settings page and their own reading defaults, apart from comics.
+
 **Offline**
 - Download single books, or a series or read list's unread (or all) books, with a storage limit; optionally deleted
   once read, and optionally only on Wi-Fi (Android). A download cut off part way carries on where it stopped.
@@ -105,6 +118,10 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
 [![Contents](docs/images/thumbs/tablet-ebook-contents.jpg "Contents")](docs/images/tablet-ebook-contents.jpg)
 [![Two pages on the PC](docs/images/thumbs/pc-ebook.jpg "Two pages on the PC")](docs/images/pc-ebook.jpg)
 
+**Settings** - every setting in one place, with a page per kind of book
+
+[![Settings](docs/images/thumbs/tablet-settings-webtoons.jpg "Settings > Webtoons")](docs/images/tablet-settings-webtoons.jpg)
+
 ## Getting started
 
 1. In Komga's web interface, create an API key: your account (top right) > API keys > Create.
@@ -119,15 +136,16 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
 ## Where your settings live
 
 - **On Komga, for every device**: reading progress, per-series reader settings (fit, reading direction, page
-  colours, gutter) and image settings and their defaults, the EPUB settings
+  colours, gutter) and image settings and their defaults - comics and webtoons each their own - the EPUB settings
   (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their order, pins
   (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its own), and what's
   hidden from On deck.
 - **On this device**: the server address and API key, reading brightness and night mode, how the reader behaves (page
-  turn animation, taps, keys, what's shown over the page, keeping the screen on), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the offline
+  turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and auto-scroll
+  speed), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the offline
   mode switch. Settings > About can reset all of these at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, eBooks and Remote and keys for reading;
+Settings (side menu) has everything in one place: Reading, Comics, Webtoons, eBooks and Remote and keys for reading;
 Server and sync, Library & Home, Downloads and Look for the app; About. Groups marked "synced" are the same on every
 device.
 
@@ -181,7 +199,7 @@ The rest of this file is about building the app.
 
 - `komga_reader\` - the Flutter app: Dart in `lib\`, shaders in `shaders\`, tests in `test\`, native code in
   `android\` and `windows\`. The reader is one screen (`lib\screens\reader.dart`: controls, keys, progress, moving
-  between books) with a renderer per kind of book (`lib\reader\`: comic pages, EPUB).
+  between books) with a renderer per kind of book (`lib\reader\`: comic pages - and a webtoon's strip - and EPUB).
 - `CHANGELOG.md` - what each build contains. `README.md` - this file. `THIRD_PARTY_NOTICES.md` - everything the
   project relies on, and the notices it must carry. All three are bundled into the app by the build.
 - `LICENSE` - MIT.
@@ -214,7 +232,7 @@ For an interactive shell, set the same two things (JAVA_HOME to the JDK, Flutter
 komga_reader\. The everyday commands there:
 
 1. **flutter analyze** - static checks (lint findings fail the build)
-2. **flutter test** - the test suite
+2. **flutter test** - the test suite (**flutter test -x slow** for a quicker run while working)
 3. **flutter run -d windows** - run on the PC with hot reload
 
 Checks over real EPUBs live in `tool\epub_checks\`, outside the test suite, and do nothing unless pointed at books
@@ -306,11 +324,16 @@ spelling is displayed, typed, searched and used in file names.
 - GitHub runs `flutter analyze` and the tests on every push and pull request (`.github\workflows\checks.yml`).
   Analyze fails on lint findings too, including a Future left un-awaited (`unawaited_futures`): await it, or wrap it
   in `unawaited(...)` when it's meant to run on its own.
+- While working on a change, flutter test -x slow runs everything but the tests tagged slow (dart_test.yaml); the
+  build runs them all. Time the app's logic depends on (throttles, gaps, retries) is read through package:clock, so
+  a widget test moves it on with its own clock instead of waiting.
 - New behaviour gets a test in `test\`, and a fix gets a test that fails without it. Shared test code is in
   `test\support\`:
   - fakes of Komga extend `TestKomga` and are built through `noNetwork(...)`, so any call a fake doesn't answer fails
     the test instead of reaching the network;
   - ready-made fakes for the reader, libraries and downloads, Home, and the synced client settings;
+  - epub_reader.dart opens an eBook held in memory in the reader, lets it settle and reads where it is - shared by
+    the eBook reader's test files;
   - `app_shell.dart` runs the whole app (`KomgaReaderApp`) against a recorded fake server;
   - `helpers.dart` holds `setView`, a `waitUntil` that fails loudly, test images, and the shader preload.
 

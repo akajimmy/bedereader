@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/client_settings.dart';
 import 'support/epub_books.dart';
 import 'support/no_network.dart';
+import 'support/epub_reader.dart';
 
 const _long = 'The extraordinary fishermen remembered uncomfortable temperatures and particularly unpredictable '
     'weather conditions throughout their understandable conversations. ';
@@ -62,19 +63,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: server = noNetwork(() => _LastKomga()),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: _book(),
         saveProgress: false)));
-    for (var i = 0; i < 200; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-      if (find.byType(PageView).evaluate().isNotEmpty && i > 10) break;
-    }
-    expect(find.byType(PageView), findsOneWidget);
-  }
-
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 10; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 100));
-    }
+    await bookShown(tester);
   }
 
   /// The page on screen.
@@ -150,7 +139,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     final saved = jsonDecode(server.written['komgareader.highlights.b1']!) as List;
     expect(saved.single['t'], 'eel');
     expect(saved.single['e'] - saved.single['s'], 3, reason: 'three characters of the chapter');
@@ -159,7 +148,7 @@ void main() {
     // in Contents - from another page, so going to the highlight is seen (from its own page the check couldn't fail -
     // audit, 2026-10-11)
     await tester.tapAt(const Offset(760, 600)); // a page on
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isFalse);
     await tester.tapAt(const Offset(400, 600)); // the controls
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
@@ -169,7 +158,7 @@ void main() {
     expect(find.text('eel'), findsOneWidget);
     await tester.tap(find.text('eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isTrue, reason: 'its page');
 
     // a tap on it: Remove
@@ -178,7 +167,7 @@ void main() {
     expect(onFirstPage(tester), isTrue, reason: 'not a page turn');
     await tester.tap(find.text('Remove highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     expect(jsonDecode(server.written['komgareader.highlights.b1']!), isEmpty);
     await tester.tapAt(at(tester, 'eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
@@ -229,15 +218,15 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(selected(tester), 'cow');
     await tester.tapAt(const Offset(750, 600)); // the right side: a turn, normally
-    await settle(tester);
+    await settleEpub(tester);
     expect(selected(tester), isNull, reason: 'the selection let go of');
     expect(find.text('Copy'), findsNothing);
     expect(onFirstPage(tester), isTrue, reason: 'no turn');
     await tester.tapAt(const Offset(750, 600));
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isFalse, reason: 'the next tap turns');
     await tester.tapAt(const Offset(400, 600));
-    await settle(tester);
+    await settleEpub(tester);
     expect(find.text('Close'), findsOneWidget, reason: 'the middle: the controls');
   });
 
@@ -247,20 +236,20 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(selected(tester), 'Ant');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isFalse, reason: 'the key turned the page');
     expect(find.text('Copy'), findsNothing);
     expect(tester.renderObjectList<RenderSelectablePage>(find.byType(SelectablePage))
         .where((r) => r.getSelectedContent() != null), isEmpty, reason: 'nothing selected on any page');
     await tester.tapAt(const Offset(50, 600)); // not taken as "let go of the selection": it turns back
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isTrue);
     // a swipe
     await tester.longPressAt(at(tester, 'Ant'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(selected(tester), 'Ant');
     await tester.fling(find.byType(PageView), const Offset(-500, 0), 2000);
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isFalse, reason: 'the swipe turned the page');
     expect(find.text('Copy'), findsNothing);
   });
@@ -273,7 +262,7 @@ void main() {
     final g = await tester.startGesture(const Offset(750, 600));
     await tester.pump(const Duration(milliseconds: 150)); // held past the selection's 100 ms
     await g.up();
-    await settle(tester);
+    await settleEpub(tester);
     expect(find.text('Copy'), findsNothing);
     expect(tester.renderObjectList<RenderSelectablePage>(find.byType(SelectablePage))
         .where((r) => r.getSelectedContent() != null), isEmpty);
@@ -304,7 +293,7 @@ void main() {
       final word = selected(tester);
       expect(word, isNotNull);
       await press(tester, find.text('Highlight'), kind: PointerDeviceKind.mouse);
-      await settle(tester);
+      await settleEpub(tester);
       expect(server.written['komgareader.highlights.b1'], isNotNull, reason: 'the click highlighted it');
       expect((jsonDecode(server.written['komgareader.highlights.b1']!) as List).single['t'], word);
     } finally {
@@ -349,7 +338,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, hasLength(1));
     await tester.longPressAt(at(tester, 'eel'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
@@ -357,7 +346,7 @@ void main() {
     expect(find.text('Highlight'), findsNothing, reason: 'all of it highlighted already');
     await tester.tap(find.text('Remove highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     expect(jsonDecode(server.written['komgareader.highlights.b1']!) as List, isEmpty);
   });
 
@@ -367,7 +356,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     await tester.tap(find.text('Highlight'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    await settle(tester);
+    await settleEpub(tester);
     final accent = Theme.of(tester.element(find.byType(PageView))).colorScheme.primary;
     final painters = tester
         .widgetList<CustomPaint>(find.byWidgetPredicate(
@@ -460,7 +449,7 @@ void main() {
     expect(find.byKey(const ValueKey('epub-selection-pane')), findsOneWidget);
     expect(find.byTooltip('Contents'), findsNothing, reason: 'no controls');
     await tester.tapAt(const Offset(400, 40), kind: PointerDeviceKind.mouse); // a click lets go of the selection
-    await settle(tester);
+    await settleEpub(tester);
     expect(selected(tester), isNull);
     await tester.tapAt(spot, kind: PointerDeviceKind.mouse); // one click
     await tester.pump(const Duration(milliseconds: 100));
@@ -482,7 +471,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 16));
       }
       await g.up();
-      await settle(tester);
+      await settleEpub(tester);
       expect(selected(tester), isNull, reason: 'nothing selected');
       expect(onFirstPage(tester), isFalse, reason: 'turned');
     } finally {
@@ -508,22 +497,22 @@ void main() {
     expect(selected(tester), matches(RegExp(r'^[A-Za-z­]+[.,]?$')), reason: 'one word selected');
     expect(onFirstPage(tester), isTrue, reason: 'no turn');
     await tester.tapAt(const Offset(400, 40), kind: PointerDeviceKind.mouse); // lets go of it
-    await settle(tester);
+    await settleEpub(tester);
     expect(selected(tester), isNull);
 
     // one click on the text in the right third: the turn waits for a second click that doesn't come
     final right = Offset(700, at(tester, 'weather').dy);
     await tester.tapAt(right, kind: PointerDeviceKind.mouse);
-    await settle(tester); // (a second of the 2 s wait - the next page laid out meanwhile)
+    await settleEpub(tester); // (a second of the 2 s wait - the next page laid out meanwhile)
     expect(page(), 0, reason: 'not yet: a second click could come');
     await tester.pump(EpubRenderer.doubleTapWait);
-    await settle(tester);
+    await settleEpub(tester);
     expect(onFirstPage(tester), isFalse, reason: 'then it turns');
 
     // a click in the right margin: at once
     final before = page();
     await tester.tapAt(Offset(799, at(tester, 'weather').dy), kind: PointerDeviceKind.mouse);
-    await settle(tester); // (the same second: well inside the wait)
+    await settleEpub(tester); // (the same second: well inside the wait)
     expect(page(), greaterThan(before), reason: 'the margin: no wait');
   });
 
@@ -576,7 +565,7 @@ void main() {
       expect(copied, 'Ant bee cow.\nDog eel');
       expect(onFirstPage(tester), isTrue);
       await tester.tapAt(const Offset(750, 600), kind: PointerDeviceKind.mouse);
-      await settle(tester);
+      await settleEpub(tester);
       expect(selected(tester), isNull);
       expect(onFirstPage(tester), isTrue, reason: "the click let go of the selection, it didn't turn");
     } finally {

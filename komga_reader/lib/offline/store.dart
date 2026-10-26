@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 /// The downloaded books on this device (1.1 offline mode). One folder per store:
 ///
 ///   index.json                      every downloaded book (see [put])
@@ -107,6 +109,11 @@ class OfflineStore {
   }
 
   Future<void> _writes = Future.value();
+
+  /// Tests: done once every save asked for so far is on disk (never fails) - before deleting the folder, a save still
+  /// on its way lost its temporary file and failed the test (build 144's run, 2026-10-22).
+  @visibleForTesting
+  Future<void> get written => _writes;
 
   /// Adds or replaces a book entry (the download engine calls this; tests build stores with it).
   Future<void> put(String bookId, Map<String, dynamic> entry) async {

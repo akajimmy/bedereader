@@ -58,6 +58,7 @@ void main() {
     d.reset();
     sync.reset();
     conn.reset();
+    await d.store?.written; // an index save still on its way (a book deleted once read) loses its folder otherwise
     await deleteTemp(dir);
   });
 

@@ -2,12 +2,16 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../page_curl.dart';
@@ -23,15 +27,37 @@ import 'renderer.dart';
 import 'curl_turns.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
+import 'webtoon_view.dart';
 
 /// Komga lists the book with no pages (a damaged file, or not analysed yet).
 class NoPages implements Exception {}
 
 /// A comic's pages loaded for showing (from [ComicRenderer.prepare]).
 class ComicPages {
-  const ComicPages(this.pages, this.direction);
+  const ComicPages(this.pages, this.direction, {this.stripPlace});
   final List<dynamic> pages;
   final String? direction; // the series' reading direction in Komga
+
+  /// A webtoon: where in the strip it was left on this device ([StripPlaces]) - null: nowhere kept.
+  final (int, double)? stripPlace;
+}
+
+/// Where in a webtoon's strip each book was left, on this device: the slice across the middle of the screen and how
+/// far into it the top of the screen was (a share of its height) - Komga keeps only the page, which opened up to a
+/// screen and a half off (user, 2026-10-22: "1 ... for sure"). Used when Komga's page is still that slice (another
+/// device that moved on wins).
+class StripPlaces {
+  static String _key(String bookId) => 'strip.place.$bookId';
+
+  static Future<(int, double)?> load(String bookId) async {
+    final v = (await SharedPreferences.getInstance()).getString(_key(bookId))?.split(':');
+    final page = v == null || v.length != 2 ? null : int.tryParse(v[0]);
+    final share = v == null || v.length != 2 ? null : double.tryParse(v[1]);
+    return page == null || share == null ? null : (page, share);
+  }
+
+  static Future<void> save(String bookId, int page, double share) async =>
+      (await SharedPreferences.getInstance()).setString(_key(bookId), '$page:${share.toStringAsFixed(4)}');
 }
 
 /// The comic renderer (the one Reader, user 2026-10-07): a book's page images - the page view and its turns (wipe,
@@ -43,13 +69,26 @@ class ComicPages {
 class ComicRenderer extends Renderer {
   ComicRenderer(super.host) {
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
+    latest = this;
   }
+
+  /// The comic renderer made last (tests look inside it).
+  @visibleForTesting
+  static ComicRenderer? latest;
+
+  /// Joined pairs held ([_joinedAt]).
+  @visibleForTesting
+  int get joinedKept => _joined.length;
 
   AppSettings get _settings => AppSettings.instance;
   bool _disposed = false;
 
   @override
-  BookKind get kind => BookKind.comics;
+  BookKind get kind => _komgaWebtoon ? BookKind.webtoons : BookKind.comics;
+
+  /// Komga says the series is a webtoon: its settings are webtoons', not comics' (user, 2026-10-22: "a clean split").
+  /// (A comic series set to Vertical scroll reads as a strip but keeps its comic settings.)
+  bool get _komgaWebtoon => _komgaDirection == 'WEBTOON';
 
   void _changed() {
     if (!_disposed) notifyListeners();
@@ -76,7 +115,8 @@ class ComicRenderer extends Renderer {
   /// Two pages side by side now (the setting, on this screen's shape).
   bool get dual => _dual;
 
-  bool _twoPagesOn(Size area) => twoPagesAllowed && prefs.twoPages.on(area); // (the series' own, or the default)
+  bool _twoPagesOn(Size area) =>
+      twoPagesAllowed && !webtoon && prefs.twoPages.on(area); // (the series' own, or the default; never a webtoon)
   bool _dual = false;
   List<Spread> _spreads = const [];
   List<int> _spreadOf = const [];
@@ -115,7 +155,7 @@ class ComicRenderer extends Renderer {
     _scrolls.clear();
     _sideways.clear();
     _pageRects.clear();
-    _joined.clear();
+    _freeAllJoined();
     _spineAt.clear();
     _startAtEnd = null;
     zoomed = false;
@@ -164,9 +204,21 @@ class ComicRenderer extends Renderer {
   @override
   bool get rtl => switch (prefs.direction) {
         ReadingDirection.rtl => true,
-        ReadingDirection.ltr => false,
+        ReadingDirection.ltr || ReadingDirection.vertical => false,
         ReadingDirection.auto => _komgaDirection == 'RIGHT_TO_LEFT',
       };
+
+  /// A webtoon: the pages one continuous strip, scrolled down ([WebtoonView]) - the series set to Vertical scroll, or
+  /// on Auto where Komga says Webtoon (user, 2026-10-22).
+  bool get webtoon => switch (prefs.direction) {
+        ReadingDirection.vertical => true,
+        ReadingDirection.auto => _komgaDirection == 'WEBTOON',
+        _ => false,
+      };
+
+  WebtoonController? _strip; // the strip's place and scrolling, while a webtoon is shown
+  (int, double)? _stripPlace; // where in the strip the book was left here (opening it)
+  bool _wasWebtoon = false; // (paged again: the page view on the place read in the strip)
 
   // ---- opening a book
 
@@ -185,7 +237,9 @@ class ComicRenderer extends Renderer {
         direction = null; // unknown: left to right
       }
     }
-    return ComicPages(pages, direction);
+    // a webtoon: where in the strip it was left here
+    final place = direction == 'WEBTOON' ? await StripPlaces.load(book['id'] as String) : null;
+    return ComicPages(pages, direction, stripPlace: place);
   }
 
   /// The page [book] opens at: where its progress is (a finished one: the start).
@@ -211,6 +265,11 @@ class ComicRenderer extends Renderer {
     loader.around(start);
     _komgaDirection = prepared.direction;
     _directionSeries = book['seriesId'] as String?;
+    // a webtoon's series follows webtoons' defaults (AppSettings.defaultsFor)
+    final sid = book['seriesId'] as String?;
+    if (sid != null) {
+      _settings.noteDirection(sid, prepared.direction);
+    }
     // the last book's page shapes (the curl drew the new book's first turn in them - #17) and a page left to open at
     // its end (a later page with that number opened scrolled to its end - #22) go with it
     _pageRects.clear();
@@ -218,6 +277,10 @@ class ComicRenderer extends Renderer {
     _book = book;
     this.pages = pages;
     index = start;
+    _strip = null; // (a webtoon opens at its place)
+    _playAt = null;
+    _stripPlace = prepared.stripPlace;
+    if (!identical(_loader, loader)) _loader?.freeAll(); // (the last book's pictures)
     _loader = loader;
     zoomed = false;
     _bookFit = null;
@@ -226,7 +289,7 @@ class ComicRenderer extends Renderer {
     final area = _area.isEmpty && host.mounted ? MediaQuery.sizeOf(host.context) : _area;
     _dual = !area.isEmpty && _twoPagesOn(area);
     _pair();
-    _joined.clear();
+    _freeAllJoined();
     _spineAt.clear();
     _at = _viewOf(start);
     pc = PageController(initialPage: _at, keepPage: false); // (a kept page would be the last book's)
@@ -246,7 +309,15 @@ class ComicRenderer extends Renderer {
 
   // ---- the strip as the Reader's row over the bottom bar; the slider's Up / Down
   @override
-  Widget? above(BuildContext context) => stripShown ? strip(context) : null;
+  Widget? above(BuildContext context) {
+    // a webtoon: auto-scroll's speed, over the bar its button is on
+    if (webtoon && _strip != null) {
+      return stripShown
+          ? Column(mainAxisSize: MainAxisSize.min, children: [_autoSpeedRow(context), strip(context)])
+          : _autoSpeedRow(context);
+    }
+    return stripShown ? strip(context) : null;
+  }
   @override
   FocusNode? get rowNode => stripShown ? stripNode : null;
   @override
@@ -308,12 +379,19 @@ class ComicRenderer extends Renderer {
 
   @override
   Future<Object?> Function() progressSaver(int place) {
-    // the end card counts as the last page: finished
-    final page = math.min(place, last), id = _book['id'] as String, completed = page >= last;
+    final id = _book['id'] as String;
+    final (page, completed) = progressSaving(place);
     return () async {
-      await api.setProgress(id, page + 1, completed: completed);
-      return (page + 1, completed);
+      await api.setProgress(id, page, completed: completed);
+      return (page, completed);
     };
+  }
+
+  /// Komga's page (1-based) and finished for [place] - the end card counts as the last page: finished.
+  @override
+  (int, bool) progressSaving(int place) {
+    final page = math.min(place, last);
+    return (page + 1, page >= last);
   }
 
   @override
@@ -327,7 +405,11 @@ class ComicRenderer extends Renderer {
     final (page, finished) = moved as (int?, bool);
     final at = math.min(here, last) + 1;
     return (
-      title: finished ? 'Finished on another device' : 'Read further on another device',
+      title: finished
+          ? 'Finished on another device'
+          : page != null && page < at
+              ? 'Read on another device' // (behind this one: not "further" - user, 2026-10-24)
+              : 'Read further on another device',
       text: finished
           ? 'This book was read to the end on another device.'
           : page == null
@@ -351,7 +433,12 @@ class ComicRenderer extends Renderer {
   @override
   void dispose() {
     _disposed = true;
+    _freeAllJoined();
+    _loader?.freeAll();
+    _settleTimer?.cancel();
     _tapTimer?.cancel();
+    _autoAwake?.cancel();
+    autoNode.dispose();
     _curl.dispose();
     _idle?.complete(); // nothing left waiting
     pc?.dispose();
@@ -360,7 +447,7 @@ class ComicRenderer extends Renderer {
     }
     _scrolls.clear();
     _stripScroll.dispose();
-    for (final n in [fitNode, pagesNode, imageNode, readerNode, stripNode]) {
+    for (final n in [fitNode, pagesNode, readerNode, stripNode]) {
       n.dispose();
     }
     super.dispose();
@@ -407,7 +494,7 @@ class ComicRenderer extends Renderer {
     index = i;
     zoomed = false;
     // (two pages: the window of pages kept and preloaded twice as wide - a turn moves two)
-    if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1);
+    if (i <= last) _loader?.around(_dual ? _pagesAt(v).first : i, span: _dual ? 2 : 1, free: true);
     // a curl moves the page view underneath as it starts: that counts once the curl completes (_endCurl) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
     host.pageChanged(i, curling: _curl.active);
@@ -416,6 +503,10 @@ class ComicRenderer extends Renderer {
   /// To [place] at once (the slider, the strip, another device's page) - not a turn (the Reader knows it's coming).
   @override
   void jumpTo(int place) {
+    if (webtoon) {
+      _strip?.jumpTo(place);
+      return;
+    }
     finishCurlNow();
     pc?.jumpToPage(_viewOf(place));
   }
@@ -427,7 +518,16 @@ class ComicRenderer extends Renderer {
 
   /// Forward: in fit width/height scroll on through the page first, then turn; from the end card, the next book.
   @override
-  void forward({bool snap = false}) {
+  void forward({bool snap = false, bool held = false}) {
+    if (webtoon) {
+      if (pc == null || host.busy) return;
+      if (_strip?.atEnd ?? false) {
+        host.nextBook(); // (the end card showing)
+        return;
+      }
+      _webtoonStep(1, held: held);
+      return;
+    }
     if (_blocked) return;
     if (_at >= _views) {
       host.nextBook();
@@ -448,7 +548,12 @@ class ComicRenderer extends Renderer {
 
   /// Back: scroll back through the page first; the previous page then opens at its end.
   @override
-  void back({bool snap = false}) {
+  void back({bool snap = false, bool held = false}) {
+    if (webtoon) {
+      if (pc == null || host.busy) return;
+      _webtoonStep(-1, held: held);
+      return;
+    }
     if (_blocked) return;
     if (zoomed && (_steppers[_at]?.call(false) ?? false)) return; // zoomed in: pan back along the page first
     final c = _scrolls[_at];
@@ -484,7 +589,146 @@ class ComicRenderer extends Renderer {
   /// A Zoom in / Zoom out step (the keys) - fit screen, the only fit that zooms.
   @override
   void zoomStep(bool zoomIn) {
+    if (webtoon) {
+      _strip?.zoomBy(zoomIn ? 1.25 : 1 / 1.25);
+      return;
+    }
     if (prefs.fit == FitMode.screen) _zoomSteps[_at]?.call(zoomIn);
+  }
+
+  // ---- a webtoon's scrolling (user, 2026-10-22): one press - a tap at the side, a key - glides a short way (Smooth)
+  // or most of a screen (Page: a strip of it kept on screen); a held key's repeats glide on steadily, a little each,
+  // so a held key scrolls continuously
+  static const smoothStep = 0.25, pageStep = 0.85, heldStep = 0.06; // shares of the screen's height
+
+  void _webtoonStep(int direction, {required bool held}) {
+    final s = _strip;
+    if (s == null) return;
+    if (_settings.display.webtoonScroll == WebtoonScroll.page) {
+      // Page: every press a screen (a strip of it kept) - held, a screen each time the last one has landed
+      if (held && s.gliding) return;
+      s.glide(direction * pageStep * s.viewport, duration: const Duration(milliseconds: 260));
+      return;
+    }
+    s.glide(direction * (held ? heldStep : smoothStep) * s.viewport,
+        duration: held ? const Duration(milliseconds: 120) : const Duration(milliseconds: 260));
+  }
+
+  /// The strip moved to slice [i] ([pages.length]: the end card).
+  // ---- a webtoon's auto-scroll (user, 2026-10-22): the play button (the bottom bar), its speed slider over it, its
+  // keys; any touch on the strip stops it, as does the end
+  final autoNode = FocusNode(debugLabel: 'ctl-auto');
+  Timer? _autoAwake; // the screen kept on while it scrolls by itself (no page turns to count)
+
+  bool get autoScrolling => _strip?.autoOn ?? false;
+
+  @override
+  void autoScrollToggle() {
+    final s = _strip;
+    if (!webtoon || s == null) return;
+    if (s.autoOn) {
+      s.stopAuto();
+      _autoStopped();
+      return;
+    }
+    _autoResume();
+  }
+
+  /// The tap that stops auto-scroll brings the controls and a play button where it was (user, 2026-10-22: "tap
+  /// pauses + control AND adds a floating "play" button where the tap happened"; "there isn't really a pause state" -
+  /// stopped is stopped, and the next tap is a tap).
+  Offset? _playAt; // the floating play button, where the tap that stopped it was
+  static const _playSize = 72.0;
+
+  void _autoResume() {
+    final s = _strip;
+    if (s == null) return;
+    _playAt = null;
+    s
+      ..autoSpeed = _settings.display.autoScrollSpeed
+      ..startAuto();
+    host.awake();
+    _autoAwake?.cancel();
+    _autoAwake = Timer.periodic(const Duration(seconds: 20), (_) => host.awake());
+    host.hideControls(); // (to read)
+    _changed();
+  }
+
+  void _autoStopped() {
+    _autoAwake?.cancel();
+    _autoAwake = null;
+    _changed();
+  }
+
+  /// A tap on the strip: the one that stopped auto-scroll - the controls, and play where it was; any other, the tap
+  /// zones (the floating play goes).
+  void _stripTap(TapUpDetails d, Size box) {
+    if (!host.controlsUp) _playAt = null; // (put away with the controls)
+    final strip = _strip;
+    if (!(strip?.touchStoppedAuto ?? false) && _playAt == null && strip != null && !host.controlsUp) {
+      // a double tap zooms the strip in on the spot, and out again (user, 2026-10-22: as comics' - their tap logic)
+      _tapOrDoubleTap(d,
+          zoom: _settings.display.webtoonDoubleTap ? (_) => strip.toggleZoomAt(d.localPosition) : null,
+          tap: (at) => _stripTapAt(at, box));
+      return;
+    }
+    _stripTapAt(d.localPosition, box);
+  }
+
+  void _stripTapAt(Offset at, Size box) {
+    if (_strip?.touchStoppedAuto ?? false) {
+      _playAt = at;
+      if (!host.controlsUp) host.tap(0.5); // (the middle: the controls)
+      _changed();
+      return;
+    }
+    if (_playAt != null) {
+      // the tap after it: the controls (and the play button) away - still stopped (user, 2026-10-22: "if I tap
+      // somewhere other than the play button, the controls will close, but it will remain stopped")
+      _playAt = null;
+      host.hideControls();
+      _changed();
+      return;
+    }
+    host.tap(_settings.display.webtoonTaps == WebtoonTaps.topBottom
+        ? _zoneOf(at.dy / box.height)
+        : at.dx / box.width);
+  }
+
+  @override
+  void autoScrollSpeed({required bool faster}) {
+    if (!webtoon) return;
+    _setAutoSpeed(_settings.display.autoScrollSpeed * (faster ? 1.25 : 1 / 1.25));
+  }
+
+  void _setAutoSpeed(double v) {
+    final speed = v.clamp(DisplayPrefs.autoScrollSlowest, DisplayPrefs.autoScrollFastest).toDouble();
+    _strip?.autoSpeed = speed;
+    _settings.setDisplay(_settings.display.copyWith(autoScrollSpeed: speed));
+  }
+
+  /// The speed over the bottom bar, a webtoon's (its play button is on the bar).
+  Widget _autoSpeedRow(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(children: [
+          const Icon(Icons.speed, color: Colors.white70, size: 20),
+          Expanded(
+            child: Slider(
+              key: const ValueKey('auto-scroll-speed'),
+              min: DisplayPrefs.autoScrollSlowest,
+              max: DisplayPrefs.autoScrollFastest,
+              value: _settings.display.autoScrollSpeed,
+              label: 'Auto-scroll speed',
+              onChanged: _setAutoSpeed,
+            ),
+          ),
+        ]),
+      );
+
+  void _onStripPlace(int i) {
+    index = i;
+    if (i <= last) _loader?.around(i, span: 2); // (a screen can show two or three slices)
+    host.pageChanged(i, curling: false);
   }
 
   // ---- the mouse wheel over the page (desktop): in fit width/height it scrolls through the page first; otherwise
@@ -494,6 +738,24 @@ class ComicRenderer extends Renderer {
 
   void wheel(double dy) {
     if (host.controlsUp || pc == null) return;
+    if (webtoon) {
+      if (_settings.display.webtoonScroll == WebtoonScroll.page) {
+        // Page: the wheel's notches add up to a screen at a time, as a comic's turn a page (user, 2026-10-22: it
+        // "feels very similar to smooth scroll" - the wheel glided by its spin in both)
+        _wheelAcc += dy;
+        if (_wheelAcc.abs() < 40) return;
+        final down = _wheelAcc > 0;
+        _wheelAcc = 0;
+        final now = clock.now();
+        if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
+        _lastWheelTurn = now;
+        _webtoonStep(down ? 1 : -1, held: false);
+        return;
+      }
+      // Smooth: as far as the wheel spins, gliding (user, 2026-10-22: "smooth scroll, based on wheel spin distance")
+      _strip?.glide(dy, duration: const Duration(milliseconds: 140));
+      return;
+    }
     final c = _scrolls[_at];
     if (prefs.fit != FitMode.screen && c != null && c.hasClients) {
       final p = c.position;
@@ -508,36 +770,44 @@ class ComicRenderer extends Renderer {
     if (_wheelAcc.abs() < 40) return;
     final fwd = _wheelAcc > 0;
     _wheelAcc = 0;
-    final now = DateTime.now();
+    final now = clock.now();
     if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
     _lastWheelTurn = now;
     fwd ? forward() : back();
   }
 
-  // ---- taps: with Double-tap to zoom on (fit screen, a page showing), a tap waits [_doubleTapWait] to see whether a
+  // ---- taps: with Double-tap to zoom on (fit screen, a page showing), a tap waits [doubleTapWait] to see whether a
   // second one follows near it: a double tap zooms in on that spot (again: back out), and no single tap happens. A
   // single tap goes to the Reader's tap zones.
-  static const _doubleTapWait = Duration(milliseconds: 250);
+  /// (zero: no wait - tests that aren't about the double tap; a tap goes at once)
+  @visibleForTesting
+  static Duration doubleTapWait = const Duration(milliseconds: 250);
   static const _doubleTapSlop = 60.0; // how far apart the two taps may be
   Timer? _tapTimer;
   Offset? _firstTap; // waiting for a possible second tap
 
-  void _onTapUp(TapUpDetails d, double width) {
-    final zoomer = _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null;
+  void _onTapUp(TapUpDetails d, double width) => _tapOrDoubleTap(d,
+      zoom: _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null,
+      tap: (at) => host.tap(at.dx / width));
+
+  /// A tap, or two close together: with a [zoom] (Double-tap to zoom), a tap waits [doubleTapWait] for a second
+  /// near it - the pair zooms ([zoom] with the second's place on the screen), a tap alone goes to [tap] (its place in
+  /// the view) a moment later; without, at once. Comics' pages and webtoons' strip alike.
+  void _tapOrDoubleTap(TapUpDetails d, {void Function(Offset global)? zoom, required void Function(Offset at) tap}) {
     final waiting = _firstTap;
     final pending = waiting != null && (_tapTimer?.isActive ?? false);
     _tapTimer?.cancel();
     _firstTap = null;
-    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) host.tap(waiting.dx / width); // not a pair
-    if (zoomer == null) {
-      host.tap(d.localPosition.dx / width);
+    if (pending && (d.localPosition - waiting).distance > _doubleTapSlop) tap(waiting); // not a pair
+    if (zoom == null || doubleTapWait == Duration.zero) {
+      tap(d.localPosition);
     } else if (pending && (d.localPosition - waiting).distance <= _doubleTapSlop) {
-      zoomer(d.globalPosition);
+      zoom(d.globalPosition);
     } else {
       _firstTap = d.localPosition;
-      _tapTimer = Timer(_doubleTapWait, () {
+      _tapTimer = Timer(doubleTapWait, () {
         _firstTap = null;
-        if (host.mounted && !host.controlsUp) host.tap(d.localPosition.dx / width);
+        if (host.mounted && !host.controlsUp) tap(d.localPosition);
       });
     }
   }
@@ -684,8 +954,8 @@ class ComicRenderer extends Renderer {
   /// together at height [h] (picture pixels): how the fit will scale the picture on this screen.
   double _gapPixels(double h, double w0) {
     final gap = prefs.gutter;
-    if (gap <= 0 || _area.isEmpty || h <= 0 || w0 <= 0) return 0;
-    final a = _area;
+    if (gap <= 0 || _settled.isEmpty || h <= 0 || w0 <= 0) return 0;
+    final a = _settled; // (the layout's area: the pair joined once a rotation has settled)
     double byHeight() => gap * h / a.height; // the picture as tall as the screen
     double byWidth() => gap * w0 / math.max(1.0, a.width - gap); // as wide (the gap included)
     return switch (prefs.fit) {
@@ -714,6 +984,7 @@ class ComicRenderer extends Renderer {
 
   void _configureTurn(TurnDragRecognizer r) => r
     ..canTurn = (() => _canDragTurn)
+    ..hold = null // nothing on a comic page takes a hold: a finger held first still turns
     ..onTap = ((d) => _onTapUp(d, _area.width)) // a wobbly click the turn took (a mouse)
     ..maxAngle = (() => _scrollsDown ? 30.0 : 60.0)
     ..onStart = (d) {
@@ -734,12 +1005,175 @@ class ComicRenderer extends Renderer {
 
   /// The page view, with its gestures and the curl over it - for the Reader's Stack.
   @override
-  List<Widget> buildPages(BuildContext context) => [
+  List<Widget> buildPages(BuildContext context) {
+    if (webtoon) {
+      _wasWebtoon = true;
+      return [_webtoonView(context)];
+    }
+    if (_wasWebtoon) {
+      // paged again (the setting changed): the page view on the place the strip was at
+      _wasWebtoon = false;
+      _strip = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: _dual));
+    }
+    return _pagedView(context);
+  }
+
+  /// A webtoon's strip ([WebtoonView]) with the reader's taps, wheel and right-click.
+  Widget _webtoonView(BuildContext context) {
+    // opened on the page it was left on here: just as far into it as then (Komga keeps only the page)
+    final kept = _stripPlace;
+    final strip = (_strip ??= WebtoonController(index.clamp(0, pages.length),
+        startShare: kept != null && kept.$1 == index ? kept.$2 : 0)
+      ..onAutoStopped = _autoStopped)
+      ..autoSpeed = _settings.display.autoScrollSpeed; // (set anywhere - the panel, Settings - it goes at once)
+    return LayoutBuilder(builder: (context, box) {
+      _area = Size(box.maxWidth, box.maxHeight);
+      return Listener(
+        onPointerSignal: (e) {
+          if (e is PointerScrollEvent && !HardwareKeyboard.instance.isControlPressed) {
+            GestureBinding.instance.pointerSignalResolver
+                .register(e, (ev) => wheel((ev as PointerScrollEvent).scrollDelta.dy));
+          }
+        },
+        onPointerDown: (e) {
+          host.awake();
+          _rightDown = e.buttons == kSecondaryButton;
+        },
+        onPointerUp: (e) {
+          if (_rightDown) {
+            _rightDown = false;
+            // the right-click that stopped auto-scroll: as the tap that does - the controls, and play where it was
+            // (user, 2026-10-23)
+            if (_strip?.touchStoppedAuto ?? false) {
+              _stripTapAt(e.localPosition, Size(box.maxWidth, box.maxHeight));
+            } else {
+              host.toggleControls();
+            }
+          }
+        },
+        onPointerCancel: (_) => _rightDown = false,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          // the tap zones: the sides (as a comic's), or top and bottom - the bottom third scrolls down, the top up
+          // (user, 2026-10-22)
+          onTapUp: (d) => _stripTap(d, Size(box.maxWidth, box.maxHeight)),
+          // the strip follows a finger, a mouse drag and a pen alike
+          child: ScrollConfiguration(
+            // (no scroll bar over the strip - user, 2026-10-22: Windows put one there; the slider says where it is)
+            behavior: ScrollConfiguration.of(context)
+                .copyWith(dragDevices: PointerDeviceKind.values.toSet(), scrollbars: false),
+            child: WebtoonView(
+              key: ValueKey(('webtoon', _book['id'])),
+              sizes: [
+                for (final p in pages)
+                  // (as cropped: Crop edges narrows each slice, its place in the strip with it)
+                  croppedSize(((p as Map)['width'] as num?)?.toInt() ?? 0, (p['height'] as num?)?.toInt() ?? 0,
+                      prefs.crop, sidesOnly: true),
+              ],
+              page: _slice,
+              endCard: host.endCard,
+              controller: strip,
+              onPlace: _onStripPlace,
+              background: background,
+              fit: WebtoonView.fitOf(prefs.fit),
+              gutter: prefs.gutter,
+              onWheel: wheel,
+              onSettled: (slice, share) {
+                final id = _book['id'] as String?;
+                if (id != null) unawaited(StripPlaces.save(id, slice, share));
+                _stripPlace = (slice, share);
+              },
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  /// Auto-scroll stopped by a tap: play, big, where the tap was - a shortcut for the bar's small one, where the finger
+  /// already is (user, 2026-10-22). Over the controls (the tap brought them up), so it takes its own tap.
+  @override
+  List<Widget> overControls(BuildContext context) {
+    final at = _playAt;
+    // (with the controls: a tap elsewhere puts them away, and it goes with them - still stopped)
+    if (!webtoon || at == null || autoScrolling || !host.controlsUp) return const [];
+    return [
+      Positioned(
+        left: (at.dx - _playSize / 2).clamp(0.0, math.max(0.0, _area.width - _playSize)),
+        top: (at.dy - _playSize / 2).clamp(0.0, math.max(0.0, _area.height - _playSize)),
+        width: _playSize,
+        height: _playSize,
+        child: Material(
+          key: const ValueKey('auto-scroll-play'),
+          color: Colors.black.withValues(alpha: 0.6),
+          shape: const CircleBorder(),
+          child: IconButton(
+            iconSize: 48,
+            tooltip: 'Resume auto-scroll',
+            icon: const Icon(Icons.play_arrow, color: Colors.white),
+            onPressed: _autoResume,
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// A tap [along] the screen's height (0 at the top) as the Reader's tap zones, which go across: the bottom third
+  /// as the right (on), the top as the left (back), the middle the middle.
+  static double _zoneOf(double along) => along > 2 / 3 ? 1.0 : along < 1 / 3 ? 0.0 : 0.5;
+
+  /// Slice [i] of a webtoon, filling its place in the strip (its height is Komga's, ahead of it loading).
+  Widget _slice(BuildContext context, int i) => FutureBuilder<PageData>(
+        future: _loader!.get(i),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(child: IconButton(
+              tooltip: 'Retry',
+              icon: Icon(Icons.broken_image, color: ink(0.4), size: 40),
+              onPressed: _changed,
+            ));
+          }
+          if (!snap.hasData) return Center(child: CircularProgressIndicator(strokeWidth: 2, color: ink(0.3)));
+          // the series' image settings, as a comic's page has them (ProcessedPicture) - a crop at the sides only, the
+          // strip running on from slice to slice
+          return LayoutBuilder(builder: (context, box) => ProcessedPicture(data: snap.data!, prefs: prefs,
+              size: Size(box.maxWidth, box.maxHeight), sidesOnly: true, levels: _loader!.bookLevels,
+              levelsNow: () => _loader?.levelsNow));
+        },
+      );
+
+  /// The page area the layout follows (one page or two, the pairs' pictures): [_area] once it has stayed put for
+  /// [settle]. Meanwhile the pages showing stay as they are, fitted to the new shape - a rotation passes through
+  /// several sizes, and a tilt can turn the screen and back within a second; each rebuilt every page near the one
+  /// being read, and Android closed the app for memory (user, 2026-10-24: "can we just be smarter about how and when
+  /// images are generated").
+  Size _settled = Size.zero;
+  Timer? _settleTimer;
+  @visibleForTesting
+  static const settle = Duration(milliseconds: 500);
+
+  void _areaNow(Size area) {
+    _area = area;
+    if (_settled.isEmpty) {
+      _settled = area;
+    } else if (area == _settled) {
+      _settleTimer?.cancel(); // back as it was (turned and back): nothing to redo
+    } else {
+      _settleTimer?.cancel();
+      _settleTimer = Timer(settle, () {
+        _settled = _area;
+        _changed();
+      });
+    }
+  }
+
+  List<Widget> _pagedView(BuildContext context) => [
         LayoutBuilder(builder: (context, box) {
-          _area = Size(box.maxWidth, box.maxHeight);
-          // one page or two, by the screen's shape now (turned, a window resized) and the setting: the page view
-          // again after this frame, on the same page
-          final dual = pages.isNotEmpty && _twoPagesOn(_area);
+          _areaNow(Size(box.maxWidth, box.maxHeight));
+          // one page or two, by the screen's shape (turned, a window resized - once it's settled) and the setting:
+          // the page view again after this frame, on the same page
+          final dual = pages.isNotEmpty && _twoPagesOn(_settled);
           final scrolls = ScrollConfiguration.of(context); // the pages' own scrolling (the page view's is off)
           if (dual != _dual) WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildView(dual: dual));
           return Listener(
@@ -819,6 +1253,10 @@ class ComicRenderer extends Renderer {
   /// The page view's item [v]: a page - or, two pages up, a spread: a pair joined side by side as one picture (fit,
   /// zoom, pan and Enhance work on it as on a page), or a page alone, centred (user, 2026-10-16).
   Widget _view(BuildContext context, int v) {
+    // more than a turn away: the page view's neighbour from before a turn, built once more before the view moves (the
+    // place moves first) - off screen and about to go; loading it decoded again the pages just let go of, two pages up
+    // the spread just left (measured 2026-10-25: four big decodes a curl, two of them that)
+    if ((v - _at).abs() > 1) return const SizedBox.shrink();
     if (!_dual) return _page(context, v, _loader!.get(v));
     final s = _spreads[v];
     if (s.pages.length == 1) return _page(context, v, _loader!.get(s.first));
@@ -830,27 +1268,71 @@ class ComicRenderer extends Renderer {
   final Map<(int, double, bool, double, FitMode, Size, Color), Future<PageData>> _joined = {};
 
   Future<PageData> _joinedAt(int v, Spread s) {
-    _joined.removeWhere((k, _) => (k.$1 - _at).abs() > 2);
+    // the pair showing and one turn either way (the page view builds no further) - each is two pages wide
+    for (final k in [for (final k in _joined.keys) if ((k.$1 - _at).abs() > 1) k]) {
+      _freeJoined(_joined.remove(k)!);
+    }
     final crop = prefs.crop;
-    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _area, background);
-    return _joined.putIfAbsent(key, () async {
+    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _settled, background);
+    // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as
+    // the bars move, and each pair was joined again for each, every copy kept - two full pages wide each; user,
+    // 2026-10-24: the app died turning the tablet with two pages up)
+    final older = [for (final k in _joined.keys) if (k.$1 == v && k != key) k];
+    final made = _joined.putIfAbsent(key, () async {
       try {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
-        final images = [for (final p in pair) crop > 0 ? await cropEdges(p.image, crop) : p.image];
-        final onScreen = rtl ? images.reversed.toList() : images;
-        // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
-        final h = math.max(onScreen[0].height, onScreen[1].height);
-        double w(ui.Image i) => i.width * h / i.height;
-        final w0 = w(onScreen[0]) + w(onScreen[1]), gap = _gapPixels(h.toDouble(), w0);
-        _spineAt[v] = (w(onScreen[0]) + gap / 2) / (w0 + gap);
-        _gapAt[v] = gap / (w0 + gap);
-        return PageData(await joinPages(onScreen, gap: gap, fill: background), Uint8List(0));
+        // its own hold on the two pages (the loader frees its own once they're far behind - PageLoader.around)
+        final own = [for (final p in pair) p.image.clone()];
+        final cut = crop > 0 ? [for (final i in own) await cropEdges(i, crop)] : null;
+        try {
+          final images = cut ?? own;
+          final onScreen = rtl ? images.reversed.toList() : images;
+          // the gutter: the left page's share of the width, the two at one height (as joinPages joins them)
+          final h = math.max(onScreen[0].height, onScreen[1].height);
+          double w(ui.Image i) => i.width * h / i.height;
+          final w0 = w(onScreen[0]) + w(onScreen[1]), gap = _gapPixels(h.toDouble(), w0);
+          _spineAt[v] = (w(onScreen[0]) + gap / 2) / (w0 + gap);
+          _gapAt[v] = gap / (w0 + gap);
+          final joined = await joinPages(onScreen, gap: gap, fill: background);
+          onJoined?.call(joined);
+          return PageData(joined, Uint8List(0));
+        } finally {
+          for (final i in [...own, ...?cut]) {
+            i.dispose();
+          }
+        }
       } catch (_) {
         _joined.remove(key)?.ignore(); // Retry joins them again
         rethrow;
       }
     });
+    // (the older one shows until this one is in: freed after it)
+    for (final k in older) {
+      _freeJoined(_joined.remove(k)!, after: made);
+    }
+    return made;
   }
+
+  /// A joined pair let go of: its picture freed once nothing can still be drawing it - two frames on, and after
+  /// [after] (its replacement) is in. Left to the garbage collector, these two-pages-wide pictures piled up as pages
+  /// were turned - about 40 MB a turn, never given back - and Android closed the app (user, 2026-10-24).
+  void _freeJoined(Future<PageData> joined, {Future<void>? after}) {
+    joined.then((d) async {
+      await after?.then((_) {}, onError: (Object _) {});
+      afterFrames(d.image.dispose);
+    }, onError: (Object _) {});
+  }
+
+  void _freeAllJoined() {
+    for (final f in _joined.values) {
+      _freeJoined(f);
+    }
+    _joined.clear();
+  }
+
+  /// Tests: told of each joined pair's picture as it's made.
+  @visibleForTesting
+  static void Function(ui.Image)? onJoined;
 
   Widget _page(BuildContext context, int i, Future<PageData> data, {ReaderPrefs? prefs}) {
     return FutureBuilder<PageData>(
@@ -903,35 +1385,49 @@ class ComicRenderer extends Renderer {
 
   final fitNode = FocusNode(debugLabel: 'ctl-fit');
   final pagesNode = FocusNode(debugLabel: 'ctl-pages');
-  final imageNode = FocusNode(debugLabel: 'ctl-image');
   final readerNode = FocusNode(debugLabel: 'ctl-reader');
   final stripNode = FocusNode(debugLabel: 'ctl-strip');
 
   /// The top bar's own: the fit (one press = the next fit mode: screen -> width -> height -> original size).
   @override
-  List<BarButton> topButtons() => [
-        BarButton(
-          fitNode,
-          IconButton(
-            focusNode: fitNode,
-            tooltip: prefs.fit == FitMode.original ? 'Original size' : 'Fit ${prefs.fit.label.toLowerCase()}',
-            onPressed: () => _setFit(FitMode.values[(prefs.fit.index + 1) % FitMode.values.length]),
-            icon: fitIcon(prefs.fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
-          ),
+  List<BarButton> topButtons() {
+    // a webtoon: Original size or Fit width, one press the other (user, 2026-10-22)
+    final fit = webtoon ? WebtoonView.fitOf(prefs.fit) : prefs.fit;
+    // (a strip: its own size -> Fit width -> Fit page height - user, 2026-10-22)
+    final next = webtoon
+        ? switch (fit) { FitMode.original => FitMode.width, FitMode.width => FitMode.height, _ => FitMode.original }
+        : FitMode.values[(fit.index + 1) % FitMode.values.length];
+    return [
+      BarButton(
+        fitNode,
+        IconButton(
+          focusNode: fitNode,
+          // (a strip's height fit: one page to the screen's height - 'Fit page height', as its panel says)
+          tooltip: fit == FitMode.original
+              ? 'Original size'
+              : webtoon && fit == FitMode.height
+                  ? 'Fit page height'
+                  : 'Fit ${fit.label.toLowerCase()}',
+          onPressed: () => _setFit(next),
+          icon: fitIcon(fit, size: 26, color: Colors.white), // ↔ / ↕ (display_panel.dart)
         ),
-      ];
+      ),
+    ];
+  }
 
-  /// The bottom bar's own: the page strip, image settings (a series), reader settings.
+  /// The bottom bar's own: the page strip, auto-scroll (a webtoon), the reader's settings (the image settings in them).
   @override
   List<BarButton> bottomButtons(BuildContext context) => [
         if (pages.length > 1)
           BarButton(pagesNode, barIcon(node: pagesNode, icon: _stripOpen ? Icons.view_carousel : Icons.view_carousel_outlined,
               label: _stripOpen ? 'Hide pages' : 'Show pages', onPressed: _toggleStrip)),
-        if (seriesId != null)
-          BarButton(imageNode, barIcon(node: imageNode, icon: Icons.settings_brightness, label: 'Image settings',
-              onPressed: () => showImagePanel(context, seriesId: seriesId!, seriesTitle: _book['seriesTitle'] as String?))),
-        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune, label: 'Comic settings',
-            onPressed: () => showReaderPanel(context,
+        // a webtoon: auto-scroll, play / pause
+        if (webtoon && _strip != null)
+          BarButton(autoNode, barIcon(node: autoNode, icon: autoScrolling ? Icons.stop : Icons.play_arrow,
+              label: autoScrolling ? 'Stop auto-scroll' : 'Auto-scroll', onPressed: autoScrollToggle)),
+        BarButton(readerNode, barIcon(node: readerNode, icon: Icons.tune,
+            label: _komgaWebtoon ? 'Webtoon settings' : 'Comic settings',
+            onPressed: () => showReaderPanel(context, webtoon: _komgaWebtoon,
                 seriesId: seriesId, seriesTitle: _book['seriesTitle'] as String?,
                 komgaDirection: _komgaDirection, bookFit: _bookFit,
                 page: canSaveCopyPictures && index <= last ? PageActions(save: _savePage, copy: _copyPage) : null,
@@ -947,7 +1443,7 @@ class ComicRenderer extends Renderer {
   void _setFit(FitMode f) {
     final id = seriesId;
     if (id == null) {
-      _settings.setDefault(_settings.defaults.copyWith(fit: f));
+      _settings.setDefault(_settings.defaults.copyWith(fit: f)); // (no series: not Komga's webtoon - it's a series')
     } else if (_settings.ownsLayout(id)) {
       _settings.setSeriesLayout(id, prefs.copyWith(fit: f));
     } else {
@@ -1002,6 +1498,7 @@ class ComicRenderer extends Renderer {
       final f = await _pageFile();
       if (f == null) return;
       final where = await savePicture(f.$1, f.$2);
+      AppLog.instance.info('reader', 'page saved: $where'); // (Save page unchecked on iOS - backlog)
       messenger // a message for each save, the last one shown at once (not queued behind the one before)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text('Page saved: $where')));
@@ -1017,6 +1514,7 @@ class ComicRenderer extends Renderer {
       final f = await _pageFile();
       if (f == null) return;
       await copyPicture(f.$1, f.$2);
+      AppLog.instance.info('reader', 'page copied');
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(const SnackBar(content: Text('Page copied')));
@@ -1285,7 +1783,7 @@ class ComicRenderer extends Renderer {
       return b;
     }
     final failed = _thumbsFailed[i];
-    if (failed != null && DateTime.now().difference(failed) < _thumbRetry) return null;
+    if (failed != null && clock.now().difference(failed) < _thumbRetry) return null;
     if (!_thumbsLoading.contains(i)) {
       if (queued) {
         _thumbQueue
@@ -1334,7 +1832,7 @@ class ComicRenderer extends Renderer {
       (b) => done(() => _thumbs[i] = b),
       onError: (Object e) => done(() {
         if (e is KomgaUnreachable) {
-          _thumbsFailed[i] = DateTime.now(); // too slow, or no answer: try again a little later, not never
+          _thumbsFailed[i] = clock.now(); // too slow, or no answer: try again a little later, not never
         } else {
           _thumbs[i] = null; // Komga answered: there's no picture to be had
         }

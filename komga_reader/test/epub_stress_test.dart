@@ -109,7 +109,7 @@ void main() {
     for (var i = 0; i < 20; i++) {
       await step(tester, 10);
     }
-  });
+  }, tags: 'slow');
 
   for (final pattern in ['forward then back', 'back and forth']) {
     testWidgets('turning quickly ($pattern) across slow-loading chapters never leaves the reader on a spinner',
@@ -141,6 +141,6 @@ void main() {
       for (var i = 0; i < 20; i++) {
         await step(tester, 10);
       }
-    });
+    }, tags: 'slow');
   }
 }

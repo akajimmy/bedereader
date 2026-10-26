@@ -1,4 +1,5 @@
 // The page curl's drawing (lib/page_curl.dart, shaders/curl.frag): the back of the turning page in the colour given.
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -79,6 +80,53 @@ void main() {
     // further on, the band inside the page: shaded there
     final g = PageCurl.fold(const Offset(200, 150), const Offset(60, 150), r)!;
     expect(await alphaAt(const Offset(60, 150), page.left + g.$1.dx + r + 4), greaterThan(0), reason: 'shaded on it');
+    sheet.dispose();
+  });
+
+  // The iPad drew a dotted gold line along the fold (user, 2026-10-25): the page was read inside the branches that
+  // pick what a pixel shows, so a pixel whose neighbours took another branch got its blur level from garbage - the
+  // page's average colour. The GPU here doesn't do that, so the pictures can't catch it: this keeps the reads out of
+  // the branches (checked on the iPad by a screenshot mid-curl).
+  test("the curl shader reads the page before choosing what a pixel shows, never inside a branch (the iPad's dotted "
+      'line along the fold)', () {
+    final src = File('shaders/curl.frag').readAsStringSync();
+    final main = src.substring(src.indexOf('void main()'));
+    // (the mirroring before it is the same for every pixel; the choosing starts here)
+    final choosing = main.indexOf('if (d > uRadius)');
+    expect(choosing, greaterThan(0));
+    final reads = RegExp(r'\b(sheet|backOf|texture)\(').allMatches(main).map((m) => m.start).toList();
+    expect(reads, isNotEmpty);
+    expect(reads.where((at) => at > choosing), isEmpty, reason: 'a read inside the choosing');
+  });
+
+  test('no lighter band where the page starts to curl (user, 2026-10-24: "every book, every page, every curl" - '
+      'the flat part was shaded darker right up to the fold, the curl began at full light): the shading runs on '
+      'across the fold, front and back, straight or at an angle', () async {
+    const size = Size(400, 300), grey = Color(0xFF808080);
+    final program = (await PageCurl.program())!;
+    final sheet = await solidImage(400, 300, grey);
+    // the step in lightness across the fold (where the page starts to curl) along row [y]: 2 px either side
+    Future<int> stepAtFold(Offset finger, int y) async {
+      final rec = ui.PictureRecorder();
+      // (the back the sheet's own grey: only the light and shade differ)
+      PageCurlPainter(program: program, sheet: sheet, page: Offset.zero & size, grab: const Offset(400, 150),
+              finger: finger, mirror: false, paper: grey)
+          .paint(Canvas(rec), size);
+      final img = await rec.endRecording().toImage(400, 300);
+      final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+      img.dispose();
+      final (at, n) = PageCurl.fold(const Offset(400, 150), finger, PageCurl.radius(400))!;
+      final x = (at.dx - (y - at.dy) * n.dy / n.dx).round();
+      int light(int x) => px[(y * 400 + x) * 4];
+      return (light(x - 2) - light(x + 2)).abs();
+    }
+
+    // (just lifting: the front going up from the fold, nothing over yet; further on: the back coming over it)
+    for (final (finger, y) in [(const Offset(385, 150), 150), (const Offset(360, 170), 150),
+        (const Offset(200, 150), 150), (const Offset(120, 150), 150),
+        (const Offset(200, 260), 200), (const Offset(150, 40), 100)]) {
+      expect(await stepAtFold(finger, y), lessThanOrEqualTo(4), reason: 'finger $finger, row $y');
+    }
     sheet.dispose();
   });
 

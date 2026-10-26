@@ -112,6 +112,27 @@ void main() {
     await tester.pump(const Duration(minutes: 2));
   });
 
+  testWidgets("webtoons' reading defaults follow the account apart from comics' (user, 2026-10-22: a clean split); a "
+      "series Komga says is a webtoon starts from them", (tester) async {
+    final api = server();
+    await s.load(api);
+    s.setWebtoonDefault(const ReaderPrefs(fit: FitMode.height, background: ReaderBackground.white));
+    await tester.pump(const Duration(seconds: 3));
+    final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
+    expect(ReaderPrefs.fromJson(Map<String, dynamic>.from(sent['webtoon'] as Map)).fit, FitMode.height);
+    expect(s.defaults.fit, isNot(FitMode.height), reason: "comics' untouched");
+
+    await s.clearAccount(); // another device, the same account
+    SharedPreferences.setMockInitialValues({});
+    await s.load(api);
+    expect((s.webtoonDefaults.fit, s.webtoonDefaults.background), (FitMode.height, ReaderBackground.white));
+    s.webtoonSeries.add('W1');
+    addTearDown(s.webtoonSeries.clear);
+    expect(s.prefsFor('W1').fit, FitMode.height, reason: "a webtoon series: webtoons' defaults");
+    expect(s.prefsFor('C1').fit, s.defaults.fit, reason: "a comic series: comics'");
+    await tester.pump(const Duration(minutes: 2));
+  });
+
   testWidgets("series settings removed on another device go here too; Komga's copy is the truth", (tester) async {
     final api = server({AppSettings.komgaKey: blob({'S1': FitMode.width, 'S2': FitMode.height})});
     await s.load(api);

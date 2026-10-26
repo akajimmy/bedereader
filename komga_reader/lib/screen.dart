@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'app_log.dart';
+import 'rotation.dart';
 
 const _channel = MethodChannel('komga_reader/screen');
 
@@ -134,6 +138,7 @@ class OrientationLock {
     if (!portrait && !landscape) {
       _portrait = null;
       if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
+      if (defaultTargetPlatform == TargetPlatform.android) return AutoRotation.instance.follow(); // (the app's own)
       await SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       return;
     }
@@ -151,22 +156,38 @@ class OrientationLock {
     await _apply();
   }
 
-  /// iOS's Locked: the screen held the way it is now. Looked at again a moment later: if the screen turned over instead
-  /// (iOS may name its two landscapes the other way round from Android's - not checkable here), the other one.
-  Future<void> holdNow() async {
-    final way = await _wayUp();
+  /// iOS's Locked. [chosen] (Locked picked just now): the screen held the way it is now, and that way kept on this
+  /// device. A book opened with Locked on: the way kept - locked in landscape, the next book opened with the iPad
+  /// upright was held upright (user, 2026-10-25); the way it is now only if none is kept yet. Looked at again a moment
+  /// after it's chosen: if the screen turned over instead (iOS may name its two landscapes the other way round from
+  /// Android's - not checkable here), the other one.
+  Future<void> holdNow({bool chosen = true}) async {
+    final kept = chosen ? null : (await SharedPreferences.getInstance()).getString(lockedKey);
+    final way = kept ?? await _wayUp();
     if (way == null) return; // not known: nothing held
     _portrait = way == 'portrait' || way == 'reversePortrait';
     _flipped = way.startsWith('reverse');
     await _apply();
+    if (kept != null) return; // (kept as it was found to be, the check below done then)
     await Future<void>.delayed(const Duration(milliseconds: 800));
     if (_portrait == null) return; // let go meanwhile
     final now = await _wayUp();
+    AppLog.instance.info('rotation', 'Locked: the screen was $way, a moment later ${now ?? 'not known'}');
     if (now != null && now == _opposite(way)) {
       _flipped = !_flipped;
       await _apply();
     }
+    final held = switch ((_portrait!, _flipped)) {
+      (true, false) => 'portrait',
+      (true, true) => 'reversePortrait',
+      (false, false) => 'landscape',
+      (false, true) => 'reverseLandscape',
+    };
+    await (await SharedPreferences.getInstance()).setString(lockedKey, held);
   }
+
+  /// The way iOS's Locked was last chosen in (this device).
+  static const lockedKey = 'rotation.lockedWay';
 
   static String _opposite(String way) => switch (way) {
         'portrait' => 'reversePortrait',
@@ -186,8 +207,10 @@ class OrientationLock {
 
   /// The book closed: the app follows the device again.
   Future<void> release() async {
+    if (_portrait != null) AppLog.instance.info('rotation', 'let go: the device turns the screen');
     _portrait = null;
     if (defaultTargetPlatform == TargetPlatform.windows) return _pcHold('none');
+    if (defaultTargetPlatform == TargetPlatform.android) return AutoRotation.instance.follow();
     await SystemChrome.setPreferredOrientations(const []);
   }
 
@@ -214,7 +237,19 @@ class OrientationLock {
 
   // one orientation, exactly (on Android: PORTRAIT / REVERSE_PORTRAIT / LANDSCAPE / REVERSE_LANDSCAPE - fixed, not
   // the sensor's)
-  Future<void> _apply() => defaultTargetPlatform == TargetPlatform.windows
+  Future<void> _apply() async {
+    if (defaultTargetPlatform == TargetPlatform.android) await AutoRotation.instance.stop(); // the lock's now
+    if (_portrait == null) return; // let go meanwhile
+    await _hold();
+  }
+
+  Future<void> _hold() {
+    // (rotation Locked unchecked on iOS - backlog)
+    AppLog.instance.info('rotation', 'held ${_portrait! ? 'portrait' : 'landscape'}${_flipped ? ', the other way up' : ''}');
+    return _holdNow();
+  }
+
+  Future<void> _holdNow() => defaultTargetPlatform == TargetPlatform.windows
       ? _pcHold(switch ((_portrait!, _flipped)) {
           (true, false) => 'portrait',
           (true, true) => 'reversePortrait',
@@ -290,11 +325,35 @@ Future<bool> openUrl(String url) async {
 /// platform side can't say.
 Future<String?> appStorageDir() async {
   try {
-    return await _channel.invokeMethod<String>('storageDir');
+    final dir = await _channel.invokeMethod<String>('storageDir');
+    if (dir != null && defaultTargetPlatform == TargetPlatform.iOS && !_backupAsked) {
+      _backupAsked = true;
+      await _keepOutOfBackup(dir);
+    }
+    return dir;
   } catch (_) {
     return null;
   }
 }
+
+/// iOS: the app's folder (the downloads, a few GB maybe) kept out of iCloud backup - iOS backs up Application Support
+/// unless told not to, against the person's iCloud storage, and the books are on Komga anyway (backlog, 2026-10-25:
+/// "left out of iCloud backup" was never done). Asked once a run (a folder made again is marked again); said in the
+/// app's log.
+Future<void> _keepOutOfBackup(String dir) async {
+  try {
+    final ok = await _channel.invokeMethod<bool>('excludeFromBackup', dir);
+    AppLog.instance.info('storage', ok == true ? 'kept out of iCloud backup' : 'could not be kept out of iCloud backup');
+  } catch (e) {
+    AppLog.instance.warn('storage', 'could not be kept out of iCloud backup: $e');
+  }
+}
+
+bool _backupAsked = false;
+
+/// Tests: as at start-up, not asked yet this run.
+@visibleForTesting
+void resetBackupAsked() => _backupAsked = false;
 
 // ---- Save page / Copy page (the reader, user 2026-10-02): the page's own image file, as Komga sends it ----------
 
@@ -376,5 +435,18 @@ Future<void> setScreenBrightness(double value) async {
     await _channel.invokeMethod('brightness', value);
   } catch (_) {
     // no native side on this platform
+    return;
   }
+  // in the app's log (brightness unchecked on iOS - backlog): following the system, or a level - a slider being
+  // dragged once every 2 s at most, with what the screen says it's at
+  final now = clock.now();
+  if (value >= 0 && _brightnessLogged != null && now.difference(_brightnessLogged!) < const Duration(seconds: 2)) {
+    return;
+  }
+  _brightnessLogged = value < 0 ? null : now;
+  final screen = await getScreenBrightness();
+  AppLog.instance.info('brightness', '${value < 0 ? 'the system\'s own' : 'set to ${value.toStringAsFixed(2)}'}'
+      '${screen == null ? '' : ' - the screen says ${screen.toStringAsFixed(2)}'}');
 }
+
+DateTime? _brightnessLogged;

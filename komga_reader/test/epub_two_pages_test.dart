@@ -19,6 +19,7 @@ import 'support/client_settings.dart';
 import 'support/epub_books.dart';
 import 'support/helpers.dart';
 import 'support/no_network.dart';
+import 'support/epub_reader.dart';
 
 class _Komga extends TestKomga with EmptyClientSettings {
   @override
@@ -52,19 +53,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(_Komga.new),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: twoChapters(),
         saveProgress: false)));
-    for (var i = 0; i < 200; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
-      if (find.byType(PageView).evaluate().isNotEmpty && i > 10) break;
-    }
-    expect(find.byType(PageView), findsOneWidget);
-  }
-
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 10; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 100));
-    }
+    await bookShown(tester);
   }
 
   /// The position's left and right spots ("Book · Pg. 2-3/9 · 20%", "Ch. · Pg. 2/5"), the controls up for a moment.
@@ -83,7 +72,7 @@ void main() {
 
   Future<void> turn(WidgetTester tester) async {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await settle(tester);
+    await settleEpub(tester);
   }
 
   String pages(String left) => RegExp(r'Pg\. ([0-9-]+)/').firstMatch(left)!.group(1)!;
@@ -113,12 +102,14 @@ void main() {
       } else {
         expect(seen, isNot(contains('${chapter1 + 1}')), reason: 'the second chapter beside a page, not alone');
       }
+      // one turn on from the last spread: the end card (it checked for text the app never had - test audit, 2026-10-23)
       await turn(tester);
-      expect(find.text('You finished the book'), findsNothing); // (the end card's own text is the Reader's)
+      await settleEpub(tester);
+      expect(find.text('End of book'), findsOneWidget, reason: '$start: the end card after the last spread');
       await tester.pumpWidget(const SizedBox());
     }
     AppSettings.instance.setEpub(const EpubPrefs());
-  });
+  }, tags: 'slow');
 
   testWidgets('chapters set to start elsewhere while reading: the book paired again, on the same page', (tester) async {
     await open(tester);
@@ -130,14 +121,14 @@ void main() {
     }
     final before = pages((await spots(tester))!.$1);
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(chapterStart: ChapterStart.rightPage));
-    await settle(tester);
+    await settleEpub(tester);
     final after = pages((await spots(tester))!.$1);
     // the spread had the second chapter's first page beside another; now a chapter starts alone on the right - and
     // the place (the spread's earlier page) is still on screen
     expect(after, isNot(before), reason: 'paired again: $before -> $after');
     expect(after.split('-'), contains(before.split('-').first), reason: 'the place kept: $before -> $after');
     AppSettings.instance.setEpub(const EpubPrefs());
-    await settle(tester);
+    await settleEpub(tester);
   });
 
   testWidgets('a tall screen: one page at a time; Off: one on a wide screen too; Always: two on a tall one',
@@ -149,14 +140,14 @@ void main() {
     expect(pages((await spots(tester))!.$1), '3', reason: 'page by page');
 
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(twoPages: TwoPages.always));
-    await settle(tester);
-    await settle(tester);
+    await settleEpub(tester);
+    await settleEpub(tester);
     expect(pages((await spots(tester))!.$1), contains('-'), reason: 'Always: a pair, a tall screen too');
 
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(twoPages: TwoPages.off));
     tester.view.physicalSize = const Size(1600, 1000);
-    await settle(tester);
-    await settle(tester);
+    await settleEpub(tester);
+    await settleEpub(tester);
     final now = pages((await spots(tester))!.$1);
     expect(now, isNot(contains('-')), reason: 'Off: one page on a wide screen');
     await turn(tester);
@@ -199,13 +190,13 @@ void main() {
     expect(AppSettings.instance.epub.gutter, 24);
     final before = pages((await spots(tester))!.$1);
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(gutter: 80));
-    await settle(tester);
+    await settleEpub(tester);
     final apart = sheetsOnScreen(tester, 2400);
     expect(apart[1].left - apart[0].right, closeTo(80, 0.5));
     expect(apart[0].right, closeTo(1160, 0.5), reason: 'about the middle');
     expect(pages((await spots(tester))!.$1), before, reason: 'not laid out again: the same pages');
     AppSettings.instance.setEpub(const EpubPrefs());
-    await settle(tester);
+    await settleEpub(tester);
   });
 
   testWidgets("one page or two, the same page size (1600 wide two up, then an 800-wide window: one): the same place, "
@@ -217,11 +208,11 @@ void main() {
     final two = pages((await spots(tester))!.$1);
     expect(two, contains('-'));
     tester.view.physicalSize = const Size(800, 1000);
-    await settle(tester);
+    await settleEpub(tester);
     final one = pages((await spots(tester))!.$1);
     expect(one, two.split('-').first, reason: 'one page: the earlier one of the pair - the place');
     tester.view.physicalSize = const Size(1600, 1000);
-    await settle(tester);
+    await settleEpub(tester);
     expect(pages((await spots(tester))!.$1), two, reason: 'two again: the same pair');
   });
 
@@ -259,7 +250,7 @@ void main() {
     expect(identical(turning.back, turning.sheet), isFalse, reason: 'not the page turning');
     expect(turning.gap, 0, reason: 'no gap between the pages');
     await tester.pump(const Duration(milliseconds: 500));
-    await settle(tester);
+    await settleEpub(tester);
     expect(pages((await spots(tester))!.$1), contains('-'));
   });
 
@@ -270,7 +261,7 @@ void main() {
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump(const Duration(milliseconds: 500));
-    await settle(tester);
+    await settleEpub(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
     final held = tester.widgetList<ClipRect>(find.byType(ClipRect)).where((w) => w.clipper != null)
@@ -282,7 +273,7 @@ void main() {
     expect(turning.back, isNotNull, reason: "its back: the left-hand page of the spread the turn started from");
     expect(identical(turning.back, turning.sheet), isFalse);
     await tester.pump(const Duration(milliseconds: 500));
-    await settle(tester);
+    await settleEpub(tester);
   });
 
   testWidgets('the curl with Inset page (user, 2026-10-16: "how are you handling page curl + inset page"): the '
@@ -305,7 +296,7 @@ void main() {
         .single.painter as PageCurlPainter;
     expect(end.finger.dx, closeTo(-(right.width + gap), 4), reason: 'its edge over the left sheet\'s outer edge');
     await tester.pump(const Duration(milliseconds: 200));
-    await settle(tester);
+    await settleEpub(tester);
   });
 
   testWidgets('a double click on a word of the right-hand page selects it there - the pane over it', (tester) async {

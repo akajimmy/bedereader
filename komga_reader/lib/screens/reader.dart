@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
+import '../offline/downloads.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../epub/source.dart';
 import '../reader/comic_renderer.dart';
@@ -179,6 +181,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
+        "iOS's swipe from the left edge)"}');
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     closeDevice();
@@ -222,8 +226,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     final d = _settings.display.toJson()
       ..remove('brightness')
       ..remove('warmth');
-    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 's': _settings.series[_seriesId]?.toJson(),
-        'e': _settings.epub.toJson()});
+    // (webtoons' defaults too: a webtoon follows them - 2026-10-22)
+    return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 'w': _settings.webtoonDefaults.toJson(),
+        's': _settings.series[_seriesId]?.toJson(), 'e': _settings.epub.toJson()});
   }
 
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen
@@ -237,6 +242,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// 2026-09-30: closing mid-load saved the old book's page to the new one). [onOpened] runs once it has loaded.
   Future<void> _open(dynamic book, {VoidCallback? onOpened}) async {
     final run = ++_openRun;
+    final took = Stopwatch()..start(); // (for the app's log)
     setState(() { _loading = true; _menu = false; _openError = null; });
     // the book's kind: the renderer open goes on (comics), or a new one takes over once the book has loaded
     final old = _renderer;
@@ -265,12 +271,20 @@ class _ReaderScreenState extends State<ReaderScreen>
         _openedAt = r.openedAt; _turned = false;
         // as Komga has it now: a change elsewhere is from here on
         _known[fresh['id'] as String] = r.openedProgress;
+        _ours.remove(fresh['id']);
         _loading = false;
       });
       onOpened?.call();
+      AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
+      Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
+      // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
+      if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
+      AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');
       if (!mounted || run != _openRun) return;
       final empty = e is NoPages;
       final message = empty
@@ -352,9 +366,20 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!curling) _pageTurned(i);
   }
 
+  /// The book closed by the reader's own [via] (a key, Close, the end card) - for the app's log; closed any other way
+  /// it was Back: the device's Back, or iOS's swipe from the left edge.
+  /// [now]: closed even with the controls up (the top bar's Close) - otherwise as Back, which hides them first.
+  void _close(String via, {bool now = false}) {
+    _closedVia = via;
+    now ? Navigator.of(context).pop() : Navigator.of(context).maybePop();
+  }
+
+  String? _closedVia;
+
   /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
   /// counts as read (user, 2026-09-30) - and the page number flashes.
   void _pageTurned(int i) {
+    AppLog.instance.info('reader', 'at ${i + 1}'); // (the left-edge swipe against iOS's swipe-back - backlog)
     if (i != _openedAt) _turned = true;
     _saveTimer?.cancel();
     // saved at once at the place that finishes the book (comics: the last page; EPUBs: the end card) - once
@@ -378,11 +403,11 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!_turned || r == null || !r.opened || !r.savesProgress) return;
     final id = _book['id'] as String;
     // what's saved, and how Komga's progress is read, captured now: the save may run once another book has opened
-    final save = r.progressSaver(_index), read = r.progressReader();
+    final save = r.progressSaver(_index), read = r.progressReader(), saving = r.progressSaving(_index);
     // one at a time, in order; one queued before the reader went to another device's page is dropped (it waited for
     // the question's answer, then saved this reader's page over theirs - #5)
     final wentElsewhere = _wentElsewhere;
-    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, r, save, read, ask: ask) : null);
+    _saves = _saves.then((_) => wentElsewhere == _wentElsewhere ? _save(id, r, save, read, saving, ask: ask) : null);
   }
 
   // ---- progress moved on another device while this book was open (user, 2026-10-05: read on the PC, then the
@@ -394,6 +419,11 @@ class _ReaderScreenState extends State<ReaderScreen>
   // per book (a book left for the next one is saved after that one has opened): Komga's progress as this reader last
   // loaded, saved or accepted - the renderer's kind (comics: page and finished; EPUBs: a place in the book)
   final Map<String, Object?> _known = {};
+  // per book: the progress this reader sent to be saved since the last save Komga answered. On a flaky connection a
+  // save can get to Komga with its answer lost, and the next ones not get there at all: Komga then has one of this
+  // reader's older pages, which is no other device's (user, 2026-10-24: lost the connection on page 8, back on page 11
+  // - asked about page 8 "on another device")
+  final Map<String, List<Object?>> _ours = {};
   Future<void> _saves = Future.value();
   Future<bool>? _question; // the question on screen: a second asker waits for its answer
   int _wentElsewhere = 0; // times the reader went with another device's progress (saves queued before: dropped)
@@ -405,14 +435,21 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (Connection.instance.offline || !_known.containsKey(id)) return null;
     try {
       final now = await read();
-      return r.sameProgress(now, _known[id]) ? null : (now: now);
+      final ours = r.sameProgress(now, _known[id]) || (_ours[id] ?? const []).any((p) => r.sameProgress(now, p));
+      return ours ? null : (now: now);
     } catch (_) {
       return null;
     }
   }
 
+  void _noteOurs(String id, Object? progress) {
+    final l = _ours[id] ??= [];
+    l.add(progress);
+    if (l.length > 200) l.removeAt(0);
+  }
+
   Future<void> _save(String id, Renderer r, Future<Object?> Function() save, Future<Object?> Function() read,
-      {required bool ask}) async {
+      Object? saving, {required bool ask}) async {
     final moved = await _movedElsewhere(id, r, read);
     if (moved != null) {
       if (!ask || !mounted || _book['id'] != id) return; // closing, or another book by now: theirs stands
@@ -421,8 +458,12 @@ class _ReaderScreenState extends State<ReaderScreen>
     // known as this reader's page once Komga has it: noted before, a save that failed (a network blip) left Komga on
     // the earlier page, and the next save asked about this reader's own page as if another device had moved it
     // (code review 2026-10-05, #4). A failed save stays silent: the next one carries the newer page.
+    if (saving != null) _noteOurs(id, saving); // (sent: if it gets there, it's this reader's - answered or not)
     try {
       _known[id] = await save();
+      // answered: Komga has this one, so the ones sent before it no longer count - another device can be on one of
+      // those pages now (code review, 2026-10-24: every page sent this visit counted as this reader's)
+      _ours.remove(id);
     } catch (_) {}
   }
 
@@ -460,6 +501,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     );
     _known[_book['id'] as String] = moved; // answered: asked again only if it moves again
     if (stay != false || !mounted) return true; // Stay (or dismissed: Back = stay) - this reader's page goes next
+    _ours.remove(_book['id']); // the other device's from here: this reader's earlier pages are no longer its own
     _saveTimer?.cancel();
     _wentElsewhere++;
     _turned = false; // the other device's progress stands: the jump there isn't a turn of this reader's
@@ -695,7 +737,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final k = e.logicalKey;
     if (_renderer == null || !_r.ready) {
       // nothing to read yet (loading, an EPUB being laid out): only closing (Back goes through the route)
-      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) Navigator.of(context).maybePop();
+      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) _close('a key');
       return KeyEventResult.ignored;
     }
     if (!_menu) {
@@ -710,7 +752,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       final repeatWhileSliding = e is KeyRepeatEvent && _r.sliding;
       // Shift+Space goes back, whatever Space is set to do
       if (k == LogicalKeyboardKey.space && HardwareKeyboard.instance.isShiftPressed) {
-        if (!repeatWhileSliding) _r.back();
+        if (!repeatWhileSliding) _r.back(held: e is KeyRepeatEvent);
         _keyTurned();
         return KeyEventResult.handled;
       }
@@ -723,27 +765,39 @@ class _ReaderScreenState extends State<ReaderScreen>
           return KeyEventResult.handled;
         }
         if (isOkKey(k)) {
-          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _r.forward();
+          if (e is KeyDownEvent) _endClose.hasFocus ? _close('OK on the end card') : _r.forward();
           return KeyEventResult.handled;
         }
       }
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
-      switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
+      final action = ReaderKeys.instance.actionFor(k, rtl: _rtl);
+      // a key's press in the app's log, what it does or that it does nothing (a keyboard or remote on the iPad -
+      // backlog); not its repeats
+      if (e is KeyDownEvent) {
+        AppLog.instance.info('keys', '${ReaderKeys.nameOf(k)}: ${action?.label ?? 'nothing set'}');
+      }
+      switch (action) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
-          if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward();
+          if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward(held: e is KeyRepeatEvent);
           _keyTurned();
         case ReaderAction.previous:
-          if (!repeatWhileSliding) _r.back();
+          if (!repeatWhileSliding) _r.back(held: e is KeyRepeatEvent);
           _keyTurned();
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
-          if (e is KeyDownEvent) Navigator.of(context).maybePop();
+          if (e is KeyDownEvent) _close('a key');
         case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
           _r.zoomStep(true);
         case ReaderAction.zoomOut:
           _r.zoomStep(false);
+        case ReaderAction.autoScroll: // a webtoon's auto-scroll (2026-10-22)
+          if (e is KeyDownEvent) _r.autoScrollToggle();
+        case ReaderAction.scrollFaster:
+          _r.autoScrollSpeed(faster: true);
+        case ReaderAction.scrollSlower:
+          _r.autoScrollSpeed(faster: false);
         case ReaderAction.openMenu: // not the reader's (no side menu here)
         case null:
           return KeyEventResult.ignored;
@@ -764,9 +818,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     final bg = r?.background ?? Colors.black;
     // Windows: the title bar in what's along the top of the reader (the page colour, or an inset page's surround)
     return TitleBarColour(colour: () => _renderer?.edge ?? Colors.black, changes: _settings, child: PopScope(
-      // Back (tablet or remote) closes the controls first, then the book
-      canPop: !_menu,
-      onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
+      // Back (tablet or remote) closes the controls first, then the book - always through here, never popped by the
+      // system: on iOS a route that can pop takes a swipe from the left edge as Back, and it closed the book where a
+      // page turn was meant (user, 2026-10-25)
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _menu ? _hideControls() : Navigator.of(context).pop();
+      },
       child: Scaffold(
         backgroundColor: bg,
         // the reader has no text box: a keyboard coming up (Search's, under it, as Back closes the book) leaves the
@@ -796,7 +855,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                 child: const Text('Next book'))
                           else
                             TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
-                          TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+                          TextButton(onPressed: () => _close('Close'), child: const Text('Close')),
                         ])),
                   ))
                 : r == null || !r.opened
@@ -871,6 +930,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                         ),
                       ),
                     if (_menu) ..._controls(),
+                    ...r.overControls(context), // (over the controls: a webtoon's floating play)
                     // another book loading: this one's pages stay underneath (it's still the current book until the new
                     // one is in - a load that fails leaves it as it was), covered, and nothing reaches them
                     if (_loading)
@@ -981,7 +1041,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         nextNode: _endNext,
         closeNode: _endClose,
         onNext: _nextBook,
-        onClose: () => Navigator.of(context).maybePop(),
+        onClose: () => _close('the end card'),
       );
 
   final _endNext = FocusNode(debugLabel: 'end-next');
@@ -1006,6 +1066,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       onTapOutside: _hideControls,
       top: ReaderTopBar(
         closeNode: _ctl[_Ctl.close]!,
+        onClose: () => _close('the Close button', now: true), // (the log: told from iOS's swipe from the left edge)
         heading: _heading,
         title: _bookName,
         buttons: [

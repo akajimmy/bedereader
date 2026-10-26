@@ -9,6 +9,175 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.5.0
+
+**Released as build 160, tagged `v1.5.0`** (2026-10-25). Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
+
+### Build 160 - 2026-10-25
+
+**Fixed**
+
+- iPad and iPhone: the page curl no longer draws a thin dotted line along the fold, in a golden brown - the page's average colour, where the page itself belonged.
+- iPad and iPhone: a swipe from the left edge of a book no longer closes it - iOS took it as its own Back. The back arrow, the Close button and keys still close the book.
+- iPad and iPhone: Rotation Locked keeps the way you locked it. Locked in landscape, the next book opened with the iPad upright was held upright; now it opens in landscape too. To lock it the other way, choose Auto, turn the iPad, and choose Locked again.
+
+### Build 159 - 2026-10-25
+
+**Fixed**
+
+- iPad and iPhone: the app knows its own version. iOS never gave it, so About showed none, the update check couldn't compare, and eBook layouts kept from an older build weren't redone after an update.
+- Turning the remote log on also sends what the app logged earlier in that run, its start-up lines included - before, only what came after was sent.
+- The app log says when a book was closed with the reader's Close button, apart from Back (which on the iPhone and iPad is also the swipe from the left edge).
+
+### Build 158 - 2026-10-25
+
+**Fixed**
+
+- iPad and iPhone: downloaded books are no longer included in iCloud backups. The app's folder was backed up like any other, so every download counted against your iCloud storage; the books are on Komga anyway.
+
+**Changed**
+
+- The app log says more: page turns, how a book was closed, keys pressed in the reader and what they did, the screen turning and the rotation lock, brightness, pages saved or copied, the image shaders, Wi-Fi only holding downloads, and a page slow to download. On the PC it no longer logs every switch to another window.
+
+### Build 157 - 2026-10-25
+
+**New**
+
+- Settings > About > **App log**: what the app did - started, books opened and closed (and how long they took), going offline and back, downloads, errors and crashes - kept on the device, with Copy.
+- Settings > About > **Remote log** (off by default): the app log sent to a log collector of yours, so problems on a device - the iPad above all - can be looked into from elsewhere. Its address, key and the device's name are set on each device; the key is kept encrypted. Unsent lines wait for the collector, also across restarts.
+
+### Build 155 - 2026-10-25
+
+**New**
+
+- Settings > Remote and keys > **Test the remote**: press a remote's buttons and see what the app is given, as it comes. On the iPad it also shows what iPadOS hands the app before the reader sees it, to find out why a remote that pairs does nothing.
+
+### Build 154 - 2026-10-25
+
+**Fixed**
+
+- Comics: turning a page no longer decodes the pages you just left a second time. Each turn redid the page that had dropped out of memory (two pages up, the whole spread you'd left), so a curl through big modern pages decoded four of them instead of two, while the page was turning.
+- Posters no longer crop the cover at a larger text size. Home's rows and the library grids kept the same height whatever the text size, so bigger text under a poster took its room from the cover, which lost a little of its top and bottom. The cover now keeps its shape, and the row or grid grows to fit the text.
+
+### Build 153 - 2026-10-24
+
+**Fixed**
+
+- Page curl (comics and eBooks): no lighter band along the edge where the page starts to curl. The flat page was shaded darker right up to the fold and the curl started at full light, so every curl showed a brighter strip there.
+
+### Build 152 - 2026-10-24
+
+**Fixed**
+
+- The cache of books opened from Komga stays within its 512 MB: a book cached in two goes, or one bigger than Komga said, could take it past the limit. A book that failed to cache is tried again when you next open it (it used to stay stuck, with a red mark on its tile); a book being cached no longer shows as "In the download queue" or with a download's progress on its tile, so it can be downloaded; and the book you're reading is never removed to make room.
+- The question whether to go offline: a request failing while the app is checking Komga no longer asks straight away - the check's answer decides.
+- Reading progress: another device on a page you'd read past here is asked about again. Only pages sent while the connection was failing count as this device's own.
+- Rotation (Android): Portrait or Landscape set in the reader just as the tablet's auto-rotate changed could be undone straight away by the app's own Auto rotation.
+- Comic and Webtoon settings: Reset to original is back for a series' image settings (Enhance, Enhance colours, Crop edges), as it was in the Image panel. The fit and direction are left alone.
+
+### Build 151 - 2026-10-24
+
+**New**
+
+- Sign in with your Komga email and password: the sign-in screen has Password and API key tabs, Password first. The password is used once to make an API key for this device (named "BeDeReader on Android", with the date, under your account's API keys in Komga) and only the key is kept. A server that won't make keys for the account (a restricted or demo account) keeps the email and password instead, encrypted like a key. The email is filled in again after Sign out. The sign-in screen also scrolls now when it doesn't fit (a phone on its side, the keyboard up).
+- A book opened from Komga is also kept on the device in the background as you read it (comics and eBooks), so it reads from the device from then on - and offline too. The cache takes up to 512 MB: when it's full, the books opened longest ago go first; a book finished goes as soon as you leave it. It isn't a download: it's not on the Downloads screen or in its limit, and downloading a cached book makes it a normal download, kept until you delete it.
+
+### Build 150 - 2026-10-24
+
+**Fixed**
+
+- Comics: the app no longer runs out of memory as you read - pictures it's done with (two pages joined, pages left behind, a closed book's) are freed straight away instead of waiting for Android to need the room. With two pages up, memory grew about 40 MB a page turn until Android closed the app.
+
+### Build 149 - 2026-10-24
+
+**Fixed**
+
+- A flaky connection: "Can't reach Komga" no longer comes up every few seconds - a request that fails is followed by a check, and the question comes only if that fails too; after Komga answers again, it isn't asked for 30 s. Each such failure goes in the error log, with how it failed (no answer in time, refused...).
+- Comics: after a flaky connection, the reader no longer takes one of its own earlier pages on Komga for another device's ("On another device this book is on page 8" while reading page 11) - a save that reached Komga with its answer lost still counts as this reader's. Asked about another device's page that is behind this one, it no longer says "Read further".
+
+### Build 148 - 2026-10-24
+
+**Fixed**
+
+- Comics: turning the tablet no longer redoes the pages at every size on the way - the switch between one page and two, the pairs' pictures and Enhance wait until the screen has kept its shape for half a second; meanwhile the pages showing stay, fitted to the new shape. A tilt that turns the screen and back within that time redoes nothing.
+- Comics: less memory while reading - pages are kept decoded only one turn back and two ahead (two pages up, 11 pages were), with their files kept a little further so going back doesn't download them again; joined pairs only for the pair showing and one turn either way. Android was closing the app for lack of memory on the tablet, two pages up.
+- Comics, two pages up: turning the tablet no longer piles up copies of the joined pairs in memory - each in-between size of a rotation joined every pair near the page again and kept all the copies (a likely cause of the app closing after a rotation; not yet confirmed from the tablet's crash record).
+- Comics: a page curl that starts with the finger held still for a moment now turns the page - it was taken for a long press, which comic pages don't use, and the drag did nothing. eBooks keep a held finger for selecting text.
+
+**Changed**
+
+- Android, Rotation on Auto: the app turns the screen itself instead of following every move of the tablet. With the tablet's auto-rotate on, the screen turns once the tablet has clearly turned (not near a diagonal, not lying flat) and stayed so for 0.7 s - a tilt and back turns nothing. With the tablet's auto-rotate off, the screen stays as the tablet's lock holds it (it used to turn anyway). Portrait, Landscape and Locked are as before.
+- Comics and webtoons: Enhance, Enhance colours and Crop edges are back in the series' settings in the reader (Comic settings, or Webtoon settings), under the same Override defaults as the fit, direction and page colours - one switch for all of it, and Make default takes all of it. The separate Image settings button and panel are gone. A series that already had only its layout or only its image settings of its own keeps them; the other part follows the defaults until you change it.
+
+### Build 147 - 2026-10-23
+
+**Fixed**
+
+- Webtoons: a right-click that stops auto-scroll now brings the floating play button where it was, as a tap does.
+
+### Build 146 - 2026-10-22
+
+**New**
+
+- Webtoons: Image settings (Enhance, Enhance colours, Crop edges) now apply to the strip, drawn by the same processing as comics' pages - webtoons' own defaults (Settings > Webtoons > Image - defaults) and per series (the Image settings button). Crop edges trims only the sides of a strip, so nothing is lost where one slice runs into the next.
+- Webtoons: double-tap to zoom in on a spot (twice as big, as a comic's page) and double-tap again to zoom out; webtoons' own switch on the Webtoons page and in Webtoon settings.
+
+**Fixed**
+
+- Webtoons: a series' page shows its episodes with the series cover straight away - it checks with Komga itself whether the series is a webtoon (opened from a book or a pin, the episodes kept their first pages until the app had seen the series elsewhere).
+
+### Build 145 - 2026-10-22
+
+**Changed**
+
+- Webtoons in the library: an episode's poster is the series' cover with an "Ep. N" badge, not a cut-off piece of its first page. Give the series a cover in Komga (the series' Edit > Poster) and every episode shows it. The app learns which series are webtoons as it meets them (a series list, a series' page, the reader) and remembers them on this device.
+- Webtoons, auto-scroll: a tap on the strip while it scrolls stops it and brings up the controls, with a big play button right where you tapped to carry on (the bar's button is play when stopped, stop while it runs). Tap anywhere else and the controls close, still stopped. The speed is now also in Settings > Webtoons and the Webtoon settings panel.
+
+### Build 144 - 2026-10-22
+
+**New**
+
+- Webtoons: auto-scroll. A play button on the bottom bar scrolls the strip down by itself and puts the controls away; any touch stops it, and it stops at the end. Its speed is a slider over the bottom bar (kept on this device). Settings > Remote and keys has three new actions with no key by default: Auto-scroll on / off, Auto-scroll faster, Auto-scroll slower.
+- Webtoons open again exactly where you left them on this device, not at the top of that page (Komga keeps only the page; if another device has moved on to a different page, it opens at that page's top as before).
+- Webtoons: pinch to zoom (up to 4 times, about the point between your fingers); zoomed in, one finger moves the strip across. On the PC, Ctrl + the wheel and the zoom keys zoom too. Each book opens unzoomed.
+- Webtoons: a Gutter setting - the space between one picture and the next, in the page colours, like a page break: None, 2 px (the default), 8 px or 16 px. A reading default on the Webtoons page, and per series in Webtoon settings.
+
+### Build 143 - 2026-10-22
+
+**Changed**
+
+- Webtoons: the fit button says "Fit page height" for that fit, and the Smooth / Page row is called Mode (it repeated its group's name, Scrolling).
+
+### Build 142 - 2026-10-22
+
+**Changed**
+
+- Webtoons are now their own kind of book, with their own Settings page (Settings > Webtoons) and their own reading defaults, synced: Fit - Original size (the default), Fit width or Fit page height (one page as tall as the screen) - and page colours. They share nothing with comics but the Reading page. A series Komga marks as Webtoon uses them; a comic set to Vertical scroll keeps its comic settings. In the reader: Webtoon settings instead of Comic settings.
+- Webtoons: Tap zones - Left / right (as before) or Top / bottom, where the bottom third scrolls down and the top up; with Scrolling (Smooth / Page) on the Webtoons page and in the Webtoon settings panel. Webtoons have their own position text too.
+
+### Build 141 - 2026-10-22
+
+**Fixed**
+
+- Webtoons on Windows: no scroll bar over the strip.
+
+**Changed**
+
+- Webtoons, the Comic settings panel: no Direction, Dual page mode or Gutter (they mean nothing in a strip); Webtoon scrolling (Smooth / Page) is there instead.
+
+### Build 140 - 2026-10-22
+
+**Changed**
+
+- Webtoons open at their own size - one picture pixel to a screen pixel, centred - instead of blown up to the screen's width. The fit button (and the series' Fit) now works in a webtoon: Original size or Fit width.
+- Webtoon scrolling, Page: the mouse wheel and a held key now move a screen at a time too (they scrolled as in Smooth); a spun wheel no longer loses half its notches.
+
+### Build 139 - 2026-10-22
+
+**New**
+
+- Webtoons: a series Komga marks as Webtoon (or one set to the new Direction choice, Vertical scroll) reads as one continuous strip scrolled down - the full width of a tall screen, a centred column on a wide one. The wheel scrolls as far as it spins, a held key or remote button scrolls steadily, and a tap at the side or one press glides a short way - or most of a screen with Settings > Comics > Webtoon scrolling: Page. The end card follows the last slice, as with any book. (First version: no zoom, Enhance or page curl in the strip yet.)
+
 ## 1.4.1
 
 **Released as build 138, tagged `v1.4.1`** (2026-10-22). No release candidates.

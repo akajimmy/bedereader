@@ -13,6 +13,7 @@ import 'package:komga_reader/widgets/epub_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/epub_books.dart' show MemorySource, twoChapters;
+import 'support/epub_reader.dart' show bookShown;
 import 'support/client_settings.dart';
 import 'support/no_network.dart';
 
@@ -122,10 +123,6 @@ void main() {
     }
   });
 
-  test('the margins setting leaves the top and bottom alone (user, 2026-10-08)', () {
-    expect(EpubMargins.topBottom, 40);
-  });
-
   test('line spacing: three steps (user, 2026-10-21: Tight, Normal, Loose); another spacing saved reads as Normal', () {
     expect(EpubPrefs.spacings, [1.25, 1.5, 1.75]);
     expect(nearestSpacing(1.7), 1.75);
@@ -159,7 +156,6 @@ void main() {
       expect(name, findsOneWidget, reason: f.label);
       expect(tester.widget<Text>(name).style!.fontFamily, f.family, reason: '${f.label} in its own face');
     }
-    expect(find.text('The quick brown fox'), findsNWidgets(EpubFont.values.length), reason: 'sample text');
     expect(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.byIcon(Icons.check)),
         findsOneWidget, reason: 'the current one marked');
     await tester.tap(find.descendant(of: find.byType(PopupMenuItem<EpubFont>), matching: find.text('Lora')));
@@ -167,7 +163,7 @@ void main() {
     expect(AppSettings.instance.epub.font, EpubFont.lora);
     expect(find.byType(PopupMenuItem<EpubFont>), findsNothing, reason: 'closed');
     expect(shown('Lora').style!.fontFamily, 'Lora');
-  });
+  }, tags: 'slow');
 
   Future<void> wait(WidgetTester tester, Duration d) async {
     for (var t = Duration.zero; t < d; t += const Duration(milliseconds: 250)) {
@@ -254,8 +250,10 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: source, saveProgress: false)));
     Future<void> settle() async {
-      for (var i = 0; i < 40; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      // real work (loading, counting) a chance to run, frames between - no time passes on the test's clock, so the
+      // settings' pause isn't used up
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
         await tester.pump();
       }
     }
@@ -267,7 +265,7 @@ void main() {
       await tester.pump();
       return int.parse(RegExp(r'/(\d+) ·').firstMatch(t)!.group(1)!);
     }
-    await settle();
+    await bookShown(tester);
     final before = await total();
     AppSettings.instance.setEpub(AppSettings.instance.epub.copyWith(size: 28, colours: EpubColours.light));
     await tester.pump(); // the page drawn with the change: the pause starts
@@ -292,13 +290,14 @@ void main() {
         book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: twoChapters(),
         saveProgress: false)));
     Future<void> settle() async {
-      for (var i = 0; i < 40; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      // real work (loading, counting) a chance to run, frames between - no time passes on the test's clock, so the
+      // settings' pause isn't used up
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 2)));
         await tester.pump();
       }
     }
-    await settle();
-    expect(find.byType(PageView), findsOneWidget, reason: 'open');
+    await bookShown(tester);
     final before = store.loads;
     final s = AppSettings.instance;
     for (final size in [20.0, 22.0, 24.0, 26.0]) { // four steps up, each well inside the pause

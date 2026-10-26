@@ -1,10 +1,17 @@
+// ios parity (test audit, 2026-10-23: pc_rotation_test.dart folded in).
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// iOS brought in line with Android (user, 2026-10-22: "brightness like Android, Save / Copy page, Wi-Fi only
-/// downloads, Device serif = Georgia"): the Dart side asks iOS's native side as it asks Android's.
+// iOS brought in line with Android (user, 2026-10-22: "brightness like Android, Save / Copy page, Wi-Fi only
+// downloads, Device serif = Georgia"): the Dart side asks iOS's native side as it asks Android's.
+
+// ---- from pc_rotation_test.dart
+// Rotation on Windows (user, 2026-10-22: "lock, where it can"): on a PC that turns its screen by itself (a tablet,
+// a 2-in-1) the lock is Windows' own auto-rotation preference; a desktop has no Rotation.
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('komga_reader/screen');
@@ -25,11 +32,63 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
   });
 
+  test('Locked keeps the way it was locked in: locked in landscape, the next book opened with the iPad upright is held '
+      'in landscape (user, 2026-10-25: it was held upright); chosen again, the way the iPad is held then', () async {
+    SharedPreferences.setMockInitialValues({});
+    final held = <Object?>[];
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (c) async {
+      if (c.method == 'SystemChrome.setPreferredOrientations') held.add((c.arguments as List).join(','));
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    var way = 'landscape';
+    answer = (c) => c.method == 'currentWayUp' ? way : null;
+    final lock = OrientationLock.instance;
+
+    await lock.holdNow(); // Locked chosen, the iPad on its side
+    await lock.release(); // the book closed
+    way = 'portrait'; // the iPad upright
+    held.clear();
+    await lock.holdNow(chosen: false); // the next book opens with Locked on
+    expect(held, ['DeviceOrientation.landscapeLeft'], reason: 'as it was locked');
+
+    held.clear();
+    await lock.holdNow(); // Locked chosen again, now upright
+    expect(held.first, 'DeviceOrientation.portraitUp');
+    await lock.release();
+    way = 'landscape';
+    held.clear();
+    await lock.holdNow(chosen: false);
+    expect(held, ['DeviceOrientation.portraitUp']);
+    await lock.release();
+  });
+
+  test("the app's folder (the downloads) is kept out of iCloud backup: iOS is asked once a run, for that folder - not "
+      'on Android or Windows', () async {
+    addTearDown(resetBackupAsked);
+    resetBackupAsked();
+    answer = (c) => c.method == 'storageDir' ? '/var/mobile/Containers/Data/App/Library/Application Support/BeDeReader'
+        : true;
+    expect(await appStorageDir(), endsWith('BeDeReader'));
+    await appStorageDir();
+    expect(calls.map((c) => c.method), ['storageDir', 'excludeFromBackup', 'storageDir'], reason: 'once a run');
+    expect(calls[1].arguments, endsWith('BeDeReader'));
+
+    calls.clear();
+    resetBackupAsked();
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    await appStorageDir();
+    expect(calls.map((c) => c.method), ['storageDir']);
+  });
+
   test('brightness: the backlight is set, as on Android (the Auto + slider row), not just dimmed', () async {
     expect(hasBacklightControl, isTrue);
     await setScreenBrightness(0.4);
-    expect(calls.single.method, 'brightness');
-    expect(calls.single.arguments, 0.4);
+    expect(calls.first.method, 'brightness');
+    expect(calls.first.arguments, 0.4);
+    expect(calls.skip(1).map((c) => c.method), everyElement('getBrightness'),
+        reason: 'only read back after (for the app log)');
   });
 
   test('Wi-Fi only: iOS is asked which network it is on - mobile data waits, Wi-Fi goes', () async {
@@ -59,5 +118,53 @@ void main() {
     expect(deviceSerifFamily, 'Georgia');
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     expect(deviceSerifFamily, 'serif', reason: "Android's own serif");
+  });
+
+  group('pc rotation', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const channel = MethodChannel('komga_reader/screen');
+    late List<MethodCall> calls;
+    var sensor = false;
+
+    setUp(() {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      calls = [];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (c) async {
+        calls.add(c);
+        return c.method == 'canRotate' ? sensor : true;
+      });
+    });
+    tearDown(() async {
+      sensor = false;
+      await checkPcRotation(); // (back to a desktop for the other tests)
+      debugDefaultTargetPlatformOverride = null;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    });
+
+    test('Rotation is there only on a PC with a rotation sensor', () async {
+      sensor = false;
+      await checkPcRotation();
+      expect(canRotate, isFalse, reason: 'a desktop');
+      sensor = true;
+      await checkPcRotation();
+      expect(canRotate, isTrue, reason: 'a tablet, a 2-in-1');
+    });
+
+    test("the lock is Windows' own: held, turned over, let go", () async {
+      sensor = true;
+      await checkPcRotation();
+      calls.clear();
+      final lock = OrientationLock.instance;
+      await lock.hold(portrait: false, landscape: true);
+      await lock.flip();
+      await lock.hold(portrait: true, landscape: false);
+      await lock.release();
+      expect([for (final c in calls) '${c.method} ${c.arguments}'], [
+        'holdOrientation landscape',
+        'holdOrientation reverseLandscape',
+        'holdOrientation portrait',
+        'holdOrientation none',
+      ]);
+    });
   });
 }

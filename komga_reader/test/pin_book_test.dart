@@ -90,7 +90,7 @@ void main() {
     expect(find.byType(ReaderScreen), findsOneWidget, reason: 'straight into the reader');
     expect(api.asked.where((id) => id == 'B1').length, greaterThanOrEqualTo(2), reason: 'fetched fresh to open');
     await tester.pumpWidget(const SizedBox()); // (the reader closed)
-  });
+  }, tags: 'slow');
 
   testWidgets('a pinned book gone from the server: a tap says so and offers Unpin', (tester) async {
     await home(tester, [const Pin(name: 'Lost', kind: 'book', id: 'B9', title: 'Lost')]);

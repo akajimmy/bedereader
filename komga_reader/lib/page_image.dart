@@ -19,25 +19,43 @@ class PageData {
   final Uint8List bytes;
 }
 
+/// Runs [f] [frames] frames from now (one is asked for, so it comes): a picture let go of in this frame's build may
+/// still be drawn by it - freed after, it's no longer anywhere.
+void afterFrames(VoidCallback f, [int frames = 2]) {
+  final b = WidgetsBinding.instance;
+  b.addPostFrameCallback((_) => frames <= 1 ? f() : afterFrames(f, frames - 1));
+  b.scheduleFrame();
+}
+
 /// Loads a book's pages once each and keeps the few around the current page (and the next two, preloaded).
 class PageLoader {
   PageLoader(this.api, this.bookId, this.pageNumbers);
   final Komga api;
   final String bookId;
   final List<int> pageNumbers; // index -> Komga page number (1-based)
-  final Map<int, Future<PageData>> _cache = {};
-  final Map<int, Uint8List> _loaded = {}; // the pages in [_cache] that have arrived
+  final Map<int, Future<PageData>> _cache = {}; // decoded: the pages a turn either way can need
+  final Map<int, Uint8List> _loaded = {}; // the files that have arrived - kept a little further than [_cache]
 
   /// A page already here (the one showing, its neighbours): the slider's preview uses it rather than asking Komga.
   Uint8List? loadedBytes(int i) => _loaded[i];
 
+  /// The pages held decoded, and those whose files are held.
+  @visibleForTesting
+  (Set<int>, Set<int>) get held => (_cache.keys.toSet(), _loaded.keys.toSet());
+
+  /// Tests: told of each page decoded (its index), as it's asked for.
+  @visibleForTesting
+  static void Function(int i)? onDecode;
+
   Future<PageData> get(int i) {
     final have = _cache[i];
     if (have != null) return have;
+    onDecode?.call(i);
     late final Future<PageData> load;
     load = () async {
       try {
-        final bytes = await api.pageBytes(bookId, pageNumbers[i]);
+        // (its file still here - a page come back to: decoded again, not asked for again)
+        final bytes = _loaded[i] ?? await api.pageBytes(bookId, pageNumbers[i]);
         final ui.FrameInfo frame;
         try {
           frame = await (await ui.instantiateImageCodec(bytes)).getNextFrame();
@@ -59,13 +77,35 @@ class PageLoader {
   }
 
   /// Called on every page change: preload ahead, forget pages far away (the GC frees them). [span]: pages a turn
-  /// moves (two pages up: 2 - the window twice as wide).
-  void around(int i, {int span = 1}) {
+  /// moves (two pages up: 2 - the window twice as wide). Decoded, a page takes the most memory (a 2000 x 3000 scan
+  /// about 24 MB): only one turn back and two ahead are kept so; the files (a few MB) two back and three ahead, so a
+  /// page come back to is only decoded again (user, 2026-10-24: the app was killed for memory on a 2.5 GB tablet,
+  /// two pages up - 11 pages were kept decoded).
+  ///
+  /// [free]: the pictures let go of are freed too, two frames on (the frame being built may still draw them) - left to the
+  /// garbage collector, graphics memory piled up as pages were turned and Android closed the app (user, 2026-10-24).
+  /// Only where nothing beyond these pages can be showing one (the paged view; a webtoon's strip keeps slices further
+  /// out on screen).
+  void around(int i, {int span = 1, bool free = false}) {
     for (var j = i + 1; j <= i + 2 * span; j++) {
       if (j < pageNumbers.length) get(j).ignore();
     }
-    _cache.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
-    _loaded.removeWhere((k, _) => !_cache.containsKey(k));
+    for (final k in [for (final k in _cache.keys) if (k < i - span || k > i + 2 * span) k]) {
+      final gone = _cache.remove(k)!;
+      if (free) _free(gone);
+    }
+    _loaded.removeWhere((k, _) => k < i - 2 * span || k > i + 3 * span);
+  }
+
+  static void _free(Future<PageData> page) =>
+      page.then((d) => afterFrames(d.image.dispose), onError: (Object _) {});
+
+  /// The book closed: every picture freed (two frames on).
+  void freeAll() {
+    for (final f in _cache.values) {
+      _free(f);
+    }
+    _cache.clear();
   }
 
   Future<Levels>? _bookLevels;
@@ -195,9 +235,11 @@ class Tone {
       ];
 }
 
-/// Crop edges: [img] with [share] of its width and height cut off every side (a quick GPU copy, once per page).
-Future<ui.Image> cropEdges(ui.Image img, double share) {
-  final dx = (img.width * share).round(), dy = (img.height * share).round();
+/// Crop edges: [img] with [share] of its width and height cut off every side (a quick GPU copy, once per page) -
+/// [sidesOnly]: the left and right only (a webtoon's slices: cut at top and bottom, the strip would lose what runs
+/// from one into the next).
+Future<ui.Image> cropEdges(ui.Image img, double share, {bool sidesOnly = false}) {
+  final (dx, dy) = cropInset(img.width, img.height, share, sidesOnly: sidesOnly);
   final w = img.width - 2 * dx, h = img.height - 2 * dy;
   final rec = ui.PictureRecorder();
   Canvas(rec).drawImageRect(img, Rect.fromLTWH(dx.toDouble(), dy.toDouble(), w.toDouble(), h.toDouble()),
@@ -209,6 +251,16 @@ Future<ui.Image> cropEdges(ui.Image img, double share) {
 /// Two pages side by side as one picture, left to right as given (two pages up - lib/reader/spreads.dart): the
 /// shorter one scaled to the taller's height, so they meet edge to edge at the spine (a GPU copy, once per pair).
 /// [gap]: the gutter between them, picture pixels, filled with [fill] (user, 2026-10-20: a setting).
+/// What [cropEdges] cuts off each side of a [width] x [height] picture: (left and right, top and bottom).
+(int, int) cropInset(int width, int height, double share, {bool sidesOnly = false}) =>
+    ((width * share).round(), sidesOnly ? 0 : (height * share).round());
+
+/// The size of a [width] x [height] picture after [cropEdges].
+Size croppedSize(int width, int height, double share, {bool sidesOnly = false}) {
+  final (dx, dy) = cropInset(width, height, share, sidesOnly: sidesOnly);
+  return Size((width - 2 * dx).toDouble(), (height - 2 * dy).toDouble());
+}
+
 Future<ui.Image> joinPages(List<ui.Image> images, {double gap = 0, Color fill = const Color(0xFF000000)}) {
   final h = images.map((i) => i.height).reduce(math.max);
   final rec = ui.PictureRecorder();
@@ -283,26 +335,15 @@ class PageCanvas extends StatefulWidget {
   /// and the reader (which forgets the zoom on a turn) agrees with it (code review, 2026-09-30).
   final bool current;
 
+  /// How far a double tap zooms in - a comic's page, a webtoon's strip.
+  static const doubleTapScale = 2.0;
+
   @override
   State<PageCanvas> createState() => _PageCanvasState();
 }
 
 class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateMixin {
-  Levels _levels = Levels.identity;
-  // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
-  // Crop edges: the page with the chosen share cut off every side (null = not cropped)
-  ui.Image? _cropped;
-  double _croppedBy = 0;
-  ui.Image? _coloured;
-  bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
-  bool _cropFailed = false; // the crop pass failed: the page uncropped
-  int _colourRun = 0;
-  // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
-  ui.Image? _enhanced;
-  Size? _enhancedFor;
-  bool _enhanceFailed = false;
-  bool _drawn = false; // this page has been on screen: switching Enhance on keeps it there meanwhile
-  int _enhanceRun = 0; // a newer request (page / size / switch changed) makes older results stale
+  final _pictureKey = GlobalKey(); // the processed picture, kept through a change of fit
   late final TransformationController _zoom = widget.zoom ?? TransformationController();
   bool _zoomedIn = false;
   Size? _viewport; // fit-screen layout, for stepping: the viewer's size...
@@ -324,7 +365,6 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     widget.onStepper?.call(_step);
     widget.onZoomToggle?.call(_toggleZoom);
     widget.onZoomStep?.call(_zoomStep);
-    _prepare();
   }
 
   @override
@@ -333,11 +373,6 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     widget.onStepper?.call(null);
     widget.onZoomToggle?.call(null);
     widget.onZoomStep?.call(null);
-    _enhanceRun++;
-    _enhanced?.dispose();
-    _colourRun++;
-    _coloured?.dispose();
-    _cropped?.dispose();
     _anim.dispose();
     _across.dispose();
     if (widget.zoom == null) _zoom.dispose();
@@ -407,8 +442,6 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
 
   Matrix4? _heading; // where the last move goes (a zoom step pressed while one moves starts from there)
 
-  static const doubleTapScale = 2.0;
-
   /// Double-tap zoom: in to [doubleTapScale] with the tapped spot staying where it is - moved just enough to keep
   /// the screen inside the page (a tap in the black bars beside a page zooms on its nearest edge) - or, zoomed in
   /// (by double tap or pinch), back out to fit.
@@ -419,7 +452,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       _animateTo(Matrix4.identity());
       return;
     }
-    const k = doubleTapScale;
+    const k = PageCanvas.doubleTapScale;
     final p = box.globalToLocal(global);
     final tx = _keep(p.dx * (1 - k), vp.width - k * pic.right, -k * pic.left);
     final ty = _keep(p.dy * (1 - k), vp.height - k * pic.bottom, -k * pic.top);
@@ -472,22 +505,6 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
         if (_zoomedIn) _zoom.value = Matrix4.identity();
       });
     }
-    final cropChanged = old.prefs.crop != widget.prefs.crop;
-    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data || cropChanged) {
-      if (old.data != widget.data || !widget.prefs.autoLevels || cropChanged) {
-        _coloured?.dispose();
-        _coloured = null;
-      }
-      if (old.data != widget.data || cropChanged) {
-        _cropped?.dispose();
-        _cropped = null;
-      }
-      _colourFailed = false;
-      _dropEnhanced();
-      _prepare();
-    }
-    if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
-    if (old.data != widget.data) _drawn = false;
     // a new page, a fresh controller (going back swaps it), or told to start at the end: place the scroll again
     // ... and a change of fit: going round the fits again left a wide page at the left edge (tablet, 2026-09-30)
     if (old.data != widget.data || old.scroll != widget.scroll || (widget.startAtEnd && !old.startAtEnd) ||
@@ -497,144 +514,15 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
     }
   }
 
-  /// Enhance colours: the book's levels, then the colour-corrected page (the page shows with plain auto-levels
-  /// until it's ready; without the shaders that's what stays).
-  Future<void> _prepare() async {
-    final p = widget.prefs;
-    final run = ++_colourRun;
-    _cropFailed = false;
-    try {
-      await _prepareNow(p, run);
-    } catch (e) {
-      // a pass failed (the GPU couldn't - a very tall page past its texture limit): the page shown plain, quietly,
-      // not a spinner for good (code review 2026-10-05, #8)
-      debugPrint('page colours / crop failed ($e): shown plain');
-      if (!mounted || run != _colourRun) return;
-      setState(() {
-        _colourFailed = p.autoLevels;
-        _cropFailed = p.crop > 0 && _cropped == null;
-        _dropEnhanced();
-      });
-    }
-  }
-
-  Future<void> _prepareNow(ReaderPrefs p, int run) async {
-    if (p.crop > 0 || p.autoLevels) {
-      await widget.idle?.call(); // off screen: the crop and colour passes wait until no page turn is playing
-      if (!mounted || run != _colourRun) return;
-    }
-    var img = widget.data.image;
-    if (p.crop > 0) {
-      if (_cropped == null || _croppedBy != p.crop) {
-        final cut = await cropEdges(img, p.crop);
-        if (!mounted || run != _colourRun) { cut.dispose(); return; }
-        setState(() {
-          _cropped?.dispose();
-          _cropped = cut;
-          _croppedBy = p.crop;
-        });
-      }
-      img = _cropped!;
-    }
-    // the book's levels: known - used; not yet (a book's first page: they're measured from five pages, all
-    // downloaded first) - the page shows at once with neutral levels, and is done again once they're in (it waited
-    // for them - code review 2026-10-05, #39; user's choice: show plain, then adjust)
-    var levels = Levels.identity;
-    if (p.autoLevels && widget.levels != null) {
-      final known = widget.levelsNow?.call();
-      if (known != null) {
-        levels = known;
-      } else if (widget.levelsNow == null) {
-        levels = await widget.levels!();
-      } else {
-        unawaited(widget.levels!().then((_) {
-          if (mounted && run == _colourRun) _prepare();
-        }, onError: (Object _) {}));
-      }
-    }
-    if (!mounted || run != _colourRun) return;
-    setState(() => _levels = levels);
-    ui.Image? coloured;
-    if (p.autoLevels) coloured = await Enhancer.colours(img, levels.lo, levels.hi);
-    if (!mounted || run != _colourRun) { coloured?.dispose(); return; }
-    setState(() {
-      _coloured?.dispose();
-      _coloured = coloured;
-      _colourFailed = p.autoLevels && coloured == null;
-      _dropEnhanced(); // Enhance starts again from the new colours
-    });
-  }
-
-  void _dropEnhanced() {
-    _enhanceFailed = false;
-    _enhanceRun++;
-    _enhanced?.dispose();
-    _enhanced = null;
-    _enhancedFor = null;
-  }
-
-  /// Makes the enhanced picture for [physical] (after this frame; the page shows plain until it's ready).
-  void _enhance(Size physical, ui.Image img) {
-    if (_enhancedFor == physical) return;
-    _enhancedFor = physical; // requested: don't ask again for this size
-    final run = ++_enhanceRun;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (run != _enhanceRun || !mounted) return;
-      await widget.idle?.call(); // off screen: not during a page turn
-      if (run != _enhanceRun || !mounted) return;
-      ui.Image? out;
-      try {
-        out = await Enhancer.run(img, physical.width.round(), physical.height.round());
-      } catch (e) {
-        debugPrint('enhance failed ($e): shown plain'); // (#8: it used to stay on its spinner)
-      }
-      if (out == null) {
-        if (run == _enhanceRun && mounted) setState(() => _enhanceFailed = true); // can't run here: plain
-        return;
-      }
-      if (run != _enhanceRun || !mounted) { out.dispose(); return; }
-      setState(() {
-        _enhanced?.dispose();
-        _enhanced = out;
-      });
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final img = widget.data.image;
-    final cropping = widget.prefs.crop > 0;
-    final base = _coloured ?? (cropping ? _cropped : null) ?? img; // Enhance colours already applied levels and crop
+    // the page as shown: cropped (Crop edges) - its processing is ProcessedPicture's
+    final base = croppedSize(img.width, img.height, widget.prefs.crop);
     final aspect = base.width / base.height;
-    final tone = Tone.of(widget.prefs, _coloured != null ? Levels.identity : _levels);
-    final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings
     final dpr = MediaQuery.devicePixelRatioOf(context);
-
-    Widget picture(Size size) {
-      // hold the page until its processing is ready, rather than flash the unprocessed page (user, 2026-09-29)
-      Widget waiting() => SizedBox(width: size.width, height: size.height,
-          child: const Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))));
-      if (widget.prefs.autoLevels && _coloured == null && !_colourFailed) return waiting();
-      if (cropping && _cropped == null && !_cropFailed) return waiting();
-      var source = base;
-      if (enhance && !_enhanceFailed) {
-        final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());
-        if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
-          _enhance(physical, base);
-          // until the first picture is ready: wait; after a resize (rotation): the old one, stretched, meanwhile
-          // until the first picture is ready: a page appearing waits (no flash of the unprocessed page - user,
-          // 2026-09-29); a page already on screen (Enhance switched on while reading) stays as it is meanwhile - it
-          // vanished and came back (user, build 73)
-          if (_enhanced == null && !_drawn) return waiting();
-          if (_enhanced != null) source = _enhanced!;
-        }
-      }
-      // medium: at rest the enhanced picture is drawn 1:1 (so unchanged); pinch-zoomed it's smoothly magnified
-      _drawn = true;
-      final raw = RawImage(image: source, width: size.width, height: size.height, fit: BoxFit.fill,
-          filterQuality: FilterQuality.medium);
-      return tone.isIdentity ? raw : ColorFiltered(colorFilter: ColorFilter.matrix(tone.matrix), child: raw);
-    }
+    Widget picture(Size size) => ProcessedPicture(key: _pictureKey, data: widget.data, prefs: widget.prefs, size: size,
+        levels: widget.levels, levelsNow: widget.levelsNow, idle: widget.idle);
 
     return LayoutBuilder(builder: (context, box) {
       final w = box.maxWidth, h = box.maxHeight;
@@ -682,7 +570,7 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   /// Original size (user, 2026-10-02): one page pixel to one screen pixel. Smaller than the screen: centred. Taller:
   /// scrolls down, as in fit width. Wider: scrolls across, as a wide page in fit height (page swipes pause; dragging
   /// on past the edge turns). Both: down with the reader's scroll, across by dragging. Overflowing, it opens centred.
-  Widget _original(Widget Function(Size) picture, ui.Image base, double dpr, double w, double h) {
+  Widget _original(Widget Function(Size) picture, Size base, double dpr, double w, double h) {
     final s = Size(base.width / dpr, base.height / dpr);
     final tall = s.height > h, wide = s.width > w;
     final shown = Rect.fromLTWH(wide ? 0 : (w - s.width) / 2, tall ? 0 : (h - s.height) / 2,
@@ -795,3 +683,229 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
       );
 }
 
+/// A page's picture at [size], with the series' image settings: Crop edges, Enhance colours (the book's levels, the
+/// colour shaders), Enhance (at the exact physical size it's drawn at) and the plain levels while those are pending -
+/// each made once and kept. Comic pages (PageCanvas) and a webtoon's slices both draw with it (user, 2026-10-22:
+/// webtoons' image settings, "re-using as much as possible"). [sidesOnly]: Crop edges cuts the left and right only (a
+/// strip).
+class ProcessedPicture extends StatefulWidget {
+  const ProcessedPicture({super.key, required this.data, required this.prefs, required this.size, this.levels,
+      this.levelsNow, this.idle, this.sidesOnly = false});
+  final PageData data;
+  final ReaderPrefs prefs;
+  final Size size;
+  final Future<Levels> Function()? levels; // the book's auto-levels (used when auto-levels is on)
+  final Levels? Function()? levelsNow; // those levels if already known (else the page doesn't wait for them)
+  final Future<void> Function()? idle; // off screen: the passes wait for no page turn ([PageCanvas.idle])
+  final bool sidesOnly;
+
+  /// A page's new size (turned, a window resized) is enhanced again once it has stayed put this long.
+  @visibleForTesting
+  static const settle = Duration(milliseconds: 500);
+
+  @override
+  State<ProcessedPicture> createState() => _ProcessedPictureState();
+}
+
+class _ProcessedPictureState extends State<ProcessedPicture> {
+  Levels _levels = Levels.identity;
+  // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
+  // Crop edges: the page with the chosen share cut off every side (null = not cropped)
+  ui.Image? _cropped;
+  double _croppedBy = 0;
+  ui.Image? _coloured;
+  bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
+  bool _cropFailed = false; // the crop pass failed: the page uncropped
+  int _colourRun = 0;
+  // Enhance (lib/enhance.dart): the page processed at the exact physical size it's shown at, made once per size
+  ui.Image? _enhanced;
+  Size? _enhancedFor;
+  bool _enhanceFailed = false;
+  bool _drawn = false; // this page has been on screen: switching Enhance on keeps it there meanwhile
+  int _enhanceRun = 0; // a newer request (page / size / switch changed) makes older results stale
+
+  @override
+  void initState() {
+    super.initState();
+    _prepare();
+  }
+
+  @override
+  void dispose() {
+    _enhanceRun++;
+    _enhanced?.dispose();
+    _colourRun++;
+    _coloured?.dispose();
+    _cropped?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(ProcessedPicture old) {
+    super.didUpdateWidget(old);
+    final cropChanged = old.prefs.crop != widget.prefs.crop;
+    if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data || cropChanged) {
+      if (old.data != widget.data || !widget.prefs.autoLevels || cropChanged) {
+        _coloured?.dispose();
+        _coloured = null;
+      }
+      if (old.data != widget.data || cropChanged) {
+        _cropped?.dispose();
+        _cropped = null;
+      }
+      _colourFailed = false;
+      _dropEnhanced();
+      _prepare();
+    }
+    if (old.data != widget.data || !widget.prefs.sharpen) _dropEnhanced();
+    if (old.data != widget.data) _drawn = false;
+  }
+
+  /// Enhance colours: the book's levels, then the colour-corrected page (the page shows with plain auto-levels
+  /// until it's ready; without the shaders that's what stays).
+  Future<void> _prepare() async {
+    final p = widget.prefs;
+    final run = ++_colourRun;
+    _cropFailed = false;
+    try {
+      await _prepareNow(p, run);
+    } catch (e) {
+      // a pass failed (the GPU couldn't - a very tall page past its texture limit): the page shown plain, quietly,
+      // not a spinner for good (code review 2026-10-05, #8)
+      debugPrint('page colours / crop failed ($e): shown plain');
+      if (!mounted || run != _colourRun) return;
+      setState(() {
+        _colourFailed = p.autoLevels;
+        _cropFailed = p.crop > 0 && _cropped == null;
+        _dropEnhanced();
+      });
+    }
+  }
+
+  Future<void> _prepareNow(ReaderPrefs p, int run) async {
+    if (p.crop > 0 || p.autoLevels) {
+      await widget.idle?.call(); // off screen: the crop and colour passes wait until no page turn is playing
+      if (!mounted || run != _colourRun) return;
+    }
+    var img = widget.data.image;
+    if (p.crop > 0) {
+      if (_cropped == null || _croppedBy != p.crop) {
+        final cut = await cropEdges(img, p.crop, sidesOnly: widget.sidesOnly);
+        if (!mounted || run != _colourRun) { cut.dispose(); return; }
+        setState(() {
+          _cropped?.dispose();
+          _cropped = cut;
+          _croppedBy = p.crop;
+        });
+      }
+      img = _cropped!;
+    }
+    // the book's levels: known - used; not yet (a book's first page: they're measured from five pages, all
+    // downloaded first) - the page shows at once with neutral levels, and is done again once they're in (it waited
+    // for them - code review 2026-10-05, #39; user's choice: show plain, then adjust)
+    var levels = Levels.identity;
+    if (p.autoLevels && widget.levels != null) {
+      final known = widget.levelsNow?.call();
+      if (known != null) {
+        levels = known;
+      } else if (widget.levelsNow == null) {
+        levels = await widget.levels!();
+      } else {
+        unawaited(widget.levels!().then((_) {
+          if (mounted && run == _colourRun) _prepare();
+        }, onError: (Object _) {}));
+      }
+    }
+    if (!mounted || run != _colourRun) return;
+    setState(() => _levels = levels);
+    ui.Image? coloured;
+    if (p.autoLevels) coloured = await Enhancer.colours(img, levels.lo, levels.hi);
+    if (!mounted || run != _colourRun) { coloured?.dispose(); return; }
+    setState(() {
+      _coloured?.dispose();
+      _coloured = coloured;
+      _colourFailed = p.autoLevels && coloured == null;
+      _dropEnhanced(); // Enhance starts again from the new colours
+    });
+  }
+
+  void _dropEnhanced() {
+    _enhanceFailed = false;
+    _enhanceRun++;
+    _enhanced?.dispose();
+    _enhanced = null;
+    _enhancedFor = null;
+  }
+
+  /// Makes the enhanced picture for [physical] (after this frame; the page shows plain until it's ready).
+  void _enhance(Size physical, ui.Image img) {
+    if (_enhancedFor == physical) return;
+    // a new size for a page already made (turned, a window resized): once the size has stayed put - a rotation
+    // passes through several, each a full Enhance otherwise (user, 2026-10-24: closed for memory turning the tablet);
+    // the one made before stays, scaled, meanwhile
+    final resized = _enhancedFor != null && _enhanced != null;
+    _enhancedFor = physical; // requested: don't ask again for this size
+    final run = ++_enhanceRun;
+    Future<void> make() async {
+      if (run != _enhanceRun || !mounted) return;
+      await widget.idle?.call(); // off screen: not during a page turn
+      if (run != _enhanceRun || !mounted) return;
+      ui.Image? out;
+      try {
+        out = await Enhancer.run(img, physical.width.round(), physical.height.round());
+      } catch (e) {
+        debugPrint('enhance failed ($e): shown plain'); // (#8: it used to stay on its spinner)
+      }
+      if (out == null) {
+        if (run == _enhanceRun && mounted) setState(() => _enhanceFailed = true); // can't run here: plain
+        return;
+      }
+      if (run != _enhanceRun || !mounted) { out.dispose(); return; }
+      setState(() {
+        _enhanced?.dispose();
+        _enhanced = out;
+      });
+    }
+
+    if (resized) {
+      Timer(ProcessedPicture.settle, make); // (a size after it, sooner: this run is stale, nothing done)
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => make()); // (after this frame)
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final img = widget.data.image;
+    final cropping = widget.prefs.crop > 0;
+    final base = _coloured ?? (cropping ? _cropped : null) ?? img; // Enhance colours already applied levels and crop
+    final tone = Tone.of(widget.prefs, _coloured != null ? Levels.identity : _levels);
+    final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+
+    final size = widget.size;
+    // hold the page until its processing is ready, rather than flash the unprocessed page (user, 2026-09-29)
+    Widget waiting() => SizedBox(width: size.width, height: size.height,
+        child: const Center(child: SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 2))));
+    if (widget.prefs.autoLevels && _coloured == null && !_colourFailed) return waiting();
+    if (cropping && _cropped == null && !_cropFailed) return waiting();
+    var source = base;
+    if (enhance && !_enhanceFailed) {
+      final physical = Size((size.width * dpr).roundToDouble(), (size.height * dpr).roundToDouble());
+      if (physical.longestSide <= 8192) { // GPU texture limits; beyond that it stays plain
+        _enhance(physical, base);
+        // until the first picture is ready: wait; after a resize (rotation): the old one, stretched, meanwhile
+        // until the first picture is ready: a page appearing waits (no flash of the unprocessed page - user,
+        // 2026-09-29); a page already on screen (Enhance switched on while reading) stays as it is meanwhile - it
+        // vanished and came back (user, build 73)
+        if (_enhanced == null && !_drawn) return waiting();
+        if (_enhanced != null) source = _enhanced!;
+      }
+    }
+    // medium: at rest the enhanced picture is drawn 1:1 (so unchanged); pinch-zoomed it's smoothly magnified
+    _drawn = true;
+    final raw = RawImage(image: source, width: size.width, height: size.height, fit: BoxFit.fill,
+        filterQuality: FilterQuality.medium);
+    return tone.isIdentity ? raw : ColorFiltered(colorFilter: ColorFilter.matrix(tone.matrix), child: raw);
+  }
+}

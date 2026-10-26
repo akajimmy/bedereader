@@ -20,12 +20,14 @@ import '../widgets/home_sections_editor.dart';
 import '../widgets/server_status.dart';
 import '../widgets/setting_rows.dart';
 import 'about.dart';
+import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
+import 'remote_test.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
-enum SettingsPage { reading, comics, ebooks, keys, server, library, downloads, look, about }
+enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, downloads, look, about }
 
 /// The headings the pages are listed under.
 enum SettingsSection { reading, app, help }
@@ -42,6 +44,7 @@ extension SettingsPageInfo on SettingsPage {
   String get label => switch (this) {
         SettingsPage.reading => 'Reading',
         SettingsPage.comics => 'Comics',
+        SettingsPage.webtoons => 'Webtoons',
         SettingsPage.ebooks => 'eBooks',
         SettingsPage.keys => 'Remote and keys',
         SettingsPage.server => 'Server and sync',
@@ -53,6 +56,7 @@ extension SettingsPageInfo on SettingsPage {
   IconData get icon => switch (this) {
         SettingsPage.reading => Icons.menu_book_outlined,
         SettingsPage.comics => Icons.chrome_reader_mode_outlined,
+        SettingsPage.webtoons => Icons.view_day_outlined,
         SettingsPage.ebooks => Icons.text_fields,
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.server => Icons.dns_outlined,
@@ -62,15 +66,17 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.about => Icons.info_outline,
       };
   SettingsSection get section => switch (this) {
-        SettingsPage.reading || SettingsPage.comics || SettingsPage.ebooks || SettingsPage.keys => SettingsSection.reading,
+        SettingsPage.reading || SettingsPage.comics || SettingsPage.webtoons || SettingsPage.ebooks ||
+            SettingsPage.keys =>
+          SettingsSection.reading,
         SettingsPage.about => SettingsSection.help,
         _ => SettingsSection.app,
       };
 
   /// Where the page's settings are kept, said once under its title (a synced group is also marked itself).
   String? get scope => switch (this) {
-        SettingsPage.reading => 'For comics and eBooks alike. Kept on this device',
-        SettingsPage.comics || SettingsPage.ebooks => 'Groups marked synced are the same on every device (through '
+        SettingsPage.reading => 'For every kind of book. Kept on this device',
+        SettingsPage.comics || SettingsPage.webtoons || SettingsPage.ebooks => 'Groups marked synced are the same on every device (through '
             'Komga); the rest are kept on this device',
         SettingsPage.server => null,
         SettingsPage.library => 'Kept on this device, except On deck (synced)',
@@ -214,6 +220,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       KeyedSubtree(key: ValueKey(p), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: switch (p) {
         SettingsPage.reading => [_live((s) => _reading(context, s))],
         SettingsPage.comics => [_live((s) => _comics(context, s))],
+        SettingsPage.webtoons => [_live((s) => _webtoons(context, s))],
         SettingsPage.ebooks => [_live((s) => _ebooks(context, s))],
         SettingsPage.server => _server(context),
         SettingsPage.look => [_live((s) => _look(context, s))],
@@ -286,6 +293,28 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     ]);
   }
 
+  // ---- Webtoons: their own settings - nothing shared with comics but the Reading page (user, 2026-10-22: "a clean
+  // split") --------------------------------------------------------------------------------------------------------
+  Widget _webtoons(BuildContext context, AppSettings s) {
+    final p = s.webtoonDefaults;
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      const Padding(
+        padding: EdgeInsets.fromLTRB(4, 0, 4, 14),
+        child: Text('For the series Komga marks as webtoons; a series can override them in the reader (Webtoon '
+            'settings).', style: TextStyle(color: hintColour)),
+      ),
+      SettingsGroup(title: 'Pages - defaults', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
+      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+        ...imageRows(p, s.setWebtoonDefault),
+        ActionRow(title: 'Image settings back to the original',
+            button: TextButton(onPressed: () => s.setWebtoonDefault(p.imageReset()), child: const Text('Reset to original'))),
+      ]),
+      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
+        webtoonDoubleTapRow(s)]),
+      SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.webtoons)]),
+    ]);
+  }
+
   // ---- eBooks ----------------------------------------------------------------------------------------------------
   Widget _ebooks(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         ...epubSettingRows(context, s.epub, s.setEpub, insetRow: insetPageRow(s), inset: s.display.insetPage),
@@ -345,6 +374,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       // the screens with a side menu (Home, the libraries, a series...) - no key by default (user, 2026-10-12)
       SettingsGroup(title: 'Anywhere else', children: [
         _KeyRow(action: ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
+      ]),
+      // what a remote sends, and where it's lost (user, 2026-10-25: the Chromecast remote on the iPad)
+      SettingsGroup(title: 'Remote', children: [
+        ActionRow(title: 'Test the remote', icon: Icons.settings_remote_outlined,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RemoteTestScreen()))),
       ]),
     ]);
   }
@@ -587,7 +621,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ActionRow(title: 'Third-party software', icon: Icons.extension_outlined,
             onTap: () => open(DocumentScreen.thirdParty())),
         ActionRow(title: 'Error log', icon: Icons.report_outlined, onTap: () => open(const ErrorLogScreen())),
+        ActionRow(title: 'App log', icon: Icons.description_outlined, onTap: () => open(const AppLogScreen())),
       ]),
+      const RemoteLogGroup(),
       SettingsGroup(title: 'This device', children: [
         ActionRow(
           title: "Reset this device's settings",

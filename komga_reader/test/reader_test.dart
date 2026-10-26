@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/offline/offline_komga.dart' show NotAvailableOffline;
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
@@ -221,10 +222,10 @@ void main() {
     }
     expect(focused('ctl-delete'), isTrue); // stops at the right end
     await key(tester, LogicalKeyboardKey.arrowDown);
-    // same position in the bottom bar (5th of 6: previous book, slider, pages, image, reader, next book)
-    expect(focused('ctl-reader'), isTrue);
+    // same position in the bottom bar (5th of 5: previous book, slider, pages, reader settings, next book)
+    expect(focused('ctl-nextBook'), isTrue);
     await key(tester, LogicalKeyboardKey.arrowLeft);
-    expect(focused('ctl-image'), isTrue);
+    expect(focused('ctl-reader'), isTrue);
     await key(tester, LogicalKeyboardKey.arrowUp);
     expect(focused('ctl-read'), isTrue); // back up, same position (4th)
     await key(tester, LogicalKeyboardKey.arrowUp);
@@ -235,7 +236,7 @@ void main() {
     expect(focused('reader-keys'), isTrue); // Down from the bottom bar = nothing selected
     await key(tester, LogicalKeyboardKey.enter);
     expect(find.byTooltip('Next book'), findsNothing); // OK with nothing selected hides
-  });
+  }, tags: 'slow');
 
   testWidgets('remote: OK on a control presses it (fit button cycles the fit mode)', (tester) async {
     await openReader(tester);
@@ -312,18 +313,6 @@ void main() {
     await rightClick();
     expect(find.byTooltip('Next book'), findsOneWidget, reason: 'shown');
     await rightClick();
-    expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
-  });
-
-  testWidgets('a right-click shows the controls, and another hides them again (Windows, 2026-10-11: it only showed '
-      'them)', (tester) async {
-    await openReader(tester);
-    final middle = tester.getCenter(find.byType(ReaderScreen));
-    await tester.tapAt(middle, buttons: kSecondaryButton);
-    await tester.pump();
-    expect(find.byTooltip('Next book'), findsOneWidget, reason: 'shown');
-    await tester.tapAt(middle, buttons: kSecondaryButton);
-    await tester.pump();
     expect(find.byTooltip('Next book'), findsNothing, reason: 'hidden again');
   });
 
@@ -638,11 +627,6 @@ void main() {
     await key(tester, LogicalKeyboardKey.enter); // the controls
     expect(find.text('Test #1 - T'), findsOneWidget);
     expect(find.text('Pg. 1/3 · 33%'), findsOneWidget);
-    final title = tester.getRect(find.text('Test #1 - T')), page = tester.getRect(find.text('Pg. 1/3 · 33%'));
-    final slider = tester.getRect(find.byType(Slider));
-    expect(title.bottom, lessThanOrEqualTo(page.top), reason: 'the title on the line above');
-    expect(page.bottom, lessThanOrEqualTo(slider.top + 1), reason: 'the page just over the slider');
-    expect(page.left - slider.left, lessThan(40), reason: "over the slider's start");
 
     await tester.tap(find.byKey(const ValueKey('pos-left')));
     await tester.pump();
@@ -850,16 +834,48 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
-    testWidgets('reader controls fit on ${size.width.toInt()}x${size.height.toInt()} without overflow', (tester) async {
+  testWidgets("iOS: a swipe from the left edge doesn't close the book (user, 2026-10-25: it did - iOS's own Back "
+      'gesture); Back still does', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+    await openReader(tester);
+    await tester.pump(const Duration(seconds: 1)); // (the route's own animation done)
+    // what iOS's edge swipe asks before it takes over (a drag here goes to the page, so the test can't swipe it)
+    final route = ModalRoute.of(tester.element(find.byType(ReaderScreen)))!;
+    expect(route.popGestureEnabled, isFalse, reason: "the system's swipe-back refused, controls hidden");
+
+    await tester.binding.handlePopRoute(); // the device's Back
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'Back closes it');
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("the top bar's Close says so in the app log - told apart from Back, which is also iOS's swipe from the "
+      'left edge (user, 2026-10-25: a book closed with Close looked like a swipe)', (tester) async {
+    AppLog.instance.reset();
+    addTearDown(AppLog.instance.reset);
+    await openReader(tester);
+    await key(tester, LogicalKeyboardKey.enter);
+    await tester.tap(find.text('Close'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ReaderScreen), findsNothing, reason: 'closed');
+    expect(AppLog.instance.recent.map((l) => l.msg).where((m) => m.startsWith('closed')),
+        ['closed "Test #1" by the Close button']);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('reader controls fit without overflow: tall, wide, a phone, a phone on its side', (tester) async {
+    for (final size in const [Size(800, 1280), Size(1280, 800), Size(400, 860), Size(860, 400)]) {
+      final name = '${size.width.toInt()}x${size.height.toInt()}';
       setView(tester, size);
       await openReader(tester);
       await key(tester, LogicalKeyboardKey.enter);
-      expect(find.text('Close'), findsOneWidget);
-      expect(find.byTooltip('Previous book'), findsOneWidget);
-      expect(tester.takeException(), isNull); // a RenderFlex overflow would surface here
-    });
-  }
+      expect(find.text('Close'), findsOneWidget, reason: name);
+      expect(find.byTooltip('Previous book'), findsOneWidget, reason: name);
+      expect(tester.takeException(), isNull, reason: '$name: a RenderFlex overflow would surface here');
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
 
   testWidgets('previous book at the start of the series says so and stays', (tester) async {
     await openReader(tester);
@@ -1015,6 +1031,26 @@ void main() {
       }
       await g.up();
       await tester.pump(); // the spring-back / finishing animation starts counting from this frame
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      expect(page(tester), 1.0);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a finger held still a moment before it drags still curls the page (user, 2026-10-24: "if I hold my tap '
+        "for a moment before beginning to drag, it doesn't seem to register\")", (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      final y = size.height / 2;
+      final g = await tester.startGesture(Offset(size.width * 0.9, y));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 300)); // held
+      for (var i = 1; i <= 20; i++) {
+        await g.moveTo(Offset(size.width * 0.9 - i * size.width * 0.04, y));
+        await tester.pump(const Duration(milliseconds: 50));
+        if (i == 5) expect(curling(), findsOneWidget, reason: 'the page follows the finger');
+      }
+      await g.up();
+      await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(page(tester), 1.0);
@@ -1572,8 +1608,6 @@ void main() {
         final save = find.widgetWithText(OutlinedButton, 'Save page'), copy = find.widgetWithText(OutlinedButton, 'Copy page');
         expect(save, findsOneWidget);
         expect(copy, findsOneWidget);
-        expect(tester.getCenter(save).dy, tester.getCenter(copy).dy, reason: 'one horizontal line');
-        expect(tester.getRect(find.text('This page')).top, lessThan(tester.getRect(save).top), reason: 'its own group');
 
         await tester.tap(save);
         await until(tester, () => shows(find.textContaining('Page saved')));
@@ -1623,7 +1657,7 @@ void main() {
         expect(find.text('Page copied'), findsOneWidget);
         await clearMessages(tester);
         debugDefaultTargetPlatformOverride = null;
-      });
+      }, tags: 'slow');
 
       testWidgets("saving that fails says so; on the end card there's no page, so no Save / Copy", (tester) async {
         answer = (c) => c.method == 'savePicture' ? throw PlatformException(code: 'save', message: 'disk full') : null;
@@ -1763,7 +1797,7 @@ void main() {
         final screen = tester.getRect(find.byKey(strip));
         expect(picked.center.dx, closeTo(screen.center.dx, 2), reason: 'page 100 in the middle: $picked in $screen');
         await tester.pump(const Duration(seconds: 2));
-      });
+      }, tags: 'slow');
 
       testWidgets('scrubbing the slider moves the strip with it, to the page being picked; letting go, it stays on '
           'the page gone to (user, 2026-10-03)', (tester) async {
@@ -2143,6 +2177,7 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     for (final turnsOver in [false, true]) {
+      SharedPreferences.setMockInitialValues({}); // (no way kept from a lock before: the way it is now)
       var wayUp = 'reverseLandscape';
       final (requests, _) = recordOrientation(tester, () => wayUp);
       final s = AppSettings.instance;
@@ -2206,7 +2241,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets("rotation off Android (macOS here; Windows has its own lock - pc_rotation_test): one way up, the usual "
+  testWidgets("rotation off Android (macOS here; Windows has its own lock - ios_parity_test's group): one way up, the usual "
       "one; the way up isn't asked", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

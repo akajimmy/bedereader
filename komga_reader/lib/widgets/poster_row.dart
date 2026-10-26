@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../settings.dart';
+import 'poster.dart';
 
 /// A row of posters (Home, Search): its title with ‹ › buttons on the right (each scrolls about a screen's width; greyed at the ends),
 /// then a horizontal strip of posters. Touch can swipe the strip, the remote's Left/Right move along it too.
@@ -61,8 +62,9 @@ class _PosterRowState extends State<PosterRow> {
         ]),
       ),
       SizedBox(
-        // Medium: 150 wide, 290 tall; the cover scales with the poster size, the text under it doesn't
-        height: 229 * _scale + 61,
+        // Medium: 150 wide, about 290 tall; the cover scales with the poster size, the text under it with the text
+        // size - a fixed 61 for the text let a larger text size crop the cover (user, 2026-10-25)
+        height: PosterTile.heightFor(context, 150 * _scale),
         // the strip's size changes (window resized, posters loading) also update the buttons
         child: NotificationListener<ScrollMetricsNotification>(
           onNotification: (_) {

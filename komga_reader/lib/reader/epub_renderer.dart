@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -799,7 +800,7 @@ class EpubRenderer extends Renderer {
   static const _turnCurve = Curves.easeInOut;
 
   @override
-  void forward({bool snap = false}) {
+  void forward({bool snap = false, bool held = false}) {
     if (_end) {
       host.nextBook();
       return;
@@ -808,7 +809,7 @@ class EpubRenderer extends Renderer {
   }
 
   @override
-  void back({bool snap = false}) => unawaited(_turn(-1, snap: snap));
+  void back({bool snap = false, bool held = false}) => unawaited(_turn(-1, snap: snap));
 
   // the wheel: notches added up to a turn, at most one turn a quarter second (a spun wheel doesn't race through the
   // book) - as the comic reader's
@@ -821,7 +822,7 @@ class EpubRenderer extends Renderer {
     if (_wheelAcc.abs() < 40) return;
     final fwd = _wheelAcc > 0;
     _wheelAcc = 0;
-    final now = DateTime.now();
+    final now = clock.now();
     if (now.difference(_lastWheelTurn) < const Duration(milliseconds: 250)) return;
     _lastWheelTurn = now;
     fwd ? forward() : back();
@@ -847,7 +848,7 @@ class EpubRenderer extends Renderer {
     // half-turned page, it landed on the same page again
     final cut = _cutShort;
     _cutShort = null;
-    final from = cut != null && DateTime.now().difference(cut.$2) < const Duration(milliseconds: 400)
+    final from = cut != null && clock.now().difference(cut.$2) < const Duration(milliseconds: 400)
         ? cut.$1
         : (_pc.page ?? 0).round();
     final target = from + by;
@@ -865,7 +866,7 @@ class EpubRenderer extends Renderer {
       _sliding = false;
     }
     final landed = _pc.hasClients ? _pc.page : null;
-    if (landed != null && (landed - target).abs() > 0.01) _cutShort = (target, DateTime.now());
+    if (landed != null && (landed - target).abs() > 0.01) _cutShort = (target, clock.now());
     final next = _queued;
     _queued = 0;
     if (next != 0 && !_disposed && _pc.hasClients) await _turn(next);

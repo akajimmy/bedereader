@@ -77,7 +77,7 @@ void main() {
         expect(find.text('Connected as nick@test'), findsNothing, reason: 'one page at a time (${p.name})');
       }
     }
-  });
+  }, tags: 'slow');
 
   testWidgets("a tap on a setting's control sets the stored value; on Comics and eBooks each kind its own (user, "
       "2026-10-07) - the other kind's stays", (tester) async {
@@ -157,7 +157,7 @@ void main() {
       expect(read(), expected, reason: 'step $i (${page.name}): $control');
     }
     await tester.pump(const Duration(seconds: 3)); // the settings sync timer
-  });
+  }, tags: 'slow');
 
   testWidgets("the page counter's when (After a turn / Always) shows only while the page counter is on (user, "
       '2026-10-21: its own small choice under the chips)', (tester) async {
@@ -177,7 +177,8 @@ void main() {
   testWidgets('narrow: the pages as a table of contents at the top', (tester) async {
     tall(tester, width: 420);
     await open(tester);
-    expect(find.byType(ChoiceChip), findsNWidgets(8)); // no Downloads here (downloads not set up in tests)
+    // every page but Downloads (downloads not set up in tests)
+    expect(find.byType(ChoiceChip), findsNWidgets(SettingsPage.values.length - 1));
     await tester.tap(find.widgetWithText(ChoiceChip, 'Comics'));
     await tester.pumpAndSettle();
     expect(find.text('Turning pages'), findsOneWidget);

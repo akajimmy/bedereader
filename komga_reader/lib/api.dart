@@ -18,8 +18,18 @@ class Komga {
         _http = client ?? http.Client();
 
   final String baseUrl;
+
+  /// How this device signs in: a Komga API key, or - when the server wouldn't make one at a password sign-in - the
+  /// email and password as an HTTP Basic credential ([basic]: "Basic ..."; Komga's keys are hex, never that).
   final String apiKey;
   final http.Client _http;
+
+  /// The email and password as a credential for [apiKey] (sent as HTTP Basic, which Komga accepts on every request).
+  static String basic(String email, String password) => 'Basic ${base64Encode(utf8.encode('$email:$password'))}';
+
+  bool get usesPassword => apiKey.startsWith('Basic ');
+
+  Map<String, String> get _auth => usesPassword ? {'Authorization': apiKey} : {'X-API-Key': apiKey};
 
   int _inFlight = 0; // requests on their way
   bool _closing = false;
@@ -32,11 +42,11 @@ class Komga {
     if (_inFlight == 0) _http.close();
   }
 
-  Map<String, String> get headers => {'X-API-Key': apiKey, 'Accept': 'application/json'};
+  Map<String, String> get headers => {..._auth, 'Accept': 'application/json'};
 
   /// For thumbnails and pages. The thumbnail endpoints can also produce application/json, so asking for JSON
   /// there gets JSON back instead of the image (no posters).
-  Map<String, String> get imageHeaders => {'X-API-Key': apiKey, 'Accept': 'image/*'};
+  Map<String, String> get imageHeaders => {..._auth, 'Accept': 'image/*'};
 
   Uri _u(String path, [Map<String, Object?>? query]) {
     final q = <String, dynamic>{};
@@ -70,18 +80,24 @@ class Komga {
       if (e.status == 401) onKeyRefused?.call(this); // before "it answered": the connection mustn't offer to go back
       onReachability?.call(this, true); // it answered, with an error
       rethrow;
-    } on KomgaNotKomga {
+    } on KomgaNotKomga catch (e) {
+      lastFailure = e;
       onReachability?.call(this, false); // something answered, but nothing this app can use
       rethrow;
     } on TimeoutException {
-      if (!slowIsNotDown) onReachability?.call(this, false);
+      if (!slowIsNotDown) {
+        lastFailure = 'no answer within ${limit.inSeconds} s';
+        onReachability?.call(this, false);
+      }
       throw KomgaUnreachable(baseUrl);
-    } on http.ClientException {
+    } on http.ClientException catch (e) {
+      lastFailure = e; // (its message says how: refused, no route, network unreachable...)
       onReachability?.call(this, false);
       throw KomgaUnreachable(baseUrl); // package:http wraps socket errors (refused, no route) in this
     } catch (e) {
       // https with a certificate this device doesn't trust (a TLS handshake error, which package:http passes on raw)
       if ('${e.runtimeType}'.contains('Handshake') || '$e'.contains('CERTIFICATE_VERIFY_FAILED')) {
+        lastFailure = e;
         onReachability?.call(this, false);
         throw KomgaCertificate(baseUrl);
       }
@@ -91,6 +107,9 @@ class Komga {
 
   /// Told after every server call whether Komga answered (the connection uses it to offer offline mode).
   static void Function(Komga api, bool reachable)? onReachability;
+
+  /// How the last call that didn't reach Komga failed (no answer in time, refused, no route...) - for the error log.
+  static Object? lastFailure;
 
   /// Told when Komga refuses the API key (HTTP 401) - it was deleted, say (the connection offers downloaded books
   /// and signing in again).
@@ -134,6 +153,15 @@ class Komga {
 
   // ---- account / libraries
   Future<Map<String, dynamic>?> me() async => await _get('/api/v2/users/me') as Map<String, dynamic>?;
+
+  /// A new API key for the signed-in account, named [comment] (a password sign-in: the key is kept, the password
+  /// isn't). Throws [KomgaError] when Komga won't make one (a restricted account, a Komga without API keys).
+  Future<String> createApiKey(String comment) async {
+    final made = await _post('/api/v2/users/me/api-keys', const {}, {'comment': comment});
+    final key = made is Map ? made['key'] : null;
+    if (key is! String || key.isEmpty) throw KomgaError(200, '/api/v2/users/me/api-keys (no key in the answer)');
+    return key;
+  }
   Future<List<dynamic>> libraries() async => (await _get('/api/v1/libraries')) as List<dynamic>;
 
   Future<List<dynamic>>? _librariesOnce;
@@ -552,7 +580,7 @@ class Komga {
   /// asked for as Readium's own type.
   Future<Map<String, dynamic>?> epubManifest(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/manifest/epub'),
-            headers: {'X-API-Key': apiKey, 'Accept': 'application/webpub+json'});
+            headers: {..._auth, 'Accept': 'application/webpub+json'});
         if (r.statusCode == 404) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book contents');
         try {
@@ -566,7 +594,7 @@ class Komga {
   Future<Uint8List> epubResource(String bookId, String path) => _net(() async {
         final r = await _http.get(
             Uri.parse('$baseUrl/api/v1/books/$bookId/resource/${path.split('/').map(Uri.encodeComponent).join('/')}'),
-            headers: {'X-API-Key': apiKey});
+            headers: _auth);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book file $path');
         return r.bodyBytes;
       }, limit: pageTimeout, slowIsNotDown: true);
@@ -575,7 +603,7 @@ class Komga {
   /// device and time); null if never read. Shared with Komga's own web reader.
   Future<Map<String, dynamic>?> epubProgression(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/progression'),
-            headers: {'X-API-Key': apiKey, 'Accept': 'application/vnd.readium.progression+json, application/json'});
+            headers: {..._auth, 'Accept': 'application/vnd.readium.progression+json, application/json'});
         if (r.statusCode == 404 || r.statusCode == 204 || r.bodyBytes.isEmpty) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'reading position');
         return jsonDecode(utf8.decode(r.bodyBytes)) as Map<String, dynamic>;
@@ -590,7 +618,7 @@ class Komga {
 
   /// The book's own file (an EPUB, for reading offline).
   Future<Uint8List> bookFileBytes(String bookId) => _net(() async {
-        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/file'), headers: {'X-API-Key': apiKey});
+        final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/file'), headers: _auth);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book file');
         return r.bodyBytes;
       }, limit: const Duration(minutes: 5), slowIsNotDown: true);
@@ -598,7 +626,7 @@ class Komga {
   /// The book's positions (Readium): roughly one per screenful, numbered from 1; Komga's page count for an EPUB.
   Future<List<dynamic>> epubPositions(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/positions'),
-            headers: {'X-API-Key': apiKey, 'Accept': 'application/vnd.readium.position-list+json, application/json'});
+            headers: {..._auth, 'Accept': 'application/vnd.readium.position-list+json, application/json'});
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book positions');
         return ((jsonDecode(utf8.decode(r.bodyBytes)) as Map)['positions'] as List?) ?? const [];
       });

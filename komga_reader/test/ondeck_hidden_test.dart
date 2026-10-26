@@ -80,7 +80,7 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(find.text('Hidden Series #4'), findsOneWidget);
-  });
+  }, tags: 'slow');
 
   // (moved from pins_test, test audit 2026-10-07)
   test('refreshed: something hidden here while the list from Komga was on its way is kept, and reaches Komga',

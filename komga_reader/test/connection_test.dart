@@ -1,8 +1,10 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/errors.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
@@ -44,6 +46,64 @@ void main() {
     expect(conn.offline, isFalse);
   });
 
+  // user, 2026-10-24: on a flaky connection "the app prompting me every few seconds to go offline or reconnect" -
+  // each failed request asked, each one that got through closed the question
+  test('a request that fails while Komga still answers a check: not asked; a check that fails too: asked - both in '
+      'the error log, with how the request failed', () async {
+    final log = ErrorLog.instance.entries..clear();
+    final asked = server.meCalls;
+    Komga.lastFailure = 'no answer within 15 s';
+    Komga.onReachability!(server, false); // a page, a save... didn't get through
+    await Future<void>.delayed(Duration.zero);
+    expect(server.meCalls, asked + 1, reason: 'checked first');
+    expect(conn.askPending, isFalse, reason: 'Komga answered the check: no question');
+    expect(log, hasLength(1), reason: 'the flaky request noted');
+    expect(log.single.detail, contains('no answer within 15 s'));
+
+    server.up = false;
+    Komga.lastFailure = 'Connection refused';
+    Komga.onReachability!(server, false);
+    await Future<void>.delayed(Duration.zero);
+    expect(conn.askPending, isTrue, reason: 'the check failed too: gone');
+    expect(log, hasLength(2));
+    expect(log.first.detail, contains('Connection refused'));
+  });
+
+  test("another request failing while a check is on its way: the check's answer decides - answered, not asked "
+      '(code review, 2026-10-24)', () async {
+    final checking = conn.check(); // on its way
+    Komga.onReachability!(server, false); // a page request fails meanwhile
+    expect(conn.askPending, isFalse);
+    expect(await checking, isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(conn.askPending, isFalse, reason: 'Komga answered the check');
+  });
+
+  test('the question closed because Komga answered: a failure in the next 30 s asks nothing (no check either); '
+      'after that, as before', () async {
+    var now = DateTime(2026, 10, 24, 14);
+    await withClock(Clock(() => now), () async {
+      server.up = false;
+      await conn.check();
+      expect(conn.askPending, isTrue);
+      server.up = true;
+      Komga.onReachability!(server, true); // a request got through: the question closes
+      expect(conn.askPending, isFalse);
+
+      server.up = false;
+      final asked = server.meCalls;
+      now = now.add(const Duration(seconds: 10));
+      Komga.onReachability!(server, false);
+      await Future<void>.delayed(Duration.zero);
+      expect((server.meCalls, conn.askPending), (asked, false), reason: 'just back: left alone');
+
+      now = now.add(Connection.quietAfterBack);
+      Komga.onReachability!(server, false);
+      await Future<void>.delayed(Duration.zero);
+      expect(conn.askPending, isTrue, reason: 'still failing later: checked, and asked');
+    });
+  });
+
   test("can't reach Komga: asks; Use downloaded books goes offline; Komga back: offers, Go online returns", () async {
     server.up = false;
     await conn.check();
@@ -68,19 +128,6 @@ void main() {
     expect(conn.reachableAgain, isFalse);
   });
 
-  test('Stay online: no more prompts until Komga has answered again', () async {
-    server.up = false;
-    await conn.check();
-    conn.stayOnline();
-    await conn.check();
-    expect(conn.askPending, isFalse);
-    server.up = true;
-    await conn.check(); // outage over
-    server.up = false;
-    await conn.check(); // a new one
-    expect(conn.askPending, isTrue);
-  });
-
   test('nothing downloaded: still says Komga can\'t be reached (Retry / OK), never switches', () async {
     d.store!.books.clear();
     server.up = false;
@@ -91,12 +138,9 @@ void main() {
   });
 
   test('reachable again, after going offline from the prompt (user, 2026-10-21: no automatic switch - "when back online '
-      'prompt"): offline it stays until answered - asked once no book is open; Stay offline keeps it offline; the old '
-      "switch's saved key goes", () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('offline.autoSwitch', true); // (saved by the setting that went)
+      'prompt"): offline it stays until answered - asked once no book is open; Stay offline keeps it offline',
+      () async {
     await conn.load(server);
-    expect(prefs.containsKey('offline.autoSwitch'), isFalse);
     server.up = false;
     await conn.check();
     expect(conn.askPending, isTrue, reason: 'asked, never switched by itself');
@@ -153,7 +197,6 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text("Can't reach Komga"), findsOneWidget);
-    expect(find.text('Stay online'), findsNothing);
     expect(find.text('Retry'), findsOneWidget);
     await tester.tap(find.text('Go offline'));
     await tester.pumpAndSettle();

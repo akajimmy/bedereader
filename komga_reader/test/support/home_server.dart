@@ -5,8 +5,9 @@ import 'no_network.dart';
 /// [onDeckBooks] (empty unless given), no other books, no series. Build with `noNetwork(HomeServer.new)` or
 /// `noNetwork(() => HomeServer(...))`.
 ///
-/// Was home_test's FakeKomga (imported by dock_test, row_arrows_test and ondeck_hidden_test, which subclassed it for
-/// their lists) and drawer_edge_test's libraries-only copy (test audit, 2026-09-30).
+/// Was home_test's FakeKomga (imported by side_menu_test, home_rows_test and ondeck_hidden_test, which subclass it
+/// for their lists) and a libraries-only copy now in side_menu_test (test audit, 2026-09-30; files folded together
+/// 2026-10-23).
 class HomeServer extends TestKomga {
   HomeServer({this.inProgressBooks = const [], this.onDeckBooks = const []});
   final List<Map<String, dynamic>> inProgressBooks, onDeckBooks;

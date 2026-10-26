@@ -7,7 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// What a key does in the reader, with the controls hidden (Settings > Remote and keys; user, 2026-09-30).
 /// [openMenu]: not the reader's - the side menu, on the screens that have one (user, 2026-10-12: a key for it on
 /// Windows; no key by default).
-enum ReaderAction { next, previous, controls, close, zoomIn, zoomOut, openMenu }
+/// [autoScroll], [scrollFaster], [scrollSlower]: a webtoon's auto-scroll - on / off and its speed (user, 2026-10-22:
+/// "create new empty hotkeys for scroll speed"; no keys by default).
+enum ReaderAction { next, previous, controls, close, zoomIn, zoomOut, openMenu, autoScroll, scrollFaster, scrollSlower }
 
 extension ReaderActionLabel on ReaderAction {
   String get label => switch (this) {
@@ -18,6 +20,9 @@ extension ReaderActionLabel on ReaderAction {
         ReaderAction.zoomIn => 'Zoom in',
         ReaderAction.zoomOut => 'Zoom out',
         ReaderAction.openMenu => 'Open the side menu',
+        ReaderAction.autoScroll => 'Auto-scroll on / off',
+        ReaderAction.scrollFaster => 'Auto-scroll faster',
+        ReaderAction.scrollSlower => 'Auto-scroll slower',
       };
 }
 
@@ -41,6 +46,9 @@ class ReaderKeys extends ChangeNotifier {
     ReaderAction.zoomIn: [LogicalKeyboardKey.equal, LogicalKeyboardKey.add, LogicalKeyboardKey.numpadAdd],
     ReaderAction.zoomOut: [LogicalKeyboardKey.minus, LogicalKeyboardKey.numpadSubtract],
     ReaderAction.openMenu: [], // none: given one by hand (Settings > Remote and keys)
+    ReaderAction.autoScroll: [], // (webtoons; none, likewise)
+    ReaderAction.scrollFaster: [],
+    ReaderAction.scrollSlower: [],
   };
 
   Map<ReaderAction, List<LogicalKeyboardKey>> keys = {for (final e in defaults.entries) e.key: List.of(e.value)};

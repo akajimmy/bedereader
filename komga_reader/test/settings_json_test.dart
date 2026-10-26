@@ -88,11 +88,12 @@ void main() {
     // every setting away from its default at once: (name, read it, the value set, its default)
     const changed = DisplayPrefs(night: true, warmth: 0.3, brightness: 0.4, pageTurn: PageTurn.curl, epubTurn: EpubTurn.curl,
         comics: KindPrefs(hiddenSpots: ['left']), ebooks: KindPrefs(hiddenSpots: ['right', 'centre']),
+        webtoons: KindPrefs(hiddenSpots: ['centre']), webtoonTaps: WebtoonTaps.topBottom, autoScrollSpeed: 120, webtoonDoubleTap: false,
         rotation: Rotation.landscape, pageNote: PageNote.off, showClock: true, showBattery: true, progressBar: true,
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pageStrip: true, insetPage: InsetPage.never);
+        pageStrip: true, insetPage: InsetPage.never, webtoonScroll: WebtoonScroll.page);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -108,6 +109,10 @@ void main() {
       // each kind its own (user, 2026-10-07)
       ('comics hiddenSpots', (d) => d.comics.hiddenSpots.join(','), 'left', ''),
       ('ebooks hiddenSpots', (d) => d.ebooks.hiddenSpots.join(','), 'right,centre', ''),
+      ('webtoons hiddenSpots', (d) => d.webtoons.hiddenSpots.join(','), 'centre', ''), // (their own - 2026-10-22)
+      ('webtoonTaps', (d) => d.webtoonTaps, WebtoonTaps.topBottom, WebtoonTaps.sides),
+      ('autoScrollSpeed', (d) => d.autoScrollSpeed, 120.0, DisplayPrefs.autoScrollStart),
+      ('webtoonDoubleTap', (d) => d.webtoonDoubleTap, false, true), // (webtoons' own - 2026-10-22)
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 10, 0),
@@ -118,7 +123,8 @@ void main() {
       ('textScale', (d) => d.textScale, 1.15, 1.0),
       ('accent', (d) => d.accent, Accent.green, Accent.blue),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
-      ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen), // eBooks' sheet, this device's (2026-10-12)
+      ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen),
+      ('webtoonScroll', (d) => d.webtoonScroll, WebtoonScroll.page, WebtoonScroll.smooth), // (2026-10-22) // eBooks' sheet, this device's (2026-10-12)
     ];
     final back = DisplayPrefs.fromJson(changed.toJson());
     final none = DisplayPrefs.fromJson({}); // a save with none of them
@@ -130,7 +136,7 @@ void main() {
       expect(read(onlyTurn), name == 'pageTurn' ? PageTurn.flip : byDefault, reason: '$name, a save with only a turn');
     }
     // the table has every saved setting (a new one fails here until it has a row)
-    expect(settings.length, changed.toJson().length - 2 + changed.comics.toJson().length * 2,
+    expect(settings.length, changed.toJson().length - 3 + changed.comics.toJson().length * 3,
         reason: 'one row per setting (the two kinds a row per field)');
     for (final turn in PageTurn.values) {
       expect(DisplayPrefs.fromJson(DisplayPrefs(pageTurn: turn).toJson()).pageTurn, turn, reason: turn.name);
@@ -154,23 +160,10 @@ void main() {
     const d = LibraryPrefs();
     expect((d.posterSeries, d.posterTitle, d.posterDate), (true, true, true));
     expect((d.ebookPosterTitle, d.ebookPosterAuthor, d.ebookPosterSeries, d.ebookPosterDate), (true, true, false, false));
-    // the device's old poster keys aren't taken over (no migrations): a DisplayPrefs save has no captions now
-    expect(const DisplayPrefs().toJson().keys.where((k) => k.toLowerCase().contains('poster') && k != 'posterSize'),
-        isEmpty);
   });
 
-  test("the kinds' old rotation and over-the-page settings aren't taken over (no migrations): the shared ones start "
-      "from the defaults; each kind's position text stays its own", () {
+  test("each kind's position text is its own: one changed, the other not", () {
     const none = DisplayPrefs();
-    final old = DisplayPrefs.fromJson({
-      'comics': {'pageNote': 'off', 'rotation': 'landscape', 'clock': 'always', 'progressBar': true,
-          'hiddenSpots': ['left']},
-      'ebooks': {'pageNote': 'always', 'rotation': 'portrait', 'progressBar': true},
-    });
-    expect((old.rotation, old.pageNote, old.showClock, old.showBattery, old.progressBar),
-        (none.rotation, none.pageNote, none.showClock, none.showBattery, none.progressBar));
-    expect(old.comics.hiddenSpots, ['left'], reason: 'the position text: still read');
-    // each kind's position text set apart: one changed, the other not
     final apart = DisplayPrefs.fromJson(
         none.withKind(BookKind.ebooks, none.ebooks.copyWith(hiddenSpots: ['right'])).toJson());
     expect(apart.comics.hiddenSpots, isEmpty);

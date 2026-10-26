@@ -40,7 +40,7 @@ void main() {
       Navigator.of(tester.element(find.text('Mark as read'))).pop();
       await tester.pumpAndSettle();
     }
-  });
+  }, tags: 'slow');
 
   testWidgets('select multiple -> mark read touches only the books not yet read, then leaves selection', (tester) async {
     final api = await open(tester);

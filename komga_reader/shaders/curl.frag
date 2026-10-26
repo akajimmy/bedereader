@@ -49,6 +49,15 @@ void main() {
   float d = dot(p - uFold, uNormal);  // distance from the fold line, + on the lifting side
   vec4 o = vec4(0.0);
 
+  // Every place a pixel may show is read here, by every pixel, and only then chosen between: read inside the
+  // branches below, a pixel whose neighbours took another branch had its texture's blur level worked out from
+  // garbage, and drew the page's most blurred colour - a dotted gold line along the fold (iPad, user, 2026-10-25).
+  float th = asin(clamp(d / uRadius, -1.0, 1.0));
+  vec2 qBack = p + uNormal * ((PI * uRadius - uRadius * th) - d);
+  vec2 qFront = p + uNormal * (uRadius * th - d);
+  vec2 qOver = p + uNormal * (PI * uRadius - 2.0 * d);
+  vec3 cBack = backOf(qBack), cFront = sheet(qFront), cOver = backOf(qOver), cFlat = sheet(p);
+
   if (d > uRadius) {
     // the page has lifted away here: whatever is underneath, darkened near the curl - only where the page was, not
     // past its sides either (an inset page: it ran on over the surround as a line - user, 2026-10-22)
@@ -58,25 +67,23 @@ void main() {
     }
   } else if (d >= 0.0) {
     // on the cylinder: the back of the sheet coming over the top if there is any, else its front going up
-    float th = asin(clamp(d / uRadius, -1.0, 1.0));
-    vec2 qBack = p + uNormal * ((PI * uRadius - uRadius * th) - d);
-    vec2 qFront = p + uNormal * (uRadius * th - d);
+    // (each starts at the fold as the flat part next to it ends - 0.88 and 0.82 below: from full light, the curl's
+    // edge showed as a lighter band - user, 2026-10-24)
     if (inside(qBack)) {
-      float light = 0.78 + 0.22 * cos(th);
-      o = vec4(backOf(qBack) * light, 1.0);
+      float light = 0.78 + 0.10 * cos(th);
+      o = vec4(cBack * light, 1.0);
     } else if (inside(qFront)) {
-      float dark = 1.0 - 0.45 * (d / uRadius) * (d / uRadius);
-      o = vec4(sheet(qFront) * dark, 1.0);
+      float dark = 0.82 - 0.27 * (d / uRadius) * (d / uRadius);
+      o = vec4(cFront * dark, 1.0);
     }
   } else {
     // flat: the part already turned over lies on top here (its back), else the page itself - if this is the page
-    vec2 qOver = p + uNormal * (PI * uRadius - 2.0 * d);
     if (inside(qOver)) {
       float edge = 1.0 - 0.12 * clamp(1.0 + d / (uRadius * 2.0), 0.0, 1.0);
-      o = vec4(backOf(qOver) * edge, 1.0);
+      o = vec4(cOver * edge, 1.0);
     } else if (inside(p)) {
       float nearFold = 1.0 - 0.18 * clamp(1.0 + d / (uRadius * 1.5), 0.0, 1.0);  // the fold's own shadow
-      o = vec4(sheet(p) * nearFold, 1.0);
+      o = vec4(cFlat * nearFold, 1.0);
     }
   }
   fragColor = vec4(o.rgb * o.a, o.a);  // premultiplied

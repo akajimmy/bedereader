@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
@@ -32,6 +33,12 @@ class ProgressServer extends LibraryServer {
   void _reach() {
     Komga.onReachability?.call(this, !down);
     if (down) throw KomgaUnreachable(baseUrl);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> me() async {
+    if (down) _reach(); // (gone for the reachability check too)
+    return super.me();
   }
 
   @override
@@ -253,6 +260,16 @@ void main() {
     expect(server.writes, ['B2 page 2']);
   });
 
+  test("a refresh compares Komga's answer with the times the store wrote, on the same clock - whatever package:clock "
+      'says (test audit, 2026-10-23: under a test\'s fixed clock the refresh took every page saved here for newer)',
+      () async {
+    Komga.onProgressWritten!(server, const ProgressWrite(bookId: 'B2', page: 1)); // read online here, a moment ago
+    server.rp['B2'] = {'page': 2, 'completed': false}; // then further on the web
+    await Future<void>.delayed(const Duration(milliseconds: 30));
+    await withClock(Clock.fixed(DateTime.utc(2015)), () => sync.run()); // (a widget test's clock is 2015)
+    expect(d.store!.readProgressOf('B2')!['page'], 2, reason: "the refresh brought Komga's newer page");
+  });
+
   test('downloaded copies follow Komga: reading elsewhere (refresh) and reading online here (mirror)', () async {
     server.rp['B2'] = {'page': 2, 'completed': false}; // read on the web
     await sync.run();
@@ -335,7 +352,7 @@ void main() {
     await tester.pump();
     expect(find.textContaining('no longer on Komga'), findsNothing, reason: 'the mark and its filter gone');
     expect(find.textContaining('3 pages · 0.0 MB'), findsNWidgets(2));
-  });
+  }, tags: 'slow');
 
   test('a single downloaded book deleted on Komga (its series still there) is marked "no longer on Komga" too',
       () async {

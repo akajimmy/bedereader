@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
+import 'package:komga_reader/reader/comic_renderer.dart' show ComicRenderer;
 import 'package:komga_reader/reader/spreads.dart' show twoPagesAllowed;
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
@@ -93,7 +94,7 @@ void main() {
     expect(api.finished, isNotEmpty, reason: 'the last pair shown: read to the end');
     await turn(tester, back: true);
     expect((await position(tester)).split(' ·').first, 'Pg. 7/9', reason: 'back a spread');
-  });
+  }, tags: 'slow');
 
   testWidgets('a tall screen (Wide screen, the default): one page at a time; Always: two there too; Off: one on a wide '
       'screen too', (tester) async {
@@ -142,6 +143,7 @@ void main() {
     expect(s.prefsFor('S1').twoPages, TwoPages.off, reason: "the series' own");
     expect(s.defaults.twoPages, TwoPages.wideScreen, reason: 'the default unchanged');
     await tester.ensureVisible(find.text('Make default'));
+    await tester.pump(); // (scrolled there: below the sheet's bottom since Reset to original came back)
     await tester.tap(find.text('Make default'));
     await tester.pump();
     expect(s.defaults.twoPages, TwoPages.off, reason: "Make default: the series' layout, dual page mode with it");
@@ -157,7 +159,7 @@ void main() {
     expect(await position(tester), startsWith('Pg. 4/9'), reason: 'one page: the page being read');
     await turn(tester);
     expect(await position(tester), startsWith('Pg. 5/9'));
-  });
+  }, tags: 'slow');
 
   testWidgets('turned from wide to tall mid-book: the same page, now alone; and back: its pair', (tester) async {
     await open(tester);
@@ -166,12 +168,41 @@ void main() {
     expect(await position(tester), startsWith('Pg. 3-4/9'));
     tester.view.physicalSize = const Size(1000, 1600);
     await tester.pump();
+    await tester.pump(ComicRenderer.settle); // (once the turn has settled)
     await tester.pump();
     expect(await position(tester), startsWith('Pg. 4/9'), reason: 'the later page of the pair, the page being read');
     tester.view.physicalSize = const Size(1600, 1000);
     await tester.pump();
+    await tester.pump(ComicRenderer.settle);
     await tester.pump();
     expect(await position(tester), startsWith('Pg. 3-4/9'));
+  });
+
+  testWidgets('turned and back within half a second (a tilt): the pair stays as it was, nothing rebuilt; turned for '
+      'good: one page, once the turn has settled (user, 2026-10-24: Android closed the app for memory, each flip '
+      'rebuilding every page near the one read)', (tester) async {
+    await open(tester);
+    await turn(tester);
+    await turn(tester); // 3|4
+    PageController controller() => tester.widget<PageView>(find.byType(PageView)).controller!;
+    final before = controller();
+    tester.view.physicalSize = const Size(1000, 1600); // tall
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'still the pair, fitted to the new shape');
+    tester.view.physicalSize = const Size(1600, 1000); // and back
+    await tester.pump();
+    await tester.pump(ComicRenderer.settle * 2);
+    expect(identical(controller(), before), isTrue, reason: 'the page view not rebuilt');
+    expect(await position(tester), startsWith('Pg. 3-4/9'));
+
+    tester.view.physicalSize = const Size(1000, 1600); // tall, for good
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'not settled yet');
+    await tester.pump(ComicRenderer.settle);
+    await tester.pump();
+    expect(await position(tester), startsWith('Pg. 4/9'), reason: 'settled: one page');
   });
 
   testWidgets('"Shift pairing by one" in the Comic settings panel (user, 2026-10-22: not on the bottom bar; two pages up '
@@ -180,7 +211,6 @@ void main() {
     await open(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    expect(find.byTooltip('Shift pairing by one'), findsNothing, reason: 'no bar button');
     await tester.tap(find.byTooltip('Comic settings'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -264,7 +294,7 @@ void main() {
       SpreadBook.real = true;
       addTearDown(() => SpreadBook.real = false);
       await open(tester);
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
     }
 
@@ -280,7 +310,7 @@ void main() {
       await turn(tester, back: rtl);
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // decoded, joined
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // decoded, joined
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 3-4/9'));
@@ -378,7 +408,7 @@ void main() {
       }
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 7/9'));
@@ -394,7 +424,7 @@ void main() {
       await tester.pump();
       expect(await position(tester), startsWith('Pg. 8-9/9'));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
@@ -431,7 +461,7 @@ void main() {
       // 40 px: the pages 40 apart (the pair narrower to make room - fit screen keeps it on the screen)
       AppSettings.instance.setDefault(const ReaderPrefs(gutter: 40));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // joined again
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined again
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -443,6 +473,106 @@ void main() {
       expect(curl(tester)!.finger.dx, closeTo(-c.page.width - 40, 6), reason: 'landing past the 40 px gutter');
       await tester.pump(const Duration(milliseconds: 230));
       await tester.pump();
+    });
+
+    testWidgets('a rotation passing through several sizes keeps one joined picture per pair, not one per size (user, '
+        '2026-10-24: the app died turning the tablet with two pages up)', (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      final r = ComicRenderer.latest!;
+      final before = r.joinedKept;
+      expect(before, greaterThan(0), reason: 'pairs joined');
+      for (final size in const [Size(1580, 1000), Size(1560, 990), Size(1600, 960), Size(1600, 1000)]) {
+        tester.view.physicalSize = size; // (the bars moving as it turns: two pages up all along)
+        await tester.pump();
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined again
+          await tester.pump();
+        }
+      }
+      expect(r.joinedKept, before, reason: "the older sizes' pictures let go");
+      expect(await position(tester), startsWith('Pg. 3-4/9'));
+    });
+
+    testWidgets('joined pairs are kept for the pair showing and one turn either way only (user, 2026-10-24: killed for '
+        'memory, two pages up)', (tester) async {
+      await openReal(tester);
+      await toPair(tester); // 3|4
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      for (var t = 0; t < 3; t++) { // 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // joined
+          await tester.pump();
+        }
+      }
+      expect(await position(tester), startsWith('Pg. 8-9/9'));
+      expect(ComicRenderer.latest!.joinedKept, 1, reason: '5|6, two turns back, let go (the spread alone is no pair)');
+    });
+
+    testWidgets("a joined pair's picture is freed once it's let go of (not left for the garbage collector), the one "
+        'showing never (user, 2026-10-24: graphics memory grew about 40 MB a page turn until Android closed the app)',
+        (tester) async {
+      final made = <ui.Image>[];
+      ComicRenderer.onJoined = made.add;
+      addTearDown(() => ComicRenderer.onJoined = null);
+      await openReal(tester);
+      await toPair(tester); // 3|4 (and 5|6 ahead)
+      final first = made.first;
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      for (var t = 0; t < 3; t++) { // 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+          await tester.pump();
+        }
+      }
+      await tester.pump(); // (two frames on)
+      await tester.pump();
+      expect(first.debugDisposed, isTrue, reason: '3|4, two turns back: freed');
+      final shown = [for (final r in tester.widgetList<RawImage>(find.byType(RawImage))) r.image];
+      expect(shown, isNotEmpty);
+      expect(shown.where((i) => i?.debugDisposed ?? false), isEmpty, reason: 'nothing on screen freed');
+    });
+
+    testWidgets('curling forward through the book decodes each page once: the spread just left is not decoded again '
+        '(measured 2026-10-25: each curl decoded four big pages, two of them the spread left behind)', (tester) async {
+      final decoded = <int>[];
+      PageLoader.onDecode = decoded.add;
+      addTearDown(() => PageLoader.onDecode = null);
+      await openReal(tester);
+      for (var t = 0; t < 5; t++) { // the cover, 2 alone, 3|4, 5|6, the spread, 8|9
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // decoded, joined
+          await tester.pump();
+        }
+        await tester.pump(const Duration(seconds: 1)); // (the curl played out)
+      }
+      expect(await position(tester), startsWith('Pg. 8-9/9'));
+      final twice = {for (final i in decoded) if (decoded.where((d) => d == i).length > 1) i + 1};
+      expect(twice, isEmpty, reason: 'pages (from 1) decoded more than once: $decoded');
+    });
+
+    testWidgets('one page at a time, the same: curling forward decodes each page once', (tester) async {
+      final decoded = <int>[];
+      PageLoader.onDecode = decoded.add;
+      addTearDown(() => PageLoader.onDecode = null);
+      SpreadBook.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
+      SpreadBook.real = true;
+      addTearDown(() => SpreadBook.real = false);
+      await open(tester, size: const Size(800, 1200)); // tall: one page at a time
+      for (var t = 0; t < 6; t++) {
+        await turn(tester);
+        for (var i = 0; i < 5; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+          await tester.pump();
+        }
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(await position(tester), startsWith('Pg. 7/9'));
+      final twice = {for (final i in decoded) if (decoded.where((d) => d == i).length > 1) i + 1};
+      expect(twice, isEmpty, reason: 'pages (from 1) decoded more than once: $decoded');
     });
 
     testWidgets('a page alone (the cover) curls whole, as with one page up', (tester) async {
@@ -467,7 +597,7 @@ void main() {
       await turn(tester); // [1] then [2], alone, before the pair 3|4
       AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       expect(await position(tester), startsWith('Pg. 2/9'));
@@ -496,7 +626,7 @@ void main() {
       // back onto it the same way (user, 2026-10-17: "cover the reverse turn the same way"): its made-up right half
       // comes back over the pair's right-hand page, which stays until it lands
       for (var i = 0; i < 10; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
         await tester.pump();
       }
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);

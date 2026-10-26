@@ -136,13 +136,19 @@ abstract class Renderer extends ChangeNotifier {
   // ---- moving
 
   /// A turn forward or back; from the end card forward is the next book. [snap]: a tap - a turn under way ends at
-  /// once.
-  void forward({bool snap = false});
-  void back({bool snap = false});
+  /// once. [held]: a held key's repeat (a webtoon glides on a little each - user, 2026-10-22).
+  void forward({bool snap = false, bool held = false});
+  void back({bool snap = false, bool held = false});
 
   /// To [place] at once (the slider, another device's place) - not a turn (the Reader knows it's coming).
   void jumpTo(int place);
   void zoomStep(bool zoomIn) {}
+
+  /// Auto-scroll on or off (a webtoon's; nothing elsewhere) - its key ([ReaderAction.autoScroll]).
+  void autoScrollToggle() {}
+
+  /// Auto-scroll faster or slower - its keys.
+  void autoScrollSpeed({required bool faster}) {}
 
   // ---- drawing
 
@@ -154,6 +160,10 @@ abstract class Renderer extends ChangeNotifier {
   /// A row of its own over the bottom bar (the comic page strip): drawn, its focus node (the remote's walk), and the
   /// bottom bar's control below it.
   Widget? above(BuildContext context) => null;
+
+  /// Over everything, the controls included (in the Reader's Stack, last): a webtoon's floating play button - under
+  /// the controls, a tap on it closed them instead.
+  List<Widget> overControls(BuildContext context) => const [];
   FocusNode? get rowNode => null;
   FocusNode? get rowBelow => null;
   void rowFocus() {}
@@ -199,6 +209,10 @@ abstract class Renderer extends ChangeNotifier {
   /// Saves [place] as the open book's progress - captured now - and returns Komga's progress after it (this
   /// reader's). [place] past the last page: the book is read.
   Future<Object?> Function() progressSaver(int place);
+
+  /// What saving [place] will make Komga's progress, when known before the save's answer (comics: the page) - a save
+  /// that got there but whose answer was lost is still this reader's; null: only the answer says (EPUBs).
+  Object? progressSaving(int place) => null;
 
   /// Komga's progress after this reader marked the book read or unread; [fresh]: the book as Komga has it now.
   Future<Object?> progressAfterMark(Map fresh) => progressReader()();
