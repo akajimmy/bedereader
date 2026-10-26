@@ -83,7 +83,7 @@ class FolderAccess {
     if (context.mounted) {
       await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
         title: const Text("Can't find that folder"),
-        content: Text('${whereHere(path)}'),
+        content: WhereLine(path),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
       ));
     }

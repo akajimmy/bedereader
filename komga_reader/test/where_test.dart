@@ -23,7 +23,17 @@ void main() {
     expect(said('/storage/1A2B-3C4D/Comics', TargetPlatform.android), 'Card or drive 1A2B-3C4D › Comics/');
     expect(said(r'\\nick-nas\NAS-SHARE\COMICS\Archive', TargetPlatform.android), 'nick-nas › NAS-SHARE/COMICS/Archive/');
     expect(said(r'\\nick-nas\NAS-SHARE', TargetPlatform.iOS), 'nick-nas › NAS-SHARE/');
-    expect(said(r'C:\Comics\Archive', TargetPlatform.windows), r'On This Device › C:\Comics\Archive\');
+    expect(said(r'C:\Comics\Archive', TargetPlatform.windows), '$onThisDevice › ${r'C:\Comics\Archive\'}');
+  });
+
+  // user, 2026-10-26: the place's icon before it - a network folder, a card, this device
+  test("each place's kind, for its icon", () {
+    WhereKind kind(String path) =>
+        whereIs(path, documents: docs, storage: '/storage/emulated/0', platform: TargetPlatform.android).kind;
+    expect(kind(r'\\nick-nas\NAS-SHARE\COMICS'), WhereKind.server);
+    expect(kind(r'\\nick-nas'), WhereKind.server);
+    expect(kind('/storage/1A2B-3C4D/Comics'), WhereKind.card);
+    expect(kind('/storage/emulated/0/Comics'), WhereKind.device);
   });
 
   test("an iPad library kept from before the app's folder moved is found where it is now, with the same ids", () {

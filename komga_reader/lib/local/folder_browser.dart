@@ -316,7 +316,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
         if (p != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text(whereHere(p).toString(), style: const TextStyle(fontSize: 13, color: Color(0xFF9A9A9A))),
+            child: WhereLine(p, style: const TextStyle(fontSize: 13, color: Color(0xFF9A9A9A))),
           ),
         Expanded(child: switch (level) {
           _ when _error != null => Center(child: Padding(

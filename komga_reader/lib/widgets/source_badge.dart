@@ -58,14 +58,15 @@ Widget libraryIcon(Komga api, String libraryId, {double? size}) => AppSettings.i
 /// A source's icon on its own, in the colour and size icons have where it is (a library in a list: 24; on a button:
 /// 18 - at 24 there it made the library buttons taller than All libraries' beside them, tablet 2026-10-26).
 class SourceIcon extends StatelessWidget {
-  const SourceIcon(this.source, {super.key, this.size});
+  const SourceIcon(this.source, {super.key, this.size, this.colour});
   final BookSource source;
   final double? size; // null: the icon theme's, as an Icon's
+  final Color? colour; // null: the icon theme's
 
   @override
   Widget build(BuildContext context) {
     final theme = IconTheme.of(context);
-    final colour = theme.color ?? Colors.white, size = this.size ?? theme.size ?? 24;
+    final colour = this.colour ?? theme.color ?? Colors.white, size = this.size ?? theme.size ?? 24;
     // (drawn nearly to the box's edge: measured on the tablet, a 10% margin left them about 10% smaller than the
     // Material icons beside them; at 2% the folder spans what Material's own folder does, 83% of the box)
     return SizedBox.square(

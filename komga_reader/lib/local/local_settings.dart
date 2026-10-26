@@ -26,7 +26,7 @@ class LocalLibrariesGroup extends StatelessWidget {
                 title: Text(l.name, style: const TextStyle(fontSize: 14.5)),
                 // what the last scan couldn't read, under the path (punch list 2: it used to say nothing)
                 subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(whereHere(l.path).toString(), style: const TextStyle(fontSize: 12, color: hintColour)),
+                  WhereLine(l.path, style: const TextStyle(fontSize: 12, color: hintColour)),
                   // what's in it, as said when it was added (not changed here: removed and added again)
                   if (l.kind != LibraryKind.seriesFolders)
                     Text(libraryKindLabel(l.kind), style: const TextStyle(fontSize: 12, color: hintColour)),
