@@ -6,7 +6,7 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 
 - **Works:** No server mode, and local libraries beside Komga's; libraries on the device, a card or USB drive, or an SMB share; CBZ, CBR (RAR4 and RAR5) and EPUB; a folder browser to add them; ComicInfo.xml; page sizes; a library out of reach keeps its books, one deleted is asked about; what a scan couldn't read is reported; open screens refresh after a scan; offline mode keeps the local libraries.
 - **Tried on the tablet** (2026-10-25, see Findings): all of that in No server mode, except the parts below.
-- **Not tried on a device yet:** signed in to Komga with local libraries beside it, and offline with them (item 6) - needs a sign-in; a share going out of reach after it was added; iOS.
+- **Not tried on a device yet:** signed in to Komga with local libraries beside it, and offline with them (item 6) - needs a sign-in; a share going out of reach after it was added. **iOS** started (2026-10-26, TestFlight): No server mode with the NAS works.
 - **Next:** the punch list below, from the top.
 
 ## The rules here
@@ -24,6 +24,7 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - Windows: Desktop\BeDeReader-Exp, window title "BeDeReader Exp", data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp.
 - Changed for that (and so not to be copied into 1.6): android\app\build.gradle.kts (applicationId), AndroidManifest.xml (label), windows\runner Runner.rc, main.cpp and desktop_channel.cpp, tools\build.ps1 (no -Bump), tools\install-android.ps1 (-Package), tools\build-exp.ps1 (new); for iOS, ios\Runner.xcodeproj\project.pbxproj (bundle ID com.nickp.bedereader.exp), ios\Runner\Info.plist (name), .github\workflows\testflight.yml (exp-build-N tags, the bundle ID, the build number).
 - iOS: **BeDeReader Exp**, bundle ID com.nickp.bedereader.exp, its own App Store Connect record and TestFlight; the Files app shows its folder as BeDeReader Exp.
+- The version check is off (lib\update_check.dart, UpdateCheck.inThisApp): a BeDeReader release isn't an update to BeDeReader Exp (user, 2026-10-26: "1.5.0 is not an update to exp").
 
 ## Decided
 
@@ -170,7 +171,7 @@ From the wrap-up list, the code review and the tablet test. Done items move to "
 - **18. A leading number in a file name is taken as the issue:** "021 - Captain America - Reborn 01.cbr" is #21; it's issue 1. And a book numbered by its place (no number in its name) counts the files left out beside it: "Expanse_DragonTooth_005_DIGITAL" went from #1 to #3 when two broken files were put next to it.
 - **19. Wording in the log:** the reader says "from Komga" in No server mode ("opened ... (DIVINA, 43 pages, from Komga)"); a CBR's failure reads "FormatException: FormatException: UnexpectedEofException ...".
 - **20. Item 6 on a device:** signed in to Komga with local libraries beside it - then offline by hand, and Komga out of reach: the local books still listed and read. Needs a sign-in (the user's API key).
-- **12. iOS:** local mode on the iPad - a share, and the BeDeReader folder in the Files app (screenshots and logs from here over USB).
+- **12. iOS:** local mode on the iPad - a share, and the BeDeReader folder in the Files app (screenshots and logs from here over USB). **Started 2026-10-26** with TestFlight build exp-build-1: in No server mode the user added Ongoing from the NAS, the whole scan ran, and a book read - "a success". Left: the Files app's folder, CBR, the missing-folder question, offline beside Komga.
 - **13. A whole NAS library on the tablet** (thousands of books): scan time, memory, browsing. Also a share going out of reach after it was added (needs the NAS off, or the tablet away from home - adb runs over the same Wi-Fi).
 - **14. The curl's perf log out** (always on in the experiment; not to go to 1.6). (Review finding 8.)
 - **15. Into the real app:** redone as change branches with tests and CHANGELOG entries on 1.6.
