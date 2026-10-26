@@ -69,7 +69,11 @@ class FolderKomga extends OfflineKomga {
     if (store.books.isEmpty && waitForFirstScan) {
       await api.rescan(onBook: onBook);
     } else {
-      unawaited(api.rescan(onBook: onBook));
+      // in the background: a failure is said, not left unhandled (two opened on the same folders at once - signed out
+      // and in again quickly - both save the kept scan; one save can find the other's file busy)
+      unawaited(api.rescan(onBook: onBook).catchError((Object e) {
+        AppLog.instance.warn('local', 'a background scan failed: $e');
+      }));
     }
     return api;
   }
