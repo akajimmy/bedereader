@@ -83,6 +83,41 @@ void main() {
 
     Future<FolderKomga> open() => FolderKomga.open([LocalLibrary.at(root.path)], dataDir: data);
 
+    test("a poster that can't be made from its file isn't tried again while the file stays the same - each tile "
+        'showing it read the file again (an EPUB on a share, whole); one whose file was out of reach is (punch list 9)',
+        () async {
+      // a comic whose cover isn't a picture
+      final bad = File('${root.path}${Platform.pathSeparator}Broken Cover (2001).cbz');
+      await bad.writeAsBytes(zipOf({'01.png': 'not a picture', '02.png': png}));
+      final api = await open();
+      final id = api.store.books.entries.firstWhere((e) => e.value['path'] == bad.path).key;
+      final reads = <String>[];
+      final fs = _Counting(reads);
+      Storage.fsFor = (_) => fs;
+      addTearDown(() => Storage.fsFor = null);
+      // (a tile asks again later: the try before is done with by then)
+      Future<bool> poster(String book) async {
+        final made = await api.thumbAt(api.bookThumb(book));
+        await Future<void>.delayed(Duration.zero);
+        return made;
+      }
+
+      expect(await poster(id), isFalse);
+      final first = reads.length;
+      expect(first, greaterThan(0), reason: 'read to try');
+      expect(await poster(id), isFalse);
+      expect(reads.length, first, reason: 'not read again');
+
+      // out of reach: not kept - tried again
+      final other = api.store.books.entries.firstWhere((e) => (e.value['path'] as String).contains('Loose')).key;
+      fs.out = true;
+      expect(await poster(other), isFalse);
+      final tried = reads.length;
+      fs.out = false;
+      expect(await poster(other), isTrue, reason: 'the share back: made');
+      expect(reads.length, greaterThan(tried));
+    });
+
     test('series from its folders, a _oneshots folder and loose books each a series of their own; books in number '
         'order, their pages in natural order; an EPUB titled and credited from its own metadata', () async {
       final api = await open();
@@ -544,6 +579,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(handed, isNotNull);
   });
+}
+
+/// This device's files, each read counted in [reads] - or, with [out], a share that doesn't answer.
+class _Counting implements LibraryFs {
+  _Counting(this.reads);
+  final List<String> reads;
+  bool out = false;
+  static const _real = LocalFs();
+
+  Future<T> _read<T>(String path, Future<T> Function() f) async {
+    reads.add(path);
+    if (out) throw const SocketException('no answer');
+    return f();
+  }
+
+  @override
+  Future<int> length(String path) => _read(path, () => _real.length(path));
+  @override
+  Future<Uint8List> readAll(String path) => _read(path, () => _real.readAll(path));
+  @override
+  Future<Uint8List> readRange(String path, int offset, int length) =>
+      _read(path, () => _real.readRange(path, offset, length));
+  @override
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError('${invocation.memberName}');
 }
 
 /// This device's files - or, with [out], a share that doesn't answer (as dart_smb2 throws when it can't connect).

@@ -353,14 +353,24 @@ class FolderKomga extends OfflineKomga {
   int _makingNow = 0;
   final List<Completer<void>> _waiting = []; // posters waiting for a turn (a few at a time: the files may be on a NAS)
 
+  /// The posters that couldn't be made from their file as it is (a cover that isn't a picture, a damaged file): not
+  /// tried again while the file stays the same - poster path -> the file's date and size then. Each tile showing it
+  /// tried again, and an EPUB on a share was read whole every time (code review, 2026-10-25, punch list 9). A file
+  /// out of reach isn't kept here: tried again, the share may be back.
+  final Map<String, String> _noPoster = {};
+
+  static String _fileSign(Map e) => '${e['fileModified']}|${e['bytes']}';
+
   /// Makes the poster at [path] (a book's) if it isn't there yet. False: none could be made.
   Future<bool> thumbAt(String path) => _making[path] ??= () async {
+        final id = path.split(Platform.pathSeparator).last.replaceAll('.png', '');
+        final e = store.books[id];
+        var fromFile = true; // (the file's fault: kept in [_noPoster]; not when it couldn't be read)
         try {
           if (await File(path).exists()) return true;
-          final id = path.split(Platform.pathSeparator).last.replaceAll('.png', '');
-          final e = store.books[id];
           final cover = e?['cover'] as String?;
           if (e == null || cover == null) return false;
+          if (_noPoster[path] == _fileSign(e)) return false;
           if (_makingNow >= 3) {
             final turn = Completer<void>();
             _waiting.add(turn);
@@ -368,16 +378,23 @@ class FolderKomga extends OfflineKomga {
           }
           _makingNow++;
           try {
-            final Uint8List? bytes = e['epub'] == true
-                ? Zip(await Storage.instance.of(e['path'] as String).readAll(e['path'] as String)).read(cover)
-                : await (await _zip(id)).read(cover);
-            if (bytes == null) return false;
+            final Uint8List? bytes;
+            try {
+              bytes = e['epub'] == true
+                  ? Zip(await Storage.instance.of(e['path'] as String).readAll(e['path'] as String)).read(cover)
+                  : await (await _zip(id)).read(cover);
+            } catch (err) {
+              fromFile = troubleOf(err) != FileTrouble.noAnswer; // (a share that didn't answer: tried again later)
+              rethrow;
+            }
+            if (bytes == null) return _cannot(path, e);
             final codec = await ui.instantiateImageCodec(bytes, targetWidth: 320);
             final frame = await codec.getNextFrame();
             final png = await frame.image.toByteData(format: ui.ImageByteFormat.png);
             frame.image.dispose();
             codec.dispose();
-            if (png == null) return false;
+            if (png == null) return _cannot(path, e);
+            fromFile = false; // (from here on, a failure is this device's: writing the poster)
             await _thumbs.create(recursive: true);
             await File(path).writeAsBytes(png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes));
             return true;
@@ -386,11 +403,16 @@ class FolderKomga extends OfflineKomga {
             if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
           }
         } catch (_) {
-          return false;
+          return fromFile && e != null ? _cannot(path, e) : false;
         } finally {
           unawaited(Future(() => _making.remove(path)));
         }
       }();
+
+  bool _cannot(String path, Map e) {
+    _noPoster[path] = _fileSign(e);
+    return false;
+  }
 
   // ---- no server: settings stay on this device, nothing to sync -----------------------------------------------------
   @override
