@@ -110,6 +110,9 @@ ThemeData buildTheme([Accent choice = Accent.blue]) {
     // same as the filled part - so a bar looked full whatever it showed (Downloads' storage bar at 10% - user,
     // build 83)
     progressIndicatorTheme: const ProgressIndicatorThemeData(linearTrackColor: Color(0xFF34343A)),
+    // a text box's sample value faded: left to Material, a hint takes the scheme's onSurfaceVariant - white in this
+    // scheme, the same as text typed in - so "nick-nas" looked filled in (user, 2026-10-26)
+    inputDecorationTheme: const InputDecorationTheme(hintStyle: TextStyle(color: Color(0x61E6E6E6))),
     splashFactory: NoSplash.splashFactory,
     textTheme: base.textTheme.apply(bodyColor: const Color(0xFFE6E6E6), displayColor: const Color(0xFFE6E6E6)),
   );

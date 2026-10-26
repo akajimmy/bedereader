@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 
+- Sample values in text boxes (the server address on the sign-in screen, for one) are faded, so they no longer look filled in.
 - Home (and the library you came from) no longer shows a book where it was before you read on. Closing a book, the screen under it loaded again straight away, before the reader had saved the last pages you turned; now it waits for that save.
 
 ## 1.5.0
