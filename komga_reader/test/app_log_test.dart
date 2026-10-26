@@ -64,6 +64,25 @@ void main() {
     expect(log.outbox.map((l) => l.level), [LogLevel.info, LogLevel.warn, LogLevel.crash], reason: 'unsent: still to send');
   });
 
+  test('saves asked for at once are written one after another: the newest is what stays (build 160, 10-25: two '
+      'at once shared the .tmp file and the older could be renamed last)', () async {
+    final dir = await Directory.systemTemp.createTemp('app_log_order');
+    addTearDown(() async {
+      await log.written;
+      await dir.delete(recursive: true);
+    });
+    await log.load(dir);
+    for (var round = 0; round < 10; round++) {
+      log.info('t', 'line $round'); // (a save of its own starts)
+      final first = log.save();
+      log.info('t', 'after $round');
+      await Future.wait([first, log.save()]);
+      await log.written;
+      final kept = File('${dir.path}${Platform.pathSeparator}recent.jsonl').readAsLinesSync();
+      expect(kept.last, contains('after $round'), reason: 'round $round: the newest written last');
+    }
+  });
+
   test("turned on during a run, this run's lines so far are sent too - the start-up ones came before it could be "
       "turned on - each once, however often it's turned on and off; earlier runs' lines are not", () async {
     final dir = await Directory.systemTemp.createTemp('app_log_run');
