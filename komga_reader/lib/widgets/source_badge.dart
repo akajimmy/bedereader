@@ -51,19 +51,21 @@ class SourceBadge extends StatelessWidget {
 
 /// A library's icon: its source's (Settings > Library & Home, Show source icon - user, 2026-10-26: Komga's libraries
 /// and local ones of the same name looked alike in the side menu), else the plain folder.
-Widget libraryIcon(Komga api, String libraryId, {double size = 24}) => AppSettings.instance.display.sourceIcon
+Widget libraryIcon(Komga api, String libraryId, {double? size}) => AppSettings.instance.display.sourceIcon
     ? SourceIcon(sourceOf(api, libraryId), size: size)
     : Icon(Icons.folder_outlined, size: size);
 
-/// A source's icon on its own, in the colour icons have where it is (a library in a list, a button).
+/// A source's icon on its own, in the colour and size icons have where it is (a library in a list: 24; on a button:
+/// 18 - at 24 there it made the library buttons taller than All libraries' beside them, tablet 2026-10-26).
 class SourceIcon extends StatelessWidget {
-  const SourceIcon(this.source, {super.key, this.size = 24});
+  const SourceIcon(this.source, {super.key, this.size});
   final BookSource source;
-  final double size;
+  final double? size; // null: the icon theme's, as an Icon's
 
   @override
   Widget build(BuildContext context) {
-    final colour = IconTheme.of(context).color ?? Colors.white;
+    final theme = IconTheme.of(context);
+    final colour = theme.color ?? Colors.white, size = this.size ?? theme.size ?? 24;
     // (drawn nearly to the box's edge: measured on the tablet, a 10% margin left them about 10% smaller than the
     // Material icons beside them; at 2% the folder spans what Material's own folder does, 83% of the box)
     return SizedBox.square(

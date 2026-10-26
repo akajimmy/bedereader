@@ -73,6 +73,13 @@ void main() {
     expect(find.byType(SourceIcon), findsNWidgets(3));
   });
 
+  testWidgets("a source icon is the size icons are where it is - a button's 18, not 24 (tablet, 2026-10-26: Home's "
+      'library buttons came out taller than All libraries beside them)', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: Material(child: Center(child: IconTheme(
+        data: IconThemeData(size: 18), child: SourceIcon(BookSource.komga))))));
+    expect(tester.getSize(find.byType(SourceIcon)), const Size(18, 18));
+  });
+
   testWidgets('the setting off: no icon; on: the icon, on the poster', (tester) async {
     expect(sourceBadgeFor(local, 'B2'), isNull, reason: 'off by default');
     AppSettings.instance.display = const DisplayPrefs(sourceIcon: true);
