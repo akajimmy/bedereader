@@ -69,7 +69,7 @@ class _PosterGridDelegate extends SliverGridDelegate {
 class PosterTile extends StatelessWidget {
   const PosterTile({super.key, required this.api, required this.imageUrl, required this.title,
       this.subtitle, this.read = false, this.progress, required this.onOpen, this.onMenu, this.autofocus = false,
-      this.image, this.selected, this.badge, this.caption, this.corner});
+      this.image, this.selected, this.badge, this.caption, this.corner, this.source});
 
   final Komga api;
   final String imageUrl;
@@ -83,6 +83,7 @@ class PosterTile extends StatelessWidget {
   final VoidCallback? onMenu;
   final bool autofocus;
   final Widget? badge; // bottom-right corner (what of it is downloaded)
+  final Widget? source; // bottom-left corner: where it comes from ([SourceBadge] - Settings > Library & Home)
   final String? corner; // top-left, on the cover: a webtoon episode's number ("Ep. 12")
   /// A last small line (book posters: the release date). Not null = the line is there, even empty (a book with no
   /// date), so every poster in a grid keeps the same cover size.
@@ -160,6 +161,7 @@ class PosterTile extends StatelessWidget {
                         ),
                       ),
                     if (badge != null) Positioned(right: 6, bottom: 9, child: badge!), // clear of the progress bar
+                    if (source != null) Positioned(left: 6, bottom: 9, child: source!),
                     if (progress != null && !read)
                       Positioned(left: 0, right: 0, bottom: 0,
                           child: LinearProgressIndicator(value: progress, minHeight: 3, color: accent, backgroundColor: Colors.black54)),

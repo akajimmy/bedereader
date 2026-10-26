@@ -12,7 +12,7 @@ This application was developed with the aid of AI coding tools, but was designed
 
 | What | Licence | Role |
 |---|---|---|
-| [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app. BeDeReader is not affiliated with the Komga project. |
+| [Komga](https://komga.org) | MIT | The comics server the app reads from, over its web API. No Komga code is in the app; only the outline of the K in Komga's logo, the source icon on posters from Komga (listed below). BeDeReader is not affiliated with the Komga project. |
 
 ## Inside the app
 
@@ -34,6 +34,9 @@ This application was developed with the aid of AI coding tools, but was designed
 | `material_color_utilities` | 0.13.0 | Apache-2.0 | Material colour handling (part of Flutter) |
 | async, characters, collection, ffi, file, http_parser, meta, path, platform, plugin_platform_interface, source_span, string_scanner, term_glyph, typed_data, vector_math | various | BSD-3-Clause | Supporting libraries used by the above |
 | clock | 1.1.3 | BSD-3-Clause | The time for page-turn and refresh timing (testable) |
+| The K of [Komga](https://github.com/gotson/komga)'s logo (its tray icon, komga-gray-minimal.svg), Copyright (c) 2019 Gauthier Roebroeck | as of 2026-10-26 | MIT | Its outline, redrawn in one colour: the source icon on posters from Komga |
+| [koni_rar](https://github.com/zenbaku/koni_archive) with koni_archive_core and koni_codecs, parts adapted from libarchive's RAR readers (BSD-2-Clause, its NOTICE) | 0.9.0 (koni_rar with two additions) | MIT | Reading CBR (RAR) comics in local libraries |
+| [dart_smb2](https://pub.dev/packages/dart_smb2), and the libsmb2 library it loads | 0.2.3 | BSD-3-Clause; libsmb2 LGPL-2.1 | Reading library folders on network shares (SMB), on Android and iPhone / iPad |
 
 **Windows version** - also `flutter_windows.dll` (the Flutter engine) and ICU Unicode data (`icudtl.dat`, Unicode
 licence); both covered by Flutter's notices.

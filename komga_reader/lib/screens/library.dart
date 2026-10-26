@@ -14,6 +14,7 @@ import '../widgets/download_badge.dart';
 import '../widgets/drawer.dart';
 import '../widgets/filter_panel.dart';
 import '../widgets/poster.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
@@ -355,6 +356,7 @@ Widget seriesTile(BuildContext context, Komga api, dynamic s,
     read: total > 0 && s['booksUnreadCount'] == 0 && s['booksInProgressCount'] == 0,
     selected: selecting ? selection.isSelected(s) : null,
     badge: DownloadBadge.series(s['id'] as String, total: total),
+    source: sourceBadgeFor(api, s['id'] as String),
     onOpen: selecting ? () => selection.toggle(s) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(s)
@@ -405,6 +407,7 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,
     badge: DownloadBadge.book(b['id'] as String),
+    source: sourceBadgeFor(api, b['id'] as String),
     onOpen: selecting ? () => selection.toggle(b) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(b)

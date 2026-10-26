@@ -130,18 +130,32 @@ class FolderKomga extends OfflineKomga {
   /// A book, series or library of these folders.
   @override
   bool isLocal(String id) =>
-      store.books.containsKey(id) || _folders.any((l) => l.id == id) || _seriesIds.contains(id);
+      store.books.containsKey(id) || _folders.any((l) => l.id == id) || _seriesLibrary.containsKey(id);
 
-  // the series' ids, worked out again after each change (asked about for every tile beside Komga's)
-  Set<String> get _seriesIds {
+  /// Whether [id] - a book, series or library of these folders - is in a library on a network share (\\host\share),
+  /// rather than on this device: posters' source icons (Settings > Library & Home).
+  bool onShare(String id) {
+    final lib = _folders.any((l) => l.id == id)
+        ? id
+        : ((store.books[id]?['book'] as Map?)?['libraryId'] as String?) ?? _seriesLibrary[id];
+    final path = _folders.where((l) => l.id == lib).firstOrNull?.path;
+    return path != null && Storage.shareOf(path) != null;
+  }
+
+  // the series' ids, and each one's library, worked out again after each change (asked about for every tile beside
+  // Komga's)
+  Map<String, String> get _seriesLibrary {
     if (_seriesAt != changed.value || _seriesIdsKept == null) {
       _seriesAt = changed.value;
-      _seriesIdsKept = {for (final e in store.books.values) (e['book'] as Map)['seriesId'] as String};
+      _seriesIdsKept = {
+        for (final e in store.books.values)
+          (e['book'] as Map)['seriesId'] as String: (e['book'] as Map)['libraryId'] as String,
+      };
     }
     return _seriesIdsKept!;
   }
 
-  Set<String>? _seriesIdsKept;
+  Map<String, String>? _seriesIdsKept;
   int _seriesAt = -1;
 
   @override

@@ -296,7 +296,12 @@ class DisplayPrefs {
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
       this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides,
-      this.autoScrollSpeed = autoScrollStart, this.webtoonDoubleTap = true});
+      this.autoScrollSpeed = autoScrollStart, this.webtoonDoubleTap = true, this.sourceIcon = false});
+
+  /// A small icon on each book's and series' poster, bottom left: where it comes from - a local library on this
+  /// device, one on a network share, or Komga (user, 2026-10-26: "show source icon", in Library & Home). This
+  /// device's: its local libraries are its own. Off by default.
+  final bool sourceIcon;
   final bool night;
 
   /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
@@ -393,8 +398,9 @@ class DisplayPrefs {
           bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, KindPrefs? webtoons, InsetPage? insetPage, Rotation? rotation,
           PageNote? pageNote, bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll,
-          WebtoonTaps? webtoonTaps, double? autoScrollSpeed, bool? webtoonDoubleTap}) =>
+          WebtoonTaps? webtoonTaps, double? autoScrollSpeed, bool? webtoonDoubleTap, bool? sourceIcon}) =>
       DisplayPrefs(
+        sourceIcon: sourceIcon ?? this.sourceIcon,
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, webtoons: webtoons ?? this.webtoons,
         insetPage: insetPage ?? this.insetPage, webtoonTaps: webtoonTaps ?? this.webtoonTaps,
         autoScrollSpeed: autoScrollSpeed ?? this.autoScrollSpeed,
@@ -429,7 +435,7 @@ class DisplayPrefs {
       'webtoonDoubleTap': webtoonDoubleTap,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
-      'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name};
+      'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name, 'sourceIcon': sourceIcon};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -458,6 +464,7 @@ class DisplayPrefs {
         webtoons: kind('webtoons', none.webtoons),
         webtoonTaps: pick(WebtoonTaps.values, j['webtoonTaps'], WebtoonTaps.sides),
         webtoonDoubleTap: j['webtoonDoubleTap'] != false,
+        sourceIcon: j['sourceIcon'] == true,
         autoScrollSpeed: switch (j['autoScrollSpeed']) {
           final num v when v >= autoScrollSlowest && v <= autoScrollFastest => v.toDouble(),
           _ => autoScrollStart,

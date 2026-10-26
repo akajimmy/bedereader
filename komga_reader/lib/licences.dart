@@ -27,6 +27,12 @@ const materialIconsNotice = 'Material Icons by Google, licensed under the Creati
     'International licence (https://creativecommons.org/licenses/by/4.0/). Used unmodified, as the font supplied '
     'with Flutter.';
 
+/// The K of Komga's logo (its tray icon), its outline redrawn in one colour: posters' source icon for Komga's books
+/// (lib/widgets/source_badge.dart). MIT - its notice goes with the app.
+const komgaLogoNotice = 'The outline of the K in Komga\'s logo (komga-tray/src/main/resources/icons/'
+    'komga-gray-minimal.svg, https://github.com/gotson/komga), redrawn in one colour.\n\n'
+    'Copyright (c) 2019 Gauthier Roebroeck\n$_mitBody';
+
 /// The AI usage disclosure on the About screen (user's wording, 2026-09-29). README and THIRD_PARTY_NOTICES.md say
 /// which tools were used.
 const aiDisclosure =
@@ -48,6 +54,7 @@ void registerLicences() {
     yield const LicenseEntryWithLineBreaks([appName], appLicence);
     yield const LicenseEntryWithLineBreaks(['AMD FidelityFX Super Resolution 1 (FSR 1)'], amdFsrNotice);
     yield const LicenseEntryWithLineBreaks(['Material Icons'], materialIconsNotice);
+    yield const LicenseEntryWithLineBreaks(['Komga (the K of its logo)'], komgaLogoNotice);
     // EPUB reading fonts (SIL Open Font Licence 1.1), hyphenation patterns (hyph-utf8) and the dictionary (CC BY 4.0
     // over the WordNet licence): their own texts
     for (final (name, file) in const [

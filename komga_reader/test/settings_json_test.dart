@@ -93,7 +93,7 @@ void main() {
         doubleTapZoom: false, midBook: MidBook.keep,
         screenOn: 10, posterSize: PosterSize.small,
         nightSchedule: true, nightFrom: 1320, nightTo: 360, textScale: 1.15, accent: Accent.green,
-        pageStrip: true, insetPage: InsetPage.never, webtoonScroll: WebtoonScroll.page);
+        pageStrip: true, insetPage: InsetPage.never, webtoonScroll: WebtoonScroll.page, sourceIcon: true);
     final settings = <(String, Object? Function(DisplayPrefs), Object?, Object?)>[
       ('night', (d) => d.night, true, false),
       ('warmth', (d) => d.warmth, 0.3, 0.5),
@@ -113,6 +113,7 @@ void main() {
       ('webtoonTaps', (d) => d.webtoonTaps, WebtoonTaps.topBottom, WebtoonTaps.sides),
       ('autoScrollSpeed', (d) => d.autoScrollSpeed, 120.0, DisplayPrefs.autoScrollStart),
       ('webtoonDoubleTap', (d) => d.webtoonDoubleTap, false, true), // (webtoons' own - 2026-10-22)
+      ('sourceIcon', (d) => d.sourceIcon, true, false), // posters' source icon (2026-10-26)
       ('doubleTapZoom', (d) => d.doubleTapZoom, false, true),
       ('midBook', (d) => d.midBook, MidBook.keep, MidBook.ask),
       ('screenOn', (d) => d.screenOn, 10, 0),
