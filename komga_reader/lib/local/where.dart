@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -71,6 +73,26 @@ class DeviceRoots {
     documents = await appDocumentsDir();
     storage = await FolderAccess.storageRoot();
     _loaded = true;
+  }
+}
+
+/// iOS: a Comics folder in the app's own folder while that's empty - the Files app hides an empty one, so there was
+/// nowhere to copy books to (user, 2026-10-26). Only while empty: one deleted among the person's own isn't made again.
+/// [documents] for tests (else iOS's, [appDocumentsDir]). Returns the folder made, or null.
+Future<String?> makeComicsFolder({String? documents}) async {
+  final docs = documents ?? await appDocumentsDir();
+  if (docs == null) return null;
+  try {
+    final dir = Directory(docs);
+    if (!await dir.exists()) return null;
+    await for (final e in dir.list()) {
+      if (!e.path.split(RegExp(r'[\\/]')).last.startsWith('.')) return null; // not empty (.DS_Store and such aside)
+    }
+    final made = Directory('$docs${Platform.pathSeparator}Comics');
+    await made.create();
+    return made.path;
+  } catch (_) {
+    return null; // (tried again at the next start)
   }
 }
 

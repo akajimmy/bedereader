@@ -19,6 +19,7 @@ import 'local/folder_komga.dart';
 import 'local/missing_prompt.dart';
 import 'local/mixed_komga.dart';
 import 'local/storage.dart' show LocalNames;
+import 'local/where.dart' show makeComicsFolder;
 import 'night_schedule.dart';
 import 'screens/app_settings.dart' show AppSettingsScreen;
 import 'screens/home.dart';
@@ -96,6 +97,9 @@ Future<void> _startLog() async {
   final v = await appVersionInfo();
   AppLog.instance.info('app', 'started: ${v?.$1 ?? '?'} (build ${v?.$2 ?? '?'}) on ${defaultTargetPlatform.name} '
       '${Platform.operatingSystemVersion}');
+  // iOS: the app's folder shown in the Files app, with somewhere to copy books to (experimental/sources)
+  final comics = await makeComicsFolder();
+  if (comics != null) AppLog.instance.info('local', 'made $comics (the Files app hides an empty folder)');
 }
 
 /// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the

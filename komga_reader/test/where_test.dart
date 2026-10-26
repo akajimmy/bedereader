@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/folder_scan.dart';
@@ -43,5 +45,19 @@ void main() {
     // the library's id (and its series' and books', made the same way) doesn't change with the GUID: progress kept
     expect(LocalLibrary.at('$docs/Spider-Man').id, LocalLibrary.at('$moved/Spider-Man').id);
     expect(LocalLibrary.at('$docs/Spider-Man').id, isNot(LocalLibrary.at('$docs/Batman').id));
+  });
+
+  test("iOS: a Comics folder in the app's folder while that's empty (the Files app hides an empty one - user, "
+      "2026-10-26); not once the person's own things are there, so one they deleted isn't made again", () async {
+    final tmp = await Directory.systemTemp.createTemp('docs');
+    addTearDown(() => tmp.delete(recursive: true));
+    await File('${tmp.path}/.DS_Store').writeAsString('');
+    expect(await makeComicsFolder(documents: tmp.path), isNotNull, reason: 'a hidden file is still empty');
+    expect(await Directory('${tmp.path}/Comics').exists(), isTrue);
+
+    await Directory('${tmp.path}/Comics').delete();
+    await Directory('${tmp.path}/Spider-Man').create();
+    expect(await makeComicsFolder(documents: tmp.path), isNull);
+    expect(await Directory('${tmp.path}/Comics').exists(), isFalse);
   });
 }
