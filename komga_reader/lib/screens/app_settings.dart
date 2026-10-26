@@ -424,9 +424,12 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 leading: const SourceIcon(BookSource.komga),
                 title: Text(l['name'] as String? ?? '', style: const TextStyle(fontSize: 14.5)),
               ),
-            NoteRow(snap.hasError || (snap.hasData && snap.data!.isEmpty)
-                ? "Komga's libraries can't be listed now (offline?). Its server: Server and sync."
-                : "From ${api.baseUrl} (Server and sync). Shown or hidden: Library & Home."),
+            if (snap.hasError || (snap.hasData && snap.data!.isEmpty))
+              const NoteRow("Komga's libraries can't be listed now (offline?)."),
+            const NoteRow('Shown or hidden: Library & Home.'),
+            // (its server's own page - and something here for a remote to stop on)
+            ActionRow(title: 'Komga server', subtitle: api.baseUrl, icon: Icons.dns_outlined,
+                onTap: () => _go(SettingsPage.server)),
           ]),
         ),
     ];
