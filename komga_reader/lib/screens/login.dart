@@ -75,6 +75,9 @@ String apiKeyName() {
 /// API key" tabs, Password first). A password sign-in makes an API key for this device and keeps only that; when
 /// the server won't make one (a restricted or demo account), the email and password are kept instead (encrypted,
 /// like a key). The email is filled in again after Sign out; the password and key never are.
+/// The last Komga signed in to (main.dart writes it): kept while 'server' holds No server mode's 'local'.
+const lastKomgaKey = 'server.lastKomga';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key, required this.onSignedIn, this.client, this.openLocal, this.addingKomga = false});
   final Future<void> Function(Komga api) onSignedIn;
@@ -112,7 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _server.addListener(() { if (mounted) setState(() {}); }); // (the http note follows the address as it's typed)
     // signing in again (after Sign out): the last server address and email are still saved on the device
     SharedPreferences.getInstance().then((p) {
-      final last = p.getString('server'), email = p.getString('email');
+      // in No server mode 'server' is No server's own 'local': the last Komga's address instead (tablet, 2026-10-26:
+      // Add a Komga server showed "local" as the server)
+      final saved = p.getString('server');
+      final last = saved == FolderKomga.address ? p.getString(lastKomgaKey) : saved, email = p.getString('email');
       if (last != null && mounted && _server.text.isEmpty) _server.text = last;
       if (email != null && mounted && _email.text.isEmpty) _email.text = email;
     });

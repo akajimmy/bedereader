@@ -405,6 +405,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _signIn(Komga api) async {
     final p = await SharedPreferences.getInstance();
     await p.setString('server', api.baseUrl);
+    // the last Komga's own, kept through No server mode ('server' says 'local' then): the sign-in fills it in
+    if (api is! FolderKomga) await p.setString(lastKomgaKey, api.baseUrl);
     if (api is FolderKomga) {
       setState(() => _api = api);
       await _startLocal(api);

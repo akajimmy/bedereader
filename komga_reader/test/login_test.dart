@@ -37,6 +37,19 @@ void main() {
     expect(field(tester, 'API key').controller!.text, isEmpty); // never kept
   });
 
+  testWidgets("from No server mode (Add a Komga server): the last Komga's address filled in, not No server's 'local' "
+      '(tablet, 2026-10-26); none kept: empty', (tester) async {
+    for (final (saved, expected) in [
+      ({'server': 'local', lastKomgaKey: 'http://nas.local:25600'}, 'http://nas.local:25600'),
+      ({'server': 'local'}, ''),
+    ]) {
+      SharedPreferences.setMockInitialValues(saved);
+      await tester.pumpWidget(MaterialApp(home: LoginScreen(key: UniqueKey(), addingKomga: true, onSignedIn: (_) async {})));
+      await tester.pump();
+      expect(field(tester, 'Server').controller!.text, expected, reason: '$saved');
+    }
+  });
+
   testWidgets('signing in again: the email last signed in with is filled in too', (tester) async {
     SharedPreferences.setMockInitialValues({'server': 'http://nas.local:25600', 'email': 'nick@example.com'});
     await tester.pumpWidget(MaterialApp(home: LoginScreen(onSignedIn: (_) async {})));
