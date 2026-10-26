@@ -170,6 +170,7 @@ The full write-up: C:\Claude\KomgaClient\reports\10-25-exp-tablet-test.md. No se
 From the wrap-up list, the code review and the tablet test. Done items move to "Punch list done" above; this list is only what's left. Numbers stay with their items.
 
 - **8. "All libraries" with local libraries attached pages efficiently** - each page now asks Komga again for every page before it. (Review finding 4.)
+- **21. No server mode: "Add a Komga server", not "Sign out"** (user, 2026-10-26: the button "boots me back to the sign-in screen ... Showing the full password, API key, and no server: three options make this confusing"). In No server mode, Settings > Server and sync's button reads Add a Komga server and opens a sign-in with only Password and API key, and Cancel - back as it was, still in No server mode. Signed in: Komga with the local libraries beside it, as now. Signed in to Komga, the button stays Sign out.
 - **9. A poster that can't be made isn't tried again** each time its tile shows (an EPUB on the share was read whole every time). (Review finding 6.)
 - **10. Empty pins to local series hidden when signed in to Komga too** (only in No server mode now). (Review finding 7.)
 - **11. A date known only by its year shows the year**, not "1 January" (seen again on the tablet: "1 Jan 2023").
