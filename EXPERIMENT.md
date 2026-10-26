@@ -103,6 +103,24 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 - **The tablet's own storage, tried over adb (2026-10-25):** the test library copied to /storage/emulated/0/BeDeReader-TestLibrary (31 files, 648 MB). Add a library > This device asked for All files access, Open Settings went straight to the app's page there, and after "I've allowed it" the storage listed (the second time, no asking). Ongoing and Books added: 3 and 5 series; Absolute Batman #10 read (a wide spread shown alone, as measured), Frankenstein's EPUB read. No errors in the log.
 - Seen meanwhile, both cosmetic (fixed the same day): the browser's title at the storage's top reads "0" (the last part of /storage/emulated/0) instead of the place's name; Settings in No server mode shows the connection's Retry button, with nothing to retry.
 
-### Still to do
+## Punch list (2026-10-25) - in priority order
 
-- Two-page pairing by page size (page sizes aren't read yet), ComicInfo.xml, CBR, Android, local libraries beside Komga's, progress kept in the folder.
+From the wrap-up list and the code review of 2026-10-25 (the whole experiment against 1.6). Done items move to the findings above; this list is only what's left.
+
+1. **A library that can't be reached keeps its books.** A rescan that can't read a library's folder (a share out of reach, the NAS restarting, away from home) currently empties it from the kept list: the books vanish until a later scan reaches it. Keep the last scan's books for any library that couldn't be read. (Review finding 1; also the ground for local libraries offline, item 6.)
+2. **A scan says what it couldn't read.** Today a library or a file that fails is dropped without a word: say so (Settings' local libraries, and the app log), and No server's Open warns when one of several folders has no books. (Review findings 5 and 9.)
+3. **Signed in to Komga, the start doesn't wait for a local scan.** With no local scan kept yet, the app waits for a full scan of the local libraries before Home shows. Use what's kept and scan in the background, as local mode does. (Review finding 2.)
+4. **Big CBZs (ZIP64).** Archives over 4 GB, or written in ZIP64 form by some tools, are misread and left out. (Review finding 3.)
+5. **Open screens refresh** when a background scan finds changes (today: go back, or Home's refresh).
+6. **Local libraries in offline mode** (today they go with Komga), on the tablet's own folders and a share at home.
+7. **CBR (RAR) comics.**
+8. **"All libraries" with local libraries attached pages efficiently** - each page now asks Komga again for every page before it. (Review finding 4.)
+9. **A poster that can't be made isn't tried again** each time its tile shows (an EPUB on the share was read whole every time). (Review finding 6.)
+10. **Empty pins to local series hidden when signed in to Komga too** (only in No server mode now). (Review finding 7.)
+11. **A date known only by its year shows the year**, not "1 January".
+12. **iOS:** local mode on the iPad - a share, and the BeDeReader folder in the Files app (screenshots and logs from here over USB).
+13. **A whole NAS library on the tablet** (thousands of books): scan time, memory, browsing.
+14. **The curl's perf log out** (always on in the experiment; not to go to 1.6). (Review finding 8.)
+15. **Into the real app:** redone as change branches with tests and CHANGELOG entries on 1.6.
+
+To consider after that: progress kept in the library folder (shared by the tablet and the PC without Komga); read lists and collections for local books; pins and series settings on local series (they sync through Komga to devices that don't have those series).
