@@ -183,7 +183,7 @@ class OfflineKomga extends Komga {
     // the next unread downloaded book of series that have been started and have nothing in progress
     final picks = <dynamic>[];
     final index = _seriesIndex();
-    for (final MapEntry(key: sid, value: ids) in index.entries) {
+    for (final ids in index.values) {
       final books = [for (final id in ids) _book(id)]..sort((a, b) => _numberSort(a).compareTo(_numberSort(b)));
       if (libraryId != null && (store.books[books.first['id']]!['library'] as Map?)?['id'] != libraryId) continue;
       final statuses = books.map((b) => _status(b['readProgress'] as Map<String, dynamic>?)).toList();
