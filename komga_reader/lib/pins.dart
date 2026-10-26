@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'book_title.dart';
 import 'errors.dart';
+import 'local/folder_scan.dart' show isLocalId;
 import 'refresh_gate.dart';
 import 'view_filter.dart';
 
@@ -89,7 +90,13 @@ class Pin {
       );
 }
 
-/// The pins, kept on the device and in the user's Komga client settings (so another device gets them too).
+/// The pins, kept on the device and in the user's Komga client settings (so another device gets them too) - except the
+/// pins to this device's local and network libraries, which are this device's alone (user, 2026-10-26: "keep local pins
+/// local" - the PC hasn't the tablet's folders): kept here, never sent, and through signing out.
+///
+/// A pin goes when its library is removed (user, 2026-10-26): deleted on a Komga that still answers (its library list
+/// fetched without it - [librariesNow]), or a local library removed in Settings ([removeFor]). Out of reach isn't
+/// removed: the library views handle that.
 class Pins extends ChangeNotifier {
   Pins._();
   static final Pins instance = Pins._();
@@ -102,6 +109,12 @@ class Pins extends ChangeNotifier {
   // Pins always sync (user, 2026-10-21: "drop this setting entirely. pins always sync."). The switch's keys, from
   // before - a device's own list and its switch - are cleared at the next load: the shared list is the one.
   static const _oldSyncKey = 'pins.sync', _oldDeviceKey = 'pins.device';
+  static const _hereKey = 'pins.here'; // the pins to this device's local / network libraries
+  static const _komgaLibrariesKey = 'pins.komgaLibraries'; // the server's libraries, last seen
+  static const _libraryOfKey = 'pins.libraryOf'; // a series / book pin -> its library on the server, as last seen
+
+  /// A pin to one of this device's local or network libraries (a library, series or book of them): this device's.
+  static bool isHere(Pin p) => isLocalId(p.id);
 
   Komga? _api;
   List<Pin> items = [];
@@ -126,8 +139,9 @@ class Pins extends ChangeNotifier {
     if (p.containsKey(_oldSyncKey)) await p.remove(_oldSyncKey);
     if (p.containsKey(_oldDeviceKey)) await p.remove(_oldDeviceKey);
     final before = _raw;
-    final raw = p.getString(_local);
-    if (raw != null) items = _decode(raw);
+    final raw = p.getString(_local), here = _decode(p.getString(_hereKey));
+    // (pins to local things that went to Komga before they were kept here aren't kept: pinned again, they stay here)
+    items = [..._decode(raw).where((p) => !isHere(p)), ...here];
     _loaded = true;
     if (_raw != before) notifyListeners();
     if (!fetch) return;
@@ -151,9 +165,9 @@ class Pins extends ChangeNotifier {
       if (_changes != changes) return;
       if (remote is String) {
         final before = _raw;
-        items = _decode(remote);
+        items = [..._decode(remote).where((p) => !isHere(p)), ...items.where(isHere)];
         if (_raw != before) { // nothing new: nobody told (Home reloaded three times per reload - #34)
-          await p.setString(_local, _raw);
+          await p.setString(_local, _synced);
           notifyListeners();
         }
       }
@@ -192,12 +206,54 @@ class Pins extends ChangeNotifier {
     _api = null;
     _loaded = false;
     _pending = false;
-    items = [];
+    items = [...items.where(isHere)]; // (this device's own stay)
     syncError = null;
     notifyListeners();
     final p = await SharedPreferences.getInstance();
     await p.remove(_local);
     await p.remove(_dirtyKey);
+    await p.remove(_komgaLibrariesKey); // (the next account's server: its own libraries)
+    await p.remove(_libraryOfKey);
+  }
+
+  /// The pins to these - a library removed, and its series and books - deleted (user, 2026-10-26).
+  void removeFor(Set<String> ids) {
+    if (!items.any((p) => ids.contains(p.id))) return;
+    _save([for (final p in items) if (!ids.contains(p.id)) p]);
+  }
+
+  /// The server's libraries, just fetched (Komga answered - [Komga.onLibraries]): a library there last time and not
+  /// now was deleted, and the pins to it and to its series and books go. The first list seen is only kept.
+  Future<void> librariesNow(List<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    final known = p.getStringList(_komgaLibrariesKey);
+    await p.setStringList(_komgaLibrariesKey, ids);
+    if (known == null) return;
+    final gone = known.toSet().difference(ids.toSet());
+    if (gone.isEmpty) return;
+    final of = _libraryOf(p);
+    final pins = {...gone, for (final e in of.entries) if (gone.contains(e.value)) e.key};
+    of.removeWhere((pin, library) => gone.contains(library));
+    await p.setString(_libraryOfKey, jsonEncode(of));
+    removeFor(pins);
+  }
+
+  /// A series or book pin's library on the server, as its view showed it (pin_tile.dart): what goes with the library.
+  Future<void> learnLibrary(String? pinId, String? libraryId) async {
+    if (pinId == null || libraryId == null || isLocalId(pinId)) return;
+    final p = await SharedPreferences.getInstance();
+    final of = _libraryOf(p);
+    if (of[pinId] == libraryId) return;
+    of[pinId] = libraryId;
+    await p.setString(_libraryOfKey, jsonEncode(of));
+  }
+
+  static Map<String, String> _libraryOf(SharedPreferences p) {
+    try {
+      return Map<String, String>.from(jsonDecode(p.getString(_libraryOfKey) ?? '{}') as Map);
+    } catch (_) {
+      return {};
+    }
   }
 
   Pin? find(Pin view) {
@@ -219,13 +275,17 @@ class Pins extends ChangeNotifier {
 
   String get _raw => jsonEncode([for (final p in items) p.toJson()]);
 
+  /// The pins that go to Komga: all but this device's own.
+  String get _synced => jsonEncode([for (final p in items) if (!isHere(p)) p.toJson()]);
+
   void _save(List<Pin> next) {
     items = next;
     _changes++;
     _pending = true;
     notifyListeners();
     SharedPreferences.getInstance().then((p) async {
-      await p.setString(_local, _raw);
+      await p.setString(_local, _synced);
+      await p.setString(_hereKey, jsonEncode([for (final pin in items) if (isHere(pin)) pin.toJson()]));
       await p.setBool(_dirtyKey, true); // until Komga has it
       await _send();
     });
@@ -243,7 +303,7 @@ class Pins extends ChangeNotifier {
     try {
       final api = _api;
       if (api == null) throw StateError('no server');
-      final raw = _raw;
+      final raw = _synced; // (this device's own pins stay here)
       await api.putClientSetting(komgaKey, raw);
       if (!_sendAgain) {
         _pending = false;
@@ -263,7 +323,8 @@ class Pins extends ChangeNotifier {
     }
   }
 
-  static List<Pin> _decode(String raw) {
+  static List<Pin> _decode(String? raw) {
+    if (raw == null) return [];
     try {
       return [for (final j in jsonDecode(raw) as List) Pin.fromJson(Map<String, dynamic>.from(j as Map))];
     } catch (_) {

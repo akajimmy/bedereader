@@ -235,12 +235,23 @@ class FolderKomga extends OfflineKomga {
           Object.hash(id, e['fileModified'], e['bytes'], (e['library'] as Map?)?['name']),
       ]);
 
+  /// Told the ids of what a library removed held - the library, its series, its books (lib/pins.dart: their pins go -
+  /// user, 2026-10-26). Set by the app.
+  static void Function(Set<String> ids)? onRemoved;
+
   /// The libraries changed (Settings): kept, and scanned again.
   Future<void> setLibraries(List<LocalLibrary> libraries) async {
+    final ids = {for (final l in libraries) l.id};
+    // removed (Settings, or Remove in the folder-missing question): what was in it, for its pins to go
+    final removed = {
+      for (final l in _folders) if (!ids.contains(l.id)) l.id,
+      for (final e in store.books.entries)
+        if (!ids.contains((e.value['library'] as Map?)?['id'])) ...[e.key, (e.value['book'] as Map)['seriesId'] as String],
+    };
     _folders = List.of(libraries);
     await saveLibraries(libraries);
-    final ids = {for (final l in libraries) l.id};
     store.books.removeWhere((_, e) => !ids.contains((e['library'] as Map?)?['id']));
+    if (removed.isNotEmpty) onRemoved?.call(removed);
     // a library renamed: its books carry the name
     for (final e in store.books.values) {
       final l = libraries.firstWhere((l) => l.id == (e['library'] as Map)['id']);

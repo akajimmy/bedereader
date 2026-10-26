@@ -15,6 +15,7 @@ import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/missing_prompt.dart';
 import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/screens/app_settings.dart';
+import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart' show contentChanged;
 import 'package:komga_reader/widgets/server_status.dart';
@@ -82,6 +83,25 @@ void main() {
     });
 
     Future<FolderKomga> open() => FolderKomga.open([LocalLibrary.at(root.path)], dataDir: data);
+
+    test('a library removed in Settings: the pins to it, its series and its books go; the others stay (user, '
+        '2026-10-26: "auto-remove a pin if the library no longer exists ... removed in bedereader settings")', () async {
+      final api = await open();
+      final lib = api.folders.single;
+      final book = api.store.books.values.firstWhere((e) => (e['path'] as String).contains('Saga #2'));
+      final b = book['book'] as Map;
+      FolderKomga.onRemoved = Pins.instance.removeFor; // (as the app sets it)
+      addTearDown(() => FolderKomga.onRemoved = null);
+      addTearDown(() => Pins.instance.items = []);
+      Pins.instance.items = [
+        Pin(name: 'The library', kind: 'library', id: lib.id, title: lib.name),
+        Pin(name: 'Saga', kind: 'series', id: b['seriesId'] as String, title: 'Saga'),
+        Pin(name: 'Saga #2', kind: 'book', id: b['id'] as String, title: 'Saga #2'),
+        const Pin(name: 'Surfer', kind: 'series', id: 'S1', title: 'Silver Surfer'), // Komga's
+      ];
+      await api.setLibraries(const []);
+      expect([for (final p in Pins.instance.items) p.name], ['Surfer']);
+    });
 
     test("a poster that can't be made from its file isn't tried again while the file stays the same - each tile "
         'showing it read the file again (an EPUB on a share, whole); one whose file was out of reach is (punch list 9)',

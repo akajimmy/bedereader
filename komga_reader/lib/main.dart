@@ -24,6 +24,7 @@ import 'screens/app_settings.dart' show AppSettingsScreen;
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
+import 'offline/offline_komga.dart' show OfflineKomga;
 import 'offline/downloads.dart';
 import 'offline/sync.dart';
 import 'ondeck_hidden.dart';
@@ -144,6 +145,12 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
+    // pins to a library removed go (user, 2026-10-26): one removed in Settings, or deleted on a Komga that answered -
+    // the server's own list, not the offline source's (only the libraries with downloads) nor the folders'
+    FolderKomga.onRemoved = Pins.instance.removeFor;
+    Komga.onLibraries = (api, ids) {
+      if (api is! OfflineKomga && identical(api, Connection.instance.online)) unawaited(Pins.instance.librariesNow(ids));
+    };
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
     WidgetsBinding.instance.addObserver(_turns);

@@ -204,4 +204,48 @@ void main() {
     expect(find.byIcon(Icons.push_pin), findsOneWidget); // filled pin = this view is pinned
     expect(find.text('Nothing unread in this list'), findsOneWidget);
   });
+
+  // user, 2026-10-26: "keep local pins local" - a pin to the tablet's own Books reached the PC, which hasn't it
+  test("a pin to a local or network library stays on this device: not sent to Komga, kept through signing out; one "
+      "come from Komga isn't taken", () async {
+    final api = server();
+    await Pins.instance.load(api);
+    const mine = Pin(name: 'Saga here', kind: 'series', id: 'S3k9x2lq0aa', title: 'Saga');
+    const theirs = Pin(name: 'Surfer', kind: 'series', id: 'S1', title: 'Silver Surfer');
+    Pins.instance.add(mine);
+    Pins.instance.add(theirs);
+    await pumpEventQueue();
+    expect(api.written[Pins.komgaKey], allOf(contains('"S1"'), isNot(contains('S3k9x2lq0aa'))), reason: 'only Komga');
+
+    await Pins.instance.clearAccount(); // signed out
+    expect([for (final p in Pins.instance.items) p.id], ['S3k9x2lq0aa'], reason: "this device's, kept");
+
+    // signed in again: Komga's list - which still has one to local things from before - and this device's own
+    api.written[Pins.komgaKey] = jsonEncode([theirs.toJson(), const Pin(name: 'Old', kind: 'library', id: 'L1x9q',
+        title: 'Old').toJson()]);
+    await Pins.instance.load(api);
+    expect([for (final p in Pins.instance.items) p.id], ['S1', 'S3k9x2lq0aa']);
+  });
+
+  // user, 2026-10-26: a pin goes "if the library no longer exists (removed from a komga server that still otherwise
+  // responds, or removed in bedereader settings)"
+  test("a library deleted on Komga - its list fetched without it: the pins to it and to its series and books go; "
+      "the others stay; the first list is only kept", () async {
+    final api = server();
+    await Pins.instance.load(api);
+    const library = Pin(name: 'Old library', kind: 'library', id: 'K2', title: 'Old');
+    const series = Pin(name: 'In it', kind: 'series', id: 'S5', title: 'In it');
+    const elsewhere = Pin(name: 'Elsewhere', kind: 'series', id: 'S6', title: 'Elsewhere');
+    const unknown = Pin(name: 'Not looked at yet', kind: 'book', id: 'B7', title: 'B7');
+    for (final p in [library, series, elsewhere, unknown]) {
+      Pins.instance.add(p);
+    }
+    await Pins.instance.learnLibrary('S5', 'K2'); // (as their tiles saw them)
+    await Pins.instance.learnLibrary('S6', 'K1');
+    await Pins.instance.librariesNow(['K1', 'K2']); // the first list: nothing to compare with
+    expect(Pins.instance.items, hasLength(4));
+
+    await Pins.instance.librariesNow(['K1']); // K2 deleted
+    expect([for (final p in Pins.instance.items) p.name], ['Elsewhere', 'Not looked at yet']);
+  });
 }

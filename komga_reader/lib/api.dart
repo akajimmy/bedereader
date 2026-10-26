@@ -200,6 +200,11 @@ class Komga {
 
   /// The libraries this device shows (Settings > Library & Home): Home, the library picker. Fetched fresh, and kept
   /// for the side menu ([kept]: the kept list, fetched only if there's none).
+  /// Told each time the library list is fetched fresh and answered: every library's id, the hidden ones too (pins to a
+  /// library deleted on the server go - lib/pins.dart). The offline source and the folders answer too: the listener
+  /// tells them apart.
+  static void Function(Komga api, List<String> libraryIds)? onLibraries;
+
   Future<List<dynamic>> visibleLibraries({bool kept = false}) async {
     final List<dynamic> all;
     if (kept) {
@@ -207,6 +212,7 @@ class Komga {
     } else {
       all = await libraries();
       _librariesOnce = Future.value(all);
+      onLibraries?.call(this, [for (final l in all) if (l['id'] case final String id) id]);
     }
     return [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
   }
