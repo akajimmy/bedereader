@@ -42,33 +42,39 @@ class FolderAccess {
     if (storage.viaSmb(path)) {
       // with no login kept, tried as a guest first: a share open to anyone needs none (user, 2026-10-25), and
       // refusing a guest is no failure - only then is a login asked for, with nothing said against it
-      String? problem;
-      var asked = false;
+      // A login is asked for only when the share refuses one: a share that doesn't answer, or a folder that isn't
+      // there, can't be helped by signing in (tablet, 2026-10-25: \\10.0.0.254 - nothing there - asked for a user
+      // name and password, "Couldn't reach the share" above the fields)
+      final (host, share, folder) = splitUnc(path)!;
+      final where = '\\\\$host\\$share';
+      String? refusal; // asked for a login, with this said (null: nothing went wrong - a guest refused)
+      var ask = false;
       while (true) {
-        var login = storage.loginFor(path);
-        if (asked || problem != null) {
+        if (ask) {
           if (!context.mounted) return false;
-          final (host, share, _) = splitUnc(path)!;
-          login = await askLogin(context, '\\\\$host\\$share', login, problem);
+          final login = await askLogin(context, where, storage.loginFor(path), refusal);
           if (login == null) return false;
           await storage.setLogin(path, login);
         }
+        Object? unreachable;
         try {
-          final fs = storage.of(path);
-          if (await fs.exists(path)) return true;
-          problem = "Connected, but there's no folder ${splitUnc(path)!.$3} on that share.";
+          if (await storage.of(path).exists(path)) return true;
+          if (context.mounted) {
+            await _say(context, 'Folder not found', "Connected to $where, but there's no folder $folder on it.");
+          }
+          return false;
         } on Smb2Exception catch (e) {
-          final refused = e.isAuthError || e.type == Smb2ErrorType.accessDenied;
-          if (refused && login == null && !asked) {
-            asked = true; // a guest refused: ask, saying nothing went wrong
+          if (e.isAuthError || e.type == Smb2ErrorType.accessDenied) {
+            refusal = storage.loginFor(path) == null && !ask ? null : 'The share refused that user name and password.';
+            ask = true; // (a guest refused: asked, saying nothing went wrong)
             continue;
           }
-          problem = refused
-              ? 'The share refused that user name and password.'
-              : "Couldn't reach the share (${e.type.name}): ${e.message}";
+          unreachable = e.message;
         } catch (e) {
-          problem = "Couldn't reach the share: $e";
+          unreachable = e;
         }
+        if (!context.mounted || !await _retry(context, where, '$unreachable')) return false;
+        ask = false; // (tried again as it was)
       }
     }
     if (!context.mounted || !await allFiles(context)) return false;
@@ -114,6 +120,31 @@ class FolderAccess {
     }
     return true;
   }
+
+  /// "Can't reach the share": Retry (true) or Cancel. [why] - the client's own words - in small print.
+  static Future<bool> _retry(BuildContext context, String where, String why) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Can't reach the share"),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('No answer from $where. Check the address, and that the server is on and on this network.'),
+            Padding(padding: const EdgeInsets.only(top: 10),
+                child: Text(why, style: const TextStyle(fontSize: 12, color: Color(0xFFB0B0B0)))),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Retry')),
+          ],
+        ),
+      ) ??
+      false;
+
+  static Future<void> _say(BuildContext context, String title, String text) => showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(title: Text(title), content: Text(text), actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          ]));
 
   /// A user name and password (and domain, rarely needed) for [where] (\\host\share, or \\host to list its
   /// shares); null: cancelled.
