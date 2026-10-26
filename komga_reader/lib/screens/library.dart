@@ -234,7 +234,12 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           tooltip: 'Library',
           onSelected: _switchLibrary,
           itemBuilder: (_) => [
-            const PopupMenuItem(value: null, child: Text('All libraries')),
+            // (its icon as in the side menu: its name lined up with the libraries' under it - tablet, 2026-10-26)
+            const PopupMenuItem(value: null, child: Row(children: [
+              Icon(Icons.collections_bookmark_outlined, size: 20),
+              SizedBox(width: 12),
+              Flexible(child: Text('All libraries')),
+            ])),
             for (final l in _libraries)
               PopupMenuItem(value: l['id'] as String, child: Row(children: [
                 libraryIcon(api, l['id'] as String, size: 20), // (same names on Komga and here: told apart)
