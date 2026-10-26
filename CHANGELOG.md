@@ -12,6 +12,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 
 - iPad and iPhone: the page curl no longer draws a thin dotted line along the fold, in a golden brown - the page's average colour, where the page itself belonged.
+- iPad and iPhone: a swipe from the left edge of a book no longer closes it - iOS took it as its own Back. The back arrow, the Close button and keys still close the book.
+- iPad and iPhone: Rotation Locked keeps the way you locked it. Locked in landscape, the next book opened with the iPad upright was held upright; now it opens in landscape too. To lock it the other way, choose Auto, turn the iPad, and choose Locked again.
 
 ## 1.5.0 - in development
 
