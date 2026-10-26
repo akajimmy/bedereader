@@ -115,12 +115,11 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 - **3. Signed in to Komga, the start doesn't wait for a local scan** (2026-10-25). With no local scan kept yet (a library just added, the kept scan lost), the start waited for the whole first scan before Home showed - 11 s and more on the NAS, longer with a share out of reach. Now the local libraries are attached at once and scanned in the background: Home shows Komga's books meanwhile, and the local ones come in when the scan is done (Home and the side menu already listen for that). No server mode still waits on its very first scan - there's nothing else to show. Test: the first look at the folder held back - attached at once, its books in once let go (break-checked: the old start waited, timed out). With that, a background scan's failure is now logged instead of left unhandled: the suite's double start (signed out and in again quickly) had two scans saving the kept scan at once, and one found the file busy.
 
+- **5. Open screens refresh** (2026-10-25). A scan that changed something - books added, changed or gone, a library renamed, added or removed - reloads the library views open: the one on top at once, the others when they're back on top (the views' own refresh-on-return, which every library view has: Home, a library, a series, a collection, a read list, Search). A scan that found nothing new - every start's, mostly - reloads nothing. Tests: the view on top and the one underneath; a scan with nothing new, then one with a book added (break-checked).
+
 ## Punch list (2026-10-25) - in priority order
 
 From the wrap-up list and the code review. Done items move to "Punch list done" above; this list is only what's left.
-
-4. **Big CBZs (ZIP64).** Archives over 4 GB, or written in ZIP64 form by some tools, are misread and left out. (Review finding 3.)
-5. **Open screens refresh** when a background scan finds changes (today: go back, or Home's refresh).
 6. **Local libraries in offline mode** (today they go with Komga), on the tablet's own folders and a share at home.
 7. **CBR (RAR) comics.**
 8. **"All libraries" with local libraries attached pages efficiently** - each page now asks Komga again for every page before it. (Review finding 4.)
@@ -131,5 +130,6 @@ From the wrap-up list and the code review. Done items move to "Punch list done" 
 13. **A whole NAS library on the tablet** (thousands of books): scan time, memory, browsing.
 14. **The curl's perf log out** (always on in the experiment; not to go to 1.6). (Review finding 8.)
 15. **Into the real app:** redone as change branches with tests and CHANGELOG entries on 1.6.
+4. **Big CBZs (ZIP64) - only if one turns up** (moved last, user's call 2026-10-25). A sample of the NAS's CBZs (1,116: up to 200 from each COMICS folder - Archive, Events, Manga, Ongoing, Simpsons & Futurama, all of Demo Library and Webtoons) found none in ZIP64 form, and none over 4 GB. One that turns up shows in the log and Settings as "damaged or not readable yet" (item 2). About 40 lines in FileZip if it's ever needed. (Review finding 3.)
 
 To consider after that: progress kept in the library folder (shared by the tablet and the PC without Komga); read lists and collections for local books; pins and series settings on local series (they sync through Komga to devices that don't have those series); nested folders and a folder of pictures as a book; other sources (OPDS: Kavita, Calibre-Web, Komga itself).
