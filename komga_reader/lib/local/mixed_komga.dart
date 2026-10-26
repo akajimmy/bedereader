@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart' show ImageProvider;
 
 import '../api.dart';
+import '../app_log.dart';
 import '../hidden_libraries.dart';
 import '../offline/offline_komga.dart';
 import '../screen.dart' show appStorageDir;
@@ -81,11 +82,23 @@ mixin LocalBeside on Komga {
   /// asked for everything up to that page, so the merged page is the true one.
   Future<Map<String, dynamic>> _merged(Future<Map<String, dynamic>> Function(int size) komga,
       Future<Map<String, dynamic>> Function() mine, String? sort, int page, int size) async {
-    final results = await Future.wait([komga((page + 1) * size), mine()]);
+    final took = Stopwatch()..start();
+    var komgaMs = 0;
+    final results = await Future.wait([
+      komga((page + 1) * size).then((r) {
+        komgaMs = took.elapsedMilliseconds;
+        return r;
+      }),
+      mine(),
+    ]);
     final all = [...(results[0]['content'] as List? ?? const []), ...(results[1]['content'] as List? ?? const [])];
     if (sort != null) OfflineKomga.sortItems(all, sort);
     final total = ((results[0]['totalElements'] as num?) ?? 0) + ((results[1]['totalElements'] as num?) ?? 0);
     final start = (page * size).clamp(0, all.length), end = (start + size).clamp(0, all.length);
+    // (punch list 8's measurement: what each merged page cost)
+    AppLog.instance.info('merge', 'page $page (sort $sort): Komga asked for ${(page + 1) * size}, '
+        'got ${(results[0]['content'] as List? ?? const []).length} in $komgaMs ms; page done in '
+        '${took.elapsedMilliseconds} ms');
     return {'content': all.sublist(start, end), 'totalElements': total, 'last': page * size + size >= total};
   }
 
