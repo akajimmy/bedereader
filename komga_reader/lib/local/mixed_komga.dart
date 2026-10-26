@@ -20,13 +20,15 @@ class MixedKomga extends Komga {
   /// The local libraries (none until [attachLocal]).
   FolderKomga? local;
 
-  /// The local libraries saved on this device, opened (their last scan at once; scanned again in the background).
+  /// The local libraries saved on this device, opened (their last scan at once; scanned again in the background) -
+  /// with none kept yet, not waited for: Komga's Home shows meanwhile, the local books come in when they're read
+  /// (code review, 2026-10-25: the start waited for the whole first scan).
   Future<void> attachLocal() async {
     final dir = await appStorageDir();
     if (dir == null || local != null) return;
     try {
       local = await FolderKomga.open(await FolderKomga.savedLibraries(),
-          dataDir: Directory('$dir${Platform.pathSeparator}local'));
+          dataDir: Directory('$dir${Platform.pathSeparator}local'), waitForFirstScan: false);
     } catch (_) {
       // no local libraries this time
     }

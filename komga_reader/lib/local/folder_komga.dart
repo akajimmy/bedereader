@@ -52,8 +52,12 @@ class FolderKomga extends OfflineKomga {
 
   /// Local mode on [libraries], kept in [dataDir] (local\ in the app's storage): the last scan at once if there is one
   /// (scanned again in the background), else a first scan, waited for - [onBook] told how far it has got.
+  ///
+  /// [waitForFirstScan] false: nothing kept yet, it isn't waited for either - beside Komga, whose Home has its own
+  /// books to show meanwhile (the local ones come in when the scan is done: [changed]); the first scan of a NAS
+  /// library is 11 s and more, a share out of reach longer (code review, 2026-10-25).
   static Future<FolderKomga> open(List<LocalLibrary> libraries, {required Directory dataDir,
-      void Function(int books)? onBook}) async {
+      void Function(int books)? onBook, bool waitForFirstScan = true}) async {
     await Storage.instance.load(); // (the shares' logins)
     final store = OfflineStore(dataDir);
     await dataDir.create(recursive: true);
@@ -62,10 +66,10 @@ class FolderKomga extends OfflineKomga {
     store.books.removeWhere((_, e) => !ids.contains((e['library'] as Map?)?['id']));
     final api = FolderKomga._(store, List.of(libraries), Directory('${dataDir.path}${Platform.pathSeparator}thumbs'));
     await api._loadKeptMissing();
-    if (store.books.isEmpty) {
+    if (store.books.isEmpty && waitForFirstScan) {
       await api.rescan(onBook: onBook);
     } else {
-      unawaited(api.rescan());
+      unawaited(api.rescan(onBook: onBook));
     }
     return api;
   }

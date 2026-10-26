@@ -1,15 +1,18 @@
 // Local libraries beside Komga's (experimental/sources, lib/local/mixed_komga.dart): one list of libraries, views
 // across every library merged in their order, and everything about a local book answered locally - never asked of
 // Komga.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
 import 'package:komga_reader/local/mixed_komga.dart';
+import 'package:komga_reader/local/storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -86,4 +89,56 @@ void main() {
     expect(await api.nextBook(b['id'] as String), isNull);
     expect(asked, isEmpty);
   });
+
+  test("signed in to Komga, the start doesn't wait for the local libraries' first scan (code review, 2026-10-25: Home "
+      'waited for all of it - 11 s and more on the NAS): attached at once, the books come in when the scan is done',
+      () async {
+    final store = await Directory.systemTemp.createTemp('mixed_store');
+    addTearDown(() => deleteTemp(store));
+    const screen = MethodChannel('komga_reader/screen');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(screen, (c) async => c.method == 'storageDir' ? store.path : null);
+    addTearDown(() => messenger.setMockMethodCallHandler(screen, null));
+    await FolderKomga.saveLibraries([LocalLibrary.at(root.path)]); // (a library added, never scanned here)
+    final gate = Completer<void>();
+    Storage.fsFor = (_) => _Held(gate.future);
+    addTearDown(() => Storage.fsFor = null);
+
+    final fresh = MixedKomga('http://komga.test', 'key');
+    await fresh.attachLocal().timeout(const Duration(seconds: 5)); // (it waited for the gate: timed out here)
+    expect(fresh.local, isNotNull);
+    expect(fresh.local!.isEmpty, isTrue, reason: 'not read yet');
+
+    final read = Completer<void>();
+    fresh.local!.changed.addListener(() { if (!read.isCompleted) read.complete(); });
+    gate.complete();
+    await read.future.timeout(const Duration(seconds: 5));
+    expect(fresh.local!.isEmpty, isFalse, reason: 'the scan done: its books are in');
+  });
+}
+
+/// This device's files, the first look at a folder held until [gate] (a slow first scan).
+class _Held implements LibraryFs {
+  _Held(this.gate);
+  final Future<void> gate;
+  static const _real = LocalFs();
+
+  @override
+  Future<bool> exists(String folder) async {
+    await gate;
+    return _real.exists(folder);
+  }
+
+  @override
+  Future<bool> placeAnswers(String folder) => _real.placeAnswers(folder);
+  @override
+  Stream<FsEntry> list(String folder) => _real.list(folder);
+  @override
+  Future<FolderLook> look(String folder) => _real.look(folder);
+  @override
+  Future<int> length(String path) => _real.length(path);
+  @override
+  Future<Uint8List> readAll(String path) => _real.readAll(path);
+  @override
+  Future<Uint8List> readRange(String path, int offset, int length) => _real.readRange(path, offset, length);
 }
