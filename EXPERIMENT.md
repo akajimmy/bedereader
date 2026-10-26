@@ -107,11 +107,15 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
   - **File by file too** (user, 2026-10-25): a file the scan couldn't read because the share or the network stopped answering - a share dropping part-way, after the listing - keeps its book from the last scan; it lost every book after the drop. A file is only left out (not in the app after that scan; the file itself untouched, its progress kept, back once it can be read) when it's damaged - not a zip, a broken one, a format not read yet - or gone since the folder was listed.
   - Tests: a share that doesn't answer (books kept, nothing asked); the folder moved away (asked; Keep, back, gone again, Remove); the question's Remove and Keep (break-checked: item 1 alone never asked); listed but no file read (books kept), a damaged CBZ (left out) - break-checked: the old scan lost them all.
 
+- **2. A scan says what it couldn't read** (2026-10-25).
+  - **The app log:** one line per library per scan, however many files - a share dropping can be thousands (user, 2026-10-25): the count by reason (didn't answer, kept from the scan before; damaged or not readable yet, left out; gone since listed, left out), and at most five of the files left out by name ("... and 2 more"). A library not reached: "couldn't be reached" or "not found (it looks deleted)".
+  - **Settings > local libraries:** that line under the library's path; a tap lists every file left out, with why.
+  - **No server's Open:** a folder with no books among several is named - "(not found)" or "(couldn't be reached)" where known - and nothing is opened or saved until the line is corrected or taken out (it was saved as an empty library without a word).
+  - Tests: seven damaged CBZs (one log line, five names; all seven in Settings); two folders, one empty (named, nothing saved) - break-checked against the code before. (The No server test first passed without Open getting anywhere - the scan can't run inside the test's fake time; it now scans beforehand.)
+
 ## Punch list (2026-10-25) - in priority order
 
 From the wrap-up list and the code review. Done items move to "Punch list done" above; this list is only what's left.
-
-2. **A scan says what it couldn't read.** Today a library or a file that fails is dropped without a word: say so (Settings' local libraries, and the app log), and No server's Open warns when one of several folders has no books. (Review findings 5 and 9.)
 3. **Signed in to Komga, the start doesn't wait for a local scan.** With no local scan kept yet, the app waits for a full scan of the local libraries before Home shows. Use what's kept and scan in the background, as local mode does. (Review finding 2.)
 4. **Big CBZs (ZIP64).** Archives over 4 GB, or written in ZIP64 form by some tools, are misread and left out. (Review finding 3.)
 5. **Open screens refresh** when a background scan finds changes (today: go back, or Home's refresh).
