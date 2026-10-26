@@ -47,7 +47,8 @@ class _Store extends OfflineStore {
 }
 
 void main() {
-  test('a list of series walks the books once or twice, not once per series (series, On deck, filtered series)',
+  test('a list of series walks the books once or twice, not once per series (series, On deck, search, filtered '
+      'series)',
       () async {
     final store = _Store();
     const lib = {'id': 'L1', 'name': 'COMICS'};
@@ -74,6 +75,11 @@ void main() {
 
     store.walked.walks = 0;
     expect(((await api.onDeck())['content'] as List).length, 30); // (a page of 30)
+    expect(store.walked.walks, lessThanOrEqualTo(3));
+
+    // (search lists them all, then matches: 12.5 s on the tablet)
+    store.walked.walks = 0;
+    expect(((await api.searchSeries('series 1'))['content'] as List).length, 11); // 1, 10-19
     expect(store.walked.walks, lessThanOrEqualTo(3));
 
     store.walked.walks = 0;
