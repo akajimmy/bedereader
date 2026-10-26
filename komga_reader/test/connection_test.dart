@@ -363,9 +363,21 @@ void main() {
     expect(made, 2, reason: 'a connection of its own');
     expect(closed, 1, reason: 'and closed after');
   });
+
+  testWidgets("the connection's own check is that one: Komga not answering, it's asked within 5 s, not 15",
+      (t) async {
+    conn.online = _hanging();
+    bool? answered;
+    unawaited(conn.check().then((v) => answered = v));
+    await t.pump(const Duration(seconds: 6));
+    expect(answered, isFalse, reason: 'given up after 5 s');
+    expect(conn.askPending, isTrue, reason: 'asked');
+    conn.reset(); // (the 10 s asking's timer)
+  });
 }
 
 /// A server that never answers.
+Komga _hanging() => http.runWithClient(() => Komga('http://nas.test', 'k'), () => _Hangs(() {}));
 class _Hangs extends http.BaseClient {
   _Hangs(this.onClose);
   final void Function() onClose;
