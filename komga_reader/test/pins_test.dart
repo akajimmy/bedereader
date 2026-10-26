@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/local/folder_scan.dart' show stableId;
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/refresh_gate.dart';
@@ -225,6 +226,17 @@ void main() {
         title: 'Old').toJson()]);
     await Pins.instance.load(api);
     expect([for (final p in Pins.instance.items) p.id], ['S1', 'S3k9x2lq0aa']);
+  });
+
+  // found 2026-10-26: about half the local ids start with a minus (a signed 64-bit hash) - and were sent to Komga
+  test('a pin to a local series whose id starts with a minus stays on this device too', () async {
+    final api = server();
+    await Pins.instance.load(api);
+    final id = 'S${stableId('the series whose hash is negative')}';
+    expect(id, startsWith('S-'), reason: 'the case itself');
+    Pins.instance.add(Pin(name: 'Here', kind: 'series', id: id, title: 'Here'));
+    await pumpEventQueue();
+    expect(api.written[Pins.komgaKey] ?? '', isNot(contains(id)));
   });
 
   // user, 2026-10-26: a pin goes "if the library no longer exists (removed from a komga server that still otherwise

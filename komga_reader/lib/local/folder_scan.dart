@@ -35,8 +35,10 @@ String _normPath(String p) => p.trim().replaceFirst(iosContainer, '~/').replaceA
 /// A short id that stays the same for the same text (FNV-1a, 64 bits): books, series and libraries keep their ids
 /// - and so their reading progress - from one scan to the next.
 /// Whether [id] is one of these folders' (a library 'L…', series 'S…' or book 'B…' and [stableId]'s lowercase
-/// base 36) - told even once its library is gone. Komga's ids are upper case: never taken for one.
-bool isLocalId(String? id) => id != null && RegExp(r'^[LSB][0-9a-z]*[a-z][0-9a-z]*$').hasMatch(id);
+/// base 36) - told even once its library is gone. Komga's ids are upper case: never taken for one. About half start
+/// with a minus ('L-u2hs5huxz3x6'): [stableId]'s hash is a signed 64-bit int on the VM, toUnsigned(64) can't change
+/// that - and the ids are kept (progress), so they're taken as they are (found 2026-10-26: those were sent to Komga).
+bool isLocalId(String? id) => id != null && RegExp(r'^[LSB]-?[0-9a-z]*[a-z][0-9a-z]*$').hasMatch(id);
 
 String stableId(String text) {
   var h = 0xcbf29ce484222325;
