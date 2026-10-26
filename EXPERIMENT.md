@@ -15,13 +15,15 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - Quick prototypes are fine: no CHANGELOG, tests where they help (each fix is still break-checked).
 - Commits stay local unless the user asks for the branch on GitHub.
 - Builds: **tools\build-exp.ps1**, only when the user says to build (-Platforms android for the tablet alone). No build number, tag, push or TestFlight. The branch's build.ps1 refuses -Bump.
+- iOS (2026-10-26): through TestFlight as its own app, **BeDeReader Exp**, from an **exp-build-N** tag pushed to GitHub (the experiment's copy of testflight.yml; N is the iOS build number, counted on its own from 1). The repository is public: a tag puts this branch's commits there. Each push needs the user's yes.
 - The main app is merged in from time to time (merge the development branch here; never the other way).
 
 ## The experimental app is its own app
 
 - Android: **BeDeReader Exp**, app ID com.nickp.komga_reader.exp, installed beside the real one.
 - Windows: Desktop\BeDeReader-Exp, window title "BeDeReader Exp", data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp.
-- Changed for that (and so not to be copied into 1.6): android\app\build.gradle.kts (applicationId), AndroidManifest.xml (label), windows\runner Runner.rc, main.cpp and desktop_channel.cpp, tools\build.ps1 (no -Bump), tools\install-android.ps1 (-Package), tools\build-exp.ps1 (new).
+- Changed for that (and so not to be copied into 1.6): android\app\build.gradle.kts (applicationId), AndroidManifest.xml (label), windows\runner Runner.rc, main.cpp and desktop_channel.cpp, tools\build.ps1 (no -Bump), tools\install-android.ps1 (-Package), tools\build-exp.ps1 (new); for iOS, ios\Runner.xcodeproj\project.pbxproj (bundle ID com.nickp.bedereader.exp), ios\Runner\Info.plist (name), .github\workflows\testflight.yml (exp-build-N tags, the bundle ID, the build number).
+- iOS: **BeDeReader Exp**, bundle ID com.nickp.bedereader.exp, its own App Store Connect record and TestFlight; the Files app shows its folder as BeDeReader Exp.
 
 ## Decided
 
