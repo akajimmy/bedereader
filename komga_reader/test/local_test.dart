@@ -416,6 +416,8 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       FolderKomga? given;
       late Directory root, bare, data;
+      late FolderKomga scanned;
+      var asked = <LocalLibrary>[];
       await tester.runAsync(() async {
         data = await Directory.systemTemp.createTemp('local_signin2');
         root = await Directory.systemTemp.createTemp('local_signin2_lib');
@@ -423,6 +425,8 @@ void main() {
         await Directory('${root.path}${Platform.pathSeparator}S').create();
         await File('${root.path}${Platform.pathSeparator}S${Platform.pathSeparator}S #1.cbz')
             .writeAsBytes(zipOf({'1.jpg': await solidPng(2, 3)}));
+        // the two folders scanned beforehand (a real scan can't run inside the test's fake time)
+        scanned = await FolderKomga.open([LocalLibrary.at(root.path), LocalLibrary.at(bare.path)], dataDir: data);
       });
       addTearDown(() async {
         for (final d in [data, root, bare]) {
@@ -431,7 +435,10 @@ void main() {
       });
       await tester.pumpWidget(MaterialApp(home: LoginScreen(
         onSignedIn: (api) async => given = api as FolderKomga,
-        openLocal: (libs) async => (await tester.runAsync(() => FolderKomga.open(libs, dataDir: data)))!,
+        openLocal: (libs) async {
+          asked = libs;
+          return scanned;
+        },
       )));
       await tester.pumpAndSettle();
       await tester.tap(find.text('No server'));
@@ -439,8 +446,10 @@ void main() {
       await tester.enterText(find.byType(TextField), '${root.path}\n${bare.path}');
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
+      expect(asked, hasLength(2), reason: 'Open went as far as the scan');
       expect(given, isNull, reason: 'not opened');
-      expect(find.textContaining(bare.path), findsWidgets, reason: 'the folder with no books named');
+      expect(find.textContaining('No CBZ or EPUB books in this folder: ${bare.path}'), findsOneWidget,
+          reason: 'the folder with no books named');
       expect(await FolderKomga.savedLibraries(), isEmpty, reason: 'nothing saved');
     });
   });
