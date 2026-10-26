@@ -15,6 +15,7 @@ import 'errors.dart';
 import 'hidden_libraries.dart';
 import 'key_store.dart';
 import 'licences.dart';
+import 'local_names.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
 import 'screens/login.dart';
@@ -42,6 +43,7 @@ void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
+  HttpOverrides.global = LocalNames(); // a bare server name ("nick-nas") found as name.local (local_names.dart)
   // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
   // trace to go on - user, build 65); they're still reported as before
   final flutterError = FlutterError.onError;
