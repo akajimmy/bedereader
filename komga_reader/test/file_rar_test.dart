@@ -65,6 +65,25 @@ void main() {
     }
   });
 
+  test('a CBR cut short (a copy that stopped part-way) is damaged - not opened with the pages it still lists (tablet, '
+      '2026-10-25: one cut at 4 KB came in as a book whose page never loaded)', () async {
+    final whole = rarOf({'1.png': await solidPng(30, 20), '2.png': await solidPng(20, 30)});
+    final rar5 = await File('$fixtures${sep}synthetic_comic.cbr').readAsBytes();
+    for (final (name, bytes) in [
+      ('stored.cbr', whole.sublist(0, whole.length - 60)), // (the second page's data cut, its header there)
+      ('rar5.cbr', rar5.sublist(0, 400)),
+    ]) {
+      final path = await write(name, bytes);
+      final e = await ComicArchive.open(fs, path).then<Object?>((a) {
+        a.close();
+        return null;
+      }, onError: (Object e) => e);
+      expect(e, isA<FormatException>(), reason: name);
+      expect(troubleOf(e!), FileTrouble.damaged, reason: name);
+      expect('$e', isNot(contains('FormatException: FormatException')), reason: '$name: said once ($e)');
+    }
+  });
+
   test("a .cbr that's a zip inside is read as one (one on the NAS is)", () async {
     final png = await solidPng(2, 2);
     final a = await ComicArchive.open(fs, await write('zip.cbr', zipOf({'1.png': png})));

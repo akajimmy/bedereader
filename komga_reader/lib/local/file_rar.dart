@@ -176,7 +176,8 @@ void _workerMain(SendPort toMain) {
     try {
       toMain.send(['done', n, await f()]);
     } catch (e) {
-      toMain.send(['fail', n, '$e']);
+      // its own words (passed on as a FormatException: "FormatException: FormatException: ..." with its name in them)
+      toMain.send(['fail', n, e is FormatException ? e.message : '$e']);
     }
   }
 
@@ -190,6 +191,12 @@ void _workerMain(SendPort toMain) {
         unawaited(answer(msg[1] as int, () async {
           final source = _Proxy(msg[3] as int, (offset, length) => readRange(id, offset, length));
           final r = await const RarFormat().createReader(source, const ArchiveReadOptions()) as RarReader;
+          // a file cut short lists the entries it still has headers for, the last one's data missing: damaged, left
+          // out by the scan (tablet, 2026-10-25: one cut at 4 KB came in as a book whose page never loaded)
+          if (r.cutShort case final cut when cut.isNotEmpty) {
+            await r.close();
+            throw FormatException('the file is cut short (${cut.first.path} reaches past its end)');
+          }
           readers[id] = r;
           return [for (final e in r.entries) if (e.type == ArchiveEntryType.file) e.path];
         }));

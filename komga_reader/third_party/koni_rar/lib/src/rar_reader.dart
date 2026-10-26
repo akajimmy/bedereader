@@ -204,6 +204,18 @@ final class RarReader extends ArchiveReader {
     );
   }
 
+  /// BeDeReader: the entries whose data reaches past the end of the archive -
+  /// a file cut short (a copy that stopped part-way). The listing stops
+  /// quietly at the end of the file, so such an archive still lists its
+  /// first entries. Single-volume archives only (empty for a multi-volume set).
+  List<ArchiveEntry> get cutShort => _segments != null
+      ? const []
+      : [
+          for (var i = 0; i < _headers.length; i++)
+            if (_headers[i].dataOffset + _headers[i].dataSize > _source.length)
+              entries[i],
+        ];
+
   @override
   Stream<Uint8List> openRead(ArchiveEntry entry) {
     final index = _indexOf[entry];
