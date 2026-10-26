@@ -5,9 +5,9 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 ## Where it stands (2026-10-26)
 
 - **Works:** No server mode, and local libraries beside Komga's; libraries on the device, a card or USB drive, or an SMB share; CBZ, CBR (RAR4 and RAR5) and EPUB; a folder browser to add them; ComicInfo.xml; page sizes; a library out of reach keeps its books, one deleted is asked about; what a scan couldn't read is reported; open screens refresh after a scan; offline mode keeps the local libraries.
-- **Tried on the tablet** (2026-10-25, see Findings): all of that in No server mode, except the parts below.
-- **Not tried on a device yet:** signed in to Komga with local libraries beside it, and offline with them (item 6) - needs a sign-in; a share going out of reach after it was added. **iOS** started (2026-10-26, TestFlight): No server mode with the NAS works.
-- **Next:** the punch list below, from the top.
+- **Tried** on the tablet and the iPad (exp-build-5, 2026-10-26): No server mode, beside Komga, offline, read lists, the Libraries page, book details; a whole NAS library on the tablet (item 13).
+- **Wrapping up (user, 2026-10-26):** in this order - item 13 measured again on a build with its fixes; item 14 (the perf log out); a final build; a code review of the whole branch against 1.6; a round on the PC (the user). Then the plan for item 15.
+- **After the move into 1.6** (user, 2026-10-26; in reports\10-26-backlog.md): 18a (an edge case for later), 4 (ZIP64, only if one turns up), reading progress shared between devices (a file in the library folder). **Not to be tested:** a share going out of reach after it was added (left, the user's call).
 
 ## The rules here
 
