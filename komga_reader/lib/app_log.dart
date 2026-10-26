@@ -167,7 +167,13 @@ class AppLog extends ChangeNotifier {
   }
 
   /// Written now (also done by itself a few seconds after a line, and when the app goes to the background).
-  Future<void> save() async {
+  /// One at a time, in the order asked: two writes at once shared the .tmp file, and the one renamed last could be
+  /// the older (build 160's test run, 10-25: a flaky test).
+  Future<void> save() => _saving = _saving.then((_) => _saveNow());
+
+  Future<void> _saving = Future.value();
+
+  Future<void> _saveNow() async {
     final dir = _dir;
     if (dir == null) return;
     try {
