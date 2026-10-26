@@ -12,6 +12,8 @@ class _Refused implements Exception {}
 
 /// A device with one storage and a NAS whose shares need a login.
 class _Fake implements BrowseSource {
+  _Fake({this.placeList = const [Place('This device', '/storage/emulated/0'), Place('nick-nas', r'\\nick-nas', server: true)]});
+  final List<Place> placeList;
   final logins = <String, SmbLogin>{};
   final looked = <String>[];
   var deviceOpened = 0;
@@ -24,8 +26,7 @@ class _Fake implements BrowseSource {
   };
 
   @override
-  Future<List<Place>> places() async =>
-      const [Place('This device', '/storage/emulated/0'), Place('nick-nas', r'\\nick-nas', server: true)];
+  Future<List<Place>> places() async => placeList;
 
   @override
   Future<bool> openDevice(BuildContext context) async {
@@ -53,12 +54,12 @@ class _Fake implements BrowseSource {
 }
 
 void main() {
-  Future<Future<String?> Function()> open(WidgetTester tester, _Fake source) async {
+  Future<Future<String?> Function()> open(WidgetTester tester, _Fake source, {bool? network}) async {
     String? picked;
     var done = false;
     await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => Scaffold(body: Center(child: TextButton(
         onPressed: () async {
-          picked = await pickFolder(context, source: source);
+          picked = await pickFolder(context, source: source, network: network);
           done = true;
         },
         child: const Text('browse')))))));
@@ -140,6 +141,37 @@ void main() {
     await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
     expect(await result(), r'\\nick-nas\Public');
+  });
+
+  testWidgets("this device's folders only, from one place: it opens straight away - no list of one to tap through "
+      '(user, 2026-10-26); Up from its top shows the list, with Type a folder', (tester) async {
+    final source = _Fake(placeList: const [Place('This device', '/storage/emulated/0')]);
+    await open(tester, source, network: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('browse'));
+    await tester.pumpAndSettle();
+    expect(source.deviceOpened, 1, reason: "Android's file access checked first, as when tapped");
+    expect(source.looked.last, '/storage/emulated/0');
+    expect(find.text('Comics'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.arrow_upward));
+    await tester.pumpAndSettle();
+    expect(find.text('Type a folder…'), findsOneWidget);
+  });
+
+  testWidgets('more than one place (an SD card too), or the network: the places listed', (tester) async {
+    for (final (places, network) in [
+      (const [Place('This device', '/storage/emulated/0'), Place('Card or drive 1234-5678', '/storage/1234-5678')], false),
+      (const [Place('nick-nas', r'\\nick-nas', server: true)], true),
+    ]) {
+      final source = _Fake(placeList: places)..logins['nick-nas'] = const SmbLogin('u', 'p');
+      await tester.pumpWidget(const SizedBox()); // (the last one's browser gone)
+      await open(tester, source, network: network);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('browse'));
+      await tester.pumpAndSettle();
+      expect(source.looked, isEmpty, reason: 'nothing opened by itself');
+      expect(find.text(places.first.label), findsOneWidget);
+    }
   });
 
   test("a folder's look: the system's own folders left out (hidden, a NAS's @Recycle and #recycle, Windows's "

@@ -220,7 +220,17 @@ class _FolderBrowserState extends State<FolderBrowser> {
   @override
   void initState() {
     super.initState();
-    _go(null);
+    _start();
+  }
+
+  /// This device's folders only, from one place (a tablet's storage, the iPad's app folder): it opens straight away -
+  /// the list of one was a screen with nothing to choose (user, 2026-10-26). Up from its top still shows the list,
+  /// with Type a folder.
+  Future<void> _start() async {
+    await _go(null);
+    final level = _level;
+    if (!mounted || widget.network != false || _path != null || level is! _Places) return;
+    if (level.places.length == 1 && !level.places.single.server) await _openPlace(level.places.single);
   }
 
   /// \\host (no share): a server, its shares listed.
