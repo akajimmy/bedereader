@@ -222,6 +222,28 @@ void main() {
       expect(api.unreadable, isEmpty);
     });
 
+    test('a share dropping part-way through a scan - listed, but its files not read - keeps the books it had (user, '
+        '2026-10-25: every book after the drop was lost); a damaged file is still left out', () async {
+      final api = await open();
+      await api.rescan();
+      final all = await names(api);
+      await File('${root.path}${Platform.pathSeparator}Broken (2021).cbz').writeAsBytes([1, 2, 3, 4]);
+      // (changed, so read again: the last scan's copy can't just be kept as it is)
+      for (final f in root.listSync(recursive: true).whereType<File>()) {
+        f.setLastModifiedSync(DateTime(2031));
+      }
+
+      final down = _Down()..readsFail = true;
+      Storage.fsFor = (_) => down;
+      addTearDown(() => Storage.fsFor = null);
+      await api.rescan();
+      expect(await names(api), all, reason: 'the files not read: kept from the last scan; the broken one, new: none');
+
+      down.readsFail = false;
+      await api.rescan();
+      expect(await names(api), all, reason: "read again; the broken one left out - it isn't a zip");
+    });
+
     test('a library whose folder looks deleted (not there, the place it was in answering) keeps its books until the '
         'user is asked (user, 2026-10-25): Remove - it goes, books and all; Keep - as out of reach, not asked again, '
         'and read again once its folder is back (gone again later: asked again)', () async {
@@ -364,6 +386,7 @@ void main() {
 /// This device's files - or, with [out], a share that doesn't answer (as dart_smb2 throws when it can't connect).
 class _Down implements LibraryFs {
   bool out = false;
+  bool readsFail = false; // listed, but no file read answers (the share dropped part-way)
   static const _real = LocalFs();
 
   Never _noAnswer() => throw const SocketException('no answer');
@@ -377,10 +400,10 @@ class _Down implements LibraryFs {
   @override
   Future<FolderLook> look(String folder) async => out ? _noAnswer() : _real.look(folder);
   @override
-  Future<int> length(String path) async => out ? _noAnswer() : _real.length(path);
+  Future<int> length(String path) async => out || readsFail ? _noAnswer() : _real.length(path);
   @override
-  Future<Uint8List> readAll(String path) async => out ? _noAnswer() : _real.readAll(path);
+  Future<Uint8List> readAll(String path) async => out || readsFail ? _noAnswer() : _real.readAll(path);
   @override
   Future<Uint8List> readRange(String path, int offset, int length) async =>
-      out ? _noAnswer() : _real.readRange(path, offset, length);
+      out || readsFail ? _noAnswer() : _real.readRange(path, offset, length);
 }

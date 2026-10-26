@@ -1,4 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:dart_smb2/dart_smb2.dart';
 
 import '../epub/source.dart' show Zip;
 import 'file_zip.dart';
@@ -212,8 +215,13 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
       try {
         made[f.path] = await _bookEntry(fs, f, i, 'S${stableId(_normPath(where))}',
             oneshot ? _stem(where) : _base(where), lib, oneshot, known);
-      } catch (_) {
-        // a damaged or unreadable file: left out
+      } catch (e) {
+        // a damaged file, or one gone since the listing: left out. Anything else - the share stopped answering
+        // part-way, a timeout: what the last scan had of it is kept, as for a library out of reach (user,
+        // 2026-10-25: a share dropping mid-scan lost every book after it)
+        if (!fileLeftOut(e)) {
+          if (known[f.path] case final was?) made[f.path] = was;
+        }
       }
       onBook?.call(++done);
     });
@@ -311,6 +319,17 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
     if (epub) 'epub': true, 'fileModified': modified, 'inside': inside,
   };
 }
+
+/// A file the scan couldn't read is left out for good (not kept from the last scan): damaged (not a zip, a broken
+/// one, a format not read yet), or gone since the folder was listed - the share's "not found", the system's "no
+/// such file". A share or the network not answering isn't the file's doing.
+bool fileLeftOut(Object e) => switch (e) {
+      FormatException() || RangeError() || ArgumentError() => true,
+      Smb2Exception(:final type) => type == Smb2ErrorType.notFound || type == Smb2ErrorType.isADirectory,
+      // ERROR_FILE_NOT_FOUND / ENOENT (2), ERROR_PATH_NOT_FOUND (3) - not a share out of reach (Windows: 53, 64, 67)
+      FileSystemException(:final osError) => osError?.errorCode == 2 || osError?.errorCode == 3,
+      _ => false,
+    };
 
 /// Runs [f] on each of [items], [n] at a time.
 Future<void> _inParallel<T>(List<T> items, int n, Future<void> Function(T item) f) async {
