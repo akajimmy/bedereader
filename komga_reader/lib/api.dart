@@ -17,7 +17,11 @@ class Komga {
   /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
   Komga(String baseUrl, this.apiKey, {http.Client? client})
       : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
-        _http = client ?? http.Client();
+        _http = client ?? http.Client(),
+        _ownClient = client == null;
+
+  final bool _ownClient; // (a client given - the offline source's, a test's - is the only one: [ping] uses it too)
+  final Zone _zone = Zone.current; // (where it was made: a client made for [ping] is made there too)
 
   final String baseUrl;
 
@@ -74,6 +78,7 @@ class Komga {
   }
 
   Future<T> _netOnce<T>(Future<T> Function() request, {required Duration limit, required bool slowIsNotDown}) async {
+    limit = (Zone.current[_pingLimit] as Duration?) ?? limit; // ([ping]'s own, shorter)
     try {
       final r = await request().timeout(limit);
       onReachability?.call(this, true);
@@ -117,8 +122,25 @@ class Komga {
   /// and signing in again).
   static void Function(Komga api)? onKeyRefused;
 
+  /// Whether Komga is there, for the connection's check ([me], answered or thrown as for any request): asked on a
+  /// connection of its own, closed after - not one kept open from before (user, 2026-10-26: Wi-Fi off, the iPad let
+  /// requests wait on those until their 15 s ran out, and the offer to go offline came late) - and within
+  /// [pingTimeout].
+  Future<void> ping() async {
+    final fresh = _ownClient ? _zone.run(http.Client.new) : null;
+    try {
+      await runZoned(me, zoneValues: {_pingClient: fresh, _pingLimit: pingTimeout});
+    } finally {
+      fresh?.close();
+    }
+  }
+
+  static const pingTimeout = Duration(seconds: 5);
+  static final _pingClient = Object(), _pingLimit = Object();
+
   Future<dynamic> _get(String path, [Map<String, Object?>? query]) => _net(() async {
-        final r = await _http.get(_u(path, query), headers: headers);
+        final client = (Zone.current[_pingClient] as http.Client?) ?? _http; // ([ping]'s own)
+        final r = await client.get(_u(path, query), headers: headers);
         if (r.statusCode == 404) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
         try {

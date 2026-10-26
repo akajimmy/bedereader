@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/errors.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/offline_komga.dart';
 import 'package:komga_reader/widgets/connection_prompt.dart';
+import 'package:komga_reader/widgets/refresh_on_return.dart' show contentChanged;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/library_server.dart';
@@ -311,4 +314,63 @@ void main() {
     expect(conn.autoOffline, isFalse);
     expect(conn.offline, isFalse);
   });
+
+  // user, 2026-10-26 (iPad; the tablet showed it too): Komga back, the prompt and Home's "Can't reach Komga" stayed
+  // until refreshed by hand - nothing asked Komga meanwhile
+  testWidgets('Komga gone and the app still online: asked again every 10 s; back, the prompt closes and the screen on '
+      'top loads again by itself; then no more asking', (t) async {
+    server.up = false;
+    expect(await conn.check(), isFalse);
+    expect(conn.askPending, isTrue);
+    final asked = server.meCalls, reloads = contentChanged.value;
+    await t.pump(Connection.watchEvery);
+    expect(server.meCalls, asked + 1, reason: 'asked again');
+    expect(conn.askPending, isTrue, reason: 'still gone');
+    server.up = true;
+    await t.pump(Connection.watchEvery);
+    expect(conn.askPending, isFalse, reason: 'back: the prompt closes');
+    expect(contentChanged.value, reloads + 1, reason: 'the screen on top loads again');
+    final after = server.meCalls;
+    await t.pump(Connection.watchEvery * 3);
+    expect(server.meCalls, after, reason: 'answered: not asked again');
+  });
+
+  testWidgets('gone, then offline by the prompt: the 10 s asking stops (the offline poll takes over)', (t) async {
+    server.up = false;
+    await conn.check();
+    conn.useDownloads(); // Go offline
+    final asked = server.meCalls;
+    await t.pump(Connection.watchEvery * 2);
+    expect(server.meCalls, asked, reason: 'not every 10 s');
+    conn.reset(); // (the offline poll's 30 s timer, gone before the test ends)
+  });
+
+  // user, 2026-10-26: Wi-Fi off, the iPad's offer to go offline came well after Home said Komga couldn't be reached
+  testWidgets("the connection's check: on a connection of its own, closed after, and given up after 5 s", (t) async {
+    var made = 0, closed = 0;
+    final api = http.runWithClient(() => Komga('http://nas.test', 'k'), () {
+      made++;
+      return _Hangs(() => closed++);
+    });
+    expect(made, 1, reason: "Komga's own");
+    Object? failed;
+    final ping = api.ping().catchError((Object e) => failed = e);
+    await t.pump(const Duration(seconds: 4));
+    expect(failed, isNull, reason: 'still waiting at 4 s');
+    await t.pump(const Duration(seconds: 2));
+    await ping;
+    expect(failed, isA<KomgaUnreachable>(), reason: 'given up at 5 s, as unreachable');
+    expect(made, 2, reason: 'a connection of its own');
+    expect(closed, 1, reason: 'and closed after');
+  });
+}
+
+/// A server that never answers.
+class _Hangs extends http.BaseClient {
+  _Hangs(this.onClose);
+  final void Function() onClose;
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) => Completer<http.StreamedResponse>().future;
+  @override
+  void close() => onClose();
 }
