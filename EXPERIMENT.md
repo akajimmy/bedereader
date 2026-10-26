@@ -102,7 +102,9 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 ### Punch list done
 
-- **1. A library that can't be reached keeps its books** (2026-10-25). A rescan that can't read a library's folder - not there (on Windows a share out of reach looks just so), refused, or cut off part-way - now keeps that library's books from the scan before, and says so in the app log; files gone from a library that could be read still go. Test: the folder taken away and brought back with a book deleted (break-checked: the old code emptied the library).
+- **1. A library that can't be reached keeps its books** (2026-10-25). A rescan that can't read a library's folder - out of reach, refused, or cut off part-way - keeps that library's books from the scan before, and says so in the app log; files gone from a library that could be read still go.
+  - **Out of reach or deleted?** (user, 2026-10-25) When the folder isn't there, the place it was in is asked: a share that answers (SMB), or any folder above it that's there - a drive, the device's storage, a share's top on Windows, where a share out of reach looks the same as a missing folder. The place answering: the folder **looks deleted**, and the user is asked "Library folder not found - Remove the library?" **Remove**: the library and its books go. **Keep it**: treated as out of reach - not asked again (kept on the device), and once the folder is back the next scan reads it; gone again later, asked again. The place not answering: out of reach, the books kept, nothing asked.
+  - Tests: a share that doesn't answer (books kept, nothing asked); the folder moved away (asked; Keep, back, gone again, Remove); the question's Remove and Keep (break-checked: item 1 alone never asked).
 
 ## Punch list (2026-10-25) - in priority order
 
