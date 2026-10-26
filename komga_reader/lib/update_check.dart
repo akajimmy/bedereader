@@ -30,8 +30,13 @@ class UpdateCheck extends ChangeNotifier {
   NewRelease? _found;
   String? _dismissed;
 
+  /// Off in the experiment's app (BeDeReader Exp): a BeDeReader release isn't an update to it (user, 2026-10-26: "1.5.0
+  /// is not an update to exp"). Not to go to 1.6 (EXPERIMENT.md).
+  @visibleForTesting
+  static bool inThisApp = false;
+
   static bool get applies =>
-      defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows;
+      inThisApp && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows);
 
   /// Asks GitHub - unless it was asked less than a day ago (then the last answer stands).
   Future<void> check({DateTime? now}) async {
