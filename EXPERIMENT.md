@@ -113,10 +113,12 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
   - **No server's Open:** a folder with no books among several is named - "(not found)" or "(couldn't be reached)" where known - and nothing is opened or saved until the line is corrected or taken out (it was saved as an empty library without a word).
   - Tests: seven damaged CBZs (one log line, five names; all seven in Settings); two folders, one empty (named, nothing saved) - break-checked against the code before. (The No server test first passed without Open getting anywhere - the scan can't run inside the test's fake time; it now scans beforehand.)
 
+- **3. Signed in to Komga, the start doesn't wait for a local scan** (2026-10-25). With no local scan kept yet (a library just added, the kept scan lost), the start waited for the whole first scan before Home showed - 11 s and more on the NAS, longer with a share out of reach. Now the local libraries are attached at once and scanned in the background: Home shows Komga's books meanwhile, and the local ones come in when the scan is done (Home and the side menu already listen for that). No server mode still waits on its very first scan - there's nothing else to show. Test: the first look at the folder held back - attached at once, its books in once let go (break-checked: the old start waited, timed out).
+
 ## Punch list (2026-10-25) - in priority order
 
 From the wrap-up list and the code review. Done items move to "Punch list done" above; this list is only what's left.
-3. **Signed in to Komga, the start doesn't wait for a local scan.** With no local scan kept yet, the app waits for a full scan of the local libraries before Home shows. Use what's kept and scan in the background, as local mode does. (Review finding 2.)
+
 4. **Big CBZs (ZIP64).** Archives over 4 GB, or written in ZIP64 form by some tools, are misread and left out. (Review finding 3.)
 5. **Open screens refresh** when a background scan finds changes (today: go back, or Home's refresh).
 6. **Local libraries in offline mode** (today they go with Komga), on the tablet's own folders and a share at home.
