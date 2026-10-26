@@ -11,7 +11,9 @@ import 'package:http/testing.dart';
 import 'package:komga_reader/local/folder_browser.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
+import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/mixed_komga.dart';
+import 'package:komga_reader/local/storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -197,6 +199,28 @@ void main() {
     });
   });
 
+  // user, 2026-10-26: Settings > Libraries keeps this device's libraries and the network's apart
+  testWidgets("this device's libraries and the network's, each in its own group", (t) async {
+    Storage.fsFor = (p) => p.startsWith(r'\\') ? _Away() : const LocalFs();
+    addTearDown(() => Storage.fsFor = null);
+    late FolderKomga api;
+    await t.runAsync(() async {
+      await put('Saga/Saga 1.cbz');
+      api = await FolderKomga.open(
+          [LocalLibrary.at(root.path), const LocalLibrary('Archive', r'\\nick-nas\NAS-SHARE\COMICS\Archive')],
+          dataDir: data);
+    });
+    final mine = root.path.split(Platform.pathSeparator).last;
+    Future<void> show(bool network) => t.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
+        child: LocalLibrariesGroup(api: api, network: network)))));
+    await show(false);
+    expect(find.text(mine), findsOneWidget);
+    expect(find.text('Archive'), findsNothing);
+    await show(true);
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text(mine), findsNothing);
+  });
+
   testWidgets('adding a library asks what it holds; the answer is the library\'s, Cancel adds nothing', (t) async {
     LibraryKind? got = LibraryKind.seriesFolders;
     await t.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
@@ -212,4 +236,10 @@ void main() {
     await t.pumpAndSettle();
     expect(got, isNull);
   });
+}
+
+/// A share out of reach: nothing on it answers (no network in a test).
+class _Away implements LibraryFs {
+  @override
+  dynamic noSuchMethod(Invocation i) => Future<Never>.error(const SocketException('away'));
 }

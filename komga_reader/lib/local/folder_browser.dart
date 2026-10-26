@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../screen.dart' show appDocumentsDir;
 import '../widgets/error_text.dart';
+import '../widgets/source_badge.dart' show BookSource, SourceIcon;
 import 'access.dart';
 import 'folder_komga.dart';
 import 'folder_scan.dart' show LibraryKind, LocalLibrary;
@@ -43,12 +44,30 @@ abstract class BrowseSource {
 
 /// The device's own folders and the network's shares, through [Storage].
 class DeviceBrowse implements BrowseSource {
+  /// true: the network's shares only; false: this device's folders only; null: both (Settings > Libraries keeps them
+  /// apart - user, 2026-10-26; No server's sign-in screen has both).
+  DeviceBrowse({this.network});
+  final bool? network;
   final _hostLogins = <String, SmbLogin>{}; // given while browsing, to list a server's shares
 
   @override
   Future<List<Place>> places() async {
     final out = <Place>[];
     await DeviceRoots.load(); // (for the paths said plainly)
+    if (network != true) await _devicePlaces(out);
+    if (network == false) return out;
+    // the servers already used: the libraries' and the logins'
+    final hosts = <String, String>{}; // lower case -> as written
+    for (final l in await FolderKomga.savedLibraries()) {
+      if (splitUnc(l.path) case (final host, _, _)) hosts.putIfAbsent(host.toLowerCase(), () => host);
+    }
+    for (final host in hosts.values) {
+      out.add(Place(host, '\\\\$host', server: true));
+    }
+    return out;
+  }
+
+  Future<void> _devicePlaces(List<Place> out) async {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         final root = await FolderAccess.storageRoot() ?? '/storage/emulated/0';
@@ -75,15 +94,6 @@ class DeviceBrowse implements BrowseSource {
         final home = Platform.environment['HOME'];
         if (home != null) out.add(Place('Home', home));
     }
-    // the servers already used: the libraries' and the logins'
-    final hosts = <String, String>{}; // lower case -> as written
-    for (final l in await FolderKomga.savedLibraries()) {
-      if (splitUnc(l.path) case (final host, _, _)) hosts.putIfAbsent(host.toLowerCase(), () => host);
-    }
-    for (final host in hosts.values) {
-      out.add(Place(host, '\\\\$host', server: true));
-    }
-    return out;
   }
 
   @override
@@ -122,12 +132,14 @@ class DeviceBrowse implements BrowseSource {
 
 /// Picks a library folder: this device's storage, a drive, or a share on the network, browsed folder by folder.
 /// Returns its path (\\host\share\folder for a share), or null.
-Future<String?> pickFolder(BuildContext context, {BrowseSource? source}) =>
-    Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => FolderBrowser(source: source ?? DeviceBrowse())));
+/// [network]: true, shares only; false, this device's folders only; null, both ([DeviceBrowse.network]).
+Future<String?> pickFolder(BuildContext context, {BrowseSource? source, bool? network}) =>
+    Navigator.of(context).push<String>(MaterialPageRoute(
+        builder: (_) => FolderBrowser(source: source ?? DeviceBrowse(network: network), network: network)));
 
 /// A library to add: its folder ([pickFolder]), then what's in it ([askLibraryKind]). Null: cancelled.
-Future<LocalLibrary?> pickLibrary(BuildContext context, {BrowseSource? source}) async {
-  final path = await pickFolder(context, source: source);
+Future<LocalLibrary?> pickLibrary(BuildContext context, {BrowseSource? source, bool? network}) async {
+  final path = await pickFolder(context, source: source, network: network);
   if (path == null || path.trim().isEmpty || !context.mounted) return null;
   final kind = await askLibraryKind(context);
   return kind == null ? null : LocalLibrary.at(path, kind: kind);
@@ -169,8 +181,11 @@ IconData libraryKindIcon(LibraryKind k) => switch (k) {
     };
 
 class FolderBrowser extends StatefulWidget {
-  const FolderBrowser({super.key, required this.source});
+  const FolderBrowser({super.key, required this.source, this.network});
   final BrowseSource source;
+
+  /// true: a share (Connect to a server offered); false: this device's folders (not offered); null: either.
+  final bool? network;
 
   @override
   State<FolderBrowser> createState() => _FolderBrowserState();
@@ -291,7 +306,10 @@ class _FolderBrowserState extends State<FolderBrowser> {
   }
 
   Future<void> _type() async {
-    final path = (await _ask('Type a folder', 'Folder', r'\\server\share\Comics'))?.trim();
+    final path = (await _ask('Type a folder', 'Folder', widget.network == false
+            ? (defaultTargetPlatform == TargetPlatform.windows ? r'C:\Comics' : '/storage/emulated/0/Comics')
+            : r'\\server\share\Comics'))
+        ?.trim();
     if (path != null && path.isNotEmpty && mounted) Navigator.pop(context, path);
   }
 
@@ -329,15 +347,21 @@ class _FolderBrowserState extends State<FolderBrowser> {
           null => const Center(child: CircularProgressIndicator()),
           _Places(:final places) => ListView(children: [
               for (final pl in places)
-                ListTile(leading: Icon(pl.server ? Icons.dns_outlined : Icons.folder_outlined), title: Text(pl.label),
+                // (the place's own icon, as the libraries' locations have it: a share's, a card's, this device's)
+                ListTile(leading: switch (whereHere(pl.path).kind) {
+                      WhereKind.server => const SourceIcon(BookSource.network),
+                      WhereKind.card => const Icon(Icons.sd_card_outlined),
+                      WhereKind.device => Icon(deviceIcon(context)),
+                    }, title: Text(pl.label),
                     subtitle: switch (whereHere(pl.path).inside) {
                       _ when pl.server || pl.label == pl.path => null,
                       '' => null,
                       final inside => Text(inside), // (iOS: Documents/)
                     },
                     onTap: () => _openPlace(pl)),
-              ListTile(leading: const Icon(Icons.add), title: const Text('Connect to a server…'),
-                  subtitle: const Text('A shared folder on your network (SMB)'), onTap: _connect),
+              if (widget.network != false)
+                ListTile(leading: const Icon(Icons.add), title: const Text('Connect to a server…'),
+                    subtitle: const Text('A shared folder on your network (SMB)'), onTap: _connect),
               ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Type a folder…'), onTap: _type),
             ]),
           _Shares(:final shares) => shares.isEmpty

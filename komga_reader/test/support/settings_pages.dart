@@ -16,6 +16,7 @@ String pageName(SettingsPage p) => switch (p) {
       SettingsPage.keys => 'Remote and keys',
       SettingsPage.server => 'Server and sync',
       SettingsPage.library => 'Library & Home',
+      SettingsPage.libraries => 'Libraries',
       SettingsPage.downloads => 'Downloads',
       SettingsPage.look => 'Look',
       SettingsPage.about => 'About',

@@ -384,7 +384,7 @@ void main() {
         await api.rescan();
       });
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
-          child: LocalLibrariesGroup(api: api)))));
+          child: LocalLibrariesGroup(api: api, network: false)))));
       await tester.pump();
       expect(find.textContaining('7 files'), findsOneWidget);
       await tester.tap(find.textContaining('7 files'));

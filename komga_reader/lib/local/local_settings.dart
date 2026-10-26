@@ -5,21 +5,24 @@ import 'access.dart';
 import 'folder_browser.dart';
 import 'folder_komga.dart';
 import 'folder_scan.dart';
+import 'storage.dart';
 import 'where.dart';
 
-/// Settings > Server and sync in local mode: the libraries (folders) - added, renamed, removed - and Scan again,
-/// with how far a scan running has got. Removing one takes it out of the app only: its files stay where they are.
+/// Settings > Libraries: this device's libraries ([network] false) or the network's ([network] true, on a share) -
+/// added, renamed, removed (user, 2026-10-26: kept apart, and out of Server and sync). Removing one takes it out of
+/// the app only: its files stay where they are.
 class LocalLibrariesGroup extends StatelessWidget {
-  const LocalLibrariesGroup({super.key, required this.api});
+  const LocalLibrariesGroup({super.key, required this.api, required this.network});
   final FolderKomga api;
+  final bool network;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: Listenable.merge([api.changed, api.scanning]),
+        listenable: api.changed,
         builder: (context, _) {
-          final scanned = api.scanning.value;
-          return SettingsGroup(title: 'Local libraries', children: [
+          return SettingsGroup(title: network ? 'Network' : 'Local', children: [
             for (final l in api.folders)
+              if ((Storage.shareOf(l.path) != null) == network)
               ListTile(
                 contentPadding: const EdgeInsets.only(left: 14, right: 4),
                 leading: const Icon(Icons.folder_outlined),
@@ -44,12 +47,11 @@ class LocalLibrariesGroup extends StatelessWidget {
                       onPressed: () => _remove(context, l)),
                 ]),
               ),
-            ActionRow(title: 'Add a library', icon: Icons.add, onTap: () => _add(context)),
             ActionRow(
-              title: scanned == null ? 'Scan again' : 'Scanning… $scanned books',
-              subtitle: 'New and changed files are read; books whose files went are taken off',
-              icon: Icons.refresh,
-              onTap: scanned == null ? () => api.rescan() : null,
+              title: network ? 'Add a shared folder' : 'Add a folder',
+              subtitle: network ? 'On a server on your network (SMB)' : 'On this device, or a card or drive in it',
+              icon: Icons.add,
+              onTap: () => _add(context),
             ),
           ]);
         },
@@ -109,7 +111,7 @@ class LocalLibrariesGroup extends StatelessWidget {
 
   Future<void> _add(BuildContext context) async {
     // browsed for (this device, a drive, a share), or typed from the browser's "Type a folder…"; then what's in it
-    final lib = await pickLibrary(context);
+    final lib = await pickLibrary(context, network: network);
     if (lib == null || !context.mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (api.folders.any((l) => l.id == lib.id)) {
@@ -143,4 +145,21 @@ class LocalLibrariesGroup extends StatelessWidget {
     if (ok != true) return;
     await api.setLibraries([for (final x in api.folders) if (x.id != l.id) x]);
   }
+}
+
+/// Scan again, for the local and network libraries both, with how far a scan running has got.
+class LibraryScanRow extends StatelessWidget {
+  const LibraryScanRow({super.key, required this.api});
+  final FolderKomga api;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<int?>(
+        valueListenable: api.scanning,
+        builder: (context, scanned, _) => ActionRow(
+          title: scanned == null ? 'Scan again' : 'Scanning… $scanned books',
+          subtitle: 'New and changed files are read; books whose files went are taken off',
+          icon: Icons.refresh,
+          onTap: scanned == null ? () => api.rescan() : null,
+        ),
+      );
 }

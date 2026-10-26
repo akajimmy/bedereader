@@ -22,6 +22,7 @@ import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
 import '../widgets/server_status.dart';
 import '../widgets/setting_rows.dart';
+import '../widgets/source_badge.dart' show BookSource, SourceIcon;
 import 'about.dart';
 import 'app_log_screen.dart';
 import 'document.dart';
@@ -31,7 +32,7 @@ import 'remote_test.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
-enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, downloads, look, about }
+enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, libraries, downloads, look, about }
 
 /// The headings the pages are listed under.
 enum SettingsSection { reading, app, help }
@@ -53,6 +54,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => 'Remote and keys',
         SettingsPage.server => 'Server and sync',
         SettingsPage.library => 'Library & Home',
+        SettingsPage.libraries => 'Libraries',
         SettingsPage.downloads => 'Downloads',
         SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
@@ -65,6 +67,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.server => Icons.dns_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
+        SettingsPage.libraries => Icons.collections_bookmark_outlined,
         SettingsPage.downloads => Icons.download_outlined,
         SettingsPage.look => Icons.palette_outlined,
         SettingsPage.about => Icons.info_outline,
@@ -84,6 +87,7 @@ extension SettingsPageInfo on SettingsPage {
             'Komga); the rest are kept on this device',
         SettingsPage.server => null,
         SettingsPage.library => 'Kept on this device, except On deck (synced)',
+        SettingsPage.libraries => "Local and network libraries are this device's; Komga's are the server's",
         SettingsPage.about => null,
         _ => 'Kept on this device',
       };
@@ -233,6 +237,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsPage.server => _server(context),
         SettingsPage.look => [_live((s) => _look(context, s))],
         SettingsPage.library => _library(),
+        SettingsPage.libraries => _libraries(context),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
         SettingsPage.keys => [ListenableBuilder(listenable: ReaderKeys.instance, builder: (context, _) => _keys(context))],
         SettingsPage.about => _about(context),
@@ -334,8 +339,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // ---- Server and sync -------------------------------------------------------------------------------------------
   List<Widget> _server(BuildContext context) => widget.api is FolderKomga
       ? [
-          // local mode (experimental/sources): the folders, and the way back to signing in
-          LocalLibrariesGroup(api: widget.api as FolderKomga),
+          // local mode (experimental/sources): the way to a Komga server (the folders: Libraries)
           SettingsGroup(title: 'No server', children: [
             Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
             // (user, 2026-10-26: "Sign out" here "boots me back to the sign-in screen" - a Komga server is added,
@@ -350,8 +354,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ]),
         ]
       : [
-        // folders on this device as libraries, beside Komga's (experimental/sources)
-        if (widget.api case MixedKomga(:final local?)) LocalLibrariesGroup(api: local),
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
           Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
@@ -386,6 +388,49 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             },
           ),
       ];
+
+  // ---- Libraries: this device's, the network's and Komga's, each apart (user, 2026-10-26: not in Server and sync) --
+  List<Widget> _libraries(BuildContext context) {
+    final api = widget.api;
+    final FolderKomga? local = switch (api) {
+      final FolderKomga f => f,
+      LocalBeside(:final local) => local,
+      _ => null,
+    };
+    return [
+      if (local != null) ...[
+        LocalLibrariesGroup(api: local, network: false),
+        LocalLibrariesGroup(api: local, network: true),
+        SettingsGroup(title: 'Local and network', children: [LibraryScanRow(api: local)]),
+      ],
+      if (api is FolderKomga)
+        SettingsGroup(title: 'Komga', children: [
+          ActionRow(
+            title: 'Add a Komga server',
+            icon: Icons.add_link,
+            subtitle: 'Its libraries beside your local ones',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LoginScreen(addingKomga: true, onSignedIn: AppSettingsScreen.appAddKomga))),
+          ),
+        ])
+      else
+        // Komga's own (its server: Server and sync; shown or hidden here: Library & Home)
+        FutureBuilder<List<dynamic>>(
+          future: _allLibraries,
+          builder: (context, snap) => SettingsGroup(title: 'Komga', children: [
+            for (final l in snap.data ?? const [])
+              ListTile(
+                contentPadding: const EdgeInsets.only(left: 14, right: 4),
+                leading: const SourceIcon(BookSource.komga),
+                title: Text(l['name'] as String? ?? '', style: const TextStyle(fontSize: 14.5)),
+              ),
+            NoteRow(snap.hasError || (snap.hasData && snap.data!.isEmpty)
+                ? "Komga's libraries can't be listed now (offline?). Its server: Server and sync."
+                : "From ${api.baseUrl} (Server and sync). Shown or hidden: Library & Home."),
+          ]),
+        ),
+    ];
+  }
 
   // ---- Remote and keys -------------------------------------------------------------------------------------------
   Widget _keys(BuildContext context) {
