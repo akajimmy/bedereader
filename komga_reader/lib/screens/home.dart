@@ -8,8 +8,6 @@ import '../hidden_libraries.dart';
 import '../errors.dart';
 import '../home_sections.dart';
 import '../local/folder_komga.dart';
-import '../local/folder_scan.dart' show isLocalId;
-import '../local/mixed_komga.dart' show LocalBeside;
 import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
@@ -200,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   Future<void> _checkOfflinePins() async {
     if (!_hidesEmptyPins) {
       if (_offlinePins != null && mounted) setState(() => _offlinePins = null);
-      return _checkLocalPins();
+      return;
     }
     final keep = <Pin>{};
     for (final p in Pins.instance.items) {
@@ -212,31 +210,6 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
       }
     }
     if (mounted) setState(() => _offlinePins = keep);
-  }
-
-  /// Signed in to Komga with local libraries beside it: the pins to local things that lead to nothing (a library
-  /// since removed - it showed "0 books"; only No server mode hid them: punch list 10). Hidden, not deleted: the
-  /// library may come back. Komga's pins are never looked at here; one pinned since the check shows.
-  Set<String> _emptyLocalPins = const {}; // (their ids: a pin synced from Komga is a new object)
-
-  Future<void> _checkLocalPins() async {
-    final hide = <String>{};
-    if (api case final LocalBeside mixed) {
-      for (final p in Pins.instance.items) {
-        if (!isLocalId(p.id)) continue;
-        if (!mixed.isLocal(p.id!)) {
-          hide.add(p.id!); // (none of the local libraries has it: its library is gone - nothing to ask, not Komga)
-          continue;
-        }
-        try {
-          final r = await pinView(api, p, size: 1);
-          if (((r['totalElements'] as num?) ?? 0) == 0) hide.add(p.id!);
-        } catch (_) {
-          // can't tell: shown, as any other pin
-        }
-      }
-    }
-    if (mounted && (hide.isNotEmpty || _emptyLocalPins.isNotEmpty)) setState(() => _emptyLocalPins = hide);
   }
 
   /// The widgets for one Home section (drawn in the order chosen in the ⋮ menu / Settings).
@@ -286,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
               final offlineKeep = _offlinePins;
               final pins = _hidesEmptyPins
                   ? [for (final p in Pins.instance.items) if (offlineKeep?.contains(p) ?? false) p]
-                  : [for (final p in Pins.instance.items) if (!_emptyLocalPins.contains(p.id)) p];
+                  : Pins.instance.items;
               if (pins.isEmpty) return const SizedBox.shrink();
               // posters: each a 2x2 of its view's first items (lib/widgets/pin_tile.dart)
               return PosterRow(
