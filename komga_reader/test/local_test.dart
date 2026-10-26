@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/book_title.dart';
 import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
@@ -16,6 +17,7 @@ import 'package:komga_reader/local/missing_prompt.dart';
 import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/pins.dart';
+import 'package:komga_reader/screens/book_details.dart' show posterDate;
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart' show contentChanged;
 import 'package:komga_reader/widgets/server_status.dart';
@@ -83,6 +85,37 @@ void main() {
     });
 
     Future<FolderKomga> open() => FolderKomga.open([LocalLibrary.at(root.path)], dataDir: data);
+
+    // user, 2026-10-26: "Books with no numbers in the file name or metadata inside the book are not given a number at
+    // all"; a date known only by its year (or month) shows as much as is known - not "1 Jan" (punch list 11, 18)
+    test('a book with no number in its name or its ComicInfo has none (not its place in the folder); a date shows as '
+        'much as is known - the year alone, a month and year, or the whole date', () async {
+      Future<void> put(String rel, Map<String, Object> files) async {
+        final f = File('${root.path}${Platform.pathSeparator}${rel.replaceAll('/', Platform.pathSeparator)}');
+        await f.parent.create(recursive: true);
+        await f.writeAsBytes(zipOf(files));
+      }
+
+      String info(String date) => '<ComicInfo><Title>x</Title>$date</ComicInfo>';
+      await put('Saga (2012)/Saga Special.cbz', {'1.png': png}); // no number at all
+      await put('Saga (2012)/Saga #20 (2016).cbz', {'1.png': png, 'ComicInfo.xml': info('<Year>2016</Year><Month>3</Month>')});
+      await put('Saga (2012)/Saga #21 (2016).cbz',
+          {'1.png': png, 'ComicInfo.xml': info('<Year>2016</Year><Month>4</Month><Day>9</Day>')});
+      final api = await open();
+      Map meta(String file) =>
+          api.store.books.values.firstWhere((e) => (e['path'] as String).endsWith(file))['book']['metadata'] as Map;
+      Map book(String file) => api.store.books.values.firstWhere((e) => (e['path'] as String).endsWith(file))['book'] as Map;
+
+      expect(meta('Saga Special.cbz')['number'], '');
+      expect(bookSeriesLine(book('Saga Special.cbz')), 'Saga (2012)', reason: 'no "#"');
+      String? shown(String file) => posterDate(meta(file)['releaseDate'] as String?,
+          precision: meta(file)['releaseDatePrecision'] as String?);
+      expect(shown('Saga #10 (2014).cbz'), '2014', reason: "the file name's year");
+      expect(shown('Saga #20 (2016).cbz'), 'Mar 2016', reason: 'ComicInfo: a year and a month');
+      expect(shown('Saga #21 (2016).cbz'), '9 Apr 2016', reason: 'ComicInfo: the whole date');
+      // (Komga's books say nothing of it: as Komga gives them)
+      expect(posterDate('2025-01-01'), '1 Jan 2025');
+    });
 
     test('a library removed in Settings: the pins to it, its series and its books go; the others stay (user, '
         '2026-10-26: "auto-remove a pin if the library no longer exists ... removed in bedereader settings")', () async {

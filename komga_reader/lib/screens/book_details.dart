@@ -115,7 +115,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       Text((m['title'] ?? _book['name'] ?? '') as String, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w500)),
       const SizedBox(height: 12),
       detailsFact('Publisher', _series?['metadata']?['publisher'] as String?),
-      detailsFact('Released', detailsDate(m['releaseDate'] as String?)),
+      detailsFact('Released', detailsDate(m['releaseDate'] as String?, precision: m['releaseDatePrecision'] as String?)),
       detailsFact('Pages', pages == 0 ? null : '$pages'),
       detailsFact('Status', status),
       const SizedBox(height: 16),
@@ -208,22 +208,32 @@ String _roleLabel(String role, int n) {
   return n > 1 && !base.endsWith('s') ? '${base}s' : base;
 }
 
-String? detailsDate(String? iso) {
+/// [precision]: how much of the date is known - 'year' ("2012"), 'month' ("March 2012"), else the whole date. Local
+/// books know it (their ComicInfo, their file's name); Komga's don't say (user, 2026-10-26: shown as Komga gives them).
+String? detailsDate(String? iso, {String? precision}) {
   if (iso == null || iso.isEmpty) return null;
   final d = DateTime.tryParse(iso);
   if (d == null) return iso;
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October',
       'November', 'December'];
-  return '${d.day} ${months[d.month - 1]} ${d.year}';
+  return switch (precision) {
+    'year' => '${d.year}',
+    'month' => '${months[d.month - 1]} ${d.year}',
+    _ => '${d.day} ${months[d.month - 1]} ${d.year}',
+  };
 }
 
 /// A release date for a poster: "13 Mar 2024" (user, 2026-10-06); null if there's none.
-String? posterDate(String? iso) {
+String? posterDate(String? iso, {String? precision}) {
   if (iso == null || iso.isEmpty) return null;
   final d = DateTime.tryParse(iso);
   if (d == null) return null;
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return '${d.day} ${months[d.month - 1]} ${d.year}';
+  return switch (precision) { // ([detailsDate]'s)
+    'year' => '${d.year}',
+    'month' => '${months[d.month - 1]} ${d.year}',
+    _ => '${d.day} ${months[d.month - 1]} ${d.year}',
+  };
 }
 
 Widget detailsFact(String label, String? value) => value == null || value.isEmpty

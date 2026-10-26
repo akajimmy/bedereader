@@ -278,7 +278,8 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   final stem = _stem(f.path);
   final epub = _bookExt.contains(_ext(f.path));
   final parsed = parseBookName(stem, oneshot ? '' : seriesName);
-  final number = oneshot ? 1.0 : (parsed.number ?? index + 1.0);
+  // (user, 2026-10-26: a book with no number in its file name or its ComicInfo has none - not its place in the folder)
+  final number = oneshot ? null : parsed.number;
   // its own title: what follows the number, else the name without its tags ("(2025) (Digital) (Shan-Empire)")
   final untagged = stem.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   var title = oneshot ? stem : (parsed.title ?? (untagged.isEmpty ? stem : untagged));
@@ -304,9 +305,14 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   if (info?['title'] case final String t) title = t;
   if (info?['authors'] case final List a) authors.addAll([for (final x in a) (x as Map).cast<String, dynamic>()]);
   final infoNumber = double.tryParse('${info?['number'] ?? ''}');
-  final shownNumber = info?['number'] is String && !oneshot ? info!['number'] as String : _numberText(number);
-  final sortNumber = infoNumber != null && !oneshot ? infoNumber : number;
+  final shownNumber =
+      info?['number'] is String && !oneshot ? info!['number'] as String : (number == null ? '' : _numberText(number));
+  // (sorted by it: one without a number keeps its place among the others)
+  final sortNumber = infoNumber != null && !oneshot ? infoNumber : number ?? index + 1.0;
+  // the date as far as it's known (user, 2026-10-26): a year alone shows as the year, a month as "Mar 2012" - kept
+  // as a whole date for sorting, with how much of it is real
   final releaseDate = info?['releaseDate'] as String? ?? (parsed.year == null ? null : '${parsed.year}-01-01');
+  final precision = info?['releaseDate'] != null ? info!['releaseDatePrecision'] as String? : 'year';
   final cover = inside['cover'] as String?;
   final book = <String, dynamic>{
     'id': 'B${stableId(_normPath(f.path))}', 'seriesId': seriesId, 'seriesTitle': seriesName, 'libraryId': lib.id,
@@ -319,7 +325,8 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
     },
     'metadata': {
       'title': title, 'summary': info?['summary'] ?? '', 'number': shownNumber, 'numberSort': sortNumber,
-      'releaseDate': releaseDate, 'authors': authors, 'tags': <String>[],
+      'releaseDate': releaseDate, if (releaseDate != null && precision != null) 'releaseDatePrecision': precision,
+      'authors': authors, 'tags': <String>[],
       'isbn': '', 'links': <dynamic>[],
     },
     'readProgress': null, 'deleted': false, 'oneshot': oneshot,
@@ -358,7 +365,7 @@ Future<void> _inParallel<T>(List<T> items, int n, Future<void> Function(T item) 
 }
 
 /// What's kept from inside a file: read again when this changes (a scan from an older version had less in it).
-const _insideVersion = 2;
+const _insideVersion = 3; // 3: ComicInfo's date with how much of it is given (2026-10-26)
 
 /// Opens the book: a comic's pages (its pictures, in order - their sizes too where its ComicInfo.xml gives them) and
 /// its ComicInfo.xml; an EPUB's own title, author and cover.
@@ -427,8 +434,11 @@ Map<String, dynamic> comicInfo(String xml) {
   final manga = field('Manga')?.toLowerCase();
   return {
     'title': field('Title'), 'number': field('Number'), 'summary': field('Summary'),
-    if (year != null && year > 0)
+    if (year != null && year > 0) ...{
       'releaseDate': '$year-${two(month != null && month > 0 ? month : 1)}-${two(day != null && day > 0 ? day : 1)}',
+      // how much of it ComicInfo gives: "1 January" isn't shown for a year alone (punch list 11)
+      'releaseDatePrecision': month == null || month <= 0 ? 'year' : day == null || day <= 0 ? 'month' : 'day',
+    },
     'authors': authors, 'publisher': field('Publisher'),
     'genres': [for (final g in (field('Genre') ?? '').split(',')) if (g.trim().isNotEmpty) g.trim()],
     'count': number('Count'), if (manga == 'yesandrighttoleft') 'rightToLeft': true,
