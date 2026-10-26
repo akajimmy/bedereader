@@ -252,6 +252,10 @@ enum ScreenChannel {
         result(true)
       case "storageDir":
         result(storageDir())
+      case "documentsDir":
+        // the app's own folder the Files app shows (On My iPad > the app's name), books copied in there by the
+        // person: local libraries on this device (experimental/sources)
+        result(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.path)
       case "appVersion":
         // as Android and Windows answer (lib/screen.dart): the version and the build number - About, the update
         // check, the EPUB layouts' cache key, the remote log (never answered on iOS before: user, 2026-10-25)

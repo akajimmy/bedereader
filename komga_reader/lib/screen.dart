@@ -336,6 +336,18 @@ Future<String?> appStorageDir() async {
   }
 }
 
+/// iOS: the app's own folder the Files app shows (On My iPad > the app's name) - books copied in there, by the Files
+/// app or Apple Devices over USB, make local libraries on this device (experimental/sources). Null elsewhere, or not
+/// answered.
+Future<String?> appDocumentsDir() async {
+  if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+  try {
+    return await _channel.invokeMethod<String>('documentsDir');
+  } catch (_) {
+    return null;
+  }
+}
+
 /// iOS: the app's folder (the downloads, a few GB maybe) kept out of iCloud backup - iOS backs up Application Support
 /// unless told not to, against the person's iCloud storage, and the books are on Komga anyway (backlog, 2026-10-25:
 /// "left out of iCloud backup" was never done). Asked once a run (a folder made again is marked again); said in the

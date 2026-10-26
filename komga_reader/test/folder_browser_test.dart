@@ -1,9 +1,12 @@
 // Choosing a library folder by browsing (experimental/sources, lib/local/folder_browser.dart): this device's folders
 // and a server's shares, folder by folder, on the No server screen and in Settings' Add a library.
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/folder_browser.dart';
 import 'package:komga_reader/local/storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _Refused implements Exception {}
 
@@ -162,5 +165,22 @@ void main() {
         'admin\$      Disk           Hidden\r\n'
         'The command completed successfully.\r\n';
     expect(netViewShares(out), ['Container', 'home', 'NAS-SHARE', 'Old Stuff']);
+  });
+
+  testWidgets("iPhone / iPad: this device's place is the app's own folder, as iOS gives it - the one the Files app and "
+      'Apple Devices put books in (user, 2026-10-26: only "Connect to a server" was offered)', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    const docs = '/private/var/mobile/Containers/Data/Application/ABC/Documents';
+    const screen = MethodChannel('komga_reader/screen');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(screen, (c) async => c.method == 'documentsDir' ? docs : null);
+    addTearDown(() => messenger.setMockMethodCallHandler(screen, null));
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final places = await DeviceBrowse().places();
+      expect([for (final p in places) if (!p.server) p.path], [docs]);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

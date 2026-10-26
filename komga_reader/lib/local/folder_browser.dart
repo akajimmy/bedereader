@@ -4,6 +4,7 @@ import 'package:dart_smb2/dart_smb2.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../screen.dart' show appDocumentsDir;
 import '../widgets/error_text.dart';
 import 'access.dart';
 import 'folder_komga.dart';
@@ -62,9 +63,11 @@ class DeviceBrowse implements BrowseSource {
           if (await Directory(drive).exists()) out.add(Place(drive, drive));
         }
       case TargetPlatform.iOS:
-        // the app's own folder, which the Files app shows under BeDeReader (On My iPad / iPhone): books copied there
-        final home = Platform.environment['HOME'];
-        if (home != null) out.add(Place('BeDeReader folder (Files app)', '$home/Documents'));
+        // the app's own folder, which the Files app shows under the app's name (On My iPad / iPhone): books copied
+        // there. Asked of iOS itself - the HOME it was found from isn't set in the app (user, 2026-10-26: "the only
+        // option under add a library is connect to a server")
+        final docs = await appDocumentsDir();
+        if (docs != null) out.add(Place("This device (the app's folder in Files)", docs));
       default:
         final home = Platform.environment['HOME'];
         if (home != null) out.add(Place('Home', home));
