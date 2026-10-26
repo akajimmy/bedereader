@@ -73,6 +73,12 @@ class ReaderScreen extends StatefulWidget {
   @visibleForTesting
   static void forgetClosingSaves() => _ReaderScreenState._closingSaves.clear();
 
+  /// Done once the books just closed have their last place read saved (at most a few seconds): a screen loading
+  /// again as the reader closes waits for it - Home showed the place before (user, 2026-10-25).
+  static Future<void> closing() => Future.wait(_ReaderScreenState._closingSaves.values)
+      .timeout(const Duration(seconds: 5), onTimeout: () => const [])
+      .then((_) {}, onError: (Object _) {});
+
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
 }
@@ -179,14 +185,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     _open(_book);
   }
 
-  @override
-  void dispose() {
-    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
-        "iOS's swipe from the left edge)"}');
+  /// The last place read saved as the book closes - once, the moment it's popped: the screen under it loads again
+  /// right then, and waits for this ([ReaderScreen.closing]); saved only once the reader was disposed, after the
+  /// closing animation, Home asked Komga first and showed the place before (user, 2026-10-25). (Disposed without a
+  /// pop - the app's screens replaced: then.)
+  void _saveClosing() {
+    if (_closeSaved) return;
+    _closeSaved = true;
     _saveTimer?.cancel();
-    _flashTimer?.cancel();
-    closeDevice();
-    _life?.dispose();
     // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
@@ -197,6 +203,19 @@ class _ReaderScreenState extends State<ReaderScreen>
     closing.whenComplete(() {
       if (identical(_closingSaves[id], closing)) _closingSaves.remove(id);
     });
+  }
+
+  bool _closeSaved = false;
+
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
+        "iOS's swipe from the left edge)"}');
+    _flashTimer?.cancel();
+    closeDevice();
+    _life?.dispose();
+    _saveClosing(); // (done already if the book was popped)
     deviceClosed();
     _renderer
       ?..removeListener(_onRenderer)
@@ -823,7 +842,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       // page turn was meant (user, 2026-10-25)
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop) return _saveClosing(); // (popped: the screen under it is about to load again)
         _menu ? _hideControls() : Navigator.of(context).pop();
       },
       child: Scaffold(

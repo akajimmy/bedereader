@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../screens/reader.dart' show ReaderScreen;
+
 /// Tells a screen when it's back on top - whichever way: its own back arrow, the side menu's Home, the reader
 /// closing... (user, 2026-09-30: Home's Continue reading was sometimes stale). In MaterialApp.navigatorObservers;
 /// screens hear of it through [RefreshOnReturn].
@@ -53,7 +55,12 @@ mixin RefreshOnReturn<T extends StatefulWidget> on State<T> {
   bool _listening = false;
 
   void _returned() {
-    if (mounted) refreshView();
+    if (!mounted) return;
+    // a book just closed: its last place read saved first - asked at once, Komga still had the place before and
+    // Home showed it (user, 2026-10-25). Nothing on its way: at once.
+    ReaderScreen.closing().then((_) {
+      if (mounted) refreshView();
+    });
   }
 
   // only the view on top: the others load again when they're back on top

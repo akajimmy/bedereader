@@ -18,11 +18,33 @@ import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/display_panel.dart';
 import 'package:komga_reader/widgets/night.dart';
 import 'package:komga_reader/widgets/reader_clock.dart';
+import 'package:komga_reader/widgets/refresh_on_return.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
+
+/// The screen under the reader - Home, a library - as it loads again once it's back on top: what Komga had saved of
+/// the book by then.
+class _Underneath extends StatefulWidget {
+  const _Underneath(this.api, this.seen);
+  final ReaderServer api;
+  final List<List<int>> seen; // at each reload: the pages saved so far
+  @override
+  State<_Underneath> createState() => _UnderneathState();
+}
+
+class _UnderneathState extends State<_Underneath> with RefreshOnReturn {
+  @override
+  void refreshView() => widget.seen.add(List.of(widget.api.saves));
+
+  @override
+  Widget build(BuildContext context) => Scaffold(body: TextButton(
+      onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => ReaderScreen(api: widget.api, book: widget.api.theBook))),
+      child: const Text('open')));
+}
 
 /// [ReaderServer] whose books have a poster ([poster]: Komga's thumbnail), and that records any page asked for.
 class PosterKomga extends ReaderServer {
@@ -199,6 +221,26 @@ void main() {
   }
 
   bool focused(String label) => FocusManager.instance.primaryFocus?.debugLabel == label;
+
+  testWidgets('a book closed: the screen under it (Home) loads again only once the last place read is saved - it '
+      'loaded the moment the reader started closing, before that save was even asked for, and showed the place '
+      'before (user, 2026-10-25: Home stale after closing a book)', (tester) async {
+    api = noNetwork(ReaderServer.new);
+    final seen = <List<int>>[];
+    await tester.pumpWidget(MaterialApp(navigatorObservers: [ReturnObserver.instance], home: _Underneath(api, seen)));
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await key(tester, LogicalKeyboardKey.arrowRight); // page 2 - saved 1.5 s after it settles
+    await tester.pump(const Duration(milliseconds: 300)); // (it's settled: turned)
+    expect(api.saves, isEmpty);
+    await tester.binding.handlePopRoute(); // closed at once
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    expect(seen, [[2]], reason: 'reloaded once, with page 2 saved by then');
+    await tester.pump(const Duration(seconds: 3));
+  });
 
   testWidgets('remote: OK toggles controls; left/right along a bar (stopping at the ends), up/down between bars',
       (tester) async {
