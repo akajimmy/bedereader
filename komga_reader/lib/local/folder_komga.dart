@@ -92,6 +92,10 @@ class FolderKomga extends OfflineKomga {
   /// Books scanned so far while a scan runs; null when none is running.
   final scanning = ValueNotifier<int?>(null);
 
+  /// While a library's folders are being listed (before its books are read): the book files found in it so far;
+  /// null otherwise.
+  final found = ValueNotifier<int?>(null);
+
   /// Counts up each time a scan has changed what's listed (screens showing the libraries look again).
   final changed = ValueNotifier<int>(0);
 
@@ -231,7 +235,8 @@ class FolderKomga extends OfflineKomga {
         final failed = <String>{};
         final gone = <LocalLibrary>[];
         final report = <String, LibraryScan>{};
-        final fresh = await scanLibraries(_folders, known: known, onBook: (n) {
+        final fresh = await scanLibraries(_folders, known: known, onFound: (n) => found.value = n, onBook: (n) {
+          found.value = null;
           scanning.value = n;
           onBook?.call(n);
         }, onUnreadable: (lib, error, {missing = false}) {
@@ -275,6 +280,7 @@ class FolderKomga extends OfflineKomga {
         }
       } finally {
         scanning.value = null;
+        found.value = null;
       }
     }();
     _scan = run;
@@ -333,57 +339,71 @@ class FolderKomga extends OfflineKomga {
     final z = await ComicArchive.open(Storage.instance.of(path), path);
     _zips[bookId] = z;
     while (_zips.length > 4) {
-      _zips.remove(_zips.keys.first)?.close();
+      final old = _zips.keys.first;
+      _zips.remove(old)?.close();
+      _pageLists.remove(old);
     }
     return z;
   }
 
-  /// A comic's pages with their sizes (two pages up, a wide page is a spread, alone; a webtoon's strip is laid out
-  /// by them): from its ComicInfo.xml when the scan found them there, else read from the start of each picture the
-  /// first time the book is opened - and kept.
+  /// A comic's pages, read from its file as it's opened - not kept for every book (punch list 13: a NAS library's
+  /// page lists took the app to 750 MB on the tablet). With their sizes (two pages up, a wide page is a spread, alone;
+  /// a webtoon's strip is laid out by them): from its ComicInfo.xml when the scan found them there, else read from the
+  /// start of each picture the first time the book is opened - and kept, as numbers ([w, h, w, h ...]).
   @override
   Future<List<dynamic>> pages(String bookId) async {
     final e = store.books[bookId];
-    final list = (e?['pages'] as List?) ?? const [];
-    if (e != null && e['epub'] != true && list.any((p) => (p as Map)['width'] == null)) {
+    if (e == null || e['epub'] == true) return const [];
+    final names = await _pageNames(bookId);
+    final inside = (e['inside'] as Map?) ?? (e['inside'] = <String, dynamic>{});
+    var sizes = inside['sizes'] as List?;
+    if (sizes == null || sizes.length != names.length * 2) {
       try {
-        await _measure(bookId, e);
+        sizes = inside['sizes'] = await _measure(bookId, names);
+        await store.save();
       } catch (_) {
-        // sizes not known: each page shown alone, as before
+        sizes = null; // sizes not known: each page shown alone, as before
       }
     }
-    return super.pages(bookId);
+    return [
+      for (final (i, n) in names.indexed)
+        {
+          'number': i + 1, 'mediaType': imageType(n),
+          if (sizes?[2 * i] case final num w when w > 0) ...{'width': w, 'height': sizes![2 * i + 1]},
+        },
+    ];
   }
 
-  Future<void> _measure(String bookId, Map<String, dynamic> e) async {
+  /// A comic's pictures, in order (from the file's directory, read once while it's open: [_zip]).
+  Future<List<String>> _pageNames(String bookId) async => _pageLists[bookId] ??= comicPages((await _zip(bookId)).names);
+  final Map<String, List<String>> _pageLists = {}; // (the books open lately's, as [_zips])
+
+  /// Each page's size read from the start of its picture: [w, h, ...], 0 where it can't be told.
+  Future<List<int>> _measure(String bookId, List<String> names) async {
     final zip = await _zip(bookId);
-    final pages = [for (final p in e['pages'] as List) p as Map];
-    final kept = ((e['inside'] as Map?)?['pages'] as List?) ?? const []; // (what a rescan keeps)
+    final out = List.filled(names.length * 2, 0);
     var next = 0;
     Future<void> worker() async {
-      while (next < pages.length) {
+      while (next < names.length) {
         final i = next++;
-        final p = pages[i];
-        if (p['width'] != null) continue;
-        var size = imageSizeOf(await zip.head(p['file'] as String, 64 * 1024) ?? Uint8List(0));
-        size ??= imageSizeOf(await zip.head(p['file'] as String, 1024 * 1024) ?? Uint8List(0)); // (a big header)
+        var size = imageSizeOf(await zip.head(names[i], 64 * 1024) ?? Uint8List(0));
+        size ??= imageSizeOf(await zip.head(names[i], 1024 * 1024) ?? Uint8List(0)); // (a big header)
         if (size == null) continue;
-        for (final m in [p, if (i < kept.length) kept[i] as Map]) {
-          m['width'] = size.$1;
-          m['height'] = size.$2;
-        }
+        out[2 * i] = size.$1;
+        out[2 * i + 1] = size.$2;
       }
     }
 
     await Future.wait([for (var k = 0; k < 8; k++) worker()]);
-    await store.save();
+    return out;
   }
 
   @override
   Future<Uint8List> pageBytes(String bookId, int number) async {
-    final page = ((store.books[bookId]?['pages'] as List?) ?? []).firstWhere((p) => p['number'] == number,
-        orElse: () => throw NotAvailableOffline('Page $number of this book'));
-    final bytes = await (await _zip(bookId)).read(page['file'] as String);
+    if (store.books[bookId] == null) throw NotAvailableOffline('Page $number of this book');
+    final names = await _pageNames(bookId);
+    if (number < 1 || number > names.length) throw NotAvailableOffline('Page $number of this book');
+    final bytes = await (await _zip(bookId)).read(names[number - 1]);
     if (bytes == null) throw NotAvailableOffline('Page $number of this book');
     return bytes;
   }

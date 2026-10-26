@@ -245,11 +245,14 @@ List<String> comicPages(Iterable<String> names) => [
 String imageType(String name) => _imageTypes[_ext(name)] ?? 'image/jpeg';
 
 /// Scans [libraries]: bookId -> an entry shaped as a download's (lib/offline/store.dart) - the book and its series
-/// as Komga would give them, the library, the pages (zip entry names) - plus 'path', the book's file. A library folder
-/// that can't be read is left out (its books just don't show). [known]: the last scan's entries by file path - a file
-/// unchanged since isn't opened again. [onBook]: told the count of books done so far, as the scan goes.
+/// as Komga would give them, the library, its page count - plus 'path', the book's file. A library folder that can't
+/// be read is left out (its books just don't show). [known]: the last scan's entries by file path - a file unchanged
+/// since isn't opened again. [onBook]: told the count of books done so far, as the scan goes; [onFound], before that,
+/// the count of book files found in the library being listed (a NAS library's listing took 95 s with the count
+/// standing still - punch list 13).
 Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libraries,
     {Map<String, Map<String, dynamic>> known = const {}, void Function(int books)? onBook,
+    void Function(int files)? onFound,
     void Function(LocalLibrary library, Object? error, {bool missing})? onUnreadable,
     void Function(LocalLibrary library, String path, FileTrouble trouble, Object error)? onFile}) async {
   final out = <String, Map<String, dynamic>>{};
@@ -279,6 +282,7 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
         final ext = _ext(e.path);
         if (!_comicExt.contains(ext) && !_bookExt.contains(ext)) continue;
         all.add(e);
+        onFound?.call(all.length);
         final parent = e.path.substring(0, e.path.lastIndexOf(RegExp(r'[\\/]'))).replaceAll(RegExp(r'[\\/]+$'), '');
         final oneshot = parent.toLowerCase() == rootPath.toLowerCase() ||
             oneshotFolders.contains(_base(parent).toLowerCase());
@@ -423,8 +427,8 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
       // that stayed a book whose page never loads) - CBRs only, not every book in a library
       (wasInside['mediaType'] == null || wasInside['cutChecked'] == true);
   final inside = reuse ? (was['inside'] as Map).cast<String, dynamic>() : await _readInside(fs, f.path, epub);
-  final pages = [for (final p in (inside['pages'] as List)) (p as Map).cast<String, dynamic>()];
-  if (!epub && pages.isEmpty) throw const FormatException('no pages');
+  final pageCount = (inside['count'] as num?)?.toInt() ?? 0;
+  if (!epub && pageCount == 0) throw const FormatException('no pages');
   if (inside['title'] is String) title = inside['title'] as String;
   final authors = <Map<String, dynamic>>[
     if (inside['author'] is String) {'name': inside['author'], 'role': 'writer'},
@@ -454,7 +458,7 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
     'media': {
       'status': 'READY', 'mediaType': epub ? 'application/epub+zip' : inside['mediaType'] ?? 'application/zip',
       // an EPUB: progress as a share of the book, out of 100 (Komga counts its positions)
-      'pagesCount': epub ? 100 : pages.length, 'comment': '', 'mediaProfile': epub ? 'EPUB' : 'DIVINA',
+      'pagesCount': epub ? 100 : pageCount, 'comment': '', 'mediaProfile': epub ? 'EPUB' : 'DIVINA',
     },
     'metadata': {
       'title': title, 'summary': info?['summary'] ?? '', 'number': shownNumber, 'numberSort': sortNumber,
@@ -466,7 +470,7 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   };
   return {
     'book': book, 'library': {'id': lib.id, 'name': lib.name}, 'readLists': <dynamic>[], 'collections': <dynamic>[],
-    'pages': pages, 'state': 'done', 'path': f.path, 'bytes': f.size, if (cover != null) 'cover': cover,
+    'state': 'done', 'path': f.path, 'bytes': f.size, if (cover != null) 'cover': cover,
     if (epub) 'epub': true, 'fileModified': modified, 'inside': inside,
   };
 }
@@ -499,15 +503,16 @@ Future<void> _inParallel<T>(List<T> items, int n, Future<void> Function(T item) 
 
 /// What's kept from inside a file: read again when this changes (a scan from an older version had less in it).
 // 3: ComicInfo's date with how much of it is given; 4: its Series (a read-list library's books) - 2026-10-26, in one
-// build: one reading of every file
-const _insideVersion = 4;
+// build: one reading of every file; 5: a comic's page count, not its page list (punch list 13: a NAS library's page
+// lists, kept for every book, took the app to 750 MB on the tablet) - its pages are read from the file when it's opened
+const _insideVersion = 5;
 
-/// Opens the book: a comic's pages (its pictures, in order - their sizes too where its ComicInfo.xml gives them) and
-/// its ComicInfo.xml; an EPUB's own title, author and cover.
+/// Opens the book: how many pages a comic has (its pictures), its cover and its ComicInfo.xml; an EPUB's own title,
+/// author and cover. (The pages themselves, and their sizes, when the book is opened - FolderKomga.pages.)
 Future<Map<String, dynamic>> _readInside(LibraryFs fs, String path, bool epub) async {
   if (epub) {
     final meta = epubMetadata(Zip(await fs.readAll(path)));
-    return {'v': _insideVersion, 'pages': const [], 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
+    return {'v': _insideVersion, 'count': 0, 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
   }
   final zip = await ComicArchive.open(fs, path);
   final names = comicPages(zip.names);
@@ -522,15 +527,10 @@ Future<Map<String, dynamic>> _readInside(LibraryFs fs, String path, bool epub) a
   return {
     'v': _insideVersion,
     if (zip is! FileZip) ...{'mediaType': zip.mediaType, 'cutChecked': true}, // (a CBR - read with the cut-short check)
-    'pages': [
-      for (final (i, n) in names.indexed)
-        {
-          'number': i + 1, 'file': n, 'mediaType': imageType(n),
-          // (ComicInfo lists a page for each picture, in the same order, when it's whole)
-          if (sizes.length == names.length && sizes[i] != null) 'width': sizes[i][0],
-          if (sizes.length == names.length && sizes[i] != null) 'height': sizes[i][1],
-        },
-    ],
+    'count': names.length,
+    // the pages' sizes, where ComicInfo gives them all (a page for each picture, in the same order): [w, h, w, h ...]
+    if (sizes.length == names.length && sizes.every((s) => s != null))
+      'sizes': [for (final s in sizes) ...[s[0], s[1]]],
     'cover': names.firstOrNull,
     if (info != null) 'info': info..remove('pageSizes'),
   };

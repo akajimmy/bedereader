@@ -280,12 +280,38 @@ void main() {
     test("pages with no sizes given: read from the pictures themselves when the book is opened, and kept", () async {
       var api = await open();
       final saga = ((await api.searchBooks('Saga #10'))['content'] as List).single as Map;
-      expect((api.store.books[saga['id']]!['pages'] as List).first['width'], isNull, reason: 'not read by the scan');
+      Map inside() => api.store.books[saga['id']]!['inside'] as Map;
+      expect(inside()['sizes'], isNull, reason: 'not read by the scan');
       expect([for (final p in await api.pages(saga['id'] as String)) '${p['width']}x${p['height']}'],
           ['4x6', '4x6', '4x6'], reason: "the PNGs' own sizes");
       await api.rescan();
       api = await open(); // the next start: kept
-      expect((api.store.books[saga['id']]!['pages'] as List).first['width'], 4);
+      expect(inside()['sizes'], [4, 6, 4, 6, 4, 6]);
+      expect([for (final p in await api.pages(saga['id'] as String)) p['number']], [1, 2, 3]);
+      expect(await api.pageBytes(saga['id'] as String, 2), isNotEmpty);
+      await api.rescan();
+    });
+
+    test('while the folders are listed, the files found so far are counted (a NAS library: 95 s with the count '
+        'standing still - punch list 13); none once the books are read', () async {
+      final api = await open();
+      final seen = <int?>[];
+      void note() => seen.add(api.found.value);
+      api.found.addListener(note);
+      await api.rescan();
+      api.found.removeListener(note);
+      expect(seen.whereType<int>().take(3), [1, 2, 3]);
+      expect(api.found.value, isNull);
+    });
+
+    test("a book's pages aren't kept for every book - its page count is, the pages read from the file when it's "
+        'opened (punch list 13: a NAS library of 7,783 books took the app to 750 MB on the tablet)', () async {
+      final api = await open();
+      for (final e in api.store.books.values.where((e) => e['epub'] != true)) {
+        expect(e.containsKey('pages'), isFalse);
+        expect((e['inside'] as Map).containsKey('pages'), isFalse);
+        expect((e['book'] as Map)['media']['pagesCount'], greaterThan(0));
+      }
       await api.rescan();
     });
 

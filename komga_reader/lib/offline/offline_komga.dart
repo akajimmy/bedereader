@@ -490,7 +490,7 @@ class OfflineKomga extends Komga {
     // an EPUB: Komga's page count for it (not its positions); a comic: its pages
     final pages = entry?['positions'] != null
         ? (_pagesCount(entry!) ?? (entry['positions'] as List).length)
-        : (entry?['pages'] as List?)?.length;
+        : (entry?['pages'] as List?)?.length ?? (entry == null ? null : _pagesCount(entry)); // (a local book: no list)
     await store.setProgress(bookId, page: pages, completed: true);
     Downloads.instance.bookFinished(bookId);
   }

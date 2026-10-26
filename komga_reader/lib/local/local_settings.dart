@@ -153,13 +153,22 @@ class LibraryScanRow extends StatelessWidget {
   final FolderKomga api;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<int?>(
-        valueListenable: api.scanning,
-        builder: (context, scanned, _) => ActionRow(
-          title: scanned == null ? 'Scan again' : 'Scanning… $scanned books',
-          subtitle: 'New and changed files are read; books whose files went are taken off',
-          icon: Icons.refresh,
-          onTap: scanned == null ? () => api.rescan() : null,
-        ),
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: Listenable.merge([api.scanning, api.found]),
+        builder: (context, _) {
+          final scanned = api.scanning.value, found = api.found.value;
+          return ActionRow(
+            // (a NAS library's folders are listed first, for a minute or more: the count of files found meanwhile -
+            // it stood still on the books before - punch list 13)
+            title: scanned == null
+                ? 'Scan again'
+                : found != null
+                ? 'Looking through folders… $found found'
+                : 'Scanning… $scanned books',
+            subtitle: 'New and changed files are read; books whose files went are taken off',
+            icon: Icons.refresh,
+            onTap: scanned == null ? () => api.rescan() : null,
+          );
+        },
       );
 }
