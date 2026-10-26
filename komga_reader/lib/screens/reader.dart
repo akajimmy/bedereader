@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
@@ -180,6 +181,8 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
+        "iOS's swipe from the left edge)"}');
     _saveTimer?.cancel();
     _flashTimer?.cancel();
     closeDevice();
@@ -239,6 +242,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   /// 2026-09-30: closing mid-load saved the old book's page to the new one). [onOpened] runs once it has loaded.
   Future<void> _open(dynamic book, {VoidCallback? onOpened}) async {
     final run = ++_openRun;
+    final took = Stopwatch()..start(); // (for the app's log)
     setState(() { _loading = true; _menu = false; _openError = null; });
     // the book's kind: the renderer open goes on (comics), or a new one takes over once the book has loaded
     final old = _renderer;
@@ -271,12 +275,16 @@ class _ReaderScreenState extends State<ReaderScreen>
         _loading = false;
       });
       onOpened?.call();
+      AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
       if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
+      AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');
       if (!mounted || run != _openRun) return;
       final empty = e is NoPages;
       final message = empty
@@ -358,9 +366,20 @@ class _ReaderScreenState extends State<ReaderScreen>
     if (!curling) _pageTurned(i);
   }
 
+  /// The book closed by the reader's own [via] (a key, Close, the end card) - for the app's log; closed any other way
+  /// it was Back: the device's Back, or iOS's swipe from the left edge.
+  /// [now]: closed even with the controls up (the top bar's Close) - otherwise as Back, which hides them first.
+  void _close(String via, {bool now = false}) {
+    _closedVia = via;
+    now ? Navigator.of(context).pop() : Navigator.of(context).maybePop();
+  }
+
+  String? _closedVia;
+
   /// A page turn that stands: progress is saved once the page settles - at once on the last page, where the book
   /// counts as read (user, 2026-09-30) - and the page number flashes.
   void _pageTurned(int i) {
+    AppLog.instance.info('reader', 'at ${i + 1}'); // (the left-edge swipe against iOS's swipe-back - backlog)
     if (i != _openedAt) _turned = true;
     _saveTimer?.cancel();
     // saved at once at the place that finishes the book (comics: the last page; EPUBs: the end card) - once
@@ -718,7 +737,7 @@ class _ReaderScreenState extends State<ReaderScreen>
     final k = e.logicalKey;
     if (_renderer == null || !_r.ready) {
       // nothing to read yet (loading, an EPUB being laid out): only closing (Back goes through the route)
-      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) Navigator.of(context).maybePop();
+      if (e is KeyDownEvent && ReaderKeys.instance.actionFor(k) == ReaderAction.close) _close('a key');
       return KeyEventResult.ignored;
     }
     if (!_menu) {
@@ -746,12 +765,18 @@ class _ReaderScreenState extends State<ReaderScreen>
           return KeyEventResult.handled;
         }
         if (isOkKey(k)) {
-          if (e is KeyDownEvent) _endClose.hasFocus ? Navigator.of(context).maybePop() : _r.forward();
+          if (e is KeyDownEvent) _endClose.hasFocus ? _close('OK on the end card') : _r.forward();
           return KeyEventResult.handled;
         }
       }
       // the rest as set in Settings > Remote and keys (reader_keys.dart); Left and Right swap for right to left
-      switch (ReaderKeys.instance.actionFor(k, rtl: _rtl)) {
+      final action = ReaderKeys.instance.actionFor(k, rtl: _rtl);
+      // a key's press in the app's log, what it does or that it does nothing (a keyboard or remote on the iPad -
+      // backlog); not its repeats
+      if (e is KeyDownEvent) {
+        AppLog.instance.info('keys', '${ReaderKeys.nameOf(k)}: ${action?.label ?? 'nothing set'}');
+      }
+      switch (action) {
         case ReaderAction.next:
           // on the end card, moving on to the next book takes a fresh press: a held key's repeats don't
           if ((e is KeyDownEvent || _index <= _last) && !repeatWhileSliding) _r.forward(held: e is KeyRepeatEvent);
@@ -762,7 +787,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         case ReaderAction.controls:
           if (e is KeyDownEvent) _showControls();
         case ReaderAction.close: // closes the book (full screen stays)
-          if (e is KeyDownEvent) Navigator.of(context).maybePop();
+          if (e is KeyDownEvent) _close('a key');
         case ReaderAction.zoomIn: // a step in or out - fit screen, the only fit that zooms
           _r.zoomStep(true);
         case ReaderAction.zoomOut:
@@ -793,9 +818,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     final bg = r?.background ?? Colors.black;
     // Windows: the title bar in what's along the top of the reader (the page colour, or an inset page's surround)
     return TitleBarColour(colour: () => _renderer?.edge ?? Colors.black, changes: _settings, child: PopScope(
-      // Back (tablet or remote) closes the controls first, then the book
-      canPop: !_menu,
-      onPopInvokedWithResult: (didPop, _) { if (!didPop) _hideControls(); },
+      // Back (tablet or remote) closes the controls first, then the book - always through here, never popped by the
+      // system: on iOS a route that can pop takes a swipe from the left edge as Back, and it closed the book where a
+      // page turn was meant (user, 2026-10-25)
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _menu ? _hideControls() : Navigator.of(context).pop();
+      },
       child: Scaffold(
         backgroundColor: bg,
         // the reader has no text box: a keyboard coming up (Search's, under it, as Back closes the book) leaves the
@@ -825,7 +855,7 @@ class _ReaderScreenState extends State<ReaderScreen>
                                 child: const Text('Next book'))
                           else
                             TextButton(autofocus: true, onPressed: () => _open(_book), child: const Text('Retry')),
-                          TextButton(onPressed: () => Navigator.of(context).maybePop(), child: const Text('Close')),
+                          TextButton(onPressed: () => _close('Close'), child: const Text('Close')),
                         ])),
                   ))
                 : r == null || !r.opened
@@ -1011,7 +1041,7 @@ class _ReaderScreenState extends State<ReaderScreen>
         nextNode: _endNext,
         closeNode: _endClose,
         onNext: _nextBook,
-        onClose: () => Navigator.of(context).maybePop(),
+        onClose: () => _close('the end card'),
       );
 
   final _endNext = FocusNode(debugLabel: 'end-next');
@@ -1036,6 +1066,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       onTapOutside: _hideControls,
       top: ReaderTopBar(
         closeNode: _ctl[_Ctl.close]!,
+        onClose: () => _close('the Close button', now: true), // (the log: told from iOS's swipe from the left edge)
         heading: _heading,
         title: _bookName,
         buttons: [

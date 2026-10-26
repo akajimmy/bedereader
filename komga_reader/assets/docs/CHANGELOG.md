@@ -11,11 +11,51 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Fixed**
 
-- Comics: turning a page no longer decodes the pages you just left a second time. Each turn redid the page that had dropped out of memory (two pages up, the whole spread you'd left), so a curl through big modern pages decoded four of them instead of two, while the page was turning.
+- iPad and iPhone: the page curl no longer draws a thin dotted line along the fold, in a golden brown - the page's average colour, where the page itself belonged.
+- iPad and iPhone: a swipe from the left edge of a book no longer closes it - iOS took it as its own Back. The back arrow, the Close button and keys still close the book.
+- iPad and iPhone: Rotation Locked keeps the way you locked it. Locked in landscape, the next book opened with the iPad upright was held upright; now it opens in landscape too. To lock it the other way, choose Auto, turn the iPad, and choose Locked again.
 
 ## 1.5.0 - in development
 
 Not released yet. Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).
+
+### Build 159 - 2026-10-25
+
+**Fixed**
+
+- iPad and iPhone: the app knows its own version. iOS never gave it, so About showed none, the update check couldn't compare, and eBook layouts kept from an older build weren't redone after an update.
+- Turning the remote log on also sends what the app logged earlier in that run, its start-up lines included - before, only what came after was sent.
+- The app log says when a book was closed with the reader's Close button, apart from Back (which on the iPhone and iPad is also the swipe from the left edge).
+
+### Build 158 - 2026-10-25
+
+**Fixed**
+
+- iPad and iPhone: downloaded books are no longer included in iCloud backups. The app's folder was backed up like any other, so every download counted against your iCloud storage; the books are on Komga anyway.
+
+**Changed**
+
+- The app log says more: page turns, how a book was closed, keys pressed in the reader and what they did, the screen turning and the rotation lock, brightness, pages saved or copied, the image shaders, Wi-Fi only holding downloads, and a page slow to download. On the PC it no longer logs every switch to another window.
+
+### Build 157 - 2026-10-25
+
+**New**
+
+- Settings > About > **App log**: what the app did - started, books opened and closed (and how long they took), going offline and back, downloads, errors and crashes - kept on the device, with Copy.
+- Settings > About > **Remote log** (off by default): the app log sent to a log collector of yours, so problems on a device - the iPad above all - can be looked into from elsewhere. Its address, key and the device's name are set on each device; the key is kept encrypted. Unsent lines wait for the collector, also across restarts.
+
+### Build 155 - 2026-10-25
+
+**New**
+
+- Settings > Remote and keys > **Test the remote**: press a remote's buttons and see what the app is given, as it comes. On the iPad it also shows what iPadOS hands the app before the reader sees it, to find out why a remote that pairs does nothing.
+
+### Build 154 - 2026-10-25
+
+**Fixed**
+
+- Comics: turning a page no longer decodes the pages you just left a second time. Each turn redid the page that had dropped out of memory (two pages up, the whole spread you'd left), so a curl through big modern pages decoded four of them instead of two, while the page was turning.
+- Posters no longer crop the cover at a larger text size. Home's rows and the library grids kept the same height whatever the text size, so bigger text under a poster took its room from the cover, which lost a little of its top and bottom. The cover now keeps its shape, and the row or grid grows to fit the text.
 
 ### Build 153 - 2026-10-24
 

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
@@ -161,12 +162,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
     if (!wifiOnly || await isOnWifi()) {
       if (waitingForWifi) {
         waitingForWifi = false;
+        AppLog.instance.info('downloads', 'on Wi-Fi again: the queue goes on');
         notifyListeners();
       }
       return true;
     }
     if (!waitingForWifi) {
       waitingForWifi = true;
+      AppLog.instance.info('downloads', 'Wi-Fi only, and not on Wi-Fi: the queue waits');
       notifyListeners();
     }
     _wifiTimer?.cancel();
@@ -778,6 +781,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
       ..error = null
       ..pagesDone = 0;
     notifyListeners();
+    final took = Stopwatch()..start(); // (for the app's log)
+    AppLog.instance.info('downloads', '${job.cache ? 'caching' : 'downloading'} "${job.title}"');
     try {
       final book = await api.book(job.bookId);
       if (book == null) throw KomgaError(404, '/api/v1/books/${job.bookId}'); // gone from Komga
@@ -906,7 +911,13 @@ class Downloads extends ChangeNotifier implements LocalPages {
         if (await f.exists() && await f.length() > 0) {
           bytes += await f.length();
         } else {
+          final page = Stopwatch()..start();
           final data = await api.pageBytes(job.bookId, p['number'] as int);
+          // a page that took long: the app was likely in the background meanwhile (frozen by iOS) - for the log
+          // (downloads in the background, unchecked on iOS - backlog)
+          if (page.elapsed > const Duration(seconds: 10)) {
+            AppLog.instance.warn('downloads', '"${job.title}" page ${i + 1} took ${page.elapsed.inSeconds} s');
+          }
           await f.parent.create(recursive: true);
           // to a .part file first, renamed once it's all there: the app killed mid-write left a cut-off page that the
           // next run counted as downloaded - unreadable for good (code review, 2026-09-30)
@@ -959,6 +970,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
         if (!job.cache) entry..remove('cache')..remove('cachedAt'); // (downloaded on purpose meanwhile)
         await s.put(job.bookId, entry);
         queue.remove(job);
+        AppLog.instance.info('downloads', '"${job.title}" done: ${(bytes / 1048576).toStringAsFixed(1)} MB in '
+            '${(took.elapsedMilliseconds / 1000).toStringAsFixed(1)} s');
         // (its real size now: the cache back under its limit if Komga's sizes were short)
         if (job.cache) await _cacheRoom(bytes, job.bookId);
       }
@@ -973,6 +986,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
           ..state = JobState.queued
           ..error = null;
         waitingForServer = true;
+        AppLog.instance.warn('downloads', '"${job.title}" waits: Komga out of reach ($e)');
         _serverTimer?.cancel();
         _serverTimer = Timer(serverRecheck, _pump);
       } else if (job.cache) {
@@ -992,6 +1006,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
               ? '$e'.replaceFirst('Exception: ', '')
               : ex.kind == ErrorKind.gone ? 'this book is no longer on Komga' : ex.reason;
         if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
+        if (room) AppLog.instance.warn('downloads', '"${job.title}" failed: ${job.error}');
       }
     }
     await _saveQueue();

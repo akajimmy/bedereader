@@ -23,8 +23,10 @@ import '../widgets/home_sections_editor.dart';
 import '../widgets/server_status.dart';
 import '../widgets/setting_rows.dart';
 import 'about.dart';
+import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
+import 'remote_test.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
@@ -392,6 +394,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       SettingsGroup(title: 'Anywhere else', children: [
         _KeyRow(action: ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
       ]),
+      // what a remote sends, and where it's lost (user, 2026-10-25: the Chromecast remote on the iPad)
+      SettingsGroup(title: 'Remote', children: [
+        ActionRow(title: 'Test the remote', icon: Icons.settings_remote_outlined,
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RemoteTestScreen()))),
+      ]),
     ]);
   }
 
@@ -633,7 +640,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ActionRow(title: 'Third-party software', icon: Icons.extension_outlined,
             onTap: () => open(DocumentScreen.thirdParty())),
         ActionRow(title: 'Error log', icon: Icons.report_outlined, onTap: () => open(const ErrorLogScreen())),
+        ActionRow(title: 'App log', icon: Icons.description_outlined, onTap: () => open(const AppLogScreen())),
       ]),
+      const RemoteLogGroup(),
       SettingsGroup(title: 'This device', children: [
         ActionRow(
           title: "Reset this device's settings",
