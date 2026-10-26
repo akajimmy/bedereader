@@ -15,7 +15,12 @@ class Komga {
   /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
   Komga(String baseUrl, this.apiKey, {http.Client? client})
       : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
-        _http = client ?? http.Client();
+        _http = client ?? http.Client(),
+        _ownClient = client == null;
+
+  final bool _ownClient; // (a client given - the offline source's, a test's - is the only one: [ping] uses it too)
+  // where it was made: a client made later for [ping] comes from the same place as its own (http.runWithClient)
+  final Zone _madeIn = Zone.current;
 
   final String baseUrl;
 
@@ -115,8 +120,25 @@ class Komga {
   /// and signing in again).
   static void Function(Komga api)? onKeyRefused;
 
-  Future<dynamic> _get(String path, [Map<String, Object?>? query]) => _net(() async {
-        final r = await _http.get(_u(path, query), headers: headers);
+  /// Whether Komga is there, for the connection's check ([me], answered or thrown as for any request): asked on a
+  /// connection of its own, closed after - not one kept open from before (user, 2026-10-26: Wi-Fi off, the iPad let
+  /// requests wait on those until their 15 s ran out, and the offer to go offline came late) - and within
+  /// [pingTimeout].
+  Future<void> ping() async {
+    final fresh = _ownClient ? _madeIn.run(http.Client.new) : null;
+    try {
+      await me(via: fresh, limit: pingTimeout);
+    } finally {
+      fresh?.close();
+    }
+  }
+
+  static const pingTimeout = Duration(seconds: 5);
+
+  /// [via]: another client than its own ([ping]'s); [limit]: another time limit than [timeout].
+  Future<dynamic> _get(String path, [Map<String, Object?>? query, http.Client? via, Duration limit = timeout]) =>
+      _net(limit: limit, () async {
+        final r = await (via ?? _http).get(_u(path, query), headers: headers);
         if (r.statusCode == 404) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
         try {
@@ -152,7 +174,9 @@ class Komga {
       });
 
   // ---- account / libraries
-  Future<Map<String, dynamic>?> me() async => await _get('/api/v2/users/me') as Map<String, dynamic>?;
+  /// The signed-in account. [via] and [limit]: [ping]'s own connection and time limit.
+  Future<Map<String, dynamic>?> me({http.Client? via, Duration limit = timeout}) async =>
+      await _get('/api/v2/users/me', null, via, limit) as Map<String, dynamic>?;
 
   /// A new API key for the signed-in account, named [comment] (a password sign-in: the key is kept, the password
   /// isn't). Throws [KomgaError] when Komga won't make one (a restricted account, a Komga without API keys).

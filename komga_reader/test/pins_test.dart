@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart' show Komga;
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/refresh_gate.dart';
@@ -24,7 +25,7 @@ class PinsServer extends HomeServer with ClientSettingsStore {
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       onePage([]);
   @override
-  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'};
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async => {'email': 'nick@test'};
 }
 
 PinsServer server() => noNetwork(PinsServer.new);
