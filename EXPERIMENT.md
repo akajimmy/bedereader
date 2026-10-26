@@ -24,6 +24,7 @@ Branch **experimental/sources**, in its own folder: C:\Claude\KomgaClient-experi
 - Windows: Desktop\BeDeReader-Exp, window title "BeDeReader Exp", data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp.
 - Changed for that (and so not to be copied into 1.6): android\app\build.gradle.kts (applicationId), AndroidManifest.xml (label), windows\runner Runner.rc, main.cpp and desktop_channel.cpp, tools\build.ps1 (no -Bump), tools\install-android.ps1 (-Package), tools\build-exp.ps1 (new); for iOS, ios\Runner.xcodeproj\project.pbxproj (bundle ID com.nickp.bedereader.exp), ios\Runner\Info.plist (name), .github\workflows\testflight.yml (exp-build-N tags, the bundle ID, the build number).
 - iOS: **BeDeReader Exp**, bundle ID com.nickp.bedereader.exp, its own App Store Connect record and TestFlight; the Files app shows its folder as BeDeReader Exp.
+- Its icon: the same page over yellow and black stripes, "under construction" (user, 2026-10-26) - tools\make_icon.py, whose copy here also writes the iOS icons and the Android adaptive icon's background (a vector, res\drawable\ic_launcher_background.xml). Every icon file differs from 1.6's: none to be copied there.
 - The version check is off (lib\update_check.dart, UpdateCheck.inThisApp): a BeDeReader release isn't an update to BeDeReader Exp (user, 2026-10-26: "1.5.0 is not an update to exp").
 
 ## Decided
