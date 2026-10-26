@@ -362,8 +362,8 @@ class _FolderBrowserState extends State<FolderBrowser> {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
                     '${level.look.folders.length} folder${level.look.folders.length == 1 ? '' : 's'}'
-                    '${books > 0 ? ', $books book${books == 1 ? '' : 's'}' : ''} in here. A library is a folder with '
-                    'one folder per series in it.',
+                    '${books > 0 ? ', $books book${books == 1 ? '' : 's'}' : ''} in here. Next you say how its books '
+                    'are laid out.',
                     style: const TextStyle(fontSize: 12, color: Color(0xFF9A9A9A))),
                 ),
                 FilledButton(onPressed: () => Navigator.pop(context, p), child: const Text('Use this folder')),
