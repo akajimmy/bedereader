@@ -5,6 +5,7 @@ import 'access.dart';
 import 'folder_browser.dart';
 import 'folder_komga.dart';
 import 'folder_scan.dart';
+import 'where.dart';
 
 /// Settings > Server and sync in local mode: the libraries (folders) - added, renamed, removed - and Scan again,
 /// with how far a scan running has got. Removing one takes it out of the app only: its files stay where they are.
@@ -25,7 +26,7 @@ class LocalLibrariesGroup extends StatelessWidget {
                 title: Text(l.name, style: const TextStyle(fontSize: 14.5)),
                 // what the last scan couldn't read, under the path (punch list 2: it used to say nothing)
                 subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(l.path, style: const TextStyle(fontSize: 12, color: hintColour)),
+                  Text(whereHere(l.path).toString(), style: const TextStyle(fontSize: 12, color: hintColour)),
                   if (api.lastScan[l.id]?.summary case final s?)
                     Text(s[0].toUpperCase() + s.substring(1),
                         style: const TextStyle(fontSize: 12, color: Color(0xFFFACC15))),

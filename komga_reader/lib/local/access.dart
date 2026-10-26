@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'storage.dart';
+import 'where.dart';
 
 /// Getting at a library's folder (experimental/sources): a share's login, asked for and tried before it's kept; on
 /// Android, All files access for the tablet's own folders. Shared by the sign-in screen's No server and Settings'
@@ -82,7 +83,7 @@ class FolderAccess {
     if (context.mounted) {
       await showDialog<void>(context: context, builder: (ctx) => AlertDialog(
         title: const Text("Can't find that folder"),
-        content: Text(path),
+        content: Text('${whereHere(path)}'),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
       ));
     }

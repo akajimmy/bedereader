@@ -15,6 +15,7 @@ import '../offline/store.dart';
 import 'file_zip.dart';
 import 'folder_scan.dart';
 import 'storage.dart';
+import 'where.dart';
 
 /// Local mode (experimental/sources): Komga as if it were a few folders on this device - no server at all. The
 /// libraries are folders ([LocalLibrary]), scanned into entries shaped as downloads' ([scanLibraries]), and answered
@@ -41,8 +42,14 @@ class FolderKomga extends OfflineKomga {
   static Future<List<LocalLibrary>> savedLibraries() async {
     final raw = (await SharedPreferences.getInstance()).getString(_librariesKey);
     if (raw == null) return const [];
+    await DeviceRoots.load();
     try {
-      return [for (final j in jsonDecode(raw) as List) LocalLibrary.fromJson((j as Map).cast<String, dynamic>())];
+      // (iOS: in the app's folder as it is now - its GUID can change with an update)
+      return [
+        for (final j in jsonDecode(raw) as List)
+          if (LocalLibrary.fromJson((j as Map).cast<String, dynamic>()) case final l)
+            LocalLibrary(l.name, reanchored(l.path, DeviceRoots.documents)),
+      ];
     } catch (_) {
       return const [];
     }

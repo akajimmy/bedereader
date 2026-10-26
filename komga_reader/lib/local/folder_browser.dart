@@ -9,6 +9,7 @@ import '../widgets/error_text.dart';
 import 'access.dart';
 import 'folder_komga.dart';
 import 'storage.dart';
+import 'where.dart';
 
 /// Where the folder browser starts: this device's storage, a drive, a server.
 class Place {
@@ -46,6 +47,7 @@ class DeviceBrowse implements BrowseSource {
   @override
   Future<List<Place>> places() async {
     final out = <Place>[];
+    await DeviceRoots.load(); // (for the paths said plainly)
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         final root = await FolderAccess.storageRoot() ?? '/storage/emulated/0';
@@ -270,7 +272,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
         if (p != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Text(p, style: const TextStyle(fontSize: 13, color: Color(0xFF9A9A9A))),
+            child: Text(whereHere(p).toString(), style: const TextStyle(fontSize: 13, color: Color(0xFF9A9A9A))),
           ),
         Expanded(child: switch (level) {
           _ when _error != null => Center(child: Padding(
@@ -284,7 +286,11 @@ class _FolderBrowserState extends State<FolderBrowser> {
           _Places(:final places) => ListView(children: [
               for (final pl in places)
                 ListTile(leading: Icon(pl.server ? Icons.dns_outlined : Icons.folder_outlined), title: Text(pl.label),
-                    subtitle: pl.server || pl.label == pl.path ? null : Text(pl.path),
+                    subtitle: switch (whereHere(pl.path).inside) {
+                      _ when pl.server || pl.label == pl.path => null,
+                      '' => null,
+                      final inside => Text(inside), // (iOS: Documents/)
+                    },
                     onTap: () => _openPlace(pl)),
               ListTile(leading: const Icon(Icons.add), title: const Text('Connect to a server…'),
                   subtitle: const Text('A shared folder on your network (SMB)'), onTap: _connect),

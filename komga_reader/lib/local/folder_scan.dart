@@ -26,7 +26,11 @@ class LocalLibrary {
   }
 }
 
-String _normPath(String p) => p.trim().replaceAll('/', r'\').replaceAll(RegExp(r'\\+$'), '').toLowerCase();
+/// iOS: the app's own folder, /var/mobile/Containers/Data/Application/{GUID}/ - the GUID can change when the app is
+/// updated or put back, so a path in it is known by what's after it (its ids too: progress kept).
+final iosContainer = RegExp(r'^/(?:private/)?var/mobile/Containers/Data/Application/[^/]+/');
+
+String _normPath(String p) => p.trim().replaceFirst(iosContainer, '~/').replaceAll('/', r'\').replaceAll(RegExp(r'\\+$'), '').toLowerCase();
 
 /// A short id that stays the same for the same text (FNV-1a, 64 bits): books, series and libraries keep their ids
 /// - and so their reading progress - from one scan to the next.
