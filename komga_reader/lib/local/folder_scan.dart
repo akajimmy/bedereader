@@ -170,7 +170,8 @@ String imageType(String name) => _imageTypes[_ext(name)] ?? 'image/jpeg';
 /// unchanged since isn't opened again. [onBook]: told the count of books done so far, as the scan goes.
 Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libraries,
     {Map<String, Map<String, dynamic>> known = const {}, void Function(int books)? onBook,
-    void Function(LocalLibrary library, Object? error, {bool missing})? onUnreadable}) async {
+    void Function(LocalLibrary library, Object? error, {bool missing})? onUnreadable,
+    void Function(LocalLibrary library, String path, FileTrouble trouble, Object error)? onFile}) async {
   final out = <String, Map<String, dynamic>>{};
   var done = 0;
   for (final lib in libraries) {
@@ -216,12 +217,14 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
         made[f.path] = await _bookEntry(fs, f, i, 'S${stableId(_normPath(where))}',
             oneshot ? _stem(where) : _base(where), lib, oneshot, known);
       } catch (e) {
-        // a damaged file, or one gone since the listing: left out. Anything else - the share stopped answering
-        // part-way, a timeout: what the last scan had of it is kept, as for a library out of reach (user,
-        // 2026-10-25: a share dropping mid-scan lost every book after it)
-        if (!fileLeftOut(e)) {
+        // a damaged file, or one gone since the listing: left out. The share not answering (it stopped part-way, a
+        // timeout): what the last scan had of it is kept, as for a library out of reach (user, 2026-10-25: a share
+        // dropping mid-scan lost every book after it)
+        final trouble = troubleOf(e);
+        if (trouble == FileTrouble.noAnswer) {
           if (known[f.path] case final was?) made[f.path] = was;
         }
+        onFile?.call(lib, f.path, trouble, e);
       }
       onBook?.call(++done);
     });
@@ -320,15 +323,18 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   };
 }
 
-/// A file the scan couldn't read is left out for good (not kept from the last scan): damaged (not a zip, a broken
-/// one, a format not read yet), or gone since the folder was listed - the share's "not found", the system's "no
-/// such file". A share or the network not answering isn't the file's doing.
-bool fileLeftOut(Object e) => switch (e) {
-      FormatException() || RangeError() || ArgumentError() => true,
-      Smb2Exception(:final type) => type == Smb2ErrorType.notFound || type == Smb2ErrorType.isADirectory,
+/// Why the scan couldn't use a file. [noAnswer]: the share or the network didn't answer - not the file's doing: its
+/// book is kept from the last scan. [damaged] (not a zip, a broken one, a format not read yet) and [gone] (deleted
+/// since the folder was listed): left out - not in the app after that scan; the file untouched, its progress kept.
+enum FileTrouble { noAnswer, damaged, gone }
+
+FileTrouble troubleOf(Object e) => switch (e) {
+      FormatException() || RangeError() || ArgumentError() => FileTrouble.damaged,
+      Smb2Exception(:final type) when type == Smb2ErrorType.notFound || type == Smb2ErrorType.isADirectory =>
+        FileTrouble.gone,
       // ERROR_FILE_NOT_FOUND / ENOENT (2), ERROR_PATH_NOT_FOUND (3) - not a share out of reach (Windows: 53, 64, 67)
-      FileSystemException(:final osError) => osError?.errorCode == 2 || osError?.errorCode == 3,
-      _ => false,
+      FileSystemException(:final osError) when osError?.errorCode == 2 || osError?.errorCode == 3 => FileTrouble.gone,
+      _ => FileTrouble.noAnswer,
     };
 
 /// Runs [f] on each of [items], [n] at a time.

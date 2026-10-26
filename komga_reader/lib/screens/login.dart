@@ -140,6 +140,24 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) setState(() => _localError = 'No CBZ or EPUB books found in ${libraries.length == 1 ? 'that folder' : 'those folders'}.');
         return;
       }
+      // one of several gave no books: said, not saved as an empty library (code review, 2026-10-25 - it was saved
+      // without a word); which, and why where it's known
+      final empty = [
+        for (final l in libraries)
+          if (api.booksIn(l.id) == 0)
+            '${l.path}${switch (api.lastScan[l.id]) {
+              LibraryScan(reached: false, missing: true) => ' (not found)',
+              LibraryScan(reached: false) => " (couldn't be reached)",
+              _ => '',
+            }}',
+      ];
+      if (empty.isNotEmpty) {
+        if (mounted) {
+          setState(() => _localError = 'No CBZ or EPUB books in ${empty.length == 1 ? 'this folder' : 'these folders'}: '
+              '${empty.join(', ')}. Correct the line, or take it out, then Open again.');
+        }
+        return;
+      }
       await FolderKomga.saveLibraries(libraries);
       await widget.onSignedIn(api);
     } catch (e) {

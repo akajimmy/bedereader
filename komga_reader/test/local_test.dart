@@ -5,8 +5,10 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
+import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/missing_prompt.dart';
 import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/screens/login.dart';
@@ -244,6 +246,48 @@ void main() {
       expect(await names(api), all, reason: "read again; the broken one left out - it isn't a zip");
     });
 
+    Future<void> putBroken(int n) async {
+      for (var i = 1; i <= n; i++) {
+        await File('${root.path}${Platform.pathSeparator}Saga (2012)${Platform.pathSeparator}Broken $i.cbz')
+            .writeAsBytes([1, 2, 3, 4]);
+      }
+    }
+
+    test('what a scan couldn\'t read is said - one line a library in the app log, however many files (user, '
+        '2026-10-25: a share dropping can be thousands), with five of the files left out by name', () async {
+      AppLog.instance.reset();
+      addTearDown(AppLog.instance.reset);
+      await putBroken(7);
+      final api = await open();
+      await api.rescan();
+      final lib = LocalLibrary.at(root.path);
+      final r = api.lastScan[lib.id]!;
+      expect(r.count(FileTrouble.damaged), 7);
+      expect(r.summary, contains('7 files'));
+      final lines = [for (final l in AppLog.instance.recent) if (l.tag == 'local') l.msg];
+      expect(lines, hasLength(lessThanOrEqualTo(2)), reason: 'a line a scan (open, then this one), not a line a file');
+      expect(lines.last, contains('and 2 more'));
+    });
+
+    testWidgets("Settings' local libraries: what the last scan couldn't read, under the library; the files left out "
+        'listed on a tap', (tester) async {
+      late FolderKomga api;
+      await tester.runAsync(() async {
+        await putBroken(7);
+        api = await open();
+        await api.rescan();
+      });
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
+          child: LocalLibrariesGroup(api: api)))));
+      await tester.pump();
+      expect(find.textContaining('7 files'), findsOneWidget);
+      await tester.tap(find.textContaining('7 files'));
+      await tester.pumpAndSettle();
+      for (var i = 1; i <= 7; i++) {
+        expect(find.textContaining('Broken $i.cbz'), findsOneWidget, reason: 'all of them, here');
+      }
+    });
+
     test('a library whose folder looks deleted (not there, the place it was in answering) keeps its books until the '
         'user is asked (user, 2026-10-25): Remove - it goes, books and all; Keep - as out of reach, not asked again, '
         'and read again once its folder is back (gone again later: asked again)', () async {
@@ -328,11 +372,12 @@ void main() {
       final opened = <List<LocalLibrary>>[];
       FolderKomga? given;
       late FolderKomga empty, full;
+      late Directory root;
       await tester.runAsync(() async {
         final data = await Directory.systemTemp.createTemp('local_signin');
         addTearDown(() => deleteTemp(data));
         empty = await FolderKomga.open(const [], dataDir: data);
-        final root = await Directory.systemTemp.createTemp('local_signin_lib');
+        root = await Directory.systemTemp.createTemp('local_signin_lib');
         addTearDown(() => deleteTemp(root));
         await Directory('${root.path}${Platform.pathSeparator}S').create();
         await File('${root.path}${Platform.pathSeparator}S${Platform.pathSeparator}S #1.cbz')
@@ -359,10 +404,44 @@ void main() {
       expect(find.textContaining('No CBZ or EPUB books found'), findsOneWidget);
 
       books = true;
+      await tester.enterText(find.byType(TextField), root.path); // (the folder the books are in)
       await tester.tap(find.text('Open'));
       await tester.pumpAndSettle();
       expect(given, same(full));
-      expect([for (final l in await FolderKomga.savedLibraries()) l.path], [r'C:\Comics\Ongoing', r'D:\Golden Age']);
+      expect([for (final l in await FolderKomga.savedLibraries()) l.path], [root.path]);
+    });
+
+    testWidgets('No server: one of several folders with no books in it is said, with which - not saved as an empty '
+        'library (code review, 2026-10-25: it was, without a word)', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      FolderKomga? given;
+      late Directory root, bare, data;
+      await tester.runAsync(() async {
+        data = await Directory.systemTemp.createTemp('local_signin2');
+        root = await Directory.systemTemp.createTemp('local_signin2_lib');
+        bare = await Directory.systemTemp.createTemp('local_signin2_bare');
+        await Directory('${root.path}${Platform.pathSeparator}S').create();
+        await File('${root.path}${Platform.pathSeparator}S${Platform.pathSeparator}S #1.cbz')
+            .writeAsBytes(zipOf({'1.jpg': await solidPng(2, 3)}));
+      });
+      addTearDown(() async {
+        for (final d in [data, root, bare]) {
+          await deleteTemp(d);
+        }
+      });
+      await tester.pumpWidget(MaterialApp(home: LoginScreen(
+        onSignedIn: (api) async => given = api as FolderKomga,
+        openLocal: (libs) async => (await tester.runAsync(() => FolderKomga.open(libs, dataDir: data)))!,
+      )));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('No server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '${root.path}\n${bare.path}');
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      expect(given, isNull, reason: 'not opened');
+      expect(find.textContaining(bare.path), findsWidgets, reason: 'the folder with no books named');
+      expect(await FolderKomga.savedLibraries(), isEmpty, reason: 'nothing saved');
     });
   });
 

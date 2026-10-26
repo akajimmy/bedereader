@@ -82,6 +82,13 @@ class FolderKomga extends OfflineKomga {
   /// The libraries the last scan couldn't read (their books are the scan before's) - by id.
   Set<String> unreadable = const {};
 
+  /// What the last scan couldn't read, by library id (none: all read) - for Settings (and the app log).
+  Map<String, LibraryScan> lastScan = const {};
+
+  /// How many books a library has now.
+  int booksIn(String libraryId) =>
+      store.books.values.where((e) => (e['library'] as Map?)?['id'] == libraryId).length;
+
   /// Libraries whose folder looks deleted - not there, while the place it was in answers - to ask the user about:
   /// remove the library ([removeMissing]), or keep it as out of reach ([keepMissing]) (user, 2026-10-25).
   final toAsk = ValueNotifier<List<LocalLibrary>>(const []);
@@ -149,16 +156,24 @@ class FolderKomga extends OfflineKomga {
         final known = {for (final e in store.books.values) e['path'] as String: e};
         final failed = <String>{};
         final gone = <LocalLibrary>[];
+        final report = <String, LibraryScan>{};
         final fresh = await scanLibraries(_folders, known: known, onBook: (n) {
           scanning.value = n;
           onBook?.call(n);
         }, onUnreadable: (lib, error, {missing = false}) {
           failed.add(lib.id);
           if (missing && !_keptMissing.contains(lib.id)) gone.add(lib);
-          AppLog.instance.warn('local', '"${lib.name}" (${lib.path}) couldn\'t be read'
-              '${missing ? ' - not there (it looks deleted)' : error == null ? ' - out of reach' : ': $error'}'
-              '; its books kept from the last scan');
+          report[lib.id] = LibraryScan(reached: false, missing: missing, error: error);
+        }, onFile: (lib, path, trouble, error) {
+          (report[lib.id] ??= LibraryScan()).files.add((path, trouble));
         });
+        // what couldn't be read, a line per library (however many files: a share dropping part-way can be thousands)
+        for (final lib in _folders) {
+          if (report[lib.id] case final r? when r.summary != null) {
+            AppLog.instance.warn('local', '"${lib.name}" (${lib.path}): ${r.summary}${r.examples}');
+          }
+        }
+        lastScan = report;
         // read again: a "keep it" said while its folder wasn't there is done with
         if (_keptMissing.any((id) => !failed.contains(id))) {
           _keptMissing.removeWhere((id) => !failed.contains(id));
@@ -345,6 +360,44 @@ class FolderKomga extends OfflineKomga {
   Future<Map<String, dynamic>> clientSettings() async => const {};
   @override
   Future<void> putClientSetting(String key, String value) async {}
+}
+
+/// What a scan couldn't read of one library: the whole library ([reached] false - out of reach, or [missing]: not
+/// there, the place it was in answering), or some of its files, each with why.
+class LibraryScan {
+  LibraryScan({this.reached = true, this.missing = false, this.error});
+  final bool reached, missing;
+  final Object? error; // (the library's, when it wasn't reached)
+  final List<(String, FileTrouble)> files = [];
+
+  int count(FileTrouble t) => files.where((f) => f.$2 == t).length;
+
+  /// The files left out (damaged, or gone since the listing): their paths.
+  List<String> get leftOut => [for (final f in files) if (f.$2 != FileTrouble.noAnswer) f.$1];
+
+  /// In a line ("not found on the last scan - …"; "3 files couldn't be read - 2 damaged, left out; …"), or null:
+  /// nothing to say.
+  String? get summary {
+    if (!reached) {
+      return missing
+          ? 'not found on the last scan (it looks deleted) - its books are from the scan before'
+          : "couldn't be reached on the last scan - its books are from the scan before";
+    }
+    if (files.isEmpty) return null;
+    final parts = [
+      if (count(FileTrouble.noAnswer) case final k when k > 0) "$k didn't answer (kept from the scan before)",
+      if (count(FileTrouble.damaged) case final k when k > 0) '$k damaged or not readable yet (left out)',
+      if (count(FileTrouble.gone) case final k when k > 0) '$k gone since the folder was listed (left out)',
+    ];
+    return '${files.length} file${files.length == 1 ? '' : 's'} couldn\'t be read - ${parts.join('; ')}';
+  }
+
+  /// For the log: up to 5 of the files left out, by name (": a.cbz, b.cbz and 3 more"); '' if none.
+  String get examples {
+    final names = [for (final p in leftOut) p.split(RegExp(r'[\\/]')).last];
+    if (names.isEmpty) return '';
+    return ': ${names.take(5).join(', ')}${names.length > 5 ? ' and ${names.length - 5} more' : ''}';
+  }
 }
 
 /// A local book's poster: made (from the book) the first time it's shown, then read from its file.

@@ -23,7 +23,17 @@ class LocalLibrariesGroup extends StatelessWidget {
                 contentPadding: const EdgeInsets.only(left: 14, right: 4),
                 leading: const Icon(Icons.folder_outlined),
                 title: Text(l.name, style: const TextStyle(fontSize: 14.5)),
-                subtitle: Text(l.path, style: const TextStyle(fontSize: 12, color: hintColour)),
+                // what the last scan couldn't read, under the path (punch list 2: it used to say nothing)
+                subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(l.path, style: const TextStyle(fontSize: 12, color: hintColour)),
+                  if (api.lastScan[l.id]?.summary case final s?)
+                    Text(s[0].toUpperCase() + s.substring(1),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFFACC15))),
+                ]),
+                // the files left out, listed (the log has five at most)
+                onTap: (api.lastScan[l.id]?.leftOut ?? const []).isEmpty
+                    ? null
+                    : () => _showLeftOut(context, l, api.lastScan[l.id]!),
                 trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                   IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(context, l)),
                   IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline),
@@ -40,6 +50,40 @@ class LocalLibrariesGroup extends StatelessWidget {
           ]);
         },
       );
+
+  /// The files of [library] the last scan left out, each with why - the file's name, and its folder under the library.
+  Future<void> _showLeftOut(BuildContext context, LocalLibrary library, LibraryScan scan) {
+    final root = library.path.replaceAll(RegExp(r'[\\/]+$'), '');
+    String inLibrary(String p) => p.startsWith(root) ? p.substring(root.length).replaceFirst(RegExp(r'^[\\/]'), '') : p;
+    final rows = [
+      for (final (path, trouble) in scan.files)
+        if (trouble != FileTrouble.noAnswer)
+          (inLibrary(path), trouble == FileTrouble.damaged ? 'damaged, or a format not read yet' : 'gone since listed'),
+    ];
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Left out of ${library.name}'),
+        content: SizedBox(
+          width: 520,
+          child: ListView(shrinkWrap: true, children: [
+            const Padding(padding: EdgeInsets.only(bottom: 8), child: Text(
+                "Not in the app after the last scan. The files aren't touched; each comes back once it can be read.",
+                style: TextStyle(fontSize: 12.5, color: hintColour))),
+            for (final (name, why) in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(text: name),
+                  TextSpan(text: '  $why', style: const TextStyle(fontSize: 12, color: hintColour)),
+                ])),
+              ),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+      ),
+    );
+  }
 
   Future<String?> _ask(BuildContext context, {required String title, required String label, String initial = '',
       String? hint, required String action}) {
