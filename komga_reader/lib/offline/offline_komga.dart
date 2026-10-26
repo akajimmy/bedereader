@@ -91,9 +91,20 @@ class OfflineKomga extends Komga {
   List<String> _booksOfSeries(String seriesId) =>
       [for (final e in _done) if ((e.value['book'] as Map)['seriesId'] == seriesId) e.key];
 
-  /// Series as Komga would return it, with book counts for the downloaded books only.
-  Map<String, dynamic> _series(String seriesId) {
-    final ids = _booksOfSeries(seriesId);
+  /// Every series' books, in one walk over them - for a list of series: each one's books looked for by walking all
+  /// of them was series x books (experimental/sources, punch list 13: a NAS library of 1,098 series and 8,843 books
+  /// took 11 s to list on the tablet).
+  Map<String, List<String>> _seriesIndex() {
+    final out = <String, List<String>>{};
+    for (final e in _done) {
+      (out[(e.value['book'] as Map)['seriesId'] as String] ??= []).add(e.key);
+    }
+    return out;
+  }
+
+  /// Series as Komga would return it, with book counts for the downloaded books only. [ids]: its books, if known.
+  Map<String, dynamic> _series(String seriesId, [List<String>? ids]) {
+    ids ??= _booksOfSeries(seriesId);
     final s = Map<String, dynamic>.from(store.books[ids.first]!['series'] as Map);
     var unread = 0, inProgress = 0, read = 0;
     for (final id in ids) {
@@ -148,8 +159,9 @@ class OfflineKomga extends Komga {
       if (collectionId != null && !((v['collections'] as List?) ?? []).any((c) => c['id'] == collectionId)) continue;
       ids.add((v['book'] as Map)['seriesId'] as String);
     }
+    final index = _seriesIndex();
     final list = <dynamic>[
-      for (final id in ids) _series(id),
+      for (final id in ids) _series(id, index[id]),
     ].where((s) => _wanted(readStatus, _seriesStatus(s as Map<String, dynamic>))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
@@ -170,9 +182,9 @@ class OfflineKomga extends Komga {
   Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async {
     // the next unread downloaded book of series that have been started and have nothing in progress
     final picks = <dynamic>[];
-    final seriesIds = {for (final e in _done) (e.value['book'] as Map)['seriesId'] as String};
-    for (final sid in seriesIds) {
-      final books = [for (final id in _booksOfSeries(sid)) _book(id)]..sort((a, b) => _numberSort(a).compareTo(_numberSort(b)));
+    final index = _seriesIndex();
+    for (final MapEntry(key: sid, value: ids) in index.entries) {
+      final books = [for (final id in ids) _book(id)]..sort((a, b) => _numberSort(a).compareTo(_numberSort(b)));
       if (libraryId != null && (store.books[books.first['id']]!['library'] as Map?)?['id'] != libraryId) continue;
       final statuses = books.map((b) => _status(b['readProgress'] as Map<String, dynamic>?)).toList();
       if (!statuses.contains('READ') || statuses.contains('IN_PROGRESS')) continue;
@@ -277,7 +289,8 @@ class OfflineKomga extends Komga {
     final f = filter.forView(seriesView: true);
     final all = (await series(libraryId: libraryId, collectionId: collectionId, readStatus: read.api, sort: sort,
         size: _all))['content'] as List;
-    return _page([for (final s in all) if (_seriesMatches(s as Map, f)) s], page, size);
+    final index = f.isEmpty ? const <String, List<String>>{} : _seriesIndex();
+    return _page([for (final s in all) if (_seriesMatches(s as Map, f, index[s['id']])) s], page, size);
   }
 
   @override
@@ -320,9 +333,9 @@ class OfflineKomga extends Komga {
 
   /// A series against the filter, as Komga does it: the authors of its books (Komga's booksMetadata, and those of the
   /// downloaded books), its release date (its first book's), its publisher, genres and status.
-  bool _seriesMatches(Map s, ViewFilter f) {
+  bool _seriesMatches(Map s, ViewFilter f, [List<String>? ids]) {
     if (f.isEmpty) return true;
-    final books = [for (final id in _booksOfSeries(s['id'] as String)) store.books[id]!['book'] as Map];
+    final books = [for (final id in ids ?? _booksOfSeries(s['id'] as String)) store.books[id]!['book'] as Map];
     final authors = [..._authorsOf(s, 'booksMetadata'), for (final b in books) ..._authorsOf(b, 'metadata')];
     final dates = [for (final b in books) _releaseDateOf(b, 'metadata')].whereType<String>().toList()..sort();
     final meta = (s['metadata'] as Map?) ?? const {};

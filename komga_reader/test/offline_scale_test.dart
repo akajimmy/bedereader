@@ -1,0 +1,84 @@
+// A big library browsed from the store (offline_komga.dart; experimental/sources, punch list 13): a NAS library of
+// 1,098 series and 8,843 books took 11 s to list on the tablet - each series' books were looked for by walking every
+// book, series x books. Counted here: how many times a call walks the books.
+import 'dart:collection';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/store.dart';
+import 'package:komga_reader/view_filter.dart';
+
+/// The books, counting each walk over them.
+class _Walked extends MapBase<String, Map<String, dynamic>> {
+  final _m = <String, Map<String, dynamic>>{};
+  var walks = 0;
+
+  @override
+  Iterable<MapEntry<String, Map<String, dynamic>>> get entries {
+    walks++;
+    return _m.entries;
+  }
+
+  @override
+  Iterable<Map<String, dynamic>> get values {
+    walks++;
+    return _m.values;
+  }
+
+  @override
+  Map<String, dynamic>? operator [](Object? key) => _m[key];
+  @override
+  void operator []=(String key, Map<String, dynamic> value) => _m[key] = value;
+  @override
+  void clear() => _m.clear();
+  @override
+  Iterable<String> get keys => _m.keys;
+  @override
+  Map<String, dynamic>? remove(Object? key) => _m.remove(key);
+}
+
+class _Store extends OfflineStore {
+  _Store() : super(Directory.systemTemp);
+  final walked = _Walked();
+
+  @override
+  Map<String, Map<String, dynamic>> get books => walked;
+}
+
+void main() {
+  test('a list of series walks the books once or twice, not once per series (series, On deck, filtered series)',
+      () async {
+    final store = _Store();
+    const lib = {'id': 'L1', 'name': 'COMICS'};
+    for (var s = 0; s < 40; s++) {
+      final series = {'id': 'S$s', 'name': 'Series $s', 'metadata': {'title': 'Series $s', 'titleSort': 'Series $s',
+          'genres': ['Action']}};
+      for (var n = 1; n <= 3; n++) {
+        store.books['B$s-$n'] = {
+          'book': {'id': 'B$s-$n', 'seriesId': 'S$s', 'name': '$n', 'metadata': {'title': '$n', 'numberSort': n},
+              'media': {'pagesCount': 1}},
+          'series': series, 'library': lib, 'state': 'done',
+        };
+      }
+      // started (its first book read): On deck offers its next
+      store.progress['B$s-1'] = {'page': 1, 'completed': true};
+    }
+    final api = OfflineKomga(store);
+
+    store.walked.walks = 0;
+    final all = await api.series(libraryId: 'L1', size: 100);
+    expect((all['content'] as List).length, 40);
+    expect((all['content'] as List).first['booksCount'], 3);
+    expect(store.walked.walks, lessThanOrEqualTo(3), reason: 'was 41: once for the list, once per series');
+
+    store.walked.walks = 0;
+    expect(((await api.onDeck())['content'] as List).length, 30); // (a page of 30)
+    expect(store.walked.walks, lessThanOrEqualTo(3));
+
+    store.walked.walks = 0;
+    final filtered = await api.filteredSeries(filter: const ViewFilter(genres: ['Action']), size: 100);
+    expect((filtered['content'] as List).length, 40);
+    expect(store.walked.walks, lessThanOrEqualTo(5));
+  });
+}

@@ -265,6 +265,7 @@ class FolderKomga extends OfflineKomga {
           ..clear()
           ..addAll(fresh);
         readListFirst.clear();
+        seriesFirst.clear();
         await store.save();
         // the screens look again only when something did change (every start's scan finds nothing new, mostly):
         // Home and the side menu ([changed]); the library views open, the one on top at once (punch list 5)
@@ -303,6 +304,7 @@ class FolderKomga extends OfflineKomga {
     _folders = List.of(libraries);
     await saveLibraries(libraries);
     store.books.removeWhere((_, e) => !ids.contains((e['library'] as Map?)?['id']));
+    seriesFirst.clear();
     if (removed.isNotEmpty) onRemoved?.call(removed);
     // a library renamed: its books carry the name (and its read list's, a read-list library's)
     for (final e in store.books.values) {
@@ -406,11 +408,26 @@ class FolderKomga extends OfflineKomga {
   /// A series' poster: its first book's.
   @override
   String seriesThumb(String id) {
-    final first = store.books.entries.where((e) => (e.value['book'] as Map)['seriesId'] == id).toList()
-      ..sort((a, b) => ((a.value['book']['metadata']['numberSort'] as num?) ?? 0)
-          .compareTo((b.value['book']['metadata']['numberSort'] as num?) ?? 0));
-    return first.isEmpty ? '' : _thumbPath(first.first.key);
+    // every series' first book, in one walk over the books: each tile walking all of them was slow with a whole NAS
+    // library (punch list 13: 8,843 books)
+    final first = seriesFirst.isNotEmpty ? seriesFirst : () {
+      final low = <String, (String, num)>{};
+      for (final MapEntry(key: bookId, value: e) in store.books.entries) {
+        final book = e['book'] as Map;
+        final n = ((book['metadata'] as Map?)?['numberSort'] as num?) ?? 0;
+        final sid = book['seriesId'] as String;
+        if (low[sid] case (_, final m) when m <= n) continue;
+        low[sid] = (bookId, n);
+      }
+      return seriesFirst..addAll({for (final MapEntry(:key, :value) in low.entries) key: value.$1});
+    }();
+    final book = first[id];
+    return book == null ? '' : _thumbPath(book);
   }
+
+  /// Each series' first book (worked out once a scan: [rescan] and [setLibraries] clear it).
+  @visibleForTesting
+  final Map<String, String> seriesFirst = {};
 
   @override
   ImageProvider thumbImage(String ref) => _LocalThumb(ref, this);
