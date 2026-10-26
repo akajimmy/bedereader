@@ -117,10 +117,11 @@ C:\Claude\BeDeReader-TestLibrary (made 2026-10-24, 31 books, 648 MB, copied from
 
 - **5. Open screens refresh** (2026-10-25). A scan that changed something - books added, changed or gone, a library renamed, added or removed - reloads the library views open: the one on top at once, the others when they're back on top (the views' own refresh-on-return, which every library view has: Home, a library, a series, a collection, a read list, Search). A scan that found nothing new - every start's, mostly - reloads nothing. Tests: the view on top and the one underneath; a scan with nothing new, then one with a book added (break-checked).
 
+- **6. Each source there whenever it can be reached** (2026-10-25; user: "local library should always be available. Network libraries should be available as long as the network is reachable, and Komga libraries should be available when Komga is reachable. All of those should be independent of each other"). Offline - by hand, or after "Can't reach Komga" - the local libraries now stay beside the downloaded books: listed, read, and their place saved, Komga not asked (offline was the downloads alone). A share's library is read while the share answers, Komga or not; one out of reach keeps its books (item 1). The "Can't reach Komga" and "key not accepted" prompts offer going offline when there are local books, even with nothing downloaded, and name what's there ("your downloaded books and your local libraries"); the key prompt's button is now "Read offline". Settings' server line says "showing downloaded books and the local libraries". The code: the routing that put local books beside Komga's is shared by the online and the offline source. Tests: offline, a download and a local book listed together, the local one read and its place saved with nothing sent to Komga; nothing downloaded but local books, going offline offered - both break-checked. Not tried on the tablet yet.
+
 ## Punch list (2026-10-25) - in priority order
 
 From the wrap-up list and the code review. Done items move to "Punch list done" above; this list is only what's left.
-6. **Local libraries in offline mode** (today they go with Komga), on the tablet's own folders and a share at home.
 7. **CBR (RAR) comics.**
 8. **"All libraries" with local libraries attached pages efficiently** - each page now asks Komga again for every page before it. (Review finding 4.)
 9. **A poster that can't be made isn't tried again** each time its tile shows (an EPUB on the share was read whole every time). (Review finding 6.)
