@@ -27,6 +27,9 @@ class LocalLibrariesGroup extends StatelessWidget {
                 // what the last scan couldn't read, under the path (punch list 2: it used to say nothing)
                 subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(whereHere(l.path).toString(), style: const TextStyle(fontSize: 12, color: hintColour)),
+                  // what's in it, as said when it was added (not changed here: removed and added again)
+                  if (l.kind != LibraryKind.seriesFolders)
+                    Text(libraryKindLabel(l.kind), style: const TextStyle(fontSize: 12, color: hintColour)),
                   if (api.lastScan[l.id]?.summary case final s?)
                     Text(s[0].toUpperCase() + s.substring(1),
                         style: const TextStyle(fontSize: 12, color: Color(0xFFFACC15))),
@@ -105,10 +108,9 @@ class LocalLibrariesGroup extends StatelessWidget {
   }
 
   Future<void> _add(BuildContext context) async {
-    // browsed for (this device, a drive, a share), or typed from the browser's "Type a folder…"
-    final path = await pickFolder(context);
-    if (path == null || path.trim().isEmpty || !context.mounted) return;
-    final lib = LocalLibrary.at(path);
+    // browsed for (this device, a drive, a share), or typed from the browser's "Type a folder…"; then what's in it
+    final lib = await pickLibrary(context);
+    if (lib == null || !context.mounted) return;
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (api.folders.any((l) => l.id == lib.id)) {
       messenger?.showSnackBar(const SnackBar(content: Text('That folder is a library already')));
@@ -122,7 +124,7 @@ class LocalLibrariesGroup extends StatelessWidget {
   Future<void> _rename(BuildContext context, LocalLibrary l) async {
     final name = await _ask(context, title: 'Rename library', label: 'Name', initial: l.name, action: 'Rename');
     if (name == null || name.trim().isEmpty || name.trim() == l.name) return;
-    await api.setLibraries([for (final x in api.folders) x.id == l.id ? LocalLibrary(name.trim(), x.path) : x]);
+    await api.setLibraries([for (final x in api.folders) x.id == l.id ? x.renamed(name.trim()) : x]);
   }
 
   Future<void> _remove(BuildContext context, LocalLibrary l) async {

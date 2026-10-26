@@ -123,16 +123,24 @@ class _LoginScreenState extends State<LoginScreen> {
       if (email != null && mounted && _email.text.isEmpty) _email.text = email;
     });
     FolderKomga.savedLibraries().then((libs) {
+      for (final l in libs) {
+        _kinds[l.path.toLowerCase()] = l.kind;
+      }
       if (libs.isNotEmpty && mounted && _folders.text.isEmpty) _folders.text = [for (final l in libs) l.path].join('\n');
     });
   }
+
+  /// What's in each folder browsed for ("This library contains:"), by its path in lower case; a folder typed in is
+  /// one folder per series.
+  final _kinds = <String, LibraryKind>{};
 
   /// Local mode: the folders typed (one per line) scanned as libraries - started if any books are found.
   Future<void> _openLocal() async {
     if (_busy) return;
     final libraries = [
       for (final line in _folders.text.split('\n'))
-        if (line.trim().isNotEmpty) LocalLibrary.at(line),
+        if (line.trim().isNotEmpty)
+          LocalLibrary.at(line, kind: _kinds[line.trim().toLowerCase()] ?? LibraryKind.seriesFolders),
     ];
     if (libraries.isEmpty) {
       setState(() => _localError = 'Type the folder of a library: one folder per series in it.');
@@ -294,7 +302,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
               if (_local) ...[
                 const Text('Read books from folders on this device or your network, with no Komga server. Each '
-                    'folder is a library, with one folder per series in it (CBZ, CBR and EPUB files).',
+                    'folder is a library (CBZ, CBR and EPUB files): one folder per series in it, unless you say '
+                    'otherwise when you browse for it.',
                     style: TextStyle(color: Colors.white60)),
                 const SizedBox(height: 12),
                 TextField(controller: _folders, minLines: 2, maxLines: 6, autocorrect: false, enableSuggestions: false,
@@ -309,8 +318,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     icon: const Icon(Icons.folder_outlined),
                     label: const Text('Browse for a folder…'),
                     onPressed: _busy ? null : () async {
-                      final path = await pickFolder(context); // (added as a line of its own)
-                      if (path == null || !mounted) return;
+                      final lib = await pickLibrary(context); // (added as a line of its own)
+                      if (lib == null || !mounted) return;
+                      final path = lib.path;
+                      _kinds[path.toLowerCase()] = lib.kind;
                       final lines = [for (final l in _folders.text.split('\n')) if (l.trim().isNotEmpty) l.trim()];
                       if (!lines.any((l) => l.toLowerCase() == path.toLowerCase())) lines.add(path);
                       setState(() => _folders.text = lines.join('\n'));

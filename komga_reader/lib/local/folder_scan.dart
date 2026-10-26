@@ -7,24 +7,72 @@ import '../epub/source.dart' show Zip;
 import 'file_zip.dart';
 import 'storage.dart';
 
-/// A local library: a folder on this device (or a share it can reach), one folder per series inside it.
+/// What a library folder holds, said when it's added (user, 2026-10-26: "This library contains:"); kept with the
+/// library - changed by removing it and adding it again.
+enum LibraryKind {
+  /// One folder per series (a book loose in the library: a one-shot of its own) - as before.
+  seriesFolders,
+
+  /// Books of one series: every book in the folder and its subfolders, folder by folder.
+  oneSeries,
+
+  /// Books of several series, in an order: a read list named after the folder, the books in it by path; each book's
+  /// series from its ComicInfo.xml, else from its file name ([seriesFromName]).
+  readList,
+}
+
+/// A local library: a folder on this device (or a share it can reach), holding its books as [kind] says.
 class LocalLibrary {
-  const LocalLibrary(this.name, this.path);
+  const LocalLibrary(this.name, this.path, {this.kind = LibraryKind.seriesFolders});
   final String name;
   final String path;
+  final LibraryKind kind;
 
   /// Stable for the folder: progress kept under it survives a rescan or a restart.
   String get id => 'L${stableId(_normPath(path))}';
 
-  Map<String, dynamic> toJson() => {'name': name, 'path': path};
-  factory LocalLibrary.fromJson(Map<String, dynamic> j) => LocalLibrary(j['name'] as String, j['path'] as String);
+  /// A read-list library's read list ([LibraryKind.readList]).
+  String get readListId => 'R${stableId(_normPath(path))}';
+
+  /// The same library under another name.
+  LocalLibrary renamed(String to) => LocalLibrary(to, path, kind: kind);
+
+  Map<String, dynamic> toJson() =>
+      {'name': name, 'path': path, if (kind != LibraryKind.seriesFolders) 'kind': kind.name};
+  factory LocalLibrary.fromJson(Map<String, dynamic> j) => LocalLibrary(j['name'] as String, j['path'] as String,
+      kind: LibraryKind.values.asNameMap()[j['kind']] ?? LibraryKind.seriesFolders);
 
   /// A library for [path], named after its folder.
-  factory LocalLibrary.at(String path) {
+  factory LocalLibrary.at(String path, {LibraryKind kind = LibraryKind.seriesFolders}) {
     final clean = path.trim().replaceAll(RegExp(r'[\\/]+$'), '');
-    return LocalLibrary(clean.split(RegExp(r'[\\/]')).last, clean);
+    return LocalLibrary(clean.split(RegExp(r'[\\/]')).last, clean, kind: kind);
   }
 }
+
+/// A read list's file name starts with its place in the list: "001 - Green Lantern 021" (F:\SEEDING's Sinestro Corps
+/// War, 2026-10-26) - not the issue.
+final _readingOrder = RegExp(r'^\s*\d{1,4}\s*-\s+');
+
+/// A book's series from its file name, in a read-list library (where the folder doesn't say): the name up to its
+/// issue number - after a "#", else the first number standing on its own - without a reading order at the start
+/// ("001 - ") or a "Vol." / "v" just before the number; a name with no number is the whole name (a book of its own).
+/// Tried on the NAS's names first (reports\10-26-read-list-series.md): "002 - Green Lantern 021(2007)(Digital)" is
+/// Green Lantern, "Fables (2002) Vol. 22 - Farewell" is Fables.
+String seriesFromName(String stem) {
+  final bare = stem
+      .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim()
+      .replaceFirst(_readingOrder, '');
+  final hash = RegExp(r'#\s*-?\d').firstMatch(bare);
+  final number = hash ?? RegExp(r'(?:^|\s)(\d{1,4}(?:\.\d+)?)(?=\s|$)').firstMatch(bare);
+  final s = (number == null ? bare : bare.substring(0, number.start)).replaceAll(RegExp(r'^[\s\-_:,]+|[\s\-_:,]+$'), '');
+  return s.replaceFirst(RegExp(r'\s+(vol\.?|volume|v)$', caseSensitive: false), '').replaceAll(RegExp(r'[\s\-_:,]+$'), '');
+}
+
+/// Two series names the same, whatever their case and punctuation: "X-Men" and "X Men", "Spider-Man & Wolverine" and
+/// "Spider-Man and Wolverine" aren't (the "and").
+String _seriesKey(String name) => name.toLowerCase().replaceAll(RegExp(r'[^0-9a-z]+'), ' ').trim();
 
 /// iOS: the app's own folder, /var/mobile/Containers/Data/Application/{GUID}/ - the GUID can change when the app is
 /// updated or put back, so a path in it is known by what's after it (its ids too: progress kept).
@@ -34,11 +82,11 @@ String _normPath(String p) => p.trim().replaceFirst(iosContainer, '~/').replaceA
 
 /// A short id that stays the same for the same text (FNV-1a, 64 bits): books, series and libraries keep their ids
 /// - and so their reading progress - from one scan to the next.
-/// Whether [id] is one of these folders' (a library 'L…', series 'S…' or book 'B…' and [stableId]'s lowercase
+/// Whether [id] is one of these folders' (a library 'L…', series 'S…', book 'B…' or read list 'R…' and [stableId]'s lowercase
 /// base 36) - told even once its library is gone. Komga's ids are upper case: never taken for one. About half start
 /// with a minus ('L-u2hs5huxz3x6'): [stableId]'s hash is a signed 64-bit int on the VM, toUnsigned(64) can't change
 /// that - and the ids are kept (progress), so they're taken as they are (found 2026-10-26: those were sent to Komga).
-bool isLocalId(String? id) => id != null && RegExp(r'^[LSB]-?[0-9a-z]*[a-z][0-9a-z]*$').hasMatch(id);
+bool isLocalId(String? id) => id != null && RegExp(r'^[LSBR]-?[0-9a-z]*[a-z][0-9a-z]*$').hasMatch(id);
 
 String stableId(String text) {
   var h = 0xcbf29ce484222325;
@@ -199,16 +247,25 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
       continue;
     }
     final rootPath = lib.path.replaceAll(RegExp(r'[\\/]+$'), '');
-    // series: each folder with books in it; a _oneshots folder's books and books loose in the library each their own
+    // series, by what the library holds ([LibraryKind]) - one folder per series: each folder with books in it, a
+    // _oneshots folder's books and books loose in the library each their own; one series: all of it; a read list:
+    // each book on its own until it's read (its series from its ComicInfo, else its name), then put together
     final groups = <(String, bool), List<FsEntry>>{}; // (series folder or file, oneshot) -> its books
+    final all = <FsEntry>[];
     try {
       await for (final e in fs.list(lib.path)) {
         final ext = _ext(e.path);
         if (!_comicExt.contains(ext) && !_bookExt.contains(ext)) continue;
+        all.add(e);
         final parent = e.path.substring(0, e.path.lastIndexOf(RegExp(r'[\\/]'))).replaceAll(RegExp(r'[\\/]+$'), '');
         final oneshot = parent.toLowerCase() == rootPath.toLowerCase() ||
             oneshotFolders.contains(_base(parent).toLowerCase());
-        groups.putIfAbsent(oneshot ? (e.path, true) : (parent, false), () => []).add(e);
+        final key = switch (lib.kind) {
+          LibraryKind.seriesFolders => oneshot ? (e.path, true) : (parent, false),
+          LibraryKind.oneSeries => (rootPath, false),
+          LibraryKind.readList => (e.path, false),
+        };
+        groups.putIfAbsent(key, () => []).add(e);
       }
     } catch (e) {
       onUnreadable?.call(lib, e, missing: false); // the folder couldn't be read through (a share dropping part-way)
@@ -216,16 +273,19 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
     }
     // the books read several at a time: on a network share, opening each file is mostly waiting for the network
     final made = <String, Map<String, dynamic>>{}; // file path -> its entry
+    // (by path: one series' books in subfolders, folder by folder - user, 2026-10-26; a read list's, its place in it)
+    final place = {for (final (i, f) in (all..sort((a, b) => naturalCompare(a.path, b.path))).indexed) f.path: i};
     final jobs = [
       for (final MapEntry(key: (where, oneshot), value: files) in groups.entries)
-        for (final (i, f) in (files..sort((a, b) => naturalCompare(_base(a.path), _base(b.path)))).indexed)
-          (f, i, where, oneshot),
+        for (final (i, f) in (files..sort((a, b) => naturalCompare(a.path, b.path))).indexed)
+          (f, lib.kind == LibraryKind.readList ? place[f.path]! : i, where, oneshot),
     ];
     await _inParallel(jobs, 8, (j) async {
       final (f, i, where, oneshot) = j;
       try {
         made[f.path] = await _bookEntry(fs, f, i, 'S${stableId(_normPath(where))}',
-            oneshot ? _stem(where) : _base(where), lib, oneshot, known);
+            oneshot ? _stem(where) : lib.kind == LibraryKind.readList ? seriesFromName(_stem(where)) : _base(where), lib,
+            oneshot, known);
       } catch (e) {
         // a damaged file, or one gone since the listing: left out. The share not answering (it stopped part-way, a
         // timeout): what the last scan had of it is kept, as for a library out of reach (user, 2026-10-25: a share
@@ -238,9 +298,32 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
       }
       onBook?.call(++done);
     });
-    for (final MapEntry(key: (where, oneshot), value: files) in groups.entries) {
-      final seriesName = oneshot ? _stem(where) : _base(where);
-      final seriesId = 'S${stableId(_normPath(where))}';
+    final List<(String, String, bool, String, List<FsEntry>)> seriesGroups; // (id, name, oneshot, url, its books)
+    if (lib.kind == LibraryKind.readList) {
+      // a read list: its books put together by series - ComicInfo's Series, else the file name's - and each given its
+      // place in the list (by path, folder by folder: "001 - ..." first), counting the books read only
+      final readable = [for (final f in all) if (made[f.path] != null) f];
+      final bySeries = <String, (String, List<FsEntry>)>{};
+      for (final (i, f) in readable.indexed) {
+        final b = made[f.path]!;
+        b['readLists'] = [
+          {'id': lib.readListId, 'name': lib.name, 'index': i, 'count': readable.length},
+        ];
+        var name = ((b['inside'] as Map?)?['info'] as Map?)?['series'] as String? ?? seriesFromName(_stem(f.path));
+        if (_seriesKey(name).isEmpty) name = _stem(f.path);
+        bySeries.putIfAbsent(_seriesKey(name), () => (name, [])).$2.add(f);
+      }
+      seriesGroups = [
+        for (final MapEntry(key: key, value: (name, files)) in bySeries.entries)
+          ('S${stableId('${_normPath(rootPath)}|$key')}', name, false, rootPath, files),
+      ];
+    } else {
+      seriesGroups = [
+        for (final MapEntry(key: (where, oneshot), value: files) in groups.entries)
+          ('S${stableId(_normPath(where))}', oneshot ? _stem(where) : _base(where), oneshot, where, files),
+      ];
+    }
+    for (final (seriesId, seriesName, oneshot, where, files) in seriesGroups) {
       final books = [for (final f in files) if (made[f.path] case final b?) b];
       if (books.isEmpty) continue;
       final dates = [for (final b in books) (b['book']['metadata'] as Map)['releaseDate'] as String?]
@@ -272,6 +355,8 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
       };
       for (final b in books) {
         b['series'] = series;
+        (b['book'] as Map)['seriesId'] = seriesId;
+        (b['book'] as Map)['seriesTitle'] = seriesName;
         out[b['book']['id'] as String] = b;
       }
     }
@@ -283,11 +368,13 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
     bool oneshot, Map<String, Map<String, dynamic>> known) async {
   final stem = _stem(f.path);
   final epub = _bookExt.contains(_ext(f.path));
-  final parsed = parseBookName(stem, oneshot ? '' : seriesName);
+  // (a read list's "001 - " is its place in the list, not the issue)
+  final named = lib.kind == LibraryKind.readList ? stem.replaceFirst(_readingOrder, '') : stem;
+  final parsed = parseBookName(named, oneshot ? '' : seriesName);
   // (user, 2026-10-26: a book with no number in its file name or its ComicInfo has none - not its place in the folder)
   final number = oneshot ? null : parsed.number;
   // its own title: what follows the number, else the name without its tags ("(2025) (Digital) (Shan-Empire)")
-  final untagged = stem.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  final untagged = named.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   var title = oneshot ? stem : (parsed.title ?? (untagged.isEmpty ? stem : untagged));
   final modified = f.modified.toIso8601String();
   // what's read from inside the file (its pages, an EPUB's title, author and cover): kept from the last scan if the
@@ -314,7 +401,11 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   final shownNumber =
       info?['number'] is String && !oneshot ? info!['number'] as String : (number == null ? '' : _numberText(number));
   // (sorted by it: one without a number keeps its place among the others)
-  final sortNumber = infoNumber != null && !oneshot ? infoNumber : number ?? index + 1.0;
+  // (one series in a folder and its subfolders: folder by folder, then by file name - "Vol 2/Book 1" after "Vol 1/
+  // Book 10" - as the user asked, 2026-10-26)
+  final sortNumber = lib.kind == LibraryKind.oneSeries
+      ? index + 1.0
+      : infoNumber != null && !oneshot ? infoNumber : number ?? index + 1.0;
   // the date as far as it's known (user, 2026-10-26): a year alone shows as the year, a month as "Mar 2012" - kept
   // as a whole date for sorting, with how much of it is real
   final releaseDate = info?['releaseDate'] as String? ?? (parsed.year == null ? null : '${parsed.year}-01-01');
@@ -371,7 +462,9 @@ Future<void> _inParallel<T>(List<T> items, int n, Future<void> Function(T item) 
 }
 
 /// What's kept from inside a file: read again when this changes (a scan from an older version had less in it).
-const _insideVersion = 3; // 3: ComicInfo's date with how much of it is given (2026-10-26)
+// 3: ComicInfo's date with how much of it is given; 4: its Series (a read-list library's books) - 2026-10-26, in one
+// build: one reading of every file
+const _insideVersion = 4;
 
 /// Opens the book: a comic's pages (its pictures, in order - their sizes too where its ComicInfo.xml gives them) and
 /// its ComicInfo.xml; an EPUB's own title, author and cover.
@@ -439,7 +532,7 @@ Map<String, dynamic> comicInfo(String xml) {
   ];
   final manga = field('Manga')?.toLowerCase();
   return {
-    'title': field('Title'), 'number': field('Number'), 'summary': field('Summary'),
+    'title': field('Title'), 'series': field('Series'), 'number': field('Number'), 'summary': field('Summary'),
     if (year != null && year > 0) ...{
       'releaseDate': '$year-${two(month != null && month > 0 ? month : 1)}-${two(day != null && day > 0 ? day : 1)}',
       // how much of it ComicInfo gives: "1 January" isn't shown for a year alone (punch list 11)

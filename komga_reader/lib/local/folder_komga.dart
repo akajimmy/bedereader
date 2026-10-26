@@ -48,7 +48,7 @@ class FolderKomga extends OfflineKomga {
       return [
         for (final j in jsonDecode(raw) as List)
           if (LocalLibrary.fromJson((j as Map).cast<String, dynamic>()) case final l)
-            LocalLibrary(l.name, reanchored(l.path, DeviceRoots.documents)),
+            LocalLibrary(l.name, reanchored(l.path, DeviceRoots.documents), kind: l.kind),
       ];
     } catch (_) {
       return const [];
@@ -137,7 +137,33 @@ class FolderKomga extends OfflineKomga {
   /// A book, series or library of these folders.
   @override
   bool isLocal(String id) =>
-      store.books.containsKey(id) || _folders.any((l) => l.id == id) || _seriesLibrary.containsKey(id);
+      store.books.containsKey(id) || _folders.any((l) => l.id == id || l.readListId == id) ||
+      _seriesLibrary.containsKey(id);
+
+  /// The read lists a book is in (a read-list library's: [LibraryKind.readList]).
+  @override
+  Future<List<dynamic>> bookReadLists(String bookId) async => [
+        for (final rl in (store.books[bookId]?['readLists'] as List?) ?? const [])
+          if (await readList((rl as Map)['id'] as String) case final r?) r,
+      ];
+
+  /// A read list's poster: its first book's.
+  @override
+  String readListThumb(String id) {
+    final first = (readListFirst[id] ??= () {
+      final inIt = [
+        for (final e in store.books.entries)
+          for (final rl in (e.value['readLists'] as List?) ?? const [])
+            if ((rl as Map)['id'] == id) (e.key, (rl['index'] as num?) ?? 0),
+      ]..sort((a, b) => a.$2.compareTo(b.$2));
+      return inIt.firstOrNull?.$1 ?? '';
+    }());
+    return first.isEmpty ? '' : _thumbPath(first);
+  }
+
+  /// Each read list's first book (worked out once a scan: [rescan] clears it).
+  @visibleForTesting
+  final Map<String, String> readListFirst = {};
 
   /// Whether [id] - a book, series or library of these folders - is in a library on a network share (\\host\share),
   /// rather than on this device: posters' source icons (Settings > Library & Home).
@@ -220,6 +246,7 @@ class FolderKomga extends OfflineKomga {
         store.books
           ..clear()
           ..addAll(fresh);
+        readListFirst.clear();
         await store.save();
         // the screens look again only when something did change (every start's scan finds nothing new, mostly):
         // Home and the side menu ([changed]); the library views open, the one on top at once (punch list 5)
@@ -251,7 +278,7 @@ class FolderKomga extends OfflineKomga {
     final ids = {for (final l in libraries) l.id};
     // removed (Settings, or Remove in the folder-missing question): what was in it, for its pins to go
     final removed = {
-      for (final l in _folders) if (!ids.contains(l.id)) l.id,
+      for (final l in _folders) if (!ids.contains(l.id)) ...[l.id, l.readListId],
       for (final e in store.books.entries)
         if (!ids.contains((e.value['library'] as Map?)?['id'])) ...[e.key, (e.value['book'] as Map)['seriesId'] as String],
     };
@@ -259,10 +286,13 @@ class FolderKomga extends OfflineKomga {
     await saveLibraries(libraries);
     store.books.removeWhere((_, e) => !ids.contains((e['library'] as Map?)?['id']));
     if (removed.isNotEmpty) onRemoved?.call(removed);
-    // a library renamed: its books carry the name
+    // a library renamed: its books carry the name (and its read list's, a read-list library's)
     for (final e in store.books.values) {
       final l = libraries.firstWhere((l) => l.id == (e['library'] as Map)['id']);
       e['library'] = {'id': l.id, 'name': l.name};
+      for (final rl in (e['readLists'] as List?) ?? const []) {
+        if ((rl as Map)['id'] == l.readListId) rl['name'] = l.name;
+      }
     }
     changed.value++;
     contentChanged.value++; // (a library added, renamed or removed: the views open look again too)

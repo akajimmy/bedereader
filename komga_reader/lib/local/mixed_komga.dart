@@ -247,6 +247,42 @@ mixin LocalBeside on Komga {
         size);
   }
 
+  // ---- read lists: Komga's, then a read-list library's (lib/local/folder_scan.dart, LibraryKind.readList) -------------
+  @override
+  Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) {
+    final l = _of(libraryId);
+    if (l != null) return l.readLists(libraryId: libraryId, page: page, size: size);
+    if (libraryId != null || _alone) return super.readLists(libraryId: libraryId, page: page, size: size);
+    return _merged((n) => super.readLists(size: n), () => local!.readLists(size: _all), null, page, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) {
+    final l = _of(libraryId);
+    if (l != null) return l.searchReadLists(query, libraryId: libraryId, size: size);
+    if (libraryId != null || _alone) return super.searchReadLists(query, libraryId: libraryId, size: size);
+    return _merged((n) => super.searchReadLists(query, size: n), () => local!.searchReadLists(query, size: size), null,
+        0, size);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> readList(String id) => _of(id)?.readList(id) ?? super.readList(id);
+
+  @override
+  Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0,
+          int size = 1000}) =>
+      _of(readListId)?.readListBooks(readListId, readStatus: readStatus, page: page, size: size) ??
+      super.readListBooks(readListId, readStatus: readStatus, page: page, size: size);
+
+  @override
+  Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
+          int page = 0, int size = 500}) =>
+      _of(readListId)?.readListBooksSorted(readListId, sort, readStatus: readStatus, page: page, size: size) ??
+      super.readListBooksSorted(readListId, sort, readStatus: readStatus, page: page, size: size);
+
+  @override
+  String readListThumb(String id) => _of(id)?.readListThumb(id) ?? super.readListThumb(id);
+
   @override
   Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async {
     final mine = [for (final id in seriesIds) if (isLocal(id)) id];
@@ -279,10 +315,10 @@ mixin LocalBeside on Komga {
   Future<Map<String, dynamic>> filteredBooks({String? libraryId, String? seriesId, String? readListId,
       ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String? sort, int page = 0,
       int? size}) {
-    final l = _of(seriesId) ?? _of(libraryId);
+    final l = _of(seriesId) ?? _of(readListId) ?? _of(libraryId);
     if (l != null) {
-      return l.filteredBooks(libraryId: libraryId, seriesId: seriesId, read: read, filter: filter, sort: sort,
-          page: page, size: size);
+      return l.filteredBooks(libraryId: libraryId, seriesId: seriesId, readListId: readListId, read: read,
+          filter: filter, sort: sort, page: page, size: size);
     }
     if (libraryId != null || seriesId != null || readListId != null || _alone) {
       return super.filteredBooks(libraryId: libraryId, seriesId: seriesId, readListId: readListId, read: read,
@@ -298,9 +334,10 @@ mixin LocalBeside on Komga {
   @override
   Future<List<String>> authorNames(List<String> roles, {String? search, String? libraryId, String? collectionId,
       String? seriesId, String? readListId, int size = 1000}) async {
-    final l = _of(seriesId) ?? _of(libraryId);
+    final l = _of(seriesId) ?? _of(readListId) ?? _of(libraryId);
     if (l != null) {
-      return l.authorNames(roles, search: search, libraryId: libraryId, seriesId: seriesId, size: size);
+      return l.authorNames(roles, search: search, libraryId: libraryId, seriesId: seriesId, readListId: readListId,
+          size: size);
     }
     final komga = await super.authorNames(roles, search: search, libraryId: libraryId, collectionId: collectionId,
         seriesId: seriesId, readListId: readListId, size: size);
@@ -328,8 +365,8 @@ mixin LocalBeside on Komga {
 
   @override
   Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) {
-    final l = _of(seriesId) ?? _of(libraryId);
-    if (l != null) return l.viewKind(libraryId: libraryId, seriesId: seriesId);
+    final l = _of(seriesId) ?? _of(readListId) ?? _of(libraryId);
+    if (l != null) return l.viewKind(libraryId: libraryId, seriesId: seriesId, readListId: readListId);
     return super.viewKind(libraryId: libraryId, seriesId: seriesId, readListId: readListId);
   }
 
@@ -377,10 +414,11 @@ mixin LocalBeside on Komga {
 
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) =>
-      _of(bookId)?.nextBook(bookId) ?? super.nextBook(bookId, readListId: readListId);
+      _of(bookId)?.nextBook(bookId, readListId: readListId) ?? super.nextBook(bookId, readListId: readListId);
   @override
   Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) =>
-      _of(bookId)?.previousBook(bookId) ?? super.previousBook(bookId, readListId: readListId);
+      _of(bookId)?.previousBook(bookId, readListId: readListId) ??
+      super.previousBook(bookId, readListId: readListId);
 
   @override
   Future<Map<String, dynamic>?> epubProgression(String bookId) =>
@@ -393,8 +431,8 @@ mixin LocalBeside on Komga {
       _of(bookId)?.epubPositions(bookId) ?? super.epubPositions(bookId);
 
   @override
-  Future<List<dynamic>> bookReadLists(String bookId) async =>
-      isLocal(bookId) ? const [] : super.bookReadLists(bookId);
+  Future<List<dynamic>> bookReadLists(String bookId) =>
+      _of(bookId)?.bookReadLists(bookId) ?? super.bookReadLists(bookId);
   @override
   Future<List<dynamic>> seriesCollections(String seriesId) async =>
       isLocal(seriesId) ? const [] : super.seriesCollections(seriesId);

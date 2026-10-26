@@ -8,6 +8,7 @@ import '../screen.dart' show appDocumentsDir;
 import '../widgets/error_text.dart';
 import 'access.dart';
 import 'folder_komga.dart';
+import 'folder_scan.dart' show LibraryKind, LocalLibrary;
 import 'storage.dart';
 import 'where.dart';
 
@@ -123,6 +124,49 @@ class DeviceBrowse implements BrowseSource {
 /// Returns its path (\\host\share\folder for a share), or null.
 Future<String?> pickFolder(BuildContext context, {BrowseSource? source}) =>
     Navigator.of(context).push<String>(MaterialPageRoute(builder: (_) => FolderBrowser(source: source ?? DeviceBrowse())));
+
+/// A library to add: its folder ([pickFolder]), then what's in it ([askLibraryKind]). Null: cancelled.
+Future<LocalLibrary?> pickLibrary(BuildContext context, {BrowseSource? source}) async {
+  final path = await pickFolder(context, source: source);
+  if (path == null || path.trim().isEmpty || !context.mounted) return null;
+  final kind = await askLibraryKind(context);
+  return kind == null ? null : LocalLibrary.at(path, kind: kind);
+}
+
+/// "This library contains:" - how its books are laid out (user, 2026-10-26). Null: cancelled.
+Future<LibraryKind?> askLibraryKind(BuildContext context) => showDialog<LibraryKind>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('This library contains:'),
+        children: [
+          for (final k in LibraryKind.values)
+            ListTile(
+              leading: Icon(libraryKindIcon(k)),
+              title: Text(libraryKindLabel(k)),
+              onTap: () => Navigator.pop(ctx, k),
+            ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ),
+          ),
+        ],
+      ),
+    );
+
+String libraryKindLabel(LibraryKind k) => switch (k) {
+      LibraryKind.seriesFolders => 'One folder per series',
+      LibraryKind.oneSeries => 'Multiple books for a single series',
+      LibraryKind.readList => 'Multiple books for multiple series (a read list)',
+    };
+
+IconData libraryKindIcon(LibraryKind k) => switch (k) {
+      LibraryKind.seriesFolders => Icons.folder_copy_outlined,
+      LibraryKind.oneSeries => Icons.collections_bookmark_outlined,
+      LibraryKind.readList => Icons.format_list_numbered,
+    };
 
 class FolderBrowser extends StatefulWidget {
   const FolderBrowser({super.key, required this.source});
