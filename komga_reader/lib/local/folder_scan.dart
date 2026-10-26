@@ -166,14 +166,21 @@ String imageType(String name) => _imageTypes[_ext(name)] ?? 'image/jpeg';
 /// that can't be read is left out (its books just don't show). [known]: the last scan's entries by file path - a file
 /// unchanged since isn't opened again. [onBook]: told the count of books done so far, as the scan goes.
 Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libraries,
-    {Map<String, Map<String, dynamic>> known = const {}, void Function(int books)? onBook}) async {
+    {Map<String, Map<String, dynamic>> known = const {}, void Function(int books)? onBook,
+    void Function(LocalLibrary library, Object? error)? onUnreadable}) async {
   final out = <String, Map<String, dynamic>>{};
   var done = 0;
   for (final lib in libraries) {
     final fs = Storage.instance.of(lib.path); // this device's files, or a share through the app's SMB client
+    // [onUnreadable] told of a library that couldn't be read through - not there (on Windows a share out of reach
+    // looks just so), refused, or cut off part-way: its books aren't known this time, which isn't "it has none"
     try {
-      if (!await fs.exists(lib.path)) continue;
-    } catch (_) {
+      if (!await fs.exists(lib.path)) {
+        onUnreadable?.call(lib, null);
+        continue;
+      }
+    } catch (e) {
+      onUnreadable?.call(lib, e);
       continue;
     }
     final rootPath = lib.path.replaceAll(RegExp(r'[\\/]+$'), '');
@@ -188,8 +195,9 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
             oneshotFolders.contains(_base(parent).toLowerCase());
         groups.putIfAbsent(oneshot ? (e.path, true) : (parent, false), () => []).add(e);
       }
-    } catch (_) {
-      continue; // the folder couldn't be read through: as if it weren't there (its books don't show this time)
+    } catch (e) {
+      onUnreadable?.call(lib, e); // the folder couldn't be read through (a share dropping part-way)
+      continue;
     }
     // the books read several at a time: on a network share, opening each file is mostly waiting for the network
     final made = <String, Map<String, dynamic>>{}; // file path -> its entry

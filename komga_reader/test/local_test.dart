@@ -191,6 +191,30 @@ void main() {
       await api.rescan();
     });
 
+    test("a library that can't be read on a rescan keeps the books it had - a share out of reach (away from home, the "
+        'NAS restarting) emptied it (code review, 2026-10-25); once it can be read again, a book deleted meanwhile '
+        'goes', () async {
+      final api = await open();
+      await api.rescan();
+      Future<List<String>> names() async => [
+            for (final b in (await api.books(size: 100))['content'] as List) '${b['name']}'
+          ]..sort();
+      final all = await names();
+      expect(all, hasLength(4));
+
+      final away = Directory('${root.path}-away');
+      await root.rename(away.path); // the folder out of reach (on Windows a share that is: as if it weren't there)
+      await api.rescan();
+      expect(await names(), all, reason: 'kept from the last scan');
+      expect(api.unreadable, {LocalLibrary.at(root.path).id});
+
+      await away.rename(root.path);
+      await File('${root.path}${Platform.pathSeparator}Loose One-Shot (2020).cbz').delete();
+      await api.rescan();
+      expect(await names(), all.where((n) => !n.startsWith('Loose')).toList(), reason: 'read again: the deleted one goes');
+      expect(api.unreadable, isEmpty);
+    });
+
     test('a library folder that isn\'t there: no books, nothing thrown', () async {
       final api = await FolderKomga.open([LocalLibrary.at(r'Z:\nowhere\at\all')], dataDir: data);
       expect(api.isEmpty, isTrue);

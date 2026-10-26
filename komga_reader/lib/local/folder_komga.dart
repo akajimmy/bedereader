@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../app_log.dart';
 import '../epub/source.dart' show Zip;
 import '../offline/offline_komga.dart';
 import '../offline/store.dart';
@@ -77,6 +78,9 @@ class FolderKomga extends OfflineKomga {
   /// Counts up each time a scan has changed what's listed (screens showing the libraries look again).
   final changed = ValueNotifier<int>(0);
 
+  /// The libraries the last scan couldn't read (their books are the scan before's) - by id.
+  Set<String> unreadable = const {};
+
   @override
   Listenable? get localChanges => changed;
 
@@ -116,10 +120,21 @@ class FolderKomga extends OfflineKomga {
       scanning.value = 0;
       try {
         final known = {for (final e in store.books.values) e['path'] as String: e};
+        final failed = <String>{};
         final fresh = await scanLibraries(_folders, known: known, onBook: (n) {
           scanning.value = n;
           onBook?.call(n);
+        }, onUnreadable: (lib, error) {
+          failed.add(lib.id);
+          AppLog.instance.warn('local', '"${lib.name}" (${lib.path}) couldn\'t be read'
+              '${error == null ? ' - not there, or out of reach' : ': $error'}; its books kept from the last scan');
         });
+        // a library that couldn't be read keeps the books it had: a share out of reach (away from home, the NAS
+        // restarting) emptied it until a later scan reached it (code review, 2026-10-25)
+        for (final MapEntry(key: id, value: e) in store.books.entries) {
+          if (failed.contains((e['library'] as Map?)?['id'])) fresh.putIfAbsent(id, () => e);
+        }
+        unreadable = failed;
         store.books
           ..clear()
           ..addAll(fresh);
