@@ -56,17 +56,22 @@ class OfflineKomga extends Komga {
 
   /// [list] sorted as Komga sorts by [sort] ("field,dir", the fields the app uses) - lists from two sources merged
   /// (local libraries beside Komga's: lib/local/mixed_komga.dart).
-  static void sortItems(List<dynamic> list, String sort) => _sort(list, sort, (m) => _sortKey(sort, m));
+  static void sortItems(List<dynamic> list, String sort) => list.sort(comparator(sort));
 
-  /// Sorts by a Komga sort param "field,dir" for the fields the app uses.
-  static void _sort(List<dynamic> list, String sort, dynamic Function(Map item) key) {
+  /// The order of a Komga sort param "field,dir", for the fields the app uses (two lists in it merge item by item).
+  static int Function(dynamic, dynamic) comparator(String sort) => _comparator(sort, (m) => _sortKey(sort, m));
+
+  static int Function(dynamic, dynamic) _comparator(String sort, dynamic Function(Map item) key) {
     final desc = sort.endsWith(',desc');
-    list.sort((a, b) {
+    return (a, b) {
       final ka = key(a as Map), kb = key(b as Map);
       final c = (ka is num && kb is num) ? ka.compareTo(kb) : '${ka ?? ''}'.toLowerCase().compareTo('${kb ?? ''}'.toLowerCase());
       return desc ? -c : c;
-    });
+    };
   }
+
+  /// Sorts by a Komga sort param "field,dir" with [key] for its field.
+  static void _sort(List<dynamic> list, String sort, dynamic Function(Map item) key) => list.sort(_comparator(sort, key));
 
   static dynamic _sortKey(String sort, Map item) {
     final field = sort.split(',').first;

@@ -95,6 +95,44 @@ void main() {
     expect(asked, isEmpty);
   });
 
+  test('All libraries paged across Komga and the local libraries: each page asks Komga for its next page only, and '
+      'the pages are the same as one sorted list cut in pages (punch list 8: each page asked again for every page '
+      'before it)', () async {
+    // Komga: 150 series S000..S149; the local libraries: Saga plus three that fall between Komga's
+    for (final name in ['S045b', 'S101b', 'S149z']) {
+      final d = Directory('${root.path}${Platform.pathSeparator}$name');
+      await d.create();
+      await File('${d.path}${Platform.pathSeparator}$name #1.cbz').writeAsBytes(zipOf({'1.png': await solidPng(2, 3)}));
+    }
+    await api.local!.rescan();
+    final komga = [for (var i = 0; i < 150; i++) series('K$i', 'S${i.toString().padLeft(3, '0')}')];
+    final sizes = <int>[];
+    final paged = MixedKomga('http://komga.test', 'key', client: MockClient((r) async {
+      if (r.url.path != '/api/v1/series') return http.Response('', 404);
+      final page = int.parse(r.url.queryParameters['page'] ?? '0'), size = int.parse(r.url.queryParameters['size']!);
+      sizes.add(size);
+      final items = komga.skip(page * size).take(size).toList();
+      return http.Response(jsonEncode({'content': items, 'totalElements': komga.length,
+          'last': (page + 1) * size >= komga.length}), 200, headers: {'content-type': 'application/json'});
+    }))..local = api.local;
+
+    final names = <String>[];
+    for (var page = 0; ; page++) {
+      final r = await paged.series(page: page, size: 20);
+      names.addAll([for (final s in r['content'] as List) s['name'] as String]);
+      if (r['last'] == true) break;
+    }
+    final expected = [for (final s in komga) s['name'] as String, 'S045b', 'S101b', 'S149z', 'Saga (2012)']
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    expect(names, expected);
+    expect(sizes, everyElement(20), reason: 'a page at a time: $sizes');
+    expect(sizes, hasLength(8), reason: 'Komga\'s 150 in pages of 20, each asked once');
+
+    // a page asked out of turn: the old way, still right
+    final third = await paged.series(page: 3, size: 20);
+    expect([for (final s in third['content'] as List) s['name']], expected.sublist(60, 80));
+  });
+
   test("the reader's log names a local book's source as a local library - signed in, and in No server mode (it said "
       '"from Komga" - tablet, 2026-10-25); a Komga book from Komga', () async {
     final local = api.local!.store.books.keys.single;

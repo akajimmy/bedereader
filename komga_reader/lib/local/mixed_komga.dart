@@ -104,6 +104,61 @@ mixin LocalBeside on Komga {
 
   static const _all = 100000;
 
+  /// A grid's pages across every library, one after the other ([series], [books]): Komga's pages and the local items
+  /// merged item by item in [sort]'s order - each page asks Komga for its next page only. Page 0 starts again; a page
+  /// asked out of turn (not the next) is made the old way ([_merged]: Komga asked for everything up to it). Before
+  /// this (punch list 8, review finding 4), every page asked Komga again for all the pages before it.
+  Future<Map<String, dynamic>> _paged(String key, Future<Map<String, dynamic>> Function(int page, int size) komga,
+      Future<Map<String, dynamic>> Function() mine, String sort, int page, int size) {
+    var m = _merges[key];
+    if (page == 0 || m == null || m.size != size) {
+      _merges[key] = m = _Merge(sort, size);
+    }
+    final merge = m;
+    final out = merge.busy.then((_) async {
+      if (page != merge.next || !identical(_merges[key], merge)) {
+        return _merged((n) => komga(0, n), mine, sort, page, size);
+      }
+      final took = Stopwatch()..start();
+      var asked = 0;
+      merge.local ??= ((await mine())['content'] as List? ?? const []).toList()..sort(merge.compare);
+      final local = merge.local!;
+      final items = <dynamic>[];
+      while (items.length < size) {
+        if (merge.ki >= merge.komga.length && !merge.komgaDone) {
+          final r = await komga(merge.komgaPage, size);
+          asked++;
+          final got = (r['content'] as List? ?? const []);
+          merge
+            ..komga.addAll(got)
+            ..komgaPage += 1
+            ..komgaTotal = (r['totalElements'] as num?)?.toInt() ?? merge.komga.length
+            ..komgaDone = r['last'] == true || got.length < size;
+        }
+        final k = merge.ki < merge.komga.length, l = merge.li < local.length;
+        if (!k && !l) break;
+        if (k && (!l || merge.compare(merge.komga[merge.ki], local[merge.li]) <= 0)) {
+          items.add(merge.komga[merge.ki++]);
+        } else {
+          items.add(local[merge.li++]);
+        }
+      }
+      merge.next++;
+      final total = (merge.komgaTotal ?? 0) + local.length;
+      AppLog.instance.info('merge', 'page $page (sort $sort): Komga asked $asked time(s) for $size; page done in '
+          '${took.elapsedMilliseconds} ms');
+      return <String, dynamic>{
+        'content': items,
+        'totalElements': total,
+        'last': merge.ki >= merge.komga.length && merge.komgaDone && merge.li >= local.length,
+      };
+    });
+    merge.busy = out.then((_) {}, onError: (_) {}); // (the next page waits for this one)
+    return out;
+  }
+
+  final Map<String, _Merge> _merges = {}; // the grids being paged: where each one is in Komga's and the local items
+
   @override
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) {
@@ -115,7 +170,7 @@ mixin LocalBeside on Komga {
       return super.series(libraryId: libraryId, collectionId: collectionId, readStatus: readStatus, sort: sort,
           page: page, size: size);
     }
-    return _merged((n) => super.series(readStatus: readStatus, sort: sort, size: n),
+    return _paged('series $sort $readStatus', (p, n) => super.series(readStatus: readStatus, sort: sort, page: p, size: n),
         () => local!.series(readStatus: readStatus, sort: sort, size: _all), sort, page, size);
   }
 
@@ -127,7 +182,7 @@ mixin LocalBeside on Komga {
     if (libraryId != null || _alone) {
       return super.books(libraryId: libraryId, readStatus: readStatus, sort: sort, page: page, size: size);
     }
-    return _merged((n) => super.books(readStatus: readStatus, sort: sort, size: n),
+    return _paged('books $sort $readStatus', (p, n) => super.books(readStatus: readStatus, sort: sort, page: p, size: n),
         () => local!.books(readStatus: readStatus, sort: sort, size: _all), sort, page, size);
   }
 
@@ -315,4 +370,19 @@ mixin LocalBeside on Komga {
   Future<void> deleteSeriesFiles(String seriesId) => isLocal(seriesId)
       ? Future.error(NotAvailableOffline('Deleting a local series'))
       : super.deleteSeriesFiles(seriesId);
+}
+
+/// One grid paged across every library ([LocalBeside._paged]): Komga's items fetched so far and how many were used,
+/// the local items (all, sorted) and how many were used, and the page that comes next.
+class _Merge {
+  _Merge(String sort, this.size) : compare = OfflineKomga.comparator(sort);
+  final int Function(dynamic, dynamic) compare;
+  final int size;
+  final List<dynamic> komga = [];
+  int ki = 0, komgaPage = 0;
+  int? komgaTotal;
+  bool komgaDone = false;
+  List<dynamic>? local;
+  int li = 0, next = 0;
+  Future<void> busy = Future.value();
 }
