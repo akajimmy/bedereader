@@ -265,6 +265,54 @@ final class RarReader extends ArchiveReader {
     return _streamEntry(index, header, entry);
   }
 
+  /// BeDeReader: the start of [entry], about [bytes] of it, decoded only that
+  /// far (a picture's size is in its first few KB; a whole page can take
+  /// 100 ms to decode). Not checked against the entry's CRC. Stored, solid,
+  /// encrypted and unusual entries are read whole ([openRead]) and cut.
+  Future<Uint8List> readHead(ArchiveEntry entry, int bytes) async {
+    final index = _indexOf[entry];
+    if (index == null) {
+      throw ArgumentError.value(entry, 'entry', 'not an entry of this archive');
+    }
+    final header = _headers[index];
+    final simple = !header.isEncrypted && !header.solid && !header.isDirectory &&
+        header.method != 0 && bytes < header.unpackedSize &&
+        header.unpackedSize <= _maxFileSize &&
+        (header.version == 50 ||
+            (header.version == 29 &&
+                (header.unpackVersion == 29 ||
+                    header.unpackVersion == 20 ||
+                    header.unpackVersion == 26)));
+    if (simple) {
+      try {
+        final data = await _readData(index, header);
+        final windowLen = _pow2Ceil(
+          header.unpackedSize > header.windowSize
+              ? header.unpackedSize
+              : header.windowSize,
+        );
+        final output = Uint8List(windowLen);
+        if (header.version != 29) {
+          Rar5Decoder(output).decompressFile(data, bytes);
+        } else if (header.unpackVersion == 20 || header.unpackVersion == 26) {
+          Rar20Decoder(output).decompressFile(data, bytes);
+        } else {
+          Rar4Decoder(output).decompressFile(data, bytes);
+        }
+        return Uint8List.sublistView(output, 0, bytes);
+      } on FormatException {
+        // (a filter or a block that reaches past the cut: read it whole)
+      }
+    }
+    final out = BytesBuilder(copy: false);
+    await for (final chunk in openRead(entry)) {
+      out.add(chunk);
+      if (out.length >= bytes) break;
+    }
+    final all = out.takeBytes();
+    return all.length > bytes ? Uint8List.sublistView(all, 0, bytes) : all;
+  }
+
   Stream<Uint8List> _streamEntry(
     int index,
     Rar5FileHeader header,

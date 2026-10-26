@@ -38,7 +38,7 @@ abstract class LibraryFs {
   Future<FolderLook> look(String folder);
 }
 
-/// A folder's own folders and its count of books (CBZ, EPUB), as the folder browser shows them.
+/// A folder's own folders and its count of books (CBZ, CBR, EPUB), as the folder browser shows them.
 class FolderLook {
   const FolderLook(this.folders, this.books);
   final List<String> folders;
@@ -55,7 +55,7 @@ class FolderLook {
 /// A file the scan reads as a book.
 bool isBookFile(String name) {
   final n = name.toLowerCase();
-  return n.endsWith('.cbz') || n.endsWith('.epub');
+  return n.endsWith('.cbz') || n.endsWith('.cbr') || n.endsWith('.epub');
 }
 
 /// Shown in the folder browser: not a system's own folder - hidden ones (.x), a NAS's (@Recycle, #recycle,

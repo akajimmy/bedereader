@@ -2,12 +2,48 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'file_rar.dart';
 import 'storage.dart';
+
+/// A comic's archive, read in place: a zip ([FileZip] - a CBZ) or a RAR ([FileRar] - a CBR). Which one is told by
+/// the file's first bytes, not its name (a .cbr can be a zip renamed: one of the 2,219 on the NAS is).
+abstract class ComicArchive {
+  static Future<ComicArchive> open(LibraryFs fs, String path) async {
+    final head = await fs.readRange(path, 0, 8);
+    final rar = head.length >= 7 && head[0] == 0x52 && head[1] == 0x61 && head[2] == 0x72 && head[3] == 0x21 &&
+        head[4] == 0x1a && head[5] == 0x07; // "Rar!\x1a\x07"
+    return rar ? FileRar.open(fs, path) : FileZip.open(fs, path);
+  }
+
+  /// The media type Komga gives a book in this form.
+  String get mediaType;
+
+  /// The entries' names (the files in it - not its folders), in the archive's own order.
+  Iterable<String> get names;
+
+  /// The entry named so, ignoring case ("ComicInfo.xml" is written every which way); null if there's none.
+  String? find(String name) {
+    final lower = name.toLowerCase();
+    for (final n in names) {
+      if (n.toLowerCase() == lower) return n;
+    }
+    return null;
+  }
+
+  /// An entry's contents (null if there's none of that name).
+  Future<Uint8List?> read(String name);
+
+  /// The start of an entry - about [bytes] of it (a picture's size is in its first few KB).
+  Future<Uint8List?> head(String name, int bytes);
+
+  /// Done with it (a RAR's reader is let go).
+  void close() {}
+}
 
 /// A zip read in place (a CBZ can be 100 MB: not loaded whole, unlike the EPUB reader's Zip) - on this device or an
 /// SMB share ([LibraryFs]): its central directory once, then each entry's bytes as they're asked for, in one read
 /// each. Stored or deflated entries; no zip64, no encryption.
-class FileZip {
+class FileZip extends ComicArchive {
   FileZip._(this.fs, this.path, this._entries);
 
   final LibraryFs fs;
@@ -15,7 +51,10 @@ class FileZip {
   // name -> (method, compressed size, local header offset, name length)
   final Map<String, (int, int, int, int)> _entries;
 
-  /// The entries' names, in the zip's own order.
+  @override
+  String get mediaType => 'application/zip';
+
+  @override
   Iterable<String> get names => _entries.keys;
 
   static Future<FileZip> open(LibraryFs fs, String path) async {
@@ -60,19 +99,10 @@ class FileZip {
     }
   }
 
-  /// The entry named so, ignoring case ("ComicInfo.xml" is written every which way); null if there's none.
-  String? find(String name) {
-    final lower = name.toLowerCase();
-    for (final n in _entries.keys) {
-      if (n.toLowerCase() == lower) return n;
-    }
-    return null;
-  }
-
-  /// An entry's contents (null if there's none of that name).
+  @override
   Future<Uint8List?> read(String name) => _read(name, null);
 
-  /// The start of an entry - about [bytes] of it (a picture's size is in its first few KB).
+  @override
   Future<Uint8List?> head(String name, int bytes) => _read(name, bytes);
 
   Future<Uint8List?> _read(String name, int? limit) async {

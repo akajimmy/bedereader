@@ -19,7 +19,7 @@ import 'storage.dart';
 /// Local mode (experimental/sources): Komga as if it were a few folders on this device - no server at all. The
 /// libraries are folders ([LocalLibrary]), scanned into entries shaped as downloads' ([scanLibraries]), and answered
 /// as the offline source answers for downloads: browsing, filters, sort, reading progress (kept on the device). Pages
-/// come out of the CBZ files where they are; an EPUB is opened from its own file.
+/// come out of the CBZ and CBR files where they are; an EPUB is opened from its own file.
 ///
 /// The last scan is kept (index.json in [dataDir]): a start shows it at once and scans again in the background,
 /// opening only the files that are new or changed ([rescan]). Posters are made when a tile first asks for one.
@@ -241,17 +241,17 @@ class FolderKomga extends OfflineKomga {
   Future<Map<String, dynamic>?> me() async => {'email': 'local'};
 
   // ---- pages: straight out of the archive ------------------------------------------------------------------------------
-  final Map<String, FileZip> _zips = {}; // the books open lately (their directories read once)
+  final Map<String, ComicArchive> _zips = {}; // the books open lately (their directories read once)
 
-  Future<FileZip> _zip(String bookId) async {
+  Future<ComicArchive> _zip(String bookId) async {
     final have = _zips.remove(bookId);
     if (have != null) return _zips[bookId] = have; // (the newest last)
     final path = store.books[bookId]?['path'] as String?;
     if (path == null) throw NotAvailableOffline('This book');
-    final z = await FileZip.open(Storage.instance.of(path), path);
+    final z = await ComicArchive.open(Storage.instance.of(path), path);
     _zips[bookId] = z;
     while (_zips.length > 4) {
-      _zips.remove(_zips.keys.first);
+      _zips.remove(_zips.keys.first)?.close();
     }
     return z;
   }

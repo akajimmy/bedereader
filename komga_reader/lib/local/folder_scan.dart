@@ -39,7 +39,7 @@ String stableId(String text) {
   return h.toUnsigned(64).toRadixString(36);
 }
 
-const _comicExt = {'.cbz'};
+const _comicExt = {'.cbz', '.cbr'};
 const _bookExt = {'.epub'};
 const _imageTypes = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif',
@@ -305,7 +305,7 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
     'name': stem, 'url': f.path, 'number': index + 1, 'created': modified, 'lastModified': modified,
     'fileLastModified': modified, 'sizeBytes': f.size, 'size': '${(f.size / 1048576).toStringAsFixed(1)} MiB',
     'media': {
-      'status': 'READY', 'mediaType': epub ? 'application/epub+zip' : 'application/zip',
+      'status': 'READY', 'mediaType': epub ? 'application/epub+zip' : inside['mediaType'] ?? 'application/zip',
       // an EPUB: progress as a share of the book, out of 100 (Komga counts its positions)
       'pagesCount': epub ? 100 : pages.length, 'comment': '', 'mediaProfile': epub ? 'EPUB' : 'DIVINA',
     },
@@ -359,13 +359,19 @@ Future<Map<String, dynamic>> _readInside(LibraryFs fs, String path, bool epub) a
     final meta = epubMetadata(Zip(await fs.readAll(path)));
     return {'v': _insideVersion, 'pages': const [], 'title': meta.title, 'author': meta.author, 'cover': meta.cover};
   }
-  final zip = await FileZip.open(fs, path);
+  final zip = await ComicArchive.open(fs, path);
   final names = comicPages(zip.names);
-  final infoName = zip.find('ComicInfo.xml');
-  final info = infoName == null ? null : comicInfo(utf8.decode(await zip.read(infoName) ?? const [], allowMalformed: true));
+  final Map<String, dynamic>? info;
+  try {
+    final infoName = zip.find('ComicInfo.xml');
+    info = infoName == null ? null : comicInfo(utf8.decode(await zip.read(infoName) ?? const [], allowMalformed: true));
+  } finally {
+    zip.close();
+  }
   final sizes = (info?['pageSizes'] as List?) ?? const [];
   return {
     'v': _insideVersion,
+    if (zip is! FileZip) 'mediaType': zip.mediaType, // (a CBR)
     'pages': [
       for (final (i, n) in names.indexed)
         {

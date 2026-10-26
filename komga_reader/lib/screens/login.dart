@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       final api = await (widget.openLocal ?? _openInStorage)(libraries);
       if (api.isEmpty) {
-        if (mounted) setState(() => _localError = 'No CBZ or EPUB books found in ${libraries.length == 1 ? 'that folder' : 'those folders'}.');
+        if (mounted) setState(() => _localError = 'No CBZ, CBR or EPUB books found in ${libraries.length == 1 ? 'that folder' : 'those folders'}.');
         return;
       }
       // one of several gave no books: said, not saved as an empty library (code review, 2026-10-25 - it was saved
@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ];
       if (empty.isNotEmpty) {
         if (mounted) {
-          setState(() => _localError = 'No CBZ or EPUB books in ${empty.length == 1 ? 'this folder' : 'these folders'}: '
+          setState(() => _localError = 'No CBZ, CBR or EPUB books in ${empty.length == 1 ? 'this folder' : 'these folders'}: '
               '${empty.join(', ')}. Correct the line, or take it out, then Open again.');
         }
         return;
@@ -277,7 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 12),
               if (_local) ...[
                 const Text('Read books from folders on this device or your network, with no Komga server. Each '
-                    'folder is a library, with one folder per series in it (CBZ and EPUB files).',
+                    'folder is a library, with one folder per series in it (CBZ, CBR and EPUB files).',
                     style: TextStyle(color: Colors.white60)),
                 const SizedBox(height: 12),
                 TextField(controller: _folders, minLines: 2, maxLines: 6, autocorrect: false, enableSuggestions: false,

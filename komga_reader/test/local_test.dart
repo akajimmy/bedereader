@@ -415,7 +415,7 @@ void main() {
       expect([for (final l in opened.single) (l.name, l.path)], [('Ongoing', r'C:\Comics\Ongoing'),
         ('Golden Age', r'D:\Golden Age')], reason: 'one library per line, named after its folder');
       expect(given, isNull, reason: 'no books there: not opened');
-      expect(find.textContaining('No CBZ or EPUB books found'), findsOneWidget);
+      expect(find.textContaining('No CBZ, CBR or EPUB books found'), findsOneWidget);
 
       books = true;
       await tester.enterText(find.byType(TextField), root.path); // (the folder the books are in)
@@ -462,7 +462,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(asked, hasLength(2), reason: 'Open went as far as the scan');
       expect(given, isNull, reason: 'not opened');
-      expect(find.textContaining('No CBZ or EPUB books in this folder: ${bare.path}'), findsOneWidget,
+      expect(find.textContaining('No CBZ, CBR or EPUB books in this folder: ${bare.path}'), findsOneWidget,
           reason: 'the folder with no books named');
       expect(await FolderKomga.savedLibraries(), isEmpty, reason: 'nothing saved');
     });
