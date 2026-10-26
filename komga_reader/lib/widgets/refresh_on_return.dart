@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../content_changed.dart';
 import '../screens/reader.dart' show ReaderScreen;
 
 /// Tells a screen when it's back on top - whichever way: its own back arrow, the side menu's Home, the reader
@@ -39,13 +40,20 @@ class ReturnObserver extends NavigatorObserver {
 }
 
 /// A library view (Home, a library, a series, a read list...) that loads afresh whenever it's shown again: back on
-/// top after another screen, or the app brought back into view. Not live - nothing changes while you look at it.
+/// top after another screen, or the app brought back into view - and, on top, when what it shows changed by itself
+/// ([contentChanged]).
 mixin RefreshOnReturn<T extends StatefulWidget> on State<T> {
   /// Load again, keeping the scroll position.
   void refreshView();
 
   Route<dynamic>? _route;
   AppLifecycleListener? _life;
+  bool _listening = false;
+
+  // only the view on top: the others load again when they're back on top
+  void _changed() {
+    if (_route?.isCurrent ?? true) _returned();
+  }
 
   void _returned() {
     if (!mounted) return;
@@ -69,12 +77,17 @@ mixin RefreshOnReturn<T extends StatefulWidget> on State<T> {
     _life ??= AppLifecycleListener(onShow: () {
       if (_route?.isCurrent ?? true) _returned();
     });
+    if (!_listening) {
+      _listening = true;
+      contentChanged.addListener(_changed);
+    }
   }
 
   @override
   void dispose() {
     if (_route != null) ReturnObserver.instance._remove(_route!, _returned);
     _life?.dispose();
+    contentChanged.removeListener(_changed);
     super.dispose();
   }
 }

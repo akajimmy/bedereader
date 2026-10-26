@@ -123,7 +123,7 @@ class OfflineKomga extends Komga {
 
   // ---- account / libraries -------------------------------------------------------------------------------------------
   @override
-  Future<Map<String, dynamic>?> me() async => {'email': 'offline'};
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async => {'email': 'offline'};
 
   @override
   Future<List<dynamic>> libraries() async {

@@ -36,7 +36,7 @@ class ProgressServer extends LibraryServer {
   }
 
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     if (down) _reach(); // (gone for the reachability check too)
     return super.me();
   }

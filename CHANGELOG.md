@@ -13,6 +13,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 - Sample values in text boxes (the server address on the sign-in screen, for one) are faded, so they no longer look filled in.
 - Home (and the library you came from) no longer shows a book where it was before you read on. Closing a book, the screen under it loaded again straight away, before the reader had saved the last pages you turned; now it waits for that save.
+- When Komga can't be reached, the offer to read offline comes within about 5 seconds. Checking whether Komga was there waited on connections left from before - on the iPad up to 15 seconds after the Wi-Fi went.
+- When Komga can be reached again, the app notices by itself: it asks every 10 seconds while Komga is gone, then closes the "Can't reach Komga" offer and loads the screen you're on again. Before, Home kept saying Komga couldn't be reached until you refreshed it.
 
 ## 1.5.0
 

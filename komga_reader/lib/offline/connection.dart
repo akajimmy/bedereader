@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../content_changed.dart';
 import '../errors.dart' show ErrorLog;
 import '../ondeck_hidden.dart';
 import '../synced_ids.dart';
@@ -132,7 +133,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (api == null || forcedOffline) return false;
     _checks++;
     try {
-      await api.me();
+      await api.ping(); // (on a connection of its own, within 5 s)
       return true;
     } catch (e) {
       // the check's own failure decides, not another request's that fails meanwhile (code review, 2026-10-24: one
@@ -194,6 +195,14 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (!identical(api, online)) return; // the offline source, or a sign-in attempt at another server
     if (keyRefused) return; // answering or not, the key is refused: the key prompt covers it
     if (reachable) {
+      // back after a check found it gone: the screen on top shows Komga's again by itself - it said "Can't reach
+      // Komga" until refreshed by hand (user, 2026-10-26, iPad; on the tablet the prompt and Home's error stayed 76 s
+      // after Wi-Fi was back)
+      if (down) {
+        down = false;
+        _watch();
+        contentChanged.value++;
+      }
       if (askPending) {
         askPending = false;
         _quietUntil = clock.now().add(quietAfterBack); // back: not asked again straight away
@@ -215,6 +224,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
 
   /// A check couldn't reach Komga: ask (or, with nothing downloaded, just say Komga can't be reached).
   void _gone() {
+    if (!keyRefused && !offline && !forcedOffline && !down) {
+      down = true;
+      _watch();
+    }
     if (keyRefused || offline || forcedOffline || askPending || !available) return;
     askPending = true;
     ErrorLog.instance.record("Can't reach Komga (asked whether to go offline)", Komga.lastFailure ?? 'not known');
@@ -228,8 +241,26 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (!forcedOffline) unawaited(check()); // back in the app: look again
   }
 
+  /// A check found Komga gone, and the app is still online (the prompt up, or answered with Retry, or nothing
+  /// downloaded to offer): Komga is asked again every [watchEvery] until it answers ([_onReachability]) - nothing else
+  /// asks it meanwhile, and the app wouldn't know it was back (user, 2026-10-26).
+  bool down = false;
+  static const watchEvery = Duration(seconds: 10);
+  Timer? _watchTimer;
+
+  void _watch() {
+    final on = down && !offline && !forcedOffline && !keyRefused && online != null;
+    if (on && _watchTimer == null) {
+      _watchTimer = Timer.periodic(watchEvery, (_) => check());
+    } else if (!on) {
+      _watchTimer?.cancel();
+      _watchTimer = null;
+    }
+  }
+
   /// Point the background users of the server at the current connection, and poll while offline by the prompt.
   void _apply() {
+    _watch(); // (offline now - by the prompt or by hand: the offline poll's, not this)
     Downloads.instance.hold = offline; // no downloading while offline
     AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
     Pins.instance.useApi(api);
@@ -249,6 +280,8 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   void signedOut() {
     _poll?.cancel();
     _poll = null;
+    down = false;
+    _watch();
     online = null;
     autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
@@ -259,6 +292,9 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   void reset() {
     _poll?.cancel();
     _poll = null;
+    down = false;
+    _watchTimer?.cancel();
+    _watchTimer = null;
     online = null;
     forcedOffline = autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
