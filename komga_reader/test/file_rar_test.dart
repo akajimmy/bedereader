@@ -118,6 +118,63 @@ void main() {
     expect([for (final p in pages) (p['width'], p['height'])], [(30, 20), (20, 30)]);
     expect(imageSizeOf(await api.pageBytes(books.last['id'] as String, 2)), isNotNull);
   });
+
+  test('a CBR read by a scan before a file cut short was looked for is read again, once - not left a book whose page '
+      'never loads (tablet, 2026-10-26); the CBZs, unchanged, are not read again', () async {
+    final data = await Directory.systemTemp.createTemp('file_rar_data');
+    addTearDown(() => deleteTemp(data));
+    final lib = '${dir.path}${sep}lib';
+    final cbr = await write('lib${sep}Saga$sep#1.cbr', rarOf({'1.png': await solidPng(4, 4)}));
+    final cbz = await write('lib${sep}Saga$sep#2.cbz', zipOf({'1.png': await solidPng(4, 4)}));
+    final api = await FolderKomga.open([LocalLibrary.at(lib)], dataDir: data);
+    await api.rescan();
+    // as a scan before the check left it: the CBR's reading without its mark
+    for (final e in api.store.books.values) {
+      (e['inside'] as Map).remove('cutChecked');
+    }
+    final read = <String>{};
+    Storage.fsFor = (_) => _Reads(read);
+    addTearDown(() => Storage.fsFor = null);
+
+    await api.rescan();
+    expect(read, {cbr}, reason: 'the CBR read again; the CBZ not');
+    read.clear();
+    await api.rescan();
+    expect(read, isEmpty, reason: 'once: the next scan reuses it');
+    expect(cbz, isNotEmpty);
+  });
+}
+
+/// This device's files, the paths read (not listed) kept in [read].
+class _Reads implements LibraryFs {
+  _Reads(this.read);
+  final Set<String> read;
+  static const _real = LocalFs();
+  @override
+  Stream<FsEntry> list(String folder) => _real.list(folder);
+  @override
+  Future<bool> exists(String folder) => _real.exists(folder);
+  @override
+  Future<bool> placeAnswers(String folder) => _real.placeAnswers(folder);
+  @override
+  Future<FolderLook> look(String folder) => _real.look(folder);
+  @override
+  Future<int> length(String path) {
+    read.add(path);
+    return _real.length(path);
+  }
+
+  @override
+  Future<Uint8List> readAll(String path) {
+    read.add(path);
+    return _real.readAll(path);
+  }
+
+  @override
+  Future<Uint8List> readRange(String path, int offset, int length) {
+    read.add(path);
+    return _real.readRange(path, offset, length);
+  }
 }
 
 /// This device's files, until [down]: then a share that stopped answering.

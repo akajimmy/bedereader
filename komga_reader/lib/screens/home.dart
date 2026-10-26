@@ -12,6 +12,7 @@ import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
 import '../settings.dart';
+import '../widgets/connection_prompt.dart' show offlineBooks;
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
@@ -384,11 +385,14 @@ class _OfflineBanner extends StatelessWidget {
         builder: (context, _) {
           final c = Connection.instance;
           final back = c.reachableAgain && !c.forcedOffline;
+          // what's shown: the downloads, the local libraries, or both (tablet, 2026-10-26: it said "downloaded books"
+          // over a Home of local ones)
+          final shown = c.hasLocal ? offlineBooks(c) : 'downloaded books';
           final (text, button, action) = c.forcedOffline
-              ? ('Offline mode - showing downloaded books', 'Go online', c.goOnline)
+              ? ('Offline mode - showing $shown', 'Go online', c.goOnline)
               : back
                   ? ('Komga is reachable again', 'Go online', c.goOnline)
-                  : ("Can't reach Komga - showing downloaded books", 'Retry', () { c.check(); });
+                  : ("Can't reach Komga - showing $shown", 'Retry', () { c.check(); });
           final color = back ? const Color(0xFF4ADE80) : const Color(0xFFFACC15);
           return Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),

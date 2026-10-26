@@ -282,8 +282,12 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   // what's read from inside the file (its pages, an EPUB's title, author and cover): kept from the last scan if the
   // file hasn't changed since - only new and changed files are opened
   final was = known[f.path];
-  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == f.size && was['inside'] is Map &&
-      (was['inside'] as Map)['v'] == _insideVersion;
+  final wasInside = was?['inside'];
+  final reuse = was != null && was['fileModified'] == modified && was['bytes'] == f.size && wasInside is Map &&
+      wasInside['v'] == _insideVersion &&
+      // a CBR read before a file cut short was looked for is read again, once (tablet, 2026-10-26: one read before
+      // that stayed a book whose page never loads) - CBRs only, not every book in a library
+      (wasInside['mediaType'] == null || wasInside['cutChecked'] == true);
   final inside = reuse ? (was['inside'] as Map).cast<String, dynamic>() : await _readInside(fs, f.path, epub);
   final pages = [for (final p in (inside['pages'] as List)) (p as Map).cast<String, dynamic>()];
   if (!epub && pages.isEmpty) throw const FormatException('no pages');
@@ -371,7 +375,7 @@ Future<Map<String, dynamic>> _readInside(LibraryFs fs, String path, bool epub) a
   final sizes = (info?['pageSizes'] as List?) ?? const [];
   return {
     'v': _insideVersion,
-    if (zip is! FileZip) 'mediaType': zip.mediaType, // (a CBR)
+    if (zip is! FileZip) ...{'mediaType': zip.mediaType, 'cutChecked': true}, // (a CBR - read with the cut-short check)
     'pages': [
       for (final (i, n) in names.indexed)
         {
