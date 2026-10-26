@@ -18,6 +18,8 @@ class MemoryFs implements LibraryFs {
   @override
   Future<bool> exists(String folder) async => files.keys.any((k) => k.startsWith(folder));
   @override
+  Future<bool> placeAnswers(String folder) async => true;
+  @override
   Stream<FsEntry> list(String folder) async* {
     for (final e in files.entries) {
       if (e.key.startsWith(folder)) yield FsEntry(e.key, e.value.length, DateTime(2026));

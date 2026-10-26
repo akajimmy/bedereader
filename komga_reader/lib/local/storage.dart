@@ -20,6 +20,10 @@ abstract class LibraryFs {
   /// The folder is there (and can be read).
   Future<bool> exists(String folder);
 
+  /// [folder] isn't there ([exists] said no): does the place it was in answer - so it looks deleted, not out of
+  /// reach? (user, 2026-10-25: a library whose folder looks deleted is asked about; one out of reach is kept.)
+  Future<bool> placeAnswers(String folder);
+
   /// Every file under [folder], at any depth.
   Stream<FsEntry> list(String folder);
 
@@ -66,6 +70,21 @@ class LocalFs implements LibraryFs {
 
   @override
   Future<bool> exists(String folder) => Directory(folder).exists();
+
+  /// Any folder above it is there - a drive, the device's storage, or (Windows) a share's top, \\host\share: a share
+  /// out of reach has none of them (Windows says "not there" for all, not "can't reach").
+  @override
+  Future<bool> placeAnswers(String folder) async {
+    final unc = splitUnc(folder);
+    var dir = Directory(folder.replaceAll(RegExp(r'[\\/]+$'), '')).parent;
+    while (true) {
+      if (unc != null && splitUnc(dir.path) == null) return false; // (above the share: \\host itself, never a folder)
+      if (await dir.exists()) return true;
+      final up = dir.parent;
+      if (up.path == dir.path) return false;
+      dir = up;
+    }
+  }
 
   @override
   Stream<FsEntry> list(String folder) async* {
@@ -129,6 +148,10 @@ class SmbFs implements LibraryFs {
     final p = _inShare(folder);
     return p.isEmpty || await (await _connected).exists(p);
   }
+
+  /// [exists] answered (a share out of reach, or refusing, throws instead): the share is there.
+  @override
+  Future<bool> placeAnswers(String folder) async => true;
 
   @override
   Stream<FsEntry> list(String folder) async* {
@@ -297,7 +320,12 @@ class Storage {
       ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
   }
 
+  /// Tests: the storage for a path (a share out of reach, say), in place of the real one.
+  @visibleForTesting
+  static LibraryFs Function(String path)? fsFor;
+
   LibraryFs of(String path) {
+    if (fsFor case final f?) return f(path);
     if (!viaSmb(path)) return const LocalFs();
     final (host, share, _) = splitUnc(path)!;
     return _shares.putIfAbsent(shareOf(path)!, () => SmbFs(host, share, _logins[shareOf(path)]));

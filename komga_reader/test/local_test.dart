@@ -1,11 +1,14 @@
 // Local mode (experimental/sources): libraries that are folders, no server. The scan, the names, the pages, the
 // progress kept on the device, and the sign-in screen's "No server".
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
+import 'package:komga_reader/local/missing_prompt.dart';
+import 'package:komga_reader/local/storage.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/widgets/server_status.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -191,28 +194,103 @@ void main() {
       await api.rescan();
     });
 
-    test("a library that can't be read on a rescan keeps the books it had - a share out of reach (away from home, the "
-        'NAS restarting) emptied it (code review, 2026-10-25); once it can be read again, a book deleted meanwhile '
-        'goes', () async {
+    Future<List<String>> names(FolderKomga api) async => [
+          for (final b in (await api.books(size: 100))['content'] as List) '${b['name']}'
+        ]..sort();
+
+    test("a library out of reach on a rescan (a share away from home, the NAS restarting) keeps the books it had - it "
+        'emptied it (code review, 2026-10-25) - and nothing is asked; read again, a book deleted meanwhile goes',
+        () async {
       final api = await open();
       await api.rescan();
-      Future<List<String>> names() async => [
-            for (final b in (await api.books(size: 100))['content'] as List) '${b['name']}'
-          ]..sort();
-      final all = await names();
+      final all = await names(api);
       expect(all, hasLength(4));
 
-      final away = Directory('${root.path}-away');
-      await root.rename(away.path); // the folder out of reach (on Windows a share that is: as if it weren't there)
+      final down = _Down();
+      Storage.fsFor = (_) => down;
+      addTearDown(() => Storage.fsFor = null);
+      down.out = true; // the share doesn't answer
       await api.rescan();
-      expect(await names(), all, reason: 'kept from the last scan');
+      expect(await names(api), all, reason: 'kept from the last scan');
       expect(api.unreadable, {LocalLibrary.at(root.path).id});
+      expect(api.toAsk.value, isEmpty, reason: 'out of reach: nothing to ask');
 
-      await away.rename(root.path);
+      down.out = false;
       await File('${root.path}${Platform.pathSeparator}Loose One-Shot (2020).cbz').delete();
       await api.rescan();
-      expect(await names(), all.where((n) => !n.startsWith('Loose')).toList(), reason: 'read again: the deleted one goes');
+      expect(await names(api), all.where((n) => !n.startsWith('Loose')).toList(), reason: 'read again: the deleted one goes');
       expect(api.unreadable, isEmpty);
+    });
+
+    test('a library whose folder looks deleted (not there, the place it was in answering) keeps its books until the '
+        'user is asked (user, 2026-10-25): Remove - it goes, books and all; Keep - as out of reach, not asked again, '
+        'and read again once its folder is back (gone again later: asked again)', () async {
+      final api = await open();
+      await api.rescan();
+      final all = await names(api);
+      final lib = LocalLibrary.at(root.path);
+      final away = Directory('${root.path}-away');
+
+      await root.rename(away.path); // deleted, as far as the app can tell: its parent folder is there
+      await api.rescan();
+      expect(await names(api), all, reason: 'kept until asked');
+      expect([for (final l in api.toAsk.value) l.id], [lib.id]);
+
+      await api.keepMissing(lib);
+      expect(api.toAsk.value, isEmpty);
+      await api.rescan();
+      expect(api.toAsk.value, isEmpty, reason: 'kept: not asked again');
+      expect(await names(api), all);
+
+      await away.rename(root.path); // back
+      await api.rescan();
+      expect(api.unreadable, isEmpty);
+      await root.rename(away.path); // gone again
+      await api.rescan();
+      expect([for (final l in api.toAsk.value) l.id], [lib.id], reason: 'the keep was for the time it was away');
+
+      await api.removeMissing(lib);
+      expect(api.folders, isEmpty);
+      expect(await names(api), isEmpty, reason: 'removed: its books go');
+      expect(api.toAsk.value, isEmpty);
+      await away.rename(root.path); // (for the tear-down)
+    });
+
+    testWidgets("the question about a library whose folder looks deleted: Remove takes the library away, Keep it "
+        'leaves it', (tester) async {
+      late FolderKomga api;
+      late Directory away;
+      final lib = LocalLibrary.at(root.path);
+      await tester.runAsync(() async {
+        api = await open();
+        await api.rescan();
+        away = Directory('${root.path}-away');
+        await root.rename(away.path);
+        await api.rescan();
+      });
+      addTearDown(() => away.renameSync(root.path));
+      expect(api.toAsk.value, hasLength(1));
+      Future<void> ask() async {
+        await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+            onPressed: () => askAboutMissing(context, api), child: const Text('go')))));
+        await tester.tap(find.text('go'));
+        await tester.pumpAndSettle();
+      }
+
+      await ask();
+      expect(find.textContaining(root.path), findsOneWidget, reason: "the folder's path shown");
+      await tester.tap(find.text('Keep it'));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+      await tester.pumpAndSettle();
+      expect(api.toAsk.value, isEmpty);
+      expect(api.folders.map((l) => l.id), [lib.id], reason: 'kept');
+
+      api.toAsk.value = [lib]; // (asked again)
+      await ask();
+      await tester.tap(find.text('Remove'));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+      await tester.pumpAndSettle();
+      expect(api.folders, isEmpty, reason: 'removed');
     });
 
     test('a library folder that isn\'t there: no books, nothing thrown', () async {
@@ -281,4 +359,28 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.refresh), findsOneWidget);
   });
+}
+
+/// This device's files - or, with [out], a share that doesn't answer (as dart_smb2 throws when it can't connect).
+class _Down implements LibraryFs {
+  bool out = false;
+  static const _real = LocalFs();
+
+  Never _noAnswer() => throw const SocketException('no answer');
+
+  @override
+  Future<bool> exists(String folder) async => out ? _noAnswer() : _real.exists(folder);
+  @override
+  Future<bool> placeAnswers(String folder) async => !out && await _real.placeAnswers(folder);
+  @override
+  Stream<FsEntry> list(String folder) => out ? Stream.error(const SocketException('no answer')) : _real.list(folder);
+  @override
+  Future<FolderLook> look(String folder) async => out ? _noAnswer() : _real.look(folder);
+  @override
+  Future<int> length(String path) async => out ? _noAnswer() : _real.length(path);
+  @override
+  Future<Uint8List> readAll(String path) async => out ? _noAnswer() : _real.readAll(path);
+  @override
+  Future<Uint8List> readRange(String path, int offset, int length) async =>
+      out ? _noAnswer() : _real.readRange(path, offset, length);
 }

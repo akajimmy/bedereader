@@ -16,6 +16,7 @@ import 'hidden_libraries.dart';
 import 'key_store.dart';
 import 'licences.dart';
 import 'local/folder_komga.dart';
+import 'local/missing_prompt.dart';
 import 'local/mixed_komga.dart';
 import 'night_schedule.dart';
 import 'screens/home.dart';
@@ -326,6 +327,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       await _startLocal(local);
     } else if (api != null) {
       await (api as MixedKomga).attachLocal(); // this device's local libraries, beside Komga's
+      _watchMissing(api.local);
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
       // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
       await _startDownloads(api);
@@ -356,9 +358,36 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     }
   }
 
+  /// The local libraries' scans: a library whose folder looks deleted is asked about (lib/local/missing_prompt.dart).
+  void _watchMissing(FolderKomga? local) {
+    _missingOf?.toAsk.removeListener(_onMissing);
+    _missingOf = local?..toAsk.addListener(_onMissing);
+    _onMissing();
+  }
+
+  FolderKomga? _missingOf;
+  bool _askingMissing = false;
+
+  void _onMissing() {
+    final local = _missingOf;
+    if (local == null || local.toAsk.value.isEmpty || _askingMissing) return;
+    // after the frame: on start the navigator may not be built yet
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final ctx = _nav.currentContext;
+      if (ctx == null || _askingMissing || !identical(local, _missingOf)) return;
+      _askingMissing = true;
+      try {
+        await askAboutMissing(ctx, local);
+      } finally {
+        _askingMissing = false;
+      }
+    });
+  }
+
   /// No server: nothing to download from, no key; the connection only so the screens find their source. The
   /// settings, pins and the rest stay on this device ([FolderKomga.clientSettings]).
   Future<void> _startLocal(FolderKomga api) async {
+    _watchMissing(api);
     await Connection.instance.load(api);
     unawaited(AppSettings.instance.load(api));
     unawaited(Pins.instance.load(api));
@@ -375,7 +404,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       return;
     }
     await KeyStore.write(api.apiKey);
-    if (api is MixedKomga) await api.attachLocal(); // this device's local libraries, beside Komga's
+    if (api is MixedKomga) {
+      await api.attachLocal(); // this device's local libraries, beside Komga's
+      _watchMissing(api.local);
+    }
     setState(() => _api = api);
     // in the background: each shows its local copy at once and its own sync problems
     unawaited(AppSettings.instance.load(api));

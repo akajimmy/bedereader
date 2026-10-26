@@ -167,20 +167,21 @@ String imageType(String name) => _imageTypes[_ext(name)] ?? 'image/jpeg';
 /// unchanged since isn't opened again. [onBook]: told the count of books done so far, as the scan goes.
 Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libraries,
     {Map<String, Map<String, dynamic>> known = const {}, void Function(int books)? onBook,
-    void Function(LocalLibrary library, Object? error)? onUnreadable}) async {
+    void Function(LocalLibrary library, Object? error, {bool missing})? onUnreadable}) async {
   final out = <String, Map<String, dynamic>>{};
   var done = 0;
   for (final lib in libraries) {
     final fs = Storage.instance.of(lib.path); // this device's files, or a share through the app's SMB client
-    // [onUnreadable] told of a library that couldn't be read through - not there (on Windows a share out of reach
-    // looks just so), refused, or cut off part-way: its books aren't known this time, which isn't "it has none"
+    // [onUnreadable] told of a library that couldn't be read through - out of reach, refused, cut off part-way, or
+    // [missing]: not there while the place it was in answers (it looks deleted - the user is asked). Its books
+    // aren't known this time, which isn't "it has none".
     try {
       if (!await fs.exists(lib.path)) {
-        onUnreadable?.call(lib, null);
+        onUnreadable?.call(lib, null, missing: await fs.placeAnswers(lib.path).catchError((Object _) => false));
         continue;
       }
     } catch (e) {
-      onUnreadable?.call(lib, e);
+      onUnreadable?.call(lib, e, missing: false);
       continue;
     }
     final rootPath = lib.path.replaceAll(RegExp(r'[\\/]+$'), '');
@@ -196,7 +197,7 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
         groups.putIfAbsent(oneshot ? (e.path, true) : (parent, false), () => []).add(e);
       }
     } catch (e) {
-      onUnreadable?.call(lib, e); // the folder couldn't be read through (a share dropping part-way)
+      onUnreadable?.call(lib, e, missing: false); // the folder couldn't be read through (a share dropping part-way)
       continue;
     }
     // the books read several at a time: on a network share, opening each file is mostly waiting for the network

@@ -61,6 +61,7 @@ class FolderKomga extends OfflineKomga {
     final ids = {for (final l in libraries) l.id};
     store.books.removeWhere((_, e) => !ids.contains((e['library'] as Map?)?['id']));
     final api = FolderKomga._(store, List.of(libraries), Directory('${dataDir.path}${Platform.pathSeparator}thumbs'));
+    await api._loadKeptMissing();
     if (store.books.isEmpty) {
       await api.rescan(onBook: onBook);
     } else {
@@ -80,6 +81,32 @@ class FolderKomga extends OfflineKomga {
 
   /// The libraries the last scan couldn't read (their books are the scan before's) - by id.
   Set<String> unreadable = const {};
+
+  /// Libraries whose folder looks deleted - not there, while the place it was in answers - to ask the user about:
+  /// remove the library ([removeMissing]), or keep it as out of reach ([keepMissing]) (user, 2026-10-25).
+  final toAsk = ValueNotifier<List<LocalLibrary>>(const []);
+
+  /// The user's answer: the library goes, with its books.
+  Future<void> removeMissing(LocalLibrary library) async {
+    toAsk.value = [for (final l in toAsk.value) if (l.id != library.id) l];
+    await setLibraries([for (final l in _folders) if (l.id != library.id) l]);
+  }
+
+  /// The user's answer: kept, as if out of reach - not asked again, read again once its folder is back.
+  Future<void> keepMissing(LocalLibrary library) async {
+    toAsk.value = [for (final l in toAsk.value) if (l.id != library.id) l];
+    _keptMissing.add(library.id);
+    await _saveKeptMissing();
+  }
+
+  static const _keptMissingKey = 'local.keptMissing';
+  final Set<String> _keptMissing = {};
+
+  Future<void> _loadKeptMissing() async =>
+      _keptMissing.addAll((await SharedPreferences.getInstance()).getStringList(_keptMissingKey) ?? const []);
+
+  Future<void> _saveKeptMissing() async =>
+      (await SharedPreferences.getInstance()).setStringList(_keptMissingKey, _keptMissing.toList());
 
   @override
   Listenable? get localChanges => changed;
@@ -121,14 +148,23 @@ class FolderKomga extends OfflineKomga {
       try {
         final known = {for (final e in store.books.values) e['path'] as String: e};
         final failed = <String>{};
+        final gone = <LocalLibrary>[];
         final fresh = await scanLibraries(_folders, known: known, onBook: (n) {
           scanning.value = n;
           onBook?.call(n);
-        }, onUnreadable: (lib, error) {
+        }, onUnreadable: (lib, error, {missing = false}) {
           failed.add(lib.id);
+          if (missing && !_keptMissing.contains(lib.id)) gone.add(lib);
           AppLog.instance.warn('local', '"${lib.name}" (${lib.path}) couldn\'t be read'
-              '${error == null ? ' - not there, or out of reach' : ': $error'}; its books kept from the last scan');
+              '${missing ? ' - not there (it looks deleted)' : error == null ? ' - out of reach' : ': $error'}'
+              '; its books kept from the last scan');
         });
+        // read again: a "keep it" said while its folder wasn't there is done with
+        if (_keptMissing.any((id) => !failed.contains(id))) {
+          _keptMissing.removeWhere((id) => !failed.contains(id));
+          await _saveKeptMissing();
+        }
+        toAsk.value = gone;
         // a library that couldn't be read keeps the books it had: a share out of reach (away from home, the NAS
         // restarting) emptied it until a later scan reached it (code review, 2026-10-25)
         for (final MapEntry(key: id, value: e) in store.books.entries) {
