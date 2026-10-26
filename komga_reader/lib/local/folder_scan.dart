@@ -70,6 +70,28 @@ String seriesFromName(String stem) {
   return s.replaceFirst(RegExp(r'\s+(vol\.?|volume|v)$', caseSensitive: false), '').replaceAll(RegExp(r'[\s\-_:,]+$'), '');
 }
 
+/// One series' books' names without the start they all share (user, 2026-10-26: "Green Lantern Mosaic 012 (1993)" in
+/// a folder of Green Lantern Mosaic issues is "012 (1993)"): cut after the last " - " or ": " in the shared start
+/// ("Batman - Year One 01 - Who I Am" is "Year One 01 - Who I Am" - the user's choice), else after its last space.
+/// Null: fewer than two books, nothing shared up to a break, or a name that would be left empty.
+List<String>? withoutSharedStart(List<String> names) {
+  if (names.length < 2) return null;
+  var n = names.first.length;
+  for (final s in names.skip(1)) {
+    var i = 0;
+    while (i < n && i < s.length && s[i].toLowerCase() == names.first[i].toLowerCase()) {
+      i++;
+    }
+    n = i;
+  }
+  final shared = names.first.substring(0, n);
+  final separators = RegExp(r'\s[-–—]\s|:\s').allMatches(shared).toList();
+  final cut = separators.isNotEmpty ? separators.last.end : shared.lastIndexOf(RegExp(r'\s')) + 1;
+  if (cut <= 0) return null;
+  final out = [for (final s in names) s.substring(cut).trim()];
+  return out.any((s) => s.isEmpty) ? null : out;
+}
+
 /// Two series names the same, whatever their case and punctuation: "X-Men" and "X Men", "Spider-Man & Wolverine" and
 /// "Spider-Man and Wolverine" aren't (the "and").
 String _seriesKey(String name) => name.toLowerCase().replaceAll(RegExp(r'[^0-9a-z]+'), ' ').trim();
@@ -280,12 +302,25 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
         for (final (i, f) in (files..sort((a, b) => naturalCompare(a.path, b.path))).indexed)
           (f, lib.kind == LibraryKind.readList ? place[f.path]! : i, where, oneshot),
     ];
+    // each series' books named without the start they share ([withoutSharedStart]) - a series folder's, or a
+    // one-series library's; not a read list's (its books are of several series) or a one-shot
+    final short = <String, String>{};
+    if (lib.kind != LibraryKind.readList) {
+      for (final MapEntry(key: (_, oneshot), value: files) in groups.entries) {
+        if (oneshot) continue;
+        final names = withoutSharedStart([for (final f in files) _stem(f.path)]);
+        if (names == null) continue;
+        for (final (i, f) in files.indexed) {
+          short[f.path] = names[i];
+        }
+      }
+    }
     await _inParallel(jobs, 8, (j) async {
       final (f, i, where, oneshot) = j;
       try {
         made[f.path] = await _bookEntry(fs, f, i, 'S${stableId(_normPath(where))}',
             oneshot ? _stem(where) : lib.kind == LibraryKind.readList ? seriesFromName(_stem(where)) : _base(where), lib,
-            oneshot, known);
+            oneshot, known, shortTitle: short[f.path]);
       } catch (e) {
         // a damaged file, or one gone since the listing: left out. The share not answering (it stopped part-way, a
         // timeout): what the last scan had of it is kept, as for a library out of reach (user, 2026-10-25: a share
@@ -365,7 +400,7 @@ Future<Map<String, Map<String, dynamic>>> scanLibraries(List<LocalLibrary> libra
 }
 
 Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, String seriesId, String seriesName, LocalLibrary lib,
-    bool oneshot, Map<String, Map<String, dynamic>> known) async {
+    bool oneshot, Map<String, Map<String, dynamic>> known, {String? shortTitle}) async {
   final stem = _stem(f.path);
   final epub = _bookExt.contains(_ext(f.path));
   // (a read list's "001 - " is its place in the list, not the issue)
@@ -375,7 +410,8 @@ Future<Map<String, dynamic>> _bookEntry(LibraryFs fs, FsEntry f, int index, Stri
   final number = oneshot ? null : parsed.number;
   // its own title: what follows the number, else the name without its tags ("(2025) (Digital) (Shan-Empire)")
   final untagged = named.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-  var title = oneshot ? stem : (parsed.title ?? (untagged.isEmpty ? stem : untagged));
+  // (its name without the start its series' books share, where they share one - user, 2026-10-26)
+  var title = oneshot ? stem : (shortTitle ?? parsed.title ?? (untagged.isEmpty ? stem : untagged));
   final modified = f.modified.toIso8601String();
   // what's read from inside the file (its pages, an EPUB's title, author and cover): kept from the last scan if the
   // file hasn't changed since - only new and changed files are opened

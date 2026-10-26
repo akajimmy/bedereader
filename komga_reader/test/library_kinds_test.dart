@@ -57,6 +57,38 @@ void main() {
     expect(seriesFromName('Absolute Batman 010 (2025) (Digital) (Shan-Empire)'), 'Absolute Batman');
   });
 
+  // user, 2026-10-26: a series' books named without the start they share - cut after a " - " or ": " in it, else at
+  // its last word break
+  test("a series' books' titles without the start they share", () {
+    expect(withoutSharedStart(['Green Lantern Mosaic 001 (1992)', 'Green Lantern Mosaic 012 (1993)']),
+        ['001 (1992)', '012 (1993)']);
+    expect(withoutSharedStart(['Green Lantern - Rebirth 001 (2004) (Digital-Empire)', 'Green Lantern - Rebirth 002 (2005)']),
+        ['Rebirth 001 (2004) (Digital-Empire)', 'Rebirth 002 (2005)']);
+    expect(withoutSharedStart(['Batman - Year One 01 - Who I Am', 'Batman - Year One 02 - War Is Declared']),
+        ['Year One 01 - Who I Am', 'Year One 02 - War Is Declared']);
+    expect(withoutSharedStart(['Spider-Man 001', 'Spider-Man 002']), ['001', '002'], reason: 'a hyphen in a word');
+    expect(withoutSharedStart(['Saga', 'Saga 2']), isNull, reason: 'one would be left empty');
+    expect(withoutSharedStart(['Saga 1']), isNull, reason: 'one book');
+    expect(withoutSharedStart(['Saga 1', 'RESIZED']), isNull, reason: 'nothing shared');
+  });
+
+  test('the shared start is taken off in a series folder and a one-series library; ComicInfo\'s title still wins',
+      () async {
+    await put('Mosaic/Green Lantern Mosaic 001 (1992).cbz');
+    await put('Mosaic/Green Lantern Mosaic 012 (1993).cbz');
+    final api = await FolderKomga.open([LocalLibrary.at(root.path)], dataDir: data);
+    final titles = [
+      for (final b in (await api.books(size: 50))['content'] as List) ((b as Map)['metadata'] as Map)['title'],
+    ];
+    expect(titles.toSet(), {'001 (1992)', '012 (1993)'});
+    final data2 = await Directory.systemTemp.createTemp('kinds_data2');
+    addTearDown(() => deleteTemp(data2));
+    final one = await FolderKomga.open([LocalLibrary.at('${root.path}${Platform.pathSeparator}Mosaic',
+        kind: LibraryKind.oneSeries)], dataDir: data2);
+    expect({for (final b in (await one.books(size: 50))['content'] as List) b['metadata']['title']},
+        {'001 (1992)', '012 (1993)'});
+  });
+
   test('one series: every book in the folder and its subfolders, one series named after the folder, folder by '
       'folder', () async {
     await put('Book 2.cbz');
