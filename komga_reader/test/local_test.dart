@@ -5,12 +5,16 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:komga_reader/api.dart';
 import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/local/folder_komga.dart';
 import 'package:komga_reader/local/folder_scan.dart';
 import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/missing_prompt.dart';
 import 'package:komga_reader/local/storage.dart';
+import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart' show contentChanged;
 import 'package:komga_reader/widgets/server_status.dart';
@@ -482,6 +486,63 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ServerStatus(api: plainKomga()))));
     await tester.pump();
     expect(find.byIcon(Icons.refresh), findsOneWidget);
+  });
+
+  // user, 2026-10-26: in No server mode "Sign out / use a Komga server ... boots me back to the sign-in screen ...
+  // Showing the full password, API key, and no server: three options make this confusing"
+  testWidgets("No server mode's Settings: a Komga server is added - its sign-in alone (Password, API key; no No "
+      'server), and Cancel leaves No server mode as it was, nothing signed out', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    late FolderKomga local;
+    await tester.runAsync(() async {
+      final data = await Directory.systemTemp.createTemp('local_add');
+      addTearDown(() => deleteTemp(data));
+      local = await FolderKomga.open(const [], dataDir: data);
+    });
+    var signedOut = false;
+    Komga? added;
+    final was = AppSettingsScreen.appAddKomga;
+    AppSettingsScreen.appAddKomga = (api) async => added = api;
+    addTearDown(() => AppSettingsScreen.appAddKomga = was);
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: local, onSignOut: () => signedOut = true,
+        initialPage: SettingsPage.server)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.add_link));
+    await tester.pumpAndSettle();
+    final login = tester.widget<LoginScreen>(find.byType(LoginScreen));
+    expect(login.addingKomga, isTrue);
+    expect(tester.widget<SegmentedButton<String>>(find.byType(SegmentedButton<String>)).segments.map((s) => s.value),
+        ['password', 'key'], reason: 'no No server among the ways in');
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LoginScreen), findsNothing, reason: 'back in Settings');
+    expect(find.byType(AppSettingsScreen), findsOneWidget);
+    expect((signedOut, added), (false, null), reason: 'nothing signed out, nothing added');
+
+    // signed in there: handed to the app (which leaves No server mode for Komga with the local libraries)
+    expect(identical(login.onSignedIn, AppSettingsScreen.appAddKomga), isTrue);
+  });
+
+  testWidgets('adding a Komga server: a sign-in that works is handed over (the app switches then)', (tester) async {
+    SharedPreferences.setMockInitialValues({'server': 'http://komga.test'});
+    Komga? handed;
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (context) => TextButton(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => LoginScreen(
+            addingKomga: true, onSignedIn: (api) async => handed = api,
+            // a Komga that knows the key
+            client: (server, key) => Komga(server, key, client: MockClient((r) async => r.url.path == '/api/v2/users/me'
+                ? http.Response('{"email": "me@komga.test"}', 200, headers: {'content-type': 'application/json'})
+                : http.Response('', 404)))))),
+        child: const Text('open')))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('API key'));
+    await tester.pump();
+    await tester.enterText(find.byType(TextField).last, 'k');
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+    expect(handed, isNotNull);
   });
 }
 

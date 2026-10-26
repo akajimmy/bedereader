@@ -20,6 +20,7 @@ import 'local/missing_prompt.dart';
 import 'local/mixed_komga.dart';
 import 'local/storage.dart' show LocalNames;
 import 'night_schedule.dart';
+import 'screens/app_settings.dart' show AppSettingsScreen;
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
@@ -142,6 +143,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.initState();
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
+    AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
     WidgetsBinding.instance.addObserver(_turns);
@@ -428,6 +430,15 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await Downloads.instance.attach(api, start: false);
     await Connection.instance.load(api);
     ProgressSync.instance.start(); // offline reading -> Komga
+  }
+
+  /// No server mode -> Komga with the local libraries beside it (Settings > Server and sync, Add a Komga server), once
+  /// its sign-in has worked: the screens over Home closed, No server mode left as signing out leaves it, then signed in
+  /// as from the sign-in screen. (Cancelled, none of this happens: No server mode stays as it was.)
+  Future<void> _addKomga(Komga api) async {
+    _nav.currentState?.popUntil((r) => r.isFirst);
+    await _signOut();
+    await _signIn(api);
   }
 
   Future<void> _signOut() async {

@@ -26,6 +26,7 @@ import 'about.dart';
 import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
+import 'login.dart';
 import 'remote_test.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
@@ -99,6 +100,10 @@ class AppSettingsScreen extends StatefulWidget {
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
   final List<SettingsPage>? only;
+
+  /// No server mode -> Komga with the local libraries beside it, once Add a Komga server's sign-in has worked (set by
+  /// the app - main.dart; tests: their own).
+  static Future<void> Function(Komga api) appAddKomga = (_) async {};
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -333,11 +338,14 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           LocalLibrariesGroup(api: widget.api as FolderKomga),
           SettingsGroup(title: 'No server', children: [
             Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
+            // (user, 2026-10-26: "Sign out" here "boots me back to the sign-in screen" - a Komga server is added,
+            // nothing to sign out of: its sign-in alone, Cancel back to this as it was)
             ActionRow(
-              title: 'Sign out / use a Komga server',
-              icon: Icons.logout,
-              subtitle: 'Your local libraries are kept for next time',
-              onTap: () => _signOut(context),
+              title: 'Add a Komga server',
+              icon: Icons.add_link,
+              subtitle: 'Its libraries beside your local ones',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) => LoginScreen(addingKomga: true, onSignedIn: AppSettingsScreen.appAddKomga))),
             ),
           ]),
         ]
@@ -366,7 +374,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               return SettingsGroup(title: 'Offline', children: [
                 SwitchRow(
                   title: 'Offline mode',
-                  subtitle: c.offline ? 'Showing downloaded books only' : 'Connected to Komga',
+                  subtitle: !c.offline
+                      ? 'Connected to Komga'
+                      : c.hasLocal
+                          ? 'Showing downloaded books and the local libraries' // (punch list 6)
+                          : 'Showing downloaded books only',
                   value: c.offline,
                   onChanged: c.setForcedOffline,
                 ),

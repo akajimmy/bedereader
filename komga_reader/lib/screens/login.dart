@@ -76,8 +76,13 @@ String apiKeyName() {
 /// the server won't make one (a restricted or demo account), the email and password are kept instead (encrypted,
 /// like a key). The email is filled in again after Sign out; the password and key never are.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn, this.client, this.openLocal});
+  const LoginScreen({super.key, required this.onSignedIn, this.client, this.openLocal, this.addingKomga = false});
   final Future<void> Function(Komga api) onSignedIn;
+
+  /// Opened from No server mode to add a Komga server (Settings > Server and sync, Add a Komga server - user,
+  /// 2026-10-26: "Sign out" there "boots me back to the sign-in screen ... three options make this confusing"): only
+  /// Password and API key, and a way back (Cancel, the back arrow) that leaves No server mode as it was.
+  final bool addingKomga;
 
   /// Builds the client Connect tries (tests: a fake); null = the real [Komga].
   final Komga Function(String server, String apiKey)? client;
@@ -247,22 +252,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final adding = widget.addingKomga;
     return Scaffold(
+      appBar: adding ? AppBar(title: const Text('Add a Komga server')) : null, // (its back arrow: Cancel)
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: SingleChildScrollView( // (a short screen: a phone on its side, the keyboard up)
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(appName, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 4),
-              const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
+              if (!adding) ...[
+                Text(appName, style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 4),
+                const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
+              ] else
+                const Text('Sign in to Komga: its libraries show beside your local ones, which stay as they are.',
+                    style: TextStyle(color: Colors.white60)),
               const SizedBox(height: 24),
               SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'password', label: Text('Password')),
-                  ButtonSegment(value: 'key', label: Text('API key')),
-                  ButtonSegment(value: 'local', label: Text('No server')),
+                segments: [
+                  const ButtonSegment(value: 'password', label: Text('Password')),
+                  const ButtonSegment(value: 'key', label: Text('API key')),
+                  if (!adding) const ButtonSegment(value: 'local', label: Text('No server')),
                 ],
                 selected: {_local ? 'local' : _byPassword ? 'password' : 'key'},
                 showSelectedIcon: false,
@@ -335,6 +346,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     onSubmitted: (_) => _connect()),
               const SizedBox(height: 20),
               FilledButton(onPressed: _busy ? null : _connect, child: Text(_busy ? 'Connecting…' : 'Connect')),
+              if (adding)
+                Padding(padding: const EdgeInsets.only(top: 8), child: TextButton(
+                    onPressed: _busy ? null : () => Navigator.of(context).maybePop(), child: const Text('Cancel'))),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
                   child: ErrorText(explain(_error!, signIn: true, password: _errorWithPassword).message, _error!)),
               ],
