@@ -58,18 +58,30 @@ class CombinedSource implements BookSource {
   static const _all = 1 << 30;
 
   // a grid's merged order, kept from one page to the next: Komga's pages fetched so far, and the local list. Page 0
-  // starts afresh (a refresh shows what's new); any later page reads on from what's kept - two views of the same list
-  // read the same kept pages, not each other's resets (the experiment's review: one view's first page reset another's)
+  // starts afresh (a refresh shows what's new), and a view reading on from there reads the fresh one; the one it
+  // replaced is kept beside it for a view further down the same list, which reads on from it - not asking Komga again
+  // for every page up to where it was (the experiment's review). Let go once the fresh one has caught up.
   final Map<String, _Merge> _merges = {};
+  final Map<String, _Merge> _behind = {};
 
   Future<Map<String, dynamic>> _merged(String key, String sort, int page, int size,
       Future<Map<String, dynamic>> Function(int page, int size) fromMain, Future<List<dynamic>> Function() fromLocal) async {
     var m = _merges.remove(key);
-    if (page == 0 || m == null) m = _Merge(await fromLocal());
+    if (page == 0 || m == null) {
+      final behind = _behind[key];
+      if (m != null && m.reach > 0) _behind[key] = behind != null && behind.reach > m.reach ? behind : m;
+      m = _Merge(await fromLocal());
+    }
     _merges[key] = m; // (the newest last)
     while (_merges.length > 24) {
+      _behind.remove(_merges.keys.first);
       _merges.remove(_merges.keys.first);
     }
+    // a page past where the fresh one has read to, that the one behind has: a view further down, reading on
+    final fresh = m;
+    if (_behind[key] case final b? when page > fresh.reach + 1 && page <= b.reach + 1) m = b;
+    if (page > m.reach) m.reach = page;
+    if (_behind[key] case final b? when fresh.reach >= b.reach) _behind.remove(key);
     final compare = CatalogueSource.comparator(sort);
     final out = <dynamic>[];
     var i = 0, j = 0;
@@ -424,5 +436,6 @@ class _Merge {
   final List<dynamic> local;
   final List<dynamic> main = [];
   int pagesFetched = 0, mainTotal = 0;
+  int reach = -1; // the furthest page read from it
   bool mainDone = false;
 }
