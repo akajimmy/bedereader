@@ -5,6 +5,7 @@ import '../errors.dart';
 import '../offline/downloads_source.dart';
 import '../book_source.dart';
 import '../combined_source.dart';
+import 'connection_prompt.dart' show offlineBooks;
 
 enum ServerState { checking, ok, warning, down }
 
@@ -29,7 +30,7 @@ class _ServerStatusState extends State<ServerStatus> {
 
   Future<void> _check() async {
     if (CombinedSource.mainOf(widget.api) is DownloadsSource) {
-      setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing downloaded books'; });
+      setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing ${offlineBooks(widget.api)}'; });
       return;
     }
     setState(() { _state = ServerState.checking; _detail = 'Checking…'; });

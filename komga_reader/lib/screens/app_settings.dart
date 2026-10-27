@@ -12,6 +12,7 @@ import '../screen.dart';
 import '../settings.dart';
 import '../view_prefs.dart';
 import '../widgets/epub_settings.dart';
+import '../widgets/connection_prompt.dart' show offlineBooks;
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -381,7 +382,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               return SettingsGroup(title: 'Offline', children: [
                 SwitchRow(
                   title: 'Offline mode',
-                  subtitle: c.offline ? 'Showing downloaded books only' : 'Connected to Komga',
+                  subtitle: c.offline ? 'Showing ${offlineBooks(widget.api)} only' : 'Connected to Komga',
                   value: c.offline,
                   onChanged: c.setForcedOffline,
                 ),
@@ -571,6 +572,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 ToggleChip('Release date', l.ebookPosterDate, (v) => s.setLibrary(l.copyWith(ebookPosterDate: v))),
               ],
             ),
+            // (this device's own: which sources it has is this device's - user, 2026-10-26: "show source icon")
+            SwitchRow(
+              title: 'Show where books come from',
+              subtitle: 'An icon on posters and libraries: this device, a network share, Komga',
+              value: d.sourceIcon,
+              onChanged: (v) => s.setDisplay(d.copyWith(sourceIcon: v)),
+            ),
           ]);
         }),
         _librariesShown(),
@@ -723,7 +731,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
             "what's shown over the page, rotation), the eBook font and text size, night mode and its schedule, app "
             "text size and "
-            "accent colour, the reader's keys, poster size, the libraries shown, every screen's remembered "
+            "accent colour, the reader's keys, poster size and the source icon, the libraries shown, every screen's remembered "
             'filter and sort, and the download limit and Delete once read.\n\nNot touched: settings synced '
             "through Komga (reading defaults, series settings, pins, On deck, posters' captions, Home sections), "
             'your sign-in and your downloaded books.'),

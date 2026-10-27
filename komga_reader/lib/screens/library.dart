@@ -16,6 +16,7 @@ import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'book_details.dart' show posterDate;
@@ -233,8 +234,18 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           tooltip: 'Library',
           onSelected: _switchLibrary,
           itemBuilder: (_) => [
-            const PopupMenuItem(value: null, child: Text('All libraries')),
-            for (final l in _libraries) PopupMenuItem(value: l['id'] as String, child: Text(l['name'] as String)),
+            // (each with its icon, as in the side menu: Komga's and a local one of the same name told apart)
+            const PopupMenuItem(value: null, child: Row(children: [
+              Icon(Icons.collections_bookmark_outlined, size: 20),
+              SizedBox(width: 12),
+              Flexible(child: Text('All libraries')),
+            ])),
+            for (final l in _libraries)
+              PopupMenuItem(value: l['id'] as String, child: Row(children: [
+                libraryIcon(api, l['id'] as String, size: 20),
+                const SizedBox(width: 12),
+                Flexible(child: Text(l['name'] as String)),
+              ])),
           ],
           // a narrow window: the name shortens ("Demo Li...") beside the buttons - it overflowed the bar at 650 px
           // (Windows test plan, 2026-10-22)
@@ -355,6 +366,7 @@ Widget seriesTile(BuildContext context, BookSource api, dynamic s,
     read: total > 0 && s['booksUnreadCount'] == 0 && s['booksInProgressCount'] == 0,
     selected: selecting ? selection.isSelected(s) : null,
     badge: DownloadBadge.series(s['id'] as String, total: total),
+    source: sourceBadgeFor(api, s['id'] as String),
     onOpen: selecting ? () => selection.toggle(s) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(s)
@@ -374,7 +386,9 @@ Widget bookTile(BuildContext context, BookSource api, dynamic b,
   final completed = rp != null && rp['completed'] == true;
   final title = (b['metadata']?['title'] ?? b['name']) as String;
   final display = AppSettings.instance.library; // (posters' captions: synced)
-  final date = posterDate(b['metadata']?['releaseDate'] as String?) ?? '';
+  final date = posterDate(b['metadata']?['releaseDate'] as String?,
+          precision: b['metadata']?['releaseDatePrecision'] as String?) ??
+      '';
   // Settings > Library & Home: any of the lines, always in this order (user, 2026-10-07) - the first is the tile's
   // title, the next its subtitle, the third its caption ('' keeps a line when the book has nothing for it). Comics
   // and eBooks each their own (user, 2026-10-18): an eBook by its title and author, not "Discworld #13".
@@ -405,6 +419,7 @@ Widget bookTile(BuildContext context, BookSource api, dynamic b,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,
     badge: DownloadBadge.book(b['id'] as String),
+    source: sourceBadgeFor(api, b['id'] as String),
     onOpen: selecting ? () => selection.toggle(b) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(b)

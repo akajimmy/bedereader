@@ -237,6 +237,12 @@ class LocalSource extends CatalogueSource {
       [for (final l in _libraries) {'id': l.id, 'name': l.name}]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
 
   /// A library's folder.
+  /// [id] (a book, series or library of these) is on a network share.
+  bool onShare(String id) {
+    final path = _books[id]?.path ?? _books[_seriesFirst[id]]?.path ?? libraryPath(id);
+    return path != null && splitUnc(path) != null;
+  }
+
   String? libraryPath(String libraryId) => _libraries.where((l) => l.id == libraryId).firstOrNull?.path;
 
   /// A book's file; null for none of these.

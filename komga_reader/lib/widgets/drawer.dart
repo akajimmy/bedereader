@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../content_changed.dart';
 import '../hidden_libraries.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -10,6 +11,7 @@ import '../screens/downloads_screen.dart';
 import '../screens/about.dart';
 import '../screens/library.dart';
 import '../side_menu.dart';
+import 'source_badge.dart' show libraryIcon;
 import '../book_source.dart';
 
 /// Side navigation: Home, each library, sign out. Home is always the root route, so every entry first pops back to it.
@@ -34,6 +36,9 @@ class _AppDrawerState extends State<AppDrawer> {
   void initState() {
     super.initState();
     HiddenLibraries.instance.addListener(_loadLibraries); // shown / hidden in Settings
+    // local libraries added or removed (Settings > Libraries), Komga back: the list again - a menu kept open beside
+    // the page on a wide screen showed the old one
+    contentChanged.addListener(_loadLibraries);
     _loadLibraries();
   }
 
@@ -44,6 +49,7 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   void dispose() {
     HiddenLibraries.instance.removeListener(_loadLibraries);
+    contentChanged.removeListener(_loadLibraries);
     super.dispose();
   }
 
@@ -116,7 +122,7 @@ class _AppDrawerState extends State<AppDrawer> {
           ListTile(leading: const Icon(Icons.collections_bookmark_outlined), title: const Text('All libraries'),
               onTap: () => _go(null)),
           for (final l in _libraries)
-            ListTile(leading: const Icon(Icons.folder_outlined), title: Text(l['name'] as String),
+            ListTile(leading: libraryIcon(widget.api, l['id'] as String), title: Text(l['name'] as String),
                 onTap: () => _go(l['id'] as String)),
           const Divider(height: 1),
           if (Connection.instance.available)
