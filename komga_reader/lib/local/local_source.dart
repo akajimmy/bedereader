@@ -174,7 +174,18 @@ class LocalSource extends CatalogueSource {
           report[library.id] = r.report;
           // (not one removed while it was being scanned: it was asked about after it had gone - the review, 2026-10-26)
           if (r.report.missing && _libraries.any((l) => l.id == library.id)) looksDeleted.add(library);
-          if (r.report.reached && _libraries.any((l) => l.id == library.id)) await store.putLibrary(r.index);
+          if (r.report.reached && _libraries.any((l) => l.id == library.id)) {
+            // a book whose file changed: its pages' sizes are the old file's (a spread became two pages, or the other
+            // way round - the experiment's review)
+            final was = store.libraries[library.id]?.books;
+            if (was != null) {
+              await store.forgetSizes([
+                for (final b in r.index.books.values)
+                  if (was[b.id] case final old? when !old.sameFile(b.size, b.modified)) b.id,
+              ]);
+            }
+            await store.putLibrary(r.index);
+          }
         }
         lastScan = report;
         missing.value = [for (final l in looksDeleted) if (_libraries.any((x) => x.id == l.id)) l];

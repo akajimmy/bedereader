@@ -12,6 +12,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 
 - Big CBRs in a network library open much faster the first time: measuring the pages' sizes read the whole book over the network (a 266 MB one took 13 s to its first page on the tablet), now only the start of each page.
+- A comic in a local or network library replaced by another file with as many pages kept the old file's page layout (a two-page spread could show as one page, or the other way round): its pages are measured again.
 
 ## 1.6.0
 
