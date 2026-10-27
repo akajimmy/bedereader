@@ -105,6 +105,27 @@ void main() {
     expect([for (final s in a1['content'] as List) s['name']], ['Elektra', 'Hulk', 'Saga']);
   });
 
+  test("two views of the same list: one starting again doesn't make the other, further down, ask Komga again for "
+      "every page up to where it was (the experiment's review); the one starting again reads it afresh", () async {
+    final names = [for (var i = 10; i < 30; i++) 'Series $i'];
+    komgaSeries(names);
+    await localSeries(['Akira']);
+    final whole = ['Akira', ...names];
+    for (var p = 0; p <= 3; p++) {
+      await api.series(page: p, size: 3); // view A, down to page 3
+    }
+    komga.asked.clear();
+    final b0 = await api.series(page: 0, size: 3); // view B, from the start (a refresh)
+    expect(komga.asked, [0], reason: 'afresh');
+    expect([for (final s in b0['content'] as List) s['name']], whole.sublist(0, 3));
+    final a4 = await api.series(page: 4, size: 3); // view A, on
+    expect([for (final s in a4['content'] as List) s['name']], whole.sublist(12, 15));
+    expect(komga.asked, [0, 4], reason: "A reads on from its own: only Komga's next page");
+    final b1 = await api.series(page: 1, size: 3); // view B, on - from its fresh one
+    expect([for (final s in b1['content'] as List) s['name']], whole.sublist(3, 6));
+    expect(komga.asked, [0, 4, 1]);
+  });
+
   test("each item asked of the source it's in: a local book's pages and progress, Komga's book", () async {
     komgaSeries(['Batman']);
     await localSeries(['Saga']);
