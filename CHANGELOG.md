@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 165 - 2026-10-27
+
 **New**
 
 - eBook settings per book: in the reader's eBook settings (Aa), This book > Override defaults gives the book its own font, text size, spacing, margins, page colours, two pages and the rest - starting from the defaults, so nothing moves - and Make default passes them on to every book. A book's own settings are kept on that device only (what reads best differs from screen to screen); the defaults stay as they were. Settings > eBooks counts the books with their own settings, with Reset all.
