@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- No server mode: the app without a Komga server, on local libraries alone. The sign-in screen's Use without a server starts it (the folder browser opens for a first library; more are added in Settings > Libraries). Settings > Server and sync then has Add a Komga server - its books come beside the local ones - and Leave No server mode. Settings, pins and reading progress stay on the device in this mode; adding a server or leaving the mode lets go of its pins and reading settings, as signing out does.
+
 ## 1.6.0
 
 ### Build 161 - 2026-10-26
