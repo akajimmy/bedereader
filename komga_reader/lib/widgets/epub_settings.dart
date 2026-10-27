@@ -35,19 +35,48 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
 /// The eBook reader's panel, "eBook settings": what's changed mid-book (user, 2026-10-21, trimmed): font, size, line
 /// spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
 /// settings, a tap away).
-List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api}) {
-  final e = s.epub;
-  final set = s.setEpub;
+///
+/// [bookId]: the book open (user, 2026-10-27: per-book settings, as comics' per series) - "This book" leads with
+/// Override defaults: off, the rows show the defaults, greyed out; on, they're this book's own (this device's), with
+/// Make default. Null: the rows set the defaults, as before.
+List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api, String? bookId}) {
+  final id = bookId;
+  final own = id != null && s.ownsEpub(id);
+  final e = s.epubFor(id);
+  final ValueChanged<EpubPrefs> set = id == null ? s.setEpub : (n) => s.setEpubBook(id, n);
+  // following the defaults: shown, not set (nor focused by the remote)
+  Widget follows(Widget row) => own || id == null
+      ? row
+      : IgnorePointer(child: ExcludeFocus(child: Opacity(opacity: 0.45, child: row)));
   return [
+    if (id != null)
+      SettingsGroup(title: 'This book', children: [
+        SwitchRow(
+          title: 'Override defaults',
+          subtitle: own ? 'Its own settings, on this device' : 'Following the eBook defaults',
+          value: own,
+          onChanged: (v) => s.setEpubOverride(id, v),
+        ),
+        if (own)
+          ActionRow(
+            title: 'Use these settings for every book',
+            button: TextButton(
+              onPressed: () {
+                s.setEpub(e);
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    const SnackBar(content: Text("Books you haven't adjusted will read like this one")));
+              },
+              child: const Text('Make default'),
+            ),
+          ),
+      ]),
     SettingsGroup(title: 'Text', children: [
-      ..._fontRows(e, set),
-      _sizeRow(e, set),
-      _lineSpacingRow(e, set),
-      _marginsRow(e, set),
+      for (final row in [..._fontRows(e, set), _sizeRow(e, set), _lineSpacingRow(e, set), _marginsRow(e, set)])
+        follows(row),
     ]),
     SettingsGroup(title: 'Page', children: [
-      _coloursRow(e, set),
-      _twoPagesRow(e, set),
+      follows(_coloursRow(e, set)),
+      follows(_twoPagesRow(e, set)),
     ]),
     SettingsGroup(title: 'Screen', children: [
       ...brightnessRows(s),

@@ -249,7 +249,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       ..remove('warmth');
     // (webtoons' defaults too: a webtoon follows them - 2026-10-22)
     return jsonEncode({'d': d, 'r': _settings.defaults.toJson(), 'w': _settings.webtoonDefaults.toJson(),
-        's': _settings.series[_seriesId]?.toJson(), 'e': _settings.epub.toJson()});
+        's': _settings.series[_seriesId]?.toJson(), 'e': _settings.epubFor(_book['id'] as String?).toJson()});
   }
 
   (String, Object, StackTrace)? _openError; // the book couldn't be opened, and there's none on screen

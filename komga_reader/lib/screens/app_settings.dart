@@ -345,6 +345,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ...epubSettingRows(context, s.epub, s.setEpub, insetRow: insetPageRow(s), inset: s.display.insetPage),
         SettingsGroup(title: 'Display', children: [epubTurnRow(s)]),
         SettingsGroup(title: 'Behaviour', children: [positionTextRow(s, BookKind.ebooks)]),
+        // a book's own settings (the reader's Aa > Override defaults; user, 2026-10-27): this device's
+        SettingsGroup(title: 'Books with their own settings', children: [
+          ActionRow(
+            title: s.epubBooks.isEmpty
+                ? 'Every book follows the defaults'
+                : '${s.epubBooks.length} book${s.epubBooks.length == 1 ? ' has its' : 's have their'} own settings',
+            subtitle: 'Set in the reader (Aa > Override defaults), on this device',
+            button: s.epubBooks.isEmpty
+                ? null
+                : TextButton(onPressed: () => _resetEpubBooks(context, s.epubBooks.length), child: const Text('Reset all')),
+          ),
+        ]),
       ]);
 
 
@@ -823,10 +835,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text("Reset this device's settings?"),
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
-            "what's shown over the page, rotation), the eBook font and text size, night mode and its schedule, app "
+            "what's shown over the page, rotation), the eBook font and text size, books' own eBook settings, night "
+            'mode and its schedule, app '
             "text size and "
             "accent colour, the reader's keys, poster size and the source icon, the libraries shown, every screen's remembered "
-            'filter and sort, and the download limit and Delete once read.\n\nNot touched: settings synced '
+            'filter and sort, and the download and cache limits and Delete once read.\n\nNot touched: settings synced '
             "through Komga (reading defaults, series settings, pins, On deck, posters' captions, Home sections), "
             'your sign-in and your downloaded books.'),
         actions: [
@@ -839,11 +852,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
     s.setEpub(s.epub.copyWith(font: const EpubPrefs().font, size: const EpubPrefs().size)); // this device's own
+    s.clearEpubBooks(); // books' own eBook settings: this device's (2026-10-27)
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
     if (Downloads.instance.anyReady) {
       await Downloads.instance.setCap(Downloads.defaultCap);
+      await Downloads.instance.setCacheCap(Downloads.defaultCacheCap);
       await Downloads.instance.setDeleteRead(DeleteRead.never);
     }
     if (context.mounted) {
@@ -866,6 +881,22 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ),
     );
     if (ok == true) AppSettings.instance.resetAllSeries();
+  }
+
+  Future<void> _resetEpubBooks(BuildContext context, int n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reset $n book${n == 1 ? '' : 's'} to the defaults?'),
+        content: const Text('Their own eBook settings are removed from this device (they are kept on this device '
+            'only). They follow the defaults from then on.'),
+        actions: [
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Reset all')),
+        ],
+      ),
+    );
+    if (ok == true) AppSettings.instance.clearEpubBooks();
   }
 }
 
