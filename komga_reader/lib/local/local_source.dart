@@ -101,7 +101,11 @@ class LocalSource extends CatalogueSource {
         books[b.id] = b;
         entries[b.id] = {
           'book': _bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
-          'readLists': const [], 'collections': const [], 'state': 'done',
+          // a read-list library's list, named after the library
+          'readLists': [
+            for (final r in b.readLists) {'id': r.id, 'name': library.name, 'index': r.index, 'count': r.count},
+          ],
+          'collections': const [], 'state': 'done',
         };
         if (first[b.seriesId] case (_, final n) when n <= b.numberSort) continue;
         first[b.seriesId] = (b.id, b.numberSort);
@@ -491,7 +495,10 @@ class LocalSource extends CatalogueSource {
   @override
   Future<Uint8List?> thumbBytes(String url) async => null;
   @override
-  Future<List<dynamic>> bookReadLists(String bookId) async => const [];
+  Future<List<dynamic>> bookReadLists(String bookId) async => [
+        for (final r in (entries[bookId]?['readLists'] as List?) ?? const [])
+          if (await readList((r as Map)['id'] as String) case final list?) list,
+      ];
   @override
   Future<List<dynamic>> seriesCollections(String seriesId) async => const [];
   @override
