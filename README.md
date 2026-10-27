@@ -24,7 +24,7 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - **Several at once** - Home, search, On deck and the libraries list put every source's books together. Settings >
   Library & Home > Show where books come from puts a small icon on posters: this device, the network or Komga.
 - **No Komga at all** - the sign-in screen's *Use without a server* runs the app on folders alone. A Komga server can
-  be added later, in Settings > Server and sync.
+  be added later, in Settings > Server & Sync.
 
 ### Folders and shares as libraries
 
@@ -179,8 +179,8 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
 - **On Komga, for every device**: reading progress of Komga's books, per-series reader settings (fit, reading
   direction, page colours, gutter) and image settings and their defaults - comics and webtoons each their own - the
   EPUB settings (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their
-  order, pins (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its
-  own), and what's hidden from On deck.
+  order, pins and what's hidden from On deck. Settings > Server & Sync says when this device last synced, and Sync
+  now syncs it at once.
 - **On this device**: the server address and API key, the local and network libraries and the shares' logins, the
   reading progress, pins and series settings of their books, reading brightness and night mode, how the reader
   behaves (page turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and
@@ -189,7 +189,7 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
   settings at once; each Settings page also has its own reset.
 
 Settings (side menu) has everything in one place: All Book Types, Comics, Webtoons, eBooks and Remote and keys for reading;
-Server and sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
+Server & Sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
 on every device.
 
 ## Privacy

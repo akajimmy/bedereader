@@ -178,10 +178,10 @@ class Pins extends ChangeNotifier {
   /// restarting the app (user, 2026-10-05: one pinned on the tablet never reached a PC app left open). Changes made
   /// here and not sent yet go first, as at a start.
   /// Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_api == null || !_loaded) return;
     final p = await SharedPreferences.getInstance();
-    await _gate.run(() => _fetch(p));
+    await _gate.run(() => _fetch(p), force: force); // (force: Sync now)
   }
 
   final _gate = RefreshGate();

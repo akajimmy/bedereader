@@ -14,12 +14,13 @@ class RefreshGate {
   /// Komga was asked just now (a start-up load counts too).
   void asked() => _at = clock.now();
 
-  /// Runs [fetch] unless one is running (that one's answer is shared) or the last ask was within [gap].
-  Future<void> run(Future<void> Function() fetch) {
+  /// Runs [fetch] unless one is running (that one's answer is shared) or the last ask was within [gap] - [force]: even
+  /// then (Sync now, asked for).
+  Future<void> run(Future<void> Function() fetch, {bool force = false}) {
     final running = _running;
     if (running != null) return running;
     final at = _at;
-    if (at != null && clock.now().difference(at) < gap) return Future.value();
+    if (!force && at != null && clock.now().difference(at) < gap) return Future.value();
     return _running = fetch().whenComplete(() => _running = null);
   }
 }

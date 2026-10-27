@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 import 'hidden_libraries.dart';
+import 'sync_status.dart';
 import 'book_source.dart';
 import 'view_filter.dart';
 export 'view_filter.dart' show ReadFilter, ReadFilterApi;
@@ -648,13 +649,17 @@ class Komga implements BookSource {
 
   Future<Map<String, dynamic>>? _settingsAsking;
 
-  Future<Map<String, dynamic>> _fetchClientSettings() async =>
-      (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
+  Future<Map<String, dynamic>> _fetchClientSettings() async {
+    final got = (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
+    SyncStatus.instance.synced(); // (Settings > Server & Sync > Last Sync)
+    return got;
+  }
 
   @override
-  Future<void> putClientSetting(String key, String value) {
+  Future<void> putClientSetting(String key, String value) async {
     _settingsAsking = null;
-    return _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+    await _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+    SyncStatus.instance.synced();
   }
 
   // ---- EPUB books (Readium web publication): the manifest (reading order, table of contents) and the book's files

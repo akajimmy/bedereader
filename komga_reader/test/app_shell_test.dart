@@ -99,7 +99,7 @@ void main() {
       await tester.tap(find.text('Settings'));
       await frames();
       expect(find.byType(AppSettingsScreen), findsOneWidget);
-      await tester.tap(find.text('Server and sync')); // (Settings opens on Reading)
+      await tester.tap(find.text(SettingsPage.server.label)); // (Settings opens on All Book Types)
       await frames();
 
       await tester.ensureVisible(find.text('Sign out / change server'));
