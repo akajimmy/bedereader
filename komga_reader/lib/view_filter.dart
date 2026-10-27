@@ -237,3 +237,27 @@ class ViewFilter {
   @override
   String toString() => 'ViewFilter(${toJson()})';
 }
+
+/// The read filter: everything, hide what's read, or hide what isn't (user, 2026-10-07: three-way, on every library
+/// screen). In-progress counts as unread, so each item falls on one side: "hide read" asks Komga for UNREAD +
+/// IN_PROGRESS (for series: not every book finished), "hide unread" for READ (finished; a series: all of it).
+enum ReadFilter { all, hideRead, hideUnread }
+
+extension ReadFilterApi on ReadFilter {
+  List<String>? get api => switch (this) {
+        ReadFilter.all => null,
+        ReadFilter.hideRead => const ['UNREAD', 'IN_PROGRESS'],
+        ReadFilter.hideUnread => const ['READ'],
+      };
+
+  /// What the view shows, for names and counts ("unread", "read"); null for everything.
+  String? get shows => switch (this) {
+        ReadFilter.all => null,
+        ReadFilter.hideRead => 'unread',
+        ReadFilter.hideUnread => 'read',
+      };
+
+  /// A saved name; anything else is everything.
+  static ReadFilter fromName(Object? name) =>
+      ReadFilter.values.firstWhere((f) => f.name == name, orElse: () => ReadFilter.all);
+}

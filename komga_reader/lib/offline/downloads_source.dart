@@ -152,8 +152,11 @@ class DownloadsSource implements BookSource {
   // ---- browsing ------------------------------------------------------------------------------------------------------
   @override
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
-      String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
-    final c = _catalogue;
+      String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async =>
+      _page(_seriesList(_catalogue, libraryId, collectionId, readStatus, sort), page, size);
+
+  List<dynamic> _seriesList(Catalogue c, String? libraryId, String? collectionId, List<String>? readStatus,
+      String sort) {
     final ids = <String>{
       for (final b in c.scoped(libraryId: libraryId, collectionId: collectionId))
         if (libraryId == null || b.libraryId == libraryId) b.seriesId,
@@ -162,7 +165,7 @@ class DownloadsSource implements BookSource {
       for (final id in ids) _series(c.bySeries[id]!),
     ].where((s) => _wanted(readStatus, _seriesStatus(s as Map<String, dynamic>))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
-    return _page(list, page, size);
+    return list;
   }
 
   @override
@@ -270,10 +273,9 @@ class DownloadsSource implements BookSource {
       ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String sort = 'metadata.titleSort,asc',
       int page = 0, int size = 60}) async {
     final f = filter.forView(seriesView: true);
-    final all = (await series(libraryId: libraryId, collectionId: collectionId, readStatus: read.api, sort: sort,
-        size: _all))['content'] as List;
+    final c = _catalogue; // (one for the list and the filter)
+    final all = _seriesList(c, libraryId, collectionId, read.api, sort);
     if (f.isEmpty) return _page(all, page, size);
-    final c = _catalogue;
     return _page([for (final s in all) if (_seriesMatches(s as Map, f, c.bySeries[s['id']] ?? const [])) s], page,
         size);
   }
@@ -515,7 +517,7 @@ class DownloadsSource implements BookSource {
       if (store.books[next]?['state'] == 'done') return _book(next);
       throw NotAvailableOffline('The next book');
     }
-    final order = _order(c, bookId, readListId);
+    final order = _order(c, bookId, null); // (a read list's next is found above)
     final i = order.indexOf(bookId);
     return i >= 0 && i + 1 < order.length ? _book(order[i + 1]) : null;
   }

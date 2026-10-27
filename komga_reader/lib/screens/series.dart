@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
