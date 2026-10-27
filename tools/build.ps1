@@ -271,6 +271,10 @@ if ($Platforms -contains 'windows') {
         Say 'emptying the Windows build folder (only this build in the zip)'
         Remove-Item $release -Recurse -Force
     }
+    # the assets are staged in build\flutter_assets first and copied in from there - it kept the spike's (empty)
+    # package folders too (build 164's zip, 10-27): emptied as well, made again by this build
+    $staged = Join-Path $app 'build\flutter_assets'
+    if (Test-Path $staged) { Remove-Item $staged -Recurse -Force }
     Run 'Windows app' "flutter build windows --release$defines"
     $zip = Join-Path $out "$product-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
