@@ -11,7 +11,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
-- No server mode: the app without a Komga server, on local libraries alone. The sign-in screen's Use without a server starts it (the folder browser opens for a first library; more are added in Settings > Libraries). Settings > Server and sync then has Add a Komga server - its books come beside the local ones - and Leave No server mode. Settings, pins and reading progress stay on the device in this mode; adding a server or leaving the mode lets go of its pins and reading settings, as signing out does.
+- No server mode: the app without a Komga server, on local libraries alone. The sign-in screen's Use without a server starts it (the folder browser opens for a first library; more are added in Settings > Libraries). Settings > Server and sync then has Add a Komga server - its books come beside the local ones - and Leave No server mode. Settings, pins and reading progress stay on the device in this mode; adding a server or leaving the mode lets go of its reading settings, as signing out does.
+- Pins to a local library, its series or a book are this device's own: never sent to Komga (another device hasn't these folders), and kept through signing out. Removing a local library removes the pins to it.
 
 ## 1.6.0
 
