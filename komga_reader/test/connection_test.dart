@@ -335,6 +335,19 @@ void main() {
     expect(server.meCalls, after, reason: 'answered: not asked again');
   });
 
+  testWidgets("gone, then offline by the prompt, then back: the offline view isn't loaded again for it (review, "
+      '2026-10-26) - the "reachable again" question is what comes', (t) async {
+    server.up = false;
+    await conn.check();
+    conn.useDownloads(); // Go offline
+    final reloads = contentChanged.value;
+    server.up = true;
+    await t.pump(Connection.pollEvery);
+    expect(conn.reachableAgain, isTrue);
+    expect(contentChanged.value, reloads);
+    conn.reset();
+  });
+
   testWidgets('gone, then offline by the prompt: the 10 s asking stops (the offline poll takes over)', (t) async {
     server.up = false;
     await conn.check();

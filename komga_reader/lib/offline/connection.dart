@@ -263,7 +263,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Point the background users of the server at the current connection, and poll while offline by the prompt.
   void _apply() {
-    _watch(); // (offline now - by the prompt or by hand: the offline poll's, not this)
+    // offline now - by the prompt or by hand: the offline poll's, not this; and not "gone" any more - the poll
+    // finding Komga back reloaded the downloads' view on top for nothing (review, 2026-10-26)
+    if (offline) down = false;
+    _watch();
     Downloads.instance.hold = offline; // no downloading while offline
     AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
     Pins.instance.useApi(api);
