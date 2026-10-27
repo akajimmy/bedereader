@@ -13,6 +13,7 @@ import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/screens/series.dart';
+import 'package:komga_reader/source.dart';
 import 'package:komga_reader/view_filter.dart';
 import 'package:komga_reader/widgets/filter_panel.dart' show firstYear;
 import 'package:komga_reader/widgets/pin_tile.dart';
@@ -109,7 +110,7 @@ void main() {
     ReadListTile.invalidate();
   });
 
-  Future<T> show<T extends Komga>(WidgetTester tester, T api, Widget screen, {Size size = const Size(1400, 900)})
+  Future<T> show<T extends Source>(WidgetTester tester, T api, Widget screen, {Size size = const Size(1400, 900)})
       async {
     setView(tester, size);
     await tester.pumpWidget(MaterialApp(home: screen));
