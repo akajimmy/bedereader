@@ -25,6 +25,11 @@ class _Main extends DownloadsSource {
     return super.series(libraryId: libraryId, collectionId: collectionId, readStatus: readStatus, sort: sort,
         page: page, size: size);
   }
+
+  Map<String, dynamic>? readListsAnswer; // Komga's read lists, as it answers (null: the downloads')
+  @override
+  Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async =>
+      readListsAnswer ?? await super.readLists(libraryId: libraryId, page: page, size: size);
 }
 
 void main() {
@@ -124,6 +129,22 @@ void main() {
     final b1 = await api.series(page: 1, size: 3); // view B, on - from its fresh one
     expect([for (final s in b1['content'] as List) s['name']], whole.sublist(3, 6));
     expect(komga.asked, [0, 4, 1]);
+  });
+
+  test("read lists beside Komga's: every local one after Komga's first page, however many of Komga's fill it (the "
+      "experiment put Komga's first and cut to the page size: no local one showed)", () async {
+    komga.readListsAnswer = {
+      'content': [{'id': 'R1', 'name': 'Events'}, {'id': 'R2', 'name': 'Crossovers'}],
+      'totalElements': 2, 'last': true,
+    };
+    final order = Directory('${root.path}/Reading order');
+    await order.create();
+    await File('${order.path}/001 - Saga 1.cbz').writeAsBytes(zipOf({'p1.png': png}));
+    await local.setLibraries([LocalLibrary.at(order.path, kind: LibraryKind.readList)]);
+    await local.rescan();
+    final r = await api.readLists(size: 2);
+    expect([for (final l in r['content'] as List) l['name']], ['Events', 'Crossovers', 'Reading order']);
+    expect(r['totalElements'], 3);
   });
 
   test("each item asked of the source it's in: a local book's pages and progress, Komga's book", () async {
