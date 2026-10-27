@@ -5,9 +5,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/local/file_rar.dart';
 import 'package:komga_reader/local/file_zip.dart';
 
 import 'support/memory_fs.dart';
+import 'support/rar_writer.dart';
 import 'support/zip_writer.dart';
 
 /// Every place [from] (ASCII) is in [zip], as [to] (the same length).
@@ -56,11 +58,12 @@ void main() {
     expect(await zip.read('02.png'), isNull);
   });
 
-  test('a CBR is told by its first bytes, whatever its name, and is not readable yet; a file that is no archive at '
-      'all is damaged', () async {
-    final rar = Uint8List.fromList([0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00, ...List.filled(40, 0)]);
-    final fs = MemoryFs({'renamed.cbz': rar, 'text.cbz': Uint8List.fromList(List.filled(100, 0x41))});
-    expect(() => ComicArchive.open(fs, 'renamed.cbz'), throwsA(isA<UnreadableArchive>()));
+  test('a CBR is told by its first bytes, whatever its name - read as a RAR (file_rar_test.dart); a file that is no '
+      'archive at all is damaged', () async {
+    final fs = MemoryFs({'renamed.cbz': rarOf({'1.png': [1, 2, 3]}), 'text.cbz': Uint8List.fromList(List.filled(100, 0x41))});
+    final rar = await ComicArchive.open(fs, 'renamed.cbz');
+    addTearDown(rar.close);
+    expect(rar, isA<FileRar>());
     expect(() => ComicArchive.open(fs, 'text.cbz'), throwsA(isA<FormatException>()));
   });
 
