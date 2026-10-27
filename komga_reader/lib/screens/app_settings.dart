@@ -1,10 +1,15 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../hidden_libraries.dart';
 import '../ondeck_hidden.dart';
+import '../offline/sync.dart' show ProgressSync;
+import '../pins.dart';
+import '../sync_status.dart';
+import '../synced_ids.dart' show PairShift;
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -47,15 +52,15 @@ extension SettingsSectionLabel on SettingsSection {
 
 extension SettingsPageInfo on SettingsPage {
   String get label => switch (this) {
-        SettingsPage.reading => 'Reading',
+        SettingsPage.reading => 'All Book Types', // (user, 2026-10-27; it said Reading, as its heading does)
         SettingsPage.comics => 'Comics',
         SettingsPage.webtoons => 'Webtoons',
         SettingsPage.ebooks => 'eBooks',
         SettingsPage.keys => 'Remote and keys',
-        SettingsPage.server => 'Server and sync',
+        SettingsPage.server => 'Server & Sync', // (user, 2026-10-27: as Library & Home)
         SettingsPage.library => 'Library & Home',
         SettingsPage.libraries => 'Libraries',
-        SettingsPage.downloads => 'Downloads',
+        SettingsPage.downloads => 'Storage & Downloads', // (user, 2026-10-27: the cache too)
         SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
       };
@@ -99,6 +104,9 @@ class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading,
       this.only});
   final BookSource api;
+
+  /// Server & Sync's Sync now (tests find it by this).
+  static const syncNowKey = ValueKey('syncNow');
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
@@ -261,8 +269,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         screenOnRow(s),
         if (canRotate) rotationRow(s), // comics and eBooks alike (user, 2026-10-21)
       ]),
-      SettingsGroup(title: 'Over the page', children: overPageRows(s)),
-      SettingsGroup(title: 'Moving on', children: [
+      _night(s),
+      SettingsGroup(title: 'Display', children: overPageRows(s)), // (user, 2026-10-27; "Over the page")
+      SettingsGroup(title: 'Behaviour', children: [ // (user, 2026-10-27; "Moving on")
         SegmentRow<MidBook>(
           // (user, 2026-10-21: the question as the title, no description; 2026-10-22: the reader's own Next book icon
           // in it, "not the emoji")
@@ -286,17 +295,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Text('The defaults for every series; a series can override them in the reader (Comic settings).',
             style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages - defaults', synced: true, children: layoutRows(p, s.setDefault)),
-      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: layoutRows(p, s.setDefault)),
+      SettingsGroup(title: 'Image - default values', synced: true, children: [
         ...imageRows(p, s.setDefault),
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
       ]),
-      SettingsGroup(title: 'Turning pages', children: [
-        pageTurnRow(s),
-        doubleTapRow(s),
-      ]),
+      // (user, 2026-10-27: "Turning pages" -> Appearance, its Double-tap to zoom into Controls)
+      SettingsGroup(title: 'Appearance', children: [pageTurnRow(s)]),
       SettingsGroup(title: 'Controls', children: [
+        doubleTapRow(s),
         positionTextRow(s, BookKind.comics),
       ]),
       SettingsGroup(title: 'Series with their own settings', synced: true, children: [
@@ -318,8 +326,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Text('For the series Komga marks as webtoons; a series can override them in the reader (Webtoon '
             'settings).', style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages - defaults', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
-      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
+      SettingsGroup(title: 'Image - default values', synced: true, children: [
         ...imageRows(p, s.setWebtoonDefault),
         ActionRow(title: 'Image settings back to the original',
             button: TextButton(onPressed: () => s.setWebtoonDefault(p.imageReset()), child: const Text('Reset to original'))),
@@ -370,10 +378,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onTap: () => _signOut(context),
           ),
         ]),
-        // what goes through Komga, said in one place (user, 2026-10-07; one line, and pins always sync - 2026-10-21)
-        const SettingsGroup(title: "What's synced through Komga", synced: true, children: [
-          NoteRow('Synced: reading settings, series settings, pins, On deck, reading progress.'),
-        ]),
+        // what goes through Komga, said in one place (user, 2026-10-07; one line, and pins always sync - 2026-10-21),
+        // when it last did, and Sync now for when something seems off (user, 2026-10-27)
+        ListenableBuilder(
+          listenable: Listenable.merge([SyncStatus.instance, Connection.instance]),
+          builder: (context, _) {
+            final last = SyncStatus.instance.last;
+            return SettingsGroup(title: 'Sync', synced: true, children: [
+              const NoteRow('Synced: reading settings, series settings, pins, On deck, reading progress.'),
+              ActionRow(
+                title: 'Last Sync',
+                subtitle: last == null ? 'Not yet on this device' : syncTimeLabel(last, clock.now()),
+                button: TextButton(
+                  key: AppSettingsScreen.syncNowKey,
+                  onPressed: _syncing || Connection.instance.offline ? null : () => _syncNow(context),
+                  child: Text(_syncing ? 'Syncing…' : 'Sync now'),
+                ),
+              ),
+            ]);
+          },
+        ),
         if (Connection.instance.available)
           ListenableBuilder(
             listenable: Connection.instance,
@@ -471,21 +495,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     }
   }
 
+  /// Night mode and its schedule - on All Book Types (user, 2026-10-27; it was in Look).
+  Widget _night(AppSettings s) => SettingsGroup(title: 'Night', children: [
+        ...nightRows(s),
+        if (s.display.nightSchedule)
+          SettingRow(
+            title: 'From / to',
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              _timeButton(s.display.nightFrom, 'Night mode starts',
+                  (m) => s.setDisplay(s.display.copyWith(nightFrom: m))),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('–')),
+              _timeButton(s.display.nightTo, 'Night mode ends', (m) => s.setDisplay(s.display.copyWith(nightTo: m))),
+            ]),
+          ),
+      ]);
+
   // ---- Look ------------------------------------------------------------------------------------------------------
   Widget _look(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingsGroup(title: 'Night', children: [
-          ...nightRows(s),
-          if (s.display.nightSchedule)
-            SettingRow(
-              title: 'From / to',
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                _timeButton(s.display.nightFrom, 'Night mode starts',
-                    (m) => s.setDisplay(s.display.copyWith(nightFrom: m))),
-                const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('–')),
-                _timeButton(s.display.nightTo, 'Night mode ends', (m) => s.setDisplay(s.display.copyWith(nightTo: m))),
-              ]),
-            ),
-        ]),
         SettingsGroup(title: 'Text and colour', children: [
           SegmentRow<double>(
             title: 'Text size',
@@ -494,7 +520,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             value: s.display.textScale,
             onChanged: (t) => s.setDisplay(s.display.copyWith(textScale: t)),
           ),
-          // fourteen swatches: under the label, wrapping, rather than squeezed beside it
+          // the swatches (24 since 10-27): under the label, wrapping, rather than squeezed beside it
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -522,26 +548,71 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     );
   }
 
-  // ---- Library & Home --------------------------------------------------------------------------------------------
-  /// The local libraries (folders on this device) and Komga's - the server's own settings on Server and sync.
+  // ---- Libraries -------------------------------------------------------------------------------------------------
+  /// Every library in one place (user, 2026-10-27: the app reads from several sources, Komga one of them): the local
+  /// and network ones, added and managed here, and Komga's - all of the server's, each switched on or off on this
+  /// device (a folder that isn't wanted simply isn't added; a server brings all its libraries). The server's own
+  /// settings stay on Server and sync.
   List<Widget> _libraries() {
     final api = widget.api;
     final local = api is CombinedSource ? api.local : null;
+    final noServer = CombinedSource.noServerOf(api);
     return [
       if (local != null) ...[
+        // (on top: not between two groups - user, 2026-10-27)
+        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
         LocalLibrariesGroup(local: local),
         LocalLibrariesGroup(local: local, network: true),
-        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
       ] else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
-      SettingsGroup(title: 'Komga', children: [
-        ActionRow(title: 'Komga server', subtitle: CombinedSource.noServerOf(api)
-                ? 'None (No server mode) - one is added in Server and sync'
-                : 'Its address, account and sync: Server and sync',
-            icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
-      ]),
+      if (noServer)
+        SettingsGroup(title: 'Komga', children: [
+          ActionRow(title: 'Komga server', subtitle: 'None (No server mode) - one is added in Server & Sync',
+              icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
+        ])
+      else
+        _komgaLibraries(),
     ];
   }
+
+  /// Komga's libraries (the server's, not the local ones), as this device's main source gives them.
+  late final Future<List<dynamic>> _komga = switch (widget.api) {
+    final CombinedSource c => c.main.libraries(),
+    final other => other.libraries(),
+  };
+
+  /// Komga's libraries: a switch each - shown on this device or not (kept on this device). The last one shown can't
+  /// be switched off: with none left, Komga would be asked for every library (api.dart _scope).
+  Widget _komgaLibraries() => FutureBuilder<List<dynamic>>(
+        future: _komga,
+        builder: (context, snap) {
+          final libs = snap.data ?? const [];
+          final server = ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server & Sync',
+              icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server));
+          return ListenableBuilder(
+            listenable: HiddenLibraries.instance,
+            builder: (context, _) {
+              final h = HiddenLibraries.instance;
+              final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
+              return SettingsGroup(title: 'Komga', children: [
+                server,
+                for (final l in libs)
+                  SwitchRow(
+                    title: l['name'] as String? ?? '',
+                    value: !h.isHidden(l['id'] as String?),
+                    onChanged: !h.isHidden(l['id'] as String?) && shown <= 1
+                        ? null // the last one shown stays
+                        : (v) => h.setHidden(l['id'] as String, !v),
+                  ),
+                if (snap.hasError || (snap.hasData && libs.isEmpty))
+                  const NoteRow("Komga's libraries can't be listed right now."),
+              ]);
+            },
+          );
+        },
+      );
+
+  // ---- Library & Home --------------------------------------------------------------------------------------------
 
   List<Widget> _library() => [
         _live((s) {
@@ -556,7 +627,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             // any of three lines under a book's poster, always in this order (user, 2026-10-07); comics and eBooks each
             // their own (user, 2026-10-18)
             ToggleChipsRow(
-              title: 'Under comic posters',
+              title: 'Under Comic & Webtoon Posters', // (user, 2026-10-27: a webtoon's are these)
               chips: [
                 ToggleChip('Series #', l.posterSeries, (v) => s.setLibrary(l.copyWith(posterSeries: v))),
                 ToggleChip('Title', l.posterTitle, (v) => s.setLibrary(l.copyWith(posterTitle: v))),
@@ -581,7 +652,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ),
           ]);
         }),
-        _librariesShown(),
         const SettingsGroup(title: 'Home sections', children: [
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
         ]),
@@ -603,50 +673,48 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ];
 
 
-  late final Future<List<dynamic>> _allLibraries = widget.api.libraries();
-
-  /// A switch per library: shown on this device or not. The last one shown can't be switched off.
-  Widget _librariesShown() => FutureBuilder<List<dynamic>>(
-        future: _allLibraries,
-        builder: (context, snap) {
-          final libs = snap.data;
-          if (libs == null || libs.isEmpty) return const SizedBox.shrink(); // can't list them (offline, say)
-          return ListenableBuilder(
-            listenable: HiddenLibraries.instance,
-            builder: (context, _) {
-              final h = HiddenLibraries.instance;
-              final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
-              return SettingsGroup(title: 'Libraries on this device', children: [
-                for (final l in libs)
-                  SwitchRow(
-                    title: l['name'] as String? ?? '',
-                    value: !h.isHidden(l['id'] as String?),
-                    onChanged: !h.isHidden(l['id'] as String?) && shown <= 1
-                        ? null // the last one shown stays
-                        : (v) => h.setHidden(l['id'] as String, !v),
-                  ),
-              ]);
-            },
-          );
-        },
-      );
-
   // ---- Downloads -------------------------------------------------------------------------------------------------
   Widget _downloads(BuildContext context) {
     final d = Downloads.instance;
-    const choices = <int?>[2, 5, 10, 20, 50, 100, null]; // GB; null = no limit
+    // GB; null = no limit, 0 = off: nothing downloads (a book asked for stops for lack of room - user, 2026-10-27)
+    const choices = <int?>[0, 2, 5, 10, 20, 50, 100, null];
     final current = d.capBytes == null ? null : (d.capBytes! / Downloads.gb).round();
+    // MB; 0 = off: nothing is cached, a book is read from its source (user, 2026-10-27)
+    const cacheChoices = <int>[0, 256, 512, 1024, 2048, 5120];
+    final cacheMb = (Downloads.cacheCap / (1024 * 1024)).round();
+    String mb(int m) => m == 0 ? 'Off' : (m < 1024 ? '$m MB' : '${m ~/ 1024} GB');
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'Storage', children: [
         SettingRow(
-          title: 'Storage limit',
+          title: 'Downloads limit', // (user, 2026-10-27; "Storage limit")
           subtitle: '${DownloadsScreen.size(d.usedBytes)} used', // (user, 2026-10-21: just the amount)
           trailing: DropdownButton<int?>(
             value: choices.contains(current) ? current : 10,
             underline: const SizedBox.shrink(),
-            items: [for (final c in choices) DropdownMenuItem(value: c, child: Text(c == null ? 'No limit' : '$c GB'))],
+            items: [
+              for (final c in choices)
+                DropdownMenuItem(value: c, child: Text(c == null ? 'No limit' : (c == 0 ? 'Off' : '$c GB'))),
+            ],
             onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
           ),
+        ),
+        // the books opened lately, kept to read again without the source (user, 2026-10-27: its own limit, and Clear)
+        SettingRow(
+          title: 'Cache limit',
+          subtitle: '${DownloadsScreen.size(d.cacheBytes)} used',
+          trailing: DropdownButton<int>(
+            value: cacheChoices.contains(cacheMb) ? cacheMb : 512,
+            underline: const SizedBox.shrink(),
+            items: [for (final c in cacheChoices) DropdownMenuItem(value: c, child: Text(mb(c)))],
+            onChanged: (c) {
+              if (c != null) d.setCacheCap(c * 1024 * 1024);
+            },
+          ),
+        ),
+        ActionRow(
+          title: 'Cached books',
+          subtitle: 'Opened lately and kept, to read again without the server or share',
+          button: TextButton(onPressed: d.cacheBytes == 0 ? null : d.clearCache, child: const Text('Clear cache')),
         ),
         // a phone or tablet (a PC has no mobile data to save)
         if (knowsMobileData)
@@ -695,6 +763,30 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ),
       ]),
     ];
+  }
+
+  // ---- Sync now (Server & Sync) -----------------------------------------------------------------------------------
+  bool _syncing = false;
+
+  /// Everything synced through Komga, now: each store's changes waiting to go are sent, and Komga's are read again -
+  /// past the few seconds a refresh is otherwise held back for - and reading done offline goes too. Komga not
+  /// answering: said (Last Sync stays as it was).
+  Future<void> _syncNow(BuildContext context) async {
+    final before = SyncStatus.instance.last;
+    setState(() => _syncing = true);
+    try {
+      await Future.wait([
+        AppSettings.instance.refresh(force: true),
+        Pins.instance.refresh(force: true),
+        OnDeckHidden.instance.refresh(force: true),
+        PairShift.instance.refresh(force: true),
+      ]);
+      await ProgressSync.instance.run();
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+    if (!context.mounted || SyncStatus.instance.last != before) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Komga didn't answer: nothing synced")));
   }
 
   // ---- confirmations ---------------------------------------------------------------------------------------------

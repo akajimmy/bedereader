@@ -286,6 +286,11 @@ class LocalSource extends CatalogueSource {
   Future<List<dynamic>> libraries() async =>
       [for (final l in _libraries) {'id': l.id, 'name': l.name}]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
 
+  /// All of them: a folder that isn't wanted isn't added - hiding is Komga's libraries' (Settings > Libraries; user,
+  /// 2026-10-27), and a local one hidden before had no switch left to show it again.
+  @override
+  Future<List<dynamic>> visibleLibraries({bool kept = false}) => libraries();
+
   /// [id] (a book, series or library of these) is on a network share.
   bool onShare(String id) {
     final path = _books[id]?.path ?? _books[_seriesFirst[id]]?.path ?? libraryPath(id);

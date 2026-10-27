@@ -80,10 +80,10 @@ abstract class SyncedIds extends ChangeNotifier {
 
   /// Komga's list again - Home calls it each time it reloads, so a change made on another device arrives without a
   /// restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_api == null || !_loaded) return;
     final p = await SharedPreferences.getInstance();
-    await _gate.run(() => _fetch(p));
+    await _gate.run(() => _fetch(p), force: force); // (force: Sync now)
   }
 
   final _gate = RefreshGate();

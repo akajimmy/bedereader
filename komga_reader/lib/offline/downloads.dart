@@ -237,8 +237,34 @@ class Downloads extends ChangeNotifier implements LocalPages {
   // from the device from then on, and offline too. Up to [cacheCap] on disk: the books opened longest ago go first to
   // make room; a book finished goes as soon as it's left. Not a download: not on the Downloads screen, not in its limit.
   static const defaultCacheCap = 512 * 1024 * 1024; // (user, 2026-10-24: "let's call the cache size 512 megabytes")
-  @visibleForTesting
+  /// This device's (Settings > Storage & Downloads > Cache limit - user, 2026-10-27); 0: nothing is cached - a book is
+  /// read from its source as it's opened and read.
   static int cacheCap = defaultCacheCap;
+  static const _cacheCapKey = 'downloads.cacheCap';
+
+  /// A new cache limit, kept; the cache trimmed to it at once (0: emptied - but the book being read).
+  Future<void> setCacheCap(int bytes) async {
+    cacheCap = bytes;
+    await (await SharedPreferences.getInstance()).setInt(_cacheCapKey, bytes);
+    await _cacheRoom(0, '');
+    notifyListeners();
+  }
+
+  /// Every cached copy gone (Clear cache), but the book open in the reader's - its pages are read from it - and the
+  /// books waiting to be cached.
+  Future<void> clearCache() async {
+    final open = _readers > 0 ? _reading : null;
+    final ids = [
+      for (final s in [store, localStore])
+        for (final e in s?.books.entries ?? const <MapEntry<String, Map<String, dynamic>>>[])
+          if (e.value['cache'] == true && e.key != open) e.key,
+    ];
+    final waiting = queue.where((j) => j.cache && j.state != JobState.downloading).toList();
+    queue.removeWhere(waiting.contains);
+    if (ids.isNotEmpty) await _deleteFiles(ids);
+    if (waiting.isNotEmpty) await _saveQueue();
+    notifyListeners();
+  }
   int get cacheBytes => _bytes(cached: true);
   bool isCached(String bookId) {
     final e = _storeOf(bookId)?.books[bookId];
@@ -263,6 +289,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     // holds Komga's only (the share is another server)
     final s = _storeOf(id);
     if (s == null || !canDownload(id) || (_hold && !isLocalId(id))) return;
+    if (cacheCap <= 0) return; // (the cache off: read from its source)
     final e = s.books[id];
     if (e != null && e['cache'] == true) {
       e['cachedAt'] = clock.now().toIso8601String();
@@ -407,6 +434,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
+    final cacheLimit = p.getInt(_cacheCapKey);
+    if (cacheLimit != null) cacheCap = cacheLimit; // (none chosen: as it is - the default, or a test's)
     wifiOnly = p.getBool(_wifiOnlyKey) ?? false;
     waitingForWifi = false;
     paused = p.getBool(_pausedKey) ?? false;

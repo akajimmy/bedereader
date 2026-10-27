@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
-    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, 'Reading')).selected, isTrue);
+    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, pageName(SettingsPage.reading))).selected, isTrue);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -181,7 +181,7 @@ void main() {
     expect(find.byType(ChoiceChip), findsNWidgets(SettingsPage.values.length - 1));
     await tester.tap(find.widgetWithText(ChoiceChip, 'Comics'));
     await tester.pumpAndSettle();
-    expect(find.text('Turning pages'), findsOneWidget);
+    expect(find.byType(SegmentedButton<PageTurn>), findsOneWidget, reason: "the Comics page's page turn");
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Comics')).selected, isTrue);
     expect(tester.takeException(), isNull); // no overflow at phone width
   });
@@ -221,14 +221,17 @@ void main() {
     expect(tester.widget<Switch>(onDeckSwitch()).value, isTrue);
   });
 
-  testWidgets("night mode: Off / On / Scheduled, one choice on Look (user, 2026-10-07) - the same setting as the "
-      "reader's moon", (tester) async {
+  testWidgets("night mode: Off / On / Scheduled, one choice on All Book Types (user, 2026-10-07; moved from Look "
+      "2026-10-27) - the same setting as the reader's moon", (tester) async {
     tall(tester);
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
     addTearDown(() => s.setDisplay(const DisplayPrefs()));
     await open(tester, page: SettingsPage.look);
     final seg = find.byType(SegmentedButton<NightMode>);
+    expect(seg, findsNothing, reason: 'not on Look any more');
+    await tester.tap(find.widgetWithText(ListTile, pageName(SettingsPage.reading)));
+    await tester.pumpAndSettle();
     Future<void> pick(String t) async {
       await tester.tap(find.descendant(of: seg, matching: find.text(t)));
       await tester.pumpAndSettle();
@@ -345,7 +348,7 @@ void main() {
     await tester.pumpAndSettle();
     final back = s.display;
     expect([back.night, back.posterSize, back.screenOn, back.nightSchedule, back.textScale, back.accent, back.epubTurn],
-        [false, PosterSize.medium, 0, false, 1.0, Accent.blue, EpubTurn.slide]);
+        [false, PosterSize.medium, 0, false, 1.0, Accent.royal, EpubTurn.slide]);
     expect(ReaderKeys.instance.isDefault, isTrue, reason: "the reader's keys");
     expect(ReaderKeys.instance.actionFor(LogicalKeyboardKey.keyN), isNull);
     expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');

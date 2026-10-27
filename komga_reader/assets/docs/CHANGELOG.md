@@ -9,6 +9,17 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Settings > Libraries now holds every library: Local, Network and Komga. Komga's libraries are listed there, each with its switch to show it on this device or not (they were in Library & Home). Local and network libraries can't be hidden any more: a folder you don't want isn't added (Remove takes it off).
+- Settings, renamed and regrouped: Reading is All Book Types, with Display (was Over the page) and Behaviour (was Moving on). Comics: Page Layout - default values (was Pages - defaults), Appearance (was Turning pages) with Page Turn Animation, and Double-tap to zoom now in Controls. eBooks: Formatting, Page and Two pages are one group, Page Layout, with New Chapters Start On; eBooks' Page Turn Animation too. Over the slider (tap to hide) is Show above page slider, with an (i) that says what it does - a tap on it shows the text. In Libraries, Scan is at the top.
+- Server and sync is Server & Sync. Its group What's synced through Komga is Sync, with Last Sync - when this device last synced with Komga - and Sync now: everything synced through Komga, at once (it says so if Komga doesn't answer).
+- Library & Home: Under comic posters is Under Comic & Webtoon Posters (a webtoon's posters take those lines).
+- Night mode and its schedule moved from Look to All Book Types.
+- Look: a new palette of 24 accent colours, bolder and more of them - Crimson, Fire red, Coral, Orange, Yellow, Lime, Neon, Forest, Green, Mint, Cyan, Royal, Navy, Violet, Electric, Dark Pink, Hot pink, Salmon, Bronze, Olive, White, Grey, Charcoal and Near Black. Royal is the default now (Blue is gone); a device on a colour that's gone starts on Royal.
+- Webtoons' settings say Page Layout - default values too, and Comics' and Webtoons' Image - defaults is Image - default values.
+- Downloads is Storage & Downloads. Storage limit is Downloads limit, and it can be Off (nothing downloads). New: Cache limit - how much the books you open are kept, Off to 5 GB (512 MB as before; Off: nothing is cached, a book is read from its source) - and Clear cache.
+
 ## 1.6.0 - in development
 
 Not released yet. Release candidates: build 164 (`v1.6.0-rc.1`).

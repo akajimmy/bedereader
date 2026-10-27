@@ -16,7 +16,7 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 - **A Komga server** - your libraries, series, collections and read lists, with reading progress kept on the server
   and the same on every device. Komga sorts, searches and keeps the metadata; BeDeReader shows it and keeps it in
-  sync.
+  sync. Each of the server's libraries can be switched off on a device, in Settings > Libraries.
 - **A folder on this device** - on Android its storage or a card, on Windows any drive, on iPhone and iPad the app's
   own folder in the Files app.
 - **A shared folder on your network** - a NAS or a PC's share (SMB). The app asks for a user name and password only
@@ -24,7 +24,7 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - **Several at once** - Home, search, On deck and the libraries list put every source's books together. Settings >
   Library & Home > Show where books come from puts a small icon on posters: this device, the network or Komga.
 - **No Komga at all** - the sign-in screen's *Use without a server* runs the app on folders alone. A Komga server can
-  be added later, in Settings > Server and sync.
+  be added later, in Settings > Server & Sync.
 
 ### Folders and shares as libraries
 
@@ -109,10 +109,11 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 **Offline**
 - Download single books, or a series or read list's unread (or all) books - from Komga or a shared folder - with a
-  storage limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
+  downloads limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
   carries on where it stopped. A book on a folder of the device itself needs no download: it's there.
-- Books you open are kept on the device for a while too (up to 512 MB, the oldest opened going first), so they read
-  offline without a download.
+- Books you open are kept on the device for a while too (up to the cache limit, 512 MB at first, the oldest opened
+  going first), so they read offline without a download. Settings > Storage & Downloads sets both limits - either can
+  be Off - and Clear cache empties the cache.
 - **Offline mode** shows just the books with a copy on the device - by hand, or offered when Komga can't be reached.
   Nothing is read from Komga or a share while it's on; folders on the device are read as always. Started in offline
   mode, the app doesn't contact Komga at all.
@@ -179,8 +180,8 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
 - **On Komga, for every device**: reading progress of Komga's books, per-series reader settings (fit, reading
   direction, page colours, gutter) and image settings and their defaults - comics and webtoons each their own - the
   EPUB settings (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their
-  order, pins (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its
-  own), and what's hidden from On deck.
+  order, pins and what's hidden from On deck. Settings > Server & Sync says when this device last synced, and Sync
+  now syncs it at once.
 - **On this device**: the server address and API key, the local and network libraries and the shares' logins, the
   reading progress, pins and series settings of their books, reading brightness and night mode, how the reader
   behaves (page turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and
@@ -188,8 +189,8 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
   offline mode switch. In No server mode, everything is on this device. Settings > About can reset this device's
   settings at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, Webtoons, eBooks and Remote and keys for reading;
-Server and sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
+Settings (side menu) has everything in one place: All Book Types, Comics, Webtoons, eBooks and Remote and keys for reading;
+Server & Sync, Library & Home, Libraries, Storage & Downloads and Look for the app; About. Groups marked "synced" are the same
 on every device.
 
 ## Privacy

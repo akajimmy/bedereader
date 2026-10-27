@@ -29,6 +29,7 @@ import 'pins.dart';
 import 'reader_keys.dart';
 import 'remote_log.dart';
 import 'settings.dart';
+import 'sync_status.dart';
 import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
@@ -104,7 +105,7 @@ Future<void> _startLog() async {
 
 /// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the
 /// app is driven by a D-pad remote as well as touch.
-ThemeData buildTheme([Accent choice = Accent.blue]) {
+ThemeData buildTheme([Accent choice = defaultAccent]) {
   final accent = choice.colour;
   final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
   return base.copyWith(
@@ -381,6 +382,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
+    unawaited(SyncStatus.instance.load()); // (Settings > Server & Sync > Last Sync)
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     // the local libraries in the background - the start doesn't wait on the disk for them (Home takes them in when
     // they're open: what the last scans found, then scanned again)

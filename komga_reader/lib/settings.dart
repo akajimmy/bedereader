@@ -181,37 +181,56 @@ extension RotationLabel on Rotation {
       };
 }
 
-/// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark
-/// background (the "Rich" set, 2026-09-30 - the first, pale set was too muted). Listed in the order shown; the names
-/// are what's saved, so the original seven keep theirs (purple is now a violet).
-/// The app's accent colours (user, 2026-10-07 QA: hues spread out - the old ones crowded round blue - and greys).
-enum Accent { red, orange, yellow, lime, green, blue, violet, purple, magenta, pink, bronze, olive, white, silver, slate,
-  charcoal }
+/// The app's accent colour (buttons, switches, highlights), listed in the order shown: the user's own palette (10-27
+/// worksheet, reports\10-27-accent-worksheet.html: bolder, more of them - "a bright fire engine red, a bold forest
+/// green"). The name is what's saved: a device on a name that's gone (blue, red, purple...) starts on [defaultAccent].
+/// In hue order round the wheel, cut between Salmon and Crimson so the reds stay together (user, 2026-10-27, "A'" -
+/// cut at 0 degrees, Crimson at 348 went to the far end), then the earth tones, then the greys light to dark.
+enum Accent { crimson, fireRed, coral, orange, yellow, lime, neon, forest, green, mint, cyan, royal, navy, violet,
+  electric, darkPink, hotPink, salmon, bronze, olive, white, grey, charcoal, nearBlack }
+
+/// A fresh install's accent, and one saved under a name that's gone (user, 2026-10-27: Blue was the default - gone).
+const defaultAccent = Accent.royal;
 
 extension AccentColour on Accent {
   Color get colour => switch (this) {
-        Accent.red => const Color(0xFFE5484D),
+        Accent.fireRed => const Color(0xFFFF1F1F),
+        Accent.crimson => const Color(0xFFD7163E),
+        Accent.coral => const Color(0xFFFF6B57),
         Accent.orange => const Color(0xFFF76B15),
         Accent.yellow => const Color(0xFFF5D90A),
-        Accent.lime => const Color(0xFF99D52A),
+        Accent.lime => const Color(0xFF00FF00),
+        Accent.neon => const Color(0xFF3DFF5A),
         Accent.green => const Color(0xFF30A46C),
-        Accent.blue => const Color(0xFF0090FF),
+        Accent.forest => const Color(0xFF1E8C3A),
+        Accent.mint => const Color(0xFF3DE8B5),
+        Accent.cyan => const Color(0xFF00D2F0),
+        Accent.navy => const Color(0xFF000080),
+        Accent.royal => const Color(0xFF2F5BFF),
         Accent.violet => const Color(0xFF6E56CF),
-        Accent.purple => const Color(0xFF9A5CD0),
-        Accent.magenta => const Color(0xFFD6409F),
-        Accent.pink => const Color(0xFFE93D82),
+        Accent.electric => const Color(0xFFB026FF),
+        Accent.darkPink => const Color(0xFFA02372),
+        Accent.hotPink => const Color(0xFFFF2E93),
+        Accent.salmon => const Color(0xFFFF91A4),
         Accent.bronze => const Color(0xFFAD7F58),
         Accent.olive => const Color(0xFF8E8C5C),
         Accent.white => const Color(0xFFEDEDED),
-        Accent.silver => const Color(0xFFA0A4AB),
-        Accent.slate => const Color(0xFF6B7280),
+        Accent.grey => const Color(0xFF9999A0),
         Accent.charcoal => const Color(0xFF4A4F57),
+        Accent.nearBlack => const Color(0xFF1B1B1B), // (the user's call: as it is, though it sits close to the background)
       };
 
   /// Text and icons on the accent (a selected choice, a filled button): black on the light ones, white on the dark.
   Color get onColour => colour.computeLuminance() > 0.25 ? const Color(0xFF101012) : const Color(0xFFFFFFFF);
 
-  String get label => '${name[0].toUpperCase()}${name.substring(1)}';
+  /// As the user named them (10-27).
+  String get label => switch (this) {
+        Accent.fireRed => 'Fire red',
+        Accent.darkPink => 'Dark Pink',
+        Accent.hotPink => 'Hot pink',
+        Accent.nearBlack => 'Near Black',
+        _ => '${name[0].toUpperCase()}${name.substring(1)}',
+      };
 
   /// Where the remote's focus is shown: the accent, or on the dark greys a lighter one - charcoal on the app's
   /// near-black was hard to find.
@@ -292,7 +311,7 @@ class DisplayPrefs {
       this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
+      this.textScale = 1.0, this.accent = defaultAccent, this.pageStrip = false,
       this.comics = const KindPrefs(), this.ebooks = const KindPrefs(), this.webtoons = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
@@ -458,7 +477,7 @@ class DisplayPrefs {
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
-        accent: pick(Accent.values, j['accent'], Accent.blue),
+        accent: pick(Accent.values, j['accent'], defaultAccent),
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         webtoons: kind('webtoons', none.webtoons),
@@ -1032,10 +1051,10 @@ class AppSettings extends ChangeNotifier {
 
   /// The reader settings from Komga again - Home calls it each time it reloads, so a change made on another device
   /// arrives without a restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_api == null || !_loaded) return;
     final p = await SharedPreferences.getInstance();
-    await _gate.run(() => _fetch(p));
+    await _gate.run(() => _fetch(p), force: force); // (force: Sync now)
   }
 
   final _gate = RefreshGate();
