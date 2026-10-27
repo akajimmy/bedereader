@@ -258,6 +258,10 @@ class Shares {
   /// Share paths go through the app's SMB client here (not Windows).
   bool get viaApp => _viaApp;
 
+  /// Before a share's connection is replaced (a new login): what holds files open through it lets them go (the app:
+  /// the local libraries' open books - main.dart).
+  Future<void> Function()? beforeReconnect;
+
   /// The share [path] is on, as a key (host\share, lower case - the NAS doesn't tell case apart); null: not a share.
   static String? shareOf(String path) {
     final s = splitUnc(path);
@@ -291,7 +295,13 @@ class Shares {
     final k = shareOf(path);
     if (k == null) return;
     login == null ? _logins.remove(k) : _logins[k] = login;
-    await _open.remove(k)?.close();
+    final old = _open.remove(k);
+    if (old != null) {
+      // the files open through the old connection let go first (a book open on it lost its pages - the review,
+      // 2026-10-26): opened again through the new one when next read
+      await beforeReconnect?.call();
+      await old.close();
+    }
     await _storage.write(key: _key, value: jsonEncode({for (final e in _logins.entries) e.key: e.value.toJson()}));
   }
 

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'errors.dart';
+import 'local/book_names.dart' show isLocalId;
 import 'refresh_gate.dart';
 import 'screen.dart';
 import 'book_source.dart';
@@ -710,6 +711,9 @@ class AppSettings extends ChangeNotifier {
 
   static const komgaKey = 'komgareader.readerprefs';
   static const _localReader = 'readerPrefs';
+  // a local library's series' settings: this device's own (another device hasn't its folders) - never sent to Komga,
+  // kept when its copy comes and through signing out (review, 2026-10-26: as the local pins are)
+  static const _hereSeries = 'readerPrefs.here';
   static const _localDisplay = 'displayPrefs';
 
   BookSource? _api;
@@ -824,7 +828,7 @@ class AppSettings extends ChangeNotifier {
     epub = _withOwn(const EpubPrefs()); // (this device's font and size stay)
     library = const LibraryPrefs();
     _posterLookFollows();
-    series.clear();
+    series.removeWhere((id, _) => !isLocalId(id)); // (this device's own stay)
     _dirtySeries.clear();
     _dirtyDefault = false;
     _dirtyEpub = false;
@@ -908,6 +912,7 @@ class AppSettings extends ChangeNotifier {
     final r = p.getString(_localReader);
     final savedReader = r == null ? null : jsonDecode(r) as Map<String, dynamic>;
     if (savedReader != null) _applyBlob(savedReader, remote: false);
+    _applyHere(p.getString(_hereSeries));
     _posterLookFollows();
     applyBacklight();
     notifyListeners();
@@ -979,6 +984,7 @@ class AppSettings extends ChangeNotifier {
   }
 
   void _dirty(String seriesId) {
+    if (isLocalId(seriesId)) return; // (this device's own: nothing to send)
     _dirtySeries.add(seriesId);
     _versions[seriesId] = (_versions[seriesId] ?? 0) + 1;
   }
@@ -1075,7 +1081,10 @@ class AppSettings extends ChangeNotifier {
 
   void _changedReader() {
     notifyListeners();
-    SharedPreferences.getInstance().then((p) => p.setString(_localReader, jsonEncode(_blob())));
+    SharedPreferences.getInstance().then((p) async {
+      await p.setString(_localReader, jsonEncode(_blob()));
+      await p.setString(_hereSeries, jsonEncode(_hereBlob()));
+    });
     _saveUnsent();
     if (_api != null) _syncSoon(); // not connected yet: it's unsent, and goes when Komga is (load / useApi)
   }
@@ -1149,6 +1158,20 @@ class AppSettings extends ChangeNotifier {
         'series': {for (final e in series.entries) e.key: e.value.toJson()},
       };
 
+  /// This device's own series' settings (a local library's).
+  Map<String, dynamic> _hereBlob() => {for (final e in series.entries) if (isLocalId(e.key)) e.key: e.value.toJson()};
+
+  void _applyHere(String? raw) {
+    if (raw == null) return;
+    try {
+      (jsonDecode(raw) as Map).forEach((id, v) {
+        if (isLocalId(id as String)) series[id] = ReaderPrefs.fromJson(Map<String, dynamic>.from(v as Map));
+      });
+    } catch (_) {
+      // damaged: none
+    }
+  }
+
   /// A saved copy - this device's ([remote] false) or Komga's - replaces what's here, except this device's changes
   /// that haven't reached Komga yet: those stay as they are (changed, or removed). So a series whose own settings were
   /// removed on another device goes here too (code review, 2026-09-30: it used to stay for good).
@@ -1169,6 +1192,10 @@ class AppSettings extends ChangeNotifier {
           e.key as String: ReaderPrefs.fromJson(Map<String, dynamic>.from(e.value as Map)),
     };
     if (remote) {
+      // (Komga's copy has none of this device's own: they stay)
+      for (final e in series.entries) {
+        if (isLocalId(e.key)) next[e.key] = e.value;
+      }
       for (final id in _dirtySeries) {
         final mine = series[id];
         if (mine != null) next[id] = mine; // unsent here: this device's version (absent = removed here)

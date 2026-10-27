@@ -172,11 +172,12 @@ class LocalSource extends CatalogueSource {
           });
           found.value = null;
           report[library.id] = r.report;
-          if (r.report.missing) looksDeleted.add(library);
+          // (not one removed while it was being scanned: it was asked about after it had gone - the review, 2026-10-26)
+          if (r.report.missing && _libraries.any((l) => l.id == library.id)) looksDeleted.add(library);
           if (r.report.reached && _libraries.any((l) => l.id == library.id)) await store.putLibrary(r.index);
         }
         lastScan = report;
-        missing.value = looksDeleted;
+        missing.value = [for (final l in looksDeleted) if (_libraries.any((x) => x.id == l.id)) l];
         _rebuild();
         if (_signature() != signature) {
           changed.value++;
@@ -196,23 +197,27 @@ class LocalSource extends CatalogueSource {
         for (final b in _books.values) Object.hash(b.id, b.size, b.modified, b.title),
       ]);
 
-  /// The libraries changed (Settings): kept, the removed ones' scans let go (not their progress), and scanned again.
+  /// The libraries changed (Settings): kept, the removed ones' scans let go (not their progress), and scanned again -
+  /// not waited for: [scanning] tells how it goes, and the screens look again when it's done (the first scan of a big
+  /// library kept the sign-in screen waiting with nothing said - the review, 2026-10-26). [rescan] waits for it.
   Future<void> setLibraries(List<LocalLibrary> libraries) async {
     final ids = {for (final l in libraries) l.id};
+    final removed = [for (final l in _libraries) if (!ids.contains(l.id)) l];
+    // the list first, before anything is waited for: a scan ending meanwhile sees it (the review, 2026-10-26: one
+    // ending while a removed library's files were let go put it back up as looking deleted)
+    _libraries = List.of(libraries);
     final gone = <String>{};
-    for (final l in _libraries) {
-      if (ids.contains(l.id)) continue;
+    for (final l in removed) {
       final index = store.libraries[l.id];
       gone.addAll([l.id, ...?index?.series.keys, ...?index?.books.keys]);
       await store.removeLibrary(l.id);
     }
     if (gone.isNotEmpty) onRemoved?.call(gone);
-    _libraries = List.of(libraries);
     await LocalLibraries.save(libraries);
     _rebuild();
     changed.value++;
     contentChanged.value++;
-    await rescan();
+    unawaited(rescan().catchError((Object _) {})); // (a scan's own trouble is in lastScan)
   }
 
   // ---- account / libraries ------------------------------------------------------------------------------------------
@@ -236,13 +241,13 @@ class LocalSource extends CatalogueSource {
   Future<List<dynamic>> libraries() async =>
       [for (final l in _libraries) {'id': l.id, 'name': l.name}]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
 
-  /// A library's folder.
   /// [id] (a book, series or library of these) is on a network share.
   bool onShare(String id) {
     final path = _books[id]?.path ?? _books[_seriesFirst[id]]?.path ?? libraryPath(id);
     return path != null && splitUnc(path) != null;
   }
 
+  /// A library's folder.
   String? libraryPath(String libraryId) => _libraries.where((l) => l.id == libraryId).firstOrNull?.path;
 
   /// A book's file; null for none of these.

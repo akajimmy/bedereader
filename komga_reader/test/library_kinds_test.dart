@@ -36,6 +36,13 @@ void main() {
     expect(titles['Loose One-Shot.cbz'], 'Loose One-Shot', reason: 'a one-shot: its whole name');
   });
 
+  test('a title after its number comes first: "Dune 01 - Dune Messiah" is "Dune Messiah", not the name without its '
+      'shared start ("01 - Dune Messiah" - the review, 2026-10-26)', () async {
+    final fs = MemoryFs({'lib/Dune/Dune 01 - Dune Messiah.cbz': _cbz(), 'lib/Dune/Dune 02 - Children of Dune.cbz': _cbz()});
+    final r = await scanLibrary(fs, const LocalLibrary('lib', 'lib'), null);
+    expect({for (final b in r.index.books.values) b.title}, {'Dune Messiah', 'Children of Dune'});
+  });
+
   test('one series: every book in the folder and its subfolders, one series named after the folder, folder by folder '
       '("Vol 2/Book 1" after "Vol 1/Book 10")', () async {
     final fs = MemoryFs({

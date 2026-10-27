@@ -4,8 +4,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'refresh_gate.dart';
 import 'book_source.dart';
+import 'local/book_names.dart' show isLocalId;
+import 'refresh_gate.dart';
 
 /// Sets of ids kept on the device and in the user's Komga client settings, so every device agrees - what's hidden from
 /// On deck ([OnDeckHidden]), the books whose pages pair shifted by one ([PairShift]). Komga's copy is the truth except
@@ -41,8 +42,9 @@ abstract class SyncedIds extends ChangeNotifier {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final before = _raw;
-    final raw = p.getString(_local);
+    final raw = p.getString(_local), here = p.getString(_hereKey);
     if (raw != null) _decode(raw);
+    if (here != null) _decodeHere(here);
     _loaded = true;
     if (_raw != before) notifyListeners();
     if (!fetch) return;
@@ -68,7 +70,7 @@ abstract class SyncedIds extends ChangeNotifier {
         final before = _raw;
         _decode(remote);
         if (_raw == before) return; // nothing new: nobody told (Home reloaded three times per reload - #34)
-        await p.setString(_local, _raw);
+        await p.setString(_local, _synced);
         notifyListeners();
       }
     } catch (_) {
@@ -110,18 +112,30 @@ abstract class SyncedIds extends ChangeNotifier {
 
   @protected
   void change(void Function() f) {
+    final synced = _synced;
     f();
+    notifyListeners();
+    if (_synced == synced) { // only this device's own changed: nothing for Komga
+      SharedPreferences.getInstance().then((p) => p.setString(_hereKey, _here));
+      return;
+    }
     _changes++;
     _pending = true;
-    notifyListeners();
     SharedPreferences.getInstance().then((p) async {
-      await p.setString(_local, _raw);
+      await p.setString(_hereKey, _here);
+      await p.setString(_local, _synced);
       await p.setBool(_dirtyKey, true); // until Komga has it
       await _send();
     });
   }
 
+  /// This device's own ids - a local library's series and books (review, 2026-10-26: as its pins are): never sent to
+  /// Komga (another device hasn't its folders), kept when Komga's list comes, and through signing out.
+  String get _hereKey => '$_local.here';
+
   String get _raw => jsonEncode({for (final n in _names) n: sets[n]!.toList()});
+  String get _synced => jsonEncode({for (final n in _names) n: [for (final id in sets[n]!) if (!isLocalId(id)) id]});
+  String get _here => jsonEncode({for (final n in _names) n: [for (final id in sets[n]!) if (isLocalId(id)) id]});
 
   /// To Komga, one send at a time with the list as it is then (two quick changes landed out of order, and a fast
   /// failure then a slow success cleared the unsent mark - code review 2026-10-05, #3). Not reachable: kept marked
@@ -137,7 +151,7 @@ abstract class SyncedIds extends ChangeNotifier {
     try {
       final api = _api;
       if (api == null) throw StateError('no server');
-      await api.putClientSetting(_syncKey, _raw);
+      await api.putClientSetting(_syncKey, _synced);
       if (!_sendAgain) {
         _pending = false;
         await p.setBool(_dirtyKey, false); // changed meanwhile: still to send
@@ -154,25 +168,43 @@ abstract class SyncedIds extends ChangeNotifier {
     }
   }
 
+  /// Komga's list (or the device's copy of it) - this device's own ids kept as they are.
   void _decode(String raw) {
     try {
       final j = jsonDecode(raw) as Map;
       for (final n in _names) {
-        sets[n] = {for (final id in (j[n] as List? ?? const [])) id as String};
+        sets[n] = {
+          for (final id in (j[n] as List? ?? const [])) if (!isLocalId(id as String)) id,
+          ...sets[n]!.where(isLocalId),
+        };
       }
     } catch (_) {
       // damaged: keep what we have
     }
   }
 
+  /// This device's own ids, as kept.
+  void _decodeHere(String raw) {
+    try {
+      final j = jsonDecode(raw) as Map;
+      for (final n in _names) {
+        sets[n]!.addAll([for (final id in (j[n] as List? ?? const [])) if (isLocalId(id as String)) id]);
+      }
+    } catch (_) {
+      // damaged: none
+    }
+  }
+
   /// Signed out: the account's list goes from this device (it comes back from Komga on signing in again) - an unsent
-  /// change here was sent to the next account, over its own list (code review, 2026-09-30).
+  /// change here was sent to the next account, over its own list (code review, 2026-09-30). This device's own stay.
   Future<void> clearAccount() async {
     _retry?.cancel();
     _api = null;
     _loaded = false;
     _pending = false;
-    _clearSets();
+    for (final n in _names) {
+      sets[n] = {...sets[n]!.where(isLocalId)};
+    }
     notifyListeners();
     final p = await SharedPreferences.getInstance();
     await p.remove(_local);
