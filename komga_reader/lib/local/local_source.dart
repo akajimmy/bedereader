@@ -232,7 +232,7 @@ class LocalSource extends CatalogueSource {
     final o = _open[bookId];
     if (o == null || o.users > 0) return;
     _open.remove(bookId);
-    unawaited(o.archive.close());
+    unawaited(o.close());
   }
 
   /// The books held open let go - done once they are (a file held open can't be moved or deleted on Windows).
@@ -240,7 +240,7 @@ class LocalSource extends CatalogueSource {
     final open = [..._open.values];
     _open.clear();
     for (final o in open) {
-      await o.archive.close();
+      await o.close();
     }
   }
 
@@ -278,33 +278,48 @@ class LocalSource extends CatalogueSource {
   // ---- pages: straight out of the archive ---------------------------------------------------------------------------
   // the books open lately (their directories read once), [_keepOpen] at most; one being read isn't closed under it
   final Map<String, _OpenBook> _open = {};
+  // a book being opened: asked for again meanwhile (the grid and the reader at once), it's the same opening - two
+  // would leave one archive never closed (the experiment's review)
+  final Map<String, Future<_OpenBook>> _opening = {};
   static const _keepOpen = 4;
 
   Future<T> _withArchive<T>(String bookId, Future<T> Function(ComicArchive a, List<String> pages) use) async {
     final b = _books[bookId];
     if (b == null) throw NeedsKomga('This book'); // (not one of these: never asked here)
-    var o = _open.remove(bookId);
+    var o = _open[bookId];
     if (o != null && !o.book.sameFile(b.size, b.modified)) {
-      // its file changed since it was opened: opened again
-      if (o.users == 0) unawaited(o.archive.close());
+      // its file changed since it was opened: opened again (one in use is closed when it's let go)
+      _open.remove(bookId);
+      if (o.users == 0) unawaited(o.close());
       o = null;
     }
     if (o == null) {
-      final (fs, file) = _fileOf(b);
-      final archive = await ComicArchive.open(fs, file);
-      o = _OpenBook(b, archive, comicPages(archive.names));
+      final opening = _opening[bookId] ??= () async {
+        final (fs, file) = _fileOf(b);
+        final archive = await ComicArchive.open(fs, file);
+        return _OpenBook(b, archive, comicPages(archive.names));
+      }();
+      try {
+        o = await opening;
+      } finally {
+        if (identical(_opening[bookId], opening)) _opening.remove(bookId);
+      }
     }
-    _open[bookId] = o; // (the newest last)
+    _open
+      ..remove(bookId)
+      ..[bookId] = o; // (the newest last)
     o.users++;
     try {
       return await use(o.archive, o.pages);
     } finally {
       o.users--;
+      // let go of while in use (its file changed, or the files were closed): closed now
+      if (o.users == 0 && !identical(_open[bookId], o)) unawaited(o.close());
       while (_open.length > _keepOpen) {
         final oldest = _open.entries.where((e) => e.value.users == 0).firstOrNull;
         if (oldest == null) break;
         _open.remove(oldest.key);
-        unawaited(oldest.value.archive.close());
+        unawaited(oldest.value.close());
       }
     }
   }
@@ -566,6 +581,14 @@ class _OpenBook {
   final ComicArchive archive;
   final List<String> pages;
   int users = 0;
+  bool _closed = false;
+
+  /// Its archive closed, once.
+  Future<void> close() async {
+    if (_closed) return;
+    _closed = true;
+    await archive.close();
+  }
 }
 
 /// A local book's poster, made when it's first shown ([LocalSource.posterAt]).
