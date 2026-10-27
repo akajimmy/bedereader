@@ -39,6 +39,7 @@ import 'local/local_library.dart';
 import 'screens/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
 import 'local/smb_fs.dart' show Shares;
+import 'open_with.dart';
 import 'side_menu.dart';
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
@@ -49,7 +50,11 @@ import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 import 'widgets/poster.dart' show HoldOkGuard;
 
-void main() {
+/// The app's command line (Windows: a file opened with the app - lib/open_with.dart).
+List<String> _args = const [];
+
+void main(List<String> args) {
+  _args = args;
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
@@ -194,6 +199,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    OpenWith.instance.start(_nav, _args); // a book file handed to the app from outside: straight into the reader
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
     // a library deleted on Komga: the pins to it go (only the signed-in Komga's answers count)
@@ -422,6 +428,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       _noServer = noServer;
       _loaded = true;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => OpenWith.instance.ready()); // (over the first screen)
   }
 
   /// No server mode's settings, pins, On deck hidden and pairing: this device's own - nothing to sync them through.

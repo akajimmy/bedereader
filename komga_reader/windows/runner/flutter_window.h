@@ -3,6 +3,7 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -36,6 +37,9 @@ class FlutterWindow : public Win32Window {
   // Keep-awake, version, links, fullscreen, window memory (desktop_channel.h).
   std::unique_ptr<DesktopChannel> desktop_;
   bool start_maximized_ = false;
+
+  // Files handed over by later starts, passed on to the app (open_with.h, lib/open_with.dart).
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> open_with_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

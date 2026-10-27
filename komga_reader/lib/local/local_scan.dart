@@ -182,9 +182,10 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
 /// Opens a book's file: its pages (a comic) or its metadata (an EPUB), its ComicInfo, and what its name says. Also
 /// returns its ComicInfo's series (a read list's books are put in theirs). [shortName]: its name without the start
 /// its series' books share - its title, unless its name has one after its number, or its ComicInfo or the EPUB has one.
+/// [fileName]: the file's name, when its path doesn't end in it (Android's opened files: /proc/self/fd/N).
 Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary library, String seriesId,
-    String seriesName, int place, bool oneshot, {String? shortName}) async {
-  final name = f.path.substring(f.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
+    String seriesName, int place, bool oneshot, {String? shortName, String? fileName}) async {
+  final name = fileName ?? f.path.substring(f.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
   final dot = name.lastIndexOf('.');
   final fileStem = dot <= 0 ? name : name.substring(0, dot);
   // (a read list's "001 - " is its place in the list, not its number)
@@ -240,6 +241,16 @@ Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary lib
     await archive.close();
   }
 }
+
+/// A book file opened on its own (Open with, Share - lib/opened_file.dart): read as a book of its own in a library
+/// would be ([fileName]: its name, when its path doesn't end in it).
+Future<LocalBook> readLooseBook(LibraryFs fs, FsEntry f, {String? fileName}) async {
+  const library = LocalLibrary('', looseFolder);
+  return (await _readBook(fs, f, library, localSeriesId(f.path), '', 0, true, fileName: fileName)).$1;
+}
+
+/// Where the loose books are said to be: no folder (their library's id is made from it).
+const looseFolder = '<opened file>';
 
 /// What a book sorts by: its ComicInfo number, else its name's; one with neither goes after the numbered ones, in
 /// its place in the folder (it took its place as its number, and could tie with #1 - the experiment's review).

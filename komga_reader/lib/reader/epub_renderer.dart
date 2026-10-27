@@ -26,6 +26,7 @@ import '../offline/downloads.dart';
 import '../combined_source.dart';
 import '../local/local_source.dart';
 import '../offline/downloads_source.dart';
+import '../opened_file.dart';
 import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -131,6 +132,7 @@ class EpubRenderer extends Renderer {
   static EpubSource sourceFor(BookSource api, String id) {
     final from = CombinedSource.of(api, id);
     if (from is LocalSource) return FileEpubSource.load(() => from.epubBytes(id));
+    if (from is OpenedFile) return FileEpubSource.load(from.epubBytes); // (a file opened on its own)
     final file = from is DownloadsSource ? from.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
