@@ -9,6 +9,7 @@ import 'package:komga_reader/local/local_source.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/memory_fs.dart';
+import 'support/zip_writer.dart';
 
 /// Files in memory whose scans wait at [gate] (asked whether a library's folder is there).
 class _Held extends MemoryFs {
@@ -60,5 +61,28 @@ void main() {
     await removed;
     await local.rescan();
     expect(asked.where((l) => l.isNotEmpty), isEmpty);
+  });
+
+  test("a library removed while it's being scanned stays removed - its books don't come back when the scan ends (the "
+      "experiment's review: they did, until the next scan)", () async {
+    fs.files['Comics/Saga/Saga 1.cbz'] = zipOf({'p1.png': pngHead(800, 1200)});
+    await local.setLibraries([const LocalLibrary('Comics', 'Comics')]).timeout(const Duration(seconds: 2));
+    final removed = local.setLibraries(const []); // while its scan waits
+    fs.gate.complete();
+    await removed;
+    await local.rescan();
+    expect(local.store.libraries, isEmpty);
+    expect((await local.books())['content'], isEmpty);
+  });
+
+  test("a library renamed while it's being scanned keeps its new name when the scan ends", () async {
+    fs.files['Comics/Saga/Saga 1.cbz'] = zipOf({'p1.png': pngHead(800, 1200)});
+    await local.setLibraries([const LocalLibrary('Comics', 'Comics')]).timeout(const Duration(seconds: 2));
+    final renamed = local.setLibraries([const LocalLibrary('My comics', 'Comics')]); // while its scan waits
+    fs.gate.complete();
+    await renamed;
+    await local.rescan();
+    expect([for (final l in await local.libraries()) l['name']], ['My comics']);
+    expect((await local.books())['content'], hasLength(1));
   });
 }
