@@ -4,8 +4,10 @@
 /// For developers > Renaming the app. (Until 2026-09-29 the app was called "Komga Reader".)
 const appName = 'BeDeReader';
 
-/// Under the name wherever there's room (sign-in, About, store listings): what it is, and what it works with.
-const appTagline = 'A library and reader for Komga';
+/// Under the name wherever there's room (sign-in, About, store listings, the README's headline): what it reads, and
+/// that it reads it from anywhere - Komga, the device, the network (user, 2026-10-27; it was "A library and reader
+/// for Komga" until 1.6 brought local and network libraries).
+const appTagline = 'Comics, manga and books - wherever they live.';
 
 // Internal identifiers - they stay the same whatever the app is called (changing them would cut people off from their
 // data or updates):
