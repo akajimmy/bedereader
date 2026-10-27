@@ -6,4 +6,5 @@ project's README, changelog, licence and third-party notices are one folder up: 
 
 - `lib\` - the app (Dart); `shaders\` - GPU shaders (page processing, page curl); `test\` - the test suite
 - `assets\` - the icon, the bundled documents (`docs\`, copied in by `..\tools\build.ps1`) and licence texts
-- `android\`, `windows\`, `web\` - the platform projects
+- android\, ios\, windows\ - the platform projects
+- third_party\koni_rar\ - the RAR reader (CBR), vendored with BeDeReader's additions (its pubspec says which)

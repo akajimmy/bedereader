@@ -263,14 +263,15 @@ if ($Platforms -contains 'android' -and $Bundle) {
     $artifacts += $aab
 }
 if ($Platforms -contains 'windows') {
-    Run 'Windows app' "flutter build windows --release$defines"
     $release = Join-Path $app 'build\windows\x64\runner\Release'
-    # only this build's program goes in the zip: the build folder keeps any .exe built under an earlier name (build 39
-    # shipped KomgaReader.exe next to BeDeReader.exe). They're build output - the next build makes them again if needed.
-    Get-ChildItem $release -Filter *.exe | Where-Object { $_.Name -ne "$product.exe" } | ForEach-Object {
-        Say "left out of the zip (and removed from the build folder): $($_.Name), from an earlier build"
-        Remove-Item $_.FullName
+    # only this build's files go in the zip: Flutter adds to the folder and never clears it, so whatever an earlier
+    # build left stayed and was zipped - an .exe under the old name (build 39), a web view plugin's DLL and assets from
+    # a spike never merged (builds 64-163, releases 1.2 to 1.5 too; found 10-27). Build output: emptied, made again.
+    if (Test-Path $release) {
+        Say 'emptying the Windows build folder (only this build in the zip)'
+        Remove-Item $release -Recurse -Force
     }
+    Run 'Windows app' "flutter build windows --release$defines"
     $zip = Join-Path $out "$product-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip

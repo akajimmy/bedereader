@@ -49,12 +49,18 @@ const komgaNotice = "Komga's K (the source icon for Komga's books) is drawn from
 const aiDisclosure =
     'This application was developed with the aid of AI coding tools, but was designed, reviewed, and tested by a human.';
 
-/// The Android version also carries AndroidX, Kotlin and kotlinx.coroutines (through Flutter's Android layer and the
-/// settings package) - Apache 2.0, whose terms have to go with the app. Flutter's own notices don't cover them.
-const androidLibraries = ['AndroidX libraries (activity, annotation, appcompat, core, datastore, fragment, lifecycle, '
-    'preference, window and others)', 'Kotlin standard library', 'kotlinx.coroutines'];
+/// The Android version also carries AndroidX, Kotlin, kotlinx.coroutines and the libraries they and the encrypted
+/// storage bring (Flutter's Android layer, the settings and secure storage packages) - all Apache 2.0, whose terms
+/// have to go with the app. Flutter's own notices don't cover them. (The release build's list, from Gradle's
+/// releaseRuntimeClasspath, 10-27.)
+const androidLibraries = ['AndroidX libraries (activity, annotation, appcompat, collection, concurrent-futures, core, '
+    'datastore, fragment, lifecycle, preference, window and others)', 'Kotlin standard library', 'kotlinx.coroutines',
+    'Google Tink', 'Gson', 'Okio', 'ReLinker', 'JSR 305 annotations', 'Error Prone annotations', 'JetBrains annotations',
+    'JSpecify'];
 const androidLibrariesNotice = 'Included in the Android version. Copyright The Android Open Source Project; '
-    'JetBrains s.r.o. and Kotlin Programming Language contributors. Licensed under the Apache License, Version 2.0:';
+    'JetBrains s.r.o. and Kotlin Programming Language contributors; Google LLC (Tink, Gson, Error Prone, Guava); '
+    'Square, Inc. (Okio); KeepSafe Software, Inc. (ReLinker); the JSR 305 expert group; the JSpecify authors. '
+    'Licensed under the Apache License, Version 2.0:';
 
 var _registered = false;
 
