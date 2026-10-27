@@ -87,4 +87,31 @@ void main() {
     expect((filtered['content'] as List).length, 40);
     expect(store.walked.walks, lessThanOrEqualTo(5));
   });
+
+  test("the read lists, and a read list's next book: the books walked once, not once per list (the downloads' "
+      'catalogue, 2026-10-26)', () async {
+    final store = _Store();
+    const lib = {'id': 'L1', 'name': 'COMICS'}, series = {'id': 'S1', 'name': 'Events'};
+    // 30 read lists of 4 books each
+    for (var r = 0; r < 30; r++) {
+      for (var i = 0; i < 4; i++) {
+        store.books['B$r-$i'] = {
+          'book': {'id': 'B$r-$i', 'seriesId': 'S1', 'name': '$i', 'metadata': {'title': '$i', 'numberSort': r * 4 + i}},
+          'series': series, 'library': lib, 'state': 'done',
+          'readLists': [{'id': 'R$r', 'name': 'List $r', 'index': i, 'count': 4}],
+        };
+      }
+    }
+    final api = OfflineKomga(store);
+
+    store.walked.walks = 0;
+    final lists = (await api.readLists())['content'] as List;
+    expect(lists.length, 30);
+    expect(lists.first['bookIds'], ['B0-0', 'B0-1', 'B0-2', 'B0-3']);
+    expect(store.walked.walks, lessThanOrEqualTo(2), reason: 'was 61: once for the lists, twice per list');
+
+    store.walked.walks = 0;
+    expect((await api.nextBook('B7-1', readListId: 'R7'))?['id'], 'B7-2');
+    expect(store.walked.walks, lessThanOrEqualTo(2));
+  });
 }

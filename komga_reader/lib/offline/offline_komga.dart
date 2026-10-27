@@ -2,12 +2,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/painting.dart' show FileImage, ImageProvider;
-import 'package:http/http.dart' as http;
 
 import '../api.dart';
 import '../hidden_libraries.dart';
 import '../epub/progress.dart' show komgaEpubPage;
+import '../source.dart';
 import '../view_filter.dart';
+import 'catalogue.dart';
 import 'downloads.dart';
 import 'store.dart';
 
@@ -22,17 +23,22 @@ class NotAvailableOffline implements Exception {
 /// Komga, as if only the downloaded books existed (user's 1.1 decision): the same calls the screens already make,
 /// answered from the [OfflineStore], so libraries / series / read lists / collections / books show the downloaded
 /// part of the tree. Reading progress goes to the store's queue; server-only actions throw [NotAvailableOffline];
-/// settings sync throws [KomgaUnreachable] so it retries once back online.
-class OfflineKomga extends Komga {
-  // no HTTP client of its own: it answers from the device (one was made per offline source and never used or closed -
-  // code review 2026-10-05, #50)
-  OfflineKomga(this.store, {String baseUrl = 'offline'}) : super(baseUrl, '', client: _NoNetwork());
+/// what only Komga can give (settings sync, an EPUB's manifest or file, a poster by its address) throws
+/// [KomgaUnreachable], so it's asked again once back online.
+///
+/// A [Source] of its own, not a Komga that can't connect (it was one, with an HTTP client that always failed: what it
+/// didn't answer itself went to it); each question is answered from one [Catalogue] of the downloads.
+class OfflineKomga implements Source {
+  OfflineKomga(this.store, {this.baseUrl = 'offline'});
   final OfflineStore store;
 
+  /// The server the downloads came from (what they're kept under) - 'offline' when not known.
+  @override
+  final String baseUrl;
+
   // ---- helpers ------------------------------------------------------------------------------------------------------
-  // downloaded books - those in a library hidden on this device left out, as online
-  Iterable<MapEntry<String, Map<String, dynamic>>> get _done => store.books.entries.where((e) =>
-      e.value['state'] == 'done' && !HiddenLibraries.instance.isHidden((e.value['library'] as Map?)?['id'] as String?));
+  // the downloaded books - those in a library hidden on this device left out, as online
+  Catalogue get _catalogue => Catalogue(store.books, hidden: HiddenLibraries.instance.isHidden);
 
   /// The book as Komga would return it, with the progress made on this device.
   Map<String, dynamic> _book(String id) {
@@ -79,26 +85,12 @@ class OfflineKomga extends Komga {
     };
   }
 
-  List<String> _booksOfSeries(String seriesId) =>
-      [for (final e in _done) if ((e.value['book'] as Map)['seriesId'] == seriesId) e.key];
-
-  /// Every series' books, in one walk over them - for a list of series: each one's books looked for by walking all
-  /// of them was series x books (a library of 1,098 series and 8,843 books took 11 s to list on the tablet).
-  Map<String, List<String>> _seriesIndex() {
-    final out = <String, List<String>>{};
-    for (final e in _done) {
-      (out[(e.value['book'] as Map)['seriesId'] as String] ??= []).add(e.key);
-    }
-    return out;
-  }
-
-  /// Series as Komga would return it, with book counts for the downloaded books only. [ids]: its books, if known.
-  Map<String, dynamic> _series(String seriesId, [List<String>? ids]) {
-    ids ??= _booksOfSeries(seriesId);
-    final s = Map<String, dynamic>.from(store.books[ids.first]!['series'] as Map);
+  /// Series as Komga would return it, with book counts for the downloaded books only.
+  Map<String, dynamic> _series(List<CatalogueBook> books) {
+    final s = Map<String, dynamic>.from(books.first.entry['series'] as Map);
     var unread = 0, inProgress = 0, read = 0;
-    for (final id in ids) {
-      switch (_status(store.readProgressOf(id))) {
+    for (final b in books) {
+      switch (_status(store.readProgressOf(b.id))) {
         case 'UNREAD':
           unread++;
         case 'IN_PROGRESS':
@@ -107,7 +99,7 @@ class OfflineKomga extends Komga {
           read++;
       }
     }
-    s['booksCount'] = ids.length;
+    s['booksCount'] = books.length;
     s['booksUnreadCount'] = unread;
     s['booksInProgressCount'] = inProgress;
     s['booksReadCount'] = read;
@@ -123,13 +115,16 @@ class OfflineKomga extends Komga {
 
   // ---- account / libraries -------------------------------------------------------------------------------------------
   @override
-  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async => {'email': 'offline'};
+  Future<Map<String, dynamic>?> me() async => {'email': 'offline'};
+
+  @override
+  void close() {} // (nothing held open)
 
   @override
   Future<List<dynamic>> libraries() async {
     final libs = <String, Map<String, dynamic>>{};
-    for (final e in _done) {
-      final l = e.value['library'] as Map?;
+    for (final b in _catalogue.books) {
+      final l = b.entry['library'] as Map?;
       if (l != null) libs[l['id'] as String] = Map<String, dynamic>.from(l);
     }
     return libs.values.toList()..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
@@ -138,20 +133,33 @@ class OfflineKomga extends Komga {
   @override
   Future<List<dynamic>> keptLibraries() => libraries(); // read from the device each time: nothing to keep
 
+  @override
+  void forgetLibraries() {} // (nothing kept)
+
+  @override
+  Future<String?> libraryName(String? id) async {
+    if (id == null) return null;
+    for (final l in await libraries()) {
+      if (l['id'] == id) return l['name'] as String?;
+    }
+    return null;
+  }
+
+  @override
+  Future<List<dynamic>> visibleLibraries({bool kept = false}) async =>
+      [for (final l in await libraries()) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
+
   // ---- browsing ------------------------------------------------------------------------------------------------------
   @override
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
-    final ids = <String>{};
-    for (final e in _done) {
-      final v = e.value;
-      if (libraryId != null && (v['library'] as Map?)?['id'] != libraryId) continue;
-      if (collectionId != null && !((v['collections'] as List?) ?? []).any((c) => c['id'] == collectionId)) continue;
-      ids.add((v['book'] as Map)['seriesId'] as String);
-    }
-    final index = _seriesIndex();
+    final c = _catalogue;
+    final ids = <String>{
+      for (final b in c.scoped(libraryId: libraryId, collectionId: collectionId))
+        if (libraryId == null || b.libraryId == libraryId) b.seriesId,
+    };
     final list = <dynamic>[
-      for (final id in ids) _series(id, index[id]),
+      for (final id in ids) _series(c.bySeries[id]!),
     ].where((s) => _wanted(readStatus, _seriesStatus(s as Map<String, dynamic>))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
@@ -161,20 +169,26 @@ class OfflineKomga extends Komga {
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
     final list = <dynamic>[
-      for (final e in _done)
-        if (libraryId == null || (e.value['library'] as Map?)?['id'] == libraryId) _book(e.key),
+      for (final b in _catalogue.scoped(libraryId: libraryId)) _book(b.id),
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
   }
 
+  /// Books you are part-way through, most recently read first.
+  @override
+  Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) =>
+      books(libraryId: libraryId, readStatus: const ['IN_PROGRESS'], sort: 'readProgress.readDate,desc', size: size);
+
   @override
   Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async {
     // the next unread downloaded book of series that have been started and have nothing in progress
+    final c = _catalogue;
     final picks = <dynamic>[];
-    for (final ids in _seriesIndex().values) {
-      final books = [for (final id in ids) _book(id)]..sort((a, b) => _numberSort(a).compareTo(_numberSort(b)));
-      if (libraryId != null && (store.books[books.first['id']]!['library'] as Map?)?['id'] != libraryId) continue;
+    for (final sid in c.bySeries.keys) {
+      final inOrder = c.seriesInOrder(sid);
+      if (libraryId != null && inOrder.first.libraryId != libraryId) continue;
+      final books = [for (final b in inOrder) _book(b.id)];
       final statuses = books.map((b) => _status(b['readProgress'] as Map<String, dynamic>?)).toList();
       if (!statuses.contains('READ') || statuses.contains('IN_PROGRESS')) continue;
       final next = books.firstWhere((b) => b['readProgress'] == null, orElse: () => <String, dynamic>{});
@@ -187,7 +201,7 @@ class OfflineKomga extends Komga {
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
       String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
     final list = <dynamic>[
-      for (final id in _booksOfSeries(seriesId)) _book(id),
+      for (final b in _catalogue.scoped(seriesId: seriesId)) _book(b.id),
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
@@ -196,56 +210,36 @@ class OfflineKomga extends Komga {
   @override
   Future<Map<String, dynamic>> collections({String? libraryId, int page = 0, int size = 200}) async {
     final cols = <String, Map<String, dynamic>>{};
-    for (final e in _done) {
-      if (libraryId != null && (e.value['library'] as Map?)?['id'] != libraryId) continue;
-      for (final c in (e.value['collections'] as List?) ?? []) {
+    for (final b in _catalogue.scoped(libraryId: libraryId)) {
+      for (final c in b.collections) {
         final col = cols.putIfAbsent(c['id'] as String, () => {'id': c['id'], 'name': c['name'], 'seriesIds': <String>[]});
-        final sid = (e.value['book'] as Map)['seriesId'] as String;
-        if (!(col['seriesIds'] as List).contains(sid)) (col['seriesIds'] as List).add(sid);
+        if (!(col['seriesIds'] as List).contains(b.seriesId)) (col['seriesIds'] as List).add(b.seriesId);
       }
     }
     final list = cols.values.toList()..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
     return _page(list, page, size);
   }
 
-  /// Downloaded books of a read list, in the list's order.
-  List<String> _readListOrder(String readListId) {
-    final withIndex = <MapEntry<String, num>>[];
-    for (final e in _done) {
-      for (final rl in (e.value['readLists'] as List?) ?? []) {
-        if (rl['id'] == readListId) withIndex.add(MapEntry(e.key, (rl['index'] as num?) ?? 0));
-      }
-    }
-    withIndex.sort((a, b) => a.value.compareTo(b.value));
-    return [for (final e in withIndex) e.key];
-  }
-
-  Map<String, dynamic>? _readListInfo(String readListId) {
-    for (final e in _done) {
-      for (final rl in (e.value['readLists'] as List?) ?? []) {
-        if (rl['id'] == readListId) return {'id': rl['id'], 'name': rl['name'], 'bookIds': _readListOrder(readListId)};
-      }
-    }
-    return null;
-  }
+  /// A read list as Komga gives it: its downloaded books' ids, in the list's order.
+  static Map<String, dynamic>? _readListInfo(Catalogue c, String readListId) => c.readListNames.containsKey(readListId)
+      ? {'id': readListId, 'name': c.readListNames[readListId], 'bookIds': [for (final b in c.readList(readListId)) b.id]}
+      : null;
 
   @override
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async {
-    final ids = <String>{};
-    for (final e in _done) {
-      if (libraryId != null && (e.value['library'] as Map?)?['id'] != libraryId) continue;
-      for (final rl in (e.value['readLists'] as List?) ?? []) {
-        ids.add(rl['id'] as String);
-      }
-    }
-    final list = [for (final id in ids) _readListInfo(id)!]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
+    final c = _catalogue;
+    final ids = <String>{
+      for (final b in c.scoped(libraryId: libraryId))
+        for (final r in b.readLists) r['id'] as String,
+    };
+    final list = [for (final id in ids) _readListInfo(c, id)!]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
     return _page(list, page, size);
   }
 
   @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async {
     final list = <dynamic>[
-      for (final id in _readListOrder(readListId)) _book(id),
+      for (final b in _catalogue.readList(readListId)) _book(b.id),
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
     return _page(list, page, size);
   }
@@ -262,7 +256,7 @@ class OfflineKomga extends Komga {
   Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
       int page = 0, int size = 500}) async {
     final list = <dynamic>[
-      for (final id in _readListOrder(readListId)) _book(id),
+      for (final b in _catalogue.readList(readListId)) _book(b.id),
     ].where((b) => _wanted(readStatus, _status((b as Map)['readProgress'] as Map<String, dynamic>?))).toList();
     _sort(list, sort, (m) => _sortKey(sort, m));
     return _page(list, page, size);
@@ -278,8 +272,10 @@ class OfflineKomga extends Komga {
     final f = filter.forView(seriesView: true);
     final all = (await series(libraryId: libraryId, collectionId: collectionId, readStatus: read.api, sort: sort,
         size: _all))['content'] as List;
-    final index = f.isEmpty ? const <String, List<String>>{} : _seriesIndex();
-    return _page([for (final s in all) if (_seriesMatches(s as Map, f, index[s['id']])) s], page, size);
+    if (f.isEmpty) return _page(all, page, size);
+    final c = _catalogue;
+    return _page([for (final s in all) if (_seriesMatches(s as Map, f, c.bySeries[s['id']] ?? const [])) s], page,
+        size);
   }
 
   @override
@@ -322,11 +318,9 @@ class OfflineKomga extends Komga {
 
   /// A series against the filter, as Komga does it: the authors of its books (Komga's booksMetadata, and those of the
   /// downloaded books), its release date (its first book's), its publisher, genres and status.
-  bool _seriesMatches(Map s, ViewFilter f, [List<String>? ids]) {
-    if (f.isEmpty) return true;
-    final books = [for (final id in ids ?? _booksOfSeries(s['id'] as String)) store.books[id]!['book'] as Map];
-    final authors = [..._authorsOf(s, 'booksMetadata'), for (final b in books) ..._authorsOf(b, 'metadata')];
-    final dates = [for (final b in books) _releaseDateOf(b, 'metadata')].whereType<String>().toList()..sort();
+  static bool _seriesMatches(Map s, ViewFilter f, List<CatalogueBook> books) {
+    final authors = [..._authorsOf(s, 'booksMetadata'), for (final b in books) ..._authorsOf(b.book, 'metadata')];
+    final dates = [for (final b in books) _releaseDateOf(b.book, 'metadata')].whereType<String>().toList()..sort();
     final meta = (s['metadata'] as Map?) ?? const {};
     return ViewFilter.authorsMatch(authors, f.writers, writerRoles) &&
         ViewFilter.authorsMatch(authors, f.artists, artistRoles) &&
@@ -336,31 +330,15 @@ class OfflineKomga extends Komga {
         ViewFilter.oneOf(meta['status'], f.statuses);
   }
 
-  /// The downloaded books in a view's scope (the narrowest given).
-  Iterable<Map<String, dynamic>> _scoped({String? libraryId, String? collectionId, String? seriesId,
-      String? readListId}) sync* {
-    for (final e in _done) {
-      final v = e.value;
-      if (seriesId != null) {
-        if ((v['book'] as Map)['seriesId'] != seriesId) continue;
-      } else if (readListId != null) {
-        if (!((v['readLists'] as List?) ?? const []).any((r) => (r as Map)['id'] == readListId)) continue;
-      } else if (collectionId != null) {
-        if (!((v['collections'] as List?) ?? const []).any((c) => (c as Map)['id'] == collectionId)) continue;
-      } else if (libraryId != null && (v['library'] as Map?)?['id'] != libraryId) {
-        continue;
-      }
-      yield v;
-    }
-  }
-
   @override
   Future<List<String>> authorNames(List<String> roles, {String? search, String? libraryId, String? collectionId,
       String? seriesId, String? readListId, int size = 1000}) async {
     final q = search?.trim().toLowerCase() ?? '';
     final names = <String, String>{};
-    for (final v in _scoped(libraryId: libraryId, collectionId: collectionId, seriesId: seriesId, readListId: readListId)) {
-      for (final a in _authorsOf(v['book'] as Map, 'metadata')) {
+    final scope = _catalogue.scoped(libraryId: libraryId, collectionId: collectionId, seriesId: seriesId,
+        readListId: readListId);
+    for (final b in scope) {
+      for (final a in _authorsOf(b.book, 'metadata')) {
         final n = (a as Map)['name'];
         if (n is! String || n.trim().isEmpty || !roles.contains('${a['role']}'.toLowerCase())) continue;
         if (q.isNotEmpty && !n.toLowerCase().contains(q)) continue;
@@ -372,8 +350,8 @@ class OfflineKomga extends Komga {
 
   /// The series JSON of the downloaded books in scope, one per series.
   Iterable<Map> _scopedSeries({String? libraryId, String? collectionId}) => {
-        for (final v in _scoped(libraryId: libraryId, collectionId: collectionId))
-          (v['book'] as Map)['seriesId']: v['series'] as Map,
+        for (final b in _catalogue.scoped(libraryId: libraryId, collectionId: collectionId))
+          b.seriesId: b.entry['series'] as Map,
       }.values;
 
   @override
@@ -392,15 +370,18 @@ class OfflineKomga extends Komga {
   /// The downloaded books' kinds (their media profiles), in the view's scope.
   @override
   Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) async => ViewKind.ofProfiles([
-        for (final v in _scoped(libraryId: libraryId, seriesId: seriesId, readListId: readListId))
-          ((v['book'] as Map)['media'] as Map?)?['mediaProfile'] ?? 'DIVINA', // (no profile: a comic, as Komga's default)
+        for (final b in _catalogue.scoped(libraryId: libraryId, seriesId: seriesId, readListId: readListId))
+          (b.book['media'] as Map?)?['mediaProfile'] ?? 'DIVINA', // (no profile: a comic, as Komga's default)
       ]);
 
   @override
-  Future<Map<String, dynamic>?> oneSeries(String id) async => _booksOfSeries(id).isEmpty ? null : _series(id);
+  Future<Map<String, dynamic>?> oneSeries(String id) async {
+    final books = _catalogue.bySeries[id];
+    return books == null ? null : _series(books);
+  }
 
   @override
-  Future<Map<String, dynamic>?> readList(String id) async => _readListInfo(id);
+  Future<Map<String, dynamic>?> readList(String id) async => _readListInfo(_catalogue, id);
 
   @override
   Future<Map<String, dynamic>?> book(String id) async =>
@@ -488,24 +469,24 @@ class OfflineKomga extends Komga {
   Future<void> markUnread(String bookId) => store.setProgress(bookId, completed: false, clear: true);
   @override
   Future<void> markSeriesRead(String seriesId) async {
-    for (final id in _booksOfSeries(seriesId)) {
-      await markRead(id);
+    for (final b in [...?_catalogue.bySeries[seriesId]]) {
+      await markRead(b.id);
     }
   }
 
   @override
   Future<void> markSeriesUnread(String seriesId) async {
-    for (final id in _booksOfSeries(seriesId)) {
-      await markUnread(id);
+    for (final b in [...?_catalogue.bySeries[seriesId]]) {
+      await markUnread(b.id);
     }
   }
 
   // ---- next / previous: within the read list it was opened from, else the series ----------------------------------------
-  List<String> _order(String bookId, String? readListId) {
-    if (readListId != null) return _readListOrder(readListId);
+  List<String> _order(Catalogue c, String bookId, String? readListId) {
+    if (readListId != null) return [for (final b in c.readList(readListId)) b.id];
     final sid = (store.books[bookId]?['book'] as Map?)?['seriesId'] as String?;
     if (sid == null) return [];
-    return _booksOfSeries(sid)..sort((a, b) => _numberSort(store.books[a]!['book'] as Map).compareTo(_numberSort(store.books[b]!['book'] as Map)));
+    return [for (final b in c.seriesInOrder(sid)) b.id];
   }
 
   /// The next book only if it's downloaded: when the one that comes next isn't, this says so
@@ -514,16 +495,17 @@ class OfflineKomga extends Komga {
   @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
     final entry = store.books[bookId];
+    final c = _catalogue;
     if (readListId != null) {
       Map? place(Map<String, dynamic>? e) =>
           ((e?['readLists'] as List?) ?? []).cast<Map>().where((r) => r['id'] == readListId).firstOrNull;
       final index = (place(entry)?['index'] as num?)?.toInt();
       if (index == null || index < 0) return null;
-      String? at(int i) => _done.where((e) => (place(e.value)?['index'] as num?)?.toInt() == i).firstOrNull?.key;
-      final next = at(index + 1);
-      if (next != null) return _book(next);
+      final inList = c.scoped(readListId: readListId);
+      final next = inList.where((b) => b.placeIn(readListId)?.toInt() == index + 1).firstOrNull;
+      if (next != null) return _book(next.id);
       final count = (place(entry)?['count'] as num?)?.toInt();
-      final later = _done.any((e) => ((place(e.value)?['index'] as num?)?.toInt() ?? -1) > index + 1);
+      final later = inList.any((b) => (b.placeIn(readListId)?.toInt() ?? -1) > index + 1);
       if (count != null ? index + 1 >= count : !later) return null; // the list's last book (or can't tell)
       throw NotAvailableOffline('The next book');
     }
@@ -533,14 +515,14 @@ class OfflineKomga extends Komga {
       if (store.books[next]?['state'] == 'done') return _book(next);
       throw NotAvailableOffline('The next book');
     }
-    final order = _order(bookId, readListId);
+    final order = _order(c, bookId, readListId);
     final i = order.indexOf(bookId);
     return i >= 0 && i + 1 < order.length ? _book(order[i + 1]) : null;
   }
 
   @override
   Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async {
-    final order = _order(bookId, readListId);
+    final order = _order(_catalogue, bookId, readListId);
     final i = order.indexOf(bookId);
     return i > 0 ? _book(order[i - 1]) : null;
   }
@@ -585,10 +567,23 @@ class OfflineKomga extends Komga {
   }
 
   // ---- needs the server --------------------------------------------------------------------------------------------------
+  // (only Komga has these: asked again once it's back)
   @override
   Future<Map<String, dynamic>> clientSettings() async => throw KomgaUnreachable(baseUrl);
   @override
   Future<void> putClientSetting(String key, String value) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<Map<String, dynamic>?> epubManifest(String bookId) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<Uint8List> epubResource(String bookId, String href) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<Uint8List> bookFileBytes(String bookId) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<Uint8List?> thumbBytes(String url) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<List<dynamic>> bookReadLists(String bookId) async => throw KomgaUnreachable(baseUrl);
+  @override
+  Future<List<dynamic>> seriesCollections(String seriesId) async => throw KomgaUnreachable(baseUrl);
   @override
   Future<void> deleteBookFile(String bookId) async => throw NotAvailableOffline('Deleting a book');
   @override
@@ -597,11 +592,4 @@ class OfflineKomga extends Komga {
   Future<void> renameCollection(String id, String name) async => throw NotAvailableOffline('Renaming a collection');
   @override
   Future<void> deleteSeriesFiles(String seriesId) async => throw NotAvailableOffline('Deleting a series');
-}
-
-/// The offline source's HTTP client: holds no sockets, and anything that would go to the server fails as unreachable.
-class _NoNetwork extends http.BaseClient {
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async =>
-      throw http.ClientException('offline: nothing goes to the server', request.url);
 }
