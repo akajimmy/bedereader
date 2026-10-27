@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.6.0
+
+### Build 162 - 2026-10-27
+
 **New**
 
 - No server mode: the app without a Komga server, on local libraries alone. The sign-in screen's Use without a server starts it (the folder browser opens for a first library; more are added in Settings > Libraries). Settings > Server and sync then has Add a Komga server - its books come beside the local ones - and Leave No server mode. Settings, pins and reading progress stay on the device in this mode; adding a server or leaving the mode lets go of its reading settings, as signing out does.
@@ -24,8 +28,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Offline, the app says it's showing downloaded books and local libraries when there are local ones.
 - The side menu kept open on a wide screen takes in libraries added or removed straight away.
 - A local library's series settings (its own reader settings) and the local books hidden from On deck stay on this device, as its pins do: never sent to Komga, kept through signing out. Adding a library no longer waits for its first scan: it's listed at once, and Scan again shows how far the scan has got.
-
-## 1.6.0
 
 ### Build 161 - 2026-10-26
 
