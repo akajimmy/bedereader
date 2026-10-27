@@ -137,4 +137,18 @@ void main() {
     await tester.pump();
     expect((p, q), (false, false), reason: 'all off is allowed');
   });
+
+  testWidgets("a row's (i): its text shown on a tap (user, 2026-10-27); a row without one has none", (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Column(children: [
+      ToggleChipsRow(title: 'Chips', info: 'more about the chips', chips: [ToggleChip('A', true, (_) {})]),
+      const SettingRow(title: 'Plain'),
+    ]))));
+    expect(find.byIcon(Icons.info_outline), findsOneWidget, reason: 'one (i): the row with info');
+    expect(find.text('more about the chips'), findsNothing);
+    await tester.tap(find.byIcon(Icons.info_outline));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('more about the chips'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10)); // (the tooltip's own time)
+    await tester.pumpAndSettle();
+  });
 }

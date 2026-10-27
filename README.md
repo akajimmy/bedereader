@@ -188,7 +188,7 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
   offline mode switch. In No server mode, everything is on this device. Settings > About can reset this device's
   settings at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, Webtoons, eBooks and Remote and keys for reading;
+Settings (side menu) has everything in one place: All Book Types, Comics, Webtoons, eBooks and Remote and keys for reading;
 Server and sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
 on every device.
 

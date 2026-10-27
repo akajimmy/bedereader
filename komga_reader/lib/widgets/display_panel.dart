@@ -557,7 +557,9 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
       : const [(PositionSpot.right, 'Chapter progress'), (PositionSpot.left, 'Book progress'),
           (PositionSpot.centre, 'Chapter name')];
   return ToggleChipsRow(
-    title: 'Over the slider (tap to hide)', // (user, 2026-10-21: "(tap to hide)" in the title, no description)
+    title: 'Show above page slider', // (user, 2026-10-27; it said "Over the slider (tap to hide)")
+    info: 'Show which of the following above the page slider when the control panel is visible. You can also tap '
+        'these elements to hide them and tap the empty area to show them again',
     chips: [
       for (final (spot, label) in spots)
         ToggleChip(label, !k.hiddenSpots.contains(spot.name), (on) => s.setDisplay(s.display.withKind(kind,
@@ -567,7 +569,7 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
 }
 
 Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
-      title: 'Page turn', // as eBooks' (user, 2026-10-21: "the same name")
+      title: 'Page Turn Animation', // as eBooks' (user, 2026-10-21: "the same name"; 2026-10-27: this name)
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
       value: s.display.pageTurn,
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),

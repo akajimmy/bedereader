@@ -50,7 +50,7 @@ void main() {
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     expect(find.byType(AppSettingsScreen), findsOneWidget);
-    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, 'Reading')).selected, isTrue);
+    expect(tester.widget<ListTile>(find.widgetWithText(ListTile, pageName(SettingsPage.reading))).selected, isTrue);
 
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -181,7 +181,7 @@ void main() {
     expect(find.byType(ChoiceChip), findsNWidgets(SettingsPage.values.length - 1));
     await tester.tap(find.widgetWithText(ChoiceChip, 'Comics'));
     await tester.pumpAndSettle();
-    expect(find.text('Turning pages'), findsOneWidget);
+    expect(find.byType(SegmentedButton<PageTurn>), findsOneWidget, reason: "the Comics page's page turn");
     expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Comics')).selected, isTrue);
     expect(tester.takeException(), isNull); // no overflow at phone width
   });
