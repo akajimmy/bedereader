@@ -184,7 +184,9 @@ extension RotationLabel on Rotation {
 /// The app's accent colour (buttons, switches, highlights), listed in the order shown: the user's own palette (10-27
 /// worksheet, reports\10-27-accent-worksheet.html: bolder, more of them - "a bright fire engine red, a bold forest
 /// green"). The name is what's saved: a device on a name that's gone (blue, red, purple...) starts on [defaultAccent].
-enum Accent { fireRed, crimson, coral, orange, yellow, lime, neon, green, forest, mint, cyan, navy, royal, violet,
+/// In hue order round the wheel, cut between Salmon and Crimson so the reds stay together (user, 2026-10-27, "A'" -
+/// cut at 0 degrees, Crimson at 348 went to the far end), then the earth tones, then the greys light to dark.
+enum Accent { crimson, fireRed, coral, orange, yellow, lime, neon, forest, green, mint, cyan, royal, navy, violet,
   electric, darkPink, hotPink, salmon, bronze, olive, white, grey, charcoal, nearBlack }
 
 /// A fresh install's accent, and one saved under a name that's gone (user, 2026-10-27: Blue was the default - gone).
