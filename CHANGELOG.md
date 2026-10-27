@@ -15,6 +15,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Pins to a local library, its series or a book are this device's own: never sent to Komga (another device hasn't these folders), and kept through signing out. Removing a local library removes the pins to it.
 - A library deleted on Komga takes the pins to it, its series and its books with it (seen the next time Komga answers with its library list; out of reach, nothing is removed).
 - Network libraries: a folder on a server on your network (an SMB share - a NAS, a PC) as a library, in Settings > Libraries > Network: Add a shared folder browses a server's shares (Connect to a server by its name), and asks for a user name and password only when the share refuses a guest. The login is kept encrypted on the device; each network library has Sign in to change it. On Windows, Windows reaches the share itself, with its own login. Scan again now has a group of its own, for both kinds.
+- CBR comics (RAR4 and RAR5) in local and network libraries: read in place like CBZs; the CBRs the last scan couldn't read come in with the next scan. A CBR cut short (a copy that stopped part-way) is left out as damaged.
 
 ## 1.6.0
 

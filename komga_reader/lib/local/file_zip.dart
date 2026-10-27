@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'file_rar.dart';
 import 'library_fs.dart';
 
-/// A comic's archive, read in place: a zip ([FileZip] - a CBZ). Which kind is told by the file's first bytes, not its
-/// name (a .cbr can be a zip renamed: one of the 2,219 on the NAS is). A RAR (a CBR) isn't read yet: it's damaged as
-/// far as the app can tell ([UnreadableArchive]). The file is opened once, and held open until [close].
+/// A comic's archive, read in place: a zip ([FileZip] - a CBZ) or a RAR ([FileRar] - a CBR). Which kind is told by
+/// the file's first bytes, not its name (a .cbr can be a zip renamed: one of the 2,219 on the NAS is). The file is
+/// opened once, and held open until [close].
 abstract class ComicArchive {
   static Future<ComicArchive> open(LibraryFs fs, String path) async {
     final file = await fs.open(path);
@@ -14,7 +15,7 @@ abstract class ComicArchive {
       final head = await file.readRange(0, 8);
       final rar = head.length >= 7 && head[0] == 0x52 && head[1] == 0x61 && head[2] == 0x72 && head[3] == 0x21 &&
           head[4] == 0x1a && head[5] == 0x07; // "Rar!\x1a\x07"
-      if (rar) throw const UnreadableArchive('a RAR archive (CBR)');
+      if (rar) return await FileRar.open(file);
       return await FileZip.open(file);
     } catch (_) {
       await file.close();
