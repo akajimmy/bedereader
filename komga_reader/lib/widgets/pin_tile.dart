@@ -6,10 +6,11 @@ import '../view_sort.dart';
 import 'download_badge.dart';
 import 'poster.dart';
 import 'readlist_tile.dart';
+import '../source.dart';
 
 /// The pinned view's own query (its filter, mode and sort) - [size] items of it. Used for the pin's poster and
 /// count, and offline to hide pins with nothing downloaded.
-Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
+Future<Map<String, dynamic>> pinView(Source api, Pin p, {int size = 4}) async {
   final read = p.readFilter;
   final parts = (p.fullSort ?? '').split(':');
   final desc = parts.length > 1 && parts[1] == 'desc';
@@ -62,7 +63,7 @@ String _noun(Pin p, int n) {
 }
 
 /// Thumbnail references for the items of a pinned view.
-List<String> _thumbs(Komga api, Pin p, List<dynamic> items) {
+List<String> _thumbs(Source api, Pin p, List<dynamic> items) {
   String Function(String) thumb = switch (p.kind) {
     'series' || 'readlist' => api.bookThumb,
     'collection' => api.seriesThumb,
@@ -90,7 +91,7 @@ String bookState(Map b) {
 /// Tap opens the view; long-press (or right-click) renames or unpins.
 class PinTile extends StatefulWidget {
   const PinTile({super.key, required this.api, required this.pin, required this.onOpen, this.autofocus = false});
-  final Komga api;
+  final Source api;
   final Pin pin;
   final VoidCallback onOpen;
   final bool autofocus;

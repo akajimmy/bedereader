@@ -10,13 +10,14 @@ import '../widgets/error_text.dart';
 import 'book_details.dart';
 import 'series.dart';
 import 'series_details.dart';
+import '../source.dart';
 
 /// Book actions sheet (long-press a book): details, view series (not when already in that series), mark as read,
 /// mark as unread (both always offered; a book already in that state is left alone), select multiple (where the
 /// screen supports it), delete.
 /// Every entry is a focusable list tile, so the remote can drive it.
 /// Returns what was done: 'read', 'unread', 'deleted', or null (cancelled / nothing to do / failed).
-Future<String?> showBookActions(BuildContext context, Komga api, dynamic b,
+Future<String?> showBookActions(BuildContext context, Source api, dynamic b,
     {required VoidCallback onChanged, VoidCallback? onSelectMultiple, String? readListId, bool showViewSeries = true}) async {
   final title = bookTitle(b);
   final dl = Downloads.instance;
@@ -152,7 +153,7 @@ bool needsChange(dynamic b, {required bool read}) {
 }
 
 /// Mark several books read or unread, skipping those already in that state; a few requests at a time.
-Future<void> bulkMark(BuildContext context, Komga api, List<dynamic> books, {required bool read}) async {
+Future<void> bulkMark(BuildContext context, Source api, List<dynamic> books, {required bool read}) async {
   final todo = books.where((b) => needsChange(b, read: read)).toList();
   final messenger = ScaffoldMessenger.of(context);
   final word = read ? 'read' : 'unread';
@@ -177,7 +178,7 @@ Future<void> bulkMark(BuildContext context, Komga api, List<dynamic> books, {req
 }
 
 /// Delete several books' files (confirmed first, Cancel focused). Returns true if anything was deleted.
-Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) async {
+Future<bool> bulkDelete(BuildContext context, Source api, List<dynamic> books) async {
   final n = books.length;
   final ok = await confirmDelete(context, 'Delete $n book${n == 1 ? '' : 's'}?',
       'This deletes the files from the server. It cannot be undone from the app.');
@@ -200,7 +201,7 @@ Future<bool> bulkDelete(BuildContext context, Komga api, List<dynamic> books) as
 
 /// Series actions: mark whole series read/unread, download, select multiple (where the grid supports it), delete
 /// series.
-Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
+Future<void> showSeriesActions(BuildContext context, Source api, dynamic s,
     {required VoidCallback onChanged, bool inSeries = false, VoidCallback? onSelectMultiple}) async {
   final title = (s['metadata']?['title'] ?? s['name']) as String;
   final view = listPin('series', s['id'] as String, title);
@@ -297,11 +298,11 @@ Future<void> showSeriesActions(BuildContext context, Komga api, dynamic s,
 /// Renames a read list on Komga (user, 2026-10-18: "starting with the ability to rename a read list"): asks for the
 /// name, sends it, and updates [rl] in place - its screen shows the new name - and the pins of the list. Komga lets
 /// admin accounts only do it, and turns down a name another read list has: both said so.
-Future<void> renameReadList(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) =>
+Future<void> renameReadList(BuildContext context, Source api, dynamic rl, {required VoidCallback onChanged}) =>
     _renameList(context, rl, 'read list', 'readlist', api.renameReadList, onChanged);
 
 /// Renames a collection, as [renameReadList] a read list (user, 2026-10-18: its menu "does not ... have any options").
-Future<void> renameCollection(BuildContext context, Komga api, dynamic c, {required VoidCallback onChanged}) =>
+Future<void> renameCollection(BuildContext context, Source api, dynamic c, {required VoidCallback onChanged}) =>
     _renameList(context, c, 'collection', 'collection', api.renameCollection, onChanged);
 
 Future<void> _renameList(BuildContext context, dynamic list, String thing, String pinKind,
@@ -338,7 +339,7 @@ Widget pinTile(BuildContext ctx, Pin? pinned, {bool autofocus = false}) => pinne
 
 /// Collection actions (right-click / long-press a collection; user, 2026-10-18: it had no menu at all): pin it to
 /// Home, mark every series in it read or unread, rename it.
-Future<void> showCollectionActions(BuildContext context, Komga api, dynamic c, {required VoidCallback onChanged}) async {
+Future<void> showCollectionActions(BuildContext context, Source api, dynamic c, {required VoidCallback onChanged}) async {
   final name = c['name'] as String;
   final ids = [for (final id in (c['seriesIds'] as List?) ?? const []) '$id'];
   final view = listPin('collection', c['id'] as String, name);
@@ -419,7 +420,7 @@ Future<String?> askName(BuildContext context,
 
 /// Read-list actions (long-press a read list, or ⋮ in the list): mark every book in it read or unread; rename it.
 /// Komga has no bulk call for read lists, so only the books that need changing are updated, a few at a time.
-Future<void> showReadListActions(BuildContext context, Komga api, dynamic rl, {required VoidCallback onChanged}) async {
+Future<void> showReadListActions(BuildContext context, Source api, dynamic rl, {required VoidCallback onChanged}) async {
   final name = rl['name'] as String;
   final total = (rl['bookIds'] as List?)?.length ?? 0;
   final view = listPin('readlist', rl['id'] as String, name);
@@ -556,7 +557,7 @@ Future<void> queueDownloads(BuildContext context, String name,
 
 /// Download several series (a series selection): asks "unread" or "all" as the one-series menu does, then queues
 /// their books, series by series in the order they were picked, each in its number order. False if cancelled.
-Future<bool> bulkDownloadSeries(BuildContext context, Komga api, List<dynamic> series) async {
+Future<bool> bulkDownloadSeries(BuildContext context, Source api, List<dynamic> series) async {
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -593,7 +594,7 @@ bool seriesNeedsChange(dynamic s, {required bool read}) {
 
 /// Mark several series read or unread (a series selection), confirmed first as for one series; those already in that
 /// state are skipped, the rest a few at a time. False if cancelled.
-Future<bool> bulkMarkSeries(BuildContext context, Komga api, List<dynamic> series, {required bool read}) async {
+Future<bool> bulkMarkSeries(BuildContext context, Source api, List<dynamic> series, {required bool read}) async {
   final n = series.length;
   final word = read ? 'read' : 'unread';
   if (!await confirmBulk(context, 'Mark all books of $n series $word?',

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../book_title.dart';
 import '../offline/offline_komga.dart' show NotAvailableOffline;
 import '../widgets/native_poster.dart';
 import '../widgets/focus_style.dart';
+import '../source.dart';
 
 /// The page after the last, for both kinds of book (the one Reader, user 2026-10-07, decision 1): what's next - its
 /// poster and title - or that this was the last one; then **Next book** and **Close**, both reachable with the remote
@@ -15,7 +15,7 @@ class ReaderEndCard extends StatelessWidget {
       required this.lastText, required this.nextNode, required this.closeNode, required this.onNext,
       required this.onClose, this.skipRead = false, this.subtitle});
 
-  final Komga api;
+  final Source api;
   final Future<Map<String, dynamic>?> next; // the book after this one (null: none)
   final Color Function(double alpha) ink; // text on the page's background
   final String where; // 'the series', 'this read list'

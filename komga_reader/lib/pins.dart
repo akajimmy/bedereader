@@ -9,6 +9,7 @@ import 'book_title.dart';
 import 'errors.dart';
 import 'refresh_gate.dart';
 import 'view_filter.dart';
+import 'source.dart';
 
 /// A library sort field's natural direction: titles A -> Z, dates newest first.
 bool naturalDesc(String key) => key != 'title';
@@ -103,7 +104,7 @@ class Pins extends ChangeNotifier {
   // before - a device's own list and its switch - are cleared at the next load: the shared list is the one.
   static const _oldSyncKey = 'pins.sync', _oldDeviceKey = 'pins.device';
 
-  Komga? _api;
+  Source? _api;
   List<Pin> items = [];
   String? syncError;
   Timer? _retry;
@@ -120,7 +121,7 @@ class Pins extends ChangeNotifier {
   }
 
   /// [fetch] false (offline mode): this device's copy only - nothing is sent or asked for.
-  Future<void> load(Komga api, {bool fetch = true}) async {
+  Future<void> load(Source api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     if (p.containsKey(_oldSyncKey)) await p.remove(_oldSyncKey);
@@ -180,7 +181,7 @@ class Pins extends ChangeNotifier {
   int _changes = 0; // pins changed on this device: a list from Komga that was asked for before is out of date
 
   /// Switch connection (online / offline) without reloading; changes waiting to be sent go now.
-  void useApi(Komga api) {
+  void useApi(Source api) {
     _api = api;
     if (!_loaded) return; // not read yet: [load] sends what's unsent (start-up sent [] - #2)
     SharedPreferences.getInstance().then((p) { if (p.getBool(_dirtyKey) ?? false) _send(); });

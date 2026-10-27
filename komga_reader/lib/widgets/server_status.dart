@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../errors.dart';
 import '../offline/offline_komga.dart';
+import '../source.dart';
 
 enum ServerState { checking, ok, warning, down }
 
@@ -10,7 +11,7 @@ enum ServerState { checking, ok, warning, down }
 /// is accepted. Amber: answered but refused the key, took over 3 s, or offline mode. Red: no answer.
 class ServerStatus extends StatefulWidget {
   const ServerStatus({super.key, required this.api});
-  final Komga api;
+  final Source api;
   @override
   State<ServerStatus> createState() => _ServerStatusState();
 }

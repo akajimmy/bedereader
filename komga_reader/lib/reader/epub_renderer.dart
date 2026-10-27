@@ -12,7 +12,6 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
-import '../api.dart';
 import '../epub/book.dart';
 import '../epub/count_store.dart';
 import '../epub/hyphenator.dart';
@@ -40,6 +39,7 @@ import 'reader_bars.dart';
 import 'renderer.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
+import '../source.dart';
 
 /// An EPUB ready to show (from [EpubRenderer.prepare]).
 class _Prepared {
@@ -121,7 +121,7 @@ class EpubRenderer extends Renderer {
   /// Where book [id]'s files come from: a downloaded EPUB's file - offline (its progress kept on the device, sent to
   /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
   /// still go to Komga as before); else Komga.
-  static EpubSource sourceFor(Komga api, String id) {
+  static EpubSource sourceFor(Source api, String id) {
     final file = api is OfflineKomga ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }

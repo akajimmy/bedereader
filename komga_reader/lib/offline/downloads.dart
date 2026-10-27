@@ -12,6 +12,7 @@ import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
 import 'store.dart';
+import '../source.dart';
 
 enum JobState { queued, downloading, paused, failed }
 
@@ -111,7 +112,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   static const gb = 1024 * 1024 * 1024;
   static const defaultCap = 10 * gb;
 
-  Komga? _api;
+  Source? _api;
   OfflineStore? store;
   final List<DownloadJob> queue = [];
 
@@ -320,7 +321,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     waitingForServer = false;
   }
 
-  Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
+  Future<void> attach(Source api, {Directory? root, bool start = true}) async {
     _api = api;
     Komga.localPages = this;
     _session++;
