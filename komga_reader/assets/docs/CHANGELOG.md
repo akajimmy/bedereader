@@ -16,6 +16,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - A library deleted on Komga takes the pins to it, its series and its books with it (seen the next time Komga answers with its library list; out of reach, nothing is removed).
 - Network libraries: a folder on a server on your network (an SMB share - a NAS, a PC) as a library, in Settings > Libraries > Network: Add a shared folder browses a server's shares (Connect to a server by its name), and asks for a user name and password only when the share refuses a guest. The login is kept encrypted on the device; each network library has Sign in to change it. On Windows, Windows reaches the share itself, with its own login. Scan again now has a group of its own, for both kinds.
 - CBR comics (RAR4 and RAR5) in local and network libraries: read in place like CBZs; the CBRs the last scan couldn't read come in with the next scan. A CBR cut short (a copy that stopped part-way) is left out as damaged.
+- Adding a local or network library asks what's in the folder: one folder per series (as before), the books of one series (all of its subfolders, folder by folder), or a read list - books of several series in the order of their names ("001 - ..."), shown as a read list named after the library, each book in its series (from its ComicInfo, else its name). A library's kind shows under it in Settings > Libraries.
+- Local books are titled without the start of the name their series' books share ("Green Lantern Mosaic 012 (1993)" in that series is "012 (1993)"); a ComicInfo title still comes first. The local libraries' books are read again once, at the next scan, for this.
 
 ## 1.6.0
 
