@@ -269,6 +269,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         screenOnRow(s),
         if (canRotate) rotationRow(s), // comics and eBooks alike (user, 2026-10-21)
       ]),
+      _night(s),
       SettingsGroup(title: 'Display', children: overPageRows(s)), // (user, 2026-10-27; "Over the page")
       SettingsGroup(title: 'Behaviour', children: [ // (user, 2026-10-27; "Moving on")
         SegmentRow<MidBook>(
@@ -494,21 +495,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     }
   }
 
+  /// Night mode and its schedule - on All Book Types (user, 2026-10-27; it was in Look).
+  Widget _night(AppSettings s) => SettingsGroup(title: 'Night', children: [
+        ...nightRows(s),
+        if (s.display.nightSchedule)
+          SettingRow(
+            title: 'From / to',
+            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              _timeButton(s.display.nightFrom, 'Night mode starts',
+                  (m) => s.setDisplay(s.display.copyWith(nightFrom: m))),
+              const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('–')),
+              _timeButton(s.display.nightTo, 'Night mode ends', (m) => s.setDisplay(s.display.copyWith(nightTo: m))),
+            ]),
+          ),
+      ]);
+
   // ---- Look ------------------------------------------------------------------------------------------------------
   Widget _look(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingsGroup(title: 'Night', children: [
-          ...nightRows(s),
-          if (s.display.nightSchedule)
-            SettingRow(
-              title: 'From / to',
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                _timeButton(s.display.nightFrom, 'Night mode starts',
-                    (m) => s.setDisplay(s.display.copyWith(nightFrom: m))),
-                const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('–')),
-                _timeButton(s.display.nightTo, 'Night mode ends', (m) => s.setDisplay(s.display.copyWith(nightTo: m))),
-              ]),
-            ),
-        ]),
         SettingsGroup(title: 'Text and colour', children: [
           SegmentRow<double>(
             title: 'Text size',
