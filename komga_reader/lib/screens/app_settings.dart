@@ -301,9 +301,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
       ]),
-      // (user, 2026-10-27: "Turning pages" -> Appearance, its Double-tap to zoom into Controls)
-      SettingsGroup(title: 'Appearance', children: [pageTurnRow(s)]),
-      SettingsGroup(title: 'Controls', children: [
+      // (user, 2026-10-27: "Turning pages" -> Display, its Double-tap to zoom into Controls - then Controls ->
+      // Behaviour; every kind's page in the same order: page layout, image or text, display, behaviour)
+      SettingsGroup(title: 'Display', children: [pageTurnRow(s)]),
+      SettingsGroup(title: 'Behaviour', children: [
         doubleTapRow(s),
         positionTextRow(s, BookKind.comics),
       ]),
@@ -332,17 +333,18 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ActionRow(title: 'Image settings back to the original',
             button: TextButton(onPressed: () => s.setWebtoonDefault(p.imageReset()), child: const Text('Reset to original'))),
       ]),
-      SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
-        webtoonDoubleTapRow(s)]),
-      SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.webtoons)]),
+      SettingsGroup(title: 'Display', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s)]),
+      // (user, 2026-10-27: Controls -> Behaviour, Double-tap to zoom in it - as comics)
+      SettingsGroup(title: 'Behaviour', children: [webtoonDoubleTapRow(s), positionTextRow(s, BookKind.webtoons)]),
     ]);
   }
 
   // ---- eBooks ----------------------------------------------------------------------------------------------------
   Widget _ebooks(BuildContext context, AppSettings s) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // (user, 2026-10-27: page layout, text, display - was Screen - then behaviour - was Controls)
         ...epubSettingRows(context, s.epub, s.setEpub, insetRow: insetPageRow(s), inset: s.display.insetPage),
-        SettingsGroup(title: 'Controls', children: [positionTextRow(s, BookKind.ebooks)]),
-        SettingsGroup(title: 'Screen', children: [epubTurnRow(s)]),
+        SettingsGroup(title: 'Display', children: [epubTurnRow(s)]),
+        SettingsGroup(title: 'Behaviour', children: [positionTextRow(s, BookKind.ebooks)]),
       ]);
 
 

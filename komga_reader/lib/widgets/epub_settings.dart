@@ -7,27 +7,28 @@ import 'display_panel.dart';
 import 'setting_rows.dart';
 import '../book_source.dart';
 
-/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, and Page Layout
-/// (user, 2026-10-27: Formatting, Page and Two pages made one) - the formatting rows, page colours, then the two pages
-/// (the rows that don't apply hidden - user, 2026-10-21): [insetRow] (this device's Inset page, as [inset] is set),
-/// Dual page mode, then - two pages up - New Chapters Start On, and with an inset page the Gutter between the sheets.
+/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Page Layout, then Text
+/// (user, 2026-10-27: every kind's page in the same order - page layout, then image or text, then display and
+/// behaviour; and Formatting, Page and Two pages made one group) - the formatting rows, page colours, then the two
+/// pages (the rows that don't apply hidden - user, 2026-10-21): [insetRow] (this device's Inset page, as [inset] is
+/// set), Dual page mode, then - two pages up - New Chapters Start On, and with an inset page the Gutter between the
+/// sheets.
 List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set,
         {Widget? insetRow, InsetPage inset = InsetPage.wideScreen}) => [
-      SettingsGroup(title: 'Text', synced: true, children: [
-        ..._fontRows(e, set),
-        _sizeRow(e, set),
-        _lineSpacingRow(e, set),
-        _paragraphGapRow(e, set),
-        _marginsRow(e, set),
-      ]),
-      // (user, 2026-10-27: Formatting, Page and Two pages in one group)
-      SettingsGroup(title: 'Page Layout', synced: true, children: [
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: [
         ..._formattingRows(e, set),
         _coloursRow(e, set),
         if (insetRow != null) insetRow,
         _twoPagesRow(e, set),
         if (e.twoPages != TwoPages.off) _chapterStartRow(e, set),
         if (e.twoPages != TwoPages.off && inset != InsetPage.never) _gutterRow(e, set),
+      ]),
+      SettingsGroup(title: 'Text - default values', synced: true, children: [
+        ..._fontRows(e, set),
+        _sizeRow(e, set),
+        _lineSpacingRow(e, set),
+        _paragraphGapRow(e, set),
+        _marginsRow(e, set),
       ]),
     ];
 
