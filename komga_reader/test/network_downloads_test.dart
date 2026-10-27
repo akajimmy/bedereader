@@ -290,14 +290,19 @@ void main() {
       expect(d.isCached(cached['id'] as String), isFalse, reason: 'trimmed to the new limit');
     });
 
-    test('the downloads limit Off: nothing downloads - the book stops for lack of room, nothing breaks', () async {
+    test('the downloads limit Off: nothing downloads - the book stops for lack of room, nothing breaks; the limit back, '
+        'it carries on', () async {
       await d.setCap(0);
       final b = await book(onShare: true);
       await d.add([b]);
       await settled();
       expect(d.isDownloaded(b['id'] as String), isFalse);
       expect(d.jobFor(b['id'] as String)?.state, JobState.failed);
+      // room again: the book goes back in the queue and downloads - waited for here, or it was still writing into the
+      // downloads folder when tearDown deleted it ("Directory not empty" on GitHub's Linux checks, 10-27)
       await d.setCap(Downloads.defaultCap);
+      await settled();
+      expect(d.isDownloaded(b['id'] as String), isTrue);
     });
   });
 
