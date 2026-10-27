@@ -17,6 +17,7 @@ import 'key_store.dart';
 import 'licences.dart';
 import 'local_names.dart';
 import 'night_schedule.dart';
+import 'screens/app_settings.dart' show AppSettingsScreen;
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
@@ -32,6 +33,7 @@ import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
 import 'local/device_folders.dart';
+import 'local/folder_browser.dart' show pickFolder;
 import 'local/local_library.dart';
 import 'local/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
@@ -141,6 +143,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   LocalSource? _local;
   CombinedSource? _combined; // the screens' source: Komga (or its downloads) with the local libraries beside it
   bool _askingMissing = false;
+  Future<void>? _localOpening; // (No server mode waits for it)
+  bool _noServer = false; // No server mode: the local libraries alone, no Komga
 
   BookSource _combinedOf(BookSource main) {
     final c = _combined ??= CombinedSource(main, local: _local);
@@ -181,6 +185,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.initState();
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
+    AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
     WidgetsBinding.instance.addObserver(_turns);
@@ -365,12 +370,24 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     // the local libraries in the background - the start doesn't wait on the disk for them (Home takes them in when
     // they're open: what the last scans found, then scanned again)
-    unawaited(_openLocal().then((_) {
+    final opening = _localOpening = _openLocal().then((_) {
       if (mounted && _local != null) setState(() {});
-    }));
+    });
+    unawaited(opening);
+    // No server mode: Home is the local libraries', so it waits for them (they can't be opened: the sign-in screen)
+    var noServer = await NoServerMode.load();
+    if (noServer) {
+      await opening;
+      final local = _local;
+      if (local == null) {
+        noServer = false;
+      } else {
+        _loadOnDevice(_combinedOf(local));
+      }
+    }
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = await KeyStore.read();
-    final api = url != null && key != null ? Komga(url, key) : null;
+    final api = !noServer && url != null && key != null ? Komga(url, key) : null;
     if (api != null) {
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
       // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
@@ -386,8 +403,44 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (!mounted) return;
     setState(() {
       _api = api;
+      _noServer = noServer;
       _loaded = true;
     });
+  }
+
+  /// No server mode's settings, pins, On deck hidden and pairing: this device's own - nothing to sync them through.
+  void _loadOnDevice(BookSource api) {
+    unawaited(AppSettings.instance.load(api, fetch: false));
+    unawaited(Pins.instance.load(api, fetch: false));
+    unawaited(OnDeckHidden.instance.load(api, fetch: false));
+    unawaited(PairShift.instance.load(api, fetch: false));
+  }
+
+  /// The sign-in screen's Use without a server: No server mode, on the local libraries - with none yet, the folder
+  /// browser for the first (cancelled: still on the sign-in screen). More are added in Settings > Libraries.
+  Future<void> _startNoServer(BuildContext context) async {
+    await _localOpening;
+    final local = _local;
+    if (local == null) throw StateError("the local libraries couldn't be opened on this device");
+    if (local.folders.isEmpty) {
+      if (!context.mounted) return;
+      final path = await pickFolder(context);
+      if (path == null) return;
+      await local.setLibraries([LocalLibrary.at(path)]);
+    }
+    await NoServerMode.save(true);
+    _loadOnDevice(_combinedOf(local));
+    AppLog.instance.info('local', 'No server mode on');
+    if (mounted) setState(() => _noServer = true);
+  }
+
+  /// No server mode -> Komga, with the local libraries beside it (Settings > Server and sync, Add a Komga server),
+  /// once its sign-in has worked: No server mode left as signing out leaves it (its pins and settings go - Komga's
+  /// come instead), then signed in as from the sign-in screen.
+  Future<void> _addKomga(Komga api) async {
+    _nav.currentState?.popUntil((r) => r.isFirst);
+    await _signOut();
+    await _signIn(api);
   }
 
   Future<void> _signIn(Komga api) async {
@@ -423,9 +476,18 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await Pins.instance.clearAccount();
     await OnDeckHidden.instance.clearAccount();
     await PairShift.instance.clearAccount();
+    if (_noServer) {
+      await NoServerMode.save(false); // (left: the sign-in screen, the local libraries kept)
+      AppLog.instance.info('local', 'No server mode off');
+    }
     final old = _api;
     _combined = null; // (the next account's own; the local libraries stay)
-    if (mounted) setState(() => _api = null);
+    if (mounted) {
+      setState(() {
+        _api = null;
+        _noServer = false;
+      });
+    }
     // the old connection isn't used again (signing in makes a new one): its client goes once what's on its way has
     // finished (code review 2026-10-05, #50)
     old?.close();
@@ -457,8 +519,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       builder: (context, child) => appFrame(context, child!, textScale: display.textScale, onKey: _onEsc),
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
+          : _noServer && _local != null
+              ? HomeScreen(key: const ValueKey('noServer'), api: _combinedOf(_local!), onSignOut: _signOut)
           : _api == null
-              ? LoginScreen(onSignedIn: _signIn)
+              ? LoginScreen(onSignedIn: _signIn, onNoServer: _startNoServer)
               : HomeScreen(
                   key: ValueKey(Connection.instance.offline), // a fresh Home when switching online/offline
                   api: _combinedOf(Connection.instance.online == null ? _api! : Connection.instance.api),

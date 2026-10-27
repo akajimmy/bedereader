@@ -37,8 +37,15 @@ class CombinedSource implements BookSource {
   /// The local libraries (null: none).
   LocalSource? local;
 
-  /// The local libraries, when they have books - else nothing to put together (Komga's answers as they are).
-  LocalSource? get _local => local?.isEmpty ?? true ? null : local;
+  /// No server mode: the local libraries are [main] - there's no Komga.
+  bool get noServer => main is LocalSource;
+
+  /// No server mode, whatever [api] is.
+  static bool noServerOf(BookSource api) => mainOf(api) is LocalSource;
+
+  /// The local libraries, when they have books and aren't [main] already (No server mode) - else nothing to put
+  /// together ([main]'s answers as they are).
+  LocalSource? get _local => (local?.isEmpty ?? true) || identical(local, main) ? null : local;
 
   /// The source [id] (a book, series, library or read list) is in.
   BookSource sourceOf(String? id) => id != null && isLocalId(id) && local != null ? local! : main;

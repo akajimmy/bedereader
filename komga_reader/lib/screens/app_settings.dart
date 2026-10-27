@@ -24,8 +24,10 @@ import 'document.dart';
 import 'downloads_screen.dart';
 import 'remote_test.dart';
 import '../book_source.dart';
+import '../api.dart' show Komga;
 import '../combined_source.dart';
 import '../local/local_settings.dart';
+import 'login.dart' show LoginScreen;
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
@@ -100,6 +102,13 @@ class AppSettingsScreen extends StatefulWidget {
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
   final List<SettingsPage>? only;
+
+  /// No server mode -> Komga with the local libraries beside it, once Add a Komga server's sign-in has worked (set by
+  /// the app, as the side menu's sign-out is).
+  static Future<void> Function(Komga api) appAddKomga = (_) async {};
+
+  /// No server mode's Add a Komga server and Leave rows (tests find them by these).
+  static const addKomgaKey = ValueKey('addKomga'), leaveNoServerKey = ValueKey('leaveNoServer');
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -329,7 +338,27 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
 
   // ---- Server and sync -------------------------------------------------------------------------------------------
-  List<Widget> _server(BuildContext context) => [
+  List<Widget> _server(BuildContext context) => CombinedSource.noServerOf(widget.api) ? [
+        SettingsGroup(title: 'No server', children: [
+          const NoteRow('Books from the local libraries only. Settings, pins and reading progress stay on this '
+              'device.'),
+          ActionRow(
+            key: AppSettingsScreen.addKomgaKey,
+            title: 'Add a Komga server',
+            icon: Icons.dns_outlined,
+            subtitle: 'Its books beside the local libraries',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LoginScreen(adding: true, onSignedIn: AppSettingsScreen.appAddKomga))),
+          ),
+          ActionRow(
+            key: AppSettingsScreen.leaveNoServerKey,
+            title: 'Leave No server mode',
+            icon: Icons.logout,
+            subtitle: 'Back to the sign-in screen; the local libraries stay',
+            onTap: () => _signOut(context),
+          ),
+        ]),
+      ] : [
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
           Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
@@ -503,7 +532,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
       SettingsGroup(title: 'Komga', children: [
-        ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server and sync',
+        ActionRow(title: 'Komga server', subtitle: CombinedSource.noServerOf(api)
+                ? 'None (No server mode) - one is added in Server and sync'
+                : 'Its address, account and sync: Server and sync',
             icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
       ]),
     ];
@@ -658,15 +689,19 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   // ---- confirmations ---------------------------------------------------------------------------------------------
   Future<void> _signOut(BuildContext context) async {
+    final noServer = CombinedSource.noServerOf(widget.api);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('The API key is removed from this device; you can sign in again or connect to a different '
-            'server. Downloads and settings stay.'),
+        title: Text(noServer ? 'Leave No server mode?' : 'Sign out?'),
+        content: Text(noServer
+            ? "Back to the sign-in screen. The local libraries and their reading progress stay; this mode's pins "
+                'and reading settings go.'
+            : 'The API key is removed from this device; you can sign in again or connect to a different server. '
+                'Downloads and settings stay.'),
         actions: [
           TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(noServer ? 'Leave' : 'Sign out')),
         ],
       ),
     );
