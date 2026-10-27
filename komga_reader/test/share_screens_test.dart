@@ -46,10 +46,8 @@ class _Network implements NetworkBrowseSource {
   Future<void> setLogin(String path, SmbLogin login) async => logins[r'\\nas\books'] = login;
 }
 
-/// A share as Shares connects to it: refusing a guest when [needsLogin], out of reach when [away].
+/// A share as Shares connects to it, with a Comics folder.
 class _Share implements SmbShare {
-  _Share({this.needsLogin = false, this.away = false});
-  final bool needsLogin, away;
 
   @override
   Future<bool> exists(String inShare) async => inShare == 'Comics';
