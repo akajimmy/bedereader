@@ -31,7 +31,9 @@ import 'settings.dart';
 import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
+import 'local/device_folders.dart';
 import 'local/local_library.dart';
+import 'local/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
 import 'side_menu.dart';
 import 'update_check.dart';
@@ -138,6 +140,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   // experiment opened them with each sign-in, and a second copy scanned over the first's)
   LocalSource? _local;
   CombinedSource? _combined; // the screens' source: Komga (or its downloads) with the local libraries beside it
+  bool _askingMissing = false;
 
   BookSource _combinedOf(BookSource main) {
     final c = _combined ??= CombinedSource(main, local: _local);
@@ -149,9 +152,21 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _openLocal() async {
     final dir = await appStorageDir();
     if (dir == null) return;
+    // iOS: the app's own folder shown in the Files app, with a Comics folder to copy books to while it's empty
+    final comics = await DeviceFolders.makeComicsFolder();
+    if (comics != null) AppLog.instance.info('local', 'made $comics (the Files app hides an empty folder)');
     try {
-      _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'), await LocalLibraries.load());
-      unawaited(_local!.rescan().catchError((Object e) => AppLog.instance.warn('local', 'a scan failed: $e')));
+      final local = _local =
+          await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'), await LocalLibraries.load());
+      // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
+      // or Keep it in case it comes back
+      local.missing.addListener(() {
+        final ctx = _nav.currentContext;
+        if (_askingMissing || ctx == null || local.missing.value.isEmpty) return;
+        _askingMissing = true;
+        askAboutMissing(ctx, local).whenComplete(() => _askingMissing = false);
+      });
+      unawaited(local.rescan().catchError((Object e) => AppLog.instance.warn('local', 'a scan failed: $e')));
     } catch (e) {
       AppLog.instance.warn('local', "the local libraries couldn't be opened: $e");
     }

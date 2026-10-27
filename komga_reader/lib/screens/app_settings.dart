@@ -24,10 +24,12 @@ import 'document.dart';
 import 'downloads_screen.dart';
 import 'remote_test.dart';
 import '../book_source.dart';
+import '../combined_source.dart';
+import '../local/local_settings.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
-enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, downloads, look, about }
+enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, libraries, downloads, look, about }
 
 /// The headings the pages are listed under.
 enum SettingsSection { reading, app, help }
@@ -49,6 +51,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => 'Remote and keys',
         SettingsPage.server => 'Server and sync',
         SettingsPage.library => 'Library & Home',
+        SettingsPage.libraries => 'Libraries',
         SettingsPage.downloads => 'Downloads',
         SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
@@ -61,6 +64,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.server => Icons.dns_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
+        SettingsPage.libraries => Icons.collections_bookmark_outlined,
         SettingsPage.downloads => Icons.download_outlined,
         SettingsPage.look => Icons.palette_outlined,
         SettingsPage.about => Icons.info_outline,
@@ -225,6 +229,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsPage.server => _server(context),
         SettingsPage.look => [_live((s) => _look(context, s))],
         SettingsPage.library => _library(),
+        SettingsPage.libraries => _libraries(),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
         SettingsPage.keys => [ListenableBuilder(listenable: ReaderKeys.instance, builder: (context, _) => _keys(context))],
         SettingsPage.about => _about(context),
@@ -488,6 +493,22 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   // ---- Library & Home --------------------------------------------------------------------------------------------
+  /// The local libraries (folders on this device) and Komga's - the server's own settings on Server and sync.
+  List<Widget> _libraries() {
+    final api = widget.api;
+    final local = api is CombinedSource ? api.local : null;
+    return [
+      if (local != null)
+        LocalLibrariesGroup(local: local)
+      else
+        const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
+      SettingsGroup(title: 'Komga', children: [
+        ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server and sync',
+            icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
+      ]),
+    ];
+  }
+
   List<Widget> _library() => [
         _live((s) {
           final d = s.display, l = s.library; // (size: this device's; the captions: synced - LibraryPrefs)
