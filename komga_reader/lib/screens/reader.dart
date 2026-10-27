@@ -30,6 +30,7 @@ import 'open_book.dart' show isEpub;
 import '../book_source.dart';
 import '../combined_source.dart';
 import '../local/local_source.dart';
+import '../opened_file.dart';
 
 export '../reader/comic_renderer.dart' show trimPictures;
 export '../reader/curl_turns.dart' show CurlLayer;
@@ -80,6 +81,16 @@ class ReaderScreen extends StatefulWidget {
   static Future<void> closing() => Future.wait(_ReaderScreenState._closingSaves.values)
       .timeout(const Duration(seconds: 5), onTimeout: () => const [])
       .then((_) {}, onError: (Object _) {});
+
+  /// Closes the books open, each saving its place as it goes - done once those saves are ([closing]). A file opened
+  /// with the app while a book is open (user, 2026-10-27: "make sure position in current book/comic/webtoon is saved
+  /// before moving the user").
+  static Future<void> leaveAll(String why) async {
+    for (final s in [..._ReaderScreenState._shown]) {
+      s._leave(why);
+    }
+    await closing();
+  }
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -180,6 +191,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   @override
   void initState() {
     super.initState();
+    _shown.add(this);
     openDevice(); // the screen kept on, the rotation lock, the system bars, full screen (lib/reader/reader_device.dart)
     // back in the app (unlocked, switched back to): read further elsewhere meanwhile?
     _life = AppLifecycleListener(onResume: () => unawaited(_checkElsewhere()));
@@ -211,6 +223,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   @override
   void dispose() {
+    _shown.remove(this);
     _saveTimer?.cancel();
     AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
         "iOS's swipe from the left edge)"}');
@@ -301,7 +314,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       final fromKomga = identical(from, Connection.instance.online);
       AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
           '${fresh['media']?['pagesCount'] ?? '?'} pages, '
-          '${fromKomga ? 'from Komga' : from is LocalSource ? 'from a local library' : 'offline'}) '
+          '${fromKomga ? 'from Komga' : from is LocalSource ? 'from a local library' : _loose ? 'a file opened on its own' : 'offline'}) '
           'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
@@ -390,6 +403,19 @@ class _ReaderScreenState extends State<ReaderScreen>
     // a curl moves the page view underneath as it starts: that counts once the curl completes (turned) - one let go
     // before halfway leaves no trace (code review, 2026-09-30: it un-read a finished book)
     if (!curling) _pageTurned(i);
+  }
+
+  /// The readers on screen ([ReaderScreen.leaveAll]).
+  static final Set<_ReaderScreenState> _shown = {};
+
+  /// This reader closed, with whatever is over it (a sheet, a dialog) - its place saved as it's popped.
+  void _leave(String why) {
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isActive) return;
+    _closedVia = why;
+    Navigator.of(context)
+      ..popUntil((r) => r == route)
+      ..pop();
   }
 
   /// The book closed by the reader's own [via] (a key, Close, the end card) - for the app's log; closed any other way
@@ -717,15 +743,17 @@ class _ReaderScreenState extends State<ReaderScreen>
         for (final b in _r.topButtons()) b.node,
         _ctl[_Ctl.night]!,
         if (isDesktop) _ctl[_Ctl.fullscreen]!,
-        _ctl[_Ctl.read]!,
-        _ctl[_Ctl.delete]!,
+        if (!_loose) ...[_ctl[_Ctl.read]!, _ctl[_Ctl.delete]!],
       ];
   List<FocusNode> _bottomBar(BuildContext context) => [
-        _ctl[_Ctl.prevBook]!,
+        if (!_loose) _ctl[_Ctl.prevBook]!,
         if (_count > 1) _ctl[_Ctl.slider]!,
         for (final b in _r.bottomButtons(context)) b.node,
-        _ctl[_Ctl.nextBook]!,
+        if (!_loose) _ctl[_Ctl.nextBook]!,
       ];
+
+  /// A file opened on its own (Open with, Share): nothing to mark, delete or go on to.
+  bool get _loose => api is OpenedFile;
 
   /// Remote in the controls (user's layout, lib/reader/reader_bars.dart): along a bar, between the bars; with the page
   /// strip open it's a row of its own just above the bottom bar (Left / Right in it are the strip's own).
@@ -736,7 +764,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       dx: dx,
       dy: dy,
       row: _r.rowNode,
-      rowBelow: _r.rowBelow ?? _ctl[_Ctl.prevBook],
+      rowBelow: _r.rowBelow ?? _bottomBar(context).first,
     );
     switch (to) {
       case WalkToNode(:final node):
@@ -1049,7 +1077,7 @@ class _ReaderScreenState extends State<ReaderScreen>
 
   static bool _isRead(Map<String, dynamic> book) => book['readProgress']?['completed'] == true;
 
-  String get _endText => switch ((widget.readListId != null, widget.skipRead)) {
+  String get _endText => _loose ? 'The end' : switch ((widget.readListId != null, widget.skipRead)) {
         (true, true) => 'No unread books left in the read list',
         (true, false) => 'End of the read list',
         (false, true) => 'No unread books left in the series',
@@ -1105,7 +1133,7 @@ class _ReaderScreenState extends State<ReaderScreen>
             onPressed: () => _settings.setDisplay(_settings.display.copyWith(night: !night)),
           ),
           if (isDesktop) fullscreenButton(_ctl[_Ctl.fullscreen]!),
-          barIcon(
+          if (!_loose) barIcon(
             node: _ctl[_Ctl.read]!,
             icon: completed ? Icons.check_circle : Icons.check_circle_outline,
             label: completed ? 'Mark unread' : 'Mark read',
@@ -1126,7 +1154,7 @@ class _ReaderScreenState extends State<ReaderScreen>
               }
             },
           ),
-          IconButton(
+          if (!_loose) IconButton(
             focusNode: _ctl[_Ctl.delete],
             tooltip: 'Delete book',
             icon: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
@@ -1136,9 +1164,9 @@ class _ReaderScreenState extends State<ReaderScreen>
       ),
       bottom: ReaderBottomBar(
         prevNode: _ctl[_Ctl.prevBook]!,
-        onPrev: _prevBook,
+        onPrev: _loose ? null : _prevBook,
         nextNode: _ctl[_Ctl.nextBook]!,
-        onNext: _nextBook,
+        onNext: _loose ? null : _nextBook,
         above: _r.above(context),
         // the renderer's words for the place shown (decision 5, mockup "A")
         position: ReaderPositionRow(kind: readerKind, left: spots.left, centre: spots.centre, right: spots.right, picking: _scrub != null),

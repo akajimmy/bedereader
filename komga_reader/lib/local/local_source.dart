@@ -118,13 +118,13 @@ class LocalSource extends CatalogueSource {
       final index = store.libraries[library.id];
       if (index == null) continue;
       final lib = {'id': library.id, 'name': library.name};
-      final seriesJson = {for (final s in index.series.values) s.id: _seriesJson(s)};
+      final seriesOf = {for (final s in index.series.values) s.id: seriesJson(s)};
       for (final b in index.books.values) {
-        final series = seriesJson[b.seriesId];
+        final series = seriesOf[b.seriesId];
         if (series == null || _outOfReach(b)) continue;
         books[b.id] = b;
         entries[b.id] = {
-          'book': _bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
+          'book': bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
           // a read-list library's list, named after the library
           'readLists': [
             for (final r in b.readLists) {'id': r.id, 'name': library.name, 'index': r.index, 'count': r.count},
@@ -143,13 +143,13 @@ class LocalSource extends CatalogueSource {
   static String _date(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  static Map<String, dynamic> _seriesJson(LocalSeries s) => {
+  static Map<String, dynamic> seriesJson(LocalSeries s) => {
         'id': s.id, 'name': s.name, 'libraryId': s.libraryId, 'oneshot': s.oneshot,
         'metadata': {'title': s.name, 'titleSort': s.name, 'status': 'ONGOING', 'genres': const [], 'tags': const []},
         'booksMetadata': {'authors': const []},
       };
 
-  static Map<String, dynamic> _bookJson(LocalBook b, LocalSeries s) {
+  static Map<String, dynamic> bookJson(LocalBook b, LocalSeries s) {
     final name = b.path.substring(b.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
     final modified = b.modified.toUtc().toIso8601String();
     return {
@@ -380,7 +380,7 @@ class LocalSource extends CatalogueSource {
     return _withArchive(bookId, (archive, names) async {
       var sizes = store.sizes[bookId];
       if (sizes == null || sizes.length != names.length * 2) {
-        sizes = await _measure(archive, names);
+        sizes = await measurePages(archive, names);
         unawaited(store.setSizes(bookId, sizes));
       }
       return [
@@ -395,7 +395,7 @@ class LocalSource extends CatalogueSource {
 
   /// Each page's size from the start of its picture ([w, h, ...]; 0, 0 where it can't be told), 8 at a time - a
   /// picture whose size isn't in its first 64 KB (a big colour profile) read further, to 1 MB.
-  static Future<List<int>> _measure(ComicArchive archive, List<String> names) async {
+  static Future<List<int>> measurePages(ComicArchive archive, List<String> names) async {
     final out = List.filled(names.length * 2, 0);
     var next = 0;
     Future<void> worker() async {
