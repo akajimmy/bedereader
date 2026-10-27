@@ -12,6 +12,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 
 - Offline mode covers network libraries too: offline, a network library shows only its books with a copy on the device (downloaded, or cached when opened), isn't scanned, and its downloads wait - nothing is read from a share. The Offline mode switch shows when there's Komga or a network library, not with only folders on the device (it stayed in the side menu after signing out); in No server mode it's kept as you left it.
+- The app's tagline is "Comics, manga and books - wherever they live." (it said "for Komga"), and About and the README describe the local and network libraries too. The README is rewritten for 1.6.
+- About > Licences of included open-source software adds libsmb2 (the network shares' library: its LGPL text, notice and source), the RAR reader's notices for the code it adapts, Komga's notice for its K, and every library the Android version carries. On iPhone and iPad, the local network question names shared folders too.
+- The Windows zip holds only the app's own files: an unused web view plugin, left over from an experiment, had been in it since 1.2.
 - Book details: the Downloaded and Cached badges are the blue of the downloaded tick on posters (Downloaded was a lighter blue, Cached grey).
 
 **Fixed**
