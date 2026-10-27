@@ -148,6 +148,7 @@ void main() {
     final local = await LocalSource.open(data, [LocalLibrary.at(root.path)]);
     addTearDown(() async {
       await local.closeFiles();
+      await local.store.written; // (the pages' sizes are saved in the background: not deleted under the write)
       await root.delete(recursive: true);
       await data.delete(recursive: true);
     });
