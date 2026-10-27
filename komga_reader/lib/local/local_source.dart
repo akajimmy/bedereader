@@ -358,6 +358,9 @@ class LocalSource extends CatalogueSource {
   @override
   ImageProvider thumbImage(String ref) => _Poster(ref, this);
 
+  /// Whether a poster reference ([bookThumb], [seriesThumb]) is one of these.
+  bool ownsPoster(String ref) => ref.startsWith(_posters.path);
+
   final Map<String, Future<bool>> _making = {}; // posters being made (one each, however many tiles ask)
   int _makingNow = 0;
   final List<Completer<void>> _turns = []; // posters waiting for a turn (a few at a time: the files may be on a NAS)

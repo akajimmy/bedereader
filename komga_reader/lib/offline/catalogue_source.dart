@@ -57,14 +57,17 @@ abstract class CatalogueSource implements BookSource {
   static num _numberSort(Map b) => ((b['metadata'] as Map?)?['numberSort'] as num?) ?? 0;
 
   /// Sorts by a Komga sort param "field,dir" for the fields the app uses.
-  static void _sort(List<dynamic> list, String sort, dynamic Function(Map item) key) {
-    final desc = sort.endsWith(',desc');
-    list.sort((a, b) {
-      final ka = key(a as Map), kb = key(b as Map);
-      final c = (ka is num && kb is num) ? ka.compareTo(kb) : '${ka ?? ''}'.toLowerCase().compareTo('${kb ?? ''}'.toLowerCase());
-      return desc ? -c : c;
-    });
+  static void _sort(List<dynamic> list, String sort, dynamic Function(Map item) key) =>
+      list.sort((a, b) => _compare(sort, key(a as Map), key(b as Map)));
+
+  static int _compare(String sort, Object? ka, Object? kb) {
+    final c = (ka is num && kb is num) ? ka.compareTo(kb) : '${ka ?? ''}'.toLowerCase().compareTo('${kb ?? ''}'.toLowerCase());
+    return sort.endsWith(',desc') ? -c : c;
   }
+
+  /// The order of a Komga sort param "field,dir", for two items (Komga's JSON) - for merging two sources' lists.
+  static int Function(Map a, Map b) comparator(String sort) =>
+      (a, b) => _compare(sort, _sortKey(sort, a), _sortKey(sort, b));
 
   static dynamic _sortKey(String sort, Map item) {
     final field = sort.split(',').first;
