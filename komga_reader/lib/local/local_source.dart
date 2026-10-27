@@ -294,15 +294,15 @@ class LocalSource extends CatalogueSource {
       o = null;
     }
     if (o == null) {
-      final opening = _opening[bookId] ??= () async {
-        final (fs, file) = _fileOf(b);
-        final archive = await ComicArchive.open(fs, file);
-        return _OpenBook(b, archive, comicPages(archive.names));
-      }();
+      var opening = _opening[bookId];
+      if (opening == null) {
+        opening = _openBook(b);
+        _opening[bookId] = opening;
+      }
       try {
         o = await opening;
       } finally {
-        if (identical(_opening[bookId], opening)) _opening.remove(bookId);
+        if (identical(_opening[bookId], opening)) unawaited(_opening.remove(bookId)); // (done: nothing to wait for)
       }
     }
     _open
@@ -322,6 +322,12 @@ class LocalSource extends CatalogueSource {
         unawaited(oldest.value.close());
       }
     }
+  }
+
+  Future<_OpenBook> _openBook(LocalBook b) async {
+    final (fs, file) = _fileOf(b);
+    final archive = await ComicArchive.open(fs, file);
+    return _OpenBook(b, archive, comicPages(archive.names));
   }
 
   /// A comic's pages, read from its archive as it's opened, with their sizes - measured from the start of each
