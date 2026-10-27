@@ -202,7 +202,10 @@ class _LoginScreenState extends State<LoginScreen> {
               else ...[
                 Text(appName, style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 4),
-                const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
+                const Text(appTagline, style: TextStyle(color: Colors.white60)),
+                const SizedBox(height: 4),
+                const Text('Sign in to your Komga server, or use the app with folders alone.',
+                    style: TextStyle(color: Colors.white60)),
               ],
               const SizedBox(height: 24),
               SegmentedButton<bool>(
