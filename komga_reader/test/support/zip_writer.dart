@@ -13,11 +13,12 @@ Uint8List zipOf(Map<String, Object> files, {bool deflate = false}) {
     final stored = deflate ? ZLibEncoder(raw: true).convert(data) : data;
     final method = deflate ? 8 : 0;
     final nameBytes = utf8.encode(name);
+    final flags = nameBytes.any((b) => b > 0x7f) ? 0x800 : 0; // (a name not ASCII: marked UTF-8, as zip tools do)
     final crc = _crc32(data);
     final offset = out.length;
     out.add(_le32(0x04034b50));
     out.add(_le16(20));
-    out.add(_le16(0)); // flags
+    out.add(_le16(flags));
     out.add(_le16(method));
     out.add(_le32(0)); // time, date
     out.add(_le32(crc));
@@ -30,7 +31,7 @@ Uint8List zipOf(Map<String, Object> files, {bool deflate = false}) {
     dir.add(_le32(0x02014b50));
     dir.add(_le16(20));
     dir.add(_le16(20));
-    dir.add(_le16(0));
+    dir.add(_le16(flags));
     dir.add(_le16(method));
     dir.add(_le32(0));
     dir.add(_le32(crc));

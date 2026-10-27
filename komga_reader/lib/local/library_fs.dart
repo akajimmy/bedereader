@@ -1,6 +1,5 @@
 import 'dart:io';
-
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 
 /// A file found in a library folder: its full path (as the library's own path is written), size and date.
 class FsEntry {
@@ -13,11 +12,23 @@ class FsEntry {
 /// Why a file or folder couldn't be read - each file system tells its own errors apart ([LibraryFs.classify]).
 /// - [gone]: not there (deleted, or moved since the folder was listed).
 /// - [refused]: there, but this app isn't allowed to read it (a permission taken back, a share's login refused).
-/// - [noAnswer]: the network or the share didn't answer - not the file's doing.
+/// - [noAnswer]: the network, the share or the drive didn't answer - not the file's doing (a card or a USB drive taken
+///   out is this too: its books are kept, not taken for deleted).
 /// - [damaged]: read, but not a book this app can use (a broken or unknown archive) - or an error not known as one of
 ///   the others: said, not taken for a share that's away (the local libraries' review, 2026-10-26: every error not
 ///   recognised counted as "no answer", and kept a book that was really broken).
 enum FileTrouble { gone, refused, noAnswer, damaged }
+
+/// A file opened for reading: its parts read as they're needed, then [close]d (on a share, opening is a round trip of
+/// its own - opened once for a book, not once a read: review, 2026-10-26).
+abstract interface class LibraryFile {
+  Future<int> length();
+
+  /// [length] bytes from [offset] (fewer only at the end of the file).
+  Future<Uint8List> readRange(int offset, int length);
+
+  Future<void> close();
+}
 
 /// Where a local library's files are read from: this device's own files ([LocalFs]), and - later - a share reached
 /// by the app itself. Paths are written the same way for all: a share as \\host\share\folder.
@@ -29,14 +40,12 @@ abstract interface class LibraryFs {
   /// reach? (A library whose folder looks deleted is asked about; one out of reach is kept.)
   Future<bool> placeAnswers(String folder);
 
-  /// Every file under [folder], at any depth.
-  Stream<FsEntry> list(String folder);
+  /// The book files under [folder] (CBZ, CBR, EPUB), at any depth - not in the system's own folders (a NAS's
+  /// #recycle and @eaDir, hidden ones) and not hidden files (a Mac's ._x). A folder in it that can't be read is told
+  /// to [onUnreadable] and passed over: the rest is still listed.
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable});
 
-  Future<int> length(String path);
-  Future<Uint8List> readAll(String path);
-
-  /// [length] bytes from [offset] (fewer at the end of the file).
-  Future<Uint8List> readRange(String path, int offset, int length);
+  Future<LibraryFile> open(String path);
 
   /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
   /// and how many books.
@@ -44,6 +53,16 @@ abstract interface class LibraryFs {
 
   /// What kind of trouble [error] (thrown by this file system's reads) is.
   FileTrouble classify(Object error);
+}
+
+/// A whole file, through [LibraryFs.open].
+Future<Uint8List> readWhole(LibraryFs fs, String path) async {
+  final f = await fs.open(path);
+  try {
+    return await f.readRange(0, await f.length());
+  } finally {
+    await f.close();
+  }
 }
 
 /// A folder's own folders and its count of books (CBZ, CBR, EPUB), as the folder browser shows them.
@@ -60,8 +79,9 @@ class FolderLook {
   }
 }
 
-/// A file read as a book.
+/// A file read as a book - not a hidden one (a Mac's ._x copy of a book's attributes, on a share it wrote to).
 bool isBookFile(String name) {
+  if (name.startsWith('.')) return false;
   final n = name.toLowerCase();
   return n.endsWith('.cbz') || n.endsWith('.cbr') || n.endsWith('.epub');
 }
@@ -72,31 +92,45 @@ bool shownFolder(String name) =>
     !name.startsWith('.') && !name.startsWith('@') && !name.startsWith('#') && !name.startsWith(r'$') &&
     name != 'System Volume Information';
 
-/// A share's path, \\host\share\folder (or smb://host/share/folder): (host, share, the folder in it with '/').
-/// Null for anything else.
+/// A share's path, \\host\share\folder (or smb://host/share/folder, or Windows's long form \\?\UNC\host\share\...):
+/// (host, share, the folder in it with '/'). Null for anything else - Windows's long form of a drive path (\\?\C:\x)
+/// too.
 (String, String, String)? splitUnc(String path) {
-  final m = RegExp(r'^(?:\\\\|//|smb://)([^\\/]+)[\\/]+([^\\/]+)[\\/]*(.*)$', caseSensitive: false).firstMatch(path.trim());
+  var p = path.trim();
+  if (p.startsWith(r'\\?\UNC\') || p.startsWith(r'\\.\UNC\')) p = r'\\' + p.substring(8);
+  if (p.startsWith(r'\\?\') || p.startsWith(r'\\.\')) return null;
+  final m = RegExp(r'^(?:\\\\|//|smb://)([^\\/]+)[\\/]+([^\\/]+)[\\/]*(.*)$', caseSensitive: false).firstMatch(p);
   if (m == null) return null;
   return (m[1]!, m[2]!, m[3]!.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), ''));
 }
 
+/// How a system numbers its errors: Windows's (winerror.h), Apple's (Darwin's errno), the others' (Linux's - Android).
+enum FsPlatform {
+  windows, apple, linux;
+
+  static FsPlatform get current =>
+      Platform.isWindows ? windows : Platform.isIOS || Platform.isMacOS ? apple : linux;
+}
+
 /// The device's own files (and, on Windows, a share by its \\host\share path - Windows reaches it itself).
 class LocalFs implements LibraryFs {
-  /// [windows]: tell the errors apart as Windows numbers them (else as Android, iOS and the rest do).
-  LocalFs({bool? windows}) : _windows = windows ?? Platform.isWindows;
-  final bool _windows;
+  LocalFs({FsPlatform? platform}) : _platform = platform ?? FsPlatform.current;
+  final FsPlatform _platform;
 
   @override
   Future<bool> exists(String folder) => Directory(folder).exists();
 
-  /// Any folder above it is there - a drive, the device's storage, or (Windows) a share's top, \\host\share: a share
-  /// out of reach has none of them (Windows says "not there" for all, not "can't reach").
+  /// The place it was in answers: the nearest folder above it that's there - but not the system's own top folders
+  /// (/, /storage, /var...), which are always there: a card or USB drive taken out (/storage/1234-ABCD/Comics) would
+  /// look deleted (review, 2026-10-26). A drive's top (E:\) or a share's (\\host\share) is a place of its own.
   @override
   Future<bool> placeAnswers(String folder) async {
     final unc = splitUnc(folder);
+    final posix = folder.startsWith('/');
     var dir = Directory(folder.replaceAll(RegExp(r'[\\/]+$'), '')).parent;
     while (true) {
       if (unc != null && splitUnc(dir.path) == null) return false; // (above the share: \\host itself, never a folder)
+      if (posix && dir.path.split('/').where((s) => s.isNotEmpty).length < 2) return false;
       if (await dir.exists()) return true;
       final up = dir.parent;
       if (up.path == dir.path) return false;
@@ -105,13 +139,30 @@ class LocalFs implements LibraryFs {
   }
 
   @override
-  Stream<FsEntry> list(String folder) async* {
-    await for (final e in Directory(folder).list(recursive: true, followLinks: false)) {
-      if (e is! File) continue;
-      final s = await e.stat();
-      yield FsEntry(e.path, s.size, s.modified);
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) async* {
+    final List<FileSystemEntity> here;
+    try {
+      here = await Directory(folder).list(followLinks: false).toList();
+    } catch (e) {
+      if (onUnreadable == null) rethrow; // (the library's own folder: the caller says what's wrong)
+      onUnreadable(folder, e);
+      return;
+    }
+    for (final e in here) {
+      final name = e.path.substring(e.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
+      if (e is Directory) {
+        if (!shownFolder(name)) continue;
+        yield* list(e.path, onUnreadable: onUnreadable ?? (_, __) {});
+      } else if (e is File && isBookFile(name)) {
+        final s = await e.stat();
+        if (s.type == FileSystemEntityType.notFound) continue; // (deleted since it was listed)
+        yield FsEntry(e.path, s.size, s.modified);
+      }
     }
   }
+
+  @override
+  Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());
 
   @override
   Future<FolderLook> look(String folder) async => FolderLook.of([
@@ -119,42 +170,66 @@ class LocalFs implements LibraryFs {
           (e.path.substring(e.path.lastIndexOf(RegExp(r'[\\/]')) + 1), e is Directory),
       ]);
 
-  @override
-  Future<int> length(String path) => File(path).length();
-  @override
-  Future<Uint8List> readAll(String path) => File(path).readAsBytes();
-
-  @override
-  Future<Uint8List> readRange(String path, int offset, int length) async {
-    final raf = await File(path).open();
-    try {
-      await raf.setPosition(offset);
-      return await raf.read(length);
-    } finally {
-      await raf.close();
-    }
-  }
-
-  // the system's error numbers: Windows's (winerror.h) and the others' (errno)
-  static const _winGone = {2, 3}; // file / path not found
-  static const _winRefused = {5}; // access denied
-  // a share by \\host\share: network path not found, gone, bad name, unexpected network error, timeout, unreachable;
-  // a file in use elsewhere (32: sharing violation) - there, just not now
-  static const _winNoAnswer = {32, 53, 59, 64, 67, 121, 1231};
-  static const _posixGone = {2, 20}; // ENOENT, ENOTDIR
-  static const _posixRefused = {1, 13}; // EPERM, EACCES
-  static const _posixNoAnswer = {101, 110, 112, 113}; // ENETUNREACH, ETIMEDOUT, EHOSTDOWN, EHOSTUNREACH
+  // the systems' error numbers
+  static const _gone = {
+    FsPlatform.windows: {2, 3}, // file / path not found
+    FsPlatform.apple: {2, 20}, // ENOENT, ENOTDIR
+    FsPlatform.linux: {2, 20},
+  };
+  static const _refused = {
+    // access denied, network access denied, a share's password or login refused, not signed in
+    FsPlatform.windows: {5, 65, 86, 1244, 1326},
+    FsPlatform.apple: {1, 13}, // EPERM, EACCES
+    FsPlatform.linux: {1, 13},
+  };
+  static const _noAnswer = {
+    // a drive not there or not ready (a USB drive taken out); a file in use elsewhere; a share by \\host\share:
+    // network path not found, unexpected network error, gone, bad name, timeout, session cancelled, no network,
+    // host unreachable, connection aborted, unreachable, connection doesn't exist
+    FsPlatform.windows: {15, 21, 32, 53, 59, 64, 67, 121, 240, 1222, 1231, 1232, 1236, 2250},
+    // ENETDOWN, ENETUNREACH, ECONNABORTED, ECONNRESET, ETIMEDOUT, ECONNREFUSED, EHOSTDOWN, EHOSTUNREACH, ESTALE
+    FsPlatform.apple: {50, 51, 53, 54, 60, 61, 64, 65, 70},
+    // ENODEV, ENETDOWN, ENETUNREACH, ECONNABORTED, ECONNRESET, ETIMEDOUT, ECONNREFUSED, EHOSTDOWN, EHOSTUNREACH,
+    // ESTALE, ENOMEDIUM (a card taken out)
+    FsPlatform.linux: {19, 100, 101, 103, 104, 110, 111, 112, 113, 116, 123},
+  };
 
   @override
   FileTrouble classify(Object error) {
     if (error is FileSystemException) {
       final code = error.osError?.errorCode;
       if (code != null) {
-        if ((_windows ? _winGone : _posixGone).contains(code)) return FileTrouble.gone;
-        if ((_windows ? _winRefused : _posixRefused).contains(code)) return FileTrouble.refused;
-        if ((_windows ? _winNoAnswer : _posixNoAnswer).contains(code)) return FileTrouble.noAnswer;
+        if (_gone[_platform]!.contains(code)) return FileTrouble.gone;
+        if (_refused[_platform]!.contains(code)) return FileTrouble.refused;
+        if (_noAnswer[_platform]!.contains(code)) return FileTrouble.noAnswer;
       }
     }
     return FileTrouble.damaged;
   }
+}
+
+class _LocalFile implements LibraryFile {
+  _LocalFile(this._f);
+  final RandomAccessFile _f;
+
+  @override
+  Future<int> length() => _f.length();
+
+  @override
+  Future<Uint8List> readRange(int offset, int length) async {
+    await _f.setPosition(offset);
+    final first = await _f.read(length);
+    if (first.length >= length || first.isEmpty) return first;
+    // (a network file system can answer with less than asked before the end: the rest asked for until the end)
+    final out = BytesBuilder(copy: false)..add(first);
+    while (out.length < length) {
+      final more = await _f.read(length - out.length);
+      if (more.isEmpty) break;
+      out.add(more);
+    }
+    return out.takeBytes();
+  }
+
+  @override
+  Future<void> close() => _f.close();
 }
