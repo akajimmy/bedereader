@@ -23,6 +23,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - A local book's date shows as far as it's known: "2012", "Mar 2012", or the whole date.
 - Offline, the app says it's showing downloaded books and local libraries when there are local ones.
 - The side menu kept open on a wide screen takes in libraries added or removed straight away.
+- A local library's series settings (its own reader settings) and the local books hidden from On deck stay on this device, as its pins do: never sent to Komga, kept through signing out. Adding a library no longer waits for its first scan: it's listed at once, and Scan again shows how far the scan has got.
 
 ## 1.6.0
 

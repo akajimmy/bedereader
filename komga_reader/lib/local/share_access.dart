@@ -13,14 +13,24 @@ Future<bool> ensureShare(BuildContext context, String path, {Shares? shares}) as
   if (parts == null) return true; // (not a share)
   final (host, share, folder) = parts;
   final where = '\\\\$host\\$share';
+  // a login given here and not working out (refused, then Cancel; the share not answering) isn't kept: the share's
+  // login as it was before (the review, 2026-10-26: a refused one stayed, and was used for the next listing)
+  final before = s.loginFor(path);
+  var tried = false;
+  Future<bool> no() async {
+    if (tried) await s.setLogin(path, before);
+    return false;
+  }
+
   String? problem; // said above the login fields (null: nothing went wrong - a guest refused)
   var ask = false;
   while (true) {
     if (ask) {
-      if (!context.mounted) return false;
+      if (!context.mounted) return no();
       final login = await askShareLogin(context, where, was: s.loginFor(path), problem: problem);
-      if (login == null) return false;
+      if (login == null) return no();
       await s.setLogin(path, login);
+      tried = true;
     }
     final fs = s.fsFor(path);
     Object error;
@@ -29,7 +39,7 @@ Future<bool> ensureShare(BuildContext context, String path, {Shares? shares}) as
       if (context.mounted) {
         await _say(context, 'Folder not found', "Connected to $where, but there's no folder $folder on it.");
       }
-      return false;
+      return false; // (the login worked: kept)
     } catch (e) {
       error = e;
     }
@@ -39,9 +49,9 @@ Future<bool> ensureShare(BuildContext context, String path, {Shares? shares}) as
         ask = true;
       case FileTrouble.gone:
         if (context.mounted) await _say(context, 'Share not found', 'There is no share $share on $host.');
-        return false;
+        return no();
       case FileTrouble.noAnswer || FileTrouble.damaged:
-        if (!context.mounted || !await _retry(context, where, '$error')) return false;
+        if (!context.mounted || !await _retry(context, where, '$error')) return no();
         ask = false; // (tried again as it was)
     }
   }

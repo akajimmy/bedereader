@@ -173,6 +173,10 @@ void main() {
     await alone.markRead(first);
     expect([for (final b in (await alone.onDeck())['content'] as List) b['id']], hasLength(1));
     expect(((await alone.searchSeries('saga'))['content'] as List), hasLength(1));
+    // (the review, 2026-10-26: the side menu, Home and the library picker gave each library twice)
+    expect(await alone.libraries(), hasLength(1));
+    expect(await alone.keptLibraries(), hasLength(1));
+    expect(await alone.visibleLibraries(), hasLength(1));
   });
 
   test('the No server setting: off until turned on; turned off, nothing of it is left', () async {

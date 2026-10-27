@@ -47,6 +47,10 @@ class CombinedSource implements BookSource {
   /// together ([main]'s answers as they are).
   LocalSource? get _local => (local?.isEmpty ?? true) || identical(local, main) ? null : local;
 
+  /// The local libraries beside [main] - none in No server mode, where they are [main] (the library lists gave each
+  /// library twice: the review, 2026-10-26).
+  LocalSource? get _beside => identical(local, main) ? null : local;
+
   /// The source [id] (a book, series, library or read list) is in.
   BookSource sourceOf(String? id) => id != null && isLocalId(id) && local != null ? local! : main;
 
@@ -105,6 +109,14 @@ class CombinedSource implements BookSource {
     return {'content': content, 'totalElements': total, 'last': content.length >= total};
   }
 
+  /// Both sources' answers, asked at once (the local one while Komga's is on its way - the review, 2026-10-26); the
+  /// first error as it is (a record's .wait wraps it, and explain() wouldn't know it).
+  static Future<(Map<String, dynamic>, Map<String, dynamic>)> _both(
+      Future<Map<String, dynamic>> a, Future<Map<String, dynamic>> b) async {
+    final r = await Future.wait([a, b]);
+    return (r[0], r[1]);
+  }
+
   static String _key(String what, List<Object?> args) => '$what|${args.join('|')}';
 
   // ---- account / libraries ------------------------------------------------------------------------------------------
@@ -119,10 +131,10 @@ class CombinedSource implements BookSource {
   Future<Map<String, dynamic>?> me() => main.me();
 
   @override
-  Future<List<dynamic>> libraries() async => [...await main.libraries(), ...?await local?.libraries()];
+  Future<List<dynamic>> libraries() async => [...await main.libraries(), ...?await _beside?.libraries()];
 
   @override
-  Future<List<dynamic>> keptLibraries() async => [...await main.keptLibraries(), ...?await local?.libraries()];
+  Future<List<dynamic>> keptLibraries() async => [...await main.keptLibraries(), ...?await _beside?.libraries()];
 
   @override
   void forgetLibraries() => main.forgetLibraries();
@@ -132,7 +144,7 @@ class CombinedSource implements BookSource {
 
   @override
   Future<List<dynamic>> visibleLibraries({bool kept = false}) async =>
-      [...await main.visibleLibraries(kept: kept), ...?await local?.visibleLibraries(kept: kept)];
+      [...await main.visibleLibraries(kept: kept), ...?await _beside?.visibleLibraries(kept: kept)];
 
   // ---- browsing -----------------------------------------------------------------------------------------------------
   @override
@@ -165,10 +177,8 @@ class CombinedSource implements BookSource {
   Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) async {
     final l = _local;
     if (libraryId != null || l == null) return sourceOf(libraryId).inProgress(libraryId: libraryId, size: size);
-    final both = [
-      ...(await main.inProgress(size: size))['content'] as List,
-      ...(await l.inProgress(size: size))['content'] as List,
-    ]..sort((a, b) => CatalogueSource.comparator('readProgress.readDate,desc')(a as Map, b as Map));
+    final r = await _both(main.inProgress(size: size), l.inProgress(size: size));
+    final both = [...r.$1['content'] as List, ...r.$2['content'] as List]..sort((a, b) => CatalogueSource.comparator('readProgress.readDate,desc')(a as Map, b as Map));
     return {'content': both.take(size).toList(), 'totalElements': both.length, 'last': both.length <= size};
   }
 
@@ -176,7 +186,8 @@ class CombinedSource implements BookSource {
   Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async {
     final l = _local;
     if (libraryId != null || l == null) return sourceOf(libraryId).onDeck(libraryId: libraryId, size: size);
-    return _shared(await main.onDeck(size: size), await l.onDeck(size: size), size);
+    final (a, b) = await _both(main.onDeck(size: size), l.onDeck(size: size));
+    return _shared(a, b, size);
   }
 
   @override
@@ -205,14 +216,16 @@ class CombinedSource implements BookSource {
   Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async {
     final l = _local;
     if (libraryId != null || l == null) return sourceOf(libraryId).searchSeries(query, libraryId: libraryId, size: size);
-    return _shared(await main.searchSeries(query, size: size), await l.searchSeries(query, size: size), size);
+    final (a, b) = await _both(main.searchSeries(query, size: size), l.searchSeries(query, size: size));
+    return _shared(a, b, size);
   }
 
   @override
   Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async {
     final l = _local;
     if (libraryId != null || l == null) return sourceOf(libraryId).searchBooks(query, libraryId: libraryId, size: size);
-    return _shared(await main.searchBooks(query, size: size), await l.searchBooks(query, size: size), size);
+    final (a, b) = await _both(main.searchBooks(query, size: size), l.searchBooks(query, size: size));
+    return _shared(a, b, size);
   }
 
   /// Each source asked for its own series' books.
@@ -233,7 +246,8 @@ class CombinedSource implements BookSource {
     if (libraryId != null || l == null) {
       return sourceOf(libraryId).searchReadLists(query, libraryId: libraryId, size: size);
     }
-    return _shared(await main.searchReadLists(query, size: size), await l.searchReadLists(query, size: size), size);
+    final (a, b) = await _both(main.searchReadLists(query, size: size), l.searchReadLists(query, size: size));
+    return _shared(a, b, size);
   }
 
   @override

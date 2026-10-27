@@ -177,6 +177,21 @@ void main() {
     });
   });
 
+  test("a share's new login: what holds files open through it lets them go first, then the old connection closes (a "
+      'book open on it lost its pages - the review, 2026-10-26)', () async {
+    FlutterSecureStorage.setMockInitialValues({});
+    final order = <String>[];
+    final share = _Share({'': []});
+    final shares = Shares(viaApp: true, connect: (_, __, ___) async => share)
+      ..beforeReconnect = () async => order.add('files let go');
+    await shares.fsFor(r'\\nas\books').exists(r'\\nas\books');
+    await shares.setLogin(r'\\nas\books', const SmbLogin('nick', 'p'));
+    order.add('disconnected ${share.disconnected}');
+    expect(order, ['files let go', 'disconnected 1']);
+    await shares.setLogin(r'\\nas\other', const SmbLogin('nick', 'p'));
+    expect(order, hasLength(2), reason: 'nothing open on that share: nothing to let go');
+  });
+
   test("Windows's net view: the folder shares under the dashed line, hidden ones left out", () {
     const out = 'Shared resources at \\\\NAS\r\n\r\nShare name  Type  Used as  Comment\r\n'
         '-------------------------------------------------\r\n'

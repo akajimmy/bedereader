@@ -179,6 +179,25 @@ void main() {
       expect(shares.loginFor(r'\\nas\books\Manga')?.user, 'nick');
     });
 
+    testWidgets("a login the share refuses, then Cancel: not kept - the share's login as it was (the review, "
+        '2026-10-26: the refused one stayed, and was used for the next listing)', (tester) async {
+      final shares = Shares(viaApp: true, connect: (_, __, login) async {
+        if (login?.password != 'right') throw _refused;
+        return _Share();
+      });
+      await shares.setLogin(r'\\nas\books', const SmbLogin('old', 'stale'));
+      final result = await host(tester, (c) => ensureShare(c, r'\\nas\books\Comics', shares: shares));
+      await tester.enterText(find.widgetWithText(TextField, 'User name'), 'nick');
+      await tester.enterText(find.widgetWithText(TextField, 'Password'), 'wrong');
+      await tester.tap(find.widgetWithText(TextButton, 'Sign in'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<ShareLoginDialog>(find.byType(ShareLoginDialog)).problem, isNotNull, reason: 'refused');
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(result(), isFalse);
+      expect(shares.loginFor(r'\\nas\books')?.user, 'old');
+    });
+
     testWidgets("out of reach: Retry or Cancel, no login asked for; Cancel isn't kept", (tester) async {
       final shares = Shares(viaApp: true,
           connect: (_, __, ___) async => throw const Smb2Exception('no route', type: Smb2ErrorType.connection));

@@ -181,7 +181,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
 
 /// Opens a book's file: its pages (a comic) or its metadata (an EPUB), its ComicInfo, and what its name says. Also
 /// returns its ComicInfo's series (a read list's books are put in theirs). [shortName]: its name without the start
-/// its series' books share - its title, unless its ComicInfo or the EPUB has one.
+/// its series' books share - its title, unless its name has one after its number, or its ComicInfo or the EPUB has one.
 Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary library, String seriesId,
     String seriesName, int place, bool oneshot, {String? shortName}) async {
   final name = f.path.substring(f.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
@@ -198,7 +198,9 @@ Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary lib
     final parsed = parseBookName(stem, seriesName);
     // its own title: what follows the number, else the name without its tags ("(2025) (Digital) (Shan-Empire)")
     final untagged = stem.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    var title = oneshot ? stem : (shortName ?? parsed.title ?? (untagged.isEmpty ? stem : untagged));
+    // (a title after its number first: "Dune 01 - Dune Messiah" is "Dune Messiah", not "01 - Dune Messiah" - the
+    // review, 2026-10-26)
+    var title = oneshot ? stem : (parsed.title ?? shortName ?? (untagged.isEmpty ? stem : untagged));
     if (epub) {
       final meta = await epubMetadata(archive);
       return (
