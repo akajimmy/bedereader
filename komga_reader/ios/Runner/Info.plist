@@ -26,7 +26,7 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>BeDeReader connects to your Komga server on your local network.</string>
+	<string>BeDeReader connects to your Komga server and to shared folders on your local network.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

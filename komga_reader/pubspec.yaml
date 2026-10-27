@@ -38,6 +38,9 @@ flutter:
     - assets/docs/CHANGELOG.md
     - assets/docs/THIRD_PARTY_NOTICES.md
     - assets/licences/apache-2.0.txt
+    - assets/licences/lgpl-2.1.txt # libsmb2 (network shares)
+    - assets/licences/dart_smb2-NOTICE.txt
+    - assets/licences/koni_rar-NOTICE.txt # the RAR reader's adapted code: libarchive, rardecode, PPMd
     # EPUB: hyphenation patterns (hyph-utf8; licences in LICENSE.txt) and the reading fonts' licences (OFL)
     - assets/hyphenation/hyph-en-us.pat.txt
     - assets/hyphenation/hyph-en-us.hyp.txt
