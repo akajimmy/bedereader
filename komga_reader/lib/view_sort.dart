@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import 'api.dart';
 import 'view_filter.dart';
 import 'book_source.dart';
 

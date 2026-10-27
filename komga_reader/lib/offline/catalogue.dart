@@ -36,18 +36,30 @@ class Catalogue {
   Catalogue(Map<String, Map<String, dynamic>> entries, {bool Function(String? libraryId)? hidden}) {
     for (final MapEntry(key: id, value: e) in entries.entries) {
       if (e['state'] != 'done') continue;
-      final b = CatalogueBook._(id, e);
+      final CatalogueBook b;
+      final List<String> lists;
+      try {
+        b = CatalogueBook._(id, e);
+        lists = [for (final r in b.readLists) r['id'] as String];
+      } catch (_) {
+        // an entry that can't be read (written by a broken download, say): left out - not every question about the
+        // downloads failing for it (review, 2026-10-26: before, only those that touched it did)
+        skipped++;
+        continue;
+      }
       if (hidden != null && hidden(b.libraryId)) continue;
       books.add(b);
       byId[id] = b;
       (bySeries[b.seriesId] ??= []).add(b);
-      for (final r in b.readLists) {
-        final rid = r['id'] as String;
+      for (final (i, rid) in lists.indexed) {
         (_inReadList[rid] ??= []).add(b);
-        readListNames.putIfAbsent(rid, () => r['name']);
+        readListNames.putIfAbsent(rid, () => b.readLists[i]['name']);
       }
     }
   }
+
+  /// Entries left out because they couldn't be read.
+  int skipped = 0;
 
   /// In the store's order.
   final List<CatalogueBook> books = [];

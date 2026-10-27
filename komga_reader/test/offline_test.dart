@@ -128,6 +128,22 @@ void main() {
     expect(() => api.clientSettings(), throwsA(isA<KomgaUnreachable>()));
   });
 
+  // the downloads answer these themselves since they stopped being a Komga that can't connect (2026-10-26): what only
+  // the server has is "unreachable" as before - the EPUB reader, the sync and the download engine tell by it
+  test("what only the server has is unreachable, as it was; the library list's own questions answered", () async {
+    for (final call in <Future<Object?> Function()>[
+      () => api.epubManifest('B1'), () => api.epubResource('B1', 'x.html'), () => api.bookFileBytes('B1'),
+      () => api.thumbBytes('http://nas/thumb'), () => api.bookReadLists('B1'), () => api.seriesCollections('S1'),
+      () => api.putClientSetting('k', 'v'),
+    ]) {
+      await expectLater(call(), throwsA(isA<KomgaUnreachable>()));
+    }
+    expect(await api.libraryName('L1'), 'Events');
+    expect(await api.libraryName('nope'), isNull);
+    expect([for (final l in await api.visibleLibraries()) l['id']], ['L1']);
+    expect(await api.me(), {'email': 'offline'});
+  });
+
   testWidgets('the real library screen browses the offline tree unchanged', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.runAsync(

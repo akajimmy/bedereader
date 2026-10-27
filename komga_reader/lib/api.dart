@@ -8,18 +8,19 @@ import 'package:http/http.dart' as http;
 import 'hidden_libraries.dart';
 import 'book_source.dart';
 import 'view_filter.dart';
+export 'view_filter.dart' show ReadFilter, ReadFilterApi;
 
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
 /// override changes made in the web client.
 class Komga implements BookSource {
-  /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
+  /// [client]: the HTTP client to use (tests give one); by default its own.
   Komga(String baseUrl, this.apiKey, {http.Client? client})
       : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
         _http = client ?? http.Client(),
         _ownClient = client == null;
 
-  final bool _ownClient; // (a client given - the offline source's, a test's - is the only one: [ping] uses it too)
+  final bool _ownClient; // (a client given - a test's - is the only one: [ping] uses it too)
   // where it was made: a client made later for [ping] comes from the same place as its own (http.runWithClient)
   final Zone _madeIn = Zone.current;
 
@@ -126,8 +127,10 @@ class Komga implements BookSource {
   /// Whether Komga is there, for the connection's check ([me], answered or thrown as for any request): asked on a
   /// connection of its own, closed after - not one kept open from before (user, 2026-10-26: Wi-Fi off, the iPad let
   /// requests wait on those until their 15 s ran out, and the offer to go offline came late) - and within
-  /// [pingTimeout].
+  /// [pingTimeout]. Not once [close]d: nothing more goes out with this key (review, 2026-10-26: a check made a client
+  /// of its own and asked, after signing out).
   Future<void> ping() async {
+    if (_closing) throw KomgaUnreachable(baseUrl);
     final fresh = _ownClient ? _madeIn.run(http.Client.new) : null;
     try {
       await me(via: fresh, limit: pingTimeout);
@@ -807,26 +810,3 @@ class KomgaUnreachable implements Exception {
   String toString() => 'no answer from $baseUrl';
 }
 
-/// The read filter: everything, hide what's read, or hide what isn't (user, 2026-10-07: three-way, on every library
-/// screen). In-progress counts as unread, so each item falls on one side: "hide read" asks Komga for UNREAD +
-/// IN_PROGRESS (for series: not every book finished), "hide unread" for READ (finished; a series: all of it).
-enum ReadFilter { all, hideRead, hideUnread }
-
-extension ReadFilterApi on ReadFilter {
-  List<String>? get api => switch (this) {
-        ReadFilter.all => null,
-        ReadFilter.hideRead => const ['UNREAD', 'IN_PROGRESS'],
-        ReadFilter.hideUnread => const ['READ'],
-      };
-
-  /// What the view shows, for names and counts ("unread", "read"); null for everything.
-  String? get shows => switch (this) {
-        ReadFilter.all => null,
-        ReadFilter.hideRead => 'unread',
-        ReadFilter.hideUnread => 'read',
-      };
-
-  /// A saved name; anything else is everything.
-  static ReadFilter fromName(Object? name) =>
-      ReadFilter.values.firstWhere((f) => f.name == name, orElse: () => ReadFilter.all);
-}

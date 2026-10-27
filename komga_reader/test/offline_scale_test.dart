@@ -5,6 +5,7 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/offline/catalogue.dart';
 import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 import 'package:komga_reader/view_filter.dart';
@@ -86,6 +87,21 @@ void main() {
     final filtered = await api.filteredSeries(filter: const ViewFilter(genres: ['Action']), size: 100);
     expect((filtered['content'] as List).length, 40);
     expect(store.walked.walks, lessThanOrEqualTo(5));
+  });
+
+  test("an entry that can't be read is left out - the others still answered (review, 2026-10-26: one broken entry, "
+      'even in a hidden library, failed every question about the downloads)', () async {
+    final store = _Store();
+    store.books['B1'] = {
+      'book': {'id': 'B1', 'seriesId': 'S1', 'name': '1', 'metadata': {'title': '1', 'numberSort': 1}},
+      'series': {'id': 'S1', 'name': 'Saga'}, 'library': {'id': 'L1', 'name': 'COMICS'}, 'state': 'done',
+    };
+    store.books['B2'] = {'book': {'id': 'B2'}, 'state': 'done'}; // (no series: written by a broken download)
+    store.books['B3'] = {'book': 'not a book', 'state': 'done'};
+    final api = DownloadsSource(store);
+    expect([for (final s in (await api.series())['content'] as List) s['id']], ['S1']);
+    expect([for (final l in await api.libraries()) l['id']], ['L1']);
+    expect(Catalogue(store.books).skipped, 2);
   });
 
   test("the read lists, and a read list's next book: the books walked once, not once per list (the downloads' "

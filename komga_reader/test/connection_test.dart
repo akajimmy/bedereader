@@ -358,6 +358,18 @@ void main() {
     conn.reset(); // (the offline poll's 30 s timer, gone before the test ends)
   });
 
+  // review, 2026-10-26: a check under way at signing out made a client of its own and asked with the old key
+  test("signed out (the connection closed), a check sends nothing - it doesn't even make a client", () async {
+    var made = 0;
+    final api = http.runWithClient(() => Komga('http://nas.test', 'k'), () {
+      made++;
+      return _Hangs(() {});
+    });
+    api.close();
+    await expectLater(api.ping(), throwsA(isA<KomgaUnreachable>()));
+    expect(made, 1, reason: "only Komga's own, from before");
+  });
+
   // user, 2026-10-26: Wi-Fi off, the iPad's offer to go offline came well after Home said Komga couldn't be reached
   testWidgets("the connection's check: on a connection of its own, closed after, and given up after 5 s", (t) async {
     var made = 0, closed = 0;
