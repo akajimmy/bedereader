@@ -348,7 +348,7 @@ void main() {
     await tester.pumpAndSettle();
     final back = s.display;
     expect([back.night, back.posterSize, back.screenOn, back.nightSchedule, back.textScale, back.accent, back.epubTurn],
-        [false, PosterSize.medium, 0, false, 1.0, Accent.blue, EpubTurn.slide]);
+        [false, PosterSize.medium, 0, false, 1.0, Accent.royal, EpubTurn.slide]);
     expect(ReaderKeys.instance.isDefault, isTrue, reason: "the reader's keys");
     expect(ReaderKeys.instance.actionFor(LogicalKeyboardKey.keyN), isNull);
     expect(HiddenLibraries.instance.ids, isEmpty, reason: 'every library shown again');

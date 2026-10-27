@@ -520,7 +520,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             value: s.display.textScale,
             onChanged: (t) => s.setDisplay(s.display.copyWith(textScale: t)),
           ),
-          // fourteen swatches: under the label, wrapping, rather than squeezed beside it
+          // the swatches (24 since 10-27): under the label, wrapping, rather than squeezed beside it
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

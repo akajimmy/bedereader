@@ -67,7 +67,7 @@ void main() {
 
   testWidgets('Settings > Look accent colour: the theme follows it', (tester) async {
     final ctx = await app(tester);
-    expect(Theme.of(ctx).colorScheme.primary, Accent.blue.colour); // the default
+    expect(Theme.of(ctx).colorScheme.primary, Accent.royal.colour); // the default
     s.setDisplay(s.display.copyWith(accent: Accent.green));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500)); // MaterialApp animates a change of theme
