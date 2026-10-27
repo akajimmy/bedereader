@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// This device's own folders for the local libraries: Android's All files access and where its storage starts, the
@@ -61,35 +60,12 @@ class DeviceFolders {
     }
   }
 
-  /// Android: All files access, asked for until it's granted (Open Settings, then "I've allowed it"); false:
-  /// cancelled. Elsewhere: nothing to grant.
-  static Future<bool> allFiles(BuildContext context) async {
-    if (defaultTargetPlatform != TargetPlatform.android) return true;
-    while (!await hasAllFiles()) {
-      if (!context.mounted) return false;
-      final go = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Allow access to your files'),
-          content: const Text("To read books from a folder on this device, the app needs Android's All files "
-              'access. Open Settings, turn it on for BeDeReader, then come back here.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                try {
-                  await _files.invokeMethod('askAllFiles');
-                } catch (_) {}
-              },
-              child: const Text('Open Settings'),
-            ),
-            TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, true), child: const Text("I've allowed it")),
-          ],
-        ),
-      );
-      if (go != true) return false;
-    }
-    return true;
+  /// Android: its Settings page for the app's All files access opened (the folder browser asks first -
+  /// askAllFilesAccess in screens/folder_browser.dart).
+  static Future<void> openAllFilesSettings() async {
+    try {
+      await _files.invokeMethod('askAllFiles');
+    } catch (_) {}
   }
 }
 

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import '../screens/actions.dart' show askName;
+import 'actions.dart' show askName;
 import '../widgets/setting_rows.dart';
-import 'device_folders.dart';
+import '../local/device_folders.dart';
 import 'folder_browser.dart';
-import 'library_fs.dart';
-import 'local_library.dart';
-import 'local_scan.dart';
-import 'local_source.dart';
+import '../local/library_fs.dart';
+import '../local/local_library.dart';
+import '../local/local_scan.dart';
+import '../local/local_source.dart';
 import 'share_access.dart';
-import 'smb_fs.dart';
+import '../local/smb_fs.dart';
 
 /// Settings > Libraries: the local libraries - each with where it is and what its last scan couldn't read, Rename and
 /// Remove - and Add a folder; Scan again with how far a scan has got.

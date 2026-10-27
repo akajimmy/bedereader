@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'library_fs.dart';
-import 'smb_fs.dart';
+import '../local/library_fs.dart';
+import '../local/smb_fs.dart';
 
 /// A share's folder, reachable before it's kept as a library: tried as it is first (a share open to guests needs no
 /// login - user, 2026-10-25), a login asked for only when the share refuses one (one that doesn't answer, or a folder

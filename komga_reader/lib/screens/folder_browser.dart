@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../screens/actions.dart' show askName;
-import 'device_folders.dart';
-import 'library_fs.dart';
-import 'local_library.dart';
+import 'actions.dart' show askName;
+import '../local/device_folders.dart';
+import '../local/library_fs.dart';
+import '../local/local_library.dart';
 import 'share_access.dart' show askShareLogin;
-import 'smb_fs.dart';
+import '../local/smb_fs.dart';
 
 /// Where the folder browser starts: this device's storage, a card or drive, the iPad's app folder.
 class Place {
@@ -27,6 +27,30 @@ abstract interface class BrowseSource {
 
   /// What's in [path].
   Future<FolderLook> look(String path);
+}
+
+/// Android: All files access, asked for until it's granted (Open Settings, then "I've allowed it"); false:
+/// cancelled. Elsewhere: nothing to grant.
+Future<bool> askAllFilesAccess(BuildContext context) async {
+  if (defaultTargetPlatform != TargetPlatform.android) return true;
+  while (!await DeviceFolders.hasAllFiles()) {
+    if (!context.mounted) return false;
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Allow access to your files'),
+        content: const Text("To read books from a folder on this device, the app needs Android's All files "
+            'access. Open Settings, turn it on for BeDeReader, then come back here.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          const TextButton(onPressed: DeviceFolders.openAllFilesSettings, child: Text('Open Settings')),
+          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, true), child: const Text("I've allowed it")),
+        ],
+      ),
+    );
+    if (go != true) return false;
+  }
+  return true;
 }
 
 /// This device's folders.
@@ -60,7 +84,7 @@ class DeviceBrowse implements BrowseSource {
   }
 
   @override
-  Future<bool> openPlace(BuildContext context) => DeviceFolders.allFiles(context);
+  Future<bool> openPlace(BuildContext context) => askAllFilesAccess(context);
 
   @override
   Future<FolderLook> look(String path) => LocalFs().look(path);
