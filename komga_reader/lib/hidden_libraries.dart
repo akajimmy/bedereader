@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Libraries this device doesn't show (Settings > Library & Home > Libraries on this device; user, 2026-09-30):
-/// kept on this device only. The Komga client leaves them out of every list that spans libraries (api.dart), and
+/// Komga's libraries this device doesn't show (Settings > Libraries > Komga - moved there from Library & Home, user,
+/// 2026-10-27; first 2026-09-30): kept on this device only. Local and network libraries aren't hidden - one that isn't
+/// wanted isn't added (LocalSource.visibleLibraries). The Komga client leaves them out of every list that spans libraries (api.dart), and
 /// out of the side menu, Home and the library picker. Komga's own user permissions are the real control; this is a
 /// per-device tidy-up (a shared tablet, say).
 class HiddenLibraries extends ChangeNotifier {
