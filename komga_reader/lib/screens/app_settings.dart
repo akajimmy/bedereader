@@ -1,10 +1,15 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../hidden_libraries.dart';
 import '../ondeck_hidden.dart';
+import '../offline/sync.dart' show ProgressSync;
+import '../pins.dart';
+import '../sync_status.dart';
+import '../synced_ids.dart' show PairShift;
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -52,7 +57,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.webtoons => 'Webtoons',
         SettingsPage.ebooks => 'eBooks',
         SettingsPage.keys => 'Remote and keys',
-        SettingsPage.server => 'Server and sync',
+        SettingsPage.server => 'Server & Sync', // (user, 2026-10-27: as Library & Home)
         SettingsPage.library => 'Library & Home',
         SettingsPage.libraries => 'Libraries',
         SettingsPage.downloads => 'Downloads',
@@ -99,6 +104,9 @@ class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading,
       this.only});
   final BookSource api;
+
+  /// Server & Sync's Sync now (tests find it by this).
+  static const syncNowKey = ValueKey('syncNow');
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
@@ -369,10 +377,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             onTap: () => _signOut(context),
           ),
         ]),
-        // what goes through Komga, said in one place (user, 2026-10-07; one line, and pins always sync - 2026-10-21)
-        const SettingsGroup(title: "What's synced through Komga", synced: true, children: [
-          NoteRow('Synced: reading settings, series settings, pins, On deck, reading progress.'),
-        ]),
+        // what goes through Komga, said in one place (user, 2026-10-07; one line, and pins always sync - 2026-10-21),
+        // when it last did, and Sync now for when something seems off (user, 2026-10-27)
+        ListenableBuilder(
+          listenable: Listenable.merge([SyncStatus.instance, Connection.instance]),
+          builder: (context, _) {
+            final last = SyncStatus.instance.last;
+            return SettingsGroup(title: 'Sync', synced: true, children: [
+              const NoteRow('Synced: reading settings, series settings, pins, On deck, reading progress.'),
+              ActionRow(
+                title: 'Last Sync',
+                subtitle: last == null ? 'Not yet on this device' : syncTimeLabel(last, clock.now()),
+                button: TextButton(
+                  key: AppSettingsScreen.syncNowKey,
+                  onPressed: _syncing || Connection.instance.offline ? null : () => _syncNow(context),
+                  child: Text(_syncing ? 'Syncing…' : 'Sync now'),
+                ),
+              ),
+            ]);
+          },
+        ),
         if (Connection.instance.available)
           ListenableBuilder(
             listenable: Connection.instance,
@@ -540,7 +564,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
       if (noServer)
         SettingsGroup(title: 'Komga', children: [
-          ActionRow(title: 'Komga server', subtitle: 'None (No server mode) - one is added in Server and sync',
+          ActionRow(title: 'Komga server', subtitle: 'None (No server mode) - one is added in Server & Sync',
               icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
         ])
       else
@@ -560,7 +584,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         future: _komga,
         builder: (context, snap) {
           final libs = snap.data ?? const [];
-          final server = ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server and sync',
+          final server = ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server & Sync',
               icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server));
           return ListenableBuilder(
             listenable: HiddenLibraries.instance,
@@ -600,7 +624,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             // any of three lines under a book's poster, always in this order (user, 2026-10-07); comics and eBooks each
             // their own (user, 2026-10-18)
             ToggleChipsRow(
-              title: 'Under comic posters',
+              title: 'Under Comic & Webtoon Posters', // (user, 2026-10-27: a webtoon's are these)
               chips: [
                 ToggleChip('Series #', l.posterSeries, (v) => s.setLibrary(l.copyWith(posterSeries: v))),
                 ToggleChip('Title', l.posterTitle, (v) => s.setLibrary(l.copyWith(posterTitle: v))),
@@ -710,6 +734,30 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ),
       ]),
     ];
+  }
+
+  // ---- Sync now (Server & Sync) -----------------------------------------------------------------------------------
+  bool _syncing = false;
+
+  /// Everything synced through Komga, now: each store's changes waiting to go are sent, and Komga's are read again -
+  /// past the few seconds a refresh is otherwise held back for - and reading done offline goes too. Komga not
+  /// answering: said (Last Sync stays as it was).
+  Future<void> _syncNow(BuildContext context) async {
+    final before = SyncStatus.instance.last;
+    setState(() => _syncing = true);
+    try {
+      await Future.wait([
+        AppSettings.instance.refresh(force: true),
+        Pins.instance.refresh(force: true),
+        OnDeckHidden.instance.refresh(force: true),
+        PairShift.instance.refresh(force: true),
+      ]);
+      await ProgressSync.instance.run();
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+    if (!context.mounted || SyncStatus.instance.last != before) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Komga didn't answer: nothing synced")));
   }
 
   // ---- confirmations ---------------------------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import 'package:komga_reader/key_store.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
+import 'package:komga_reader/screens/app_settings.dart' show SettingsPage, SettingsPageInfo;
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/login.dart';
 import 'package:komga_reader/settings.dart';
@@ -61,7 +62,7 @@ void main() {
     await frames();
     await tester.tap(find.text('Settings'));
     await frames();
-    await tester.tap(find.text('Server and sync')); // (Settings opens on Reading)
+    await tester.tap(find.text(SettingsPage.server.label)); // (Settings opens on All Book Types)
     await frames();
     await tester.ensureVisible(find.text('Sign out / change server'));
     await tester.tap(find.text('Sign out / change server'));

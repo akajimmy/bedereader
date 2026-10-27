@@ -29,6 +29,7 @@ import 'pins.dart';
 import 'reader_keys.dart';
 import 'remote_log.dart';
 import 'settings.dart';
+import 'sync_status.dart';
 import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
@@ -381,6 +382,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
+    unawaited(SyncStatus.instance.load()); // (Settings > Server & Sync > Last Sync)
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     // the local libraries in the background - the start doesn't wait on the disk for them (Home takes them in when
     // they're open: what the last scans found, then scanned again)
