@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Big CBRs in a network library open much faster the first time: measuring the pages' sizes read the whole book over the network (a 266 MB one took 13 s to its first page on the tablet), now only the start of each page.
+
 ## 1.6.0
 
 ### Build 163 - 2026-10-27

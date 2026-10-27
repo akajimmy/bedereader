@@ -5,6 +5,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:koni_archive_core/koni_archive_core.dart';
+import 'package:koni_rar/koni_rar.dart';
 import 'package:komga_reader/local/file_rar.dart';
 import 'package:komga_reader/local/file_zip.dart';
 import 'package:komga_reader/local/library_fs.dart';
@@ -57,6 +59,45 @@ void main() {
       expect(whole, hasLength(size), reason: name);
       expect(await a.head(entry, 100), whole!.sublist(0, 100), reason: name);
     }
+  });
+
+  group("a CBR on a share: few reads (tablet, 2026-10-27: a 266 MB CBR's first open took 13 s - its pages' sizes "
+      'read the whole book, its listing made three reads a page)', () {
+    Future<(RarReader, _Counted)> open(Uint8List bytes) async {
+      final source = _Counted(bytes);
+      final r = await const RarFormat().createReader(source, const ArchiveReadOptions()) as RarReader;
+      return (r, source);
+    }
+
+    test('a page\'s start reads only the start of its packed data, and comes out the same as the whole page\'s, '
+        'wherever it ends (a match or a filter over the end: decoded further)', () async {
+      RarReader.headSlackAtLeast = 0; // (the fixtures are a few KB)
+      addTearDown(() => RarReader.headSlackAtLeast = 16 * 1024);
+      for (final (name, entry) in [
+        ('synthetic_comic.cbr', 'comic/page001.png'), // RAR5
+        ('filter_e8.rar', 'x86call.bin'), // RAR4, a filter over the whole file
+      ]) {
+        final (r, source) = await open(fixture(name));
+        final e = r.entries.firstWhere((e) => e.path == entry);
+        final whole = BytesBuilder();
+        await r.openRead(e).forEach(whole.add);
+        final w = whole.takeBytes();
+        for (var cut = 1; cut < w.length; cut += cut < 64 ? 1 : 37) {
+          expect(await r.readHead(e, cut), w.sublist(0, cut), reason: '$name, the first $cut');
+        }
+        if (name == 'synthetic_comic.cbr') {
+          source.bytes = 0;
+          await r.readHead(e, 100);
+          expect(source.bytes, lessThan(e.compressedSize!), reason: 'the start of ${e.compressedSize} packed');
+        }
+      }
+    });
+
+    test('its listing: one read a page', () async {
+      final (r, source) = await open(rarOf({for (var i = 1; i <= 20; i++) '$i.png': _png(4, 4)}));
+      expect(r.entries, hasLength(20));
+      expect(source.reads, lessThanOrEqualTo(20 + 4)); // (the signature, the archive's header, the end)
+    });
   });
 
   test('a CBR cut short (a copy that stopped part-way) is damaged - not opened with the pages it still lists (tablet, '
@@ -119,6 +160,26 @@ void main() {
     expect([for (final p in pages) (p['width'], p['height'])], [(30, 20), (20, 30)]);
     expect(imageSizeOf(await local.pageBytes(books.last['id'] as String, 2)), isNotNull);
   });
+}
+
+/// An archive's bytes, its reads counted.
+class _Counted implements ByteSource {
+  _Counted(this._b);
+  final Uint8List _b;
+  int reads = 0, bytes = 0;
+  @override
+  int get length => _b.length;
+  @override
+  String? get name => null;
+  @override
+  Future<Uint8List> read(int offset, int length) async {
+    reads++;
+    bytes += length;
+    return Uint8List.sublistView(_b, offset, offset + length);
+  }
+
+  @override
+  Future<void> close() async {}
 }
 
 /// Files in memory, until [down]: then a share that stopped answering.

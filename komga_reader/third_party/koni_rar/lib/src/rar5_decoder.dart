@@ -183,6 +183,14 @@ final class Rar5Decoder {
   /// Write cursor (also the count of decoded bytes).
   int writePtr = 0;
 
+  /// BeDeReader: how far the last [decompressFile] read its input, in bits
+  /// (reads past its end are taken as zeros - more than its length: cut short).
+  int bitsRead = 0;
+
+  /// BeDeReader: only the start of a file is wanted ([RarReader.readHead]) - a
+  /// match is cut at its end, and a filter wholly past it is left out.
+  bool headOnly = false;
+
   final _DecodeTable _bd = _DecodeTable(7);
   final _DecodeTable _ld = _DecodeTable(10);
   final _DecodeTable _dd = _DecodeTable(7);
@@ -266,6 +274,7 @@ final class Rar5Decoder {
       }
       blockStart = writePtr;
     }
+    bitsRead = bits.position;
 
     _applyFilters();
   }
@@ -340,7 +349,10 @@ final class Rar5Decoder {
       throw const FormatException('RAR5 zero/negative match distance');
     }
     if (writePtr + len > target) {
-      throw const FormatException('RAR5 match exceeds declared output size');
+      if (!headOnly) {
+        throw const FormatException('RAR5 match exceeds declared output size');
+      }
+      len = target - writePtr; // (BeDeReader: a file's start, cut mid-match)
     }
     if (dist > writePtr) {
       throw const FormatException('RAR5 match distance before output start');
@@ -471,6 +483,10 @@ final class Rar5Decoder {
   void _runFilter(_Rar5Filter filter) {
     final start = filter.blockStart;
     final length = filter.blockLength;
+    if (headOnly && start >= writePtr) return; // (BeDeReader: past the cut)
+    if (headOnly && start + length > writePtr) {
+      throw const FormatException('RAR5 filter over the cut');
+    }
     if (start < 0 || start + length > output.length) {
       throw const FormatException('RAR5 filter region out of range');
     }

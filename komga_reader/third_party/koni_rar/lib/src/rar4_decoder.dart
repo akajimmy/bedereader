@@ -42,6 +42,14 @@ final class Rar4Decoder {
   /// Write cursor (also the total decoded byte count).
   int writePtr = 0;
 
+  /// BeDeReader: how far the last [decompressFile] read its input, in bits
+  /// (reads past its end are taken as zeros - more than its length: cut short).
+  int bitsRead = 0;
+
+  /// BeDeReader: only the start of a file is wanted ([RarReader.readHead]) - a
+  /// match is cut at its end, and a filter wholly past it is left out.
+  bool headOnly = false;
+
   /// Whether a *complete* Huffman table set has been parsed. In a solid run
   /// only the first compressed file carries a table block; later files reuse
   /// it, so they are decoded with `parseTable: false` on the same decoder
@@ -255,12 +263,13 @@ final class Rar4Decoder {
       _lastLength = len;
       _copy(len, offs, mask, target);
     }
+    bitsRead = bits.bitPos;
 
     // Apply any RarVM filters over the freshly decoded region. The window
     // holds raw LZ output (matches copy raw→raw during decode), so filtering
     // is a correct post-pass over the file's disjoint, forward regions.
     if (_filters.isNotEmpty) {
-      _filters.apply(output, fileBase, target);
+      _filters.apply(output, fileBase, target, headOnly: headOnly);
     }
   }
 
@@ -269,7 +278,10 @@ final class Rar4Decoder {
       throw const FormatException('RAR4 match distance out of range');
     }
     if (writePtr + len > target) {
-      throw const FormatException('RAR4 match exceeds declared output size');
+      if (!headOnly) {
+        throw const FormatException('RAR4 match exceeds declared output size');
+      }
+      len = target - writePtr; // (BeDeReader: a file's start, cut mid-match)
     }
     for (var i = 0; i < len; i++) {
       output[writePtr & mask] = output[(writePtr - dist) & mask];

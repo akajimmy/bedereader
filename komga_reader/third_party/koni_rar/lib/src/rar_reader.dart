@@ -281,6 +281,14 @@ final class RarReader extends ArchiveReader {
   /// far (a picture's size is in its first few KB; a whole page can take
   /// 100 ms to decode). Not checked against the entry's CRC. Stored, solid,
   /// encrypted and unusual entries are read whole ([openRead]) and cut.
+  ///
+  /// Only the start of the packed data is read from the file - the size of
+  /// every page of a book read over a network share would otherwise read the
+  /// whole book (tablet, 2026-10-27: 13 s before a 266 MB CBR's first page).
+  /// The decoder cuts a match at the end ([Rar4Decoder.headOnly]) and says
+  /// how far it read: past the start read (data that packs worse than
+  /// [_headSlack] allows), or a filter over the cut (it can't be applied to
+  /// half its bytes), it's decoded again four times further, up to whole.
   Future<Uint8List> readHead(ArchiveEntry entry, int bytes) async {
     final index = _indexOf[entry];
     if (index == null) {
@@ -296,24 +304,51 @@ final class RarReader extends ArchiveReader {
                     header.unpackVersion == 20 ||
                     header.unpackVersion == 26)));
     if (simple) {
-      try {
-        final data = await _readData(index, header);
-        final windowLen = _pow2Ceil(
-          header.unpackedSize > header.windowSize
-              ? header.unpackedSize
-              : header.windowSize,
-        );
-        final output = Uint8List(windowLen);
-        if (header.version != 29) {
-          Rar5Decoder(output).decompressFile(data, bytes);
-        } else if (header.unpackVersion == 20 || header.unpackVersion == 26) {
-          Rar20Decoder(output).decompressFile(data, bytes);
-        } else {
-          Rar4Decoder(output).decompressFile(data, bytes);
+      final windowLen = _pow2Ceil(
+        header.unpackedSize > header.windowSize
+            ? header.unpackedSize
+            : header.windowSize,
+      );
+      for (var want = bytes;; want *= 4) {
+        final upTo =
+            want < header.unpackedSize ? want : header.unpackedSize;
+        // the start of the packed data (one volume only), or all of it
+        final take = _segments == null ? want + _headSlack(want) : null;
+        final all = take == null || take >= header.dataSize;
+        try {
+          final data = all
+              ? await _readData(index, header)
+              : await _readStart(header, take);
+          final output = Uint8List(windowLen);
+          final int read; // bits the decoder took (past the data: zeros)
+          if (header.version != 29) {
+            read = (Rar5Decoder(output)
+                  ..headOnly = true
+                  ..decompressFile(data, upTo))
+                .bitsRead;
+          } else if (header.unpackVersion == 20 ||
+              header.unpackVersion == 26) {
+            read = (Rar20Decoder(output)
+                  ..headOnly = true
+                  ..decompressFile(data, upTo))
+                .bitsRead;
+          } else {
+            read = (Rar4Decoder(output)
+                  ..headOnly = true
+                  ..decompressFile(data, upTo))
+                .bitsRead;
+          }
+          if (all || read <= data.length * 8) {
+            return Uint8List.sublistView(output, 0, bytes);
+          }
+        } catch (e) {
+          // a start read: anything going wrong (its end decoded as zeros), or
+          // a filter over the cut - further; the whole entry: read whole
+          if (all && upTo == header.unpackedSize) {
+            if (e is FormatException) break;
+            rethrow;
+          }
         }
-        return Uint8List.sublistView(output, 0, bytes);
-      } on FormatException {
-        // (a filter or a block that reaches past the cut: read it whole)
       }
     }
     final out = BytesBuilder(copy: false);
@@ -323,6 +358,28 @@ final class RarReader extends ArchiveReader {
     }
     final all = out.takeBytes();
     return all.length > bytes ? Uint8List.sublistView(all, 0, bytes) : all;
+  }
+
+  /// BeDeReader: how much more packed data than [bytes] [readHead] reads at
+  /// first - pictures barely pack (a JPEG's packed size is about its own),
+  /// and a block's tables come first.
+  static int _headSlack(int bytes) => bytes ~/ 4 + headSlackAtLeast;
+
+  /// BeDeReader: the least of [_headSlack] (less in tests, whose archives are
+  /// a few KB).
+  static int headSlackAtLeast = 16 * 1024;
+
+  /// BeDeReader: the first [length] bytes of an entry's packed data (one
+  /// volume, not encrypted).
+  Future<Uint8List> _readStart(Rar5FileHeader header, int length) async {
+    if (header.dataOffset + length > _source.length) {
+      throw UnexpectedEofException(
+        'entry data extends past the end of the archive',
+        format: 'rar',
+        offset: header.dataOffset,
+      );
+    }
+    return _source.read(header.dataOffset, length);
   }
 
   Stream<Uint8List> _streamEntry(
