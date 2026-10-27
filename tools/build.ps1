@@ -94,7 +94,7 @@ function Git([string]$arguments) {
 # ---- 1. checks ---------------------------------------------------------------------------------------------------
 # A real build (-Bump: committed and tagged) is built from committed code with its tests run - otherwise the tag
 # points at code that wasn't what was built, or that was never tested (test audit, 2026-09-30).
-if ($Bump) { throw 'experimental/sources: no numbered builds from this branch - use tools\build-exp.ps1.' }
+if ($Bump) { throw 'experimental: no numbered builds from this branch - use tools\build-exp.ps1.' }
 if ($Bump -and $AllowDirty) { throw '-Bump with -AllowDirty: a tagged build has to be built from committed code - commit first.' }
 if ($Bump -and $SkipTests) { throw '-Bump with -SkipTests: a tagged build has to have passed its tests.' }
 $dirty = Git 'status --porcelain'

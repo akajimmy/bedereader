@@ -31,7 +31,7 @@ android {
 
     defaultConfig {
         // Permanent once released: Android treats a different ID as a different app.
-        applicationId = "com.nickp.komga_reader.exp" // experimental/sources: beside the real app, its own data
+        applicationId = "com.nickp.komga_reader.exp" // experimental: beside the real app, its own data
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

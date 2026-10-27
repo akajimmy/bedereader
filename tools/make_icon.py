@@ -12,7 +12,7 @@ One set of geometry drives every output:
   tools/icon_preview.png                         how launchers show it
 Usage (from C:\\Claude\\KomgaClient): py -3.13 tools\\make_icon.py
 
-THE EXPERIMENT'S COPY (BeDeReader Exp, branch experimental/sources): the same page over yellow and black diagonal
+THE EXPERIMENT'S COPY (BeDeReader Exp, branch experimental): the same page over yellow and black diagonal
 stripes - "under construction" - instead of the dark background (user, 2026-10-26), so it can't be mistaken for the
 real app. Here the script also
 writes the iOS icons (ios/Runner/Assets.xcassets/AppIcon.appiconset) and the Android adaptive icon's background as a

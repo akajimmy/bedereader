@@ -14,7 +14,7 @@
 #   APPLE_TEAM_ID            the team ID (Membership details on developer.apple.com)
 #   CERTIFICATE_PRIVATE_KEY  an RSA private key (PEM) for the distribution certificate - made once by the user
 #
-# THE EXPERIMENT'S COPY (branch experimental/sources): builds "BeDeReader Exp", its own app (bundle ID
+# THE EXPERIMENT'S COPY (branch experimental): builds "BeDeReader Exp", its own app (bundle ID
 # com.nickp.bedereader.exp, its own App Store Connect record), from an exp-build-<n> tag - never the real app's build-<n>
 # tags, so the two never meet. The build number is the tag's <n>, numbered on its own (TestFlight wants each one higher).
 name: TestFlight (experiment)

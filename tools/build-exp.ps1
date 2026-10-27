@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    An experimental build (branch experimental/sources): built from this worktree, installed beside the real app.
+    An experimental build (branch experimental): built from this worktree, installed beside the real app.
 
 .DESCRIPTION
     The experiment's app is its own app: "BeDeReader Exp", Android ID com.nickp.komga_reader.exp, Windows data in
