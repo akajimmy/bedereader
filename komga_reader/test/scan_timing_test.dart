@@ -67,6 +67,8 @@ void main() {
       "experiment's review: they did, until the next scan)", () async {
     fs.files['Comics/Saga/Saga 1.cbz'] = zipOf({'p1.png': pngHead(800, 1200)});
     await local.setLibraries([const LocalLibrary('Comics', 'Comics')]).timeout(const Duration(seconds: 2));
+    await pumpEventQueue(); // (its scan under way, at the library's folder)
+    expect(local.scanning.value, isNotNull);
     final removed = local.setLibraries(const []); // while its scan waits
     fs.gate.complete();
     await removed;
@@ -78,6 +80,8 @@ void main() {
   test("a library renamed while it's being scanned keeps its new name when the scan ends", () async {
     fs.files['Comics/Saga/Saga 1.cbz'] = zipOf({'p1.png': pngHead(800, 1200)});
     await local.setLibraries([const LocalLibrary('Comics', 'Comics')]).timeout(const Duration(seconds: 2));
+    await pumpEventQueue(); // (its scan under way, at the library's folder)
+    expect(local.scanning.value, isNotNull);
     final renamed = local.setLibraries([const LocalLibrary('My comics', 'Comics')]); // while its scan waits
     fs.gate.complete();
     await renamed;
