@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../epub/source.dart' show Zip;
+import 'file_zip.dart' show ComicArchive;
 
 // What a book's file says about it: its ids, its name's number, title and series, the pages in its archive, its
 // ComicInfo.xml and an EPUB's own metadata - the rules the local libraries' scan applies, kept free of files and
@@ -9,14 +9,21 @@ import '../epub/source.dart' show Zip;
 // ---- ids --------------------------------------------------------------------------------------------------------------
 /// iOS: the app's own folder, /var/mobile/Containers/Data/Application/{GUID}/ - the GUID can change when the app is
 /// updated or put back, so a path in it is known by what's after it (its ids too: progress kept).
-final iosContainer = RegExp(r'^/(?:private/)?var/mobile/Containers/Data/Application/[^/]+/');
+/// (Its shared app-group folders too, whose GUID changes the same way.)
+final iosContainer = RegExp(r'^/(?:private/)?var/mobile/Containers/(?:Data/Application|Shared/AppGroup)/[^/]+/');
 
-/// A path as its ids are made from it: the iOS app folder's GUID left out, one kind of separator, no trailing one, and
-/// lower case - the places the books live (Windows, Android's storage and cards, the iPad, an SMB share) don't tell
-/// "Batman 1.cbz" from "batman 1.cbz", and the same book reached as \\NICK-NAS or \\nick-nas keeps its progress (user,
-/// 2026-10-26).
-String normPath(String p) =>
-    p.trim().replaceFirst(iosContainer, '~/').replaceAll('/', r'\').replaceAll(RegExp(r'\\+$'), '').toLowerCase();
+/// A path as its ids are made from it: the iOS app folder's GUID left out, a share written \\host\share whichever way
+/// it was given (smb://, //), one kind of separator and one at a time, no trailing one, and lower case - the places
+/// the books live (Windows, Android's storage and cards, the iPad, an SMB share) don't tell "Batman 1.cbz" from
+/// "batman 1.cbz", and the same book reached as \\NICK-NAS or \\nick-nas keeps its progress (user, 2026-10-26).
+String normPath(String p) {
+  var s = p.trim().replaceFirst(iosContainer, '~/').replaceFirst(RegExp(r'^smb://', caseSensitive: false), '//');
+  s = s.replaceAll('/', r'\');
+  final share = s.startsWith(r'\\');
+  s = s.replaceAll(RegExp(r'\\+'), r'\');
+  if (share) s = '\\$s';
+  return s.replaceAll(RegExp(r'\\+$'), '').toLowerCase();
+}
 
 /// A short id that stays the same for the same text (FNV-1a, 64 bits, unsigned, base 36, 13 characters): books,
 /// series and libraries keep their ids - and so their reading progress - from one scan to the next. (The experiment's
@@ -56,8 +63,10 @@ String seriesFromName(String stem) {
       .replaceAll(RegExp(r'\s+'), ' ')
       .trim()
       .replaceFirst(_readingOrder, '');
-  final hash = RegExp(r'#\s*-?\d').firstMatch(bare);
-  final number = hash ?? RegExp(r'(?:^|\s)(\d{1,4}(?:\.\d+)?)(?=\s|$)').firstMatch(bare);
+  // its number: after a "#", else the first number standing on its own - not one the name starts with ("100 Bullets
+  // 001" is 100 Bullets: review, 2026-10-26 - it came out empty)
+  final number = RegExp(r'#\s*-?\d').firstMatch(bare) ??
+      RegExp(r'(?:^|\s)(\d{1,4}(?:\.\d+)?)(?=\s|$)').allMatches(bare).where((m) => m.start > 0).firstOrNull;
   final s = (number == null ? bare : bare.substring(0, number.start)).replaceAll(RegExp(r'^[\s\-_:,]+|[\s\-_:,]+$'), '');
   return s.replaceFirst(RegExp(r'\s+(vol\.?|volume|v)$', caseSensitive: false), '').replaceAll(RegExp(r'[\s\-_:,]+$'), '');
 }
@@ -124,7 +133,9 @@ int naturalCompare(String a, String b) {
     final c = nx != null && ny != null ? nx.compareTo(ny) : x.compareTo(y);
     if (c != 0) return c;
   }
-  return ra.length.compareTo(rb.length);
+  final c = ra.length.compareTo(rb.length);
+  // the same by that ("p01" and "p1"): by the names as written, so the order is always the same
+  return c != 0 ? c : a.compareTo(b);
 }
 
 // ---- pages -----------------------------------------------------------------------------------------------------------
@@ -186,16 +197,20 @@ class ComicInfo {
   };
 
   factory ComicInfo.parse(String xml) {
+    // a field as written - with attributes (<Title lang="en">), or its text in CDATA (review, 2026-10-26: both missed)
     String? field(String name) {
-      final m = RegExp('<$name>([^<]*)</$name>', caseSensitive: false).firstMatch(xml);
-      final v = m == null ? null : _unescape(m[1]!).trim();
-      return v == null || v.isEmpty ? null : v;
+      final m = RegExp('<$name(?:\\s[^>]*)?>(.*?)</$name>', caseSensitive: false, dotAll: true).firstMatch(xml);
+      if (m == null) return null;
+      final cdata = RegExp(r'^\s*<!\[CDATA\[(.*)\]\]>\s*$', dotAll: true).firstMatch(m[1]!);
+      final v = (cdata != null ? cdata[1]! : _unescape(m[1]!)).trim();
+      return v.isEmpty ? null : v;
     }
 
     int? number(String name) => int.tryParse(field(name) ?? '');
     final year = number('Year'), month = number('Month'), day = number('Day');
     final hasMonth = month != null && month >= 1 && month <= 12;
-    final hasDay = hasMonth && day != null && day >= 1 && day <= 31;
+    // a day the month has (30 February isn't 1 March)
+    final hasDay = hasMonth && day != null && day >= 1 && DateTime.utc(year ?? 2000, month, day).day == day;
     return ComicInfo(
       title: field('Title'), series: field('Series'), number: field('Number'), summary: field('Summary'),
       released: year != null && year > 0 ? DateTime.utc(year, hasMonth ? month : 1, hasDay ? day : 1) : null,
@@ -215,19 +230,34 @@ class ComicInfo {
       genres: [for (final g in (field('Genre') ?? '').split(',')) if (g.trim().isNotEmpty) g.trim()],
       count: number('Count'),
       rightToLeft: field('Manga')?.toLowerCase() == 'yesandrighttoleft',
-      pageSizes: [
-        for (final m in RegExp(r'<Page\b[^>]*>', caseSensitive: false).allMatches(xml))
-          () {
-            final w = int.tryParse(RegExp(r'ImageWidth="(\d+)"').firstMatch(m[0]!)?[1] ?? '');
-            final h = int.tryParse(RegExp(r'ImageHeight="(\d+)"').firstMatch(m[0]!)?[1] ?? '');
-            return w != null && h != null && w > 0 && h > 0 ? (w, h) : null;
-          }(),
-      ],
+      pageSizes: _pageSizes(xml),
     );
+  }
+
+  /// Each page's size, at the page its Image attribute says (the next one where there's none) - a list that names
+  /// some pages only put their sizes on the first ones (review, 2026-10-26).
+  static List<(int, int)?> _pageSizes(String xml) {
+    final at = <int, (int, int)?>{};
+    var next = 0;
+    for (final m in RegExp(r'<Page\b[^>]*>', caseSensitive: false).allMatches(xml)) {
+      int? attr(String name) => int.tryParse(RegExp('\\b$name\\s*=\\s*["\'](\\d+)["\']').firstMatch(m[0]!)?[1] ?? '');
+      final i = attr('Image') ?? next;
+      next = i + 1;
+      final w = attr('ImageWidth'), h = attr('ImageHeight');
+      at[i] = w != null && h != null && w > 0 && h > 0 ? (w, h) : null;
+    }
+    if (at.isEmpty) return const [];
+    final last = at.keys.reduce((a, b) => a > b ? a : b);
+    return [for (var i = 0; i <= last; i++) at[i]];
   }
 }
 
 String _unescape(String s) => s
+    // characters by number (&#233; &#xE9;) - before "&amp;": "&amp;#233;" is the text "&#233;"
+    .replaceAllMapped(RegExp(r'&#(x[0-9a-fA-F]+|\d+);'), (m) {
+      final n = m[1]!.startsWith('x') ? int.tryParse(m[1]!.substring(1), radix: 16) : int.tryParse(m[1]!);
+      return n == null || n > 0x10ffff ? m[0]! : String.fromCharCode(n);
+    })
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&quot;', '"')
@@ -236,32 +266,46 @@ String _unescape(String s) => s
     .replaceAll('&amp;', '&'); // (last: "&amp;lt;" is "&lt;", not "<")
 
 // ---- EPUB ------------------------------------------------------------------------------------------------------------
-/// An EPUB's title, author and cover (its OPF), as far as they can be read; nulls otherwise.
-({String? title, String? author, String? cover}) epubMetadata(Zip z) {
+/// An EPUB's title, author and cover (its OPF), as far as they can be read; nulls otherwise. Read through [book]'s
+/// archive - the few files it needs, not the whole book (review, 2026-10-26: an EPUB on a share was read whole for
+/// this).
+Future<({String? title, String? author, String? cover})> epubMetadata(ComicArchive book) async {
+  const none = (title: null, author: null, cover: null);
   try {
-    final container = utf8.decode(z.read('META-INF/container.xml') ?? const [], allowMalformed: true);
-    final opfPath = RegExp(r'full-path="([^"]+)"').firstMatch(container)?[1];
-    if (opfPath == null) return (title: null, author: null, cover: null);
-    final opf = utf8.decode(z.read(opfPath) ?? const [], allowMalformed: true);
+    Future<String?> text(String name) async {
+      final entry = book.find(name);
+      final bytes = entry == null ? null : await book.read(entry);
+      return bytes == null ? null : utf8.decode(bytes, allowMalformed: true);
+    }
+
+    String? attr(String tag, String name) =>
+        RegExp('\\b$name\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')', caseSensitive: false).firstMatch(tag)?.let((m) =>
+            m[1] ?? m[2]);
+
+    final container = await text('META-INF/container.xml');
+    final rootfile = container == null ? null : RegExp(r'<rootfile\b[^>]*>', caseSensitive: false).firstMatch(container);
+    final opfPath = rootfile == null ? null : attr(rootfile[0]!, 'full-path');
+    if (opfPath == null) return none;
+    final opf = await text(opfPath);
+    if (opf == null) return none;
     String? tag(String name) {
-      final m = RegExp('<(?:dc:)?$name[^>]*>([^<]*)</(?:dc:)?$name>', caseSensitive: false).firstMatch(opf);
-      final t = m?[1]?.trim();
-      return t == null || t.isEmpty ? null : _unescape(t);
+      final m = RegExp('<(?:dc:)?$name\\b[^>]*>(.*?)</(?:dc:)?$name>', caseSensitive: false, dotAll: true)
+          .firstMatch(opf);
+      final t = m == null ? null : _unescape(m[1]!.replaceAll(RegExp(r'<[^>]*>'), '')).trim();
+      return t == null || t.isEmpty ? null : t;
     }
 
     final dir = opfPath.contains('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
     // the manifest's pictures: (id, href, properties)
     final images = [
       for (final m in RegExp(r'<item\b[^>]*>', caseSensitive: false).allMatches(opf))
-        if (RegExp(r'media-type="image/').hasMatch(m[0]!))
-          (
-            RegExp(r'\bid="([^"]*)"').firstMatch(m[0]!)?[1] ?? '',
-            RegExp(r'href="([^"]+)"').firstMatch(m[0]!)?[1] ?? '',
-            RegExp(r'properties="([^"]*)"').firstMatch(m[0]!)?[1] ?? '',
-          ),
+        if ((attr(m[0]!, 'media-type') ?? '').startsWith('image/'))
+          (attr(m[0]!, 'id') ?? '', attr(m[0]!, 'href') ?? '', attr(m[0]!, 'properties') ?? ''),
     ];
-    final coverId = RegExp(r'<meta[^>]*name="cover"[^>]*content="([^"]+)"').firstMatch(opf)?[1] ??
-        RegExp(r'<meta[^>]*content="([^"]+)"[^>]*name="cover"').firstMatch(opf)?[1];
+    String? coverId;
+    for (final m in RegExp(r'<meta\b[^>]*>', caseSensitive: false).allMatches(opf)) {
+      if (attr(m[0]!, 'name') == 'cover') coverId = attr(m[0]!, 'content');
+    }
     // EPUB 3's cover-image; EPUB 2's meta cover; then what publishers name it ("cover", Penguin Random House's
     // "...cvi..." - cover image); then the first picture
     final href = [
@@ -271,8 +315,32 @@ String _unescape(String s) => s
       for (final i in images) if (RegExp(r'[_-]cvi[_.-]').hasMatch(i.$2.toLowerCase())) i.$2,
       for (final i in images) i.$2,
     ].where((h) => h.isNotEmpty).firstOrNull;
-    return (title: tag('title'), author: tag('creator'), cover: href == null ? null : Uri.decodeFull('$dir$href'));
+    return (title: tag('title'), author: tag('creator'), cover: href == null ? null : _resolve(dir, href));
   } catch (_) {
-    return (title: null, author: null, cover: null);
+    return none;
   }
+}
+
+/// [href] (written in the OPF, relative to its folder [dir]) as a path in the book: %-escapes decoded where they're
+/// whole ("cover 100%.jpg" kept as it is), "../" and "./" worked out.
+String _resolve(String dir, String href) {
+  String decoded;
+  try {
+    decoded = Uri.decodeFull(href);
+  } catch (_) {
+    decoded = href;
+  }
+  final out = <String>[];
+  for (final part in '$dir$decoded'.split('/')) {
+    if (part == '..') {
+      if (out.isNotEmpty) out.removeLast();
+    } else if (part != '.' && part.isNotEmpty) {
+      out.add(part);
+    }
+  }
+  return out.join('/');
+}
+
+extension<T> on T {
+  R let<R>(R Function(T it) f) => f(this);
 }

@@ -1,11 +1,10 @@
 // What a book's file says about it (lib/local/book_names.dart): ids, the number / title / series in its name, its
 // pages, its ComicInfo.xml and an EPUB's metadata - the local libraries' rules, tried on the NAS's names (2026-10-26).
-import 'dart:typed_data';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/epub/source.dart' show Zip;
 import 'package:komga_reader/local/book_names.dart';
+import 'package:komga_reader/local/file_zip.dart';
 
+import 'support/memory_fs.dart';
 import 'support/zip_writer.dart';
 
 void main() {
@@ -120,18 +119,85 @@ void main() {
     });
   });
 
-  test("an EPUB's title, author and cover - EPUB 2's meta cover, else a picture named for it, else the first", () {
-    Zip epub(String manifest, {String meta = ''}) => Zip(zipOf({
-          'META-INF/container.xml': '<container><rootfile full-path="OPS/book.opf"/></container>',
-          'OPS/book.opf': '<package><metadata><dc:title>Frankenstein</dc:title><dc:creator>Mary Shelley</dc:creator>'
+  group('EPUB', () {
+    late MemoryFs fs;
+    Future<ComicArchive> epub(String manifest, {String meta = '', String title = 'Frankenstein',
+        String container = '<container><rootfile full-path="OPS/book.opf"/></container>'}) {
+      fs = MemoryFs({
+        'b.epub': zipOf({
+          'META-INF/container.xml': container,
+          'OPS/book.opf': '<package><metadata><dc:title>$title</dc:title><dc:creator>Mary Shelley</dc:creator>'
               '$meta</metadata><manifest>$manifest</manifest></package>',
-        }));
-    final m = epubMetadata(epub('<item id="c" href="images/front%20page.png" media-type="image/png"/>'
-        '<item id="i1" href="images/a.jpg" media-type="image/jpeg"/>', meta: '<meta name="cover" content="c"/>'));
-    expect(m, (title: 'Frankenstein', author: 'Mary Shelley', cover: 'OPS/images/front page.png'));
-    expect(epubMetadata(epub('<item id="i1" href="a.jpg" media-type="image/jpeg"/>'
-        '<item id="i2" href="cover.jpg" media-type="image/jpeg"/>')).cover, 'OPS/cover.jpg');
-    expect(epubMetadata(epub('<item id="i1" href="a.jpg" media-type="image/jpeg"/>')).cover, 'OPS/a.jpg');
-    expect(epubMetadata(Zip(Uint8List.fromList(zipOf({'x': 'y'})))), (title: null, author: null, cover: null));
+          'OPS/chapter1.xhtml': 'x' * 50000,
+          'OPS/images/a.jpg': [1, 2, 3],
+        }),
+      });
+      return ComicArchive.open(fs, 'b.epub');
+    }
+
+    test("its title, author and cover - EPUB 2's meta cover, else a picture named for it, else the first", () async {
+      final m = await epubMetadata(await epub('<item id="c" href="images/front%20page.png" media-type="image/png"/>'
+          '<item id="i1" href="images/a.jpg" media-type="image/jpeg"/>', meta: '<meta name="cover" content="c"/>'));
+      expect(m, (title: 'Frankenstein', author: 'Mary Shelley', cover: 'OPS/images/front page.png'));
+      expect((await epubMetadata(await epub('<item id="i1" href="a.jpg" media-type="image/jpeg"/>'
+          '<item id="i2" href="cover.jpg" media-type="image/jpeg"/>'))).cover, 'OPS/cover.jpg');
+      expect((await epubMetadata(await epub('<item id="i1" href="a.jpg" media-type="image/jpeg"/>'))).cover,
+          'OPS/a.jpg');
+      final notEpub = await ComicArchive.open(MemoryFs({'x.epub': zipOf({'x': 'y'})}), 'x.epub');
+      expect(await epubMetadata(notEpub), (title: null, author: null, cover: null));
+    });
+
+    // review, 2026-10-26
+    test('read through the archive - the files it needs, not the whole book (an EPUB on a share was read whole)',
+        () async {
+      final book = await epub('<item id="i1" href="images/a.jpg" media-type="image/jpeg"/>');
+      final before = fs.reads;
+      await epubMetadata(book);
+      expect(fs.reads - before, 2, reason: 'container.xml and the OPF - not the chapters');
+    });
+
+    test('a cover path with "../" worked out, a stray "%" kept as written, single-quoted attributes, characters by '
+        'number in the title', () async {
+      final m = await epubMetadata(await epub(
+          "<item id='c' href='../covers/cover 100%.jpg' media-type='image/jpeg'/>",
+          title: 'Les Mis&#233;rables',
+          container: "<container><rootfile full-path='OPS/book.opf'/></container>"));
+      expect(m, (title: 'Les Misérables', author: 'Mary Shelley', cover: 'covers/cover 100%.jpg'));
+    });
+  });
+
+  group('the review (2026-10-26)', () {
+    test('a series whose name starts with a number keeps it: "100 Bullets 001" is 100 Bullets (it came out empty)', () {
+      expect(seriesFromName('100 Bullets 001'), '100 Bullets');
+      expect(seriesFromName('001 - 100 Bullets 001'), '100 Bullets');
+      expect(seriesFromName('2000 AD 2100'), '2000 AD');
+      expect(seriesFromName('1602 #1'), '1602');
+    });
+
+    test('a share written smb://, // or \\\\ is one library; doubled separators are one; the iPad\'s shared app '
+        "group's GUID left out too", () {
+      expect(localLibraryId('smb://NAS/Comics'), localLibraryId(r'\\nas\comics'));
+      expect(localLibraryId('//nas/comics/'), localLibraryId(r'\\nas\comics'));
+      expect(localBookId(r'C:\Comics\\Saga\\1.cbz'), localBookId(r'C:\Comics\Saga\1.cbz'));
+      expect(
+          localLibraryId('/var/mobile/Containers/Shared/AppGroup/1111-2222/Comics'),
+          localLibraryId('/private/var/mobile/Containers/Shared/AppGroup/3333-4444/Comics'));
+    });
+
+    test('pages that tie in natural order ("p01", "p1") come out in one order, whichever way they were listed', () {
+      expect(comicPages(['p1.jpg', 'p01.jpg']), comicPages(['p01.jpg', 'p1.jpg']));
+    });
+
+    test("ComicInfo: a field with attributes or in CDATA; characters by number; 30 February isn't a day; a page's "
+        'size at the page its Image says', () {
+      final i = ComicInfo.parse('<ComicInfo><Title lang="en">Saga</Title>'
+          '<Summary><![CDATA[Alana & Marko <3]]></Summary><Writer>Jos&#233; &#x4C;uis</Writer>'
+          '<Year>2016</Year><Month>2</Month><Day>30</Day>'
+          '<Pages><Page Image="2" ImageWidth="800" ImageHeight="1200"/></Pages></ComicInfo>');
+      expect((i.title, i.summary), ('Saga', 'Alana & Marko <3'));
+      expect(i.authors, [('José Luis', 'writer')]);
+      expect((i.released, i.precision), (DateTime.utc(2016, 2), DatePrecision.month));
+      expect(i.pageSizes, [null, null, (800, 1200)]);
+    });
   });
 }
