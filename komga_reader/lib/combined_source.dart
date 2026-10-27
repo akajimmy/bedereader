@@ -14,10 +14,25 @@ import 'view_filter.dart';
 /// form); what's about several - a library's grid with none chosen, On deck, search - is asked of both and put
 /// together. Offline, [main] is swapped for the downloads; the local libraries stay.
 class CombinedSource implements BookSource {
-  CombinedSource(this.main, {this.local});
+  CombinedSource(this._main, {this.local});
 
   /// Komga, or - offline - its downloads.
-  BookSource main;
+  BookSource get main => _main;
+  BookSource _main;
+
+  /// Online / offline: the other one in its place (what was kept of its pages, let go).
+  set main(BookSource to) {
+    if (identical(to, _main)) return;
+    _main = to;
+    _merges.clear();
+  }
+
+  /// The source [id] is in, whatever [api] is - this or one source (the reader's, the server status's questions:
+  /// "is it Komga's?", "is it the downloads'?").
+  static BookSource of(BookSource api, String? id) => api is CombinedSource ? api.sourceOf(id) : api;
+
+  /// [api]'s Komga or downloads - [main] - whatever [api] is.
+  static BookSource mainOf(BookSource api) => api is CombinedSource ? api.main : api;
 
   /// The local libraries (null: none).
   LocalSource? local;

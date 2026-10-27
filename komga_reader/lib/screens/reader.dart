@@ -28,6 +28,8 @@ import '../widgets/reader_clock.dart';
 import 'actions.dart';
 import 'open_book.dart' show isEpub;
 import '../book_source.dart';
+import '../combined_source.dart';
+import '../local/local_source.dart';
 
 export '../reader/comic_renderer.dart' show trimPictures;
 export '../reader/curl_turns.dart' show CurlLayer;
@@ -294,13 +296,17 @@ class _ReaderScreenState extends State<ReaderScreen>
         _loading = false;
       });
       onOpened?.call();
+      // the source it's from - Komga, the downloads, a local library - through the app's combined one
+      final from = CombinedSource.of(api, fresh['id'] as String);
+      final fromKomga = identical(from, Connection.instance.online);
       AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
-          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, '
+          '${fromKomga ? 'from Komga' : from is LocalSource ? 'from a local library' : 'offline'}) '
           'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
-      if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
+      if (fromKomga) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
       AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');

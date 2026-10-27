@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -23,6 +24,8 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../highlights.dart';
 import '../offline/downloads.dart';
+import '../combined_source.dart';
+import '../local/local_source.dart';
 import '../offline/downloads_source.dart';
 import '../page_curl.dart';
 import '../screen.dart';
@@ -121,8 +124,14 @@ class EpubRenderer extends Renderer {
   /// Where book [id]'s files come from: a downloaded EPUB's file - offline (its progress kept on the device, sent to
   /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
   /// still go to Komga as before); else Komga.
+  /// A book in a local library: its own file.
   static EpubSource sourceFor(BookSource api, String id) {
-    final file = api is DownloadsSource ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
+    final from = CombinedSource.of(api, id);
+    if (from is LocalSource) {
+      final path = from.bookPath(id);
+      if (path != null) return FileEpubSource(File(path));
+    }
+    final file = from is DownloadsSource ? from.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
 
