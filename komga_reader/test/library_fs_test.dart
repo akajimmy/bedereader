@@ -1,24 +1,27 @@
 // Where a local library's files are read from (lib/local/library_fs.dart): share paths, a folder's look, this
-// device's files, and each kind of read error told apart.
+// device's files, and each kind of read error told apart - as each system numbers them.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/library_fs.dart';
 
 void main() {
-  test(r'share paths: \\host\share\folder (or smb://), split into the host, the share and the path in it', () {
+  test(r'share paths: \\host\share\folder (or smb://, or Windows long form), split into the host, the share and the '
+      'path in it; a drive path is none, in either form', () {
     expect(splitUnc(r'\\nick-nas\nas-share\COMICS\Ongoing\'), ('nick-nas', 'nas-share', 'COMICS/Ongoing'));
     expect(splitUnc('smb://nas/comics'), ('nas', 'comics', ''));
+    expect(splitUnc(r'\\?\UNC\nick-nas\nas-share\COMICS'), ('nick-nas', 'nas-share', 'COMICS'));
+    expect(splitUnc(r'\\?\C:\Comics'), isNull, reason: "not a share whose host is '?'");
     expect(splitUnc(r'C:\Comics'), isNull);
     expect(splitUnc('/storage/emulated/0/Comics'), isNull);
   });
 
   test("a folder's look: the system's own folders left out (hidden, a NAS's @Recycle and #recycle, Windows's "
-      r'$RECYCLE.BIN), sorted; its books counted (CBZ, CBR, EPUB)', () {
+      r'$RECYCLE.BIN), sorted; its books counted (CBZ, CBR, EPUB - not a Mac''s ._ copies)', () {
     final l = FolderLook.of([
       ('Ongoing', true), ('@Recycle', true), ('.thumbs', true), ('#recycle', true), (r'$RECYCLE.BIN', true),
       ('System Volume Information', true), ('golden Age', true), ('a.cbz', false), ('B.EPUB', false),
-      ('notes.txt', false), ('c.CBR', false),
+      ('notes.txt', false), ('c.CBR', false), ('._a.cbz', false),
     ]);
     expect(l.folders, ['golden Age', 'Ongoing']);
     expect(l.books, 3);
@@ -26,22 +29,39 @@ void main() {
 
   group("this device's files", () {
     late Directory dir;
+    Future<void> put(String rel, List<int> bytes) async {
+      final f = File('${dir.path}/$rel');
+      await f.parent.create(recursive: true);
+      await f.writeAsBytes(bytes);
+    }
+
     setUp(() async {
       dir = await Directory.systemTemp.createTemp('library_fs');
-      await Directory('${dir.path}/Batman/Annuals').create(recursive: true);
-      await File('${dir.path}/Batman/001.cbz').writeAsBytes(List.generate(100, (i) => i));
-      await File('${dir.path}/Batman/Annuals/A1.cbz').writeAsBytes([1, 2, 3]);
+      await put('Batman/001.cbz', List.generate(100, (i) => i));
+      await put('Batman/Annuals/A1.cbz', [1, 2, 3]);
     });
     tearDown(() => dir.delete(recursive: true));
 
-    test('every file at any depth, with its size; a range read from the middle, and short at the end', () async {
-      final fs = LocalFs();
+    test('the book files at any depth, with their sizes - not in a NAS\'s #recycle or @eaDir, a hidden folder, a '
+        "Mac's ._ copies or files that aren't books (review, 2026-10-26)", () async {
+      await put('Batman/#recycle/002.cbz', [1]);
+      await put('Batman/@eaDir/001.cbz/SYNOFILE_THUMB_M.jpg', [1]);
+      await put('Batman/.hidden/003.cbz', [1]);
+      await put('Batman/._001.cbz', [1]);
+      await put('Batman/notes.txt', [1]);
       final found = {
-        await for (final e in fs.list(dir.path)) e.path.replaceAll('\\', '/').split('/Batman/').last: e.size,
+        await for (final e in LocalFs().list(dir.path)) e.path.replaceAll('\\', '/').split('/Batman/').last: e.size,
       };
       expect(found, {'001.cbz': 100, 'Annuals/A1.cbz': 3});
-      expect(await fs.readRange('${dir.path}/Batman/001.cbz', 10, 3), [10, 11, 12]);
-      expect(await fs.readRange('${dir.path}/Batman/001.cbz', 98, 10), [98, 99]);
+    });
+
+    test('a file opened once, read in parts: from the middle, and short at the end', () async {
+      final f = await LocalFs().open('${dir.path}/Batman/001.cbz');
+      expect(await f.length(), 100);
+      expect(await f.readRange(10, 3), [10, 11, 12]);
+      expect(await f.readRange(98, 10), [98, 99]);
+      await f.close();
+      expect(await readWhole(LocalFs(), '${dir.path}/Batman/Annuals/A1.cbz'), [1, 2, 3]);
     });
 
     test('a folder deleted from a place that is still there looks deleted (not out of reach)', () async {
@@ -54,7 +74,7 @@ void main() {
       final fs = LocalFs();
       Object? error;
       try {
-        await fs.readRange('${dir.path}/Batman/missing.cbz', 0, 4);
+        await fs.open('${dir.path}/Batman/missing.cbz');
       } catch (e) {
         error = e;
       }
@@ -62,19 +82,32 @@ void main() {
     });
   });
 
-  test('read errors told apart as Windows numbers them and as the others do (the same number can mean different '
-      'things: 5 is "access denied" on Windows, an I/O error elsewhere)', () {
+  // review, 2026-10-26: walking up, / was always there - a card taken out looked deleted, and the user was asked
+  test("a card or USB drive taken out (Android: /storage/1234-ABCD) is out of reach, not deleted: the system's own "
+      'top folders (/, /storage) are no place of its own', () async {
+    expect(await LocalFs().placeAnswers('/storage/1234-ABCD/Comics'), isFalse);
+    expect(await LocalFs().placeAnswers('/no-such-top/Comics'), isFalse);
+  });
+
+  test('read errors told apart as each system numbers them (the same number means different things: 5 is "access '
+      'denied" on Windows, an I/O error elsewhere; a timeout is 110 on Android, 60 on the iPad)', () {
     FileSystemException os(int code) => FileSystemException('x', 'p', OSError('m', code));
-    final win = LocalFs(windows: true), other = LocalFs(windows: false);
-    expect(win.classify(os(2)), FileTrouble.gone);
-    expect(win.classify(os(3)), FileTrouble.gone);
-    expect(win.classify(os(5)), FileTrouble.refused);
-    expect(win.classify(os(53)), FileTrouble.noAnswer, reason: 'a share by its \\\\host path, not found on the network');
-    expect(win.classify(os(64)), FileTrouble.noAnswer);
-    expect(other.classify(os(2)), FileTrouble.gone);
-    expect(other.classify(os(13)), FileTrouble.refused, reason: "Android's file access taken back");
-    expect(other.classify(os(110)), FileTrouble.noAnswer);
-    expect(other.classify(os(5)), FileTrouble.damaged, reason: 'an I/O error: not "access denied" here');
+    final win = LocalFs(platform: FsPlatform.windows);
+    final apple = LocalFs(platform: FsPlatform.apple);
+    final linux = LocalFs(platform: FsPlatform.linux);
+    expect([for (final c in [2, 3]) win.classify(os(c))], everyElement(FileTrouble.gone));
+    expect([for (final c in [5, 65, 86, 1244, 1326]) win.classify(os(c))], everyElement(FileTrouble.refused),
+        reason: 'access denied, a share login refused');
+    expect([for (final c in [15, 21, 53, 64, 67, 1222, 1231, 1232, 2250]) win.classify(os(c))],
+        everyElement(FileTrouble.noAnswer), reason: 'a USB drive taken out, a share not answering');
+    expect([for (final c in [2, 20]) linux.classify(os(c))], everyElement(FileTrouble.gone));
+    expect([for (final c in [1, 13]) linux.classify(os(c))], everyElement(FileTrouble.refused));
+    expect([for (final c in [100, 101, 104, 110, 111, 113, 116, 123]) linux.classify(os(c))],
+        everyElement(FileTrouble.noAnswer), reason: 'ENOMEDIUM 123: a card taken out');
+    expect(linux.classify(os(5)), FileTrouble.damaged, reason: 'an I/O error');
+    expect([for (final c in [50, 51, 54, 60, 61, 64, 65]) apple.classify(os(c))], everyElement(FileTrouble.noAnswer));
+    expect(apple.classify(os(110)), FileTrouble.damaged, reason: "not a number Apple's systems use for a timeout");
+    expect(apple.classify(os(2)), FileTrouble.gone);
   });
 
   test("an error that isn't one of the known kinds is said as damaged - not taken for a share that's away (every "
