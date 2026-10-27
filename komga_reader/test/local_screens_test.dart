@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/device_folders.dart';
-import 'package:komga_reader/local/folder_browser.dart';
+import 'package:komga_reader/screens/folder_browser.dart';
 import 'package:komga_reader/local/library_fs.dart';
 
 /// A device with the places given, and its folders.

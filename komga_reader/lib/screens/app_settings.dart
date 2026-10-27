@@ -27,7 +27,7 @@ import 'remote_test.dart';
 import '../book_source.dart';
 import '../api.dart' show Komga;
 import '../combined_source.dart';
-import '../local/local_settings.dart';
+import 'local_settings.dart';
 import 'login.dart' show LoginScreen;
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
