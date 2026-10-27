@@ -6,7 +6,8 @@
     tools\build.ps1 -Bump pushes each build's tag (exp-build-<n>, or build-<n> for a stable one); GitHub then builds that commit for iPhone / iPad and
     uploads it to TestFlight (.github\workflows\testflight.yml, about 15-20 minutes). This finds that run and says
     where it is: queued, the step it's on and for how long, or how it ended - and, once uploaded, that Apple still
-    processes it for a few minutes before TestFlight offers it.
+    processes it for a few minutes before TestFlight offers it. After that, the checks run (analyze and the tests on
+    Linux) for the same commit: passed, failed and where, running, or none yet.
 
     Exit codes: 0 = uploaded, 1 = failed or cancelled, 2 = still running or queued, 3 = no run found (the tag not
     pushed, or GitHub hasn't started it yet).
@@ -32,6 +33,25 @@ if (-not $Build) {
 }
 $tag = if ($Ref) { $Ref } elseif ($tags -contains "build-$Build") { "build-$Build" } else { "exp-build-$Build" }
 
+# the checks (analyze + the test suite on Linux, .github\workflows\checks.yml) for the same commit - they run on
+# branch pushes only, so a build's commit has none until its branch is pushed
+function Show-Checks {
+    $ErrorActionPreference = 'Continue'
+    $sha = git -C $root rev-list -n 1 $tag 2>$null
+    if (-not $sha) { return }
+    $c = @(& $gh run list --repo $repo --workflow checks.yml --commit $sha --limit 1 `
+        --json databaseId,status,conclusion,url | ConvertFrom-Json)
+    if (-not $c) { Write-Host "Checks (Linux): none for this commit yet - they run when its branch is pushed."; return }
+    $c = $c[0]
+    if ($c.status -ne 'completed') { Write-Host "Checks (Linux): $($c.status)"; Write-Host "  $($c.url)"; return }
+    if ($c.conclusion -eq 'success') { Write-Host 'Checks (Linux): passed'; return }
+    $jobs = (& $gh run view $c.databaseId --repo $repo --json jobs | ConvertFrom-Json).jobs
+    $failed = $jobs.steps | Where-Object { $_.conclusion -eq 'failure' } | Select-Object -First 1
+    $where = if ($failed) { ' - at the step "{0}"' -f $failed.name } else { '' }
+    Write-Host ('Checks (Linux): {0}{1}' -f $c.conclusion.ToUpper(), $where)
+    Write-Host "  $($c.url)"
+}
+
 $runs = & $gh run list --repo $repo --workflow testflight.yml --branch $tag --limit 1 `
     --json databaseId,status,conclusion,createdAt,updatedAt,url | ConvertFrom-Json
 if (-not $runs) {
@@ -39,7 +59,7 @@ if (-not $runs) {
     cmd /c "`"$gh`" api repos/$repo/git/refs/tags/$tag --silent >nul 2>nul"; $onGitHub = $LASTEXITCODE -eq 0
     if ($onGitHub) { Write-Host "$tag is on GitHub but its TestFlight run hasn't started yet - try again in a minute." }
     else { Write-Host "$tag isn't on GitHub: no TestFlight build (built with -NoIos, or the push failed)." }
-    exit 3
+    Show-Checks; exit 3
 }
 $run = @($runs)[0]
 $minutes = { param($from, $to) [int](([datetime]$to) - ([datetime]$from)).TotalMinutes }
@@ -49,14 +69,14 @@ if ($run.status -eq 'completed') {
     if ($run.conclusion -eq 'success') {
         Write-Host "iOS $tag`: uploaded to TestFlight ($took min). Apple processes it for a few minutes before it shows."
         Write-Host "  $($run.url)"
-        exit 0
+        Show-Checks; exit 0
     }
     $jobs = (& $gh run view $run.databaseId --repo $repo --json jobs | ConvertFrom-Json).jobs
     $failed = $jobs.steps | Where-Object { $_.conclusion -eq 'failure' } | Select-Object -First 1
     $where = if ($failed) { ' - at the step "{0}"' -f $failed.name } else { '' }
     Write-Host ('iOS {0}: {1} after {2} min{3}' -f $tag, $run.conclusion.ToUpper(), $took, $where)
     Write-Host "  $($run.url)"
-    exit 1
+    Show-Checks; exit 1
 }
 
 $now = (Get-Date).ToUniversalTime().ToString('o')
@@ -64,7 +84,7 @@ $elapsed = & $minutes $run.createdAt $now
 if ($run.status -ne 'in_progress') {
     Write-Host "iOS $tag`: $($run.status) for $elapsed min (waiting for a GitHub Mac runner)"
     Write-Host "  $($run.url)"
-    exit 2
+    Show-Checks; exit 2
 }
 $jobs = (& $gh run view $run.databaseId --repo $repo --json jobs | ConvertFrom-Json).jobs
 $steps = @($jobs.steps)
@@ -76,4 +96,4 @@ $on = if ($current) {
 } else { '{0}/{1} steps done' -f $done, $steps.Count }
 Write-Host "iOS $tag`: running $elapsed min - $on"
 Write-Host "  $($run.url)"
-exit 2
+Show-Checks; exit 2
