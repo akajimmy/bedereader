@@ -109,10 +109,11 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 **Offline**
 - Download single books, or a series or read list's unread (or all) books - from Komga or a shared folder - with a
-  storage limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
+  downloads limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
   carries on where it stopped. A book on a folder of the device itself needs no download: it's there.
-- Books you open are kept on the device for a while too (up to 512 MB, the oldest opened going first), so they read
-  offline without a download.
+- Books you open are kept on the device for a while too (up to the cache limit, 512 MB at first, the oldest opened
+  going first), so they read offline without a download. Settings > Storage & Downloads sets both limits - either can
+  be Off - and Clear cache empties the cache.
 - **Offline mode** shows just the books with a copy on the device - by hand, or offered when Komga can't be reached.
   Nothing is read from Komga or a share while it's on; folders on the device are read as always. Started in offline
   mode, the app doesn't contact Komga at all.
@@ -189,7 +190,7 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
   settings at once; each Settings page also has its own reset.
 
 Settings (side menu) has everything in one place: All Book Types, Comics, Webtoons, eBooks and Remote and keys for reading;
-Server & Sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
+Server & Sync, Library & Home, Libraries, Storage & Downloads and Look for the app; About. Groups marked "synced" are the same
 on every device.
 
 ## Privacy

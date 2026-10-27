@@ -60,7 +60,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.server => 'Server & Sync', // (user, 2026-10-27: as Library & Home)
         SettingsPage.library => 'Library & Home',
         SettingsPage.libraries => 'Libraries',
-        SettingsPage.downloads => 'Downloads',
+        SettingsPage.downloads => 'Storage & Downloads', // (user, 2026-10-27: the cache too)
         SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
       };
@@ -676,19 +676,45 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   // ---- Downloads -------------------------------------------------------------------------------------------------
   Widget _downloads(BuildContext context) {
     final d = Downloads.instance;
-    const choices = <int?>[2, 5, 10, 20, 50, 100, null]; // GB; null = no limit
+    // GB; null = no limit, 0 = off: nothing downloads (a book asked for stops for lack of room - user, 2026-10-27)
+    const choices = <int?>[0, 2, 5, 10, 20, 50, 100, null];
     final current = d.capBytes == null ? null : (d.capBytes! / Downloads.gb).round();
+    // MB; 0 = off: nothing is cached, a book is read from its source (user, 2026-10-27)
+    const cacheChoices = <int>[0, 256, 512, 1024, 2048, 5120];
+    final cacheMb = (Downloads.cacheCap / (1024 * 1024)).round();
+    String mb(int m) => m == 0 ? 'Off' : (m < 1024 ? '$m MB' : '${m ~/ 1024} GB');
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'Storage', children: [
         SettingRow(
-          title: 'Storage limit',
+          title: 'Downloads limit', // (user, 2026-10-27; "Storage limit")
           subtitle: '${DownloadsScreen.size(d.usedBytes)} used', // (user, 2026-10-21: just the amount)
           trailing: DropdownButton<int?>(
             value: choices.contains(current) ? current : 10,
             underline: const SizedBox.shrink(),
-            items: [for (final c in choices) DropdownMenuItem(value: c, child: Text(c == null ? 'No limit' : '$c GB'))],
+            items: [
+              for (final c in choices)
+                DropdownMenuItem(value: c, child: Text(c == null ? 'No limit' : (c == 0 ? 'Off' : '$c GB'))),
+            ],
             onChanged: (c) => d.setCap(c == null ? null : c * Downloads.gb),
           ),
+        ),
+        // the books opened lately, kept to read again without the source (user, 2026-10-27: its own limit, and Clear)
+        SettingRow(
+          title: 'Cache limit',
+          subtitle: '${DownloadsScreen.size(d.cacheBytes)} used',
+          trailing: DropdownButton<int>(
+            value: cacheChoices.contains(cacheMb) ? cacheMb : 512,
+            underline: const SizedBox.shrink(),
+            items: [for (final c in cacheChoices) DropdownMenuItem(value: c, child: Text(mb(c)))],
+            onChanged: (c) {
+              if (c != null) d.setCacheCap(c * 1024 * 1024);
+            },
+          ),
+        ),
+        ActionRow(
+          title: 'Cached books',
+          subtitle: 'Opened lately and kept, to read again without the server or share',
+          button: TextButton(onPressed: d.cacheBytes == 0 ? null : d.clearCache, child: const Text('Clear cache')),
         ),
         // a phone or tablet (a PC has no mobile data to save)
         if (knowsMobileData)
