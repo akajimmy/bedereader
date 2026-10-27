@@ -88,14 +88,14 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400)); // (the page's spinner turns behind the dialog: no settling)
     expect(find.byType(ShareLoginDialog), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, 'User name'), 'nick');
-    await tester.enterText(find.widgetWithText(TextField, 'Password'), 'p4ss');
-    await tester.tap(find.widgetWithText(TextButton, 'Sign in'));
+    await tester.enterText(find.byKey(ShareKeys.user), 'nick');
+    await tester.enterText(find.byKey(ShareKeys.password), 'p4ss');
+    await tester.tap(find.byKey(ShareKeys.signIn));
     await tester.pumpAndSettle();
     expect(net.logins[r'\\nas\books']?.user, 'nick');
     expect(find.text('Comics'), findsOneWidget, reason: 'tried again with the login');
 
-    await tester.tap(find.byTooltip('Up'));
+    await tester.tap(find.byIcon(Icons.arrow_upward));
     await tester.pumpAndSettle();
     expect(find.text('media'), findsOneWidget, reason: "the server's shares");
     await tester.tap(find.text('books'));
@@ -148,11 +148,11 @@ void main() {
       expect(find.descendant(of: groups.first, matching: find.text('Manga')), findsNothing);
       expect(find.descendant(of: groups.last, matching: find.text('Manga')), findsOneWidget);
       expect(find.descendant(of: groups.last, matching: find.text(LocalLibrary.at(data.path).name)), findsNothing);
-      expect(find.descendant(of: groups.last, matching: find.byTooltip('Sign in')), findsOneWidget);
-      expect(find.descendant(of: groups.first, matching: find.byTooltip('Sign in')), findsNothing);
+      expect(find.descendant(of: groups.last, matching: find.byKey(LocalLibrariesGroup.signInKey)), findsOneWidget);
+      expect(find.descendant(of: groups.first, matching: find.byKey(LocalLibrariesGroup.signInKey)), findsNothing);
 
       await page(Shares(viaApp: false));
-      expect(find.byTooltip('Sign in'), findsNothing);
+      expect(find.byKey(LocalLibrariesGroup.signInKey), findsNothing);
     });
   });
 
@@ -173,8 +173,8 @@ void main() {
       final result = await host(tester, (c) => ensureShare(c, r'\\nas\books\Comics', shares: shares));
       final dialog = tester.widget<ShareLoginDialog>(find.byType(ShareLoginDialog));
       expect(dialog.problem, isNull);
-      await tester.enterText(find.widgetWithText(TextField, 'User name'), 'nick');
-      await tester.tap(find.widgetWithText(TextButton, 'Sign in'));
+      await tester.enterText(find.byKey(ShareKeys.user), 'nick');
+      await tester.tap(find.byKey(ShareKeys.signIn));
       await tester.pumpAndSettle();
       expect(result(), isTrue);
       expect(shares.loginFor(r'\\nas\books\Manga')?.user, 'nick');
@@ -188,12 +188,12 @@ void main() {
       });
       await shares.setLogin(r'\\nas\books', const SmbLogin('old', 'stale'));
       final result = await host(tester, (c) => ensureShare(c, r'\\nas\books\Comics', shares: shares));
-      await tester.enterText(find.widgetWithText(TextField, 'User name'), 'nick');
-      await tester.enterText(find.widgetWithText(TextField, 'Password'), 'wrong');
-      await tester.tap(find.widgetWithText(TextButton, 'Sign in'));
+      await tester.enterText(find.byKey(ShareKeys.user), 'nick');
+      await tester.enterText(find.byKey(ShareKeys.password), 'wrong');
+      await tester.tap(find.byKey(ShareKeys.signIn));
       await tester.pumpAndSettle();
       expect(tester.widget<ShareLoginDialog>(find.byType(ShareLoginDialog)).problem, isNotNull, reason: 'refused');
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.byKey(ShareKeys.loginCancel));
       await tester.pumpAndSettle();
       expect(result(), isFalse);
       expect(shares.loginFor(r'\\nas\books')?.user, 'old');
@@ -204,9 +204,9 @@ void main() {
           connect: (_, __, ___) async => throw const Smb2Exception('no route', type: Smb2ErrorType.connection));
       final result = await host(tester, (c) => ensureShare(c, r'\\nas\books\Comics', shares: shares));
       expect(find.byType(ShareLoginDialog), findsNothing);
-      await tester.tap(find.widgetWithText(TextButton, 'Retry'));
+      await tester.tap(find.byKey(ShareKeys.retry));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.tap(find.byKey(ShareKeys.cancel));
       await tester.pumpAndSettle();
       expect(result(), isFalse);
     });
@@ -215,7 +215,7 @@ void main() {
       final shares = Shares(viaApp: true, connect: (_, __, ___) async => _Share());
       final result = await host(tester, (c) => ensureShare(c, r'\\nas\books\Gone', shares: shares));
       expect(find.byType(AlertDialog), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'OK'));
+      await tester.tap(find.byKey(ShareKeys.ok));
       await tester.pumpAndSettle();
       expect(result(), isFalse);
     });

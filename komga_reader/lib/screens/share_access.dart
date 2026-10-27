@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../local/library_fs.dart';
 import '../local/smb_fs.dart';
 
+/// The share dialogs' controls (tests find them by these, not by their words).
+abstract final class ShareKeys {
+  static const cancel = ValueKey('share.cancel'), retry = ValueKey('share.retry'), ok = ValueKey('share.ok');
+  static const user = ValueKey('share.user'), password = ValueKey('share.password');
+  static const signIn = ValueKey('share.signIn'), loginCancel = ValueKey('share.loginCancel');
+}
+
 /// A share's folder, reachable before it's kept as a library: tried as it is first (a share open to guests needs no
 /// login - user, 2026-10-25), a login asked for only when the share refuses one (one that doesn't answer, or a folder
 /// that isn't there, can't be helped by signing in - tablet, 2026-10-25), Retry when it doesn't answer. False:
@@ -69,8 +76,9 @@ Future<bool> _retry(BuildContext context, String where, String why) async =>
               child: Text(why, style: TextStyle(fontSize: 12, color: Theme.of(ctx).colorScheme.onSurfaceVariant))),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, true), child: const Text('Retry')),
+          TextButton(key: ShareKeys.cancel, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(key: ShareKeys.retry, autofocus: true, onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Retry')),
         ],
       ),
     ) ??
@@ -79,7 +87,7 @@ Future<bool> _retry(BuildContext context, String where, String why) async =>
 Future<void> _say(BuildContext context, String title, String text) => showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(title: Text(title), content: Text(text), actions: [
-          TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+          TextButton(key: ShareKeys.ok, autofocus: true, onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
         ]));
 
 /// A user name and password (and a domain, rarely needed) for [where] (\\host\share, or \\host to list its shares);
@@ -125,9 +133,9 @@ class _ShareLoginDialogState extends State<ShareLoginDialog> {
             if (widget.problem != null)
               Padding(padding: const EdgeInsets.only(bottom: 12),
                   child: Text(widget.problem!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
-            TextField(controller: _user, autofocus: true, autocorrect: false, enableSuggestions: false,
-                decoration: const InputDecoration(labelText: 'User name')),
-            TextField(controller: _password, obscureText: true,
+            TextField(key: ShareKeys.user, controller: _user, autofocus: true, autocorrect: false,
+                enableSuggestions: false, decoration: const InputDecoration(labelText: 'User name')),
+            TextField(key: ShareKeys.password, controller: _password, obscureText: true,
                 decoration: const InputDecoration(labelText: 'Password'), onSubmitted: (_) => _done()),
             TextField(controller: _domain, autocorrect: false, enableSuggestions: false,
                 decoration: const InputDecoration(labelText: 'Domain (usually empty)')),
@@ -137,8 +145,8 @@ class _ShareLoginDialogState extends State<ShareLoginDialog> {
           ]),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(onPressed: _done, child: const Text('Sign in')),
+          TextButton(key: ShareKeys.loginCancel, onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(key: ShareKeys.signIn, onPressed: _done, child: const Text('Sign in')),
         ],
       );
 }

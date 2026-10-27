@@ -17,6 +17,9 @@ import '../local/smb_fs.dart';
 /// [network]: the libraries on a share instead (the Network group: Add a shared folder, and each one's Sign in).
 class LocalLibrariesGroup extends StatefulWidget {
   const LocalLibrariesGroup({super.key, required this.local, this.browse, this.network = false, this.shares});
+
+  /// A network library's Sign in button (tests find it by this).
+  static const signInKey = ValueKey('library.signIn');
   final LocalSource local;
 
   /// Where Add a folder browses (tests give their own).
@@ -115,7 +118,8 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
               ]),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                 if (widget.network && _shares.viaApp) // (Windows signs in to a share itself)
-                  IconButton(tooltip: 'Sign in', icon: const Icon(Icons.key_outlined), onPressed: () => _signIn(l)),
+                  IconButton(key: LocalLibrariesGroup.signInKey, tooltip: 'Sign in', icon: const Icon(Icons.key_outlined),
+                      onPressed: () => _signIn(l)),
                 IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(l)),
                 IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline), onPressed: () => _remove(l)),
               ]),
