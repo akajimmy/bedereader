@@ -695,8 +695,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       builder: (ctx) => AlertDialog(
         title: Text(noServer ? 'Leave No server mode?' : 'Sign out?'),
         content: Text(noServer
-            ? "Back to the sign-in screen. The local libraries and their reading progress stay; this mode's pins "
-                'and reading settings go.'
+            ? 'Back to the sign-in screen. The local libraries, their reading progress and the pins to them stay; '
+                "this mode's reading settings go."
             : 'The API key is removed from this device; you can sign in again or connect to a different server. '
                 'Downloads and settings stay.'),
         actions: [
