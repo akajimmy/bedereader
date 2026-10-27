@@ -252,8 +252,18 @@ class LocalStore {
     });
   }
 
-  Future<void> setProgress(String bookId, {required int page, required bool completed, DateTime? at}) {
-    progress[bookId] = {'page': page, 'completed': completed, 'at': (at ?? DateTime.now()).toIso8601String()};
+  /// [place]: an EPUB's exact place (Readium's progression), kept with its page.
+  Future<void> setProgress(String bookId, {required int page, required bool completed, DateTime? at, Map? place}) {
+    progress[bookId] = {
+      'page': page, 'completed': completed, 'at': (at ?? DateTime.now()).toIso8601String(),
+      if (place != null) 'place': place,
+    };
+    return _write('progress.json', () => progress);
+  }
+
+  /// Marked unread: no progress at all.
+  Future<void> clearProgress(String bookId) {
+    progress.remove(bookId);
     return _write('progress.json', () => progress);
   }
 

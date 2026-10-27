@@ -212,11 +212,23 @@ class _LocalFile implements LibraryFile {
   _LocalFile(this._f);
   final RandomAccessFile _f;
 
-  @override
-  Future<int> length() => _f.length();
+  // one thing at a time on the file: a position set then a read, not another's read in between (a book's pages are
+  // measured several at a time - found 2026-10-26: a size read from another page's place)
+  Future<void> _turn = Future.value();
+
+  Future<T> _inTurn<T>(Future<T> Function() f) {
+    final run = _turn.then((_) => f());
+    _turn = run.then((_) {}, onError: (Object _) {});
+    return run;
+  }
 
   @override
-  Future<Uint8List> readRange(int offset, int length) async {
+  Future<int> length() => _inTurn(_f.length);
+
+  @override
+  Future<Uint8List> readRange(int offset, int length) => _inTurn(() => _read(offset, length));
+
+  Future<Uint8List> _read(int offset, int length) async {
     await _f.setPosition(offset);
     final first = await _f.read(length);
     if (first.length >= length || first.isEmpty) return first;
@@ -231,5 +243,5 @@ class _LocalFile implements LibraryFile {
   }
 
   @override
-  Future<void> close() => _f.close();
+  Future<void> close() => _inTurn(_f.close);
 }
