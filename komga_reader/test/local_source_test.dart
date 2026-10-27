@@ -101,6 +101,7 @@ void main() {
   tearDown(() async {
     for (final s in sources) {
       await s.closeFiles();
+      await s.store.written; // (the pages' sizes are saved in the background: not deleted under the write)
     }
     sources.clear();
     if (await root.exists()) await root.delete(recursive: true);

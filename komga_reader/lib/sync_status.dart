@@ -24,8 +24,11 @@ class SyncStatus extends ChangeNotifier {
   void synced() {
     final now = last = clock.now();
     notifyListeners();
-    // (this one's time: by the time the store is open, [last] may have moved on)
-    SharedPreferences.getInstance().then((p) => p.setString(_key, now.toUtc().toIso8601String()));
+    // (this one's time: by the time the store is open, [last] may have moved on; not kept: no harm, nothing thrown -
+    // a full run found a request's test without the store failing on it)
+    SharedPreferences.getInstance()
+        .then((p) => p.setString(_key, now.toUtc().toIso8601String()))
+        .then<void>((_) {}, onError: (Object _) {});
   }
 
   /// Tests: never synced.

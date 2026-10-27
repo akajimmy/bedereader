@@ -221,14 +221,17 @@ void main() {
     expect(tester.widget<Switch>(onDeckSwitch()).value, isTrue);
   });
 
-  testWidgets("night mode: Off / On / Scheduled, one choice on Look (user, 2026-10-07) - the same setting as the "
-      "reader's moon", (tester) async {
+  testWidgets("night mode: Off / On / Scheduled, one choice on All Book Types (user, 2026-10-07; moved from Look "
+      "2026-10-27) - the same setting as the reader's moon", (tester) async {
     tall(tester);
     final s = AppSettings.instance;
     s.setDisplay(const DisplayPrefs());
     addTearDown(() => s.setDisplay(const DisplayPrefs()));
     await open(tester, page: SettingsPage.look);
     final seg = find.byType(SegmentedButton<NightMode>);
+    expect(seg, findsNothing, reason: 'not on Look any more');
+    await tester.tap(find.widgetWithText(ListTile, pageName(SettingsPage.reading)));
+    await tester.pumpAndSettle();
     Future<void> pick(String t) async {
       await tester.tap(find.descendant(of: seg, matching: find.text(t)));
       await tester.pumpAndSettle();
