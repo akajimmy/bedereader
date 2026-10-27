@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -123,10 +125,16 @@ class _PinTileState extends State<PinTile> {
 
   void _lookup() {
     _view = PinTile._cache.putIfAbsent(_key, () {
-      final f = pinView(widget.api, widget.pin);
-      f.catchError((Object _) {
+      final pin = widget.pin;
+      final f = pinView(widget.api, pin);
+      f.then((r) {
+        // a series or book pin's library, as its view shows it: the pin goes if that library is deleted on Komga
+        if (pin.kind == 'series' || pin.kind == 'book') {
+          final first = (r['content'] as List?)?.firstOrNull;
+          if (first is Map) unawaited(Pins.instance.learnLibrary(pin.id, first['libraryId'] as String?));
+        }
+      }, onError: (Object _) {
         PinTile._cache.remove(_key);
-        return <String, dynamic>{};
       });
       return f;
     });

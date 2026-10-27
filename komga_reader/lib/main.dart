@@ -187,6 +187,10 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
+    // a library deleted on Komga: the pins to it go (only the signed-in Komga's answers count)
+    Komga.onLibraries = (api, ids) {
+      if (identical(api, Connection.instance.online)) unawaited(Pins.instance.librariesNow(ids));
+    };
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
     WidgetsBinding.instance.addObserver(_turns);
