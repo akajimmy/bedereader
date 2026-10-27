@@ -84,9 +84,10 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
 - Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
-  spacing, paragraph spacing, margins and black, dark, sepia or light page colours - in the reader (**Aa**) or Settings >
-  eBooks. *Alignment* (the book's, justified or left), *Paragraphs* (the book's indents and gaps, or Auto) and
-  *Auto-hyphenation* are set apart. A book set smaller or larger all through shows at your text size; small
+  spacing, paragraph spacing, margins and black, dark, sepia or light page colours - as defaults in Settings > eBooks,
+  and for one book in the reader (**Aa** > Override defaults: that book's own settings, on that device; Make default
+  passes them on to every book). *Alignment* (the book's, justified or left), *Paragraphs* (the book's indents and
+  gaps, or Auto) and *Auto-hyphenation* are set apart. A book set smaller or larger all through shows at your text size; small
   black-and-white pictures (chapter numbers, drop caps) take the page's colours.
 - Contents, a slider and "page X of Y" over the whole book. A Komga book's place is kept on Komga in the same form its
   own web reader uses - pick up in either. A book is laid out and its pages counted before it shows: a few seconds
@@ -183,7 +184,8 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
   order, pins and what's hidden from On deck. Settings > Server & Sync says when this device last synced, and Sync
   now syncs it at once.
 - **On this device**: the server address and API key, the local and network libraries and the shares' logins, the
-  reading progress, pins and series settings of their books, reading brightness and night mode, how the reader
+  reading progress, pins and series settings of their books, each eBook's own settings, reading brightness and
+  night mode, how the reader
   behaves (page turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and
   auto-scroll speed), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the
   offline mode switch. In No server mode, everything is on this device. Settings > About can reset this device's
