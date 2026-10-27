@@ -14,6 +14,7 @@ import 'package:komga_reader/local/local_settings.dart';
 import 'package:komga_reader/local/local_source.dart';
 import 'package:komga_reader/local/share_access.dart';
 import 'package:komga_reader/local/smb_fs.dart';
+import 'package:komga_reader/screens/actions.dart' show askNameOkKey;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _refused = Smb2Exception('refused', type: Smb2ErrorType.accessDenied);
@@ -112,7 +113,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.add_link));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), r'\\nas\books');
-    await tester.tap(find.widgetWithText(TextButton, 'OK'));
+    await tester.tap(find.byKey(askNameOkKey));
     await tester.pumpAndSettle();
     expect(find.text('books'), findsOneWidget);
     expect(find.text(r'\\nas'), findsOneWidget, reason: 'where it is');
