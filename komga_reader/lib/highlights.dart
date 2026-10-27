@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'api.dart';
 import 'errors.dart';
+import 'source.dart';
 
 /// A highlight in an eBook: a chapter (its file in the book) and the stretch of its text, in chapter positions - the
 /// same in every layout, font and page size - with the words themselves (for a list, and to see it's still right).
@@ -46,7 +46,7 @@ List<Highlight> inReadingOrder(List<Highlight> marks, List<String> spine) => [..
 /// until Komga has it (as pins are).
 class BookHighlights extends ChangeNotifier {
   BookHighlights(this.api, this.bookId);
-  final Komga api;
+  final Source api;
   final String bookId;
 
   /// Komga takes only lowercase keys ("a valid lowercase namespace string") - a book's id has capitals: with them in

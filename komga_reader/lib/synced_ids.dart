@@ -4,8 +4,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'api.dart';
 import 'refresh_gate.dart';
+import 'source.dart';
 
 /// Sets of ids kept on the device and in the user's Komga client settings, so every device agrees - what's hidden from
 /// On deck ([OnDeckHidden]), the books whose pages pair shifted by one ([PairShift]). Komga's copy is the truth except
@@ -31,13 +31,13 @@ abstract class SyncedIds extends ChangeNotifier {
     }
   }
 
-  Komga? _api;
+  Source? _api;
 
   bool get isEmpty => sets.values.every((s) => s.isEmpty);
   int get count => sets.values.fold(0, (n, s) => n + s.length);
 
   /// [fetch] false (offline mode): this device's copy only - nothing is sent or asked for.
-  Future<void> load(Komga api, {bool fetch = true}) async {
+  Future<void> load(Source api, {bool fetch = true}) async {
     _api = api;
     final p = await SharedPreferences.getInstance();
     final before = _raw;
@@ -96,7 +96,7 @@ abstract class SyncedIds extends ChangeNotifier {
   /// Switch connection (online / offline) without reloading; a change made while Komga couldn't be reached goes now
   /// (it used to wait for the next start - test audit, 2026-09-30). Not before the device's copy is read: [load]
   /// sends it then (start-up sent [] here - code review 2026-10-05, #2).
-  void useApi(Komga api) {
+  void useApi(Source api) {
     _api = api;
     if (!_loaded) return;
     SharedPreferences.getInstance().then((p) {

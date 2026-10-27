@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../reader/position_row.dart';
 import '../reader/webtoon_view.dart' show WebtoonView;
 import '../screens/app_settings.dart';
@@ -8,6 +7,7 @@ import '../synced_ids.dart';
 import '../screen.dart';
 import '../settings.dart';
 import 'setting_rows.dart';
+import '../source.dart';
 
 /// The reader's settings panel, opened from its bottom bar: side sheets on a wide screen (the page stays in
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
@@ -29,7 +29,7 @@ import 'setting_rows.dart';
 /// [api]: for More settings (null: no such row).
 /// [webtoon]: Komga's webtoon - webtoons' own settings and defaults (user, 2026-10-22: "a clean split").
 Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? seriesTitle, String? komgaDirection,
-        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift, Komga? api,
+        FitMode? bookFit, PageActions? page, String? shiftBook, VoidCallback? shift, Source? api,
         bool webtoon = false}) =>
     _show(context, (side) => _ReaderPanel(seriesId: seriesId, seriesTitle: seriesTitle, komgaDirection: komgaDirection,
         bookFit: bookFit, page: page, shiftBook: shiftBook, shift: shift, api: api, side: side, webtoon: webtoon));
@@ -37,7 +37,7 @@ Future<void> showReaderPanel(BuildContext context, {String? seriesId, String? se
 /// The panels' last row, "More settings" (user, 2026-10-21: the panels trimmed to what's changed mid-book): closes the
 /// panel and opens Settings at [page] - only the reading pages ([page] and Reading), so nothing there leaves the book
 /// (no sign out, no server).
-Widget moreSettingsRow(BuildContext context, Komga api, SettingsPage page) => SettingsGroup(children: [
+Widget moreSettingsRow(BuildContext context, Source api, SettingsPage page) => SettingsGroup(children: [
       ActionRow(
         title: 'More settings',
         subtitle: 'Settings > ${page.label}',
@@ -164,7 +164,7 @@ class _ReaderPanel extends StatelessWidget {
   const _ReaderPanel({this.seriesId, this.seriesTitle, this.komgaDirection, this.bookFit, this.page, this.shiftBook,
       this.shift, this.api, required this.side, this.webtoon = false});
   final bool webtoon; // Komga's webtoon: webtoons' settings
-  final Komga? api;
+  final Source? api;
   final PageActions? page;
   final String? shiftBook;
   final VoidCallback? shift;

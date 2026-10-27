@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'api.dart';
 import 'view_filter.dart';
+import 'source.dart';
 
 /// One way a browsing view can be sorted: its [key] (saved per view and in pins), its name in the Sort menu, and the
 /// direction it starts in when picked ([desc]: titles A -> Z and issue / list order ascending, dates newest first).
@@ -116,7 +117,7 @@ const listSorts = [
 
 /// A page of a series' books in [s], with the eye ([read]) and the filter panel's [filter] (none: the request it
 /// always was).
-Future<Map<String, dynamic>> seriesBooksPage(Komga api, String seriesId, ViewSort s,
+Future<Map<String, dynamic>> seriesBooksPage(Source api, String seriesId, ViewSort s,
     {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
   final field = switch (s.key) { 'release' => 'metadata.releaseDate', 'added' => 'createdDate', _ => 'metadata.numberSort' };
   return api.filteredBooks(seriesId: seriesId, read: read, filter: filter, sort: '$field,${s.dir}', page: page,
@@ -124,7 +125,7 @@ Future<Map<String, dynamic>> seriesBooksPage(Komga api, String seriesId, ViewSor
 }
 
 /// A page of a collection's series in [s], with [read] and [filter].
-Future<Map<String, dynamic>> collectionSeriesPage(Komga api, String collectionId, ViewSort s,
+Future<Map<String, dynamic>> collectionSeriesPage(Source api, String collectionId, ViewSort s,
     {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
   if (s.key == 'order') {
     if (filter.forView(seriesView: true).isNotEmpty) return _filteredInOrder(api, collectionId, s, read, filter, page);
@@ -141,7 +142,7 @@ Future<Map<String, dynamic>> collectionSeriesPage(Komga api, String collectionId
 
 /// A filtered collection in its own order: Komga's search can't sort by a collection's order, so the series that
 /// match (one search) are kept in the order of the whole collection (its own listing) - all of it as the first page.
-Future<Map<String, dynamic>> _filteredInOrder(Komga api, String collectionId, ViewSort s, ReadFilter read,
+Future<Map<String, dynamic>> _filteredInOrder(Source api, String collectionId, ViewSort s, ReadFilter read,
     ViewFilter filter, int page) async {
   if (page > 0) return const {'content': [], 'last': true};
   final matching = <Object?>{};
@@ -158,7 +159,7 @@ Future<Map<String, dynamic>> _filteredInOrder(Komga api, String collectionId, Vi
 }
 
 /// A page of a read list's books in [s], with [read] and [filter].
-Future<Map<String, dynamic>> readListBooksPage(Komga api, String readListId, ViewSort s,
+Future<Map<String, dynamic>> readListBooksPage(Source api, String readListId, ViewSort s,
     {ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, required int page, required int size}) {
   if (filter.forView(seriesView: false).isNotEmpty) {
     // Komga's book search, in the list's order ("readList.number") or by release date

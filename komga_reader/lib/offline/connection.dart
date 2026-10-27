@@ -13,6 +13,7 @@ import '../pins.dart';
 import '../settings.dart';
 import 'downloads.dart';
 import 'offline_komga.dart';
+import '../source.dart';
 
 /// Online or offline. Offline, the whole app runs on [OfflineKomga] - the downloaded books only - and nothing
 /// talks to the server: downloads hold, settings and pins wait to sync.
@@ -56,7 +57,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   bool get hasDownloads => Downloads.instance.store?.books.values.any((e) => e['state'] == 'done') ?? false;
 
   /// The connection every screen should use right now.
-  Komga get api {
+  Source get api {
     final store = Downloads.instance.store;
     if (!offline || store == null) return online!;
     if (_offline == null || _offline!.store != store) _offline = OfflineKomga(store, baseUrl: online?.baseUrl ?? 'offline');

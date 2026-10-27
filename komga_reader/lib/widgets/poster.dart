@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import '../api.dart';
 import '../errors.dart';
 import '../paged.dart';
 import '../reader/reader_bars.dart' show isOkKey;
 import '../reader_keys.dart';
 import '../settings.dart';
 import 'error_text.dart';
+import '../source.dart';
 
 /// Poster size in a screen's top bar (Home and the grids; user, 2026-09-30): a grid icon with S, M or L, opening
 /// Small / Medium / Large. The same setting as Settings > Library & Home.
@@ -71,7 +71,7 @@ class PosterTile extends StatelessWidget {
       this.subtitle, this.read = false, this.progress, required this.onOpen, this.onMenu, this.autofocus = false,
       this.image, this.selected, this.badge, this.caption, this.corner});
 
-  final Komga api;
+  final Source api;
   final String imageUrl;
   final bool? selected; // multi-select: null = not selecting, else ticked or not
   final Widget? image; // drawn instead of the Komga thumbnail at [imageUrl] (read-list mosaics)
