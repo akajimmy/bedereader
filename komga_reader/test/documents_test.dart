@@ -146,6 +146,18 @@ Text after.
     final hyph = textOf('Hyphenation patterns (hyph-utf8): English, French').single;
     expect(hyph, contains('Gerard D.C. Kuiken'));
     expect(hyph, contains('Daniel Flipo'));
+    // 1.6's network shares and CBRs (the notices pass, 10-27): libsmb2 with the LGPL's full text, its notice and
+    // source; the RAR reader's adapted code (package NOTICE files Flutter doesn't gather); Komga's K
+    final smb = textOf('libsmb2').single;
+    expect(smb, contains('GNU LESSER GENERAL PUBLIC LICENSE'));
+    expect(smb, contains('END OF TERMS AND CONDITIONS'));
+    expect(smb, contains('Ronnie Sahlberg'));
+    expect(smb, contains('libsmb2-r9'));
+    final rar = textOf('koni_rar').single;
+    expect(rar, contains('Grzegorz Antoniak'));
+    expect(rar, contains('Tim Kientzle'));
+    expect(rar, contains('Nicholas Waples'));
+    expect(textOf('Komga').single, contains('Gauthier Roebroeck'));
   });
 
   testWidgets('Android: the AndroidX / Kotlin libraries with the Apache 2.0 terms; not on other platforms', (tester) async {
