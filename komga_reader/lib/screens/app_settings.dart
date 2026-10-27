@@ -47,7 +47,7 @@ extension SettingsSectionLabel on SettingsSection {
 
 extension SettingsPageInfo on SettingsPage {
   String get label => switch (this) {
-        SettingsPage.reading => 'Reading',
+        SettingsPage.reading => 'All Book Types', // (user, 2026-10-27; it said Reading, as its heading does)
         SettingsPage.comics => 'Comics',
         SettingsPage.webtoons => 'Webtoons',
         SettingsPage.ebooks => 'eBooks',
@@ -261,8 +261,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         screenOnRow(s),
         if (canRotate) rotationRow(s), // comics and eBooks alike (user, 2026-10-21)
       ]),
-      SettingsGroup(title: 'Over the page', children: overPageRows(s)),
-      SettingsGroup(title: 'Moving on', children: [
+      SettingsGroup(title: 'Display', children: overPageRows(s)), // (user, 2026-10-27; "Over the page")
+      SettingsGroup(title: 'Behaviour', children: [ // (user, 2026-10-27; "Moving on")
         SegmentRow<MidBook>(
           // (user, 2026-10-21: the question as the title, no description; 2026-10-22: the reader's own Next book icon
           // in it, "not the emoji")
@@ -286,17 +286,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Text('The defaults for every series; a series can override them in the reader (Comic settings).',
             style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages - defaults', synced: true, children: layoutRows(p, s.setDefault)),
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: layoutRows(p, s.setDefault)),
       SettingsGroup(title: 'Image - defaults', synced: true, children: [
         ...imageRows(p, s.setDefault),
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
       ]),
-      SettingsGroup(title: 'Turning pages', children: [
-        pageTurnRow(s),
-        doubleTapRow(s),
-      ]),
+      // (user, 2026-10-27: "Turning pages" -> Appearance, its Double-tap to zoom into Controls)
+      SettingsGroup(title: 'Appearance', children: [pageTurnRow(s)]),
       SettingsGroup(title: 'Controls', children: [
+        doubleTapRow(s),
         positionTextRow(s, BookKind.comics),
       ]),
       SettingsGroup(title: 'Series with their own settings', synced: true, children: [
@@ -533,9 +532,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final noServer = CombinedSource.noServerOf(api);
     return [
       if (local != null) ...[
+        // (on top: not between two groups - user, 2026-10-27)
+        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
         LocalLibrariesGroup(local: local),
         LocalLibrariesGroup(local: local, network: true),
-        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
       ] else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
       if (noServer)
