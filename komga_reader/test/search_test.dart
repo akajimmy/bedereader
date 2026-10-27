@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/screens/search.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -150,7 +150,7 @@ void main() {
   test('offline search looks through the downloaded titles', () async {
     final dir = await Directory.systemTemp.createTemp('komga_search_test');
     try {
-      final api = OfflineKomga(await buildStore(dir));
+      final api = DownloadsSource(await buildStore(dir));
       List<String> ids(Map<String, dynamic> r) => [for (final i in r['content'] as List) i['id'] as String];
       expect(ids(await api.searchSeries('surf')), ['S1']);
       expect(ids(await api.searchBooks('spider')), ['B3']); // matches the series title of the book

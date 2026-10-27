@@ -12,10 +12,10 @@ import '../synced_ids.dart';
 import '../pins.dart';
 import '../settings.dart';
 import 'downloads.dart';
-import 'offline_komga.dart';
-import '../source.dart';
+import 'downloads_source.dart';
+import '../book_source.dart';
 
-/// Online or offline. Offline, the whole app runs on [OfflineKomga] - the downloaded books only - and nothing
+/// Online or offline. Offline, the whole app runs on [DownloadsSource] - the downloaded books only - and nothing
 /// talks to the server: downloads hold, settings and pins wait to sync.
 ///
 /// Two ways in (user's decisions, 2026-09-28):
@@ -45,7 +45,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   /// Komga answering doesn't count as "reachable again" - it would only refuse the key again (user, 2026-09-29).
   bool keyRefused = false;
   bool keyPromptPending = false;
-  OfflineKomga? _offline;
+  DownloadsSource? _offline;
   Timer? _poll;
   bool _observing = false;
 
@@ -57,10 +57,12 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   bool get hasDownloads => Downloads.instance.store?.books.values.any((e) => e['state'] == 'done') ?? false;
 
   /// The connection every screen should use right now.
-  Source get api {
+  BookSource get api {
     final store = Downloads.instance.store;
     if (!offline || store == null) return online!;
-    if (_offline == null || _offline!.store != store) _offline = OfflineKomga(store, baseUrl: online?.baseUrl ?? 'offline');
+    if (_offline == null || _offline!.store != store) {
+      _offline = DownloadsSource(store, baseUrl: online?.baseUrl ?? 'offline');
+    }
     return _offline!;
   }
 

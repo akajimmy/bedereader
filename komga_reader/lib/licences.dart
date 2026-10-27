@@ -36,7 +36,7 @@ const aiDisclosure =
 /// settings package) - Apache 2.0, whose terms have to go with the app. Flutter's own notices don't cover them.
 const androidLibraries = ['AndroidX libraries (activity, annotation, appcompat, core, datastore, fragment, lifecycle, '
     'preference, window and others)', 'Kotlin standard library', 'kotlinx.coroutines'];
-const androidLibrariesNotice = 'Included in the Android version. Copyright The Android Open Source Project; '
+const androidLibrariesNotice = 'Included in the Android version. Copyright The Android Open BookSource Project; '
     'JetBrains s.r.o. and Kotlin Programming Language contributors. Licensed under the Apache License, Version 2.0:';
 
 var _registered = false;

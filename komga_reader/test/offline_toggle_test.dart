@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/widgets/drawer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -35,7 +35,7 @@ void main() {
     expect(conn.api, same(online));
 
     await conn.setForcedOffline(true);
-    expect(conn.api, isA<OfflineKomga>());
+    expect(conn.api, isA<DownloadsSource>());
     expect(Downloads.instance.hold, isTrue); // nothing talks to the server
     expect((await SharedPreferences.getInstance()).getBool('offline.forced'), isTrue);
 

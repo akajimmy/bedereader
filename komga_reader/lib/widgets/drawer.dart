@@ -10,13 +10,13 @@ import '../screens/downloads_screen.dart';
 import '../screens/about.dart';
 import '../screens/library.dart';
 import '../side_menu.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// Side navigation: Home, each library, sign out. Home is always the root route, so every entry first pops back to it.
 class AppDrawer extends StatefulWidget {
   const AppDrawer({super.key, required this.api, VoidCallback? onSignOut, this.docked = false})
       : _onSignOut = onSignOut;
-  final Source api;
+  final BookSource api;
   final VoidCallback? _onSignOut;
   VoidCallback get onSignOut => _onSignOut ?? appSignOut;
 
@@ -262,11 +262,11 @@ mixin SideMenuHere<T extends StatefulWidget> on State<T> {
 
   /// The screen, with the side menu kept open beside it when it's pinned (on a wide screen) - as on Home and the
   /// libraries (user, 2026-09-30: pinned, it vanished on a series). [page] gets whether it's docked: then no drawer.
-  Widget withSideMenu(Source api, Widget Function(bool docked) page) =>
+  Widget withSideMenu(BookSource api, Widget Function(bool docked) page) =>
       SideMenuFrame(api: api, page: (context, docked) => page(docked));
 
   /// The slide-out menu - none when it's docked beside the page.
-  Widget? menuDrawer(Source api, {bool docked = false}) => docked ? null : AppDrawer(api: api);
+  Widget? menuDrawer(BookSource api, {bool docked = false}) => docked ? null : AppDrawer(api: api);
   void onMenuChanged(bool open) { if (!open) _menuEdge.currentState?.restore(); }
   Widget menuEdge(Widget body) => DrawerEdge(key: _menuEdge, scaffoldKey: menuScaffold, child: body);
 }
@@ -275,7 +275,7 @@ mixin SideMenuHere<T extends StatefulWidget> on State<T> {
 /// right) when pinned on a wide screen. [build] gets whether it's docked, to leave out the menu button / drawer.
 class SideMenuFrame extends StatelessWidget {
   const SideMenuFrame({super.key, required this.api, this.onSignOut, required this.page});
-  final Source api;
+  final BookSource api;
   final VoidCallback? onSignOut; // null: the app-wide one (AppDrawer.appSignOut)
   final Widget Function(BuildContext context, bool docked) page;
 

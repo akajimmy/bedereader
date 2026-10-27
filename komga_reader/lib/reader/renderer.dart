@@ -2,7 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../settings.dart' show BookKind;
 import 'position_row.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// What a renderer - the pages of one kind of book (comic pages, an EPUB) - may ask of the Reader it's in (the one
 /// Reader, user 2026-10-07; reports\plan-reader-renderer-2026-10-07.md). The Reader implements it; the renderer
@@ -13,7 +13,7 @@ abstract class ReaderHost {
   BuildContext get context;
   bool get mounted;
   TickerProvider get vsync;
-  Source get api;
+  BookSource get api;
 
   /// The controls are up (the page's own gestures wait).
   bool get controlsUp;
@@ -82,7 +82,7 @@ abstract class Renderer extends ChangeNotifier {
   Renderer(this.host);
 
   final ReaderHost host;
-  Source get api => host.api;
+  BookSource get api => host.api;
 
   /// The kind of book this renderer reads: its reading settings are that kind's (KindPrefs).
   BookKind get kind;

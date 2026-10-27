@@ -23,7 +23,7 @@ import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
 import 'remote_test.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
@@ -91,7 +91,7 @@ extension SettingsPageInfo on SettingsPage {
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading,
       this.only});
-  final Source api;
+  final BookSource api;
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.

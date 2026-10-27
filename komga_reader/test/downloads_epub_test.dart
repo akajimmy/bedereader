@@ -7,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/progress.dart';
 import 'package:komga_reader/epub/source.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -92,7 +92,7 @@ void main() {
     expect(await d.store!.file('B1/book.epub').length(), api.file.length);
     expect(d.usedBytes, api.file.length);
 
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     final f = offline.epubFile('B1')!;
     final info = await FileEpubSource(f).info();
     expect(info.title, 'Sourcery', reason: 'the downloaded file reads');
@@ -115,7 +115,7 @@ void main() {
     await d.attach(api, root: dir);
     await d.add([book('B1', 1)]);
     await settle(d);
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     expect(await offline.epubProgression('B1'), isNull);
     final saved = {
       'device': {'id': 'x', 'name': 'BeDeReader (Android)'},
@@ -142,7 +142,7 @@ void main() {
     await d.attach(api, root: dir);
     await d.add([book('B1', 1)]);
     await settle(d);
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     final at = await EpubProgress(offline, 'B1').load((await offline.book('B1'))!);
     expect(at!.path, 'OEBPS/Text/ch2.xhtml');
     expect(at.progression, 0.75);

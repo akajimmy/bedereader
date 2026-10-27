@@ -23,13 +23,13 @@ import 'open_book.dart';
 import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// Start screen: Continue reading, On deck, Pinned views (long-press to rename or unpin) and a button per library;
 /// each section can be shown or hidden from the ⋮ menu. The side menu (☰) has the same library links.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.api, required this.onSignOut});
-  final Source api;
+  final BookSource api;
   final VoidCallback onSignOut;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -52,7 +52,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   bool _loading = true;
   Object? _error; // shown through lib/errors.dart
 
-  Source get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void initState() {

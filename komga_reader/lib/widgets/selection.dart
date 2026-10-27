@@ -5,7 +5,7 @@ import '../offline/downloads.dart';
 import '../screens/actions.dart';
 import 'error_text.dart';
 import 'fullscreen_exit.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// Multi-select state for a book or series grid (one kind at a time: a screen that shows both ends the selection
 /// when it switches). While [active], tapping (or OK on) a tile toggles it instead of opening it.
@@ -47,7 +47,7 @@ class Selection extends ChangeNotifier {
 /// Top bar while selecting: close, "N selected", select all (everything loaded), mark read, mark unread, delete.
 /// [all] gives the books currently loaded in the grid; [onChanged] refreshes the grid after an action.
 /// [series]: a series grid - select all, download, mark read, mark unread (no delete).
-PreferredSizeWidget selectionAppBar(BuildContext context, Source api, Selection sel,
+PreferredSizeWidget selectionAppBar(BuildContext context, BookSource api, Selection sel,
     {required List<dynamic> Function() all, required VoidCallback onChanged, bool series = false}) {
   final none = sel.count == 0;
   Future<void> run(Future<void> Function() action) async {

@@ -10,13 +10,13 @@ import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
 import 'open_book.dart';
 import 'series.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// One book's details: cover, title, series and number, publisher, release date, pages, read status, summary and
 /// credits (grouped by role), with Read / Mark read or unread / View series. Fetched fresh from Komga.
 class BookDetailsScreen extends StatefulWidget {
   const BookDetailsScreen({super.key, required this.api, required this.book, this.readListId, this.showViewSeries = true});
-  final Source api;
+  final BookSource api;
   final dynamic book;
   final String? readListId; // opened from a read list: Read continues through that list
   final bool showViewSeries; // hidden when already coming from that series
@@ -32,7 +32,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   dynamic _series;
   Object? _error; // shown through lib/errors.dart
 
-  Source get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void initState() {
