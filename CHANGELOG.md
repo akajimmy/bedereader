@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.6.0
+
+### Build 164 - 2026-10-27
+
 **Changed**
 
 - Offline mode covers network libraries too: offline, a network library shows only its books with a copy on the device (downloaded, or cached when opened), isn't scanned, and its downloads wait - nothing is read from a share. The Offline mode switch shows when there's Komga or a network library, not with only folders on the device (it stayed in the side menu after signing out); in No server mode it's kept as you left it.
@@ -21,8 +25,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 - Big CBRs in a network library open much faster the first time: measuring the pages' sizes read the whole book over the network (a 266 MB one took 13 s to its first page on the tablet), now only the start of each page.
 - A comic in a local or network library replaced by another file with as many pages kept the old file's page layout (a two-page spread could show as one page, or the other way round): its pages are measured again.
-
-## 1.6.0
 
 ### Build 163 - 2026-10-27
 
