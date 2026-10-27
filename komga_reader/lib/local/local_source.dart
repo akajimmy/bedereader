@@ -194,6 +194,7 @@ class LocalSource extends CatalogueSource {
           changed.value++;
           contentChanged.value++;
         }
+        await sweepPosters().catchError((Object _) {});
       } finally {
         scanning.value = null;
         found.value = null;
@@ -406,6 +407,20 @@ class LocalSource extends CatalogueSource {
     if (b == null) return '';
     final sign = stableId('${b.size}|${b.modified.toUtc().toIso8601String()}');
     return '${_posters.path}${Platform.pathSeparator}$id-$sign.png';
+  }
+
+  /// The posters no book has now let go - removed books and libraries, and files replaced since (their old poster):
+  /// the folder only grew (the experiment's review). A library out of reach keeps its books, so its posters.
+  Future<void> sweepPosters() async {
+    if (!await _posters.exists()) return;
+    final wanted = {for (final id in _books.keys) bookThumb(id)};
+    await for (final f in _posters.list()) {
+      if (f is File && f.path.endsWith('.png') && !wanted.contains(f.path)) {
+        try {
+          await f.delete();
+        } catch (_) {} // (in use: the next scan)
+      }
+    }
   }
 
   /// A series' poster: its first book's.

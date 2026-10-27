@@ -228,6 +228,29 @@ void main() {
     expect(s.bookThumb(id), isNot(before));
   });
 
+  test("the posters no book has now are deleted at the next scan - a replaced file's old one, a removed book's; the "
+      "others stay (the folder only grew - the experiment's review)", () async {
+    final s = await open();
+    await s.rescan();
+    final books = [for (final b in (await s.books(size: 100))['content'] as List) b as Map];
+    final saga2 = books.firstWhere((b) => (b['name'] as String).startsWith('Saga #2'))['id'] as String;
+    final annual = books.firstWhere((b) => (b['name'] as String).startsWith('Saga Annual'))['id'] as String;
+    final posters = <String, File>{};
+    for (final b in books) {
+      final id = b['id'] as String;
+      posters[id] = File(s.bookThumb(id));
+      await posters[id]!.parent.create(recursive: true);
+      await posters[id]!.writeAsBytes([1]);
+    }
+    await put('Saga (2012)/Saga #2 (2012).cbz', cbz(pages: 6));
+    await File('${root.path}/Saga (2012)/Saga Annual.cbz').delete();
+    await s.rescan();
+    expect(await posters[saga2]!.exists(), isFalse, reason: "the replaced file's old poster");
+    expect(await posters[annual]!.exists(), isFalse, reason: "the removed book's");
+    expect([for (final MapEntry(:key, :value) in posters.entries) if (key != saga2 && key != annual) value.existsSync()],
+        everyElement(isTrue));
+  });
+
   test('libraries changed: one removed takes its books off - its progress stays; the screens are told only when '
       'something changed', () async {
     final s = await open();
