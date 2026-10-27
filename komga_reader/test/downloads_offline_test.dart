@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/sync.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -96,7 +96,7 @@ void main() {
         'http://other.example:25600');
     expect(d.isDownloaded('B1'), isFalse, reason: "A's book isn't shown on B");
     expect(conn.hasDownloads, isFalse);
-    expect(await OfflineKomga(d.store!).libraries(), isEmpty, reason: 'offline on B: nothing of A');
+    expect(await DownloadsSource(d.store!).libraries(), isEmpty, reason: 'offline on B: nothing of A');
     expect(b.asked, hasLength(askedOnAttach),
         reason: "B's sync never saw A's unsent progress, so couldn't call it gone");
 
@@ -134,7 +134,8 @@ void main() {
     expect(d.store!.books['B1']!['state'], 'partial');
     expect(partFiles('B1'), isFalse);
     expect(await d.store!.file('B1/pages/0001.jpg').length(), 100, reason: 'the page it had is kept');
-    expect(await OfflineKomga(d.store!).book('B1'), isNull, reason: 'offline, a part-downloaded book is not offered');
+    expect(await DownloadsSource(d.store!).book('B1'), isNull,
+        reason: 'offline, a part-downloaded book is not offered');
 
     api.onPage = null;
     await conn.setForcedOffline(false);

@@ -10,14 +10,14 @@ import '../widgets/error_text.dart';
 import 'book_details.dart';
 import 'library.dart';
 import 'series.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// One series' details (series menu > Details): poster, title, publisher, status, first release, books and how many
 /// are read, language, age rating, genres and tags, summary, and the credits of all its books grouped by role -
 /// with Open series (hidden when already in it). Fetched fresh from Komga; pull down to refresh.
 class SeriesDetailsScreen extends StatefulWidget {
   const SeriesDetailsScreen({super.key, required this.api, required this.series, this.showOpen = true});
-  final Source api;
+  final BookSource api;
   final dynamic series;
   final bool showOpen;
   @override
@@ -28,7 +28,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   late dynamic _series = widget.series;
   Object? _error; // shown through lib/errors.dart
 
-  Source get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void initState() {

@@ -9,7 +9,7 @@ import '../epub/progress.dart' show komgaEpubPage;
 import 'connection.dart';
 import 'downloads.dart';
 import 'store.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// A book whose progress had changed both here (offline) and on Komga: what each side had, and which was kept.
 class ProgressConflict {
@@ -162,7 +162,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Downloaded copies take Komga's current progress (one request per series), except books with unsent changes.
-  Future<void> _refresh(Source api, OfflineStore store) async {
+  Future<void> _refresh(BookSource api, OfflineStore store) async {
     final bySeries = <String, List<String>>{};
     store.books.forEach((id, e) {
       final s = (e['book'] as Map?)?['seriesId'] as String?;
@@ -245,7 +245,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Written to Komga while online: the downloaded copy follows, and it's the new baseline.
-  void _mirror(Source api, ProgressWrite w) {
+  void _mirror(BookSource api, ProgressWrite w) {
     final store = _store;
     if (store == null || !identical(api, _conn.online)) return;
     final ids = w.bookId != null
@@ -277,7 +277,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
   /// [place]: an EPUB's exact place read here (its stored progression): sent as it is - Komga works its read progress
   /// out from it, and the book reopens there on every device; sent as a page, only the page moved, and Komga's place
   /// stayed where it was.
-  static Future<void> _send(Source api, String id, Map<String, dynamic> p, {Map? place}) async {
+  static Future<void> _send(BookSource api, String id, Map<String, dynamic> p, {Map? place}) async {
     if (p['none'] == true) {
       await api.markUnread(id);
     } else if (p['completed'] == true) {
@@ -291,7 +291,7 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
 
   /// Komga's exact place for an EPUB (null: none), and whether Komga could say (if not: null, the page alone is near
   /// enough - the place here would be the one Komga's replaces, S1).
-  static Future<(Map?, bool)> _komgaPlace(Source api, String id) async {
+  static Future<(Map?, bool)> _komgaPlace(BookSource api, String id) async {
     try {
       return (await api.epubProgression(id), true);
     } on KomgaUnreachable {

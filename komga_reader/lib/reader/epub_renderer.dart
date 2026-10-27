@@ -23,7 +23,7 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../highlights.dart';
 import '../offline/downloads.dart';
-import '../offline/offline_komga.dart';
+import '../offline/downloads_source.dart';
 import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -39,7 +39,7 @@ import 'reader_bars.dart';
 import 'renderer.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// An EPUB ready to show (from [EpubRenderer.prepare]).
 class _Prepared {
@@ -121,8 +121,8 @@ class EpubRenderer extends Renderer {
   /// Where book [id]'s files come from: a downloaded EPUB's file - offline (its progress kept on the device, sent to
   /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
   /// still go to Komga as before); else Komga.
-  static EpubSource sourceFor(Source api, String id) {
-    final file = api is OfflineKomga ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
+  static EpubSource sourceFor(BookSource api, String id) {
+    final file = api is DownloadsSource ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
 

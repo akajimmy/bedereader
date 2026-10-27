@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/view_filter.dart';
@@ -20,7 +20,7 @@ List<String> ids(Map<String, dynamic> page) => [for (final b in page['content'] 
 
 // ---- from offline_filter_test.dart
 
-// The filters on downloaded books (offline_komga.dart): the store keeps Komga's book and series JSON, and the
+// The filters on downloaded books (downloads_source.dart): the store keeps Komga's book and series JSON, and the
 // filtered views and the panel's value lists are made from it.
 
 /// Komga's series JSON, as a download stores it.
@@ -42,12 +42,12 @@ const series = {
 void main() {
   late Directory dir;
   late OfflineStore store;
-  late OfflineKomga api;
+  late DownloadsSource api;
 
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('komga_offline_test');
     store = await buildStore(dir);
-    api = OfflineKomga(store);
+    api = DownloadsSource(store);
   });
   tearDown(() => deleteTemp(dir));
 
@@ -141,7 +141,7 @@ void main() {
   group('offline filter', () {
     late Directory dir;
     late OfflineStore store;
-    late OfflineKomga api;
+    late DownloadsSource api;
 
     /// support/offline_store.dart's library, with metadata:
     ///   Silver Surfer (S1, Marvel, Cosmic + Action, ENDED, released 2014): B1 2014 Slott (writer) / Allred (penciller),
@@ -167,7 +167,7 @@ void main() {
       dir = await Directory.systemTemp.createTemp('komga_offline_filter_test');
       store = await buildStore(dir);
       await addMetadata();
-      api = OfflineKomga(store);
+      api = DownloadsSource(store);
     });
     tearDown(() => deleteTemp(dir));
 

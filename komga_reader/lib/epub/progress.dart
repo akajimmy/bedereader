@@ -11,7 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../source.dart';
+import '../book_source.dart';
 
 String get platformName => switch (defaultTargetPlatform) {
       TargetPlatform.android => 'Android',
@@ -71,7 +71,7 @@ class EpubKomgaPlace {
 
 class EpubProgress {
   EpubProgress(this.api, this.bookId);
-  final Source api;
+  final BookSource api;
   final String bookId;
 
   List<dynamic>? _positions;

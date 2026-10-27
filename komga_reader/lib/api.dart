@@ -6,13 +6,13 @@ import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 import 'hidden_libraries.dart';
-import 'source.dart';
+import 'book_source.dart';
 import 'view_filter.dart';
 
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
 /// override changes made in the web client.
-class Komga implements Source {
+class Komga implements BookSource {
   /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
   Komga(String baseUrl, this.apiKey, {http.Client? client})
       : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),

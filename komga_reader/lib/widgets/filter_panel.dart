@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../view_filter.dart';
 import 'focus_style.dart';
 import 'setting_rows.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 /// The filter panel (user, 2026-10-08; mockups reports\10-08-filter-mockups.html, section 3): the funnel in a view's
 /// top bar opens it, the active filters show as chips under the bar. The filters themselves, the requests and the
@@ -17,7 +17,7 @@ import '../source.dart';
 class FilterScope {
   const FilterScope({required this.api, required this.seriesView, this.libraryId, this.collectionId, this.seriesId,
       this.readListId, required this.kind, required this.count});
-  final Source api;
+  final BookSource api;
   final bool seriesView;
   final String? libraryId, collectionId, seriesId, readListId;
   final Future<ViewKind> kind;

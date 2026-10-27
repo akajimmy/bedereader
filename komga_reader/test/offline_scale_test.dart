@@ -1,11 +1,11 @@
-// A big library browsed from the store (offline_komga.dart): each series' books were looked for by walking every
+// A big library browsed from the store (downloads_source.dart): each series' books were looked for by walking every
 // book, series x books - a library of 1,098 series and 8,843 books took 11 s to list on the tablet (the local
 // libraries' tests, 2026-10-26). Counted here: how many times a call walks the books.
 import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 import 'package:komga_reader/view_filter.dart';
 
@@ -65,7 +65,7 @@ void main() {
       // started (its first book read): On deck offers its next
       store.progress['B$s-1'] = {'page': 1, 'completed': true};
     }
-    final api = OfflineKomga(store);
+    final api = DownloadsSource(store);
 
     store.walked.walks = 0;
     final all = await api.series(libraryId: 'L1', size: 100);
@@ -102,7 +102,7 @@ void main() {
         };
       }
     }
-    final api = OfflineKomga(store);
+    final api = DownloadsSource(store);
 
     store.walked.walks = 0;
     final lists = (await api.readLists())['content'] as List;

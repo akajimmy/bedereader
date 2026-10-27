@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../errors.dart';
-import '../offline/offline_komga.dart';
-import '../source.dart';
+import '../offline/downloads_source.dart';
+import '../book_source.dart';
 
 enum ServerState { checking, ok, warning, down }
 
@@ -11,7 +11,7 @@ enum ServerState { checking, ok, warning, down }
 /// is accepted. Amber: answered but refused the key, took over 3 s, or offline mode. Red: no answer.
 class ServerStatus extends StatefulWidget {
   const ServerStatus({super.key, required this.api});
-  final Source api;
+  final BookSource api;
   @override
   State<ServerStatus> createState() => _ServerStatusState();
 }
@@ -27,7 +27,7 @@ class _ServerStatusState extends State<ServerStatus> {
   }
 
   Future<void> _check() async {
-    if (widget.api is OfflineKomga) {
+    if (widget.api is DownloadsSource) {
       setState(() { _state = ServerState.warning; _detail = 'Offline mode - showing downloaded books'; });
       return;
     }

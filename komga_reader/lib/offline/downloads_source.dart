@@ -6,7 +6,7 @@ import 'package:flutter/painting.dart' show FileImage, ImageProvider;
 import '../api.dart';
 import '../hidden_libraries.dart';
 import '../epub/progress.dart' show komgaEpubPage;
-import '../source.dart';
+import '../book_source.dart';
 import '../view_filter.dart';
 import 'catalogue.dart';
 import 'downloads.dart';
@@ -26,10 +26,10 @@ class NotAvailableOffline implements Exception {
 /// what only Komga can give (settings sync, an EPUB's manifest or file, a poster by its address) throws
 /// [KomgaUnreachable], so it's asked again once back online.
 ///
-/// A [Source] of its own, not a Komga that can't connect (it was one, with an HTTP client that always failed: what it
-/// didn't answer itself went to it); each question is answered from one [Catalogue] of the downloads.
-class OfflineKomga implements Source {
-  OfflineKomga(this.store, {this.baseUrl = 'offline'});
+/// A [BookSource] of its own, not a Komga that can't connect (it was one, with an HTTP client that always failed:
+/// what it didn't answer itself went to it); each question is answered from one [Catalogue] of the downloads.
+class DownloadsSource implements BookSource {
+  DownloadsSource(this.store, {this.baseUrl = 'offline'});
   final OfflineStore store;
 
   /// The server the downloads came from (what they're kept under) - 'offline' when not known.

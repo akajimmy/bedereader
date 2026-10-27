@@ -9,7 +9,7 @@ import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
-import '../offline/offline_komga.dart' show NotAvailableOffline;
+import '../offline/downloads_source.dart' show NotAvailableOffline;
 import '../epub/source.dart';
 import '../reader/comic_renderer.dart';
 import '../reader/epub_renderer.dart';
@@ -27,7 +27,7 @@ import '../widgets/error_text.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
 import 'open_book.dart' show isEpub;
-import '../source.dart';
+import '../book_source.dart';
 
 export '../reader/comic_renderer.dart' show trimPictures;
 export '../reader/curl_turns.dart' show CurlLayer;
@@ -55,7 +55,7 @@ class ReaderScreen extends StatefulWidget {
 
   const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false,
       this.epubSource, this.saveProgress = true});
-  final Source api;
+  final BookSource api;
   final dynamic book;
   final String? readListId; // continue within this read list at the end of the book
 
@@ -118,7 +118,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
 
   @override
-  Source get api => widget.api;
+  BookSource get api => widget.api;
   int get _index => _r.place;
   int get _last => _r.last;
   int get _count => _r.last + 1; // the book's pages

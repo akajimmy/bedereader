@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'app_log.dart';
-import 'offline/offline_komga.dart' show NotAvailableOffline;
+import 'offline/downloads_source.dart' show NotAvailableOffline;
 
 /// Every error the app shows goes through here: plain words - what happened and what to do - never the raw error
 /// text (user, 2026-09-29: "completely unparseable to your average human"). The raw text isn't lost: it's behind

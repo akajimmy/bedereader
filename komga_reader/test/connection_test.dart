@@ -10,7 +10,7 @@ import 'package:komga_reader/content_changed.dart';
 import 'package:komga_reader/errors.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/widgets/connection_prompt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -115,7 +115,7 @@ void main() {
 
     conn.useDownloads();
     expect(conn.offline, isTrue);
-    expect(conn.api, isA<OfflineKomga>());
+    expect(conn.api, isA<DownloadsSource>());
     expect(d.hold, isTrue);
 
     await conn.check(); // still down

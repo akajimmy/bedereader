@@ -6,11 +6,11 @@ import 'api.dart' show ReadFilter;
 import 'view_filter.dart';
 
 /// Where the books come from, as the screens see it: Komga's server (lib/api.dart), and - offline - the downloads
-/// (lib/offline/offline_komga.dart). What only talking to Komga over HTTP needs (its API key, headers, page URLs,
+/// (lib/offline/downloads_source.dart). What only talking to Komga over HTTP needs (its API key, headers, page URLs,
 /// making a key, the reachability check) stays on [Komga]: sign-in, the connection and the app's start hold one.
 /// A source that can't do something only Komga does (deleting files, renaming, its settings) answers as the offline
 /// source does: not available.
-abstract interface class Source {
+abstract interface class BookSource {
   /// The server it is, or stands in for (the offline source: the server its books came from) - what downloads, the
   /// error messages and the reader's EPUB cache are kept under.
   String get baseUrl;

@@ -7,7 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'xhtml.dart';
-import '../source.dart';
+import '../book_source.dart';
 
 class TocEntry {
   const TocEntry(this.title, this.href, this.depth);
@@ -54,7 +54,7 @@ String resolvePath(String base, String href) {
 /// The book through Komga's Readium manifest and resource API.
 class KomgaEpubSource implements EpubSource {
   KomgaEpubSource(this.api, this.bookId);
-  final Source api;
+  final BookSource api;
   final String bookId;
 
   /// Komga writes hrefs as full URLs (`.../api/v1/books/ID/resource/OEBPS/x.xhtml`): the part after /resource/.
