@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../book_title.dart';
 import '../combined_source.dart';
 import '../errors.dart';
+import '../local/book_names.dart' show isLocalId;
 import '../local/library_fs.dart' show splitUnc;
 import '../local/local_source.dart';
 import '../offline/downloads.dart';
@@ -123,8 +124,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     final m = _book['metadata'] ?? {};
     final rp = _book['readProgress'];
     final completed = rp?['completed'] == true;
-    final pages = _book['media']?['pagesCount'] ?? 0;
-    final status = completed ? 'Read' : rp != null ? 'In progress · page ${rp['page']} of $pages' : 'Unread';
+    final (status, pages) = readingFacts(_book as Map);
     final summary = ((m['summary'] as String?)?.trim().isNotEmpty ?? false)
         ? m['summary'] as String
         : ((_series?['metadata']?['summary'] as String?)?.trim() ?? '');
@@ -154,7 +154,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
       const SizedBox(height: 12),
       detailsFact('Publisher', _series?['metadata']?['publisher'] as String?),
       detailsFact('Released', detailsDate(m['releaseDate'] as String?, precision: m['releaseDatePrecision'] as String?)),
-      detailsFact('Pages', pages == 0 ? null : '$pages'),
+      detailsFact('Pages', pages == null ? null : '$pages'),
       detailsFact('Status', status),
       // where it comes from, where its file is, what kind of file (user, 2026-10-26)
       detailsFactRow('Source', SourceLine(originOf(api, id), url: _book['url'] as String?)),
@@ -248,6 +248,23 @@ List<Widget> creditsSection(List? authors) {
 String _roleLabel(String role, int n) {
   final base = role.isEmpty ? 'Other' : role[0].toUpperCase() + role.substring(1);
   return n > 1 && !base.endsWith('s') ? '${base}s' : base;
+}
+
+/// A book's reading status and its page count, as its details say them (null: no page count to show). A local or
+/// network EPUB's progress is a share of the book, out of 100 - not pages (tablet, 2026-10-27: "Pages 100"): said as
+/// a share, and no page count.
+(String, int?) readingFacts(Map book) {
+  final rp = book['readProgress'] as Map?;
+  final pages = (book['media']?['pagesCount'] as num?)?.toInt() ?? 0;
+  final byShare = isEbook(book) && isLocalId('${book['id']}');
+  final status = rp?['completed'] == true
+      ? 'Read'
+      : rp == null
+          ? 'Unread'
+          : byShare
+              ? 'In progress · ${rp['page']}%'
+              : 'In progress · page ${rp['page']} of $pages';
+  return (status, pages == 0 || byShare ? null : pages);
 }
 
 /// [precision]: how much of the date is known - 'year' ("2012"), 'month' ("March 2012"), else the whole date. Local

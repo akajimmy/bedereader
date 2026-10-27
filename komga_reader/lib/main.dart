@@ -166,6 +166,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
           await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
       local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
       Shares.instance.beforeReconnect = local.closeFiles; // a share's new login: its open books opened again
+      // the network books' downloads, there whether or not Komga is (No server mode too)
+      await Downloads.instance.attachLocal(local);
       // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
       // or Keep it in case it comes back
       local.missing.addListener(() {

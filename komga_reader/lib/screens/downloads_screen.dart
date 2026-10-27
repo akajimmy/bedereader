@@ -34,8 +34,9 @@ class _Item {
   _Item(this.id, Map<String, dynamic> e, Map<String, dynamic>? progress)
       : book = e['book'] as Map,
         bytes = (e['bytes'] as num? ?? 0).toInt(),
-        epub = e['epubFile'] != null,
-        pages = (e['pages'] as List?)?.length ?? 0,
+        epub = e['epubFile'] != null || (e['book'] as Map)['media']?['mediaProfile'] == 'EPUB',
+        // (a network book's: its file whole - its page count as listed)
+        pages = (e['pages'] as List?)?.length ?? (((e['book'] as Map)['media']?['pagesCount'] as num?)?.toInt() ?? 0),
         gone = e['gone'] == true,
         read = progress?['completed'] == true && progress?['none'] != true,
         started = progress?['none'] != true && ((progress?['page'] as num?) ?? 0) > 0;
@@ -95,11 +96,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
 
   /// Everything downloaded (finished downloads only).
   List<_Item> _downloaded() {
-    final store = d.store;
-    if (store == null) return const [];
+    final store = d.store, network = d.localStore;
     return [
-      for (final e in store.books.entries)
-        if (e.value['state'] == 'done' && e.value['cache'] != true) _Item(e.key, e.value, store.progress[e.key]),
+      for (final e in store?.books.entries ?? const <MapEntry<String, Map<String, dynamic>>>[])
+        if (e.value['state'] == 'done' && e.value['cache'] != true) _Item(e.key, e.value, store!.progress[e.key]),
+      // the network books' (their reading progress is the local libraries')
+      for (final e in network?.books.entries ?? const <MapEntry<String, Map<String, dynamic>>>[])
+        if (e.value['state'] == 'done' && e.value['cache'] != true) _Item(e.key, e.value, d.localProgressOf(e.key)),
     ];
   }
 
@@ -177,7 +180,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
             ),
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
       // edge behind it (user, 2026-10-07)
-            body: SafeArea(top: false, child: !d.ready
+            body: SafeArea(top: false, child: !d.anyReady
                 ? const Center(
                     child: Text('Downloads aren\'t available on this device', style: TextStyle(color: _grey)))
                 : TabBarView(controller: _tabs, children: [_queueTab(), _manageTab(all)])),

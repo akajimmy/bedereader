@@ -135,7 +135,7 @@ class _AppDrawerState extends State<AppDrawer> {
               onChanged: (v) => Connection.instance.setForcedOffline(v),
             ),
           ),
-          if (Downloads.instance.ready)
+          if (Downloads.instance.anyReady)
             ListenableBuilder(
               listenable: Downloads.instance,
               builder: (context, _) {

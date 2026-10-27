@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../book_title.dart';
 import '../errors.dart';
+import '../local/book_names.dart' show isLocalId;
 import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
 import '../pins.dart';
@@ -34,7 +35,7 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
         if (showViewSeries)
           ListTile(leading: const Icon(Icons.collections_bookmark_outlined), title: const Text('View series'),
               onTap: () => Navigator.pop(ctx, 'series')),
-        if (dl.ready)
+        if (dl.canDownload(b['id'] as String)) // (Komga's, or a network book's - one on the device is here)
           dl.isDownloaded(b['id'] as String)
               ? ListTile(leading: const Icon(Icons.download_done), title: const Text('Remove download'),
                   subtitle: const Text('Frees the space on this device; the book stays on the server'),
@@ -63,9 +64,11 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
-        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
-            title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
-            onTap: () => Navigator.pop(ctx, 'delete')),
+        // (Komga's only: a local or network book's delete is in the backlog - user, 2026-10-27)
+        if (!isLocalId(b['id'] as String))
+          ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
+              title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
+              onTap: () => Navigator.pop(ctx, 'delete')),
       ])),
     ),
   );
@@ -529,7 +532,7 @@ Future<bool> confirmDelete(BuildContext context, String title, String body) asyn
 }
 
 /// "Download all" / "Download unread" entries for series and read-list menus (when downloads are available).
-List<Widget> downloadTiles(BuildContext ctx) => !Downloads.instance.ready
+List<Widget> downloadTiles(BuildContext ctx) => !Downloads.instance.anyReady
     ? const []
     : [
         ListTile(leading: const Icon(Icons.download_outlined), title: const Text('Download unread'),
