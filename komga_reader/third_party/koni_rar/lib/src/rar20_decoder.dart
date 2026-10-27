@@ -38,6 +38,14 @@ final class Rar20Decoder {
   /// Write cursor (also the total decoded byte count).
   int writePtr = 0;
 
+  /// BeDeReader: how far the last [decompressFile] read its input, in bits
+  /// (reads past its end are taken as zeros - more than its length: cut short).
+  int bitsRead = 0;
+
+  /// BeDeReader: only the start of a file is wanted ([RarReader.readHead]) - a
+  /// match is cut at its end, and a filter wholly past it is left out.
+  bool headOnly = false;
+
   final Uint8List _codeLength = Uint8List(_tableSize);
   bool _hdrRead = false;
 
@@ -96,6 +104,7 @@ final class Rar20Decoder {
       if (!_hdrRead) _readBlockHeader(bits);
       if (_lzFill(bits, mask, target)) _hdrRead = false; // end of block
     }
+    bitsRead = bits.bitPos;
   }
 
   void _readBlockHeader(Bits bits) {
@@ -253,7 +262,10 @@ final class Rar20Decoder {
       throw const FormatException('RAR2 match distance out of range');
     }
     if (writePtr + len > target) {
-      throw const FormatException('RAR2 match exceeds declared output size');
+      if (!headOnly) {
+        throw const FormatException('RAR2 match exceeds declared output size');
+      }
+      len = target - writePtr; // (BeDeReader: a file's start, cut mid-match)
     }
     for (var i = 0; i < len; i++) {
       output[writePtr & mask] = output[(writePtr - dist) & mask];

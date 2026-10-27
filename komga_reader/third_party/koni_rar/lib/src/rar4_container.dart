@@ -60,7 +60,19 @@ Future<Rar5Toc> parseRar4(
   var isVolume = false;
 
   while (offset + 7 <= source.length) {
-    final head = await source.read(offset, 7);
+    // BeDeReader: a block's header in one read (each read is a round trip on
+    // a network share - three per page made a big CBR's listing slow), more
+    // only for a header longer than that
+    final start = offset;
+    final window = await source.read(
+      start,
+      source.length - start < 512 ? source.length - start : 512,
+    );
+    Future<Uint8List> read(int from, int length) async =>
+        from - start + length <= window.length
+            ? Uint8List.sublistView(window, from - start, from - start + length)
+            : source.read(from, length);
+    final head = await read(offset, 7);
     final flags = head[3] | (head[4] << 8);
     final headerSize = head[5] | (head[6] << 8);
     final type = head[2];
@@ -82,7 +94,7 @@ Future<Rar5Toc> parseRar4(
           offset: offset,
         );
       }
-      final ext = await source.read(offset + 7, 4);
+      final ext = await read(offset + 7, 4);
       addSize = ext[0] | (ext[1] << 8) | (ext[2] << 16) | (ext[3] << 24);
     }
 
@@ -112,7 +124,7 @@ Future<Rar5Toc> parseRar4(
           offset: offset,
         );
       }
-      final headerBytes = await source.read(offset, headerSize);
+      final headerBytes = await read(offset, headerSize);
       // The packed data follows the header; its size is the header's own
       // pack_size field (the same bytes the HD_ADD_SIZE_PRESENT flag
       // points at), so the walk advances by headerSize + dataSize.

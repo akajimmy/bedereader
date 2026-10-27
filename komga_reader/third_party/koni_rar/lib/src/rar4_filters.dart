@@ -271,7 +271,14 @@ class Rar4Filters {
 
   /// Applies every scheduled filter in place over [output]. The file occupies
   /// `[fileBase, fileEnd)`; filter positions are absolute in that space.
-  void apply(Uint8List output, int fileBase, int fileEnd) {
+  /// BeDeReader: [headOnly] - the file decoded only to [fileEnd]: a filter
+  /// wholly past it is left out (one over it still throws).
+  void apply(
+    Uint8List output,
+    int fileBase,
+    int fileEnd, {
+    bool headOnly = false,
+  }) {
     if (_stack.isEmpty) return;
     final mem = Uint8List(_vmMemorySize + 4); // VM scratch: src‖dst
     var i = 0;
@@ -279,6 +286,10 @@ class Rar4Filters {
       final primary = _stack[i];
       final start = primary.blockStart;
       final blockLength = primary.blockLength;
+      if (headOnly && start >= fileEnd) {
+        i++;
+        continue;
+      }
       if (start < fileBase ||
           blockLength < 0 ||
           start + blockLength > fileEnd ||

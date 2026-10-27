@@ -260,10 +260,15 @@ final class Rar5Toc {
   static Future<({Uint8List bytes, int consumed, int sizeLen})?>
   _readHeaderBytes(ByteSource source, int offset, Rar5Keys? blockKey) async {
     if (blockKey == null) {
-      final prefix = await source.read(
+      // BeDeReader: the header in one read (each read is a round trip on a
+      // network share), more only for a header longer than that
+      final window = await source.read(
         offset,
-        offset + 11 <= source.length ? 11 : source.length - offset,
+        source.length - offset < 512 ? source.length - offset : 512,
       );
+      final prefix = window.length > 11
+          ? Uint8List.sublistView(window, 0, 11)
+          : window;
       final pr = ByteReader(prefix)..skip(4); // header CRC
       final before = pr.position;
       final int rawHeaderSize;
@@ -282,7 +287,9 @@ final class Rar5Toc {
           offset: offset,
         );
       }
-      final headerBytes = await source.read(offset, headerSize);
+      final headerBytes = headerSize <= window.length
+          ? Uint8List.sublistView(window, 0, headerSize)
+          : await source.read(offset, headerSize);
       return (bytes: headerBytes, consumed: headerSize, sizeLen: sizeLen);
     }
 
