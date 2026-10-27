@@ -29,6 +29,10 @@ import 'reader_keys.dart';
 import 'remote_log.dart';
 import 'settings.dart';
 import 'screen.dart';
+import 'book_source.dart';
+import 'combined_source.dart';
+import 'local/local_library.dart';
+import 'local/local_source.dart';
 import 'side_menu.dart';
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
@@ -129,6 +133,29 @@ class KomgaReaderApp extends StatefulWidget {
 class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Komga? _api; // the server (online) connection
   bool _loaded = false;
+
+  // the local libraries: this device's, opened once at the start and kept whatever account is signed in (the
+  // experiment opened them with each sign-in, and a second copy scanned over the first's)
+  LocalSource? _local;
+  CombinedSource? _combined; // the screens' source: Komga (or its downloads) with the local libraries beside it
+
+  BookSource _combinedOf(BookSource main) {
+    final c = _combined ??= CombinedSource(main, local: _local);
+    c.main = main;
+    c.local = _local;
+    return c;
+  }
+
+  Future<void> _openLocal() async {
+    final dir = await appStorageDir();
+    if (dir == null) return;
+    try {
+      _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'), await LocalLibraries.load());
+      unawaited(_local!.rescan().catchError((Object e) => AppLog.instance.warn('local', 'a scan failed: $e')));
+    } catch (e) {
+      AppLog.instance.warn('local', "the local libraries couldn't be opened: $e");
+    }
+  }
   final _nav = GlobalKey<NavigatorState>();
   bool _wasOffline = false;
   late final AppLifecycleListener _lifecycle;
@@ -321,6 +348,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
+    await _openLocal(); // (what the last scans found, at once; scanned again in the background)
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = await KeyStore.read();
     final api = url != null && key != null ? Komga(url, key) : null;
@@ -377,6 +405,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await OnDeckHidden.instance.clearAccount();
     await PairShift.instance.clearAccount();
     final old = _api;
+    _combined = null; // (the next account's own; the local libraries stay)
     if (mounted) setState(() => _api = null);
     // the old connection isn't used again (signing in makes a new one): its client goes once what's on its way has
     // finished (code review 2026-10-05, #50)
@@ -413,7 +442,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
               ? LoginScreen(onSignedIn: _signIn)
               : HomeScreen(
                   key: ValueKey(Connection.instance.offline), // a fresh Home when switching online/offline
-                  api: Connection.instance.online == null ? _api! : Connection.instance.api,
+                  api: _combinedOf(Connection.instance.online == null ? _api! : Connection.instance.api),
                   onSignOut: _signOut,
                 ),
     );

@@ -50,6 +50,16 @@ void main() {
     await deleteTemp(dir);
   });
 
+  test("a local library's book isn't queued, nor cached as it's read - it's on the device, and Komga hasn't it",
+      () async {
+    final api = server();
+    await d.attach(api, root: dir);
+    expect(await d.add([book('lb0000000000001', 1)]), 0);
+    await d.cacheBook(book('lb0000000000002', 2));
+    expect(d.queue, isEmpty);
+    expect(d.store!.books, isEmpty);
+  });
+
   test('a queued book downloads page by page, with its place in the tree, and shows up offline', () async {
     final api = server();
     await d.attach(api, root: dir);

@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../local/book_names.dart' show isLocalId;
 import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
@@ -227,6 +228,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     final s = store;
     if (s == null || _hold) return;
     final id = book['id'] as String;
+    if (isLocalId(id)) return; // (a local library's: on the device already, nothing to fetch from Komga)
     final e = s.books[id];
     if (e != null && e['cache'] == true) {
       e['cachedAt'] = clock.now().toIso8601String();
@@ -598,6 +600,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     var added = 0;
     for (final b in books) {
       final id = b['id'] as String;
+      if (isLocalId(id)) continue; // a local library's: on the device already (a series of both kinds: Komga's only)
       // a book in the cache, downloaded on purpose: a download from now on (kept until deleted)
       final cachedJob = jobFor(id);
       if (cachedJob != null && cachedJob.cache) {

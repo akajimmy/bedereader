@@ -140,4 +140,20 @@ void main() {
     final found = (await api.searchSeries('batman', size: 30))['content'] as List;
     expect(found.where((s) => s['name'] == 'Batman Beyond'), hasLength(1));
   });
+
+  // what asks "is this book Komga's?" (the reader: cache it as it's read) or "are we offline?" (the server status)
+  // asks it of the source behind the combined one - asked of the combined one itself, the answer was always "no", and
+  // a book read from Komga was no longer cached
+  test("through the combined source, a book's own source is found - Komga's, a local library's - and so is its main "
+      'one, also when it\'s been swapped (offline)', () async {
+    await localSeries(['Saga']);
+    final localBook = ((await local.books())['content'] as List).single['id'] as String;
+    expect(CombinedSource.of(api, 'B0S0E37'), same(komga));
+    expect(CombinedSource.of(api, localBook), same(local));
+    expect(CombinedSource.of(komga, localBook), same(komga), reason: 'not a combined one: itself');
+    final other = DownloadsSource(OfflineStore(offline));
+    api.main = other;
+    expect(CombinedSource.mainOf(api), same(other));
+    expect(CombinedSource.of(api, 'B0S0E37'), same(other));
+  });
 }
