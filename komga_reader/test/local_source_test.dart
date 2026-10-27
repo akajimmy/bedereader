@@ -203,6 +203,19 @@ void main() {
     expect(fs.held, 0);
   });
 
+  test('a file replaced by one with as many pages: its pages are measured again (the old sizes made a spread show '
+      "as one page - the experiment's review)", () async {
+    final s = await open();
+    await s.rescan();
+    final id = ((await s.books(size: 100))['content'] as List)
+        .firstWhere((b) => (b['name'] as String).startsWith('Saga #2'))['id'] as String;
+    expect([for (final p in await s.pages(id)) p['width']], [800, 800]);
+    final wide = Uint8List.fromList([...pngHead(1600, 1200), ...List.filled(100, 1)]);
+    await put('Saga (2012)/Saga #2 (2012).cbz', zipOf({'p1.png': page, 'p2.png': wide, 'p3.txt': 'longer'}));
+    await s.rescan();
+    expect([for (final p in await s.pages(id)) p['width']], [800, 1600]);
+  });
+
   test("a book's poster is named for its file as it is: replaced, it gets a new one (the experiment kept the first)",
       () async {
     final s = await open();

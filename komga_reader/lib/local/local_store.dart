@@ -281,6 +281,15 @@ class LocalStore {
     return _write('sizes.json', () => sizes);
   }
 
+  /// These books' page sizes forgotten (their files changed: measured again when next opened).
+  Future<void> forgetSizes(Iterable<String> bookIds) async {
+    var any = false;
+    for (final id in bookIds) {
+      any = sizes.remove(id) != null || any;
+    }
+    if (any) await _write('sizes.json', () => sizes);
+  }
+
   /// Done once every write asked for so far is on disk (failed ones too).
   Future<void> get written => _queue;
 
