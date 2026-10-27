@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app_identity.dart';
 import 'screen.dart';
 
 /// A newer BeDeReader on GitHub (user, 2026-10-22: "a 'version check' to the app ... that links to github if a newer
@@ -30,8 +31,13 @@ class UpdateCheck extends ChangeNotifier {
   NewRelease? _found;
   String? _dismissed;
 
+  /// Off in BeDeReader Exp: a BeDeReader release isn't an update to it (user, 2026-10-26: "1.5.0 is not an update to
+  /// exp").
+  @visibleForTesting
+  static bool inThisApp = !isExp;
+
   static bool get applies =>
-      defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows;
+      inThisApp && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.windows);
 
   /// Asks GitHub - unless it was asked less than a day ago (then the last answer stands).
   Future<void> check({DateTime? now}) async {

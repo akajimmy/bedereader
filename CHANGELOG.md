@@ -15,6 +15,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Builds in progress come as BeDeReader Exp, a separate app beside BeDeReader with its own settings, downloads and striped icon (its name shows on its screens, and it doesn't offer BeDeReader releases as updates). BeDeReader itself gets the stable releases.
 - Settings > Libraries now holds every library: Local, Network and Komga. Komga's libraries are listed there, each with its switch to show it on this device or not (they were in Library & Home). Local and network libraries can't be hidden any more: a folder you don't want isn't added (Remove takes it off).
 - Settings, renamed and regrouped: Reading is All Book Types, with Display (was Over the page) and Behaviour (was Moving on). Comics: Page Layout - default values (was Pages - defaults), Appearance (was Turning pages) with Page Turn Animation, and Double-tap to zoom now in Controls. eBooks: Formatting, Page and Two pages are one group, Page Layout, with New Chapters Start On; eBooks' Page Turn Animation too. Over the slider (tap to hide) is Show above page slider, with an (i) that says what it does - a tap on it shows the text. In Libraries, Scan is at the top.
 - Server and sync is Server & Sync. Its group What's synced through Komga is Sync, with Last Sync - when this device last synced with Komga - and Sync now: everything synced through Komga, at once (it says so if Komga doesn't answer).

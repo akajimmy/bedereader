@@ -267,7 +267,8 @@ The rest of this file is about building the app.
   puts the newest Windows build in Desktop\BeDeReader; **tools\ios-status.ps1** - how a build's iPhone / iPad
   (TestFlight) build on GitHub is going; **tools\testing\** - scripts for checking builds on real devices (its README
   says which).
-- **tools\make_icon.py** - draws every app icon from one set of shapes.
+- **tools\make_icon.py** - draws every app icon from one set of shapes. **tools\exp_identity.py** and
+  **tools\exp-identity\** - the BeDeReader Exp identity a build puts on and takes off (Building, below).
 - **keytest\** - a page for finding out which keys a remote sends.
 - **dev_setup.py** - downloads and verifies the toolchain.
 
@@ -312,15 +313,25 @@ From the repository's folder: **powershell -ExecutionPolicy Bypass -File tools\b
 (Windows blocks .ps1 scripts by default; -ExecutionPolicy Bypass lifts that for this one run without changing any
 setting. The same goes for the other scripts in tools\.)
 
+**Which app it builds.** Every build is **BeDeReader Exp** unless -Stable is given. BeDeReader Exp is a separate app
+that installs beside BeDeReader, never over it: Android ID com.nickp.komga_reader.exp, iOS bundle ID
+com.nickp.bedereader.exp, Windows data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp, a
+striped "under construction" icon, and no update check. It's where everything new is tried. **-Stable** builds
+BeDeReader itself, for release candidates and releases. tools\exp_identity.py puts the Exp identity (IDs, names, icons
+from tools\exp-identity\) on the working tree just before the platforms are built and takes it off straight after, so
+it's never committed; the Dart side follows --dart-define=BEDEREADER_EXP=true. Both apps share one line of build
+numbers: an Exp build is tagged exp-build-{n}, a stable one build-{n}, and {n} is always past the highest of either.
+
 Checks the working tree is committed (before and after flutter pub get), runs analyze - lint findings included - and
 the tests (stopping on any failure), raises the build number, files the changelog's *Unreleased* entries under the new
 build, bundles the README, changelog and third-party notices into the app, builds Android and Windows into
-dist\{version}\ with checksums and a BUILD-INFO.txt, then commits and tags build-{n}. If a build fails, the version,
-changelog and bundled documents are put back. A -Bump build must be signed with the release key, and its build-{n}
-tag must not exist yet. The Windows build starts from an empty build folder, so the zip holds only that build's files.
+dist\{version}\ with checksums and a BUILD-INFO.txt, then commits and tags exp-build-{n} (or build-{n}). If a build
+fails, the version, changelog and bundled documents are put back. A -Bump build must be signed with the release key,
+and its tag must not exist yet. The Windows build starts from an empty build folder, so the zip holds only that
+build's files.
 
-A -Bump build then pushes its build-{n} tag to GitHub, where .github\workflows\testflight.yml builds that same commit
-for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about 15-20
+A -Bump build then pushes its tag to GitHub, where .github\workflows\testflight.yml builds that same commit as the
+same app for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about 15-20
 minutes, while the device and the Desktop copy are updated. **tools\ios-status.ps1 -Build {n}** says how it's going;
 -NoIos keeps the tag local and skips it. (The workflow signs and uploads with the repository owner's App Store Connect
 key, kept in the repository's secrets.)
@@ -329,8 +340,8 @@ Options: -Platforms android (or windows) builds one of them; -Timing compiles in
 (a measuring build); -SkipTests skips the tests; -NoInstall skips the device and the Desktop copy; -AllowDirty allows
 uncommitted changes. The last two are for throwaway builds: -Bump refuses both. Progress is in dist\build.log.
 
-After a Windows build the app is unpacked fresh and swapped in as BeDeReader on your Desktop, the copy you use day to
-day; the copy it replaces is kept beside it as BeDeReader.previous (rename it back if a build misbehaves). Your
+After a Windows build the app is unpacked fresh and swapped in as BeDeReader-Exp (a -Stable build: BeDeReader) on your
+Desktop, the copy you use day to day; the copy it replaces is kept beside it as .previous (rename it back if a build misbehaves). Your
 settings and downloads aren't in those folders, so nothing is lost. If the app is open from there, that step is
 skipped and says so: close it and run tools\update-desktop.cmd (or double-click it).
 
@@ -368,8 +379,8 @@ spelling is displayed, typed, searched and used in file names.
 - **Change** (the name people see): komga_reader\lib\app_identity.dart (appName - every screen);
   android\app\src\main\AndroidManifest.xml (android:label); ios\Runner\Info.plist (CFBundleDisplayName and
   CFBundleName); windows\runner\main.cpp (window title); windows\runner\Runner.rc (FileDescription, InternalName,
-  OriginalFilename); windows\CMakeLists.txt (BINARY_NAME, the .exe); tools\build.ps1 ($product, the file names in
-  dist\); this README, the changelog's intro, THIRD_PARTY_NOTICES.md, lib\licences.dart (the AI disclosure).
+  OriginalFilename); windows\CMakeLists.txt (BINARY_NAME, the .exe); tools\build.ps1 ($product, $appLabel and
+  $fileName); tools\exp_identity.py (its text edits match the current names); this README, the changelog's intro, THIRD_PARTY_NOTICES.md, lib\licences.dart (the AI disclosure).
 - **Never change** (internal): the Android application ID and Kotlin package com.nickp.komga_reader; the iOS bundle ID
   com.nickp.bedereader; the Dart package komga_reader; Runner.rc's CompanyName and ProductName (they name the Windows
   settings folder %APPDATA%\com.nickp\Komga Reader); the Windows data folder %LOCALAPPDATA%\KomgaReader

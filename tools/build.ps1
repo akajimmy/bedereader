@@ -1,26 +1,39 @@
 <#
 .SYNOPSIS
-    Builds BeDeReader for every platform into dist\<version>\ - after the checks pass.
+    Builds BeDeReader Exp - or, with -Stable, BeDeReader - for every platform into dist\<version>\, after the checks pass.
 
 .DESCRIPTION
+    Which app: every build is BeDeReader Exp unless -Stable (user, 2026-10-27: "every build to be building the
+    experimental app. Only once we publish a new stable version at my specific request will we update the base app").
+    BeDeReader Exp is its own app beside BeDeReader - Android com.nickp.komga_reader.exp, iOS com.nickp.bedereader.exp,
+    Windows data in %LOCALAPPDATA%\KomgaReaderExp - with the striped icon and no update check. tools\exp_identity.py puts
+    that identity on the working tree just before the platforms are built and takes it off straight after (never
+    committed); the Dart side follows --dart-define=BEDEREADER_EXP=true. -Stable: the real app, only for a stable release
+    (a release candidate or final) the user asks for.
+    Both share one line of build numbers: an Exp build is tagged exp-build-<n>, a stable one build-<n>, and <n> is one
+    more than the highest of either tag (and of pubspec.yaml's), so a fix build on an older version branch can't take a
+    number a newer branch already used.
+
     1. Checks: working tree clean (unless -AllowDirty) before and after flutter pub get, flutter analyze (lint
        findings included), flutter test. Any failure stops the build. -Bump refuses -AllowDirty and -SkipTests.
     2. -Bump: raises the build number in komga_reader\pubspec.yaml (0.1.0+17 -> 0.1.0+18); the APK must be signed
-       with the release key, and the build-<n> tag must not exist yet.
+       with the release key, and neither build-<n> nor exp-build-<n> may exist yet.
     3. Builds the requested platforms:
-         android  -> BeDeReader-<ver>-android.apk; with -Bundle also BeDeReader-<ver>-android.aab - the app bundle
+         android  -> BeDeReader-Exp-<ver>-android.apk (-Stable: BeDeReader-<ver>-...); with -Bundle also the .aab - the app bundle
                      Google Play takes, signed with the release key (Play is parked - user, 2026-10-22: "apk releases
                      only for now"; the step is kept for when it isn't)
-         windows  -> BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
+         windows  -> BeDeReader-Exp-<ver>-windows.zip / BeDeReader-<ver>-windows.zip   (portable folder: unzip anywhere, run BeDeReader.exe)
     4. Writes SHA256SUMS.txt and BUILD-INFO.txt next to them.
-    5. With -Bump, commits the version change and tags it build-<n>.
-    6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall;
-       if the tablet isn't reachable the build still counts and it says so.
-    7. Unzips the Windows build over Desktop\BeDeReader, the copy used on this PC (tools\update-desktop.ps1),
-       unless -NoInstall; if the app is open from there it's closed first (forcefully - user, 2026-10-07).
-    8. iOS (with -Bump, unless -NoIos): pushes the build-<n> tag to GitHub, where .github\workflows\testflight.yml
-       builds that commit for iPhone / iPad and uploads it to TestFlight - about 15-20 minutes, on GitHub; it's
-       pushed as soon as the tag exists, so it runs while the tablet and the Desktop copy are updated.
+    5. With -Bump, commits the version change and tags it exp-build-<n> (-Stable: build-<n>).
+    6. Installs the APK on the paired tablet over wireless ADB (tools\install-android.ps1) unless -NoInstall - as
+       its own app for Exp; if the tablet isn't reachable the build still counts and it says so.
+    7. Unzips the Windows build over Desktop\BeDeReader-Exp (-Stable: Desktop\BeDeReader), the copy used on this PC
+       (tools\update-desktop.ps1), unless -NoInstall; if the app is open from there it's closed first (forcefully -
+       user, 2026-10-07).
+    8. iOS (with -Bump, unless -NoIos): pushes the build's tag to GitHub, where .github\workflows\testflight.yml
+       builds that commit for iPhone / iPad - as BeDeReader Exp for an exp-build tag - and uploads it to TestFlight,
+       about 15-20 minutes, on GitHub; it's pushed as soon as the tag exists, so it runs while the tablet and the
+       Desktop copy are updated.
        tools\ios-status.ps1 -Build <n> says how it's going (user, 2026-10-17: "any time we're building, we're
        building Windows, Android, and iOS").
 
@@ -28,7 +41,8 @@
     (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
 
 .EXAMPLE
-    .\tools\build.ps1 -Bump
+    .\tools\build.ps1 -Bump             (BeDeReader Exp - the everyday build)
+    .\tools\build.ps1 -Bump -Stable     (BeDeReader - a stable release build, only when the user asks for one)
     .\tools\build.ps1 -Platforms android
     .\tools\build.ps1 -Platforms windows -SkipTests
     .\tools\build.ps1 -Bump -Timing     (a measuring build: the EPUB reader's frame timings in its trace and logcat)
@@ -40,12 +54,19 @@ param(
     [switch]$SkipTests,
     [switch]$AllowDirty,
     [switch]$NoInstall,     # don't install on the tablet or update the Desktop copy afterwards
-    [switch]$NoIos,         # don't send the build to TestFlight (its build-<n> tag stays on this PC)
+    [switch]$NoIos,         # don't send the build to TestFlight (its tag stays on this PC)
     [switch]$Bundle,        # also the Google Play app bundle (.aab) - off: Play is parked (2026-10-22)
-    [switch]$Timing         # the EPUB reader's timing instruments compiled in (frame times, page-change timer, the
+    [switch]$Timing,        # the EPUB reader's timing instruments compiled in (frame times, page-change timer, the
                             # trace mirrored to the system log for adb) - for measuring; off in everyday builds
+    [switch]$Stable         # BeDeReader itself, not BeDeReader Exp - a stable release build, only at the user's request
 )
-$defines = if ($Timing) { ' --dart-define=BEDEREADER_TIMING=true' } else { '' }
+$exp = -not $Stable
+$defines = ''
+if ($Timing) { $defines += ' --dart-define=BEDEREADER_TIMING=true' }
+if ($exp) { $defines += ' --dart-define=BEDEREADER_EXP=true' }
+$appLabel = if ($exp) { 'BeDeReader Exp' } else { 'BeDeReader' }
+$fileName = if ($exp) { 'BeDeReader-Exp' } else { 'BeDeReader' }  # the dist\ files' names
+$tagPrefix = if ($exp) { 'exp-build-' } else { 'build-' }
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot          # C:\Claude\KomgaClient
@@ -96,13 +117,26 @@ function Git([string]$arguments) {
 # points at code that wasn't what was built, or that was never tested (test audit, 2026-09-30).
 if ($Bump -and $AllowDirty) { throw '-Bump with -AllowDirty: a tagged build has to be built from committed code - commit first.' }
 if ($Bump -and $SkipTests) { throw '-Bump with -SkipTests: a tagged build has to have passed its tests.' }
+# the Exp identity still on from a build that was stopped before taking it off: put back first (from its saved copies)
+$identity = Join-Path $root 'tools\exp_identity.py'
+function ExpIdentity([string]$what) {
+    $said = cmd /c "python `"$identity`" $what 2>&1"
+    $code = $LASTEXITCODE
+    $said | Out-File $log -Append -Encoding utf8
+    if ($code -ne 0) { throw "exp_identity.py $what failed: $($said -join ' ')" }
+    Say ($said -join ' ')
+}
+if ((cmd /c "python `"$identity`" status") -eq 'on') {
+    Say 'the Exp identity was left on by an earlier build - taking it off'
+    ExpIdentity 'restore'
+}
 $dirty = Git 'status --porcelain'
 if ($dirty -and -not $AllowDirty) {
     throw "Uncommitted changes - commit them first (or pass -AllowDirty for a throwaway build):`n$($dirty -join "`n")"
 }
 # only a copy running from the build folder is in the way (a portable copy elsewhere is fine)
 $buildDir = Join-Path $app 'build\windows'
-$product = 'BeDeReader'  # the app's name, also its file-name form (the .exe, the dist\ files)
+$product = 'BeDeReader'  # the .exe's name (BeDeReader.exe for both apps)
 # (KomgaReader: the .exe's name before the app was renamed, 2026-09-29 - a copy built then may still be open)
 $blocking = Get-Process $product, 'KomgaReader' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($buildDir, [StringComparison]::OrdinalIgnoreCase) }
 if ($Platforms -contains 'windows' -and $blocking) {
@@ -126,6 +160,7 @@ $m = [regex]::Match($text, '(?m)^version:\s*(\d+\.\d+\.\d+)\+(\d+)')
 if (-not $m.Success) { throw 'No "version: x.y.z+n" line in pubspec.yaml' }
 $name = $m.Groups[1].Value
 $build = [int]$m.Groups[2].Value
+$originalBuild = $build
 # ---- 2a. what to put back if anything below fails (the version, the changelog, the documents bundled into the app):
 # recorded before anything is written - the bump used to happen before the safety net began, so a failure in between
 # left a bumped version and a filed changelog behind (code review 2026-10-05, #15)
@@ -152,9 +187,15 @@ function Restore-Documents {
 $artifacts = @()
 try {
 if ($Bump) {
-    $build++
+    # one line of numbers for both apps and every version branch: past the highest tag of either kind
+    $tagged = @(Git 'tag -l build-* exp-build-*') | Where-Object { $_ -match '^(exp-)?build-\d+$' } |
+        ForEach-Object { [int]($_ -replace '^(exp-)?build-', '') }
+    $highest = ($tagged + $build | Measure-Object -Maximum).Maximum
+    $build = $highest + 1
     # checked before building: a tag that already exists used to fail only after the bump was committed
-    if (Git "tag -l build-$build") { throw "tag build-$build already exists - pubspec.yaml's build number is behind the tags" }
+    foreach ($t in "build-$build", "exp-build-$build") {
+        if (Git "tag -l $t") { throw "tag $t already exists" }
+    }
     $text = $text.Substring(0, $m.Index) + "version: $name+$build" + $text.Substring($m.Index + $m.Length)
     [IO.File]::WriteAllText($pubspec, $text, (New-Object Text.UTF8Encoding($false)))  # no BOM
     Say "version bumped to $name+$build"
@@ -195,10 +236,14 @@ foreach ($f in 'README.md', 'CHANGELOG.md', 'THIRD_PARTY_NOTICES.md') {
 $version = "$name-b$build"
 $out = Join-Path $dist "$name+$build"
 New-Item -ItemType Directory -Force $out | Out-Null
-Say "building $name+$build for: $($Platforms -join ', ') -> $out"
+Say "building $appLabel $name+$build for: $($Platforms -join ', ') -> $out"
 if ($Timing) { Say 'with the EPUB timing instruments (-Timing): a measuring build, not an everyday one' }
 
 # ---- 3. platforms ------------------------------------------------------------------------------------------------
+# BeDeReader Exp: its identity on the working tree for the platform builds only, taken off straight after - before
+# anything is committed (step 5 commits named files only, none of these, but they mustn't be left behind either)
+if ($exp) { ExpIdentity 'apply' }
+try {
 if ($Platforms -contains 'android') {
     # Release signing: android\key.properties names the keystore; its password is kept encrypted with this Windows
     # account (DPAPI) in %USERPROFILE%\.keystores\android-release.pass and handed to Gradle through
@@ -242,7 +287,7 @@ if ($Platforms -contains 'android') {
     if ($Bump -and (-not $signer -or $signer -match 'CN=Android Debug')) {
         throw "the APK isn't signed with the release key ($signing) - nothing committed or tagged. Check android\key.properties and $passFile (made on this Windows account)."
     }
-    $apk = Join-Path $out "$product-$version-android.apk"
+    $apk = Join-Path $out "$fileName-$version-android.apk"
     Copy-Item (Join-Path $app 'build\app\outputs\flutter-apk\app-release.apk') $apk -Force
     $artifacts += $apk
 }
@@ -258,7 +303,7 @@ if ($Platforms -contains 'android' -and $Bundle) {
     if ($Bump -and (-not $owner -or $owner -match 'CN=Android Debug')) {
         throw "the app bundle isn't signed with the release key ($owner) - nothing committed or tagged."
     }
-    $aab = Join-Path $out "$product-$version-android.aab"
+    $aab = Join-Path $out "$fileName-$version-android.aab"
     Copy-Item $bundle $aab -Force
     $artifacts += $aab
 }
@@ -276,10 +321,13 @@ if ($Platforms -contains 'windows') {
     $staged = Join-Path $app 'build\flutter_assets'
     if (Test-Path $staged) { Remove-Item $staged -Recurse -Force }
     Run 'Windows app' "flutter build windows --release$defines"
-    $zip = Join-Path $out "$product-$version-windows.zip"
+    $zip = Join-Path $out "$fileName-$version-windows.zip"
     if (Test-Path $zip) { Remove-Item $zip }
     Compress-Archive -Path (Join-Path $release '*') -DestinationPath $zip
     $artifacts += $zip
+}
+} finally {
+    if ($exp) { ExpIdentity 'restore' }
 }
 
 # ---- 4. checksums + build info -------------------------------------------------------------------------------------
@@ -290,7 +338,7 @@ $commit = (Git 'rev-parse --short HEAD') | Select-Object -First 1
 $flutter = (cmd /c 'flutter --version --machine 2>nul' | Out-String)
 $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].Value
 @(
-    "$product $name+$build",
+    "$appLabel $name+$build",
     "built:    $(Get-Date -Format 'yyyy-MM-dd HH:mm')",
     "commit:   $commit$(if ($Bump) { ' (+ this version bump)' })$(if ($dirty) { ' - WORKING TREE HAD UNCOMMITTED CHANGES' })",
     "flutter:  $fv",
@@ -305,7 +353,7 @@ $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].V
     Restore-Documents
     if ($Bump) {
         [IO.File]::WriteAllText($pubspec, $originalPubspec, (New-Object Text.UTF8Encoding($false)))
-        Say "build failed - version put back to $name+$($build - 1); changelog and bundled documents put back"
+        Say "build failed - version put back to $name+$originalBuild; changelog and bundled documents put back"
     }
     throw
 }
@@ -314,9 +362,9 @@ $fv = [regex]::Match($flutter, '"frameworkVersion"\s*:\s*"([^"]+)"').Groups[1].V
 if ($Bump) {
     # the changelog was filed and the documents bundled before building (step 2b)
     Git "add CHANGELOG.md komga_reader/assets/docs komga_reader/pubspec.yaml" | Out-Null
-    Git "commit -q -m `"Build $build`"" | Out-Null
-    Git "tag build-$build" | Out-Null
-    Say "committed and tagged build-$build"
+    Git "commit -q -m `"Build $build ($appLabel)`"" | Out-Null
+    Git "tag $tagPrefix$build" | Out-Null
+    Say "committed and tagged $tagPrefix$build"
 }
 
 # Steps 6 and 7 come after the build is committed and tagged: a failure in either is reported, with its reason, and
@@ -327,8 +375,8 @@ $notDone = @()
 # ---- 8. iOS, started first: it builds on GitHub (a Mac runner) while the tablet and the Desktop copy are updated --
 if ($Bump -and -not $NoIos) {
     try {
-        Git "push -q origin build-$build" | Out-Null
-        Say "iOS: build-$build pushed to GitHub - the TestFlight build runs there (tools\ios-status.ps1 -Build $build)"
+        Git "push -q origin $tagPrefix$build" | Out-Null
+        Say "iOS: $tagPrefix$build pushed to GitHub - the TestFlight build runs there (tools\ios-status.ps1 -Build $build)"
     } catch {
         Say "iOS: NOT started - $($_.Exception.Message)"
         $notDone += 'iOS: the build tag was not pushed'
@@ -341,7 +389,8 @@ if ($Bump -and -not $NoIos) {
 if ($Platforms -contains 'android' -and -not $NoInstall) {
     $apk = $artifacts | Where-Object { $_ -like '*-android.apk' } | Select-Object -First 1
     try {
-        & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk -ExpectedBuild $build # checks what's on the tablet
+        $package = if ($exp) { 'com.nickp.komga_reader.exp' } else { 'com.nickp.komga_reader' }
+        & (Join-Path $PSScriptRoot 'install-android.ps1') -Apk $apk -ExpectedBuild $build -Package $package # checks what's on the tablet
         if ($LASTEXITCODE -eq 2) { Say 'build finished; install it later with tools\install-android.ps1'; $notDone += 'tablet: not reachable' }
         if ($LASTEXITCODE -eq 3) { Say 'build finished; not installed - the tablet needs the old copy uninstalled first (see above)'; $notDone += 'tablet: signed with another key' }
     } catch {
@@ -354,7 +403,8 @@ if ($Platforms -contains 'android' -and -not $NoInstall) {
 if ($Platforms -contains 'windows' -and -not $NoInstall) {
     $winZip = $artifacts | Where-Object { $_ -like '*-windows.zip' } | Select-Object -First 1
     try {
-        & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip # (the app open there: closed first; exit 2 = it wouldn't close)
+        $desktopCopy = Join-Path ([Environment]::GetFolderPath('Desktop')) $fileName  # Desktop\BeDeReader-Exp or \BeDeReader
+        & (Join-Path $PSScriptRoot 'update-desktop.ps1') -Zip $winZip -Dest $desktopCopy # (the app open there: closed first; exit 2 = it wouldn't close)
         if ($LASTEXITCODE -eq 2) { $notDone += "Desktop copy: the app open there wouldn't close" }
     } catch {
         Say "Desktop copy updated: NO - $($_.Exception.Message)"
