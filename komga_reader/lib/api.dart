@@ -231,6 +231,10 @@ class Komga implements BookSource {
     }
   }
 
+  /// Told each time Komga answers a fresh fetch of the library list: every library's id, hidden ones too (the pins to
+  /// a library deleted on Komga go - lib/pins.dart).
+  static void Function(Komga api, List<String> libraryIds)? onLibraries;
+
   /// The libraries this device shows (Settings > Library & Home): Home, the library picker. Fetched fresh, and kept
   /// for the side menu ([kept]: the kept list, fetched only if there's none).
   @override
@@ -241,6 +245,7 @@ class Komga implements BookSource {
     } else {
       all = await libraries();
       _librariesOnce = Future.value(all);
+      onLibraries?.call(this, [for (final l in all) if (l['id'] case final String id) id]);
     }
     return [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
   }

@@ -253,6 +253,35 @@ void main() {
       expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc']);
     });
 
+    // (user, 2026-10-26: carried over from the experiment) a library gone from a list Komga answered was deleted
+    test("a library deleted on Komga: the pins to it, and to its series and books as their views showed them, go - "
+        "the first list is only kept; a library still there keeps its pins", () async {
+      await Pins.instance.load(server());
+      const lib = Pin(name: 'Comics', kind: 'library', id: 'L1', title: 'Comics');
+      const series = Pin(name: 'Batman', kind: 'series', id: 'S1', title: 'Batman');
+      const other = Pin(name: 'Saga', kind: 'series', id: 'S2', title: 'Saga');
+      for (final p in [lib, series, other, uu]) {
+        Pins.instance.add(p);
+      }
+      await Pins.instance.learnLibrary('S1', 'L1');
+      await Pins.instance.learnLibrary('S2', 'L2');
+      await Pins.instance.librariesNow(['L1', 'L2']); // the first list: only kept
+      expect(Pins.instance.items, hasLength(4));
+      await Pins.instance.librariesNow(['L2']);
+      expect([for (final p in Pins.instance.items) p.id], ['S2', 'RL1']);
+      await pumpEventQueue();
+    });
+
+    test('Komga tells of its libraries each time it answers a fresh fetch - not from the kept list', () async {
+      final told = <List<String>>[];
+      Komga.onLibraries = (_, ids) => told.add(ids);
+      addTearDown(() => Komga.onLibraries = null);
+      final api = noNetwork(_TwoLibraries.new);
+      await api.visibleLibraries();
+      await api.visibleLibraries(kept: true);
+      expect(told, [['L1', 'L2']]);
+    });
+
     test('a local library removed: the pins to it, its series and books go; the rest stay', () async {
       await Pins.instance.load(server());
       Pins.instance.add(uu);
@@ -263,4 +292,10 @@ void main() {
       await pumpEventQueue();
     });
   });
+}
+
+/// Komga with two libraries.
+class _TwoLibraries extends TestKomga {
+  @override
+  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Comics'}, {'id': 'L2', 'name': 'Books'}];
 }

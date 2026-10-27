@@ -104,6 +104,8 @@ class Pins extends ChangeNotifier {
   // before - a device's own list and its switch - are cleared at the next load: the shared list is the one.
   static const _oldSyncKey = 'pins.sync', _oldDeviceKey = 'pins.device';
   static const _hereKey = 'pins.here'; // this device's own: the pins to its local libraries
+  static const _komgaLibrariesKey = 'pins.komgaLibraries'; // Komga's libraries, last seen
+  static const _libraryOfKey = 'pins.libraryOf'; // a series / book pin -> its library on Komga, as last seen
 
   /// A pin to a local library (the library, a series or a book in it): this device's own - never sent to Komga (the
   /// PC hasn't the tablet's folders; user, 2026-10-26: "keep local pins local"), and kept through signing out.
@@ -208,6 +210,8 @@ class Pins extends ChangeNotifier {
     final p = await SharedPreferences.getInstance();
     await p.remove(_local);
     await p.remove(_dirtyKey);
+    await p.remove(_komgaLibrariesKey); // (the next account's server: its own libraries)
+    await p.remove(_libraryOfKey);
   }
 
   Pin? find(Pin view) {
@@ -227,10 +231,45 @@ class Pins extends ChangeNotifier {
     _save([for (final p in items) p.kind == kind && p.id == id ? p.retitled(from, to) : p]);
   }
 
-  /// The pins to these - a local library removed, and its series and books - deleted.
+  /// The pins to these - a library removed, and its series and books - deleted.
   void removeFor(Set<String> ids) {
     if (!items.any((p) => ids.contains(p.id))) return;
     _save([for (final p in items) if (!ids.contains(p.id)) p]);
+  }
+
+  /// Komga's libraries, just fetched (it answered - [Komga.onLibraries]): one there last time and not now was deleted,
+  /// and the pins to it, its series and books go (user, 2026-10-26). The first list seen is only kept. Out of reach
+  /// isn't deleted: nothing is fetched then.
+  Future<void> librariesNow(List<String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    final known = p.getStringList(_komgaLibrariesKey);
+    await p.setStringList(_komgaLibrariesKey, ids);
+    if (known == null) return;
+    final gone = known.toSet().difference(ids.toSet());
+    if (gone.isEmpty) return;
+    final of = _libraryOf(p);
+    final pins = {...gone, for (final e in of.entries) if (gone.contains(e.value)) e.key};
+    of.removeWhere((pin, library) => gone.contains(library));
+    await p.setString(_libraryOfKey, jsonEncode(of));
+    removeFor(pins);
+  }
+
+  /// A series or book pin's library on Komga, as its view showed it (pin_tile.dart): what goes with the library.
+  Future<void> learnLibrary(String? pinId, String? libraryId) async {
+    if (pinId == null || libraryId == null || isLocalId(pinId)) return;
+    final p = await SharedPreferences.getInstance();
+    final of = _libraryOf(p);
+    if (of[pinId] == libraryId) return;
+    of[pinId] = libraryId;
+    await p.setString(_libraryOfKey, jsonEncode(of));
+  }
+
+  static Map<String, String> _libraryOf(SharedPreferences p) {
+    try {
+      return Map<String, String>.from(jsonDecode(p.getString(_libraryOfKey) ?? '{}') as Map);
+    } catch (_) {
+      return {};
+    }
   }
 
   String get _raw => jsonEncode([for (final p in items) p.toJson()]);
