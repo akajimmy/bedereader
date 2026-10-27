@@ -397,9 +397,13 @@ Future<void> showCollectionActions(BuildContext context, BookSource api, dynamic
   onChanged();
 }
 
-/// Asks for a name: [initial] filled in and selected, ready to type over. Null: cancelled, or left empty.
-Future<String?> askName(BuildContext context,
-    {required String title, required String label, required String initial, required String action}) async {
+/// The [askName] dialog's own button (tests find it by this).
+const askNameOkKey = ValueKey('askName.ok');
+
+/// Asks for a name (or a server, a folder): [initial] filled in and selected, ready to type over; [hint] in the empty
+/// box; [plain]: typed as it is - no autocorrect or suggestions (an address, a path). Null: cancelled, or left empty.
+Future<String?> askName(BuildContext context, {required String title, required String label, String initial = '',
+    String action = 'OK', String? hint, bool plain = false}) async {
   final name = TextEditingController(text: initial)..selection = TextSelection(baseOffset: 0, extentOffset: initial.length);
   final ok = await showDialog<bool>(
     context: context,
@@ -408,12 +412,14 @@ Future<String?> askName(BuildContext context,
       content: TextField(
         controller: name,
         autofocus: true,
-        decoration: InputDecoration(labelText: label),
+        autocorrect: !plain,
+        enableSuggestions: !plain,
+        decoration: InputDecoration(labelText: label, hintText: hint),
         onSubmitted: (_) => Navigator.pop(ctx, true),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
+        FilledButton(key: askNameOkKey, onPressed: () => Navigator.pop(ctx, true), child: Text(action)),
       ],
     ),
   );

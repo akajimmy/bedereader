@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../screens/actions.dart' show askName;
 import 'device_folders.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
@@ -263,28 +264,13 @@ class _FolderBrowserState extends State<FolderBrowser> {
 
   /// Connect to a server: by its name or address; its shares listed.
   Future<void> _connect() async {
-    final host = (await _ask('Connect to a server', 'Server name or address', 'nick-nas'))
-        ?.trim().replaceAll(RegExp(r'^(smb:)?[\\/]+'), '').replaceAll(RegExp(r'[\\/].*$'), '');
+    final host = (await askName(context, title: 'Connect to a server', label: 'Server name or address',
+            hint: 'nick-nas', plain: true))
+        ?.replaceAll(RegExp(r'^(smb:)?[\\/]+'), '').replaceAll(RegExp(r'[\\/].*$'), '');
     if (host == null || host.isEmpty || !mounted) return;
     _root = '\\\\$host';
     _rootLabel = host;
     await _go('\\\\$host');
-  }
-
-  Future<String?> _ask(String title, String label, String hint) {
-    final c = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: TextField(controller: c, autofocus: true, autocorrect: false, enableSuggestions: false,
-            decoration: InputDecoration(labelText: label, hintText: hint), onSubmitted: (v) => Navigator.pop(ctx, v)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('OK')),
-        ],
-      ),
-    ); // (c not disposed: the dialog still draws it while it closes - as _type's)
   }
 
   Future<void> _open(Place p) async {
@@ -295,26 +281,13 @@ class _FolderBrowserState extends State<FolderBrowser> {
   }
 
   Future<void> _type() async {
-    final c = TextEditingController();
-    final path = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Type a folder'),
-        content: TextField(controller: c, autofocus: true, autocorrect: false, enableSuggestions: false,
-            decoration: InputDecoration(labelText: 'Folder', hintText: _net != null ? r'\\server\share\Comics'
-                : switch (defaultTargetPlatform) {
-              TargetPlatform.windows => r'C:\Comics',
-              TargetPlatform.android => '/storage/emulated/0/Comics',
-              _ => 'Comics',
-            }),
-            onSubmitted: (v) => Navigator.pop(ctx, v)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('OK')),
-        ],
-      ),
-    );
-    if (path != null && path.trim().isNotEmpty && mounted) Navigator.pop(context, path.trim());
+    final path = await askName(context, title: 'Type a folder', label: 'Folder', plain: true,
+        hint: _net != null ? r'\\server\share\Comics' : switch (defaultTargetPlatform) {
+          TargetPlatform.windows => r'C:\Comics',
+          TargetPlatform.android => '/storage/emulated/0/Comics',
+          _ => 'Comics',
+        });
+    if (path != null && mounted) Navigator.pop(context, path);
   }
 
   static String _name(String p) {
