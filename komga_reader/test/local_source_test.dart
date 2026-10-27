@@ -19,6 +19,7 @@ import 'support/zip_writer.dart';
 class _Fs implements LibraryFs {
   final inner = LocalFs();
   final opened = <String>[];
+  int held = 0; // files open now
   String? away;
 
   @override
@@ -29,10 +30,12 @@ class _Fs implements LibraryFs {
   Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) =>
       inner.list(folder, onUnreadable: onUnreadable);
   @override
-  Future<LibraryFile> open(String path) {
+  Future<LibraryFile> open(String path) async {
     if (away != null && path.endsWith(away!)) throw const _Away();
     opened.add(path.replaceAll('\\', '/').split('/').last);
-    return inner.open(path);
+    final f = await inner.open(path);
+    held++;
+    return _Held(f, this);
   }
 
   @override
@@ -43,6 +46,24 @@ class _Fs implements LibraryFs {
 
 class _Away implements Exception {
   const _Away();
+}
+
+/// A file of [_Fs], counted as held until it's closed.
+class _Held implements LibraryFile {
+  _Held(this.f, this.fs);
+  final LibraryFile f;
+  final _Fs fs;
+  bool _closed = false;
+  @override
+  Future<int> length() => f.length();
+  @override
+  Future<Uint8List> readRange(int offset, int length) => f.readRange(offset, length);
+  @override
+  Future<void> close() async {
+    if (!_closed) fs.held--;
+    _closed = true;
+    await f.close();
+  }
 }
 
 void main() {
@@ -167,6 +188,19 @@ void main() {
         reason: 'the next one, its series started');
     await s.markUnread(id);
     expect(s.readProgressOf(id), isNull);
+  });
+
+  test('a comic asked for several times at once (the page strip and the reader) is opened once, and every file '
+      'opened is closed with the source (two opens at once left one open - the experiment\'s review)', () async {
+    final s = await open();
+    await s.rescan();
+    final id = ((await s.books(size: 100))['content'] as List)
+        .firstWhere((b) => (b['name'] as String).startsWith('Saga #10'))['id'] as String;
+    fs.opened.clear();
+    await Future.wait([s.pages(id), s.pageBytes(id, 1), s.pageBytes(id, 2), s.pageBytes(id, 3)]);
+    expect(fs.opened, ['Saga #10 (2014).cbz']);
+    await s.closeFiles();
+    expect(fs.held, 0);
   });
 
   test("a book's poster is named for its file as it is: replaced, it gets a new one (the experiment kept the first)",
