@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 166 - 2026-10-27
+
 **New**
 
 - Open a comic or eBook file from outside the app: on Windows, right-click a CBZ, CBR or EPUB > Open with > BeDeReader (the first time: Choose another app, then browse to BeDeReader.exe); on Android, Open with or Share from a Files app; on iPhone and iPad, the Files app's Open in or a share sheet. The book opens straight in the reader, read from its file - it isn't added to a library or downloaded, and where you stopped isn't kept. With BeDeReader already open, the file opens there (on Windows the window comes to the front); a book open in the reader is closed first, its place saved. Closing the reader takes you back where you came from: on Android, the app you opened it from.
-
-## 1.7.0
 
 ### Build 165 - 2026-10-27
 
