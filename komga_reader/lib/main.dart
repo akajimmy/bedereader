@@ -105,7 +105,7 @@ Future<void> _startLog() async {
 
 /// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the
 /// app is driven by a D-pad remote as well as touch.
-ThemeData buildTheme([Accent choice = Accent.blue]) {
+ThemeData buildTheme([Accent choice = defaultAccent]) {
   final accent = choice.colour;
   final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
   return base.copyWith(

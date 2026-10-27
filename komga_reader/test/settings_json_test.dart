@@ -121,7 +121,7 @@ void main() {
       ('nightFrom', (d) => d.nightFrom, 1320, 21 * 60),
       ('nightTo', (d) => d.nightTo, 360, 7 * 60),
       ('textScale', (d) => d.textScale, 1.15, 1.0),
-      ('accent', (d) => d.accent, Accent.green, Accent.blue),
+      ('accent', (d) => d.accent, Accent.green, Accent.royal),
       ('pageStrip', (d) => d.pageStrip, true, false), // the reader's page strip left open (user, 2026-10-02)
       ('insetPage', (d) => d.insetPage, InsetPage.never, InsetPage.wideScreen),
       ('webtoonScroll', (d) => d.webtoonScroll, WebtoonScroll.page, WebtoonScroll.smooth), // (2026-10-22) // eBooks' sheet, this device's (2026-10-12)
@@ -146,6 +146,16 @@ void main() {
     // not a choice: the default
     expect(DisplayPrefs.fromJson({'screenOn': 7}).screenOn, 0);
     expect(DisplayPrefs.fromJson({'textScale': 3.0}).textScale, 1.0);
+  });
+
+  test("the accent palette (user's worksheet, 2026-10-27): a colour saved under a name that's gone - Blue, the old "
+      'default, among them - starts on the new default, Royal; one kept stays', () {
+    for (final gone in ['blue', 'red', 'magenta', 'silver', 'slate']) {
+      expect(DisplayPrefs.fromJson({'accent': gone}).accent, Accent.royal, reason: gone);
+    }
+    expect(DisplayPrefs.fromJson({'accent': 'yellow'}).accent, Accent.yellow);
+    expect(const DisplayPrefs().accent, Accent.royal, reason: 'a fresh install');
+    expect(Accent.values, hasLength(24));
   });
 
   test("the account's library look (LibraryPrefs, synced - user, 2026-10-22) survives the saved form; a save without "
