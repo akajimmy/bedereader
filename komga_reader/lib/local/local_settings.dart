@@ -53,16 +53,15 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
   Iterable<LocalLibrary> get _mine => _local.folders.where((l) => (Shares.shareOf(l.path) != null) == widget.network);
 
   Future<void> _add() async {
-    final path = await pickFolder(context, source: widget.browse ??
+    final library = await pickLibrary(context, source: widget.browse ??
         (widget.network ? NetworkBrowse(known: [for (final l in _local.folders) l.path], shares: _shares) : null));
-    if (path == null || !mounted) return;
-    final library = LocalLibrary.at(path);
+    if (library == null || !mounted) return;
     if (_local.folders.any((l) => l.id == library.id)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('That folder is a library already')));
       return;
     }
     // a share: reached first (its login asked for if it refuses one)
-    if (!await ensureShare(context, path, shares: _shares) || !mounted) return;
+    if (!await ensureShare(context, library.path, shares: _shares) || !mounted) return;
     await _local.setLibraries([..._local.folders, library]);
   }
 
@@ -109,6 +108,8 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
               subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(wherePlainly(l.path, storage: _storage, documents: _documents),
                     style: const TextStyle(fontSize: 12, color: hintColour)),
+                if (l.kind != LibraryKind.seriesFolders) // (what's in it, as said when it was added)
+                  Text(libraryKindLabel(l.kind), style: const TextStyle(fontSize: 12, color: hintColour)),
                 if (_said(_local.lastScan[l.id]) case final s?)
                   Text(s, style: const TextStyle(fontSize: 12, color: Color(0xFFFACC15))),
               ]),

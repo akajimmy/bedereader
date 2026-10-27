@@ -53,6 +53,9 @@ bool isLocalId(String? id) => id != null && id.length > 2 && id.startsWith('l') 
 /// A read list's file name starts with its place in the list: "001 - Green Lantern 021" - not the issue.
 final _readingOrder = RegExp(r'^\s*\d{1,4}\s*-\s+');
 
+/// A name in a read list without its place in it at the start ("002 - Green Lantern 021" is "Green Lantern 021").
+String withoutReadingOrder(String stem) => stem.replaceFirst(_readingOrder, '');
+
 /// A book's series from its file name, where the folder doesn't say (a read list's books): the name up to its issue
 /// number - after a "#", else the first number standing on its own - without a reading order at the start ("001 - ")
 /// or a "Vol." / "v" just before the number; a name with no number is the whole name (a book of its own).

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'device_folders.dart';
 import 'library_fs.dart';
+import 'local_library.dart';
 import 'share_access.dart' show askShareLogin;
 import 'smb_fs.dart';
 
@@ -125,6 +126,41 @@ class NetworkBrowse implements NetworkBrowseSource {
   @override
   Future<void> setLogin(String path, SmbLogin login) => _shares.setLogin(path, login);
 }
+
+/// A library to add: its folder ([pickFolder]), then what's in it ([askLibraryKind]). Null: cancelled.
+Future<LocalLibrary?> pickLibrary(BuildContext context, {BrowseSource? source}) async {
+  final path = await pickFolder(context, source: source);
+  if (path == null || !context.mounted) return null;
+  final kind = await askLibraryKind(context);
+  return kind == null ? null : LocalLibrary.at(path, kind: kind);
+}
+
+/// What a library folder holds; null: cancelled.
+Future<LibraryKind?> askLibraryKind(BuildContext context) => showDialog<LibraryKind>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text("What's in this folder?"),
+        children: [
+          for (final (i, k) in LibraryKind.values.indexed)
+            SimpleDialogOption(
+              child: ListTile(autofocus: i == 0, leading: Icon(libraryKindIcon(k)), title: Text(libraryKindLabel(k)),
+                  onTap: () => Navigator.pop(ctx, k)),
+            ),
+        ],
+      ),
+    );
+
+String libraryKindLabel(LibraryKind k) => switch (k) {
+      LibraryKind.seriesFolders => 'One folder per series',
+      LibraryKind.oneSeries => 'Books of one series',
+      LibraryKind.readList => 'Books of several series, in order (a read list)',
+    };
+
+IconData libraryKindIcon(LibraryKind k) => switch (k) {
+      LibraryKind.seriesFolders => Icons.folder_copy_outlined,
+      LibraryKind.oneSeries => Icons.collections_bookmark_outlined,
+      LibraryKind.readList => Icons.format_list_numbered,
+    };
 
 /// Picks a library folder on this device, browsed folder by folder: its path, or null.
 Future<String?> pickFolder(BuildContext context, {BrowseSource? source}) => Navigator.of(context)

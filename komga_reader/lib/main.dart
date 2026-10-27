@@ -33,7 +33,7 @@ import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
 import 'local/device_folders.dart';
-import 'local/folder_browser.dart' show pickFolder;
+import 'local/folder_browser.dart' show pickLibrary;
 import 'local/local_library.dart';
 import 'local/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
@@ -431,9 +431,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (local == null) throw StateError("the local libraries couldn't be opened on this device");
     if (local.folders.isEmpty) {
       if (!context.mounted) return;
-      final path = await pickFolder(context);
-      if (path == null) return;
-      await local.setLibraries([LocalLibrary.at(path)]);
+      final library = await pickLibrary(context);
+      if (library == null) return;
+      await local.setLibraries([library]);
     }
     await NoServerMode.save(true);
     _loadOnDevice(_combinedOf(local));

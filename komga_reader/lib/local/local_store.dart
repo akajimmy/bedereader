@@ -84,6 +84,15 @@ class LocalBook {
   /// after the iPad crossed one, and a whole library was read again).
   bool sameFile(int size, DateTime modified) => size == this.size && modified.isAtSameMomentAs(this.modified);
 
+  /// The same book in [seriesId], at [readLists] (a read-list library's: its series known once it's read, its place
+  /// worked out again each scan).
+  LocalBook placed({String? seriesId, List<ReadListPlace>? readLists}) {
+    final j = toJson();
+    if (seriesId != null) j['series'] = seriesId;
+    if (readLists != null) j['readLists'] = [for (final r in readLists) r.toJson()];
+    return LocalBook.fromJson(j, libraryId);
+  }
+
   Map<String, Object?> toJson() => {
         'id': id, 'series': seriesId, 'path': path, 'size': size, 'modified': modified.toUtc().toIso8601String(),
         'title': title, if (epub) 'epub': true, if (mediaType != 'application/zip') 'mediaType': mediaType,
