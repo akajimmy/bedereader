@@ -12,6 +12,14 @@ class NotAvailableOffline implements Exception {
   String toString() => '$what is not available offline';
 }
 
+/// Thrown for what only Komga can do (deleting files, renaming, ...) asked of a book in a local library.
+class NeedsKomga implements Exception {
+  NeedsKomga(this.what);
+  final String what;
+  @override
+  String toString() => '$what needs Komga';
+}
+
 /// A source answering from books held on this device - the downloads (downloads_source.dart) and the local libraries:
 /// libraries, series, books, read lists, collections, On deck, filters, search, next and previous, all from one
 /// [Catalogue] of [entries] per question. What's the source's own - pages, posters, saving progress, EPUBs, what only
