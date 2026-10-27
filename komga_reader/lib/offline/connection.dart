@@ -49,8 +49,14 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _poll;
   bool _observing = false;
 
-  /// Offline mode needs somewhere to have downloaded to (the downloads, once attached).
-  bool get available => Downloads.instance.ready;
+  /// Whether there are network libraries (set by the app, from its local libraries): offline mode is theirs too -
+  /// nothing is read from a share while offline (user, 2026-10-27).
+  bool Function() hasShares = _noShares;
+  static bool _noShares() => false;
+
+  /// Offline mode has something to apply to: Komga (signed in, its downloads open) or a network library - not the
+  /// folders on this device alone (user, 2026-10-27: the switch stayed in the side menu after signing out).
+  bool get available => (online != null && Downloads.instance.ready) || hasShares();
   bool get offline => (forcedOffline || autoOffline) && available;
 
   /// Downloaded books to fall back on (the prompt only offers them if there are some).
@@ -81,6 +87,13 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _apply();
     notifyListeners();
     unawaited(check()); // start-up check: a failure raises the prompt
+  }
+
+  /// No server mode: the switch as it was left (its network libraries offline or not) - no Komga to watch.
+  Future<void> loadOnDevice() async {
+    forcedOffline = (await SharedPreferences.getInstance()).getBool(_key) ?? false;
+    _apply();
+    notifyListeners();
   }
 
   Future<void> setForcedOffline(bool value) async {
@@ -267,11 +280,13 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     // finding Komga back reloaded the downloads' view on top for nothing (review, 2026-10-26)
     if (offline) down = false;
     _watch();
-    Downloads.instance.hold = offline; // no downloading while offline
-    AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
-    Pins.instance.useApi(api);
-    OnDeckHidden.instance.useApi(api);
-    PairShift.instance.useApi(api);
+    Downloads.instance.hold = offline; // no downloading while offline (from a share either)
+    if (online != null) {
+      AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
+      Pins.instance.useApi(api);
+      OnDeckHidden.instance.useApi(api);
+      PairShift.instance.useApi(api);
+    }
     final poll = autoOffline && !forcedOffline && !reachableAgain && !keyRefused; // a refused key won't come back
     if (poll && _poll == null) {
       _poll = Timer.periodic(pollEvery, (_) => check());
@@ -306,6 +321,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     keyRefused = keyPromptPending = false;
     _quietUntil = null;
     _readers = 0;
+    hasShares = _noShares;
     Komga.onReachability = null;
     Komga.onKeyRefused = null;
   }

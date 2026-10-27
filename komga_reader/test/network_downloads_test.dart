@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/library_fs.dart';
 import 'package:komga_reader/local/local_library.dart';
 import 'package:komga_reader/local/local_source.dart';
+import 'package:komga_reader/offline/catalogue_source.dart' show NotAvailableOffline;
+import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -177,6 +179,73 @@ void main() {
     }
     expect(d.isCached(id), isFalse);
     await d.localStore!.written;
+  });
+
+  group('offline mode is the network libraries\' too (user, 2026-10-27)', () {
+    tearDown(Connection.instance.reset);
+
+    test("offline: a network library shows only its books with a copy here, isn't scanned, and a book without a "
+        "copy doesn't open; a folder on the device is as always; online again, all of it is back", () async {
+      final f = File('${shareDir.path}${Platform.pathSeparator}Saga${Platform.pathSeparator}Saga 2.cbz');
+      await f.writeAsBytes(zipOf({'1.png': page}));
+      await local.rescan();
+      final onShare = [
+        for (final b in (await local.books(size: 10))['content'] as List)
+          if ('${b['url']}'.startsWith(r'\\')) b as Map,
+      ]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
+      final (one, two) = (onShare[0]['id'] as String, onShare[1]['id'] as String);
+      await d.add([onShare[0]]);
+      await settled();
+      expect(d.isDownloaded(one), isTrue);
+      final deviceBook = (await book(onShare: false))['id'] as String;
+      // every book's poster there (the scans offline mustn't take the hidden ones')
+      final posters = [for (final id in [one, two, deviceBook]) File(local.bookThumb(id))];
+      for (final p in posters) {
+        await p.parent.create(recursive: true);
+        await p.writeAsBytes([1]);
+      }
+
+      local.offline = true;
+      final ids = {for (final b in (await local.books(size: 10))['content'] as List) b['id']};
+      expect(ids, {one, deviceBook}, reason: 'the copied one and the device\'s; not the share\'s other');
+      await expectLater(local.pages(two), throwsA(isA<NotAvailableOffline>()));
+      share.away = true;
+      await local.rescan();
+      expect(local.lastScan.keys, isNot(contains(LocalLibrary.at(r'\\nas\books').id)), reason: 'its share not asked');
+      expect([for (final p in posters) p.existsSync()], everyElement(isTrue), reason: 'hidden, not gone');
+
+      share.away = false;
+      local.offline = false;
+      expect({for (final b in (await local.books(size: 10))['content'] as List) b['id']}, {one, two, deviceBook});
+    });
+
+    test("offline: a network book's download waits in the queue (nothing read from the share), and goes on once "
+        "online", () async {
+      final b = await book(onShare: true);
+      final id = b['id'] as String;
+      d.hold = true;
+      final opened = share.opened;
+      await d.add([b]);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(d.jobFor(id)?.state, JobState.queued);
+      expect(share.opened, opened);
+      d.hold = false;
+      await settled();
+      expect(d.isDownloaded(id), isTrue);
+    });
+
+    test('the Offline mode switch is there for Komga or a network library - not for the folders on this device alone '
+        '(it stayed after signing out, in No server mode)', () async {
+      final c = Connection.instance;
+      expect(c.online, isNull);
+      expect(c.available, isFalse, reason: 'no Komga, no share known');
+      c.hasShares = () => local.hasShares;
+      expect(c.available, isTrue, reason: 'a network library');
+      final deviceOnly = await LocalSource.open(await data.createTemp('only'), [LocalLibrary.at(deviceDir.path)]);
+      addTearDown(deviceOnly.closeFiles);
+      c.hasShares = () => deviceOnly.hasShares;
+      expect(c.available, isFalse, reason: 'folders on this device only');
+    });
   });
 
   test("the queue's network books are kept for the next start, in their own store", () async {
