@@ -194,4 +194,17 @@ void main() {
     expect(s.store.progress.keys, contains(id));
     expect(await LocalLibraries.load(), isEmpty);
   });
+
+  test('a library removed: its id, its series\' and its books\' are told (the pins to them go)', () async {
+    final s = await open();
+    await s.rescan();
+    final series = {for (final x in (await s.series(size: 100))['content'] as List) x['id'] as String};
+    final books = {for (final x in (await s.books(size: 100))['content'] as List) x['id'] as String};
+    final told = <Set<String>>[];
+    s.onRemoved = told.add;
+    await s.setLibraries([library()]); // (the same: nothing removed)
+    expect(told, isEmpty);
+    await s.setLibraries(const []);
+    expect(told.single, {library().id, ...series, ...books});
+  });
 }

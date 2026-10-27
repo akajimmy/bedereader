@@ -205,4 +205,62 @@ void main() {
     expect(find.byIcon(Icons.push_pin), findsOneWidget); // filled pin = this view is pinned
     expect(find.text('Nothing unread in this list'), findsOneWidget);
   });
+
+  // ---- local pins (rebuild step 8; user, 2026-10-26: "keep local pins local"): a pin to a local library, its series
+  // or a book is this device's own - the PC hasn't the tablet's folders
+  group('pins to the local libraries', () {
+    const saga = Pin(name: 'Saga', kind: 'series', id: 'ls0123456789abc', title: 'Saga');
+    const comics = Pin(name: 'Comics', kind: 'library', id: 'll0123456789abc', title: 'Comics');
+    tearDown(() => Pins.instance.items = []); // (signing out keeps them: gone here, for the next test)
+
+    test('never sent to Komga, and kept on the device - Komga only ever has its own', () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      expect(api.written[Pins.komgaKey], contains('RL1'));
+      expect(api.written[Pins.komgaKey], isNot(contains('ls0123456789abc')));
+      final puts = api.puts;
+      Pins.instance.rename(saga, 'Saga next');
+      await pumpEventQueue();
+      expect(api.puts, puts, reason: "only this device's own changed: nothing for Komga");
+
+      Pins.instance.items = [];
+      await Pins.instance.load(api, fetch: false); // the next start
+      expect([for (final p in Pins.instance.items) p.name], ['Ultimate Universe · unread', 'Saga next']);
+    });
+
+    test("Komga's list arriving (from another device) keeps this device's own", () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      api.written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+      await Pins.instance.refresh();
+      expect([for (final p in Pins.instance.items) p.id], ['RL1', 'ls0123456789abc']);
+    });
+
+    test("signing out: the account's pins go, this device's own stay", () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      await Pins.instance.clearAccount();
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc']);
+      await Pins.instance.load(server(), fetch: false); // the next account
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc']);
+    });
+
+    test('a local library removed: the pins to it, its series and books go; the rest stay', () async {
+      await Pins.instance.load(server());
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      Pins.instance.add(comics);
+      Pins.instance.removeFor({'ll0123456789abc', 'ls0123456789abc', 'lb0123456789abc'});
+      expect([for (final p in Pins.instance.items) p.id], ['RL1']);
+      await pumpEventQueue();
+    });
+  });
 }

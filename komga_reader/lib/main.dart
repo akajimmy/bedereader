@@ -162,6 +162,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     try {
       final local = _local =
           await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'), await LocalLibraries.load());
+      local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
       // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
       // or Keep it in case it comes back
       local.missing.addListener(() {

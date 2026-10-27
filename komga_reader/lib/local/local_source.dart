@@ -69,6 +69,10 @@ class LocalSource extends CatalogueSource {
   /// Libraries whose folder looks deleted - not there, while the place it was in answers - to ask the user about.
   final missing = ValueNotifier<List<LocalLibrary>>(const []);
 
+  /// Libraries removed (Settings, or a missing one): their ids, and their series' and books' (the app: the pins to
+  /// them go - user, 2026-10-26).
+  void Function(Set<String> ids)? onRemoved;
+
   // ---- the entries: Komga's JSON for each book, made from the store once a scan, for the questions -----------------
   Map<String, Map<String, dynamic>> _entries = {};
   Map<String, LocalBook> _books = {}; // bookId -> its record
@@ -191,9 +195,14 @@ class LocalSource extends CatalogueSource {
   /// The libraries changed (Settings): kept, the removed ones' scans let go (not their progress), and scanned again.
   Future<void> setLibraries(List<LocalLibrary> libraries) async {
     final ids = {for (final l in libraries) l.id};
+    final gone = <String>{};
     for (final l in _libraries) {
-      if (!ids.contains(l.id)) await store.removeLibrary(l.id);
+      if (ids.contains(l.id)) continue;
+      final index = store.libraries[l.id];
+      gone.addAll([l.id, ...?index?.series.keys, ...?index?.books.keys]);
+      await store.removeLibrary(l.id);
     }
+    if (gone.isNotEmpty) onRemoved?.call(gone);
     _libraries = List.of(libraries);
     await LocalLibraries.save(libraries);
     _rebuild();
