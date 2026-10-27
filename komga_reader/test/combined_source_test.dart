@@ -156,4 +156,31 @@ void main() {
     expect(CombinedSource.mainOf(api), same(other));
     expect(CombinedSource.of(api, 'B0S0E37'), same(other));
   });
+
+  // No server mode: the local libraries are the main source, and the local one too (Settings > Libraries finds them
+  // there) - put together with themselves, every series and book came twice
+  test('No server mode: the local libraries alone, each series and book once - in grids, On deck and search',
+      () async {
+    await localSeries(['Akira', 'Saga'], books: 2);
+    final alone = CombinedSource(local, local: local);
+    expect(alone.noServer, isTrue);
+    expect(CombinedSource.noServerOf(alone), isTrue);
+    expect(CombinedSource.noServerOf(api), isFalse);
+    expect([for (final s in (await alone.series())['content'] as List) s['name']], ['Akira', 'Saga']);
+    expect((await alone.series())['totalElements'], 2);
+    expect(((await alone.books())['content'] as List), hasLength(4));
+    final first = ((await alone.books())['content'] as List).first['id'] as String;
+    await alone.markRead(first);
+    expect([for (final b in (await alone.onDeck())['content'] as List) b['id']], hasLength(1));
+    expect(((await alone.searchSeries('saga'))['content'] as List), hasLength(1));
+  });
+
+  test('the No server setting: off until turned on; turned off, nothing of it is left', () async {
+    expect(await NoServerMode.load(), isFalse);
+    await NoServerMode.save(true);
+    expect(await NoServerMode.load(), isTrue);
+    await NoServerMode.save(false);
+    expect(await NoServerMode.load(), isFalse);
+    expect((await SharedPreferences.getInstance()).getKeys(), isNot(contains('local.noServer')));
+  });
 }

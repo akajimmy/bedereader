@@ -48,3 +48,16 @@ class LocalLibraries {
   static Future<void> save(List<LocalLibrary> libraries) async =>
       (await SharedPreferences.getInstance()).setString(_key, jsonEncode([for (final l in libraries) l.toJson()]));
 }
+
+/// No server mode: the app on the local libraries alone, without Komga - a setting of its own (the experiment kept a
+/// 'local' server address instead, and a second key to remember Komga's through it). This device's own.
+class NoServerMode {
+  static const _key = 'local.noServer';
+
+  static Future<bool> load() async => (await SharedPreferences.getInstance()).getBool(_key) ?? false;
+
+  static Future<void> save(bool on) async {
+    final p = await SharedPreferences.getInstance();
+    on ? await p.setBool(_key, true) : await p.remove(_key);
+  }
+}
