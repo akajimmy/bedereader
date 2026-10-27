@@ -11,6 +11,8 @@ import '../local/local_source.dart';
 import '../offline/downloads.dart';
 import '../pins.dart';
 import '../widgets/arrow_scroll.dart';
+import '../widgets/download_badge.dart' show onDeviceBlue;
+import '../widgets/setting_rows.dart' show hintColour;
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/source_badge.dart';
 import '../widgets/error_text.dart';
@@ -301,7 +303,7 @@ Widget detailsFact(String label, String? value) =>
 Widget detailsFactRow(String label, Widget value) => Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(width: 90, child: Text(label, style: const TextStyle(color: Color(0xFF9A9A9A)))),
+        SizedBox(width: 90, child: Text(label, style: const TextStyle(color: hintColour))),
         Expanded(child: value),
       ]),
     );
@@ -361,8 +363,8 @@ class BookBadges extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badges = [
-      if (downloaded) ('Downloaded', Icons.download_done, const Color(0xFF60A5FA)),
-      if (cached) ('Cached', Icons.history, const Color(0xFF9A9A9A)),
+      if (downloaded) ('Downloaded', Icons.download_done, onDeviceBlue),
+      if (cached) ('Cached', Icons.history, onDeviceBlue),
       if (gone) ('Not Found', Icons.error_outline, const Color(0xFFFACC15)),
     ];
     if (badges.isEmpty) return const SizedBox.shrink();

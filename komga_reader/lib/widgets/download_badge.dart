@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
 
+/// The blue of a book kept on this device: the poster tick, and book details' Downloaded and Cached (user, 10-27) -
+/// apart from the green "read" tick.
+const onDeviceBlue = Color(0xFF2E9BFF);
+
 /// Small mark in a poster's bottom-right corner saying what of it is on this device:
 /// - a book: downloaded (tick), in the queue (a ring filling with its pages; paused shows a pause sign), or failed;
 /// - a series or read list: how many of its books are downloaded (tick alone when all of them are).
@@ -15,7 +19,7 @@ class DownloadBadge extends StatelessWidget {
   final String? bookId, seriesId, readListId;
   final int total; // books in the series / read list
 
-  static const _done = Color(0xFF2E9BFF); // blue: apart from the green "read" tick
+  static const _done = onDeviceBlue;
 
   @override
   Widget build(BuildContext context) {
