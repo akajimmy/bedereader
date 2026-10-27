@@ -87,7 +87,7 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
       const SizedBox(height: 12),
       detailsFact('Publisher', m['publisher'] as String?),
       detailsFact('Status', _status(m['status'] as String?)),
-      detailsFact('First out', detailsDate(bm['releaseDate'] as String?)),
+      detailsFact('First out', detailsDate(bm['releaseDate'] as String?, precision: bm['releaseDatePrecision'] as String?)),
       detailsFact('Books', seriesStatus(_series)),
       detailsFact('Language', (m['language'] as String?)?.toUpperCase()),
       detailsFact('Age rating', age == null ? null : '$age+'),

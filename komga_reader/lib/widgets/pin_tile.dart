@@ -8,6 +8,7 @@ import '../view_sort.dart';
 import 'download_badge.dart';
 import 'poster.dart';
 import 'readlist_tile.dart';
+import 'source_badge.dart';
 import '../book_source.dart';
 
 /// The pinned view's own query (its filter, mode and sort) - [size] items of it. Used for the pin's poster and
@@ -160,6 +161,7 @@ class _PinTileState extends State<PinTile> {
             read: completed,
             progress: rp != null && !completed && pages > 0 ? (rp['page'] as int) / pages : null,
             badge: DownloadBadge.book(widget.pin.id!),
+            source: sourceBadgeFor(widget.api, widget.pin.id!),
             onOpen: widget.onOpen,
             onMenu: () => showPinDialog(context, widget.pin, pinned: true),
           );
@@ -173,6 +175,10 @@ class _PinTileState extends State<PinTile> {
               : PosterMosaic(api: widget.api, refs: _thumbs(widget.api, widget.pin, items.take(4).toList())),
           title: widget.pin.name,
           subtitle: total == null ? null : _noun(widget.pin, total),
+          // (a series is from one source; a library's view, a collection, a read list can mix them: none)
+          source: widget.pin.kind == 'series' && widget.pin.id != null
+              ? sourceBadgeFor(widget.api, widget.pin.id!)
+              : null,
           onOpen: widget.onOpen,
           onMenu: () => showPinDialog(context, widget.pin, pinned: true),
         );

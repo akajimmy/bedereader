@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../api.dart';
+import '../book_source.dart';
+import '../combined_source.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
+
+/// What offline shows, in words: the downloads, and the local libraries beside them when they have books (one
+/// helper for each place that says it - tablet, 2026-10-26: "downloaded books" over a Home of local ones).
+String offlineBooks(BookSource api) => switch (api) {
+      CombinedSource(local: final l?) when !l.isEmpty => 'downloaded books and local libraries',
+      _ => 'downloaded books',
+    };
 
 /// Komga refuses this device's API key: say so, and offer the downloaded books (which need no key) or signing in
 /// again. Returns true for Sign in again. With nothing downloaded, Sign in again is the only way on.

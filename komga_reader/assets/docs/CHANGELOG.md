@@ -18,6 +18,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - CBR comics (RAR4 and RAR5) in local and network libraries: read in place like CBZs; the CBRs the last scan couldn't read come in with the next scan. A CBR cut short (a copy that stopped part-way) is left out as damaged.
 - Adding a local or network library asks what's in the folder: one folder per series (as before), the books of one series (all of its subfolders, folder by folder), or a read list - books of several series in the order of their names ("001 - ..."), shown as a read list named after the library, each book in its series (from its ComicInfo, else its name). A library's kind shows under it in Settings > Libraries.
 - Local books are titled without the start of the name their series' books share ("Green Lantern Mosaic 012 (1993)" in that series is "012 (1993)"); a ComicInfo title still comes first. The local libraries' books are read again once, at the next scan, for this.
+- Where books come from: Settings > Library & Home > Show where books come from (this device's own, off at first) puts an icon on posters and beside libraries - this device, a network share, or Komga.
+- Book details: Source (and a network book's server), its Path in its library, its Format (CBZ, CBR, EPUB), and badges - Downloaded, Cached (opened lately, kept), Not Found (its file gone).
+- A local book's date shows as far as it's known: "2012", "Mar 2012", or the whole date.
+- Offline, the app says it's showing downloaded books and local libraries when there are local ones.
+- The side menu kept open on a wide screen takes in libraries added or removed straight away.
 
 ## 1.6.0
 
