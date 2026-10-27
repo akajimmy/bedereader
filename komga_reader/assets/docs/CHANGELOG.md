@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.6.0
+
+### Build 161 - 2026-10-26
+
 **New**
 
 - Local libraries: folders of comics and eBooks (CBZ, EPUB) on this device, beside Komga's. Settings > Libraries adds them (a folder browser: the device's storage, a card or drive, the iPad's own folder in the Files app), renames and removes them, and scans them again; each says where it is and what its last scan couldn't read. Their books show with Komga's - in All libraries, Home, search and the reader - and their reading progress is kept on the device. Not yet: folders on a network share, CBR files (shown as not readable yet), read-list folders.
