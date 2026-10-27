@@ -227,6 +227,14 @@ class LocalSource extends CatalogueSource {
   @override
   void close() => unawaited(closeFiles());
 
+  /// [bookId]'s archive let go, if nobody is reading it (downloaded now: read from the copy from then on).
+  void closeBook(String bookId) {
+    final o = _open[bookId];
+    if (o == null || o.users > 0) return;
+    _open.remove(bookId);
+    unawaited(o.archive.close());
+  }
+
   /// The books held open let go - done once they are (a file held open can't be moved or deleted on Windows).
   Future<void> closeFiles() async {
     final open = [..._open.values];
@@ -282,7 +290,8 @@ class LocalSource extends CatalogueSource {
       o = null;
     }
     if (o == null) {
-      final archive = await ComicArchive.open(_fsFor(b.path), b.path);
+      final (fs, file) = _fileOf(b);
+      final archive = await ComicArchive.open(fs, file);
       o = _OpenBook(b, archive, comicPages(archive.names));
     }
     _open[bookId] = o; // (the newest last)
@@ -410,11 +419,11 @@ class LocalSource extends CatalogueSource {
           }
           _makingNow++;
           try {
-            final fs = _fsFor(b.path);
+            final (fs, file) = _fileOf(b);
             final Uint8List? bytes;
             // its own archive: not the reader's (a grid scrolling closed the reader's book under it - the review)
             try {
-              final archive = await ComicArchive.open(fs, b.path);
+              final archive = await ComicArchive.open(fs, file);
               try {
                 bytes = await archive.read(archive.find(cover) ?? cover);
               } finally {
@@ -455,14 +464,20 @@ class LocalSource extends CatalogueSource {
       }();
 
   // ---- reading progress: kept on this device ------------------------------------------------------------------------
-  @override
-  Future<void> setProgress(String bookId, int page, {bool completed = false}) =>
-      store.setProgress(bookId, page: page, completed: completed);
+  /// A book read to the end, or marked read (the app: Downloads - Delete once read, and its cached copy goes).
+  void Function(String bookId)? onFinished;
 
   @override
-  Future<void> markRead(String bookId) {
+  Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
+    await store.setProgress(bookId, page: page, completed: completed);
+    if (completed) onFinished?.call(bookId);
+  }
+
+  @override
+  Future<void> markRead(String bookId) async {
     final b = _books[bookId];
-    return store.setProgress(bookId, page: b == null ? 1 : (b.epub ? 100 : b.pages), completed: true);
+    await store.setProgress(bookId, page: b == null ? 1 : (b.epub ? 100 : b.pages), completed: true);
+    onFinished?.call(bookId);
   }
 
   @override
@@ -488,8 +503,31 @@ class LocalSource extends CatalogueSource {
   Future<Uint8List> epubBytes(String bookId) async {
     final b = _books[bookId];
     if (b == null || !b.epub) throw NeedsKomga('This book');
-    return readWhole(_fsFor(b.path), b.path);
+    final (fs, file) = _fileOf(b);
+    return readWhole(fs, file);
   }
+
+  // ---- downloads: a network book's copy on this device (lib/offline/downloads.dart) ---------------------------------
+  /// A book's downloaded copy - a network book downloaded or cached (set by the app: Downloads) - read instead of
+  /// the share, so it opens while the share is out of reach. Null: none.
+  String? Function(String bookId)? downloadedCopy;
+
+  /// Where [b] is read from: its downloaded copy, if there's one on the device, else its own file.
+  (LibraryFs, String) _fileOf(LocalBook b) {
+    final copy = downloadedCopy?.call(b.id);
+    if (copy != null && File(copy).existsSync()) return (_localFs, copy);
+    return (_fsFor(b.path), b.path);
+  }
+
+  /// A book's own file, opened - in its library, never a copy (Downloads copies it from this).
+  Future<LibraryFile> openBookFile(String bookId) {
+    final b = _books[bookId];
+    if (b == null) throw NeedsKomga('This book');
+    return _fsFor(b.path).open(b.path);
+  }
+
+  /// What an error reading [bookId]'s own file was, as its library's files tell it (a share out of reach: no answer).
+  FileTrouble troubleOf(String bookId, Object error) => _fsFor(_books[bookId]?.path ?? '').classify(error);
 
   // ---- what only Komga has ------------------------------------------------------------------------------------------
   // (settings are this device's own here: nothing to sync)

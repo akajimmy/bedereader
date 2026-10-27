@@ -20,7 +20,7 @@ class DownloadBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final d = Downloads.instance;
-    if (!d.ready) return const SizedBox.shrink();
+    if (!d.anyReady) return const SizedBox.shrink();
     return ListenableBuilder(
       listenable: Listenable.merge([d, Connection.instance]),
       builder: (context, _) {

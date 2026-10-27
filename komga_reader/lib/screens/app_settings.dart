@@ -158,7 +158,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   List<SettingsPage> get _pages => [
         for (final p in SettingsPage.values)
-          if ((p != SettingsPage.downloads || Downloads.instance.ready) && (widget.only?.contains(p) ?? true)) p,
+          if ((p != SettingsPage.downloads || Downloads.instance.anyReady) && (widget.only?.contains(p) ?? true)) p,
       ];
 
   @override
@@ -748,7 +748,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
-    if (Downloads.instance.ready) {
+    if (Downloads.instance.anyReady) {
       await Downloads.instance.setCap(Downloads.defaultCap);
       await Downloads.instance.setDeleteRead(DeleteRead.never);
     }

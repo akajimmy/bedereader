@@ -306,7 +306,8 @@ class _ReaderScreenState extends State<ReaderScreen>
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
-      if (fromKomga) unawaited(Downloads.instance.cacheBook(fresh));
+      // (a network book's too, from its share - user, 2026-10-27; one in a folder on the device: here already)
+      if (fromKomga || from is LocalSource) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
       AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');
