@@ -1,6 +1,7 @@
 // What the local libraries' scans found, kept on the device (lib/local/local_store.dart): a file each library, written
 // only when it changed; progress and page sizes in small files of their own (the experiment rewrote one big index on
 // every scan and on each book's first opening - local libraries' review, 2026-10-26).
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -92,5 +93,90 @@ void main() {
     await again.written;
     expect(await File('${dir.path}/library-ll1.json').exists(), isFalse);
     expect(again.progress.keys, ['lb-ll1-1']);
+  });
+
+  // ---- review, 2026-10-26 --------------------------------------------------------------------------------------------
+  test('loading while a write is still waiting keeps it - in memory and on disk', () async {
+    final store = LocalStore(dir);
+    await store.setProgress('b', page: 1, completed: false);
+    unawaited(store.setProgress('b', page: 9, completed: false)); // (not waited for)
+    await store.load();
+    expect(store.progress['b']?['page'], 9);
+    final again = LocalStore(dir);
+    await again.load();
+    expect(again.progress['b']?['page'], 9);
+  });
+
+  test('a library kept, removed and kept again without waiting still has its file', () async {
+    final store = LocalStore(dir);
+    unawaited(store.putLibrary(library('ll1')));
+    unawaited(store.removeLibrary('ll1'));
+    unawaited(store.putLibrary(library('ll1')));
+    await store.written;
+    expect(await File('${dir.path}/library-ll1.json').exists(), isTrue);
+  });
+
+  test("a write that fails doesn't stop the ones after it", () async {
+    await Directory('${dir.path}/library-ll1.json').create(recursive: true); // (a folder in the way: can't be written)
+    final store = LocalStore(dir);
+    await expectLater(store.putLibrary(library('ll1')), throwsA(anything));
+    await store.setProgress('b', page: 2, completed: false);
+    expect(await File('${dir.path}/progress.json').exists(), isTrue);
+  });
+
+  test("a progress file that can't be read is copied aside before anything replaces it; one with bad entries keeps "
+      'the good ones - loading never fails for it', () async {
+    await dir.create(recursive: true);
+    await File('${dir.path}/progress.json').writeAsString('{"b1": {"page": 4, "comp');
+    final store = LocalStore(dir);
+    await store.load();
+    await store.setProgress('b2', page: 1, completed: false);
+    expect(await File('${dir.path}/progress.json.unreadable').readAsString(), '{"b1": {"page": 4, "comp');
+
+    await File('${dir.path}/progress.json').writeAsString('{"b1": 5, "b2": {"page": 3, "completed": false}}');
+    await File('${dir.path}/sizes.json').writeAsString('{"b1": [800, null], "b2": [800, 1200]}');
+    await store.load();
+    expect(store.progress.keys, ['b2']);
+    expect(store.sizes, {'b2': [800, 1200]});
+  });
+
+  test("a file's date is kept as a moment in time: the same file whatever the device's time zone (kept as local time, "
+      'every book looked changed after the iPad crossed one)', () async {
+    final local = DateTime(2026, 10, 1, 12, 30);
+    final store = LocalStore(dir);
+    await store.putLibrary(LibraryIndex('ll1', const [], [
+      LocalBook(id: 'b', libraryId: 'll1', seriesId: 's', path: '/b.cbz', size: 5, modified: local, title: 'b'),
+    ]));
+    expect(await File('${dir.path}/library-ll1.json').readAsString(), contains(local.toUtc().toIso8601String()));
+    final again = LocalStore(dir);
+    await again.load();
+    final b = again.libraries['ll1']!.books['b']!;
+    expect(b.sameFile(5, local), isTrue);
+    expect(b.sameFile(5, local.toUtc()), isTrue, reason: 'the same moment, written either way');
+  });
+
+  test('page turns in a row are one write, of the last; a write cut short (*.tmp) is cleared at the next start; the '
+      "series' fields ComicInfo gives are kept", () async {
+    final store = LocalStore(dir);
+    for (var p = 1; p <= 20; p++) {
+      unawaited(store.setProgress('b', page: p, completed: false));
+    }
+    await store.written;
+    expect(store.writes, lessThanOrEqualTo(2));
+    final again = LocalStore(dir);
+    await again.load();
+    expect(again.progress['b']?['page'], 20);
+
+    await File('${dir.path}/library-x.json.tmp').writeAsString('half');
+    await again.putLibrary(LibraryIndex('ll1', const [], [
+      LocalBook(id: 'b', libraryId: 'll1', seriesId: 's', path: '/b.cbz', size: 5, modified: modified, title: 'b',
+          rightToLeft: true, publisher: 'Dark Horse', genres: const ['Fantasy'], count: 41),
+    ]));
+    final third = LocalStore(dir);
+    await third.load();
+    expect(await File('${dir.path}/library-x.json.tmp').exists(), isFalse);
+    final b = third.libraries['ll1']!.books['b']!;
+    expect((b.rightToLeft, b.publisher, b.count), (true, 'Dark Horse', 41));
+    expect(b.genres, ['Fantasy']);
   });
 }
