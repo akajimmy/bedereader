@@ -9,6 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**New**
+
+- Network books download like Komga's: Download on a book (or a series), the same queue and Downloads screen, the same storage limit, Wi-Fi only and Delete once read. The file is copied whole and read from the copy, also when the share is out of reach; a share that stops answering makes the download wait, not fail. A network book you open is kept for a while too, like Komga's (the cache). Books in a folder on the device aren't downloaded - they're there already.
+- Delete book isn't offered on local and network books for now (it only worked for Komga's).
+
+**Fixed**
+
+- A local or network eBook's details said "Pages 100": its progress shows as a share of the book now, and no page count.
+
 ## 1.6.0
 
 ### Build 162 - 2026-10-27
