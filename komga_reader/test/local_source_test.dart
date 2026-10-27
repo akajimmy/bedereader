@@ -67,7 +67,7 @@ class _Held implements LibraryFile {
 }
 
 void main() {
-  late Directory root, data;
+  late Directory shelf, root, data;
   late _Fs fs;
   final page = Uint8List.fromList([...pngHead(800, 1200), ...List.filled(100, 1)]);
 
@@ -82,7 +82,11 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
-    root = await Directory.systemTemp.createTemp('local_lib');
+    // the library one folder down in a temp folder of its own: deleted, the place it was in still answers. Straight in
+    // the temp folder it's /tmp/local_libX on Linux, and /tmp counts as a system top (always there - placeAnswers), so
+    // there it looked out of reach instead of deleted (GitHub's checks, 10-27; Windows' temp folder is deeper)
+    shelf = await Directory.systemTemp.createTemp('local_shelf');
+    root = await Directory('${shelf.path}${Platform.pathSeparator}library').create();
     data = await Directory.systemTemp.createTemp('local_data');
     fs = _Fs();
     await put('Saga (2012)/Saga #10 (2014).cbz', cbz(pages: 3));
@@ -104,7 +108,7 @@ void main() {
       await s.store.written; // (the pages' sizes are saved in the background: not deleted under the write)
     }
     sources.clear();
-    if (await root.exists()) await root.delete(recursive: true);
+    await shelf.delete(recursive: true);
     await data.delete(recursive: true);
   });
 
