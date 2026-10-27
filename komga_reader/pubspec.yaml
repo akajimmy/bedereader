@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   clock: ^1.1.1
+  dart_smb2: ^0.2.3 # network shares (SMB) on Android and iOS - libsmb2, LGPL-2.1, loaded as its own library
   flutter_secure_storage: ^11.2.0
   http: ^1.2.2
   shared_preferences: ^2.3.2

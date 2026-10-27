@@ -8,15 +8,23 @@ import 'library_fs.dart';
 import 'local_library.dart';
 import 'local_scan.dart';
 import 'local_source.dart';
+import 'share_access.dart';
+import 'smb_fs.dart';
 
 /// Settings > Libraries: the local libraries - each with where it is and what its last scan couldn't read, Rename and
 /// Remove - and Add a folder; Scan again with how far a scan has got.
+///
+/// [network]: the libraries on a share instead (the Network group: Add a shared folder, and each one's Sign in).
 class LocalLibrariesGroup extends StatefulWidget {
-  const LocalLibrariesGroup({super.key, required this.local, this.browse});
+  const LocalLibrariesGroup({super.key, required this.local, this.browse, this.network = false, this.shares});
   final LocalSource local;
 
   /// Where Add a folder browses (tests give their own).
   final BrowseSource? browse;
+  final bool network;
+
+  /// The shares' logins (tests give their own).
+  final Shares? shares;
 
   @override
   State<LocalLibrariesGroup> createState() => _LocalLibrariesGroupState();
@@ -39,16 +47,32 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
   }
 
   LocalSource get _local => widget.local;
+  Shares get _shares => widget.shares ?? Shares.instance;
+
+  /// This group's libraries: on a share ([LocalLibrariesGroup.network]) or not.
+  Iterable<LocalLibrary> get _mine => _local.folders.where((l) => (Shares.shareOf(l.path) != null) == widget.network);
 
   Future<void> _add() async {
-    final path = await pickFolder(context, source: widget.browse);
+    final path = await pickFolder(context, source: widget.browse ??
+        (widget.network ? NetworkBrowse(known: [for (final l in _local.folders) l.path], shares: _shares) : null));
     if (path == null || !mounted) return;
     final library = LocalLibrary.at(path);
     if (_local.folders.any((l) => l.id == library.id)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('That folder is a library already')));
       return;
     }
+    // a share: reached first (its login asked for if it refuses one)
+    if (!await ensureShare(context, path, shares: _shares) || !mounted) return;
     await _local.setLibraries([..._local.folders, library]);
+  }
+
+  /// A share's login, changed: kept, and the libraries scanned again with it.
+  Future<void> _signIn(LocalLibrary l) async {
+    final (host, share, _) = splitUnc(l.path)!;
+    final login = await askShareLogin(context, '\\\\$host\\$share', was: _shares.loginFor(l.path));
+    if (login == null) return;
+    await _shares.setLogin(l.path, login);
+    await _local.rescan();
   }
 
   Future<void> _rename(LocalLibrary l) async {
@@ -76,8 +100,8 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: _local.changed,
-        builder: (context, _) => SettingsGroup(title: 'Local', children: [
-          for (final l in _local.folders)
+        builder: (context, _) => SettingsGroup(title: widget.network ? 'Network' : 'Local', children: [
+          for (final l in _mine)
             ListTile(
               contentPadding: const EdgeInsets.only(left: 14, right: 4),
               leading: const Icon(Icons.folder_outlined),
@@ -89,13 +113,17 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
                   Text(s, style: const TextStyle(fontSize: 12, color: Color(0xFFFACC15))),
               ]),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (widget.network && _shares.viaApp) // (Windows signs in to a share itself)
+                  IconButton(tooltip: 'Sign in', icon: const Icon(Icons.key_outlined), onPressed: () => _signIn(l)),
                 IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(l)),
                 IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline), onPressed: () => _remove(l)),
               ]),
             ),
-          ActionRow(title: 'Add a folder', subtitle: 'On this device, or a card or drive in it', icon: Icons.add,
-              onTap: _add),
-          LibraryScanRow(local: _local),
+          widget.network
+              ? ActionRow(title: 'Add a shared folder', subtitle: 'On a server on your network (SMB)', icon: Icons.add,
+                  onTap: _add)
+              : ActionRow(title: 'Add a folder', subtitle: 'On this device, or a card or drive in it', icon: Icons.add,
+                  onTap: _add),
         ]),
       );
 

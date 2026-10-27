@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import 'device_folders.dart';
 import 'library_fs.dart';
+import 'share_access.dart' show askShareLogin;
+import 'smb_fs.dart';
 
 /// Where the folder browser starts: this device's storage, a card or drive, the iPad's app folder.
 class Place {
@@ -62,6 +64,68 @@ class DeviceBrowse implements BrowseSource {
   Future<FolderLook> look(String path) => LocalFs().look(path);
 }
 
+/// A server's shares as well (Add a shared folder): a place may be a server, \\host - its shares listed, and opened
+/// one by one.
+abstract interface class NetworkBrowseSource implements BrowseSource {
+  /// The folder shares on [host].
+  Future<List<String>> shares(String host);
+
+  /// [error] is a server or share refusing the login (one can be asked for).
+  bool refused(Object error);
+
+  /// [login] to list [host]'s shares with - kept for the share opened from it, if that has none of its own.
+  Future<void> useLogin(String host, SmbLogin login);
+
+  /// [login] for the share [path] is on (kept).
+  Future<void> setLogin(String path, SmbLogin login);
+}
+
+/// The network's shares, through [Shares]: the servers already used ([known]: the libraries' paths, and the logins
+/// kept), and any other by its name.
+class NetworkBrowse implements NetworkBrowseSource {
+  NetworkBrowse({this.known = const [], Shares? shares}) : _shares = shares ?? Shares.instance;
+  final List<String> known;
+  final Shares _shares;
+  final _hostLogins = <String, SmbLogin>{}; // given while browsing, to list a server's shares
+
+  @override
+  Future<List<Place>> places() async {
+    final hosts = <String, String>{}; // lower case -> as written
+    for (final p in known) {
+      if (splitUnc(p) case (final host, _, _)) hosts.putIfAbsent(host.toLowerCase(), () => host);
+    }
+    return [for (final h in hosts.values) Place(h, '\\\\$h')];
+  }
+
+  @override
+  Future<bool> openPlace(BuildContext context) async => true;
+
+  @override
+  Future<List<String>> shares(String host) =>
+      _shares.sharesOn(host, _hostLogins[host.toLowerCase()] ?? _shares.loginForHost(host));
+
+  @override
+  Future<FolderLook> look(String path) async {
+    // a share opened with the login its server's shares were listed with, if it has none of its own
+    if (splitUnc(path) case (final host, final share, _)) {
+      final given = _hostLogins[host.toLowerCase()];
+      if (given != null && _shares.viaApp && _shares.loginFor(path) == null) {
+        await _shares.setLogin('\\\\$host\\$share', given);
+      }
+    }
+    return _shares.fsFor(path).look(path);
+  }
+
+  @override
+  bool refused(Object error) => SmbFs.troubleOf(error) == FileTrouble.refused;
+
+  @override
+  Future<void> useLogin(String host, SmbLogin login) async => _hostLogins[host.toLowerCase()] = login;
+
+  @override
+  Future<void> setLogin(String path, SmbLogin login) => _shares.setLogin(path, login);
+}
+
 /// Picks a library folder on this device, browsed folder by folder: its path, or null.
 Future<String?> pickFolder(BuildContext context, {BrowseSource? source}) => Navigator.of(context)
     .push<String>(MaterialPageRoute(builder: (_) => FolderBrowser(source: source ?? DeviceBrowse())));
@@ -80,8 +144,14 @@ class _FolderBrowserState extends State<FolderBrowser> {
   String? _rootLabel;
   List<Place>? _places;
   FolderLook? _look;
+  List<String>? _shares; // a server's (path \\host)
   Object? _error;
   int _loads = 0;
+
+  NetworkBrowseSource? get _net => switch (widget.source) { final NetworkBrowseSource n => n, _ => null };
+
+  /// \\host alone: a server, its shares listed.
+  static bool _isServer(String p) => p.startsWith(r'\\') && !p.startsWith(r'\\?') && splitUnc(p) == null;
 
   @override
   void initState() {
@@ -94,6 +164,7 @@ class _FolderBrowserState extends State<FolderBrowser> {
   Future<void> _start() async {
     await _go(null);
     final places = _places;
+    if (_net != null) return; // (servers: the list, with Connect to a server)
     if (mounted && _path == null && places != null && places.length == 1) await _open(places.single);
   }
 
@@ -103,7 +174,9 @@ class _FolderBrowserState extends State<FolderBrowser> {
   /// One level up; null: the places.
   String? get _up {
     final p = _path;
-    if (p == null || (_root != null && p == _root)) return null;
+    if (p == null || _isServer(p)) return null;
+    if (splitUnc(p) case (final host, _, final rest) when rest.isEmpty) return '\\\\$host'; // a share's top: its server
+    if (_root != null && p == _root) return null;
     final cut = p.replaceAll(RegExp(r'[\\/]+$'), '');
     final i = cut.lastIndexOf(_sep(cut));
     if (i <= 0) return null;
@@ -111,25 +184,71 @@ class _FolderBrowserState extends State<FolderBrowser> {
     return parent.endsWith(':') ? '$parent\\' : parent; // C:\Comics -> C:\
   }
 
-  Future<void> _go(String? path) async {
+  /// [refusedBefore]: a login given for it was refused (said above the fields when one is asked for again).
+  Future<void> _go(String? path, {bool refusedBefore = false}) async {
     final load = ++_loads;
     setState(() {
       _path = path;
       if (path == null) _root = null;
       _look = null;
+      _shares = null;
       _error = null;
     });
     try {
       if (path == null) {
         final places = await widget.source.places();
         if (mounted && load == _loads) setState(() => _places = places);
+      } else if (_isServer(path)) {
+        final shares = await _net!.shares(path.substring(2));
+        if (mounted && load == _loads) setState(() => _shares = shares);
       } else {
         final look = await widget.source.look(path);
         if (mounted && load == _loads) setState(() => _look = look);
       }
     } catch (e) {
-      if (mounted && load == _loads) setState(() => _error = e);
+      if (!mounted || load != _loads) return;
+      final net = _net;
+      if (net != null && path != null && net.refused(e)) {
+        // a server or share refusing a guest (or the login given): a login asked for, then tried again
+        final server = _isServer(path);
+        final where = server ? path : switch (splitUnc(path)) { (final h, final s, _) => '\\\\$h\\$s', _ => path };
+        final login = await askShareLogin(context, where,
+            problem: refusedBefore ? 'The server refused that user name and password.' : null);
+        if (!mounted || load != _loads) return;
+        if (login != null) {
+          server ? await net.useLogin(path.substring(2), login) : await net.setLogin(path, login);
+          if (mounted && load == _loads) await _go(path, refusedBefore: true);
+          return;
+        }
+      }
+      setState(() => _error = e);
     }
+  }
+
+  /// Connect to a server: by its name or address; its shares listed.
+  Future<void> _connect() async {
+    final host = (await _ask('Connect to a server', 'Server name or address', 'nick-nas'))
+        ?.trim().replaceAll(RegExp(r'^(smb:)?[\\/]+'), '').replaceAll(RegExp(r'[\\/].*$'), '');
+    if (host == null || host.isEmpty || !mounted) return;
+    _root = '\\\\$host';
+    _rootLabel = host;
+    await _go('\\\\$host');
+  }
+
+  Future<String?> _ask(String title, String label, String hint) {
+    final c = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(controller: c, autofocus: true, autocorrect: false, enableSuggestions: false,
+            decoration: InputDecoration(labelText: label, hintText: hint), onSubmitted: (v) => Navigator.pop(ctx, v)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, c.text), child: const Text('OK')),
+        ],
+      ),
+    ); // (c not disposed: the dialog still draws it while it closes - as _type's)
   }
 
   Future<void> _open(Place p) async {
@@ -146,7 +265,8 @@ class _FolderBrowserState extends State<FolderBrowser> {
       builder: (ctx) => AlertDialog(
         title: const Text('Type a folder'),
         content: TextField(controller: c, autofocus: true, autocorrect: false, enableSuggestions: false,
-            decoration: InputDecoration(labelText: 'Folder', hintText: switch (defaultTargetPlatform) {
+            decoration: InputDecoration(labelText: 'Folder', hintText: _net != null ? r'\\server\share\Comics'
+                : switch (defaultTargetPlatform) {
               TargetPlatform.windows => r'C:\Comics',
               TargetPlatform.android => '/storage/emulated/0/Comics',
               _ => 'Comics',
@@ -200,12 +320,26 @@ class _FolderBrowserState extends State<FolderBrowser> {
                       ? const Center(child: CircularProgressIndicator())
                       : ListView(children: [
                           for (final (i, pl) in places.indexed)
-                            ListTile(autofocus: i == 0, leading: Icon(pl.path.startsWith('/storage/') &&
-                                    !pl.path.startsWith('/storage/emulated') ? Icons.sd_card_outlined : Icons.folder_outlined),
+                            ListTile(autofocus: i == 0, leading: Icon(_isServer(pl.path) ? Icons.dns_outlined
+                                    : pl.path.startsWith('/storage/') && !pl.path.startsWith('/storage/emulated')
+                                        ? Icons.sd_card_outlined : Icons.folder_outlined),
                                 title: Text(pl.label), onTap: () => _open(pl)),
-                          ListTile(autofocus: places.isEmpty, leading: const Icon(Icons.edit_outlined),
+                          if (_net != null)
+                            ListTile(autofocus: places.isEmpty, leading: const Icon(Icons.add_link),
+                                title: const Text('Connect to a server…'), onTap: _connect),
+                          ListTile(autofocus: places.isEmpty && _net == null, leading: const Icon(Icons.edit_outlined),
                               title: const Text('Type a folder…'), onTap: _type),
                         ])
+                  : _isServer(p)
+                      ? _shares == null
+                          ? const Center(child: CircularProgressIndicator())
+                          : _shares!.isEmpty
+                              ? const Center(child: Text('No shared folders on this server'))
+                              : ListView(children: [
+                                  for (final (i, s) in _shares!.indexed)
+                                    ListTile(autofocus: i == 0, leading: const Icon(Icons.folder_shared_outlined),
+                                        title: Text(s), onTap: () => _go('$p\\$s')),
+                                ])
                   : look == null
                       ? const Center(child: CircularProgressIndicator())
                       : look.folders.isEmpty

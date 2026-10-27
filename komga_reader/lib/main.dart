@@ -37,6 +37,7 @@ import 'local/folder_browser.dart' show pickFolder;
 import 'local/local_library.dart';
 import 'local/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
+import 'local/smb_fs.dart' show Shares;
 import 'side_menu.dart';
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
@@ -160,8 +161,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     final comics = await DeviceFolders.makeComicsFolder();
     if (comics != null) AppLog.instance.info('local', 'made $comics (the Files app hides an empty folder)');
     try {
-      final local = _local =
-          await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'), await LocalLibraries.load());
+      await Shares.instance.load(); // (the shares' logins, before a scan reaches one)
+      final local = _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'),
+          await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
       local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
       // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
       // or Keep it in case it comes back

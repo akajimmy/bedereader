@@ -4,11 +4,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/combined_source.dart';
 import 'package:komga_reader/local/book_names.dart';
 import 'package:komga_reader/local/library_fs.dart';
 import 'package:komga_reader/local/local_library.dart';
 import 'package:komga_reader/local/local_scan.dart';
 import 'package:komga_reader/local/local_source.dart';
+import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/zip_writer.dart';
@@ -193,6 +195,21 @@ void main() {
     expect(s.changed.value, greaterThan(told));
     expect(s.store.progress.keys, contains(id));
     expect(await LocalLibraries.load(), isEmpty);
+  });
+
+  // the reader opened a local EPUB as a file by its path: a share's path (\\nas\comics\x.epub) isn't one on Android
+  test("the reader reads a local EPUB through its library's own files (a share's too), not as a file by its path",
+      () async {
+    final s = await open();
+    await s.rescan();
+    final id = [
+      for (final b in (await s.books(size: 100))['content'] as List)
+        if ((b['metadata'] as Map)['title'] == 'Frankenstein') b['id'] as String,
+    ].single;
+    fs.opened.clear();
+    final info = await EpubRenderer.sourceFor(CombinedSource(s), id).info();
+    expect(info.title, 'Frankenstein');
+    expect(fs.opened, ['Frankenstein - Mary Shelley.epub']);
   });
 
   test('a library removed: its id, its series\' and its books\' are told (the pins to them go)', () async {
