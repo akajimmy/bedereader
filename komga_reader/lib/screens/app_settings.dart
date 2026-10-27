@@ -522,11 +522,15 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     );
   }
 
-  // ---- Library & Home --------------------------------------------------------------------------------------------
-  /// The local libraries (folders on this device) and Komga's - the server's own settings on Server and sync.
+  // ---- Libraries -------------------------------------------------------------------------------------------------
+  /// Every library in one place (user, 2026-10-27: the app reads from several sources, Komga one of them): the local
+  /// and network ones, added and managed here, and Komga's - all of the server's, each switched on or off on this
+  /// device (a folder that isn't wanted simply isn't added; a server brings all its libraries). The server's own
+  /// settings stay on Server and sync.
   List<Widget> _libraries() {
     final api = widget.api;
     final local = api is CombinedSource ? api.local : null;
+    final noServer = CombinedSource.noServerOf(api);
     return [
       if (local != null) ...[
         LocalLibrariesGroup(local: local),
@@ -534,14 +538,54 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
       ] else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
-      SettingsGroup(title: 'Komga', children: [
-        ActionRow(title: 'Komga server', subtitle: CombinedSource.noServerOf(api)
-                ? 'None (No server mode) - one is added in Server and sync'
-                : 'Its address, account and sync: Server and sync',
-            icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
-      ]),
+      if (noServer)
+        SettingsGroup(title: 'Komga', children: [
+          ActionRow(title: 'Komga server', subtitle: 'None (No server mode) - one is added in Server and sync',
+              icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
+        ])
+      else
+        _komgaLibraries(),
     ];
   }
+
+  /// Komga's libraries (the server's, not the local ones), as this device's main source gives them.
+  late final Future<List<dynamic>> _komga = switch (widget.api) {
+    final CombinedSource c => c.main.libraries(),
+    final other => other.libraries(),
+  };
+
+  /// Komga's libraries: a switch each - shown on this device or not (kept on this device). The last one shown can't
+  /// be switched off: with none left, Komga would be asked for every library (api.dart _scope).
+  Widget _komgaLibraries() => FutureBuilder<List<dynamic>>(
+        future: _komga,
+        builder: (context, snap) {
+          final libs = snap.data ?? const [];
+          final server = ActionRow(title: 'Komga server', subtitle: 'Its address, account and sync: Server and sync',
+              icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server));
+          return ListenableBuilder(
+            listenable: HiddenLibraries.instance,
+            builder: (context, _) {
+              final h = HiddenLibraries.instance;
+              final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
+              return SettingsGroup(title: 'Komga', children: [
+                server,
+                for (final l in libs)
+                  SwitchRow(
+                    title: l['name'] as String? ?? '',
+                    value: !h.isHidden(l['id'] as String?),
+                    onChanged: !h.isHidden(l['id'] as String?) && shown <= 1
+                        ? null // the last one shown stays
+                        : (v) => h.setHidden(l['id'] as String, !v),
+                  ),
+                if (snap.hasError || (snap.hasData && libs.isEmpty))
+                  const NoteRow("Komga's libraries can't be listed right now."),
+              ]);
+            },
+          );
+        },
+      );
+
+  // ---- Library & Home --------------------------------------------------------------------------------------------
 
   List<Widget> _library() => [
         _live((s) {
@@ -581,7 +625,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             ),
           ]);
         }),
-        _librariesShown(),
         const SettingsGroup(title: 'Home sections', children: [
           Padding(padding: EdgeInsets.only(left: 6, bottom: 4), child: HomeSectionsEditor()),
         ]),
@@ -602,34 +645,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         ),
       ];
 
-
-  late final Future<List<dynamic>> _allLibraries = widget.api.libraries();
-
-  /// A switch per library: shown on this device or not. The last one shown can't be switched off.
-  Widget _librariesShown() => FutureBuilder<List<dynamic>>(
-        future: _allLibraries,
-        builder: (context, snap) {
-          final libs = snap.data;
-          if (libs == null || libs.isEmpty) return const SizedBox.shrink(); // can't list them (offline, say)
-          return ListenableBuilder(
-            listenable: HiddenLibraries.instance,
-            builder: (context, _) {
-              final h = HiddenLibraries.instance;
-              final shown = libs.where((l) => !h.isHidden(l['id'] as String?)).length;
-              return SettingsGroup(title: 'Libraries on this device', children: [
-                for (final l in libs)
-                  SwitchRow(
-                    title: l['name'] as String? ?? '',
-                    value: !h.isHidden(l['id'] as String?),
-                    onChanged: !h.isHidden(l['id'] as String?) && shown <= 1
-                        ? null // the last one shown stays
-                        : (v) => h.setHidden(l['id'] as String, !v),
-                  ),
-              ]);
-            },
-          );
-        },
-      );
 
   // ---- Downloads -------------------------------------------------------------------------------------------------
   Widget _downloads(BuildContext context) {

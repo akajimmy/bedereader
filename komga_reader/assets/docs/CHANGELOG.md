@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Changed**
+
+- Settings > Libraries now holds every library: Local, Network and Komga. Komga's libraries are listed there, each with its switch to show it on this device or not (they were in Library & Home). Local and network libraries can't be hidden any more: a folder you don't want isn't added (Remove takes it off).
+
 ## 1.6.0 - in development
 
 Not released yet. Release candidates: build 164 (`v1.6.0-rc.1`).

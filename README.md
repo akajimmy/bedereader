@@ -16,7 +16,7 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 - **A Komga server** - your libraries, series, collections and read lists, with reading progress kept on the server
   and the same on every device. Komga sorts, searches and keeps the metadata; BeDeReader shows it and keeps it in
-  sync.
+  sync. Each of the server's libraries can be switched off on a device, in Settings > Libraries.
 - **A folder on this device** - on Android its storage or a card, on Windows any drive, on iPhone and iPad the app's
   own folder in the Files app.
 - **A shared folder on your network** - a NAS or a PC's share (SMB). The app asks for a user name and password only
