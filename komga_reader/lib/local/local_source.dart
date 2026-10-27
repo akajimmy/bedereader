@@ -88,6 +88,30 @@ class LocalSource extends CatalogueSource {
     return {'page': p['page'], 'completed': p['completed'] == true, 'readDate': p['at']};
   }
 
+  /// Offline mode (the app's - Connection; user, 2026-10-27): nothing is read from a share. A network library shows
+  /// only its books with a copy on this device (downloaded or cached), isn't scanned, and a book without a copy
+  /// doesn't open. The folders on this device are as always.
+  bool get offline => _offline;
+  bool _offline = false;
+  set offline(bool value) {
+    if (value == _offline) return;
+    _offline = value;
+    _rebuild();
+    changed.value++;
+    contentChanged.value++;
+  }
+
+  /// Some of the libraries are on a share (offline mode is theirs too).
+  bool get hasShares => _libraries.any((l) => splitUnc(l.path) != null);
+
+  /// Left out while offline: a network book with no copy here.
+  bool _outOfReach(LocalBook b) => _offline && splitUnc(b.path) != null && downloadedCopy?.call(b.id) == null;
+
+  /// A book not shown: one of these left out offline (not available offline), else not one of these at all.
+  Exception _notHere(String bookId) => _libraries.any((l) => store.libraries[l.id]?.books.containsKey(bookId) ?? false)
+      ? NotAvailableOffline('This book')
+      : NeedsKomga('This book');
+
   void _rebuild() {
     final entries = <String, Map<String, dynamic>>{}, books = <String, LocalBook>{}, first = <String, (String, num)>{};
     for (final library in _libraries) {
@@ -97,7 +121,7 @@ class LocalSource extends CatalogueSource {
       final seriesJson = {for (final s in index.series.values) s.id: _seriesJson(s)};
       for (final b in index.books.values) {
         final series = seriesJson[b.seriesId];
-        if (series == null) continue;
+        if (series == null || _outOfReach(b)) continue;
         books[b.id] = b;
         entries[b.id] = {
           'book': _bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
@@ -165,6 +189,7 @@ class LocalSource extends CatalogueSource {
         var done = 0;
         final signature = _signature();
         for (final library in List.of(_libraries)) {
+          if (_offline && splitUnc(library.path) != null) continue; // (offline: its share not asked - as it was)
           final r = await scanLibrary(_fsFor(library.path), library, store.libraries[library.id],
               onFound: (n) => found.value = n, onBook: (_) {
             found.value = null;
@@ -297,7 +322,7 @@ class LocalSource extends CatalogueSource {
 
   Future<T> _withArchive<T>(String bookId, Future<T> Function(ComicArchive a, List<String> pages) use) async {
     final b = _books[bookId];
-    if (b == null) throw NeedsKomga('This book'); // (not one of these: never asked here)
+    if (b == null) throw _notHere(bookId); // (not one of these: never asked here - or hidden offline)
     var o = _open[bookId];
     if (o != null && !o.book.sameFile(b.size, b.modified)) {
       // its file changed since it was opened: opened again (one in use is closed when it's let go)
@@ -404,16 +429,22 @@ class LocalSource extends CatalogueSource {
   @override
   String bookThumb(String id) {
     final b = _books[id];
-    if (b == null) return '';
+    return b == null ? '' : _posterOf(b);
+  }
+
+  String _posterOf(LocalBook b) {
     final sign = stableId('${b.size}|${b.modified.toUtc().toIso8601String()}');
-    return '${_posters.path}${Platform.pathSeparator}$id-$sign.png';
+    return '${_posters.path}${Platform.pathSeparator}${b.id}-$sign.png';
   }
 
   /// The posters no book has now let go - removed books and libraries, and files replaced since (their old poster):
   /// the folder only grew (the experiment's review). A library out of reach keeps its books, so its posters.
   Future<void> sweepPosters() async {
     if (!await _posters.exists()) return;
-    final wanted = {for (final id in _books.keys) bookThumb(id)};
+    // (every book the libraries have - those hidden offline too)
+    final wanted = {
+      for (final l in _libraries) ...?store.libraries[l.id]?.books.values.map(_posterOf),
+    };
     await for (final f in _posters.list()) {
       if (f is File && f.path.endsWith('.png') && !wanted.contains(f.path)) {
         try {
@@ -549,7 +580,7 @@ class LocalSource extends CatalogueSource {
   /// An EPUB's whole file (the reader reads it from this).
   Future<Uint8List> epubBytes(String bookId) async {
     final b = _books[bookId];
-    if (b == null || !b.epub) throw NeedsKomga('This book');
+    if (b == null || !b.epub) throw _notHere(bookId);
     final (fs, file) = _fileOf(b);
     return readWhole(fs, file);
   }
@@ -563,6 +594,7 @@ class LocalSource extends CatalogueSource {
   (LibraryFs, String) _fileOf(LocalBook b) {
     final copy = downloadedCopy?.call(b.id);
     if (copy != null && File(copy).existsSync()) return (_localFs, copy);
+    if (_offline && splitUnc(b.path) != null) throw NotAvailableOffline('This book'); // (its share not asked)
     return (_fsFor(b.path), b.path);
   }
 

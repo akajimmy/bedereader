@@ -165,6 +165,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       final local = _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'),
           await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
       local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
+      // offline mode is the network libraries' too: the switch is there for them, and they go offline with it
+      Connection.instance.hasShares = () => local.hasShares;
+      local.offline = Connection.instance.offline;
       Shares.instance.beforeReconnect = local.closeFiles; // a share's new login: its open books opened again
       // the network books' downloads, there whether or not Komga is (No server mode too)
       await Downloads.instance.attachLocal(local);
@@ -297,6 +300,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (!c.reachableAgain) _askedBack = false;
 
     final now = c.offline;
+    _local?.offline = now; // (the network libraries with it: nothing read from a share offline)
     if (now == _wasOffline) return;
     AppLog.instance.info('connection', now ? 'offline (${c.forcedOffline ? 'switched by hand' : "Komga out of reach"})'
         : 'online');
@@ -424,6 +428,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(Pins.instance.load(api, fetch: false));
     unawaited(OnDeckHidden.instance.load(api, fetch: false));
     unawaited(PairShift.instance.load(api, fetch: false));
+    unawaited(Connection.instance.loadOnDevice()); // (offline mode as it was left: the network libraries')
   }
 
   /// The sign-in screen's Use without a server: No server mode, on the local libraries - with none yet, the folder
@@ -530,7 +535,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
           : _noServer && _local != null
-              ? HomeScreen(key: const ValueKey('noServer'), api: _combinedOf(_local!), onSignOut: _signOut)
+              ? HomeScreen(key: ValueKey('noServer ${Connection.instance.offline}'), // (fresh on going offline)
+                  api: _combinedOf(_local!), onSignOut: _signOut)
           : _api == null
               ? LoginScreen(onSignedIn: _signIn, onNoServer: _startNoServer)
               : HomeScreen(

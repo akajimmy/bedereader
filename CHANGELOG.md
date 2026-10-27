@@ -11,6 +11,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **Changed**
 
+- Offline mode covers network libraries too: offline, a network library shows only its books with a copy on the device (downloaded, or cached when opened), isn't scanned, and its downloads wait - nothing is read from a share. The Offline mode switch shows when there's Komga or a network library, not with only folders on the device (it stayed in the side menu after signing out); in No server mode it's kept as you left it.
 - Book details: the Downloaded and Cached badges are the blue of the downloaded tick on posters (Downloaded was a lighter blue, Cached grey).
 
 **Fixed**

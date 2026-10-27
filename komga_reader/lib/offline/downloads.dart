@@ -808,7 +808,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// book's while its downloads are open and the share isn't being waited for.
   bool _runnable(DownloadJob j) => j.state == JobState.queued &&
       (isLocalId(j.bookId)
-          ? localReady && !waitingForShare
+          ? localReady && !waitingForShare && !_hold // (offline: nothing from a share either - user, 10-27)
           : !_hold && _api != null && store != null && !waitingForServer);
 
   Future<void> _pump() async {
@@ -899,7 +899,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
           final total = await from.length();
           job.pagesTotal = (total / _chunk).ceil().clamp(1, 1 << 30);
           for (var i = 0; at < total; i++) {
-            if (job._cancel || paused) {
+            if (job._cancel || paused || _hold) { // (offline: back in the queue, the copy so far kept)
               stopped = true;
               break;
             }
