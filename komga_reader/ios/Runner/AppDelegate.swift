@@ -22,6 +22,74 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderRemote") {
       RemoteLog.register(messenger: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderOpenWith") {
+      OpenWith.shared.register(registrar)
+    }
+  }
+}
+
+/// Open in (the Files app, a share sheet): a CBZ, CBR or EPUB read in place in the reader (lib/open_with.dart; user,
+/// 2026-10-27) - its file as the system hands it over, accessed until the reader closes ("done"); nothing copied by
+/// the app. A copy the system made for the app (Documents/Inbox, from an app that can't share in place) goes then too.
+/// Files handed over before the app listens wait ("pending"). The scene's events come through Flutter's own scene
+/// delegate (a launch's file too, passed on once the engine is up).
+final class OpenWith: NSObject, FlutterSceneLifeCycleDelegate {
+  static let shared = OpenWith()
+  private var channel: FlutterMethodChannel?
+  private var listening = false
+  private var waiting: [[String: Any]] = []
+  private var files: [Int: (url: URL, accessing: Bool)] = [:]
+  private var nextToken = 1
+
+  func register(_ registrar: FlutterPluginRegistrar) {
+    let c = FlutterMethodChannel(name: "komga_reader/open_with", binaryMessenger: registrar.messenger())
+    c.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { return result(nil) }
+      switch call.method {
+      case "pending":
+        self.listening = true
+        result(self.waiting)
+        self.waiting.removeAll()
+      case "done":
+        if let token = (call.arguments as? [String: Any])?["token"] as? Int,
+           let file = self.files.removeValue(forKey: token) {
+          if file.accessing { file.url.stopAccessingSecurityScopedResource() }
+          let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Inbox").standardizedFileURL.path
+          if let inbox = inbox, file.url.standardizedFileURL.path.hasPrefix(inbox + "/") {
+            try? FileManager.default.removeItem(at: file.url)
+          }
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    channel = c
+    registrar.addSceneDelegate(self)
+  }
+
+  func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
+             options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
+    var took = false
+    for context in connectionOptions?.urlContexts ?? [] where take(context.url) { took = true }
+    return took
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+    var took = false
+    for context in URLContexts where take(context.url) { took = true }
+    return took
+  }
+
+  private func take(_ url: URL) -> Bool {
+    guard url.isFileURL else { return false }
+    let token = nextToken
+    nextToken += 1
+    files[token] = (url, url.startAccessingSecurityScopedResource())
+    let file: [String: Any] = ["path": url.path, "name": url.lastPathComponent, "token": token]
+    if listening { channel?.invokeMethod("open", arguments: file) } else { waiting.append(file) }
+    return true
   }
 }
 

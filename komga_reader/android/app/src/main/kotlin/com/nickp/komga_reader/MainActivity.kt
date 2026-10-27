@@ -34,6 +34,7 @@ class MainActivity : FlutterActivity() {
     // Switched off in three places because a single pass missed cases: after Back to the launcher and relaunching
     // (a fresh activity), the view that took focus was not the one the resume pass had already handled.
     override fun onCreate(savedInstanceState: Bundle?) {
+        restoring = savedInstanceState != null // (before super: the engine is set up in it)
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             // whichever view gains focus, at any time
@@ -41,6 +42,74 @@ class MainActivity : FlutterActivity() {
                 focused?.defaultFocusHighlightEnabled = false
             }
         }
+    }
+
+    // ---- Open with / Share (lib/open_with.dart; user, 2026-10-27): a book file from another app, read in place - the
+    // app is handed its file open (read as /proc/self/fd/N), nothing copied. Held open until the reader closes
+    // ("done"); then Back to the app it came from ("back"). Files handed over before the app listens wait ("pending").
+    private var openWithChannel: MethodChannel? = null
+    private var openWithListening = false
+    private val openWithWaiting = mutableListOf<Map<String, Any>>()
+    private val openFiles = mutableMapOf<Int, android.os.ParcelFileDescriptor>()
+    private var nextOpenToken = 1
+
+    private fun setUpOpenWith(flutterEngine: FlutterEngine) {
+        openWithChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/open_with").also {
+            it.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "pending" -> {
+                        openWithListening = true
+                        result.success(openWithWaiting.toList())
+                        openWithWaiting.clear()
+                    }
+                    "done" -> {
+                        (call.argument<Int>("token"))?.let { token ->
+                            try { openFiles.remove(token)?.close() } catch (_: Exception) {}
+                        }
+                        result.success(null)
+                    }
+                    "back" -> {
+                        moveTaskToBack(true)
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        // (a start for a file - not the activity made again, with the intent it started with)
+        if (!restoring) takeFile(intent)
+    }
+
+    private var restoring = false
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeFile(intent)
+    }
+
+    /// The book file in a View (Open with) or Send (Share) intent, opened and handed to the app.
+    private fun takeFile(intent: Intent?) {
+        val uri: Uri = when (intent?.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND ->
+                if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else @Suppress("DEPRECATION") intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            else -> null
+        } ?: return
+        val name = try {
+            contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        } catch (_: Exception) { null } ?: uri.lastPathSegment ?: "book"
+        val file = try { contentResolver.openFileDescriptor(uri, "r") } catch (_: Exception) { null }
+        val token = nextOpenToken++
+        val handed: Map<String, Any> = if (file == null) {
+            mapOf("path" to uri.toString(), "name" to name) // (can't be opened: the app says so)
+        } else {
+            openFiles[token] = file
+            mapOf("path" to "/proc/self/fd/${file.fd}", "name" to name, "token" to token)
+        }
+        if (openWithListening) openWithChannel?.invokeMethod("open", handed) else openWithWaiting.add(handed)
     }
 
     override fun onResume() {
@@ -136,6 +205,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        setUpOpenWith(flutterEngine)
         rotationChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "komga_reader/rotation").also {
             it.setMethodCallHandler { call, result ->
                 when (call.method) {
