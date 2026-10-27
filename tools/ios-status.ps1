@@ -3,7 +3,7 @@
     How a build's iOS (TestFlight) run on GitHub is going.
 
 .DESCRIPTION
-    tools\build.ps1 -Bump pushes each build's build-<n> tag; GitHub then builds that commit for iPhone / iPad and
+    tools\build.ps1 -Bump pushes each build's tag (exp-build-<n>, or build-<n> for a stable one); GitHub then builds that commit for iPhone / iPad and
     uploads it to TestFlight (.github\workflows\testflight.yml, about 15-20 minutes). This finds that run and says
     where it is: queued, the step it's on and for how long, or how it ended - and, once uploaded, that Apple still
     processes it for a few minutes before TestFlight offers it.
@@ -12,7 +12,7 @@
     pushed, or GitHub hasn't started it yet).
 
 .EXAMPLE
-    .\tools\ios-status.ps1               (the newest build-<n> tag)
+    .\tools\ios-status.ps1               (the newest build, either kind of tag)
     .\tools\ios-status.ps1 -Build 127
 #>
 param(
@@ -24,11 +24,13 @@ $root = Split-Path -Parent $PSScriptRoot
 $gh = 'C:\Dev\gh\bin\gh.exe'
 $repo = 'akajimmy/bedereader'
 
+# one line of numbers for both apps: build <n> is tagged exp-build-<n> (BeDeReader Exp, the everyday build) or
+# build-<n> (a stable BeDeReader) - whichever exists
+$tags = @(git -C $root tag -l 'build-*' 'exp-build-*' | Where-Object { $_ -match '^(exp-)?build-\d+$' })
 if (-not $Build) {
-    $Build = (git -C $root tag -l 'build-*' | ForEach-Object { [int]($_ -replace 'build-', '') } |
-        Measure-Object -Maximum).Maximum
+    $Build = ($tags | ForEach-Object { [int]($_ -replace '^(exp-)?build-', '') } | Measure-Object -Maximum).Maximum
 }
-$tag = if ($Ref) { $Ref } else { "build-$Build" }
+$tag = if ($Ref) { $Ref } elseif ($tags -contains "build-$Build") { "build-$Build" } else { "exp-build-$Build" }
 
 $runs = & $gh run list --repo $repo --workflow testflight.yml --branch $tag --limit 1 `
     --json databaseId,status,conclusion,createdAt,updatedAt,url | ConvertFrom-Json

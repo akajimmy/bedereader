@@ -2,7 +2,12 @@
 /// BeDeReader (user, 2026-09-29; "BéDé" is Québec French for comics, bande dessinée). Plain ASCII on purpose: the
 /// same spelling to display, type, search and use in file names. Renaming is a display-only change - see README >
 /// For developers > Renaming the app. (Until 2026-09-29 the app was called "Komga Reader".)
-const appName = 'BeDeReader';
+/// BeDeReader Exp: what everyday builds make (tools\build.ps1 without -Stable passes --dart-define=BEDEREADER_EXP=true)
+/// - its own app beside BeDeReader, for what's being tried before a stable release (user, 2026-10-27). Its IDs, data
+/// folders and icon are changed by tools\exp_identity.py for those builds only.
+const isExp = bool.fromEnvironment('BEDEREADER_EXP');
+
+const appName = isExp ? 'BeDeReader Exp' : 'BeDeReader';
 
 /// Under the name wherever there's room (sign-in, About, store listings, the README's headline): what it reads, and
 /// that it reads it from anywhere - Komga, the device, the network (user, 2026-10-27; it was "A library and reader
