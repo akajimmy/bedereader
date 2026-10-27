@@ -780,6 +780,59 @@ class AppSettings extends ChangeNotifier {
   EpubPrefs epub = const EpubPrefs();
   static const _localEpubOwn = 'epub.own';
 
+  /// eBooks: a book's own settings, overriding the defaults ([epub]) - every one of them, font and size included
+  /// (user, 2026-10-27: per book, as comics are per series; "all per-device": kept on this device only, never synced
+  /// - what reads best differs from screen to screen. The defaults stay synced, but for the font and size).
+  final Map<String, EpubPrefs> epubBooks = {};
+  static const _epubBooksKey = 'epub.books';
+
+  /// The eBook settings [bookId] is read with: its own, else the defaults.
+  EpubPrefs epubFor(String? bookId) => (bookId == null ? null : epubBooks[bookId]) ?? epub;
+
+  /// Whether [bookId] has its own eBook settings.
+  bool ownsEpub(String bookId) => epubBooks.containsKey(bookId);
+
+  /// [bookId]'s own eBook settings, from now on.
+  void setEpubBook(String bookId, EpubPrefs prefs) {
+    if (epubBooks[bookId] == prefs) return;
+    epubBooks[bookId] = prefs;
+    _epubBooksChanged();
+  }
+
+  /// The panel's "Override defaults": on, the book starts from the defaults' values (nothing on the page moves) and
+  /// can then be set; off, it follows the defaults again.
+  void setEpubOverride(String bookId, bool own) {
+    if (own == ownsEpub(bookId)) return;
+    own ? epubBooks[bookId] = epub : epubBooks.remove(bookId);
+    _epubBooksChanged();
+  }
+
+  /// Every book back to the defaults (Settings > eBooks > Reset all).
+  void clearEpubBooks() {
+    if (epubBooks.isEmpty) return;
+    epubBooks.clear();
+    _epubBooksChanged();
+  }
+
+  void _epubBooksChanged() {
+    notifyListeners();
+    final json = jsonEncode({for (final MapEntry(:key, :value) in epubBooks.entries) key: value.toJson()});
+    SharedPreferences.getInstance().then((p) => p.setString(_epubBooksKey, json)).then<void>((_) {},
+        onError: (Object _) {});
+  }
+
+  void _loadEpubBooks(String? raw) {
+    epubBooks.clear();
+    if (raw == null) return; // (a new key: none until set here - no migration)
+    try {
+      for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map<String, dynamic>).entries) {
+        epubBooks[key] = EpubPrefs.fromJson(value as Map<String, dynamic>);
+      }
+    } catch (_) {
+      epubBooks.clear(); // damaged: every book follows the defaults
+    }
+  }
+
   /// [p] with this device's font and text size (from [epub], which always has them).
   EpubPrefs _withOwn(EpubPrefs p) => p.copyWith(font: epub.font, size: epub.size);
   LibraryPrefs library = const LibraryPrefs(); // posters' captions, Home's sections: synced (key "library")
@@ -916,6 +969,7 @@ class AppSettings extends ChangeNotifier {
     final own = p.getString(_localEpubOwn); // (a new key: from the defaults until set here - no migration)
     final ownPrefs = own == null ? const EpubPrefs() : EpubPrefs.fromJson(jsonDecode(own) as Map<String, dynamic>);
     epub = epub.copyWith(font: ownPrefs.font, size: ownPrefs.size);
+    _loadEpubBooks(p.getString(_epubBooksKey));
     try {
       final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
       _dirtySeries

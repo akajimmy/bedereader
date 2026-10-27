@@ -109,7 +109,10 @@ class EpubRenderer extends Renderer {
 
   /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
   /// on the tablet; user, 2026-10-20: a setting).
-  static double get pagesApart => AppSettings.instance.epub.gutter;
+  double get pagesApart => _prefs.gutter;
+
+  /// The settings this book is read with: its own (Aa > Override defaults), else the defaults (user, 2026-10-27).
+  EpubPrefs get _prefs => AppSettings.instance.epubFor(_record['id'] as String?);
 
   /// The colour round the sheet: the page's own, a shade darker (a white page on light grey); the dark grey page on
   /// black (user, 2026-10-16: "full black"); black, a shade lighter (user, 2026-10-11: derived, no setting).
@@ -265,7 +268,7 @@ class EpubRenderer extends Renderer {
   /// screen: the margins the setting's, measured in from its edges (user, 2026-10-22: "the text should then render
   /// within that page as though the page were the screen").
   EpubTheme _themeFor(Size size, Rect? sheet) {
-    final e = AppSettings.instance.epub;
+    final e = _prefs;
     final family = e.font.family ?? switch (e.font) {
       EpubFont.deviceSerif => deviceSerifFamily,
       _ => null,
@@ -304,13 +307,13 @@ class EpubRenderer extends Renderer {
   }
 
   @override
-  Color get background => AppSettings.instance.epub.colours.background;
+  Color get background => _prefs.colours.background;
 
   /// An inset page: the surround round the sheet is what's along the top.
   @override
   Color get edge => _ready && _sheet != null ? surround(background) : background;
   @override
-  Color ink(double alpha) => AppSettings.instance.epub.colours.text.withValues(alpha: alpha);
+  Color ink(double alpha) => _prefs.colours.text.withValues(alpha: alpha);
 
   // ---- opening
 
@@ -441,7 +444,7 @@ class EpubRenderer extends Renderer {
     if (area.isEmpty) return;
     _area = area;
     // Dual page mode (user, 2026-10-16): two pages side by side, each laid out at half the width
-    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    final dual = twoPagesAllowed && _prefs.twoPages.on(area);
     _laidDual = dual;
     final size = dual ? Size(area.width / 2, area.height) : area;
     _size = size;
@@ -455,7 +458,7 @@ class EpubRenderer extends Renderer {
       // the same pages, set out the other way (a half-width page and a narrow window's are the same page): two up or
       // one, after this frame
       // (or the chapters set to start elsewhere: paired again, on the same page)
-      if (_ready && (dual != _dual || (dual && _pairedBy != AppSettings.instance.epub.chapterStart))) {
+      if (_ready && (dual != _dual || (dual && _pairedBy != _prefs.chapterStart))) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _arrange(dual));
       }
       return;
@@ -556,7 +559,7 @@ class EpubRenderer extends Renderer {
   Future<void> _countOtherWay(EpubBook b) async {
     if (!canRotate || !countOtherWay || _otherWay != null || _area.isEmpty) return;
     final area = Size(_area.height, _area.width);
-    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    final dual = twoPagesAllowed && _prefs.twoPages.on(area);
     final size = dual ? Size(area.width / 2, area.height) : area;
     final theme = _themeFor(size, _planSheet(size, area, dual));
     final id = _record['id'] as String, key = await _layoutKeyFor(theme, size, b);
@@ -740,7 +743,7 @@ class EpubRenderer extends Renderer {
       _spreadOf = const [];
       return;
     }
-    _pairedBy = AppSettings.instance.epub.chapterStart;
+    _pairedBy = _prefs.chapterStart;
     _spreads = pairChapters([for (var c = 0; c < b.chapterCount; c++) b.pageCount(c)!],
         rightHand: _pairedBy == ChapterStart.rightPage);
     _spreadOf = spreadIndex(_spreads, b.totalPages!);
@@ -758,7 +761,7 @@ class EpubRenderer extends Renderer {
   /// One page or two now, the same layout (the window's shape changed, not the page's): the page view again, on the
   /// same page.
   void _arrange(bool dual) {
-    if (_disposed || !_ready || (dual == _dual && (!dual || _pairedBy == AppSettings.instance.epub.chapterStart))) {
+    if (_disposed || !_ready || (dual == _dual && (!dual || _pairedBy == _prefs.chapterStart))) {
       return;
     }
     final keep = place;
@@ -1150,7 +1153,7 @@ class EpubRenderer extends Renderer {
     // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live;
     // the controls stay up behind it, as with comics (user, 2026-10-06: the panels as the comics')
     await showReaderPanelFrame(host.context, title: 'eBook settings',
-        children: (c, s) => epubPanelRows(c, s, api: api));
+        children: (c, s) => epubPanelRows(c, s, api: api, bookId: _record['id'] as String?));
   }
 
   // ---- the bars
