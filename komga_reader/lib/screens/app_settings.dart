@@ -296,7 +296,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
             style: TextStyle(color: hintColour)),
       ),
       SettingsGroup(title: 'Page Layout - default values', synced: true, children: layoutRows(p, s.setDefault)),
-      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+      SettingsGroup(title: 'Image - default values', synced: true, children: [
         ...imageRows(p, s.setDefault),
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
@@ -326,8 +326,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         child: Text('For the series Komga marks as webtoons; a series can override them in the reader (Webtoon '
             'settings).', style: TextStyle(color: hintColour)),
       ),
-      SettingsGroup(title: 'Pages - defaults', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
-      SettingsGroup(title: 'Image - defaults', synced: true, children: [
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: webtoonLayoutRows(p, s.setWebtoonDefault)),
+      SettingsGroup(title: 'Image - default values', synced: true, children: [
         ...imageRows(p, s.setWebtoonDefault),
         ActionRow(title: 'Image settings back to the original',
             button: TextButton(onPressed: () => s.setWebtoonDefault(p.imageReset()), child: const Text('Reset to original'))),

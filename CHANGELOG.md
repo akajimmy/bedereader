@@ -16,6 +16,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Server and sync is Server & Sync. Its group What's synced through Komga is Sync, with Last Sync - when this device last synced with Komga - and Sync now: everything synced through Komga, at once (it says so if Komga doesn't answer).
 - Library & Home: Under comic posters is Under Comic & Webtoon Posters (a webtoon's posters take those lines).
 - Night mode and its schedule moved from Look to All Book Types.
+- Webtoons' settings say Page Layout - default values too, and Comics' and Webtoons' Image - defaults is Image - default values.
 - Downloads is Storage & Downloads. Storage limit is Downloads limit, and it can be Off (nothing downloads). New: Cache limit - how much the books you open are kept, Off to 5 GB (512 MB as before; Off: nothing is cached, a book is read from its source) - and Clear cache.
 
 ## 1.6.0 - in development
