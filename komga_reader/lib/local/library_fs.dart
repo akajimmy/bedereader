@@ -30,6 +30,19 @@ abstract interface class LibraryFile {
   Future<void> close();
 }
 
+/// Bytes already in memory as a [LibraryFile] - an EPUB loaded whole, read with the same zip reader as the comics.
+class BytesFile implements LibraryFile {
+  BytesFile(this.bytes);
+  final Uint8List bytes;
+  @override
+  Future<int> length() async => bytes.length;
+  @override
+  Future<Uint8List> readRange(int offset, int length) async =>
+      Uint8List.sublistView(bytes, offset.clamp(0, bytes.length), (offset + length).clamp(0, bytes.length));
+  @override
+  Future<void> close() async {}
+}
+
 /// Where a local library's files are read from: this device's own files ([LocalFs]), and - later - a share reached
 /// by the app itself. Paths are written the same way for all: a share as \\host\share\folder.
 abstract interface class LibraryFs {

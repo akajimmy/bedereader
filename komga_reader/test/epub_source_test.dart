@@ -21,13 +21,16 @@ void main() {
     expect(resolvePath('a.xhtml', './b/./c.xhtml'), 'b/c.xhtml');
   });
 
-  test('zip: stored and deflated files read back; a missing one is null; a name matches ignoring case', () {
-    final z = Zip(zip({'a.txt': 'stored text', 'b/c.txt': 'deflated ' * 50}, deflate: {'b/c.txt'}));
-    expect(utf8.decode(z.read('a.txt')!), 'stored text');
-    expect(utf8.decode(z.read('b/c.txt')!), 'deflated ' * 50);
-    expect(z.read('B/C.TXT'), isNotNull);
-    expect(z.read('nope.txt'), isNull);
-    expect(() => Zip(Uint8List.fromList(utf8.encode('not a zip at all, just text'))), throwsFormatException);
+  test("the book's zip (read with the comics' zip reader): stored and deflated files read back; a name matches "
+      'ignoring case; a missing one is said; not a zip at all: a FormatException', () async {
+    final s = FileEpubSource.load(() async => zip({'a.txt': 'stored text', 'b/c.txt': 'deflated ' * 50},
+        deflate: {'b/c.txt'}));
+    expect(utf8.decode(await s.resource('a.txt')), 'stored text');
+    expect(utf8.decode(await s.resource('b/c.txt')), 'deflated ' * 50);
+    expect(await s.resource('B/C.TXT'), isNotEmpty);
+    await expectLater(s.resource('nope.txt'), throwsA(isA<FileSystemException>()));
+    final notZip = FileEpubSource.load(() async => Uint8List.fromList(utf8.encode('not a zip at all, just text')));
+    await expectLater(notZip.resource('a.txt'), throwsFormatException);
   });
 
   Future<FileEpubSource> fileSource(Map<String, String> files, {Set<String> deflate = const {}}) async {

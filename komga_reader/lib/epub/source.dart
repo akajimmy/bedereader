@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../local/file_zip.dart' show FileZip;
+import '../local/library_fs.dart' show BytesFile;
 import 'xhtml.dart';
 import '../book_source.dart';
 
@@ -97,20 +99,27 @@ class FileEpubSource implements EpubSource {
   FileEpubSource.load(Future<Uint8List> Function() load) : _load = load;
 
   final Future<Uint8List> Function() _load;
-  Zip? _zip;
+  Future<FileZip>? _zip;
 
-  Future<Zip> get _open async => _zip ??= Zip(await _load());
+  // (the comics' zip reader: one for both - the experiment's review)
+  Future<FileZip> get _open => _zip ??= _openZip();
+  Future<FileZip> _openZip() async => FileZip.open(BytesFile(await _load()));
 
   @override
   Future<Uint8List> resource(String path) async {
-    final z = await _open;
-    final b = z.read(path);
+    final b = await _read(await _open, path);
     if (b == null) throw FileSystemException('Not in the book', path);
     return b;
   }
 
-  String _text(Zip z, String path) {
-    final b = z.read(path);
+  /// A file in the book: matched exactly, else ignoring case.
+  static Future<Uint8List?> _read(FileZip z, String path) {
+    final name = z.names.contains(path) ? path : z.find(path);
+    return name == null ? Future.value() : z.read(name);
+  }
+
+  Future<String> _text(FileZip z, String path) async {
+    final b = await _read(z, path);
     if (b == null) throw FileSystemException('Not in the book', path);
     return utf8.decode(b, allowMalformed: true);
   }
@@ -118,10 +127,10 @@ class FileEpubSource implements EpubSource {
   @override
   Future<EpubInfo> info() async {
     final z = await _open;
-    final container = parseXhtml(_text(z, 'META-INF/container.xml'));
+    final container = parseXhtml(await _text(z, 'META-INF/container.xml'));
     final opfPath = container.find('rootfile')?.attr('full-path');
     if (opfPath == null) throw const FormatException('No package in the book');
-    final opf = parseXhtml(_text(z, opfPath));
+    final opf = parseXhtml(await _text(z, opfPath));
     final items = <String, XElement>{
       for (final i in opf.find('manifest')?.elements.where((e) => e.name == 'item') ?? const <XElement>[])
         if (i.id != null) i.id!: i,
@@ -139,7 +148,7 @@ class FileEpubSource implements EpubSource {
     final nav = items.values.where((i) => (i.attr('properties') ?? '').split(' ').contains('nav')).firstOrNull;
     if (nav != null) {
       final path = pathOf(nav);
-      final doc = parseXhtml(_text(z, path));
+      final doc = parseXhtml(await _text(z, path));
       final navs = _all(doc, 'nav');
       final tocNav = navs.where((n) => n.attr('type') == 'toc').firstOrNull ?? navs.firstOrNull;
       void walk(XElement ol, int depth) {
@@ -159,7 +168,7 @@ class FileEpubSource implements EpubSource {
           items.values.where((i) => i.attr('media-type') == 'application/x-dtbncx+xml').firstOrNull;
       if (ncx != null) {
         final path = pathOf(ncx);
-        final doc = parseXhtml(_text(z, path));
+        final doc = parseXhtml(await _text(z, path));
         void walk(XElement parent, int depth) {
           for (final p in parent.elements.where((e) => e.name == 'navpoint')) {
             final label = p.find('navlabel');
@@ -184,64 +193,4 @@ class FileEpubSource implements EpubSource {
 
   static String _textIn(XElement e) =>
       e.children.map((n) => n is XText ? n.text : _textIn(n as XElement)).join().replaceAll(RegExp(r'\s+'), ' ');
-}
-
-/// Reads files out of a zip held in memory (EPUBs are a few MB): the central directory, then each entry stored or
-/// deflated. Enough for EPUBs - no encryption, no zip64.
-class Zip {
-  Zip(this.bytes) {
-    final d = ByteData.sublistView(bytes);
-    // the end-of-central-directory record: in the last 64 KB + 22 bytes
-    var eocd = -1;
-    for (var i = bytes.length - 22; i >= 0 && i >= bytes.length - 65557; i--) {
-      if (d.getUint32(i, Endian.little) == 0x06054b50) {
-        eocd = i;
-        break;
-      }
-    }
-    if (eocd < 0) throw const FormatException('Not a zip file');
-    final count = d.getUint16(eocd + 10, Endian.little);
-    var p = d.getUint32(eocd + 16, Endian.little);
-    for (var n = 0; n < count; n++) {
-      if (d.getUint32(p, Endian.little) != 0x02014b50) throw const FormatException('Damaged zip directory');
-      final method = d.getUint16(p + 10, Endian.little);
-      final compressed = d.getUint32(p + 20, Endian.little);
-      final nameLen = d.getUint16(p + 28, Endian.little);
-      final extraLen = d.getUint16(p + 30, Endian.little);
-      final commentLen = d.getUint16(p + 32, Endian.little);
-      final local = d.getUint32(p + 42, Endian.little);
-      final name = utf8.decode(bytes.sublist(p + 46, p + 46 + nameLen), allowMalformed: true);
-      _entries[name] = (method, compressed, local);
-      p += 46 + nameLen + extraLen + commentLen;
-    }
-  }
-
-  final Uint8List bytes;
-  final Map<String, (int, int, int)> _entries = {}; // name -> (method, compressed size, local header offset)
-
-  Iterable<String> get names => _entries.keys;
-
-  /// A file's contents, or null if the zip doesn't have it. Paths are matched exactly, then ignoring case.
-  Uint8List? read(String name) {
-    var e = _entries[name];
-    if (e == null) {
-      final lower = name.toLowerCase();
-      for (final k in _entries.keys) {
-        if (k.toLowerCase() == lower) {
-          e = _entries[k];
-          break;
-        }
-      }
-    }
-    if (e == null) return null;
-    final (method, size, local) = e;
-    final d = ByteData.sublistView(bytes);
-    final start = local + 30 + d.getUint16(local + 26, Endian.little) + d.getUint16(local + 28, Endian.little);
-    final data = Uint8List.sublistView(bytes, start, start + size);
-    return switch (method) {
-      0 => Uint8List.fromList(data),
-      8 => Uint8List.fromList(ZLibDecoder(raw: true).convert(data)),
-      _ => throw FormatException('Unsupported zip compression ($method)'),
-    };
-  }
 }
