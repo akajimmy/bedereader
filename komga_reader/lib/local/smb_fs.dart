@@ -159,7 +159,10 @@ class SmbFs implements LibraryFs {
   /// The share's own answers: not there = gone; the login or the rights refused = refused; out of reach, too slow, the
   /// file busy, the connection lost = no answer (the book kept from before); anything else = damaged.
   @override
-  FileTrouble classify(Object error) {
+  FileTrouble classify(Object error) => troubleOf(error);
+
+  /// [classify], for a share's answer without a share at hand (a server's share list refused).
+  static FileTrouble troubleOf(Object error) {
     if (error is! Smb2Exception) return FileTrouble.damaged;
     return switch (error.type) {
       Smb2ErrorType.notFound || Smb2ErrorType.notADirectory => FileTrouble.gone,

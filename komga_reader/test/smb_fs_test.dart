@@ -1,6 +1,5 @@
 // Network shares (rebuild step 9; lib/local/smb_fs.dart): a share read through the app's SMB client - listed several
 // folders at once, its errors told apart, its files opened once - and the shares' logins, kept encrypted.
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dart_smb2/dart_smb2.dart';

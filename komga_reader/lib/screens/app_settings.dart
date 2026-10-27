@@ -527,9 +527,11 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     final api = widget.api;
     final local = api is CombinedSource ? api.local : null;
     return [
-      if (local != null)
-        LocalLibrariesGroup(local: local)
-      else
+      if (local != null) ...[
+        LocalLibrariesGroup(local: local),
+        LocalLibrariesGroup(local: local, network: true),
+        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
+      ] else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
       SettingsGroup(title: 'Komga', children: [
         ActionRow(title: 'Komga server', subtitle: CombinedSource.noServerOf(api)
