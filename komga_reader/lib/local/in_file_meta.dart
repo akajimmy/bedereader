@@ -4,7 +4,14 @@
 
 import 'local_meta.dart';
 
-/// [xml] (a CBZ's ComicInfo.xml; null: it has none) with [e]'s title, number and date (Year, Month, Day).
+/// ComicInfo's credit fields, by Komga's role.
+const comicInfoRoles = {
+  'writer': 'Writer', 'penciller': 'Penciller', 'inker': 'Inker', 'colorist': 'Colorist', 'letterer': 'Letterer',
+  'cover': 'CoverArtist', 'editor': 'Editor',
+};
+
+/// [xml] (a CBZ's ComicInfo.xml; null: it has none) with [e]'s title, number, date (Year, Month, Day), summary,
+/// credits (a field each role, names separated by commas) and tags.
 String comicInfoWith(String? xml, BookEdits e) {
   var x = xml ??
       '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -18,10 +25,19 @@ String comicInfoWith(String? xml, BookEdits e) {
     x = _setElement(x, 'Month', d?.month.toString(), close: 'ComicInfo');
     x = _setElement(x, 'Day', d?.day.toString(), close: 'ComicInfo');
   }
+  if (e.summary != null) x = _setElement(x, 'Summary', e.summary!.isEmpty ? null : e.summary, close: 'ComicInfo');
+  if (e.authors != null) {
+    for (final MapEntry(key: role, value: tag) in comicInfoRoles.entries) {
+      final names = [for (final (n, r) in e.authors!) if (r == role) n];
+      x = _setElement(x, tag, names.isEmpty ? null : names.join(', '), close: 'ComicInfo');
+    }
+  }
+  if (e.tags != null) x = _setElement(x, 'Tags', e.tags!.isEmpty ? null : e.tags!.join(', '), close: 'ComicInfo');
   return x;
 }
 
-/// [opf] (an EPUB's package file) with [e]'s title (dc:title), date (dc:date) and number (calibre's series index).
+/// [opf] (an EPUB's package file) with [e]'s title (dc:title), date (dc:date), number (calibre's series index),
+/// summary (dc:description), credits (dc:creator for writers, dc:contributor for the others) and tags (dc:subject).
 String opfWith(String opf, BookEdits e) {
   var x = opf;
   if (e.title != null) {
@@ -46,8 +62,28 @@ String opfWith(String opf, BookEdits e) {
       x = _beforeClose(x, '<meta name="calibre:series_index" content="${xmlEscape(e.number!)}"/>');
     }
   }
+  if (e.summary != null) {
+    x = _without(x, 'dc:description');
+    if (e.summary!.isNotEmpty) x = _beforeClose(x, '<dc:description>${xmlEscape(e.summary!)}</dc:description>');
+  }
+  if (e.authors != null) {
+    x = _without(_without(x, 'dc:creator'), 'dc:contributor');
+    for (final (n, r) in e.authors!) {
+      final tag = r == 'writer' ? 'dc:creator' : 'dc:contributor';
+      x = _beforeClose(x, '<$tag>${xmlEscape(n)}</$tag>');
+    }
+  }
+  if (e.tags != null) {
+    x = _without(x, 'dc:subject');
+    for (final t in e.tags!) {
+      x = _beforeClose(x, '<dc:subject>${xmlEscape(t)}</dc:subject>');
+    }
+  }
   return x;
 }
+
+/// [x] without its <[tag]> elements.
+String _without(String x, String tag) => x.replaceAll(RegExp('\\s*<$tag\\b[^>]*?(?:/>|>.*?</$tag>)', dotAll: true), '');
 
 /// [x] with <[tag]>[value]</[tag]> in place of the one there (null: taken out), or added before </[close]>.
 String _setElement(String x, String tag, String? value, {required String close}) {

@@ -9,20 +9,22 @@ import 'local_meta.dart';
 /// A series in a local library: stored once, not copied into each of its books.
 class LocalSeries {
   const LocalSeries({required this.id, required this.libraryId, required this.name, this.oneshot = false,
-      this.titleSort, this.readingDirection, this.status, this.publisher});
+      this.titleSort, this.readingDirection, this.status, this.publisher, this.summary, this.genres, this.tags});
   final String id, libraryId, name;
 
   /// A book of its own (a book loose in the library, or in a _oneshots folder).
   final bool oneshot;
 
   /// Its edited fields (lib/local/local_meta.dart - not kept in the scan: the edits are applied to it as it's listed).
-  final String? titleSort, readingDirection, status, publisher;
+  final String? titleSort, readingDirection, status, publisher, summary;
+  final List<String>? genres, tags;
 
   /// The same series with [e] applied (none: as it is).
   LocalSeries edited(SeriesEdits? e) => e == null
       ? this
       : LocalSeries(id: id, libraryId: libraryId, name: e.title ?? name, oneshot: oneshot, titleSort: e.titleSort,
-          readingDirection: e.readingDirection, status: e.status, publisher: e.publisher);
+          readingDirection: e.readingDirection, status: e.status, publisher: e.publisher, summary: e.summary,
+          genres: e.genres, tags: e.tags);
 
   Map<String, Object?> toJson() => {'id': id, 'name': name, if (oneshot) 'oneshot': true};
   factory LocalSeries.fromJson(Map j, String libraryId) =>
@@ -47,7 +49,7 @@ class LocalBook {
     required this.modified, required this.title, this.epub = false, this.mediaType = 'application/zip',
     this.pages = 0, this.cover, this.number = '', this.numberSort = 0, this.released, this.precision,
     this.authors = const [], this.summary = '', this.readLists = const [], this.inside = 0, this.rightToLeft = false,
-    this.publisher, this.genres = const [], this.count,
+    this.publisher, this.genres = const [], this.count, this.tags = const [],
   });
 
   final String id, libraryId, seriesId;
@@ -90,6 +92,9 @@ class LocalBook {
   final List<String> genres;
   final int? count;
 
+  /// Its tags - as edited (lib/local/local_meta.dart; ComicInfo's own aren't read).
+  final List<String> tags;
+
   /// The file is the same one as before (its book needn't be opened again): the same size, changed at the same moment
   /// - whatever time zone the device is in now (review, 2026-10-26: kept as local time, every book looked changed
   /// after the iPad crossed one, and a whole library was read again).
@@ -101,6 +106,9 @@ class LocalBook {
     if (e.title != null) j['title'] = e.title;
     if (e.number != null) j['number'] = e.number;
     if (e.numberSort != null) j['numberSort'] = e.numberSort;
+    if (e.summary != null) j['summary'] = e.summary;
+    if (e.authors != null) j['authors'] = [for (final (n, r) in e.authors!) [n, r]];
+    if (e.tags != null) j['tags'] = e.tags;
     if (e.dateSet) {
       j.remove('precision');
       final date = e.releaseDate == null ? null : DateTime.tryParse(e.releaseDate!);
@@ -133,7 +141,7 @@ class LocalBook {
         if (summary.isNotEmpty) 'summary': summary,
         if (readLists.isNotEmpty) 'readLists': [for (final r in readLists) r.toJson()],
         'inside': inside, if (rightToLeft) 'rightToLeft': true, if (publisher != null) 'publisher': publisher,
-        if (genres.isNotEmpty) 'genres': genres, if (count != null) 'count': count,
+        if (genres.isNotEmpty) 'genres': genres, if (count != null) 'count': count, if (tags.isNotEmpty) 'tags': tags,
       };
 
   factory LocalBook.fromJson(Map j, String libraryId) => LocalBook(
@@ -149,6 +157,7 @@ class LocalBook {
         readLists: [for (final r in (j['readLists'] as List?) ?? const []) ReadListPlace.fromJson(r as Map)],
         inside: j['inside'] as int? ?? 0, rightToLeft: j['rightToLeft'] == true, publisher: j['publisher'] as String?,
         genres: [for (final g in (j['genres'] as List?) ?? const []) g as String], count: j['count'] as int?,
+        tags: [for (final t in (j['tags'] as List?) ?? const []) t as String],
       );
 }
 

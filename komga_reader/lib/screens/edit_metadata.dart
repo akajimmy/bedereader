@@ -6,9 +6,10 @@ import '../local/book_names.dart' show isLocalId;
 import '../local/local_meta.dart' show EditsInFiles;
 import '../widgets/error_text.dart';
 
-// Metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md): a book's title, number, release date and
-// series; a series' title, sort title, reading direction, status and publisher. Saved through the book's source -
-// Komga's own metadata (admin accounts), or a local or network library's files.
+// Metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md): a book's title, number, sort number, release
+// date, series, summary, credits and tags; a series' title, sort title, reading direction, status, publisher, summary,
+// genres and tags. Saved through the book's source - Komga's own metadata (admin accounts), or a local or network
+// library's files.
 
 /// The sort number a number gives: its leading figures ("12", "12.5", "3a" -> 3); null for none ("Annual").
 num? numberSortOf(String number) {
@@ -20,17 +21,61 @@ num? numberSortOf(String number) {
 String isoDate(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+/// The credit roles edited, by Komga's names, with the words shown for them (others a book has - editor, translator -
+/// are kept as they are).
+const editedRoles = {
+  'writer': 'Writers', 'penciller': 'Pencillers', 'inker': 'Inkers', 'colorist': 'Colorists', 'letterer': 'Letterers',
+  'cover': 'Cover artists',
+};
+
+/// Names typed separated by commas: trimmed, empty ones left out, each once.
+List<String> namesIn(String text) => {for (final n in text.split(',')) if (n.trim().isNotEmpty) n.trim()}.toList();
+
+/// A list of names as text to edit.
+String namesText(Object? list) => [for (final n in (list as List?) ?? const []) '$n'].join(', ');
+
+/// A book's credits of [role] as text to edit.
+String creditsText(Map book, String role) => namesText([
+      for (final a in ((book['metadata'] as Map?)?['authors'] as List?) ?? const [])
+        if ((a as Map)['role'] == role) a['name'],
+    ]);
+
+bool _sameNames(Iterable<String> a, Iterable<String> b) {
+  final x = [...a]..sort(), y = [...b]..sort();
+  return x.length == y.length && Iterable.generate(x.length).every((i) => x[i] == y[i]);
+}
+
 /// The changes made to a book's fields, by Komga's names - only what differs from [book] ([series]: the series name
-/// typed, local and network books only).
+/// typed, local and network books only). [sort]: the sort number typed (null: it follows the number); [credits]:
+/// names typed for each of [editedRoles]; [tags]: typed separated by commas. Null: not edited.
 Map<String, Object?> bookChanges(Map book, {required String title, required String number, required DateTime? date,
-    String? series}) {
+    String? series, String? sort, String? summary, Map<String, String>? credits, String? tags}) {
   final m = (book['metadata'] as Map?) ?? const {};
   final out = <String, Object?>{};
   if (title.trim() != '${m['title'] ?? ''}') out['title'] = title.trim();
   if (number.trim() != '${m['number'] ?? ''}') {
     out['number'] = number.trim();
-    final sort = numberSortOf(number);
-    if (sort != null) out['numberSort'] = sort;
+    final follows = numberSortOf(number);
+    if (sort == null && follows != null) out['numberSort'] = follows;
+  }
+  if (sort != null) {
+    final n = num.tryParse(sort.trim());
+    if (n != null && n != m['numberSort']) out['numberSort'] = n;
+  }
+  if (summary != null && summary.trim() != '${m['summary'] ?? ''}'.trim()) out['summary'] = summary.trim();
+  if (credits != null) {
+    final was = [for (final a in (m['authors'] as List?) ?? const []) ((a as Map)['name'] as String, a['role'] as String)];
+    final now = [
+      for (final MapEntry(key: role, value: text) in credits.entries)
+        for (final n in namesIn(text)) (n, role),
+      for (final a in was) if (!credits.containsKey(a.$2)) a,
+    ];
+    if (!_sameNames([for (final (n, r) in was) '$r|$n'], [for (final (n, r) in now) '$r|$n'])) {
+      out['authors'] = [for (final (n, r) in now) {'name': n, 'role': r}];
+    }
+  }
+  if (tags != null && !_sameNames(namesIn(tags), [for (final t in (m['tags'] as List?) ?? const []) '$t'])) {
+    out['tags'] = namesIn(tags);
   }
   final was = m['releaseDate'] as String?;
   final now = date == null ? null : isoDate(date);
@@ -84,17 +129,30 @@ class _BookEditorState extends State<_BookEditor> {
   Map get _m => (widget.book['metadata'] as Map?) ?? const {};
   late final _title = TextEditingController(text: '${_m['title'] ?? ''}');
   late final _number = TextEditingController(text: '${_m['number'] ?? ''}');
+  late final _sort = TextEditingController(text: _sortText(_m['numberSort']));
+  bool _sortTyped = false; // the sort number changed by hand: it no longer follows the number
+  late final _summary = TextEditingController(text: '${_m['summary'] ?? ''}');
+  late final _credits = {for (final r in editedRoles.keys) r: TextEditingController(text: creditsText(widget.book, r))};
+  late final _tags = TextEditingController(text: namesText(_m['tags']));
   late DateTime? _date = DateTime.tryParse('${_m['releaseDate'] ?? ''}');
   late final bool _local = isLocalId(widget.book['id'] as String?);
   String _series = '';
   List<String> _seriesNames = const [];
   bool _saving = false;
 
+  static String _sortText(Object? n) => n is num ? (n == n.roundToDouble() ? '${n.toInt()}' : '$n') : '';
+
   @override
   void initState() {
     super.initState();
     _series = '${widget.book['seriesTitle'] ?? ''}';
     if (_local) _loadSeries();
+    // the sort number follows the number as it's typed, until it's changed by hand
+    _number.addListener(() {
+      if (_sortTyped) return;
+      final n = numberSortOf(_number.text);
+      if (n != null) _sort.text = _sortText(n);
+    });
   }
 
   /// The library's series, to pick from.
@@ -120,7 +178,8 @@ class _BookEditorState extends State<_BookEditor> {
   Future<void> _save() async {
     if (_title.text.trim().isEmpty) return;
     final changes = bookChanges(widget.book, title: _title.text, number: _number.text, date: _date,
-        series: _local ? _series : null);
+        series: _local ? _series : null, sort: _sort.text, summary: _summary.text,
+        credits: {for (final MapEntry(:key, :value) in _credits.entries) key: value.text}, tags: _tags.text);
     if (changes.isEmpty) return Navigator.pop(context, false);
     setState(() => _saving = true);
     try {
@@ -165,8 +224,16 @@ class _BookEditorState extends State<_BookEditor> {
             Padding(padding: const EdgeInsets.only(top: 8), child: Text(note, key: const ValueKey('edit-note'),
                 style: Theme.of(context).textTheme.bodySmall)),
           const SizedBox(height: 8),
-          TextField(key: const ValueKey('edit-number'), controller: _number,
-              decoration: const InputDecoration(labelText: 'Number')),
+          Row(children: [
+            Expanded(child: TextField(key: const ValueKey('edit-number'), controller: _number,
+                decoration: const InputDecoration(labelText: 'Number'))),
+            const SizedBox(width: 16),
+            Expanded(child: TextField(key: const ValueKey('edit-sort-number'), controller: _sort,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => _sortTyped = true,
+                decoration: const InputDecoration(labelText: 'Sort number',
+                    helperText: 'Where it sorts (an Annual: 12.5)', helperMaxLines: 2))),
+          ]),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: InputDecorator(decoration: const InputDecoration(labelText: 'Release date'),
@@ -177,6 +244,17 @@ class _BookEditorState extends State<_BookEditor> {
               IconButton(key: const ValueKey('edit-date-clear'), tooltip: 'No date', icon: const Icon(Icons.clear),
                   onPressed: () => setState(() => _date = null)),
           ]),
+          const SizedBox(height: 8),
+          TextField(key: const ValueKey('edit-summary'), controller: _summary, minLines: 2, maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Summary')),
+          for (final MapEntry(key: role, value: label) in editedRoles.entries) ...[
+            const SizedBox(height: 8),
+            TextField(key: ValueKey('edit-credits-$role'), controller: _credits[role],
+                decoration: InputDecoration(labelText: label, helperText: role == 'writer' ? 'Names separated by commas' : null)),
+          ],
+          const SizedBox(height: 8),
+          TextField(key: const ValueKey('edit-tags'), controller: _tags,
+              decoration: const InputDecoration(labelText: 'Tags', helperText: 'Separated by commas')),
         ]))),
         actions: [
           TextButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -197,7 +275,8 @@ const seriesStatuses = {'ONGOING': 'Ongoing', 'ENDED': 'Ended', 'HIATUS': 'Hiatu
 
 /// The changes made to a series' fields, by Komga's names - only what differs from [series].
 Map<String, Object?> seriesChanges(Map series, {required String title, required String titleSort,
-    required String? readingDirection, required String? status, required String publisher}) {
+    required String? readingDirection, required String? status, required String publisher, String? summary,
+    String? genres, String? tags}) {
   final m = (series['metadata'] as Map?) ?? const {};
   final out = <String, Object?>{};
   if (title.trim() != '${m['title'] ?? series['name'] ?? ''}') out['title'] = title.trim();
@@ -206,6 +285,13 @@ Map<String, Object?> seriesChanges(Map series, {required String title, required 
   if (readingDirection != dir) out['readingDirection'] = readingDirection; // (null: not set)
   if (status != null && status != m['status']) out['status'] = status;
   if (publisher.trim() != '${m['publisher'] ?? ''}') out['publisher'] = publisher.trim();
+  if (summary != null && summary.trim() != '${m['summary'] ?? ''}'.trim()) out['summary'] = summary.trim();
+  if (genres != null && !_sameNames(namesIn(genres), [for (final g in (m['genres'] as List?) ?? const []) '$g'])) {
+    out['genres'] = namesIn(genres);
+  }
+  if (tags != null && !_sameNames(namesIn(tags), [for (final t in (m['tags'] as List?) ?? const []) '$t'])) {
+    out['tags'] = namesIn(tags);
+  }
   return out;
 }
 
@@ -225,6 +311,9 @@ class _SeriesEditorState extends State<_SeriesEditor> {
   late String? _status = seriesStatuses.containsKey(_m['status']) ? _m['status'] as String : null;
   String _publisher = '';
   List<String> _publishers = const [];
+  late final _summary = TextEditingController(text: '${_m['summary'] ?? ''}');
+  late final _genres = TextEditingController(text: namesText(_m['genres']));
+  late final _tags = TextEditingController(text: namesText(_m['tags']));
   bool _saving = false;
 
   @override
@@ -239,7 +328,8 @@ class _SeriesEditorState extends State<_SeriesEditor> {
   Future<void> _save() async {
     if (_title.text.trim().isEmpty) return;
     final changes = seriesChanges(widget.series, title: _title.text, titleSort: _sort.text,
-        readingDirection: _direction, status: _status, publisher: _publisher);
+        readingDirection: _direction, status: _status, publisher: _publisher, summary: _summary.text,
+        genres: _genres.text, tags: _tags.text);
     if (changes.isEmpty) return Navigator.pop(context, false);
     setState(() => _saving = true);
     try {
@@ -298,6 +388,15 @@ class _SeriesEditorState extends State<_SeriesEditor> {
               decoration: const InputDecoration(labelText: 'Publisher'),
             ),
           ),
+          const SizedBox(height: 8),
+          TextField(key: const ValueKey('edit-summary'), controller: _summary, minLines: 2, maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Summary')),
+          const SizedBox(height: 8),
+          TextField(key: const ValueKey('edit-genres'), controller: _genres,
+              decoration: const InputDecoration(labelText: 'Genres', helperText: 'Separated by commas')),
+          const SizedBox(height: 8),
+          TextField(key: const ValueKey('edit-tags'), controller: _tags,
+              decoration: const InputDecoration(labelText: 'Tags', helperText: 'Separated by commas')),
         ]))),
         actions: [
           TextButton(onPressed: _saving ? null : () => Navigator.pop(context, false), child: const Text('Cancel')),

@@ -157,8 +157,9 @@ class LocalSource extends CatalogueSource {
   static Map<String, dynamic> seriesJson(LocalSeries s) => {
         'id': s.id, 'name': s.name, 'libraryId': s.libraryId, 'oneshot': s.oneshot,
         'metadata': {
-          'title': s.name, 'titleSort': s.titleSort ?? s.name, 'status': s.status ?? 'ONGOING', 'genres': const [],
-          'tags': const [], if (s.readingDirection != null) 'readingDirection': s.readingDirection,
+          'title': s.name, 'titleSort': s.titleSort ?? s.name, 'status': s.status ?? 'ONGOING',
+          'genres': s.genres ?? const [], 'tags': s.tags ?? const [], 'summary': s.summary ?? '',
+          if (s.readingDirection != null) 'readingDirection': s.readingDirection,
           if (s.publisher != null) 'publisher': s.publisher,
         },
         'booksMetadata': {'authors': const []},
@@ -182,7 +183,7 @@ class LocalSource extends CatalogueSource {
         if (b.released != null) 'releaseDate': _date(b.released!),
         if (b.released != null && b.precision != null) 'releaseDatePrecision': b.precision!.name,
         'authors': [for (final (n, r) in b.authors) {'name': n, 'role': r}],
-        'tags': const [], 'isbn': '', 'links': const [],
+        'tags': b.tags, 'isbn': '', 'links': const [],
       },
       'readProgress': null, 'deleted': false, 'oneshot': s.oneshot,
     };
@@ -650,35 +651,33 @@ class LocalSource extends CatalogueSource {
     final own = withEdits(index, library, index.meta).series[scanned.seriesId]?.name ?? '';
     if (c['seriesName'] case final String name when name.trim().toLowerCase() == own.toLowerCase()) c['seriesName'] = null;
     final file = fileNameOf(b.path);
-    // Settings' In the book files: a CBZ's or an EPUB's own fields into the file - the rest (its series; a CBR's
-    // everything) alongside. The scan reads a CBZ's back from its ComicInfo, an EPUB's title from its package file:
-    // those aren't kept alongside as well.
-    var written = (title: false, number: false, date: false);
-    final inFile = {for (final k in const ['title', 'number', 'releaseDate']) if (c.containsKey(k)) k: c[k]};
+    // Settings' In the book files: a CBZ's or an EPUB's own fields into the file - the rest (its series; its sort
+    // number - ComicInfo has none; a CBR's everything) alongside. What the scan reads back from the file - a CBZ's
+    // title, number, date, summary and credits (its ComicInfo), an EPUB's title - isn't kept alongside as well; the
+    // rest is (in the file for other apps, read by this one from alongside).
+    var readBack = const <String>{};
+    final inFile = {
+      for (final k in const ['title', 'number', 'releaseDate', 'summary', 'authors', 'tags'])
+        if (c.containsKey(k)) k: c[k],
+    };
     if (EditsInFiles.instance.value && inFile.isNotEmpty && (b.epub || b.mediaType == 'application/zip')) {
       closeBook(bookId); // (not held open while it's replaced)
       await _writeIntoFile(library, b, const BookEdits().plus(inFile));
-      written = b.epub
-          ? (title: inFile.containsKey('title'), number: false, date: false)
-          : (title: inFile.containsKey('title'), number: inFile.containsKey('number'),
-              date: inFile.containsKey('releaseDate'));
+      readBack = {
+        for (final k in b.epub ? const ['title'] : const ['title', 'number', 'releaseDate', 'summary', 'authors'])
+          if (inFile.containsKey(k)) k,
+      };
       // shown at once as it now is in the file (the next scan reads the file again: it changed)
-      index.books[bookId] = scanned.edited(
-          const BookEdits().plus({
-            if (written.title) 'title': c['title'],
-            if (written.number) ...{'number': c['number'], if (c.containsKey('numberSort')) 'numberSort': c['numberSort']},
-            if (written.date) 'releaseDate': c['releaseDate'],
-          }),
+      index.books[bookId] = scanned.edited(const BookEdits().plus({for (final k in readBack) k: c[k]}),
           seriesId: scanned.seriesId);
-      for (final k in [if (written.title) 'title', if (written.number) ...['number', 'numberSort'],
-          if (written.date) 'releaseDate']) {
+      for (final k in readBack) {
         c.remove(k);
       }
     }
     await _saveEdits(library, index, folderOf(b.path), (doc) {
       final books = Map<String, Object?>.from((doc['books'] as Map?) ?? const {});
       final now = (books[file] is Map ? BookEdits.fromJson(books[file] as Map) : const BookEdits())
-          .without(title: written.title, number: written.number, date: written.date)
+          .without(readBack)
           .plus(c);
       now.isEmpty ? books.remove(file) : books[file] = now.toJson();
       doc['books'] = books;
@@ -739,11 +738,15 @@ class LocalSource extends CatalogueSource {
     m['name'] = now.title ?? index.series[seriesId]?.name ?? ''; // (Mylar's always has a name)
     now.publisher == null ? m.remove('publisher') : m['publisher'] = now.publisher;
     now.status == null ? m.remove('status') : m['status'] = now.status == 'ENDED' ? 'Ended' : 'Continuing';
+    // (Mylar's description: what Komga reads as the summary)
+    (now.summary ?? '').isEmpty ? m.remove('description_text') : m['description_text'] = now.summary;
     doc['metadata'] = m;
     final ownKeys = {
       if (now.titleSort != null) 'titleSort': now.titleSort,
       if (now.readingDirection != null) 'readingDirection': now.readingDirection,
       if (now.status != null) 'status': now.status, // (exactly: Mylar's has no hiatus or abandoned)
+      if (now.genres != null) 'genres': now.genres, // (none in Mylar's)
+      if (now.tags != null) 'tags': now.tags,
     };
     ownKeys.isEmpty ? doc.remove('bedereader') : doc['bedereader'] = ownKeys;
     final text = const JsonEncoder.withIndent('  ').convert(doc);

@@ -41,15 +41,17 @@ const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
 /// One of the metadata files (listed with the books - the scan reads them).
 bool isMetaFile(String name) => name.toLowerCase() == seriesFileName || name == editsFileName;
 
-/// A series' edits: what's set replaces what the scan found.
+/// A series' edits: what's set replaces what the scan found. [summary]: '' when it was taken away.
 class SeriesEdits {
-  const SeriesEdits({this.title, this.titleSort, this.readingDirection, this.status, this.publisher});
-  final String? title, titleSort, readingDirection, status, publisher;
+  const SeriesEdits({this.title, this.titleSort, this.readingDirection, this.status, this.publisher, this.summary,
+      this.genres, this.tags});
+  final String? title, titleSort, readingDirection, status, publisher, summary;
+  final List<String>? genres, tags;
 
-  bool get isEmpty =>
-      title == null && titleSort == null && readingDirection == null && status == null && publisher == null;
+  bool get isEmpty => title == null && titleSort == null && readingDirection == null && status == null &&
+      publisher == null && summary == null && genres == null && tags == null;
 
-  /// [changes] (Komga's names - the app's edit screen) on top of these; a field changed to '' or null is unset.
+  /// [changes] (Komga's names - the app's edit screen) on top of these; a name field changed to '' or null is unset.
   SeriesEdits plus(Map<String, Object?> changes) {
     String? pick(String key, String? was) {
       if (!changes.containsKey(key)) return was;
@@ -59,23 +61,31 @@ class SeriesEdits {
 
     return SeriesEdits(title: pick('title', title), titleSort: pick('titleSort', titleSort),
         readingDirection: pick('readingDirection', readingDirection), status: pick('status', status),
-        publisher: pick('publisher', publisher));
+        publisher: pick('publisher', publisher),
+        summary: changes.containsKey('summary') ? ((changes['summary'] as String?) ?? '').trim() : summary,
+        genres: changes.containsKey('genres') ? _list(changes['genres']) : genres,
+        tags: changes.containsKey('tags') ? _list(changes['tags']) : tags);
   }
 
   Map<String, Object?> toJson() => {
         if (title != null) 'title': title, if (titleSort != null) 'titleSort': titleSort,
         if (readingDirection != null) 'readingDirection': readingDirection, if (status != null) 'status': status,
-        if (publisher != null) 'publisher': publisher,
+        if (publisher != null) 'publisher': publisher, if (summary != null) 'summary': summary,
+        if (genres != null) 'genres': genres, if (tags != null) 'tags': tags,
       };
 
   factory SeriesEdits.fromJson(Map j) => SeriesEdits(title: _text(j['title']), titleSort: _text(j['titleSort']),
-      readingDirection: _text(j['readingDirection']), status: _text(j['status']), publisher: _text(j['publisher']));
+      readingDirection: _text(j['readingDirection']), status: _text(j['status']), publisher: _text(j['publisher']),
+      summary: j['summary'] is String ? j['summary'] as String : null, genres: _listOrNull(j['genres']),
+      tags: _listOrNull(j['tags']));
 }
 
 /// A book's edits: what's set replaces what its file and name say. [releaseDate]: set (a 'yyyy-MM-dd', or null - its
-/// date taken away) only when [dateSet].
+/// date taken away) only when [dateSet]; [summary]: '' when it was taken away; [authors]: (name, Komga's role) - all of
+/// them, as edited.
 class BookEdits {
-  const BookEdits({this.title, this.number, this.numberSort, this.dateSet = false, this.releaseDate, this.series});
+  const BookEdits({this.title, this.number, this.numberSort, this.dateSet = false, this.releaseDate, this.series,
+      this.summary, this.authors, this.tags});
   final String? title, number;
   final num? numberSort;
   final bool dateSet;
@@ -83,8 +93,12 @@ class BookEdits {
 
   /// The series it's moved to, by name (one of the library's, or a new one).
   final String? series;
+  final String? summary;
+  final List<(String, String)>? authors;
+  final List<String>? tags;
 
-  bool get isEmpty => title == null && number == null && numberSort == null && !dateSet && series == null;
+  bool get isEmpty => title == null && number == null && numberSort == null && !dateSet && series == null &&
+      summary == null && authors == null && tags == null;
 
   /// [changes] (Komga's names, and seriesName) on top of these.
   BookEdits plus(Map<String, Object?> changes) => BookEdits(
@@ -94,28 +108,54 @@ class BookEdits {
         dateSet: dateSet || changes.containsKey('releaseDate'),
         releaseDate: changes.containsKey('releaseDate') ? changes['releaseDate'] as String? : releaseDate,
         series: changes.containsKey('seriesName') ? _text(changes['seriesName']) : series,
+        summary: changes.containsKey('summary') ? ((changes['summary'] as String?) ?? '').trim() : summary,
+        authors: changes.containsKey('authors') ? _authors(changes['authors']) : authors,
+        tags: changes.containsKey('tags') ? _list(changes['tags']) : tags,
       );
 
-  /// The same edits without [title], [number] (its sort number too) or [date] - what's been written into the file
-  /// itself, read from there now.
-  BookEdits without({bool title = false, bool number = false, bool date = false}) => BookEdits(
-        title: title ? null : this.title, number: number ? null : this.number,
-        numberSort: number ? null : numberSort, dateSet: date ? false : dateSet,
-        releaseDate: date ? null : releaseDate, series: series,
+  /// The same edits without those of [keys] (Komga's names) - what's been written into the file itself, read from
+  /// there now.
+  BookEdits without(Set<String> keys) => BookEdits(
+        title: keys.contains('title') ? null : title,
+        number: keys.contains('number') ? null : number,
+        numberSort: keys.contains('numberSort') ? null : numberSort,
+        dateSet: keys.contains('releaseDate') ? false : dateSet,
+        releaseDate: keys.contains('releaseDate') ? null : releaseDate,
+        series: series,
+        summary: keys.contains('summary') ? null : summary,
+        authors: keys.contains('authors') ? null : authors,
+        tags: keys.contains('tags') ? null : tags,
       );
 
   Map<String, Object?> toJson() => {
         if (title != null) 'title': title, if (number != null) 'number': number,
         if (numberSort != null) 'numberSort': numberSort, if (dateSet) 'releaseDate': releaseDate,
-        if (series != null) 'series': series,
+        if (series != null) 'series': series, if (summary != null) 'summary': summary,
+        if (authors != null) 'authors': [for (final (n, r) in authors!) {'name': n, 'role': r}],
+        if (tags != null) 'tags': tags,
       };
 
   factory BookEdits.fromJson(Map j) => BookEdits(
         title: _text(j['title']), number: j['number'] is String ? j['number'] as String : null,
         numberSort: j['numberSort'] is num ? j['numberSort'] as num : null, dateSet: j.containsKey('releaseDate'),
         releaseDate: _date(j['releaseDate']), series: _text(j['series']),
+        summary: j['summary'] is String ? j['summary'] as String : null,
+        authors: j['authors'] is List ? _authors(j['authors']) : null, tags: _listOrNull(j['tags']),
       );
 }
+
+/// A list of names as edited: trimmed, empty ones left out, each once.
+List<String> _list(Object? v) =>
+    v is List ? {for (final x in v) if (x is String && x.trim().isNotEmpty) x.trim()}.toList() : const [];
+List<String>? _listOrNull(Object? v) => v is List ? _list(v) : null;
+
+/// Credits as Komga gives them ([{name, role}]).
+List<(String, String)> _authors(Object? v) => [
+      if (v is List)
+        for (final a in v)
+          if (a is Map && a['name'] is String && '${a['name']}'.trim().isNotEmpty)
+            ('${a['name']}'.trim(), '${a['role'] ?? 'writer'}'),
+    ];
 
 String? _text(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
 String? _date(Object? v) => v is String && DateTime.tryParse(v) != null ? v : null;
@@ -146,6 +186,9 @@ class FolderMeta {
           title: _text(m['name']), publisher: _text(m['publisher']),
           status: _text(own['status']) ?? _mylarStatus['${m['status'] ?? ''}'.toLowerCase()],
           titleSort: _text(own['titleSort']), readingDirection: _text(own['readingDirection']),
+          // (Mylar's description, as Komga reads it; one taken away in the app is '' in its own key)
+          summary: own['summary'] is String ? own['summary'] as String : _text(m['description_text']),
+          genres: _listOrNull(own['genres']), tags: _listOrNull(own['tags']),
         );
         if (folderSeries.isEmpty) folderSeries = null;
       } catch (_) {

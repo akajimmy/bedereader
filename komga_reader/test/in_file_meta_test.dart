@@ -172,7 +172,8 @@ void main() {
       await z.close();
       expect(info, allOf(contains('<Title>Chapter One</Title>'), contains('<Year>2012</Year>')));
       final edits = jsonDecode(utf8.decode(fs.files['lib/Saga/.bedereader.json']!)) as Map;
-      expect(edits['books'], {'Saga 01.cbz': {'series': 'Saga Deluxe'}});
+      // (its sort number alongside too: ComicInfo has none)
+      expect(edits['books'], {'Saga 01.cbz': {'numberSort': 1, 'series': 'Saga Deluxe'}});
       for (final pass in ['at once', 'after a scan']) {
         final b = (await local.book(idOf('Saga 01.cbz')))!;
         expect([b['metadata']['title'], b['metadata']['releaseDate'], b['seriesTitle']],
