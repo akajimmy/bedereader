@@ -35,7 +35,18 @@ class MemoryFs implements LibraryFs {
   }
 
   @override
-  FileTrouble classify(Object error) => FileTrouble.damaged;
+  FileTrouble classify(Object error) =>
+      error is StateError && error.message.startsWith('no file') ? FileTrouble.gone : FileTrouble.damaged;
+
+  /// Writes done (path, in order); [readOnly]: refused.
+  final written = <String>[];
+  bool readOnly = false;
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) async {
+    if (readOnly) throw StateError('read-only: $path');
+    files[path] = bytes;
+    written.add(path);
+  }
 }
 
 class _MemoryFile implements LibraryFile {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -629,6 +630,111 @@ class LocalSource extends CatalogueSource {
 
   /// What an error reading [bookId]'s own file was, as its library's files tell it (a share out of reach: no answer).
   FileTrouble troubleOf(String bookId, Object error) => _fsFor(_books[bookId]?.path ?? '').classify(error);
+
+  // ---- metadata edits, kept alongside the books (lib/local/local_meta.dart; user, 2026-10-27) ---------------------
+  /// A book or series of these, its share in reach (offline mode: a network one not).
+  @override
+  Future<bool> canEditMetadata(String id) async =>
+      (_books.containsKey(id) || _seriesPlaces.containsKey(id)) && !(_offline && onShare(id));
+
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) async {
+    final b = _books[bookId];
+    final library = _libraries.where((l) => l.id == b?.libraryId).firstOrNull;
+    final index = library == null ? null : store.libraries[library.id];
+    final scanned = index?.books[bookId];
+    if (b == null || library == null || index == null || scanned == null) throw _notHere(bookId);
+    final c = Map.of(changes);
+    // moved back to the series its folder makes: not moved any more
+    final own = withEdits(index, library, index.meta).series[scanned.seriesId]?.name ?? '';
+    if (c['seriesName'] case final String name when name.trim().toLowerCase() == own.toLowerCase()) c['seriesName'] = null;
+    final file = fileNameOf(b.path);
+    await _saveEdits(library, index, folderOf(b.path), (doc) {
+      final books = Map<String, Object?>.from((doc['books'] as Map?) ?? const {});
+      final now = (books[file] is Map ? BookEdits.fromJson(books[file] as Map) : const BookEdits()).plus(c);
+      now.isEmpty ? books.remove(file) : books[file] = now.toJson();
+      doc['books'] = books;
+    });
+  }
+
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) async {
+    final (library, place) = _seriesPlaces[seriesId] ?? (throw NeedsKomga('This series'));
+    final index = store.libraries[library.id] ?? (throw NeedsKomga('This series'));
+    final key = place.key;
+    if (key != null) {
+      // one with no folder of its own: in its folder's .bedereader.json
+      return _saveEdits(library, index, place.folder, (doc) {
+        final series = Map<String, Object?>.from((doc['series'] as Map?) ?? const {});
+        final now = (series[key] is Map ? SeriesEdits.fromJson(series[key] as Map) : const SeriesEdits()).plus(changes);
+        now.isEmpty ? series.remove(key) : series[key] = now.toJson();
+        doc['series'] = series;
+      });
+    }
+    // its folder's series.json, Mylar's format kept (what Komga reads), with what that has no place for in the app's
+    // own key
+    final fs = _fsFor(library.path);
+    final path = _inFolder(place.folder, seriesFileName);
+    final doc = await _readJson(fs, path) ?? {'version': '1.0.2', 'metadata': {'type': 'comicSeries'}};
+    final now = (FolderMeta.read(seriesJson: jsonEncode(doc)).folderSeries ?? const SeriesEdits()).plus(changes);
+    final m = Map<String, Object?>.from((doc['metadata'] as Map?) ?? const {});
+    m['name'] = now.title ?? index.series[seriesId]?.name ?? ''; // (Mylar's always has a name)
+    now.publisher == null ? m.remove('publisher') : m['publisher'] = now.publisher;
+    now.status == null ? m.remove('status') : m['status'] = now.status == 'ENDED' ? 'Ended' : 'Continuing';
+    doc['metadata'] = m;
+    final ownKeys = {
+      if (now.titleSort != null) 'titleSort': now.titleSort,
+      if (now.readingDirection != null) 'readingDirection': now.readingDirection,
+      if (now.status != null) 'status': now.status, // (exactly: Mylar's has no hiatus or abandoned)
+    };
+    ownKeys.isEmpty ? doc.remove('bedereader') : doc['bedereader'] = ownKeys;
+    final text = const JsonEncoder.withIndent('  ').convert(doc);
+    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
+    final was = index.meta[place.folder];
+    await _remember(index, place.folder, FolderMeta(folderSeries: FolderMeta.read(seriesJson: text).folderSeries,
+        books: was?.books ?? const {}, series: was?.series ?? const {}));
+  }
+
+  /// [folder]'s .bedereader.json changed by [change] - read as it is now first (edits made on another device since the
+  /// last scan kept), written whole, and the books listed with it at once.
+  Future<void> _saveEdits(LocalLibrary library, LibraryIndex index, String folder,
+      void Function(Map<String, Object?> doc) change) async {
+    final fs = _fsFor(library.path);
+    final path = _inFolder(folder, editsFileName);
+    final doc = await _readJson(fs, path) ?? <String, Object?>{};
+    doc['bedereader'] = 1;
+    change(doc);
+    final text = const JsonEncoder.withIndent('  ').convert(doc);
+    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
+    final read = FolderMeta.read(editsJson: text), was = index.meta[folder];
+    await _remember(index, folder, FolderMeta(folderSeries: was?.folderSeries, books: read.books, series: read.series));
+  }
+
+  /// [folder]'s edits as now saved - kept (no stamps: the next scan reads its files again) and listed.
+  Future<void> _remember(LibraryIndex index, String folder, FolderMeta meta) async {
+    meta.isEmpty ? index.meta.remove(folder) : index.meta[folder] = meta;
+    await store.putLibrary(index);
+    _rebuild();
+    changed.value++;
+    contentChanged.value++;
+  }
+
+  static String _inFolder(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
+
+  /// A metadata file as it is now: null if it isn't there. One that's there but can't be read throws - never written
+  /// over.
+  static Future<Map<String, Object?>?> _readJson(LibraryFs fs, String path) async {
+    final Uint8List bytes;
+    try {
+      bytes = await readWhole(fs, path);
+    } catch (e) {
+      if (fs.classify(e) == FileTrouble.gone) return null;
+      rethrow;
+    }
+    final j = jsonDecode(utf8.decode(bytes, allowMalformed: true));
+    if (j is! Map) throw FormatException('Not a metadata file: $path');
+    return j.cast<String, Object?>();
+  }
 
   // ---- what only Komga has ------------------------------------------------------------------------------------------
   // (settings are this device's own here: nothing to sync)
