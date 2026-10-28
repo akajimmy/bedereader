@@ -1,9 +1,9 @@
 // Crop edges' Auto (user, 2026-10-28 - lib/reader/auto_crop.dart; dialled in on real books with the prototype,
 // reports\10-28-autocrop-review): pages measured, each cut to its content plus an even border.
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/reader/auto_crop.dart';
@@ -11,6 +11,7 @@ import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'support/helpers.dart';
 import 'support/no_network.dart';
 import 'support/reader_server.dart';
 
@@ -215,7 +216,48 @@ void main() {
       expect(api.asked, 3, reason: 'remembered: not measured again');
       await tester.pumpWidget(const SizedBox());
     });
+
+    testWidgets('Auto chosen part way through a book: after "Finding page borders", the page being read shows, cut - it '
+        'stayed black until it was turned (the tablet, build 170: Auto chosen on page 3 of a book opened at page 1)',
+        (tester) async {
+      _Pages.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
+      AutoCropRun.measureForTests = (bytes, _) async => measured();
+      final api = noNetwork(_Pages.new);
+      Future<void> settle() async {
+        for (var i = 0; i < 12; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+      }
+
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+      await settle();
+      for (var i = 0; i < 2; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await settle();
+      }
+      AppSettings.instance.setOverride('S1', layout: true, image: true);
+      AppSettings.instance.setSeriesImage('S1', AppSettings.instance.prefsFor('S1').copyWith(crop: ReaderPrefs.autoCrop));
+      await tester.pump();
+      expect(find.text('Finding page borders'), findsOneWidget);
+      await settle();
+      expect(find.text('Finding page borders'), findsNothing);
+      final page = tester.widget<PageCanvas>(find.byType(PageCanvas));
+      expect(page.autoCut, isNotNull, reason: 'the page being read, drawn and cut');
+      expect(page.data.image.width, 200);
+      AppSettings.instance.useDefaults('S1');
+      await tester.pumpWidget(const SizedBox());
+    });
   });
+}
+
+/// The reader's 3-page book with pages that load ([png] each) and thumbnails at once.
+class _Pages extends ReaderServer {
+  static late Uint8List png;
+  @override
+  Future<Uint8List> pageBytes(String bookId, int number) async => png;
+  @override
+  Future<Uint8List> pageThumbBytes(String bookId, int number) async => png;
 }
 
 /// The reader's 3-page book whose page thumbnails arrive (once [held] completes, if set); page [failing] fails.

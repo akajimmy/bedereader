@@ -139,10 +139,21 @@ class ComicRenderer extends Renderer {
     have?.cancel();
     late final AutoCropRun run;
     run = AutoCropRun(api, id, _loader!.pageNumbers, border: border, onProgress: () {
-      if (identical(_auto, run)) _changed(); // (told only after it's started: its first step waits)
+      if (!identical(_auto, run) || _disposed) return; // (told only after it's started: its first step waits)
+      if (run.cuts != null && _waited) {
+        // the page view was taken down for the wait: a fresh one, on the page being read - the old controller
+        // brought it back where the book was opened, a page the view doesn't draw from here (the tablet, build 170:
+        // Auto chosen on page 3 of a book opened at page 1 - the page stayed black until it was turned)
+        _waited = false;
+        _rebuildView(dual: _dual);
+      } else {
+        _changed();
+      }
     });
     return _auto = run;
   }
+
+  bool _waited = false; // "Finding page borders" was shown in place of the pages
 
   /// Page [i]'s own cut on Auto (null: whole, or not on Auto).
   PageCut? _autoCutOf(int i) {
@@ -159,6 +170,7 @@ class ComicRenderer extends Renderer {
   @override
   Widget waiting(BuildContext context) {
     final run = _autoRun();
+    _waited = true;
     return ColoredBox(
       color: background,
       child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
