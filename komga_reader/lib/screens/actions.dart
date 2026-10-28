@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../book_title.dart';
+import '../combined_source.dart';
 import '../errors.dart';
 import '../local/book_names.dart' show isLocalId;
 import '../ondeck_hidden.dart';
@@ -70,11 +71,10 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
-        // (Komga's only: a local or network book's delete is in the backlog - user, 2026-10-27)
-        if (!isLocalId(b['id'] as String))
-          ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
-              title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
-              onTap: () => Navigator.pop(ctx, 'delete')),
+        // (a local or network book's too: its file - user, 2026-10-28)
+        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
+            title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
+            onTap: () => Navigator.pop(ctx, 'delete')),
       ])),
     ),
   );
@@ -142,7 +142,7 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
     if (choice == 'delete') {
       if (!context.mounted) return null;
       final ok = await confirmDelete(context, 'Delete "$title"?',
-          'This deletes the file from the server. It cannot be undone from the app.');
+          'This deletes the file from ${deletesFrom(api, [b['id'] as String])}. It cannot be undone from the app.');
       if (!ok) return null;
       await api.deleteBookFile(b['id']);
     }
@@ -194,7 +194,8 @@ Future<void> bulkMark(BuildContext context, BookSource api, List<dynamic> books,
 Future<bool> bulkDelete(BuildContext context, BookSource api, List<dynamic> books) async {
   final n = books.length;
   final ok = await confirmDelete(context, 'Delete $n book${n == 1 ? '' : 's'}?',
-      'This deletes the files from the server. It cannot be undone from the app.');
+      'This deletes the files from ${deletesFrom(api, [for (final b in books) b['id'] as String])}. It cannot be '
+      'undone from the app.');
   if (!ok || !context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
   var done = 0;
@@ -537,6 +538,17 @@ Future<bool> confirmBulk(BuildContext context, String title, String body, String
     ),
   );
   return r == true;
+}
+
+/// Where deleting [ids]' files deletes them from, for the confirmation: the server (Komga's), this device (a local
+/// library's folder), the share (a network library's) - "where they are" when they're in more than one.
+String deletesFrom(BookSource api, List<String> ids) {
+  final local = api is CombinedSource ? api.local : null;
+  final places = {
+    for (final id in ids)
+      !isLocalId(id) || local == null ? 'the server' : local.onShare(id) ? 'the share' : 'this device',
+  };
+  return places.length == 1 ? places.single : 'where they are';
 }
 
 /// Deletion always needs an explicit confirm; "Cancel" has focus so an accidental OK press on the remote is safe.
