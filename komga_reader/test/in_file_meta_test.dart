@@ -181,6 +181,13 @@ void main() {
       }
     });
 
+    test("a CBZ whose edits all went into its file: no .bedereader.json made beside it (an empty one was, on the "
+        'tablet)', () async {
+      await local.editBookMetadata(idOf('Saga 01.cbz'), {'title': 'Chapter One'});
+      expect(fs.files.keys, isNot(contains('lib/Saga/.bedereader.json')));
+      expect((await local.book(idOf('Saga 01.cbz')))!['metadata']['title'], 'Chapter One');
+    });
+
     test("an EPUB: its title in its package file; its date kept alongside too (the app reads an EPUB's title from it, "
         "not its date)", () async {
       await local.editBookMetadata(idOf('Dune.epub'), {'title': 'Dune (1965)', 'releaseDate': '1965-08-01'});

@@ -759,11 +759,15 @@ class LocalSource extends CatalogueSource {
       void Function(Map<String, Object?> doc) change) async {
     final fs = _fsFor(library.path);
     final path = _inFolder(folder, editsFileName);
-    final doc = await _readJson(fs, path) ?? <String, Object?>{};
+    final there = await _readJson(fs, path);
+    final doc = there ?? <String, Object?>{};
     doc['bedereader'] = 1;
     change(doc);
     final text = const JsonEncoder.withIndent('  ').convert(doc);
-    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
+    // nothing to keep, and no file yet: none made (everything went into the book's own file - on the tablet, an empty
+    // one was left beside it)
+    final empty = ((doc['books'] as Map?) ?? const {}).isEmpty && ((doc['series'] as Map?) ?? const {}).isEmpty;
+    if (there != null || !empty) await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
     final read = FolderMeta.read(editsJson: text), was = index.meta[folder];
     await _remember(index, folder, FolderMeta(folderSeries: was?.folderSeries, books: read.books, series: read.series));
   }

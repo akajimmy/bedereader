@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Metadata edits In the files: an edit that went wholly into the book's own file no longer leaves an empty .bedereader.json beside it.
+
 ## 1.7.0
 
 ### Build 168 - 2026-10-27
