@@ -7,6 +7,18 @@ import 'view_filter.dart';
 /// Remembers each screen's browse mode / filter / sort on this device (e.g. Events opens as "Unread, series" if that
 /// is how it was left). Keys: `view.library.<id|all>`, `view.series.<id>`, `view.readlist.<id>`, `view.collection.<id>`.
 class ViewPrefs {
+  /// Local series whose ids changed with their paths (Apply edits to files: old -> new): their series screens' views
+  /// follow.
+  static Future<void> renameIds(Map<String, String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      final v = p.getString('view.series.$from');
+      if (v == null || from == to) continue;
+      await p.setString('view.series.$to', v);
+      await p.remove('view.series.$from');
+    }
+  }
+
   static Future<Map<String, dynamic>> load(String key) async {
     final raw = (await SharedPreferences.getInstance()).getString(key);
     if (raw == null) return {};

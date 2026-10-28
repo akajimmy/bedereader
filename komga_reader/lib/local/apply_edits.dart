@@ -1,6 +1,6 @@
 // Apply edits to files (user, 2026-10-27; reports\10-27-apply-edits-plan.md): a local or network library's edits,
 // kept alongside its books, put into the books themselves - their metadata written in, files and folders renamed -
-// when the user asks, after a warning that says what will change.
+// when the user asks, after a confirmation that sums up what will change.
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -13,7 +13,8 @@ import 'local_meta.dart';
 import 'local_store.dart';
 
 /// [e] written into [b]'s own file ([fs]: its library's files): a CBZ's ComicInfo.xml (made if it has none), an EPUB's
-/// package file - the book rewritten safely ([rewriteZip]: checked before it takes the old one's place). Its own file, never a downloaded copy.
+/// package file - the book rewritten safely ([rewriteZip]: checked before it takes the old one's place). Its own file,
+/// never a downloaded copy.
 Future<void> writeEditsIntoBook(LibraryFs fs, LocalBook b, BookEdits e) async {
   final zip = await ComicArchive.open(fs, b.path);
   final Map<String, Uint8List> replace, add;
@@ -41,41 +42,40 @@ Future<void> writeEditsIntoBook(LibraryFs fs, LocalBook b, BookEdits e) async {
   await rewriteZip(fs, b.path, replace: replace, add: add);
 }
 
-// ---- the plan: what Apply will do, worked out before anything changes (the warning shows it) ----------------------
+// ---- the plan: what Apply will do, worked out before anything changes (the confirmation sums it up) ----------------
 
-/// A series folder Apply will rename (to its series' title).
+/// A series folder Apply will rename (after its series' title), with the books in it ([books]: their paths now - their
+/// ids follow the folder).
 class FolderStep {
-  const FolderStep(this.from, this.to);
+  const FolderStep(this.from, this.to, this.books);
   final String from, to;
+  final List<String> books;
 }
 
-/// A book Apply will change: its edits written into it ([write]; null: nothing to write - a CBR's can't be), and its
-/// file renamed or moved ([from] -> [to]: its path now and after; the same when it stays).
+/// A book Apply will change: its edits written into it ([write]; null: nothing to write - a CBR can't be written to),
+/// and its file renamed or moved ([via]: where it is once its folder has been renamed - [from] if it isn't; [to]: where
+/// it goes). [makesSeries]: the name of the series it's moved to, which gets its folder made by this move.
 class BookStep {
-  const BookStep(this.book, this.from, this.to, {this.write, String? via}) : via = via ?? from;
+  const BookStep(this.book, this.from, this.via, this.to, {this.write, this.makesSeries});
   final LocalBook book; // as the scan found it
-  final String from, to;
+  final String from, via, to;
   final BookEdits? write;
+  final String? makesSeries;
 
-  /// Where it is once its folder has been renamed (as [from] if it isn't).
-  final String via;
-
-  bool get cbr => !book.epub && book.mediaType != 'application/zip';
-  bool get renamed => fileNameOf(from) != fileNameOf(to);
+  bool get cbr => isCbr(book);
+  bool get renamed => fileNameOf(via) != fileNameOf(to);
   bool get moved => folderOf(via) != folderOf(to);
 }
 
 /// What Apply will do to a library: its series folders renamed ([folders]), its books written into, renamed and moved
-/// ([books]), and what it can't do and why ([problems]). Only books and series with edits are touched.
+/// ([books]), and what it can't do and why ([problems]). Only the books and series with edits are touched - a series'
+/// title edited touches all its books.
 class ApplyPlan {
-  ApplyPlan(this.library, this.folders, this.books, this.problems, {this.carried = const []});
+  ApplyPlan(this.library, this.folders, this.books, this.problems);
   final LocalLibrary library;
   final List<FolderStep> folders;
   final List<BookStep> books;
   final List<String> problems;
-
-  /// The books in a renamed folder that have no step of their own: their paths (they go with the folder).
-  final List<String> carried;
 
   bool get isEmpty => folders.isEmpty && books.isEmpty;
 
@@ -99,88 +99,120 @@ class ApplyPlan {
 }
 
 /// What Apply did: the books' and series' ids that changed with their paths (old -> new: what's kept under them
-/// follows), and what failed and why.
+/// follows - an id the same either way isn't in it), and what failed and why.
 class ApplyResult {
-  ApplyResult(this.ids, this.failures, this.done);
+  ApplyResult(this.ids, this.failures);
   final Map<String, String> ids;
   final List<String> failures;
-  final int done;
 }
 
-/// [library]'s plan from its scan ([index]) and the edits kept alongside its books ([index.meta]); [fs]: its files
-/// (a name already taken there gets " (2)").
+/// [library]'s plan from its scan ([index]) and the edits kept alongside its books ([index.meta]); [fs]: its files.
+/// Every name it gives is checked against one picture of where everything will be once it's done - the books it
+/// knows, and what's on the disk - so no two things end up in one place (a name taken gets " (2)").
 Future<ApplyPlan> planApply(LibraryFs fs, LocalLibrary library, LibraryIndex index) async {
   final edited = withEdits(index, library, index.meta);
   final root = library.path.replaceAll(RegExp(r'[\\/]+$'), '');
-  final sep = root.contains(r'\') ? r'\' : '/';
-  final folders = <String, String>{}; // series folder -> its new path
+  // series made from folders: their folders renamed, books moved between them; a read list's order is in its file
+  // names ("002 - "): its books written into, never renamed
+  final ownFolders = library.kind == LibraryKind.seriesFolders, renames = library.kind != LibraryKind.readList;
   final problems = <String>[];
-  final taken = <String>{}; // paths given out by this plan
 
-  // a series folder whose title was edited: named after it (a one-series library's folder is the library: not renamed)
-  if (library.kind == LibraryKind.seriesFolders) {
+  // 1. series folders whose title was edited, named after it (a one-series library's folder is the library itself)
+  final folders = <String, String>{}; // folder now -> its new path
+  if (ownFolders) {
     for (final MapEntry(key: id, value: place) in edited.places.entries) {
-      final s = edited.series[id];
-      if (s == null || place.key != null || place.folder == root) continue;
+      if (edited.series[id] == null || place.key != null || place.folder == root) continue;
       final title = index.meta[place.folder]?.folderSeries?.title;
       if (title == null || safeName(title) == fileNameOf(place.folder)) continue;
-      final to = '${folderOf(place.folder)}$sep${safeName(title)}';
+      final to = joinPath(folderOf(place.folder), safeName(title));
       final caseOnly = to.toLowerCase() == place.folder.toLowerCase();
-      if (!caseOnly && (await fs.isThere(to) || taken.contains(to.toLowerCase()))) {
-        problems.add('The folder "${fileNameOf(place.folder)}" isn\'t renamed: "${safeName(title)}" is there already.');
+      if (!caseOnly && (await fs.isThere(to) || folders.values.any((t) => t.toLowerCase() == to.toLowerCase()))) {
+        problems.add('The folder "${fileNameOf(place.folder)}" stays as it is: "${fileNameOf(to)}" is there already.');
         continue;
       }
       folders[place.folder] = to;
-      taken.add(to.toLowerCase());
     }
   }
-  String afterFolders(String folder) => folders[folder] ?? folder;
+  String after(String path) =>
+      folders.containsKey(folderOf(path)) ? joinPath(folders[folderOf(path)]!, fileNameOf(path)) : path;
+  final renamedTo = {for (final MapEntry(:key, :value) in folders.entries) value.toLowerCase(): key};
 
+  // where everything will be: every book where it'll be with its folder - each book step takes its own out and its
+  // target in; a path not among them is free if nothing's on the disk there (looked for where it is now)
+  final occupied = {for (final b in index.books.values) after(b.path).toLowerCase()};
+  final made = <String>{}; // folders this plan makes (nothing on the disk in them)
+  Future<bool> free(String path) async {
+    if (occupied.contains(path.toLowerCase())) return false;
+    final folder = folderOf(path).toLowerCase();
+    if (made.contains(folder)) return true;
+    final now = renamedTo[folder];
+    return !await fs.isThere(now == null ? path : joinPath(now, fileNameOf(path)));
+  }
+
+  // 2. the folders of series a move makes: in the library, named after the series - one there already isn't used
+  final newFolders = <String, String?>{}; // series id -> its folder (null: it can't have one)
+  Future<String?> folderFor(String seriesId, String name) async {
+    if (newFolders.containsKey(seriesId)) return newFolders[seriesId];
+    final folder = joinPath(root, safeName(name));
+    final taken = await fs.isThere(folder) || renamedTo.containsKey(folder.toLowerCase());
+    if (taken) problems.add('Books moved to "$name" stay where they are: a folder "${fileNameOf(folder)}" is there already.');
+    if (!taken) made.add(folder.toLowerCase());
+    return newFolders[seriesId] = taken ? null : folder;
+  }
+
+  // 3. the books
   final books = <BookStep>[];
   for (final b in index.books.values) {
     final now = edited.books[b.id];
     final series = now == null ? null : edited.series[now.seriesId];
     if (now == null || series == null) continue;
     final own = index.meta[folderOf(b.path)]?.books[fileNameOf(b.path)];
-    final hasEdits = own != null && !own.isEmpty;
-    final moved = now.seriesId != b.seriesId && library.kind == LibraryKind.seriesFolders;
-    if (!hasEdits && !moved) continue; // (in a renamed folder only: it goes with the folder)
-    // its folder: its series' (a series made by a move gets one in the library), else where it is
-    var folder = afterFolders(folderOf(b.path));
+    final moved = ownFolders && now.seriesId != b.seriesId;
+    // its series' name goes into it if it moved, or its series' title was edited (all the series' books, then)
+    final seriesChanged = !series.oneshot && (moved || series.name != index.series[b.seriesId]?.name);
+    if ((own == null || own.isEmpty) && !seriesChanged) continue; // (in a renamed folder only: it goes with it)
+    final via = after(b.path);
+    var folder = folderOf(via);
+    String? makes;
     if (moved) {
       final place = edited.places[now.seriesId];
-      folder = place != null && place.key == null ? afterFolders(place.folder) : '$root$sep${safeName(series.name)}';
+      final into = place != null && place.key == null ? after(place.folder) : await folderFor(now.seriesId, series.name);
+      if (into == null) continue; // (said: its series' folder can't be made)
+      if (place == null || place.key != null) makes = series.name;
+      folder = into;
     }
-    final ext = b.path.contains('.') ? b.path.substring(b.path.lastIndexOf('.')) : '';
-    var to = '$folder$sep${safeName(patternName(now, series))}$ext';
-    final from = '${afterFolders(folderOf(b.path))}$sep${fileNameOf(b.path)}';
-    if (to.toLowerCase() != from.toLowerCase()) {
-      final stem = to.substring(0, to.length - ext.length);
-      for (var n = 2; await fs.isThere(to) || taken.contains(to.toLowerCase()); n++) {
-        to = '$stem ($n)$ext';
+    var to = renames ? joinPath(folder, '${safeName(patternName(now, series))}${_extension(b.path)}') : via;
+    if (to.toLowerCase() != via.toLowerCase()) {
+      occupied.remove(via.toLowerCase());
+      final stem = to.substring(0, to.length - _extension(b.path).length);
+      for (var n = 2; !await free(to); n++) {
+        to = '$stem ($n)${_extension(b.path)}';
       }
+      occupied.add(to.toLowerCase());
     }
-    taken.add(to.toLowerCase());
-    // what goes into the file: only what was edited - its own fields, and its series' name if it moved or its series'
-    // title was edited (a sort number has no place in a file: it stays alongside only)
-    final cbr = !b.epub && b.mediaType != 'application/zip';
-    final seriesChanged = !series.oneshot && (moved || series.name != index.series[b.seriesId]?.name);
+    // what goes into the file: only what was edited (a sort number has no place in one: it stays alongside only)
     final write = BookEdits(
       title: own?.title, number: own?.number, dateSet: own?.dateSet ?? false, releaseDate: own?.releaseDate,
       summary: own?.summary, authors: own?.authors, tags: own?.tags, series: seriesChanged ? series.name : null,
     );
+    final cbr = isCbr(b);
     // (in the file already - what's to go in was all written last time: not again; Apply can be run any time)
-    final done = _within(write.toJson(), own?.applied);
-    final step = BookStep(b, b.path, to, via: from, write: cbr || write.isEmpty || done ? null : write);
-    if (step.write == null && to == from) continue; // (nothing to do: in place, and in the file already)
-    books.add(step);
+    final writes = !cbr && !write.isEmpty && !_within(write.toJson(), own?.applied);
+    if (!writes && to == via) continue;
+    books.add(BookStep(b, b.path, via, to, write: writes ? write : null, makesSeries: makes));
   }
-  final stepped = {for (final b in books) b.from};
-  // (the books in a renamed folder with no step of their own go with it)
-  return ApplyPlan(library, [for (final e in folders.entries) FolderStep(e.key, e.value)], books, problems, carried: [
-    for (final b in index.books.values)
-      if (folders.containsKey(folderOf(b.path)) && !stepped.contains(b.path)) b.path,
-  ]);
+  return ApplyPlan(library, [
+    for (final MapEntry(:key, :value) in folders.entries)
+      FolderStep(key, value, [for (final b in index.books.values) if (folderOf(b.path) == key) b.path]),
+  ], books, problems);
+}
+
+/// A CBR (a RAR): it can't be written to.
+bool isCbr(LocalBook b) => !b.epub && b.mediaType != 'application/zip';
+
+String _extension(String path) {
+  final name = fileNameOf(path);
+  return name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
 }
 
 /// Whether every field of [now] is in [applied] (what was written last time, as JSON), with the same value.
@@ -192,9 +224,9 @@ bool _within(Map<String, Object?> now, String? applied) {
 
 /// A book's file name by the pattern (user, 2026-10-27: "Series 001 (Year)"): a comic "Saga 001 (2012)" - the number
 /// padded to three figures, one that isn't a number kept as it is ("Saga Annual (2012)"), the year left out if there's
-/// none; an eBook in a series "Dune 01 - Dune", else its title; a one-shot its title (and year). No extension.
+/// none or the series' name has it; an eBook in a series "Dune 01 - Dune", else its title; a one-shot its title (and
+/// year). No extension.
 String patternName(LocalBook b, LocalSeries s) {
-  // (no year when the series' name has it already: "Saga (2012) 001", not "Saga (2012) 001 (2012)")
   final year = b.released == null || s.name.contains('(${b.released!.year})') ? '' : ' (${b.released!.year})';
   if (s.oneshot) return '${b.title}$year';
   if (b.epub) {
@@ -221,126 +253,106 @@ String safeName(String name) => name
 
 // ---- the run --------------------------------------------------------------------------------------------------------
 
-/// [plan] carried out through [fs]: the series folders renamed, the books written into, then renamed and moved; the
-/// edits kept alongside follow them (a book's entry under its new name, in its new folder's .bedereader.json; a new
-/// series' edits from the library's file to its own folder's series.json). Each step on its own: one that fails is
-/// said, and the rest go on. [onStep]: steps done of all.
+/// [plan] carried out through [fs], one step at a time - each series folder, then each book: written into, moved,
+/// and its entry in the alongside files following it at once (a step cut short loses at most that one book's entry).
+/// A step that fails is said, and the rest go on; a book whose folder couldn't be renamed stays in it. [onStep]:
+/// steps done of all.
 Future<ApplyResult> runApply(LibraryFs fs, ApplyPlan plan, {void Function(int done, int all)? onStep}) async {
   final failures = <String>[];
   final ids = <String, String>{};
+  void follows(String from, String to) {
+    if (from != to) ids[from] = to; // (a rename only in case keeps its id: ids are made from the path in lower case)
+  }
+
   final all = plan.folders.length + plan.books.length;
   var done = 0;
   void step() => onStep?.call(++done, all);
-  final sep = plan.library.path.contains(r'\') ? r'\' : '/';
 
-  // 1. series folders (a rename only in case: through a name of its own, as some systems see the two as one)
-  final folders = <String, String>{};
+  final stayed = <String, String>{}; // a folder rename that failed: the name it would have had -> its own
   for (final f in plan.folders) {
     try {
-      if (f.from.toLowerCase() == f.to.toLowerCase()) {
-        final via = '${f.from}.bedereader-rename';
-        await fs.move(f.from, via);
-        await fs.move(via, f.to);
-      } else {
-        await fs.move(f.from, f.to);
+      await _move(fs, f.from, f.to);
+      follows(localSeriesId(f.from), localSeriesId(f.to));
+      for (final p in f.books) {
+        follows(localBookId(p), localBookId(joinPath(f.to, fileNameOf(p))));
       }
-      folders[f.from] = f.to;
-      ids[localSeriesId(f.from)] = localSeriesId(f.to);
     } catch (e) {
       failures.add('The folder "${fileNameOf(f.from)}" wasn\'t renamed: $e');
+      stayed[f.to] = f.from;
     }
     step();
   }
-  String now(String path) => folders.containsKey(folderOf(path))
-      ? '${folders[folderOf(path)]}$sep${fileNameOf(path)}'
-      : path;
-  // the books in a renamed folder: their ids follow it
-  for (final p in [...plan.carried, for (final b in plan.books) if (b.to == now(b.from)) b.from]) {
-    if (now(p) != p) ids[localBookId(p)] = localBookId(now(p));
-  }
+  String where(String path) =>
+      stayed.containsKey(folderOf(path)) ? joinPath(stayed[folderOf(path)]!, fileNameOf(path)) : path;
 
-  // 2. the books: written into, then renamed and moved
-  final entries = <(String, String, String)>[]; // (old folder now, old file name, new path): their entries to follow
-  final applied = <String, String>{}; // a book written into (its path after): what was written (its entry records it)
   for (final b in plan.books) {
-    final at = now(b.from);
+    final at = where(b.via), to = where(b.to);
     try {
-      if (b.write case final e?) {
-        await writeEditsIntoBook(fs, LocalBook.fromJson(b.book.toJson()..['path'] = at, b.book.libraryId), e);
-        applied[b.to] = jsonEncode(e.toJson());
-        if (at == b.to) entries.add((folderOf(at), fileNameOf(at), at)); // (its entry to record it, where it is)
+      final write = b.write;
+      if (write != null) {
+        await writeEditsIntoBook(fs, LocalBook.fromJson(b.book.toJson()..['path'] = at, b.book.libraryId), write);
       }
-      if (at != b.to) {
-        final into = folderOf(b.to);
-        if (!await fs.isThere(into)) await fs.makeFolder(into);
-        if (at.toLowerCase() == b.to.toLowerCase()) {
-          await fs.move(at, '$at.bedereader-rename');
-          await fs.move('$at.bedereader-rename', b.to);
-        } else {
-          await fs.move(at, b.to);
-        }
-        ids[localBookId(b.from)] = localBookId(b.to);
+      if (to != at) {
+        if (b.makesSeries case final name?) await _makeSeriesFolder(fs, plan.library, folderOf(to), name, follows);
+        await _move(fs, at, to);
+        follows(localBookId(b.from), localBookId(to));
         // (a one-shot is a series of its own, named by its file)
-        if (b.book.seriesId == localSeriesId(b.from)) ids[b.book.seriesId] = localSeriesId(b.to);
-        entries.add((folderOf(at), fileNameOf(b.from), b.to));
+        if (b.book.seriesId == localSeriesId(b.from)) follows(b.book.seriesId, localSeriesId(to));
       }
+      await _entryFollows(fs, at, to, applied: write == null ? null : jsonEncode(write.toJson()));
     } catch (e) {
       failures.add('"${fileNameOf(b.from)}": $e');
     }
     step();
   }
-
-  // 3. the edits kept alongside follow the files
-  try {
-    await _follow(fs, plan, entries, ids, sep, applied);
-  } catch (e) {
-    failures.add("The edits kept beside the books couldn't all follow them: $e");
-  }
-  return ApplyResult(ids, failures, done);
+  return ApplyResult(ids, failures);
 }
 
-/// The alongside files after the moves: each moved or renamed book's entry taken from its old folder's
-/// .bedereader.json and put, under its new name, in its new folder's - a book written into, what was written recorded
-/// in its entry ([applied]); a one-shot's series entry renamed with it; a
-/// series made by a move, its edits from the library's file to its new folder's series.json (and its id the folder's).
-Future<void> _follow(LibraryFs fs, ApplyPlan plan, List<(String, String, String)> entries, Map<String, String> ids,
-    String sep, Map<String, String> applied) async {
-  final docs = <String, Map<String, Object?>>{}; // folder -> its .bedereader.json, read once, written at the end
-  Future<Map<String, Object?>> doc(String folder) async =>
-      docs[folder] ??= await readMetaJson(fs, '$folder$sep$editsFileName') ?? <String, Object?>{};
+/// [from] moved to [to] - a rename only in case through a name of its own (some systems see the two as one).
+Future<void> _move(LibraryFs fs, String from, String to) async {
+  if (from.toLowerCase() != to.toLowerCase()) return fs.move(from, to);
+  await fs.move(from, '$from.bedereader-rename');
+  await fs.move('$from.bedereader-rename', to);
+}
+
+/// The folder of a series made by a move, made, with a series.json naming it as it was typed ("What If?" in a folder
+/// "What If-") and holding its edits - taken from the library's .bedereader.json. Its id becomes the folder's.
+Future<void> _makeSeriesFolder(LibraryFs fs, LocalLibrary library, String folder, String name,
+    void Function(String from, String to) follows) async {
+  if (!await fs.isThere(folder)) await fs.makeFolder(folder);
+  follows(movedSeriesId(library, name), localSeriesId(folder));
+  final at = joinPath(folder, seriesFileName);
+  if (await fs.isThere(at)) return; // (made by an earlier book of it)
+  final root = folderOf(folder), rootEdits = joinPath(root, editsFileName);
+  final doc = await readMetaJson(fs, rootEdits);
+  final series = Map<String, Object?>.from((doc?['series'] as Map?) ?? const {});
+  final edits = series.remove('name:${name.trim().toLowerCase()}');
+  final e = edits is Map ? SeriesEdits.fromJson(edits) : const SeriesEdits();
+  await fs.writeWhole(at, _bytes(seriesJsonText(null, e, name)));
+  if (doc != null && edits != null) await fs.writeWhole(rootEdits, _bytes(_json({...doc, 'series': series})));
+}
+
+/// A book's entry in the alongside files following it from [from] to [to] (its new name, its new folder's
+/// .bedereader.json), with what was written into it now ([applied]) recorded; a one-shot's series entry renamed with
+/// it.
+Future<void> _entryFollows(LibraryFs fs, String from, String to, {String? applied}) async {
+  final oldPath = joinPath(folderOf(from), editsFileName), newPath = joinPath(folderOf(to), editsFileName);
+  final oldDoc = await readMetaJson(fs, oldPath);
+  if (oldDoc == null) return; // (no entry to follow)
   Map<String, Object?> part(Map<String, Object?> d, String key) =>
       d[key] = Map<String, Object?>.from((d[key] as Map?) ?? const {});
-
-  final root = plan.library.path.replaceAll(RegExp(r'[\\/]+$'), '');
-  final madeSeries = <String, String>{}; // a series made by a move, its name (lower case) -> its new folder
-  for (final (oldFolder, oldName, to) in entries) {
-    final from = part(await doc(oldFolder), 'books');
-    final entry = from.remove(oldName);
-    final oneshot = part(await doc(oldFolder), 'series').remove('file:$oldName');
-    if (oneshot != null) part(await doc(folderOf(to)), 'series')['file:${fileNameOf(to)}'] = oneshot;
-    if (entry is Map) {
-      if (applied[to] case final stamp?) entry['applied'] = stamp; // (what's in the file now)
-      part(await doc(folderOf(to)), 'books')[fileNameOf(to)] = entry;
-      final series = entry['series'];
-      if (series is String && folderOf(folderOf(to)) == root) madeSeries[series.toLowerCase()] = folderOf(to);
-    }
+  final entry = part(oldDoc, 'books').remove(fileNameOf(from));
+  final oneshot = part(oldDoc, 'series').remove('file:${fileNameOf(from)}');
+  if (entry == null && oneshot == null) return;
+  final newDoc = oldPath == newPath ? oldDoc : (await readMetaJson(fs, newPath) ?? <String, Object?>{});
+  if (entry is Map) {
+    part(newDoc, 'books')[fileNameOf(to)] = {...entry, if (applied != null) 'applied': applied};
   }
-  // a series made by a move: its edits into its folder's series.json, its id now the folder's
-  for (final MapEntry(key: name, value: folder) in madeSeries.entries) {
-    ids[movedSeriesId(plan.library, name)] = localSeriesId(folder);
-    final edits = part(await doc(root), 'series').remove('name:$name');
-    if (edits is! Map) continue;
-    final path = '$folder$sep$seriesFileName';
-    final was = await readMetaJson(fs, path);
-    final e = ((was == null ? null : FolderMeta.read(seriesJson: jsonEncode(was)).folderSeries) ?? const SeriesEdits())
-        .plus(SeriesEdits.fromJson(edits).toJson());
-    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(seriesJsonText(was, e, fileNameOf(folder)))));
-  }
-  for (final MapEntry(key: folder, value: d) in docs.entries) {
-    final empty = ((d['books'] as Map?) ?? const {}).isEmpty && ((d['series'] as Map?) ?? const {}).isEmpty;
-    final path = '$folder$sep$editsFileName';
-    if (empty && !await fs.isThere(path)) continue;
-    d['bedereader'] = 1;
-    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(d))));
-  }
+  if (oneshot != null) part(newDoc, 'series')['file:${fileNameOf(to)}'] = oneshot;
+  newDoc['bedereader'] = 1;
+  await fs.writeWhole(newPath, _bytes(_json(newDoc)));
+  if (oldPath != newPath) await fs.writeWhole(oldPath, _bytes(_json(oldDoc)));
 }
+
+String _json(Object o) => const JsonEncoder.withIndent('  ').convert(o);
+Uint8List _bytes(String text) => Uint8List.fromList(utf8.encode(text));

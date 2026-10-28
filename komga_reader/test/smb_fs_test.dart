@@ -45,9 +45,13 @@ class _Share implements SmbShare {
 
   @override
   Future<void> rename(String from, String to) async {
+    if (refuseRename.contains(from)) throw StateError('refused: $from');
     files[to] = files.remove(from)!;
     writes.add('rename $from');
   }
+
+  /// Renames of these refused.
+  final refuseRename = <String>{};
   int running = 0, mostAtOnce = 0, closed = 0, disconnected = 0;
 
   @override
@@ -226,16 +230,20 @@ void main() {
   });
 
   test("a file replaced whole on a share (it can't rename over one): the new one written beside it, the old one "
-      'deleted, the new one renamed into its place; a file not there yet is just made', () async {
+      'renamed aside, the new one into its place, and only then the old one deleted - at no moment is neither there; '
+      "a file not there yet is just made; a new one that can't go in puts the old one back", () async {
     final share = _Share({'': const []})..files['Saga/.bedereader.json'] = Uint8List.fromList([1]);
     final fs = SmbFs('nas', 'books', null, connect: (_, __, ___) async => share);
     await fs.writeWhole(r'\\nas\books\Saga\.bedereader.json', Uint8List.fromList([2]));
-    expect(share.writes, ['write Saga/.bedereader.json.bedereader-new', 'delete Saga/.bedereader.json',
-        'rename Saga/.bedereader.json.bedereader-new']);
+    expect(share.writes, ['write Saga/.bedereader.json.bedereader-new', 'rename Saga/.bedereader.json',
+        'rename Saga/.bedereader.json.bedereader-new', 'delete Saga/.bedereader.json.bedereader-old']);
     expect(share.files['Saga/.bedereader.json'], [2]);
     share.writes.clear();
     await fs.writeWhole(r'\\nas\books\Saga\series.json', Uint8List.fromList([3]));
     expect(share.writes, ['write Saga/series.json.bedereader-new', 'rename Saga/series.json.bedereader-new']);
+    share.refuseRename.add('Saga/series.json.bedereader-new');
+    await expectLater(fs.writeWhole(r'\\nas\books\Saga\series.json', Uint8List.fromList([4])), throwsA(anything));
+    expect(share.files['Saga/series.json'], [3], reason: 'the old one back in its place');
   });
 
   test("Windows's net view: the folder shares under the dashed line, hidden ones left out", () {

@@ -8,7 +8,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../local_names.dart' show hostToConnect;
 import 'library_fs.dart';
-import 'local_meta.dart' show isMetaFile;
 
 /// A share's user name and password (kept encrypted on the device - [Shares]).
 class SmbLogin {
@@ -122,7 +121,7 @@ class SmbFs implements LibraryFs {
               final p = dir.isEmpty ? e.name : '$dir/${e.name}';
               if (e.folder) {
                 if (shownFolder(e.name)) todo.add(p);
-              } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files - local_meta.dart)
+              } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files)
                 out.add(FsEntry(full(p), e.size, e.modified));
               }
             }
@@ -169,13 +168,23 @@ class SmbFs implements LibraryFs {
     return _SmbOut(share, await share.openWrite(_inShare(path)));
   }
 
-  /// (Delete, then rename: a share can't rename over a file.)
   @override
-  Future<void> replace(String from, String to) async {
-    final share = await _connected;
-    final at = _inShare(to);
-    if (await share.exists(at)) await share.delete(at);
-    await share.rename(_inShare(from), at);
+  Future<void> replace(String from, String to) async => _swapIn(await _connected, _inShare(from), _inShare(to));
+
+  /// [from] put in [at]'s place. A share can't rename over a file: the old one is renamed aside first, the new one
+  /// into its place, and only then is the old one deleted - at no moment is neither of them there under a name the
+  /// scan reads (a failure in between leaves the old one as "...bedereader-old").
+  static Future<void> _swapIn(SmbShare share, String from, String at) async {
+    final aside = '$at.bedereader-old';
+    final there = await share.exists(at);
+    if (there) await share.rename(at, aside);
+    try {
+      await share.rename(from, at);
+    } catch (_) {
+      if (there) await share.rename(aside, at).catchError((Object _) {}); // (the old one back)
+      rethrow;
+    }
+    if (there) await share.delete(aside);
   }
 
   @override
@@ -197,13 +206,13 @@ class SmbFs implements LibraryFs {
   @override
   Future<bool> isThere(String path) async => (await _connected).exists(_inShare(path));
 
+  /// (Written beside it, then swapped in - [_swapIn].)
   @override
   Future<void> writeWhole(String path, Uint8List bytes) async {
     final share = await _connected;
     final at = _inShare(path), temp = '$at.bedereader-new';
     await share.write(temp, bytes);
-    if (await share.exists(at)) await share.delete(at);
-    await share.rename(temp, at);
+    await _swapIn(share, temp, at);
   }
 
   @override

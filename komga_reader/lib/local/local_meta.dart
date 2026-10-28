@@ -17,11 +17,6 @@ import 'local_store.dart';
 // The scan reads them; the books and series are listed with them applied ([withEdits]) - what the scan found stays as
 // the files say.
 
-/// The two file names.
-const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
-
-/// One of the metadata files (listed with the books - the scan reads them).
-bool isMetaFile(String name) => name.toLowerCase() == seriesFileName || name == editsFileName;
 
 /// A series' edits: what's set replaces what the scan found. [summary]: '' when it was taken away.
 class SeriesEdits {
@@ -196,8 +191,7 @@ class FolderMeta {
           title: _text(m['name']), publisher: _text(m['publisher']),
           status: _text(own['status']) ?? _mylarStatus['${m['status'] ?? ''}'.toLowerCase()],
           titleSort: _text(own['titleSort']), readingDirection: _text(own['readingDirection']),
-          // (Mylar's description, as Komga reads it; one taken away in the app is '' in its own key)
-          summary: own['summary'] is String ? own['summary'] as String : _text(m['description_text']),
+          summary: _text(m['description_text']), // (Mylar's description: what Komga reads as the summary)
           genres: _listOrNull(own['genres']), tags: _listOrNull(own['tags']),
         );
         if (folderSeries.isEmpty) folderSeries = null;
@@ -247,8 +241,6 @@ class FolderMeta {
       );
 }
 
-String folderOf(String path) => path.substring(0, path.lastIndexOf(RegExp(r'[\\/]')));
-String fileNameOf(String path) => path.substring(path.lastIndexOf(RegExp(r'[\\/]')) + 1);
 
 /// Where a series' edits are kept: its folder, and - for one with no folder of its own - its key in that folder's
 /// .bedereader.json (null: the folder's series.json).

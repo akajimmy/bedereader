@@ -1,46 +1,9 @@
-// Metadata edits written into the book files (Apply edits to files - reports\10-27-apply-edits-plan.md): a CBZ's
-// ComicInfo.xml, an EPUB's package file; the book rewritten with every other entry copied as it was, checked before
-// it takes the old one's place.
-import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
+// Metadata edits as they go into the book files (Apply edits to files - reports\10-27-apply-edits-plan.md): a CBZ's
+// ComicInfo.xml and an EPUB's package file, only the fields edited changed. (The rewrite that puts them in: file_zip_test.)
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/local/file_zip.dart';
 import 'package:komga_reader/local/in_file_meta.dart';
-import 'package:komga_reader/local/library_fs.dart';
 import 'package:komga_reader/local/local_meta.dart';
-
-import 'support/epub_files.dart' show epub3, zip;
-import 'support/memory_fs.dart';
-import 'support/zip_writer.dart';
-
-final _page1 = Uint8List.fromList([...pngHead(10, 10), ...List.filled(500, 7)]);
-final _page2 = Uint8List.fromList([...pngHead(20, 10), ...List.generate(500, (i) => i % 251)]);
-Uint8List _cbz({String? info, bool deflate = false}) =>
-    zipOf({'001.png': _page1, '002.png': _page2, if (info != null) 'ComicInfo.xml': info}, deflate: deflate);
-
-/// Writes cut short: the rewritten book doesn't check out.
-class _CutFs extends MemoryFs {
-  _CutFs(super.files);
-  @override
-  Future<LibraryOut> create(String path) async => _Cut(await super.create(path));
-}
-
-class _Cut implements LibraryOut {
-  _Cut(this.inner);
-  final LibraryOut inner;
-  bool first = true;
-  @override
-  Future<void> add(Uint8List bytes) async {
-    if (first) bytes = Uint8List.fromList([...bytes]..[40] ^= 0xff); // (a byte of the first page changed)
-    first = false;
-    await inner.add(bytes);
-  }
-
-  @override
-  Future<void> close() => inner.close();
-}
 
 void main() {
   group("the text", () {
@@ -73,70 +36,25 @@ void main() {
       expect(x, isNot(contains('content="3"')));
       expect(opfWith(x, const BookEdits(dateSet: true)), isNot(contains('dc:date')));
     });
-  });
 
-  group('the rewrite', () {
-    test("a CBZ's ComicInfo.xml replaced: every page copied byte for byte (stored or deflated), the new one reading "
-        "back; no copy left beside it", () async {
-      for (final deflate in [false, true]) {
-        final fs = MemoryFs({'lib/a.cbz': _cbz(info: '<ComicInfo><Title>Old</Title></ComicInfo>', deflate: deflate)});
-        final before = await FileZip.open(await fs.open('lib/a.cbz'));
-        final pages = [await before.read('001.png'), await before.read('002.png')];
-        await before.close();
-        final xml = Uint8List.fromList(utf8.encode('<ComicInfo><Title>New</Title></ComicInfo>'));
-        await rewriteZip(fs, 'lib/a.cbz', replace: {'ComicInfo.xml': xml});
-        final after = await FileZip.open(await fs.open('lib/a.cbz'));
-        expect([await after.read('001.png'), await after.read('002.png')], pages, reason: 'deflate $deflate');
-        expect(await after.read('ComicInfo.xml'), xml);
-        expect(after.names.toList(), ['001.png', '002.png', 'ComicInfo.xml'], reason: 'in their places');
-        await after.close();
-        expect(fs.files.keys, ['lib/a.cbz']);
-      }
+    test('ComicInfo.xml: summary, each role its field (names by commas), tags; a role emptied is taken out', () {
+      final x = comicInfoWith('<ComicInfo>\n  <Inker>Someone</Inker>\n</ComicInfo>', const BookEdits(
+          summary: 'A war.', tags: ['space', 'war'],
+          authors: [('Brian K. Vaughan', 'writer'), ('Fiona Staples', 'penciller'), ('Jim Lee', 'penciller')]));
+      expect(x, allOf(contains('<Summary>A war.</Summary>'), contains('<Writer>Brian K. Vaughan</Writer>'),
+          contains('<Penciller>Fiona Staples, Jim Lee</Penciller>'), contains('<Tags>space, war</Tags>'),
+          isNot(contains('Inker'))));
     });
 
-    test("a CBZ with no ComicInfo.xml gets one, after its pages; an EPUB's mimetype stays first, as it must", () async {
-      final fs = MemoryFs({'lib/a.cbz': _cbz(), 'lib/b.epub': zip(epub3())});
-      await rewriteZip(fs, 'lib/a.cbz', add: {'ComicInfo.xml': Uint8List.fromList(utf8.encode('<ComicInfo/>'))});
-      final a = await FileZip.open(await fs.open('lib/a.cbz'));
-      expect(a.names.last, 'ComicInfo.xml');
-      await a.close();
-      final opf = Uint8List.fromList(utf8.encode('<package/>'));
-      await rewriteZip(fs, 'lib/b.epub', replace: {'OEBPS/content.opf': opf});
-      final b = fs.files['lib/b.epub']!;
-      expect(utf8.decode(b.sublist(30, 38)), 'mimetype', reason: 'the first entry');
-    });
-
-    test("a rewrite that doesn't check out (a page's bytes changed on the way): the book stays exactly as it was, "
-        "and the new copy goes", () async {
-      final book = _cbz(info: '<ComicInfo/>');
-      final fs = _CutFs({'lib/a.cbz': book});
-      await expectLater(rewriteZip(fs, 'lib/a.cbz', replace: {'ComicInfo.xml': Uint8List.fromList([1])}),
-          throwsA(isA<FormatException>()));
-      expect(fs.files['lib/a.cbz'], book);
-      expect(fs.files.keys, ['lib/a.cbz']);
-    });
-
-    test("on this device's own files: rewritten in place, nothing left beside it", () async {
-      final dir = await Directory.systemTemp.createTemp('rewrite');
-      addTearDown(() => dir.delete(recursive: true));
-      final path = '${dir.path}${Platform.pathSeparator}a.cbz';
-      File(path).writeAsBytesSync(_cbz(deflate: true));
-      final xml = Uint8List.fromList(utf8.encode('<ComicInfo><Title>T</Title></ComicInfo>'));
-      await rewriteZip(LocalFs(), path, add: {'ComicInfo.xml': xml});
-      final z = await FileZip.open(await LocalFs().open(path));
-      expect([await z.read('002.png'), await z.read('ComicInfo.xml')], [_page2, xml]);
-      await z.close();
-      expect(dir.listSync(), hasLength(1));
-    });
-
-    test("a CBR isn't rewritten: refused, left as it was", () async {
-      final rar = File('test/fixtures/rar/synthetic_comic.cbr');
-      if (!rar.existsSync()) return markTestSkipped('no RAR fixture');
-      final bytes = rar.readAsBytesSync();
-      final fs = MemoryFs({'lib/a.cbr': bytes});
-      await expectLater(rewriteZip(fs, 'lib/a.cbr', add: {'ComicInfo.xml': Uint8List(1)}), throwsA(anything));
-      expect(fs.files['lib/a.cbr'], bytes);
-      expect(fs.files.keys, ['lib/a.cbr']);
+    test("an EPUB's package file: dc:description, dc:creator for writers and dc:contributor for the others, "
+        'dc:subject for each tag - the old ones replaced', () {
+      const opf = '<package><metadata>\n    <dc:creator>Old</dc:creator>\n    <dc:subject>x</dc:subject>\n'
+          '  </metadata></package>';
+      final x = opfWith(opf, const BookEdits(summary: 'S', authors: [('Frank Herbert', 'writer'), ('Jo', 'cover')],
+          tags: ['sf', 'desert']));
+      expect(x, allOf(contains('<dc:description>S</dc:description>'), contains('<dc:creator>Frank Herbert</dc:creator>'),
+          contains('<dc:contributor>Jo</dc:contributor>'), contains('<dc:subject>sf</dc:subject>'),
+          contains('<dc:subject>desert</dc:subject>'), isNot(contains('Old')), isNot(contains('>x<'))));
     });
   });
 }

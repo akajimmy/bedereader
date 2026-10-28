@@ -64,7 +64,7 @@ class StripPlaces {
     final p = await SharedPreferences.getInstance();
     for (final MapEntry(key: from, value: to) in ids.entries) {
       final v = p.getString(_key(from));
-      if (v == null) continue;
+      if (v == null || from == to) continue;
       await p.setString(_key(to), v);
       await p.remove(_key(from));
     }

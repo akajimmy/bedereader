@@ -52,6 +52,7 @@ class BookHighlights extends ChangeNotifier {
   static Future<void> renameIds(Map<String, String> ids) async {
     final p = await SharedPreferences.getInstance();
     for (final MapEntry(key: from, value: to) in ids.entries) {
+      if (from == to) continue;
       for (final suffix in const ['', '.unsent']) {
         final v = p.get('highlights.$from$suffix');
         if (v == null) continue;
