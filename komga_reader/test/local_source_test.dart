@@ -344,4 +344,23 @@ void main() {
     expect((await byName()).keys, unorderedEquals(['Saga #10 (2014).cbz', 'Saga Annual.cbz',
         'Frankenstein - Mary Shelley.epub']));
   });
+
+  test('a series deleted: every book of it - its files - goes, the series with them; the other series stay, and a '
+      'scan after leaves them gone', () async {
+    final s = await open();
+    await s.rescan();
+    final saga = [for (final x in (await s.series(size: 100))['content'] as List) if (x['name'] == 'Saga (2012)') x]
+        .single['id'] as String;
+    final told = <Set<String>>[];
+    s.onRemoved = told.add;
+    await s.deleteSeriesFiles(saga);
+    for (final f in ['Saga #10 (2014).cbz', 'Saga #2 (2012).cbz', 'Saga Annual.cbz']) {
+      expect(File('${root.path}/Saga (2012)/$f').existsSync(), isFalse, reason: f);
+    }
+    expect(told.single, contains(saga));
+    expect(told.single, hasLength(4), reason: 'its three books and itself');
+    await s.rescan();
+    expect([for (final x in (await s.series(size: 100))['content'] as List) x['name']],
+        unorderedEquals(['Loose One-Shot (2020)', 'Frankenstein - Mary Shelley']));
+  });
 }
