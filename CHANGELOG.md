@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Crop edges' Auto: the temporary Auto crop border setting is gone; the margin kept is 2.5%. (A border set to something else on this device goes back to 2.5%, and those books are looked over again once.)
+
 ## 1.7.0
 
 ### Build 171 - 2026-10-28

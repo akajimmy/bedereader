@@ -398,10 +398,8 @@ Widget pageColoursRow(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enab
     );
 
 /// Enhance and Enhance colours, then Crop edges in four steps (user, 2026-10-21: brightness and contrast went) and -
-/// [auto]: comics, not a webtoon's strip - Auto (user, 2026-10-28), with its border while that's being dialled in.
+/// [auto]: comics, not a webtoon's strip - Auto (user, 2026-10-28).
 List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true, bool auto = false}) {
-  final onAuto = auto && p.crop == ReaderPrefs.autoCrop;
-  final s = AppSettings.instance;
   return [
     SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
         value: p.sharpen, onChanged: enabled ? (v) => setP(p.copyWith(sharpen: v)) : null),
@@ -418,18 +416,6 @@ List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool ena
       onChanged: (c) => setP(p.copyWith(crop: c)),
       enabled: enabled,
     ),
-    // TEMPORARY (user, 2026-10-28: "a temporary setting which we'll remove") - this device's
-    if (onAuto)
-      SegmentRow<double>(
-        title: 'Auto crop border',
-        choices: [
-          for (final b in DisplayPrefs.autoCropBorders)
-            Choice(b, '${(b * 100).toStringAsFixed(b * 1000 % 10 == 0 ? 0 : 1)}%'),
-        ],
-        value: s.display.autoCropBorder,
-        onChanged: (b) => s.setDisplay(s.display.copyWith(autoCropBorder: b)),
-        enabled: enabled,
-      ),
   ];
 }
 

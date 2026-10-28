@@ -131,9 +131,9 @@ class ComicRenderer extends Renderer {
   @override
   bool get ready => opened && (!_autoOn || _autoRun().cuts != null);
 
-  /// This book's run for the border set - started if it isn't (the book opened, Auto chosen, the border changed).
+  /// This book's run for the border - started if it isn't (the book opened, Auto chosen).
   AutoCropRun _autoRun() {
-    final id = _book['id'] as String, border = _settings.display.autoCropBorder;
+    final id = _book['id'] as String, border = defaultBorder;
     final have = _auto;
     if (have != null && have.bookId == id && have.border == border && have.total == pages.length) return have;
     have?.cancel();
