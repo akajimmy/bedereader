@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'book_names.dart';
 import 'library_fs.dart' show FsEntry;
 import 'local_library.dart';
@@ -15,6 +18,22 @@ import 'local_store.dart';
 //                     lower case>").
 // The scan reads them; the books and series are listed with them applied ([withEdits]) - what the scan found stays as
 // the files say.
+
+/// Settings > Libraries > Metadata edits (user, 2026-10-27): kept alongside the books (the default) or written into
+/// the book files (a CBZ's ComicInfo.xml, an EPUB's package file - what can't go there goes alongside). This device's
+/// own setting.
+class EditsInFiles extends ValueNotifier<bool> {
+  EditsInFiles._() : super(false);
+  static final instance = EditsInFiles._();
+  static const _key = 'local.editsInFiles';
+
+  Future<void> load() async => value = (await SharedPreferences.getInstance()).getBool(_key) ?? false;
+
+  Future<void> set(bool on) async {
+    value = on;
+    await (await SharedPreferences.getInstance()).setBool(_key, on);
+  }
+}
 
 /// The two file names.
 const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
@@ -75,6 +94,14 @@ class BookEdits {
         dateSet: dateSet || changes.containsKey('releaseDate'),
         releaseDate: changes.containsKey('releaseDate') ? changes['releaseDate'] as String? : releaseDate,
         series: changes.containsKey('seriesName') ? _text(changes['seriesName']) : series,
+      );
+
+  /// The same edits without [title], [number] (its sort number too) or [date] - what's been written into the file
+  /// itself, read from there now.
+  BookEdits without({bool title = false, bool number = false, bool date = false}) => BookEdits(
+        title: title ? null : this.title, number: number ? null : this.number,
+        numberSort: number ? null : numberSort, dateSet: date ? false : dateSet,
+        releaseDate: date ? null : releaseDate, series: series,
       );
 
   Map<String, Object?> toJson() => {

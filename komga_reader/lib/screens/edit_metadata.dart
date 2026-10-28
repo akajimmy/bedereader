@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../book_source.dart';
 import '../errors.dart';
 import '../local/book_names.dart' show isLocalId;
+import '../local/local_meta.dart' show EditsInFiles;
 import '../widgets/error_text.dart';
 
 // Metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md): a book's title, number, release date and
@@ -47,6 +48,21 @@ Future<bool> canEditIn(BookSource api, String id) => api
     .canEditMetadata(id)
     .timeout(const Duration(seconds: 2), onTimeout: () => false)
     .catchError((Object _) => false);
+
+/// Where a local or network book's edits go, when Settings says into the files but this one's can't (a CBR): said in
+/// its editor. Null: nothing to say.
+String? bookEditsNote(Map book) {
+  if (!isLocalId(book['id'] as String?) || !EditsInFiles.instance.value) return null;
+  final type = book['media']?['mediaType'] as String?;
+  return type == 'application/zip' || type == 'application/epub+zip'
+      ? "Its series is kept beside it (the folders make the series)."
+      : "This book's file can't be rewritten (a CBR): its edits are kept beside it.";
+}
+
+/// The same for a series: a series' edits are always kept beside its books.
+String? seriesEditsNote(Map series) => isLocalId(series['id'] as String?) && EditsInFiles.instance.value
+    ? "A series' edits are kept beside its books, not in the files."
+    : null;
 
 /// Edits a book's metadata; true once something was saved.
 Future<bool> editBook(BuildContext context, BookSource api, Map book) async =>
@@ -145,6 +161,9 @@ class _BookEditorState extends State<_BookEditor> {
                   helperMaxLines: 2),
               child: Text(_series),
             ),
+          if (bookEditsNote(widget.book) case final note?)
+            Padding(padding: const EdgeInsets.only(top: 8), child: Text(note, key: const ValueKey('edit-note'),
+                style: Theme.of(context).textTheme.bodySmall)),
           const SizedBox(height: 8),
           TextField(key: const ValueKey('edit-number'), controller: _number,
               decoration: const InputDecoration(labelText: 'Number')),
@@ -240,6 +259,9 @@ class _SeriesEditorState extends State<_SeriesEditor> {
           TextField(key: const ValueKey('edit-title'), controller: _title, autofocus: true,
               decoration: const InputDecoration(labelText: 'Title')),
           const SizedBox(height: 8),
+          if (seriesEditsNote(widget.series) case final note?)
+            Padding(padding: const EdgeInsets.only(bottom: 8), child: Text(note, key: const ValueKey('edit-note'),
+                style: Theme.of(context).textTheme.bodySmall)),
           TextField(key: const ValueKey('edit-sort'), controller: _sort,
               decoration: const InputDecoration(labelText: 'Sort title', helperText: 'Empty: sorted by its title')),
           const SizedBox(height: 8),

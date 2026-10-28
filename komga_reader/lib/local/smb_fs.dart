@@ -43,6 +43,10 @@ abstract interface class SmbShare {
   Future<void> close(Object handle);
   Future<void> disconnect();
 
+  /// Opened for writing, emptied (made if it isn't there): written with [writeAt], let go with [close].
+  Future<Object> openWrite(String inShare);
+  Future<void> writeAt(Object handle, Uint8List data, int offset);
+
   /// [data] written as the whole of [inShare] (made if it isn't there).
   Future<void> write(String inShare, Uint8List data);
   Future<void> delete(String inShare);
@@ -159,6 +163,24 @@ class SmbFs implements LibraryFs {
   /// (A share can't rename over a file: the new one is written beside it, the old one deleted, the new one renamed - a
   /// failure in between leaves the new one beside it, under its temporary name.)
   @override
+  Future<LibraryOut> create(String path) async {
+    final share = await _connected;
+    return _SmbOut(share, await share.openWrite(_inShare(path)));
+  }
+
+  /// (Delete, then rename: a share can't rename over a file.)
+  @override
+  Future<void> replace(String from, String to) async {
+    final share = await _connected;
+    final at = _inShare(to);
+    if (await share.exists(at)) await share.delete(at);
+    await share.rename(_inShare(from), at);
+  }
+
+  @override
+  Future<void> delete(String path) async => (await _connected).delete(_inShare(path));
+
+  @override
   Future<void> writeWhole(String path, Uint8List bytes) async {
     final share = await _connected;
     final at = _inShare(path), temp = '$at.bedereader-new';
@@ -200,6 +222,21 @@ class SmbFs implements LibraryFs {
       // never connected
     }
   }
+}
+
+class _SmbOut implements LibraryOut {
+  _SmbOut(this._share, this._handle);
+  final SmbShare _share;
+  final Object _handle;
+  int _at = 0;
+  @override
+  Future<void> add(Uint8List bytes) async {
+    await _share.writeAt(_handle, bytes, _at);
+    _at += bytes.length;
+  }
+
+  @override
+  Future<void> close() => _share.close(_handle);
 }
 
 class _SmbFile implements LibraryFile {
@@ -253,6 +290,11 @@ class _PoolShare implements SmbShare {
   Future<void> disconnect() => _pool.disconnect();
   @override
   Future<void> write(String inShare, Uint8List data) => _pool.writeFile(inShare, data);
+  @override
+  Future<Object> openWrite(String inShare) => _pool.openFileWrite(inShare, truncate: true);
+  @override
+  Future<void> writeAt(Object handle, Uint8List data, int offset) =>
+      _pool.writeToHandle(handle as Smb2PoolHandle, data, offset: offset);
   @override
   Future<void> delete(String inShare) => _pool.deleteFile(inShare);
   @override

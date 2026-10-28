@@ -29,6 +29,18 @@ class _Share implements SmbShare {
   }
 
   @override
+  Future<Object> openWrite(String inShare) async {
+    files[inShare] = Uint8List(0);
+    return 'w:$inShare';
+  }
+
+  @override
+  Future<void> writeAt(Object handle, Uint8List data, int offset) async {
+    final at = (handle as String).substring(2);
+    files[at] = Uint8List.fromList([...files[at]!.sublist(0, offset), ...data]);
+  }
+
+  @override
   Future<void> rename(String from, String to) async {
     files[to] = files.remove(from)!;
     writes.add('rename $from');

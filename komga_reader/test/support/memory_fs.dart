@@ -38,6 +38,21 @@ class MemoryFs implements LibraryFs {
   FileTrouble classify(Object error) =>
       error is StateError && error.message.startsWith('no file') ? FileTrouble.gone : FileTrouble.damaged;
 
+  @override
+  Future<LibraryOut> create(String path) async {
+    if (readOnly) throw StateError('read-only: $path');
+    return _MemoryOut(this, path);
+  }
+
+  @override
+  Future<void> replace(String from, String to) async {
+    files[to] = files.remove(from)!;
+    written.add(to);
+  }
+
+  @override
+  Future<void> delete(String path) async => files.remove(path);
+
   /// Writes done (path, in order); [readOnly]: refused.
   final written = <String>[];
   bool readOnly = false;
@@ -47,6 +62,17 @@ class MemoryFs implements LibraryFs {
     files[path] = bytes;
     written.add(path);
   }
+}
+
+class _MemoryOut implements LibraryOut {
+  _MemoryOut(this.fs, this.path);
+  final MemoryFs fs;
+  final String path;
+  final _bytes = BytesBuilder();
+  @override
+  Future<void> add(Uint8List bytes) async => _bytes.add(bytes);
+  @override
+  Future<void> close() async => fs.files[path] = _bytes.takeBytes();
 }
 
 class _MemoryFile implements LibraryFile {

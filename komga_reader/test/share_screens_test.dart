@@ -55,6 +55,10 @@ class _Share implements SmbShare {
   Future<void> delete(String inShare) async {}
   @override
   Future<void> rename(String from, String to) async {}
+  @override
+  Future<Object> openWrite(String inShare) async => inShare;
+  @override
+  Future<void> writeAt(Object handle, Uint8List data, int offset) async {}
 
   @override
   Future<bool> exists(String inShare) async => inShare == 'Comics';

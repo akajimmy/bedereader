@@ -66,12 +66,28 @@ abstract interface class LibraryFs {
   /// a failure part-way leaves the file as it was (metadata edits - lib/local/local_meta.dart).
   Future<void> writeWhole(String path, Uint8List bytes);
 
+  /// A new file at [path] (one there is emptied), written in order ([LibraryOut]) - a book rewritten with its
+  /// metadata in it (lib/local/zip_rewrite.dart), too big to hold whole.
+  Future<LibraryOut> create(String path);
+
+  /// [from] put in [to]'s place (the old [to] gone).
+  Future<void> replace(String from, String to);
+
+  /// [path] deleted (a rewrite's new copy that didn't check out).
+  Future<void> delete(String path);
+
   /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
   /// and how many books.
   Future<FolderLook> look(String folder);
 
   /// What kind of trouble [error] (thrown by this file system's reads) is.
   FileTrouble classify(Object error);
+}
+
+/// A file being written ([LibraryFs.create]): its bytes added in order, then closed.
+abstract interface class LibraryOut {
+  Future<void> add(Uint8List bytes);
+  Future<void> close();
 }
 
 /// A whole file, through [LibraryFs.open].
@@ -184,6 +200,15 @@ class LocalFs implements LibraryFs {
   Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());
 
   @override
+  Future<LibraryOut> create(String path) async => _LocalOut(await File(path).open(mode: FileMode.write));
+
+  @override
+  Future<void> replace(String from, String to) => File(from).rename(to); // (over the old one: Windows too)
+
+  @override
+  Future<void> delete(String path) => File(path).delete();
+
+  @override
   Future<void> writeWhole(String path, Uint8List bytes) async {
     final temp = File('$path.bedereader-new');
     await temp.writeAsBytes(bytes, flush: true);
@@ -236,6 +261,18 @@ class LocalFs implements LibraryFs {
       }
     }
     return FileTrouble.damaged;
+  }
+}
+
+class _LocalOut implements LibraryOut {
+  _LocalOut(this._f);
+  final RandomAccessFile _f;
+  @override
+  Future<void> add(Uint8List bytes) => _f.writeFrom(bytes);
+  @override
+  Future<void> close() async {
+    await _f.flush();
+    await _f.close();
   }
 }
 
