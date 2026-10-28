@@ -166,7 +166,7 @@ void main() {
         'whole and the book is not remembered', () async {
       final api = noNetwork(_Thumbs.new);
       var measures = 0;
-      Future<PageMeasure?> measure(Uint8List bytes, AutoCropTimes _) async {
+      Future<PageMeasure?> measure(Uint8List bytes) async {
         measures++;
         return bytes.isEmpty ? null : measured();
       }
@@ -194,7 +194,7 @@ void main() {
 
     testWidgets('on Auto, a book opens on "Finding page borders" with its progress, then its pages; opened again, it '
         "has nothing to wait for (user, 2026-10-28: \"wait, then open cropped\")", (tester) async {
-      AutoCropRun.measureForTests = (bytes, _) async => measured();
+      AutoCropRun.measureForTests = (bytes) async => measured();
       AppSettings.instance.setDefault(const ReaderPrefs(crop: ReaderPrefs.autoCrop));
       final api = noNetwork(_Thumbs.new)..held = Completer<void>();
       await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
@@ -221,7 +221,7 @@ void main() {
         'stayed black until it was turned (the tablet, build 170: Auto chosen on page 3 of a book opened at page 1)',
         (tester) async {
       _Pages.png = (await tester.runAsync(() => solidPng(200, 300, const Color(0xFFE0D0B0))))!;
-      AutoCropRun.measureForTests = (bytes, _) async => measured();
+      AutoCropRun.measureForTests = (bytes) async => measured();
       final api = noNetwork(_Pages.new);
       Future<void> settle() async {
         for (var i = 0; i < 12; i++) {

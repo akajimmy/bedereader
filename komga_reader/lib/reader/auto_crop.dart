@@ -7,7 +7,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../app_log.dart';
 import '../book_source.dart';
 
 /// Auto crop page borders (user, 2026-10-28 - reports\10-28-autocrop-review, the prototype it was dialled in with):
@@ -356,7 +355,7 @@ const measureWidth = 300;
 /// that fails is shown whole. Remembered on the device ([AutoCropStore]) when every page was measured.
 class AutoCropRun {
   AutoCropRun(this.api, this.bookId, this.pageNumbers, {required this.border, this.onProgress,
-      Future<PageMeasure?> Function(Uint8List bytes, AutoCropTimes times)? measure})
+      Future<PageMeasure?> Function(Uint8List bytes)? measure})
       : _measure = measure ?? measureForTests ?? measureBytes {
     _run();
   }
@@ -365,7 +364,7 @@ class AutoCropRun {
   final List<int> pageNumbers;
   final double border;
   final void Function()? onProgress;
-  final Future<PageMeasure?> Function(Uint8List bytes, AutoCropTimes times) _measure;
+  final Future<PageMeasure?> Function(Uint8List bytes) _measure;
 
   int done = 0;
   int get total => pageNumbers.length;
@@ -379,70 +378,40 @@ class AutoCropRun {
 
   /// Tests: pages measured with this instead (no decoding or isolates in a widget test).
   @visibleForTesting
-  static Future<PageMeasure?> Function(Uint8List bytes, AutoCropTimes times)? measureForTests;
+  static Future<PageMeasure?> Function(Uint8List bytes)? measureForTests;
 
   /// Pages measured at once.
   static const parallel = 4;
 
   Future<void> _run() async {
-    final wall = Stopwatch()..start(); // TEMPORARY timing (user, 2026-10-28: timed on the tablet, then stripped)
     final saved = await AutoCropStore.load(bookId, total, border);
     if (_cancelled) return;
     if (saved != null) {
-      _log('$bookId: remembered cuts for $total pages, ${wall.elapsedMilliseconds} ms');
       _finish(saved);
       return;
     }
-    _log('$bookId: measuring $total pages, border ${(border * 100).toStringAsFixed(1)}%, $parallel at once');
     final measured = List<PageMeasure?>.filled(total, null);
     var next = 0, failed = 0;
-    final times = AutoCropTimes();
     Future<void> worker() async {
       while (next < total && !_cancelled) {
         final i = next++;
-        final page = Stopwatch()..start();
         try {
-          final fetch = Stopwatch()..start();
-          final bytes = await api.pageThumbBytes(bookId, pageNumbers[i]);
-          times.fetchUs += fetch.elapsedMicroseconds;
-          times.bytes += bytes.length;
-          measured[i] = await _measure(bytes, times);
+          measured[i] = await _measure(await api.pageThumbBytes(bookId, pageNumbers[i]));
         } catch (_) {
           measured[i] = null; // shown whole
         }
-        if (page.elapsedMilliseconds > times.slowestMs) {
-          times
-            ..slowestMs = page.elapsedMilliseconds
-            ..slowestPage = i + 1;
-        }
         if (measured[i] == null) failed++;
         done++;
-        if (done % 25 == 0) _log('$bookId: $done / $total pages, ${wall.elapsedMilliseconds} ms');
         if (!_cancelled) onProgress?.call();
       }
     }
 
     await Future.wait([for (var k = 0; k < parallel; k++) worker()]);
-    if (_cancelled) {
-      _log('$bookId: stopped at $done / $total, ${wall.elapsedMilliseconds} ms');
-      return;
-    }
-    final placing = Stopwatch()..start();
+    if (_cancelled) return;
     final result = bookCuts(measured, border: border);
-    final placeMs = placing.elapsedMilliseconds;
     if (failed == 0) await AutoCropStore.save(bookId, border, result);
-    String avg(int us) => (us / 1000 / math.max(1, total)).toStringAsFixed(1);
-    final px = measured.whereType<PageMeasure>().firstOrNull;
-    _log('$bookId: $total pages in ${wall.elapsedMilliseconds} ms - per page (summed over $parallel at once): '
-        'fetch ${avg(times.fetchUs)} ms, decode ${avg(times.decodeUs)} ms, measure ${avg(times.measureUs)} ms; '
-        'placing $placeMs ms; slowest p${times.slowestPage} ${times.slowestMs} ms; '
-        '${(times.bytes / 1024 / math.max(1, total)).round()} KB a page${px == null ? '' : ', measured ${px.width}x${px.height}'}; '
-        '${result.where((c) => c != null && !c.isNone).length} cropped, ${result.where((c) => c == null).length} whole'
-        '${failed == 0 ? '' : ', $failed failed (not remembered)'}');
     _finish(result);
   }
-
-  static void _log(String msg) => AppLog.instance.info('autocrop', msg);
 
   void _finish(List<PageCut?> result) {
     if (_cancelled) return;
@@ -453,14 +422,8 @@ class AutoCropRun {
   }
 }
 
-/// TEMPORARY: where a book's measuring time goes, summed over its pages (microseconds).
-class AutoCropTimes {
-  int fetchUs = 0, decodeUs = 0, measureUs = 0, bytes = 0, slowestMs = 0, slowestPage = 0;
-}
-
 /// A page's file decoded [measureWidth] wide and measured off the UI's thread; null if it can't be decoded.
-Future<PageMeasure?> measureBytes(Uint8List bytes, [AutoCropTimes? times]) async {
-  final decode = Stopwatch()..start();
+Future<PageMeasure?> measureBytes(Uint8List bytes) async {
   final ui.Image image;
   try {
     image = (await (await ui.instantiateImageCodec(bytes, targetWidth: measureWidth)).getNextFrame()).image;
@@ -469,13 +432,9 @@ Future<PageMeasure?> measureBytes(Uint8List bytes, [AutoCropTimes? times]) async
   }
   try {
     final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
-    if (times != null) times.decodeUs += decode.elapsedMicroseconds;
     if (data == null) return null;
     final rgba = data.buffer.asUint8List(), w = image.width, h = image.height;
-    final measure = Stopwatch()..start();
-    final m = await Isolate.run(() => measurePage(rgba, w, h));
-    if (times != null) times.measureUs += measure.elapsedMicroseconds;
-    return m;
+    return await Isolate.run(() => measurePage(rgba, w, h));
   } finally {
     image.dispose();
   }
