@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 167 - 2026-10-27
+
 **Fixed**
 
 - Opening a second file from outside the app while the first was still open in the reader did nothing until the first was closed; now it takes its place at once. A comic opened this way no longer shows its title twice at the top: the line above the title is the file's name when the comic has a title of its own, and nothing otherwise.
-
-## 1.7.0
 
 ### Build 166 - 2026-10-27
 
