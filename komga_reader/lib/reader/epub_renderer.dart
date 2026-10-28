@@ -916,9 +916,9 @@ class EpubRenderer extends Renderer {
     // a big picture tapped in the middle of the screen: full screen over the book (the sides still turn the page -
     // a picture can fill the page)
     if (!host.controlsUp && x >= 1 / 3 && x <= 2 / 3) {
-      for (final (rect, image) in page?.pictures ?? const <(Rect, ui.Image)>[]) {
+      for (final (rect, image, filter) in page?.pictures ?? const <(Rect, ui.Image, ColorFilter?)>[]) {
         if (rect.contains(at)) {
-          unawaited(_showPicture(image));
+          unawaited(_showPicture(image, filter));
           return;
         }
       }
@@ -1035,7 +1035,9 @@ class EpubRenderer extends Renderer {
   /// A picture full screen over the book, fitted to the screen (user, 2026-10-06: "a lightbox style view"): pinch
   /// or wheel to zoom, a tap, Back or Esc closes it. Drawn from its own handle on the picture, so the chapter being
   /// let go of meanwhile can't free it from under the view.
-  Future<void> _showPicture(ui.Image image) async {
+  /// [filter]: a picture drawn in the page's colours (inkOnClear's line art, chapter.dart) is shown in them full screen too, on
+  /// the page's ground - black ink on the black backdrop vanished.
+  Future<void> _showPicture(ui.Image image, ColorFilter? filter) async {
     // the view owns this handle and lets it go when it's gone - after its fade-out, not when the dialog's future
     // completes (the picture is still drawn while it fades)
     final own = image.clone();
@@ -1045,7 +1047,8 @@ class EpubRenderer extends Renderer {
       barrierLabel: 'Close',
       barrierColor: Colors.black.withValues(alpha: 0.92),
       transitionDuration: const Duration(milliseconds: 150),
-      pageBuilder: (c, _, __) => _PictureView(image: own),
+      pageBuilder: (c, _, __) =>
+          _PictureView(image: own, filter: filter, ground: filter == null ? null : _drawn.background),
       transitionBuilder: (c, a, _, child) => FadeTransition(opacity: a, child: child),
     );
   }
@@ -1841,8 +1844,10 @@ class EpubRenderer extends Renderer {
 /// Esc or OK closes it. A button in each top corner of the screen turns it a quarter - left: counterclockwise,
 /// right: clockwise (user, 2026-10-08; buttons only, no key, not kept). The remote reaches them with Left / Right.
 class _PictureView extends StatefulWidget {
-  const _PictureView({required this.image});
+  const _PictureView({required this.image, this.filter, this.ground});
   final ui.Image image; // its own handle: let go of with the view
+  final ColorFilter? filter; // the page's colours, as on the page
+  final Color? ground; // behind it: the page's background
 
   /// The share of the screen the picture's area takes (user: "instead of going full screen, go like 95%").
   static const share = 0.95;
@@ -1865,6 +1870,12 @@ class _PictureViewState extends State<_PictureView> {
     super.dispose();
   }
 
+  Widget _filtered(Widget picture) {
+    final f = widget.filter, g = widget.ground;
+    if (f != null) picture = ColorFiltered(colorFilter: f, child: picture);
+    return g == null ? picture : ColoredBox(color: g, child: picture);
+  }
+
   /// The picture at [area], turned: fitted in it, centred.
   Widget _picture(Size area) {
     final w = widget.image.width.toDouble(), h = widget.image.height.toDouble();
@@ -1881,7 +1892,7 @@ class _PictureViewState extends State<_PictureView> {
             child: RotatedBox(
               key: const ValueKey('picture.turned'),
               quarterTurns: _turns,
-              child: RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
+              child: _filtered(RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium)),
             ),
           ),
         ),
