@@ -688,7 +688,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> _deleteBook() async {
     final title = bookTitle(_book);
     final ok = await confirmDelete(context, 'Delete "$title"?',
-        'This deletes the file from the server. It cannot be undone from the app.');
+        'This deletes the file from ${deletesFrom(api, [_book['id'] as String])}. It cannot be undone from the app.');
     if (!ok || !mounted) return;
     try {
       await api.deleteBookFile(_book['id']);

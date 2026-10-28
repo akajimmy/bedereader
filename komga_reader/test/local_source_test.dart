@@ -313,4 +313,35 @@ void main() {
     await s.setLibraries(const []);
     expect(told.single, {library().id, ...series, ...books});
   });
+
+  // user, 2026-10-28: Delete book was Komga's only
+  test("a book deleted: its file goes (held open by the reader: let go first), it's off the list at once, and its "
+      'series with it if it was the last; the pins to them are told; a scan after leaves it gone', () async {
+    final s = await open();
+    await s.rescan();
+    Future<Map<String, String>> byName() async => {
+          for (final x in (await s.books(size: 100))['content'] as List)
+            (x['url'] as String).replaceAll('\\', '/').split('/').last: x['id'] as String,
+        };
+    final ids = await byName();
+    final saga2 = ids['Saga #2 (2012).cbz']!, loose = ids['Loose One-Shot (2020).cbz']!;
+    final looseSeries = s.entries[loose]!['book']['seriesId'] as String;
+    await s.pageBytes(saga2, 1); // (open in the reader)
+    final told = <Set<String>>[];
+    s.onRemoved = told.add;
+
+    await s.deleteBookFile(saga2);
+    expect(File('${root.path}/Saga (2012)/Saga #2 (2012).cbz').existsSync(), isFalse);
+    expect(fs.held, 0);
+    expect((await byName()).keys, isNot(contains('Saga #2 (2012).cbz')));
+    expect(told.single, {saga2}, reason: 'Saga has other books: it stays');
+
+    await s.deleteBookFile(loose);
+    expect(told.last, {loose, looseSeries}, reason: 'its last book: the series goes too');
+    expect([for (final x in (await s.series(size: 100))['content'] as List) x['id']], isNot(contains(looseSeries)));
+
+    await s.rescan();
+    expect((await byName()).keys, unorderedEquals(['Saga #10 (2014).cbz', 'Saga Annual.cbz',
+        'Frankenstein - Mary Shelley.epub']));
+  });
 }

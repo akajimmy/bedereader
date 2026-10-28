@@ -764,8 +764,35 @@ class LocalSource extends CatalogueSource {
       ];
   @override
   Future<List<dynamic>> seriesCollections(String seriesId) async => const [];
+  /// The book's file deleted - from this device's folder, or the share (user, 2026-10-28) - and the book taken out of
+  /// its library at once (its series too, if it was the last one in it); the pins to them go ([onRemoved]). Not while
+  /// offline for a book on a share.
   @override
-  Future<void> deleteBookFile(String bookId) async => throw NeedsKomga('Deleting a book');
+  Future<void> deleteBookFile(String bookId) async {
+    final b = _books[bookId];
+    if (b == null) throw _notHere(bookId);
+    if (_offline && splitUnc(b.path) != null) throw NotAvailableOffline('Deleting a book');
+    await _scan?.catchError((Object _) {}); // (a scan ending after would put it back)
+    // its archive let go first: a file held open can't be deleted on Windows (the reader deleting the book it shows)
+    final open = _open.remove(bookId);
+    await open?.close();
+    await _fsFor(b.path).delete(b.path);
+    final gone = {bookId};
+    for (final index in store.libraries.values) {
+      final was = index.books.remove(bookId);
+      if (was == null) continue;
+      if (!index.books.values.any((x) => x.seriesId == was.seriesId)) {
+        index.series.remove(was.seriesId);
+        gone.add(was.seriesId);
+      }
+      await store.putLibrary(index);
+    }
+    await store.clearProgress(bookId);
+    onRemoved?.call(gone);
+    _rebuild();
+    changed.value++;
+    contentChanged.value++;
+  }
   @override
   Future<void> deleteSeriesFiles(String seriesId) async => throw NeedsKomga('Deleting a series');
   @override
