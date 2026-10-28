@@ -131,7 +131,9 @@ class _BookEditorState extends State<_BookEditor> {
     _number.addListener(() {
       if (_sortTyped) return;
       final n = numberSortOf(_number.text);
-      if (n != null) _sort.text = _sortText(n);
+      // (emptied: so is it - it kept the last figure, "4" of "42" deleted a character at a time - the tablet, build
+      // 170; a number that isn't a figure, "Annual", leaves it as it was)
+      if (n != null || _number.text.trim().isEmpty) _sort.text = n == null ? '' : _sortText(n);
     });
   }
 
