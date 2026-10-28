@@ -297,7 +297,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       ),
       SettingsGroup(title: 'Page Layout - default values', synced: true, children: layoutRows(p, s.setDefault)),
       SettingsGroup(title: 'Image - default values', synced: true, children: [
-        ...imageRows(p, s.setDefault),
+        ...imageRows(p, s.setDefault, auto: true),
         ActionRow(title: 'Image settings back to the original scan',
             button: TextButton(onPressed: () => s.setDefault(p.imageReset()), child: const Text('Reset to original'))),
       ]),
