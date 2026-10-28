@@ -5,7 +5,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 import 'package:komga_reader/screens/library.dart';
 import 'package:komga_reader/view_filter.dart';
@@ -20,7 +20,7 @@ List<String> ids(Map<String, dynamic> page) => [for (final b in page['content'] 
 
 // ---- from offline_filter_test.dart
 
-// The filters on downloaded books (offline_komga.dart): the store keeps Komga's book and series JSON, and the
+// The filters on downloaded books (downloads_source.dart): the store keeps Komga's book and series JSON, and the
 // filtered views and the panel's value lists are made from it.
 
 /// Komga's series JSON, as a download stores it.
@@ -42,12 +42,12 @@ const series = {
 void main() {
   late Directory dir;
   late OfflineStore store;
-  late OfflineKomga api;
+  late DownloadsSource api;
 
   setUp(() async {
     dir = await Directory.systemTemp.createTemp('komga_offline_test');
     store = await buildStore(dir);
-    api = OfflineKomga(store);
+    api = DownloadsSource(store);
   });
   tearDown(() => deleteTemp(dir));
 
@@ -128,6 +128,22 @@ void main() {
     expect(() => api.clientSettings(), throwsA(isA<KomgaUnreachable>()));
   });
 
+  // the downloads answer these themselves since they stopped being a Komga that can't connect (2026-10-26): what only
+  // the server has is "unreachable" as before - the EPUB reader, the sync and the download engine tell by it
+  test("what only the server has is unreachable, as it was; the library list's own questions answered", () async {
+    for (final call in <Future<Object?> Function()>[
+      () => api.epubManifest('B1'), () => api.epubResource('B1', 'x.html'), () => api.bookFileBytes('B1'),
+      () => api.thumbBytes('http://nas/thumb'), () => api.bookReadLists('B1'), () => api.seriesCollections('S1'),
+      () => api.putClientSetting('k', 'v'),
+    ]) {
+      await expectLater(call(), throwsA(isA<KomgaUnreachable>()));
+    }
+    expect(await api.libraryName('L1'), 'Events');
+    expect(await api.libraryName('nope'), isNull);
+    expect([for (final l in await api.visibleLibraries()) l['id']], ['L1']);
+    expect(await api.me(), {'email': 'offline'});
+  });
+
   testWidgets('the real library screen browses the offline tree unchanged', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await tester.runAsync(
@@ -141,7 +157,7 @@ void main() {
   group('offline filter', () {
     late Directory dir;
     late OfflineStore store;
-    late OfflineKomga api;
+    late DownloadsSource api;
 
     /// support/offline_store.dart's library, with metadata:
     ///   Silver Surfer (S1, Marvel, Cosmic + Action, ENDED, released 2014): B1 2014 Slott (writer) / Allred (penciller),
@@ -167,7 +183,7 @@ void main() {
       dir = await Directory.systemTemp.createTemp('komga_offline_filter_test');
       store = await buildStore(dir);
       await addMetadata();
-      api = OfflineKomga(store);
+      api = DownloadsSource(store);
     });
     tearDown(() => deleteTemp(dir));
 

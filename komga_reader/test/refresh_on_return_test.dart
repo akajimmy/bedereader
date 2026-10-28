@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/content_changed.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart';
 
 /// Library views load afresh whenever they're back on top, however they got there (user, 2026-09-30: Home's
@@ -77,5 +78,39 @@ void main() {
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await tester.pump();
     expect(counts, {'series': 1});
+  });
+
+  testWidgets('what the views show changed by itself (Komga back after it couldn\'t be reached): the view on top '
+      'loads again at once; the one underneath, once it\'s back on top', (tester) async {
+    await start(tester);
+    await push(tester, 'series');
+    contentChanged.value++;
+    await tester.pump();
+    expect(counts, {'series': 1}, reason: 'on top: at once; Home underneath: not yet');
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect(counts, {'series': 1, 'home': 1}, reason: 'Home back on top');
+  });
+
+  // review, 2026-10-26: Komga back while "Can't reach Komga" was up - Home, under the dialog, wasn't on top and kept
+  // saying Komga couldn't be reached once the dialog closed
+  testWidgets('changed while a dialog is over the view: loaded again once the dialog closes - once; a dialog closing '
+      'with nothing changed still loads nothing', (tester) async {
+    await start(tester);
+    final home = tester.element(find.text('home'));
+    unawaited(showDialog<void>(context: home, builder: (_) => const Text('dialog')));
+    await tester.pumpAndSettle();
+    contentChanged.value++;
+    await tester.pump();
+    expect(counts, isEmpty, reason: 'under the dialog: not yet');
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect(counts, {'home': 1}, reason: 'uncovered: loaded again');
+
+    unawaited(showDialog<void>(context: home, builder: (_) => const Text('dialog')));
+    await tester.pumpAndSettle();
+    nav.pop();
+    await tester.pumpAndSettle();
+    expect(counts, {'home': 1}, reason: 'nothing owed');
   });
 }

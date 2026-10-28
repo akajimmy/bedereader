@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -6,10 +8,12 @@ import '../view_sort.dart';
 import 'download_badge.dart';
 import 'poster.dart';
 import 'readlist_tile.dart';
+import 'source_badge.dart';
+import '../book_source.dart';
 
 /// The pinned view's own query (its filter, mode and sort) - [size] items of it. Used for the pin's poster and
 /// count, and offline to hide pins with nothing downloaded.
-Future<Map<String, dynamic>> pinView(Komga api, Pin p, {int size = 4}) async {
+Future<Map<String, dynamic>> pinView(BookSource api, Pin p, {int size = 4}) async {
   final read = p.readFilter;
   final parts = (p.fullSort ?? '').split(':');
   final desc = parts.length > 1 && parts[1] == 'desc';
@@ -62,7 +66,7 @@ String _noun(Pin p, int n) {
 }
 
 /// Thumbnail references for the items of a pinned view.
-List<String> _thumbs(Komga api, Pin p, List<dynamic> items) {
+List<String> _thumbs(BookSource api, Pin p, List<dynamic> items) {
   String Function(String) thumb = switch (p.kind) {
     'series' || 'readlist' => api.bookThumb,
     'collection' => api.seriesThumb,
@@ -90,7 +94,7 @@ String bookState(Map b) {
 /// Tap opens the view; long-press (or right-click) renames or unpins.
 class PinTile extends StatefulWidget {
   const PinTile({super.key, required this.api, required this.pin, required this.onOpen, this.autofocus = false});
-  final Komga api;
+  final BookSource api;
   final Pin pin;
   final VoidCallback onOpen;
   final bool autofocus;
@@ -122,10 +126,16 @@ class _PinTileState extends State<PinTile> {
 
   void _lookup() {
     _view = PinTile._cache.putIfAbsent(_key, () {
-      final f = pinView(widget.api, widget.pin);
-      f.catchError((Object _) {
+      final pin = widget.pin;
+      final f = pinView(widget.api, pin);
+      f.then((r) {
+        // a series or book pin's library, as its view shows it: the pin goes if that library is deleted on Komga
+        if (pin.kind == 'series' || pin.kind == 'book') {
+          final first = (r['content'] as List?)?.firstOrNull;
+          if (first is Map) unawaited(Pins.instance.learnLibrary(pin.id, first['libraryId'] as String?));
+        }
+      }, onError: (Object _) {
         PinTile._cache.remove(_key);
-        return <String, dynamic>{};
       });
       return f;
     });
@@ -151,6 +161,7 @@ class _PinTileState extends State<PinTile> {
             read: completed,
             progress: rp != null && !completed && pages > 0 ? (rp['page'] as int) / pages : null,
             badge: DownloadBadge.book(widget.pin.id!),
+            source: sourceBadgeFor(widget.api, widget.pin.id!),
             onOpen: widget.onOpen,
             onMenu: () => showPinDialog(context, widget.pin, pinned: true),
           );
@@ -164,6 +175,10 @@ class _PinTileState extends State<PinTile> {
               : PosterMosaic(api: widget.api, refs: _thumbs(widget.api, widget.pin, items.take(4).toList())),
           title: widget.pin.name,
           subtitle: total == null ? null : _noun(widget.pin, total),
+          // (a series is from one source; a library's view, a collection, a read list can mix them: none)
+          source: widget.pin.kind == 'series' && widget.pin.id != null
+              ? sourceBadgeFor(widget.api, widget.pin.id!)
+              : null,
           onOpen: widget.onOpen,
           onMenu: () => showPinDialog(context, widget.pin, pinned: true),
         );

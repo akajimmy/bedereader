@@ -5,15 +5,17 @@ import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../content_changed.dart';
 import '../errors.dart' show ErrorLog;
 import '../ondeck_hidden.dart';
 import '../synced_ids.dart';
 import '../pins.dart';
 import '../settings.dart';
 import 'downloads.dart';
-import 'offline_komga.dart';
+import 'downloads_source.dart';
+import '../book_source.dart';
 
-/// Online or offline. Offline, the whole app runs on [OfflineKomga] - the downloaded books only - and nothing
+/// Online or offline. Offline, the whole app runs on [DownloadsSource] - the downloaded books only - and nothing
 /// talks to the server: downloads hold, settings and pins wait to sync.
 ///
 /// Two ways in (user's decisions, 2026-09-28):
@@ -43,22 +45,30 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   /// Komga answering doesn't count as "reachable again" - it would only refuse the key again (user, 2026-09-29).
   bool keyRefused = false;
   bool keyPromptPending = false;
-  OfflineKomga? _offline;
+  DownloadsSource? _offline;
   Timer? _poll;
   bool _observing = false;
 
-  /// Offline mode needs somewhere to have downloaded to (the downloads, once attached).
-  bool get available => Downloads.instance.ready;
+  /// Whether there are network libraries (set by the app, from its local libraries): offline mode is theirs too -
+  /// nothing is read from a share while offline (user, 2026-10-27).
+  bool Function() hasShares = _noShares;
+  static bool _noShares() => false;
+
+  /// Offline mode has something to apply to: Komga (signed in, its downloads open) or a network library - not the
+  /// folders on this device alone (user, 2026-10-27: the switch stayed in the side menu after signing out).
+  bool get available => (online != null && Downloads.instance.ready) || hasShares();
   bool get offline => (forcedOffline || autoOffline) && available;
 
   /// Downloaded books to fall back on (the prompt only offers them if there are some).
   bool get hasDownloads => Downloads.instance.store?.books.values.any((e) => e['state'] == 'done') ?? false;
 
   /// The connection every screen should use right now.
-  Komga get api {
+  BookSource get api {
     final store = Downloads.instance.store;
     if (!offline || store == null) return online!;
-    if (_offline == null || _offline!.store != store) _offline = OfflineKomga(store, baseUrl: online?.baseUrl ?? 'offline');
+    if (_offline == null || _offline!.store != store) {
+      _offline = DownloadsSource(store, baseUrl: online?.baseUrl ?? 'offline');
+    }
     return _offline!;
   }
 
@@ -77,6 +87,13 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     _apply();
     notifyListeners();
     unawaited(check()); // start-up check: a failure raises the prompt
+  }
+
+  /// No server mode: the switch as it was left (its network libraries offline or not) - no Komga to watch.
+  Future<void> loadOnDevice() async {
+    forcedOffline = (await SharedPreferences.getInstance()).getBool(_key) ?? false;
+    _apply();
+    notifyListeners();
   }
 
   Future<void> setForcedOffline(bool value) async {
@@ -132,7 +149,7 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (api == null || forcedOffline) return false;
     _checks++;
     try {
-      await api.me();
+      await api.ping(); // (on a connection of its own, within 5 s)
       return true;
     } catch (e) {
       // the check's own failure decides, not another request's that fails meanwhile (code review, 2026-10-24: one
@@ -194,6 +211,14 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (!identical(api, online)) return; // the offline source, or a sign-in attempt at another server
     if (keyRefused) return; // answering or not, the key is refused: the key prompt covers it
     if (reachable) {
+      // back after a check found it gone: the screen on top shows Komga's again by itself - it said "Can't reach
+      // Komga" until refreshed by hand (user, 2026-10-26, iPad; on the tablet the prompt and Home's error stayed 76 s
+      // after Wi-Fi was back)
+      if (down) {
+        down = false;
+        _watch();
+        contentChanged.value++;
+      }
       if (askPending) {
         askPending = false;
         _quietUntil = clock.now().add(quietAfterBack); // back: not asked again straight away
@@ -215,6 +240,10 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
 
   /// A check couldn't reach Komga: ask (or, with nothing downloaded, just say Komga can't be reached).
   void _gone() {
+    if (!keyRefused && !offline && !forcedOffline && !down) {
+      down = true;
+      _watch();
+    }
     if (keyRefused || offline || forcedOffline || askPending || !available) return;
     askPending = true;
     ErrorLog.instance.record("Can't reach Komga (asked whether to go offline)", Komga.lastFailure ?? 'not known');
@@ -228,13 +257,36 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
     if (!forcedOffline) unawaited(check()); // back in the app: look again
   }
 
+  /// A check found Komga gone, and the app is still online (the prompt up, or answered with Retry, or nothing
+  /// downloaded to offer): Komga is asked again every [watchEvery] until it answers ([_onReachability]) - nothing else
+  /// asks it meanwhile, and the app wouldn't know it was back (user, 2026-10-26).
+  bool down = false;
+  static const watchEvery = Duration(seconds: 10);
+  Timer? _watchTimer;
+
+  void _watch() {
+    final on = down && !offline && !forcedOffline && !keyRefused && online != null;
+    if (on && _watchTimer == null) {
+      _watchTimer = Timer.periodic(watchEvery, (_) => check());
+    } else if (!on) {
+      _watchTimer?.cancel();
+      _watchTimer = null;
+    }
+  }
+
   /// Point the background users of the server at the current connection, and poll while offline by the prompt.
   void _apply() {
-    Downloads.instance.hold = offline; // no downloading while offline
-    AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
-    Pins.instance.useApi(api);
-    OnDeckHidden.instance.useApi(api);
-    PairShift.instance.useApi(api);
+    // offline now - by the prompt or by hand: the offline poll's, not this; and not "gone" any more - the poll
+    // finding Komga back reloaded the downloads' view on top for nothing (review, 2026-10-26)
+    if (offline) down = false;
+    _watch();
+    Downloads.instance.hold = offline; // no downloading while offline (from a share either)
+    if (online != null) {
+      AppSettings.instance.useApi(api); // offline: sync attempts fail and retry later
+      Pins.instance.useApi(api);
+      OnDeckHidden.instance.useApi(api);
+      PairShift.instance.useApi(api);
+    }
     final poll = autoOffline && !forcedOffline && !reachableAgain && !keyRefused; // a refused key won't come back
     if (poll && _poll == null) {
       _poll = Timer.periodic(pollEvery, (_) => check());
@@ -249,6 +301,8 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   void signedOut() {
     _poll?.cancel();
     _poll = null;
+    down = false;
+    _watch();
     online = null;
     autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
@@ -259,11 +313,15 @@ class Connection extends ChangeNotifier with WidgetsBindingObserver {
   void reset() {
     _poll?.cancel();
     _poll = null;
+    down = false;
+    _watchTimer?.cancel();
+    _watchTimer = null;
     online = null;
     forcedOffline = autoOffline = askPending = reachableAgain = false;
     keyRefused = keyPromptPending = false;
     _quietUntil = null;
     _readers = 0;
+    hasShares = _noShares;
     Komga.onReachability = null;
     Komga.onKeyRefused = null;
   }

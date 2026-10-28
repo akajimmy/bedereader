@@ -15,7 +15,9 @@ import 'errors.dart';
 import 'hidden_libraries.dart';
 import 'key_store.dart';
 import 'licences.dart';
+import 'local_names.dart';
 import 'night_schedule.dart';
+import 'screens/app_settings.dart' show AppSettingsScreen;
 import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
@@ -28,6 +30,14 @@ import 'reader_keys.dart';
 import 'remote_log.dart';
 import 'settings.dart';
 import 'screen.dart';
+import 'book_source.dart';
+import 'combined_source.dart';
+import 'local/device_folders.dart';
+import 'screens/folder_browser.dart' show pickLibrary;
+import 'local/local_library.dart';
+import 'screens/local_settings.dart' show askAboutMissing;
+import 'local/local_source.dart';
+import 'local/smb_fs.dart' show Shares;
 import 'side_menu.dart';
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
@@ -42,6 +52,7 @@ void main() {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
+  HttpOverrides.global = LocalNames(); // a bare server name ("nick-nas") found as name.local (local_names.dart)
   // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
   // trace to go on - user, build 65); they're still reported as before
   final flutterError = FlutterError.onError;
@@ -110,6 +121,9 @@ ThemeData buildTheme([Accent choice = Accent.blue]) {
     // same as the filled part - so a bar looked full whatever it showed (Downloads' storage bar at 10% - user,
     // build 83)
     progressIndicatorTheme: const ProgressIndicatorThemeData(linearTrackColor: Color(0xFF34343A)),
+    // a text box's sample value faded: left to Material, a hint takes the scheme's onSurfaceVariant - white in this
+    // scheme, the same as text typed in - so "nick-nas" looked filled in (user, 2026-10-26)
+    inputDecorationTheme: const InputDecorationTheme(hintStyle: TextStyle(color: Color(0x61E6E6E6))),
     splashFactory: NoSplash.splashFactory,
     textTheme: base.textTheme.apply(bodyColor: const Color(0xFFE6E6E6), displayColor: const Color(0xFFE6E6E6)),
   );
@@ -124,6 +138,52 @@ class KomgaReaderApp extends StatefulWidget {
 class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Komga? _api; // the server (online) connection
   bool _loaded = false;
+
+  // the local libraries: this device's, opened once at the start and kept whatever account is signed in (the
+  // experiment opened them with each sign-in, and a second copy scanned over the first's)
+  LocalSource? _local;
+  CombinedSource? _combined; // the screens' source: Komga (or its downloads) with the local libraries beside it
+  bool _askingMissing = false;
+  Future<void>? _localOpening; // (No server mode waits for it)
+  bool _noServer = false; // No server mode: the local libraries alone, no Komga
+
+  BookSource _combinedOf(BookSource main) {
+    final c = _combined ??= CombinedSource(main, local: _local);
+    c.main = main;
+    c.local = _local;
+    return c;
+  }
+
+  Future<void> _openLocal() async {
+    final dir = await appStorageDir();
+    if (dir == null) return;
+    // iOS: the app's own folder shown in the Files app, with a Comics folder to copy books to while it's empty
+    final comics = await DeviceFolders.makeComicsFolder();
+    if (comics != null) AppLog.instance.info('local', 'made $comics (the Files app hides an empty folder)');
+    try {
+      await Shares.instance.load(); // (the shares' logins, before a scan reaches one)
+      final local = _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'),
+          await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
+      local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
+      // offline mode is the network libraries' too: the switch is there for them, and they go offline with it
+      Connection.instance.hasShares = () => local.hasShares;
+      local.offline = Connection.instance.offline;
+      Shares.instance.beforeReconnect = local.closeFiles; // a share's new login: its open books opened again
+      // the network books' downloads, there whether or not Komga is (No server mode too)
+      await Downloads.instance.attachLocal(local);
+      // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
+      // or Keep it in case it comes back
+      local.missing.addListener(() {
+        final ctx = _nav.currentContext;
+        if (_askingMissing || ctx == null || local.missing.value.isEmpty) return;
+        _askingMissing = true;
+        askAboutMissing(ctx, local).whenComplete(() => _askingMissing = false);
+      });
+      unawaited(local.rescan().catchError((Object e) => AppLog.instance.warn('local', 'a scan failed: $e')));
+    } catch (e) {
+      AppLog.instance.warn('local', "the local libraries couldn't be opened: $e");
+    }
+  }
   final _nav = GlobalKey<NavigatorState>();
   bool _wasOffline = false;
   late final AppLifecycleListener _lifecycle;
@@ -134,6 +194,11 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     super.initState();
     SideMenu.instance.load();
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
+    AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
+    // a library deleted on Komga: the pins to it go (only the signed-in Komga's answers count)
+    Komga.onLibraries = (api, ids) {
+      if (identical(api, Connection.instance.online)) unawaited(Pins.instance.librariesNow(ids));
+    };
     ErrorLog.instance.load(); // the last errors, from earlier runs too (Settings > About > Error log)
     _startLog();
     WidgetsBinding.instance.addObserver(_turns);
@@ -235,6 +300,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (!c.reachableAgain) _askedBack = false;
 
     final now = c.offline;
+    _local?.offline = now; // (the network libraries with it: nothing read from a share offline)
     if (now == _wasOffline) return;
     AppLog.instance.info('connection', now ? 'offline (${c.forcedOffline ? 'switched by hand' : "Komga out of reach"})'
         : 'online');
@@ -316,9 +382,26 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
+    // the local libraries in the background - the start doesn't wait on the disk for them (Home takes them in when
+    // they're open: what the last scans found, then scanned again)
+    final opening = _localOpening = _openLocal().then((_) {
+      if (mounted && _local != null) setState(() {});
+    });
+    unawaited(opening);
+    // No server mode: Home is the local libraries', so it waits for them (they can't be opened: the sign-in screen)
+    var noServer = await NoServerMode.load();
+    if (noServer) {
+      await opening;
+      final local = _local;
+      if (local == null) {
+        noServer = false;
+      } else {
+        _loadOnDevice(_combinedOf(local));
+      }
+    }
     final p = await SharedPreferences.getInstance();
     final url = p.getString('server'), key = await KeyStore.read();
-    final api = url != null && key != null ? Komga(url, key) : null;
+    final api = !noServer && url != null && key != null ? Komga(url, key) : null;
     if (api != null) {
       // offline mode is applied first: with it on, the account's things load from this device and nothing is sent to
       // Komga (missing-tests audit, 2026-09-30: a forced-offline start still asked Komga for them, and for Home)
@@ -334,8 +417,45 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     if (!mounted) return;
     setState(() {
       _api = api;
+      _noServer = noServer;
       _loaded = true;
     });
+  }
+
+  /// No server mode's settings, pins, On deck hidden and pairing: this device's own - nothing to sync them through.
+  void _loadOnDevice(BookSource api) {
+    unawaited(AppSettings.instance.load(api, fetch: false));
+    unawaited(Pins.instance.load(api, fetch: false));
+    unawaited(OnDeckHidden.instance.load(api, fetch: false));
+    unawaited(PairShift.instance.load(api, fetch: false));
+    unawaited(Connection.instance.loadOnDevice()); // (offline mode as it was left: the network libraries')
+  }
+
+  /// The sign-in screen's Use without a server: No server mode, on the local libraries - with none yet, the folder
+  /// browser for the first (cancelled: still on the sign-in screen). More are added in Settings > Libraries.
+  Future<void> _startNoServer(BuildContext context) async {
+    await _localOpening;
+    final local = _local;
+    if (local == null) throw StateError("the local libraries couldn't be opened on this device");
+    if (local.folders.isEmpty) {
+      if (!context.mounted) return;
+      final library = await pickLibrary(context);
+      if (library == null) return;
+      await local.setLibraries([library]);
+    }
+    await NoServerMode.save(true);
+    _loadOnDevice(_combinedOf(local));
+    AppLog.instance.info('local', 'No server mode on');
+    if (mounted) setState(() => _noServer = true);
+  }
+
+  /// No server mode -> Komga, with the local libraries beside it (Settings > Server and sync, Add a Komga server),
+  /// once its sign-in has worked: No server mode left as signing out leaves it (its pins and settings go - Komga's
+  /// come instead), then signed in as from the sign-in screen.
+  Future<void> _addKomga(Komga api) async {
+    _nav.currentState?.popUntil((r) => r.isFirst);
+    await _signOut();
+    await _signIn(api);
   }
 
   Future<void> _signIn(Komga api) async {
@@ -371,8 +491,18 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await Pins.instance.clearAccount();
     await OnDeckHidden.instance.clearAccount();
     await PairShift.instance.clearAccount();
+    if (_noServer) {
+      await NoServerMode.save(false); // (left: the sign-in screen, the local libraries kept)
+      AppLog.instance.info('local', 'No server mode off');
+    }
     final old = _api;
-    if (mounted) setState(() => _api = null);
+    _combined = null; // (the next account's own; the local libraries stay)
+    if (mounted) {
+      setState(() {
+        _api = null;
+        _noServer = false;
+      });
+    }
     // the old connection isn't used again (signing in makes a new one): its client goes once what's on its way has
     // finished (code review 2026-10-05, #50)
     old?.close();
@@ -404,11 +534,14 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       builder: (context, child) => appFrame(context, child!, textScale: display.textScale, onKey: _onEsc),
       home: !_loaded
           ? const Scaffold(body: SizedBox.shrink())
+          : _noServer && _local != null
+              ? HomeScreen(key: ValueKey('noServer ${Connection.instance.offline}'), // (fresh on going offline)
+                  api: _combinedOf(_local!), onSignOut: _signOut)
           : _api == null
-              ? LoginScreen(onSignedIn: _signIn)
+              ? LoginScreen(onSignedIn: _signIn, onNoServer: _startNoServer)
               : HomeScreen(
                   key: ValueKey(Connection.instance.offline), // a fresh Home when switching online/offline
-                  api: Connection.instance.online == null ? _api! : Connection.instance.api,
+                  api: _combinedOf(Connection.instance.online == null ? _api! : Connection.instance.api),
                   onSignOut: _signOut,
                 ),
     );

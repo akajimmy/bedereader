@@ -36,4 +36,24 @@ void main() {
       expect(pixels.empty, isNot(accent.colour), reason: '$accent: the rest not');
     }
   });
+
+  testWidgets("a text box's sample value is faded, not drawn like text typed in (user, 2026-10-26: Connect to a "
+      'server\'s "nick-nas" looked filled in)', (tester) async {
+    final typed = TextEditingController(text: 'typed');
+    await tester.pumpWidget(MaterialApp(
+      theme: buildTheme(),
+      home: Material(
+        child: Column(children: [
+          const TextField(decoration: InputDecoration(labelText: 'Server', hintText: 'nick-nas')),
+          TextField(controller: typed),
+        ]),
+      ),
+    ));
+    await tester.tap(find.byType(TextField).first); // (a label's hint shows once the box has the focus)
+    await tester.pump();
+    final hint = tester.widget<Text>(find.text('nick-nas')).style!.color!;
+    final text = tester.widget<EditableText>(find.byType(EditableText).last).style.color!;
+    expect(text.a, 1.0, reason: 'typed text: full strength');
+    expect(hint.a, lessThan(0.6), reason: 'the sample: faded ($hint)');
+  });
 }

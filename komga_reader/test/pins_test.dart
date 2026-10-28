@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/api.dart' show Komga;
 import 'package:komga_reader/ondeck_hidden.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/refresh_gate.dart';
@@ -24,7 +25,7 @@ class PinsServer extends HomeServer with ClientSettingsStore {
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       onePage([]);
   @override
-  Future<Map<String, dynamic>?> me() async => {'email': 'nick@test'};
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async => {'email': 'nick@test'};
 }
 
 PinsServer server() => noNetwork(PinsServer.new);
@@ -204,4 +205,97 @@ void main() {
     expect(find.byIcon(Icons.push_pin), findsOneWidget); // filled pin = this view is pinned
     expect(find.text('Nothing unread in this list'), findsOneWidget);
   });
+
+  // ---- local pins (rebuild step 8; user, 2026-10-26: "keep local pins local"): a pin to a local library, its series
+  // or a book is this device's own - the PC hasn't the tablet's folders
+  group('pins to the local libraries', () {
+    const saga = Pin(name: 'Saga', kind: 'series', id: 'ls0123456789abc', title: 'Saga');
+    const comics = Pin(name: 'Comics', kind: 'library', id: 'll0123456789abc', title: 'Comics');
+    tearDown(() => Pins.instance.items = []); // (signing out keeps them: gone here, for the next test)
+
+    test('never sent to Komga, and kept on the device - Komga only ever has its own', () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      expect(api.written[Pins.komgaKey], contains('RL1'));
+      expect(api.written[Pins.komgaKey], isNot(contains('ls0123456789abc')));
+      final puts = api.puts;
+      Pins.instance.rename(saga, 'Saga next');
+      await pumpEventQueue();
+      expect(api.puts, puts, reason: "only this device's own changed: nothing for Komga");
+
+      Pins.instance.items = [];
+      await Pins.instance.load(api, fetch: false); // the next start
+      expect([for (final p in Pins.instance.items) p.name], ['Ultimate Universe · unread', 'Saga next']);
+    });
+
+    test("Komga's list arriving (from another device) keeps this device's own", () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      api.written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+      await Pins.instance.refresh();
+      expect([for (final p in Pins.instance.items) p.id], ['RL1', 'ls0123456789abc']);
+    });
+
+    test("signing out: the account's pins go, this device's own stay", () async {
+      final api = server();
+      await Pins.instance.load(api);
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      await pumpEventQueue();
+      await Pins.instance.clearAccount();
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc']);
+      await Pins.instance.load(server(), fetch: false); // the next account
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc']);
+    });
+
+    // (user, 2026-10-26: carried over from the experiment) a library gone from a list Komga answered was deleted
+    test("a library deleted on Komga: the pins to it, and to its series and books as their views showed them, go - "
+        "the first list is only kept; a library still there keeps its pins", () async {
+      await Pins.instance.load(server());
+      const lib = Pin(name: 'Comics', kind: 'library', id: 'L1', title: 'Comics');
+      const series = Pin(name: 'Batman', kind: 'series', id: 'S1', title: 'Batman');
+      const other = Pin(name: 'Saga', kind: 'series', id: 'S2', title: 'Saga');
+      for (final p in [lib, series, other, uu]) {
+        Pins.instance.add(p);
+      }
+      await Pins.instance.learnLibrary('S1', 'L1');
+      await Pins.instance.learnLibrary('S2', 'L2');
+      await Pins.instance.librariesNow(['L1', 'L2']); // the first list: only kept
+      expect(Pins.instance.items, hasLength(4));
+      await Pins.instance.librariesNow(['L2']);
+      expect([for (final p in Pins.instance.items) p.id], ['S2', 'RL1']);
+      await pumpEventQueue();
+    });
+
+    test('Komga tells of its libraries each time it answers a fresh fetch - not from the kept list', () async {
+      final told = <List<String>>[];
+      Komga.onLibraries = (_, ids) => told.add(ids);
+      addTearDown(() => Komga.onLibraries = null);
+      final api = noNetwork(_TwoLibraries.new);
+      await api.visibleLibraries();
+      await api.visibleLibraries(kept: true);
+      expect(told, [['L1', 'L2']]);
+    });
+
+    test('a local library removed: the pins to it, its series and books go; the rest stay', () async {
+      await Pins.instance.load(server());
+      Pins.instance.add(uu);
+      Pins.instance.add(saga);
+      Pins.instance.add(comics);
+      Pins.instance.removeFor({'ll0123456789abc', 'ls0123456789abc', 'lb0123456789abc'});
+      expect([for (final p in Pins.instance.items) p.id], ['RL1']);
+      await pumpEventQueue();
+    });
+  });
+}
+
+/// Komga with two libraries.
+class _TwoLibraries extends TestKomga {
+  @override
+  Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Comics'}, {'id': 'L2', 'name': 'Books'}];
 }

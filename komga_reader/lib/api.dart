@@ -6,17 +6,25 @@ import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 import 'hidden_libraries.dart';
+import 'book_source.dart';
 import 'view_filter.dart';
+export 'view_filter.dart' show ReadFilter, ReadFilterApi;
 
 /// Thin client for the Komga REST API (checked against Komga 1.27.1's /v3/api-docs).
 /// Every read-state change goes straight to the server - the app keeps no copy of reading state that could
 /// override changes made in the web client.
-class Komga {
-  /// [client]: the HTTP client to use (the offline source passes one that never connects); by default its own.
+class Komga implements BookSource {
+  /// [client]: the HTTP client to use (tests give one); by default its own.
   Komga(String baseUrl, this.apiKey, {http.Client? client})
       : baseUrl = baseUrl.replaceAll(RegExp(r'/+$'), ''),
-        _http = client ?? http.Client();
+        _http = client ?? http.Client(),
+        _ownClient = client == null;
 
+  final bool _ownClient; // (a client given - a test's - is the only one: [ping] uses it too)
+  // where it was made: a client made later for [ping] comes from the same place as its own (http.runWithClient)
+  final Zone _madeIn = Zone.current;
+
+  @override
   final String baseUrl;
 
   /// How this device signs in: a Komga API key, or - when the server wouldn't make one at a password sign-in - the
@@ -37,6 +45,7 @@ class Komga {
   /// This connection is dropped for good (a failed sign-in, signing out): its HTTP client - and the sockets it keeps
   /// open - is closed once the requests on their way have finished (code review 2026-10-05, #50: none was ever
   /// closed). Anything asked after that fails as unreachable.
+  @override
   void close() {
     _closing = true;
     if (_inFlight == 0) _http.close();
@@ -115,8 +124,27 @@ class Komga {
   /// and signing in again).
   static void Function(Komga api)? onKeyRefused;
 
-  Future<dynamic> _get(String path, [Map<String, Object?>? query]) => _net(() async {
-        final r = await _http.get(_u(path, query), headers: headers);
+  /// Whether Komga is there, for the connection's check ([me], answered or thrown as for any request): asked on a
+  /// connection of its own, closed after - not one kept open from before (user, 2026-10-26: Wi-Fi off, the iPad let
+  /// requests wait on those until their 15 s ran out, and the offer to go offline came late) - and within
+  /// [pingTimeout]. Not once [close]d: nothing more goes out with this key (review, 2026-10-26: a check made a client
+  /// of its own and asked, after signing out).
+  Future<void> ping() async {
+    if (_closing) throw KomgaUnreachable(baseUrl);
+    final fresh = _ownClient ? _madeIn.run(http.Client.new) : null;
+    try {
+      await me(via: fresh, limit: pingTimeout);
+    } finally {
+      fresh?.close();
+    }
+  }
+
+  static const pingTimeout = Duration(seconds: 5);
+
+  /// [via]: another client than its own ([ping]'s); [limit]: another time limit than [timeout].
+  Future<dynamic> _get(String path, [Map<String, Object?>? query, http.Client? via, Duration limit = timeout]) =>
+      _net(limit: limit, () async {
+        final r = await (via ?? _http).get(_u(path, query), headers: headers);
         if (r.statusCode == 404) return null;
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, path);
         try {
@@ -152,7 +180,10 @@ class Komga {
       });
 
   // ---- account / libraries
-  Future<Map<String, dynamic>?> me() async => await _get('/api/v2/users/me') as Map<String, dynamic>?;
+  /// The signed-in account. [via] and [limit]: [ping]'s own connection and time limit.
+  @override
+  Future<Map<String, dynamic>?> me({http.Client? via, Duration limit = timeout}) async =>
+      await _get('/api/v2/users/me', null, via, limit) as Map<String, dynamic>?;
 
   /// A new API key for the signed-in account, named [comment] (a password sign-in: the key is kept, the password
   /// isn't). Throws [KomgaError] when Komga won't make one (a restricted account, a Komga without API keys).
@@ -162,6 +193,7 @@ class Komga {
     if (key is! String || key.isEmpty) throw KomgaError(200, '/api/v2/users/me/api-keys (no key in the answer)');
     return key;
   }
+  @override
   Future<List<dynamic>> libraries() async => (await _get('/api/v1/libraries')) as List<dynamic>;
 
   Future<List<dynamic>>? _librariesOnce;
@@ -169,6 +201,7 @@ class Komga {
   /// The library list, kept: fetched once, then again after [forgetLibraries] (the app back in the foreground) or a
   /// fresh fetch ([visibleLibraries] - Home's load and Refresh). A failed fetch isn't kept (asked again next time).
   /// Libraries change rarely; the side menu asked for them on every opening (code review 2026-10-05, #43).
+  @override
   Future<List<dynamic>> keptLibraries() async {
     final kept = _librariesOnce ??= libraries();
     try {
@@ -180,10 +213,12 @@ class Komga {
   }
 
   /// The kept library list is out of date (the app back in the foreground): the next use fetches it again.
+  @override
   void forgetLibraries() => _librariesOnce = null;
 
   /// A library's name, for breadcrumbs ("Ongoing › Absolute Flash"), from the kept list; null if it can't be had
   /// (tried again next time).
+  @override
   Future<String?> libraryName(String? id) async {
     if (id == null) return null;
     try {
@@ -196,8 +231,13 @@ class Komga {
     }
   }
 
+  /// Told each time Komga answers a fresh fetch of the library list: every library's id, hidden ones too (the pins to
+  /// a library deleted on Komga go - lib/pins.dart).
+  static void Function(Komga api, List<String> libraryIds)? onLibraries;
+
   /// The libraries this device shows (Settings > Library & Home): Home, the library picker. Fetched fresh, and kept
   /// for the side menu ([kept]: the kept list, fetched only if there's none).
+  @override
   Future<List<dynamic>> visibleLibraries({bool kept = false}) async {
     final List<dynamic> all;
     if (kept) {
@@ -205,6 +245,7 @@ class Komga {
     } else {
       all = await libraries();
       _librariesOnce = Future.value(all);
+      onLibraries?.call(this, [for (final l in all) if (l['id'] case final String id) id]);
     }
     return [for (final l in all) if (!HiddenLibraries.instance.isHidden(l['id'] as String?)) l];
   }
@@ -223,6 +264,7 @@ class Komga {
   }
 
   // ---- browsing (Komga pages: {content, totalElements, last})
+  @override
   Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
       String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
     return await _get('/api/v1/series', {
@@ -231,6 +273,7 @@ class Komga {
     }) as Map<String, dynamic>;
   }
 
+  @override
   Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
       String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
     return await _get('/api/v1/books', {
@@ -239,13 +282,16 @@ class Komga {
   }
 
   /// Books you are part-way through, most recently read first.
+  @override
   Future<Map<String, dynamic>> inProgress({String? libraryId, int size = 30}) =>
       books(libraryId: libraryId, readStatus: const ['IN_PROGRESS'], sort: 'readProgress.readDate,desc', size: size);
 
   /// Komga's "On deck": the next unread book of series you have been reading.
+  @override
   Future<Map<String, dynamic>> onDeck({String? libraryId, int size = 30}) async =>
       await _get('/api/v1/books/ondeck', {'library_id': await _scope(libraryId), 'page': 0, 'size': size}) as Map<String, dynamic>;
 
+  @override
   Future<Map<String, dynamic>> seriesBooks(String seriesId, {List<String>? readStatus,
       String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
     final path = '/api/v1/series/$seriesId/books';
@@ -254,31 +300,39 @@ class Komga {
     return r as Map<String, dynamic>;
   }
 
+  @override
   Future<Map<String, dynamic>> collections({String? libraryId, int page = 0, int size = 200}) async =>
       await _get('/api/v1/collections', {'library_id': await _scope(libraryId), 'page': page, 'size': size}) as Map<String, dynamic>;
 
+  @override
   Future<Map<String, dynamic>> readLists({String? libraryId, int page = 0, int size = 200}) async =>
       await _get('/api/v1/readlists', {'library_id': await _scope(libraryId), 'page': page, 'size': size}) as Map<String, dynamic>;
 
   // ---- search (Komga's own search, by title and more; optionally within one library)
+  @override
   Future<Map<String, dynamic>> searchSeries(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/series', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
+  @override
   Future<Map<String, dynamic>> searchBooks(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/books', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
   /// The books of any of [seriesIds], by number - one request, however many series (Search's Books row: a series
   /// found brings its books along - bug #15).
+  @override
   Future<Map<String, dynamic>> booksOfSeries(List<String> seriesIds, {int size = 300}) async =>
       await _post('/api/v1/books/list', {'size': size, 'sort': 'metadata.numberSort,asc'}, {
         'condition': {
           'anyOf': [for (final id in seriesIds) {'seriesId': {'operator': 'is', 'value': id}}],
         },
       }) as Map<String, dynamic>;
+  @override
   Future<Map<String, dynamic>> searchReadLists(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/readlists', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
+  @override
   Future<Map<String, dynamic>> searchCollections(String query, {String? libraryId, int size = 30}) async =>
       await _get('/api/v1/collections', {'search': query, 'library_id': await _scope(libraryId), 'size': size}) as Map<String, dynamic>;
 
   /// Books of a read list in the list's own order, optionally only unread / in progress / read.
+  @override
   Future<Map<String, dynamic>> readListBooks(String readListId, {List<String>? readStatus, int page = 0, int size = 1000}) async =>
       await _get('/api/v1/readlists/$readListId/books',
           {'read_status': readStatus, 'page': page, 'size': size}) as Map<String, dynamic>;
@@ -287,6 +341,7 @@ class Komga {
   /// A view's series with its read filter and filters: one library ([libraryId]; null = all shown libraries) or a
   /// collection. With no filter (or only book-less ones) this is [series] - the same request as before filters existed;
   /// with one, Komga's search (POST /api/v1/series/list) with all of them as one condition.
+  @override
   Future<Map<String, dynamic>> filteredSeries({String? libraryId, String? collectionId,
       ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String sort = 'metadata.titleSort,asc',
       int page = 0, int size = 60}) async {
@@ -310,6 +365,7 @@ class Komga {
   /// No filter: the same request as before filters existed - [seriesBooks], [readListBooks] (in list order: no
   /// [sort]) or [books]. [sort] / [size] null: that view's usual ones.
   /// With a filter (or a read list sorted otherwise than in list order): Komga's search, POST /api/v1/books/list.
+  @override
   Future<Map<String, dynamic>> filteredBooks({String? libraryId, String? seriesId, String? readListId,
       ReadFilter read = ReadFilter.all, ViewFilter filter = ViewFilter.none, String? sort, int page = 0,
       int? size}) async {
@@ -380,6 +436,7 @@ class Komga {
 
   /// The names of the authors in [roles] (any of them: Artist is penciller, inker or cover) in the view, A -> Z, each
   /// once; [search]: names containing it. Komga gives no book counts here.
+  @override
   Future<List<String>> authorNames(List<String> roles, {String? search, String? libraryId, String? collectionId,
       String? seriesId, String? readListId, int size = 1000}) async {
     final scope = await _valueScope(libraryId: libraryId, collectionId: collectionId, seriesId: seriesId,
@@ -401,10 +458,12 @@ class Komga {
   }
 
   /// The publishers of the series in a library (null = all shown) or a collection, A -> Z.
+  @override
   Future<List<String>> publishers({String? libraryId, String? collectionId}) async =>
       _strings(await _get('/api/v1/publishers', await _valueScope(libraryId: libraryId, collectionId: collectionId)));
 
   /// The genres of the series in a library (null = all shown) or a collection, A -> Z.
+  @override
   Future<List<String>> genres({String? libraryId, String? collectionId}) async =>
       _strings(await _get('/api/v1/genres', await _valueScope(libraryId: libraryId, collectionId: collectionId)));
 
@@ -412,6 +471,7 @@ class Komga {
   /// filter panel's words (Writer / Author) and whether it offers Artist. Komga keeps no kind per library, so it's
   /// asked once per view and kept while this connection lasts: two one-book searches (EPUB, and not EPUB), whose
   /// totals say which there are. Can't be had: [ViewKind.mixed] (asked again next time).
+  @override
   Future<ViewKind> viewKind({String? libraryId, String? seriesId, String? readListId}) {
     final key = '$libraryId|$seriesId|$readListId';
     final kept = _kinds[key];
@@ -451,20 +511,26 @@ class Komga {
   static List<String> sortedValues(Iterable<String> values) =>
       values.toSet().toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
+  @override
   Future<Map<String, dynamic>?> oneSeries(String id) async => await _get('/api/v1/series/$id') as Map<String, dynamic>?;
+  @override
   Future<Map<String, dynamic>?> readList(String id) async => await _get('/api/v1/readlists/$id') as Map<String, dynamic>?;
 
   /// Renames a read list (user, 2026-10-18). Komga allows it to admin accounts only (403 otherwise), and answers 400
   /// to a name another read list already has.
+  @override
   Future<void> renameReadList(String id, String name) => _send('PATCH', '/api/v1/readlists/$id', {'name': name});
 
   /// Renames a collection - as [renameReadList] (admin accounts only; 400 for a name taken).
+  @override
   Future<void> renameCollection(String id, String name) => _send('PATCH', '/api/v1/collections/$id', {'name': name});
 
+  @override
   Future<Map<String, dynamic>?> book(String id) async => await _get('/api/v1/books/$id') as Map<String, dynamic>?;
 
   /// A collection's series in the collection's own order (Komga's: as arranged for an ordered collection, by title
   /// otherwise), optionally only unread / read; the shown libraries only, when some are hidden.
+  @override
   Future<Map<String, dynamic>> collectionSeries(String collectionId, {List<String>? readStatus, int page = 0,
       int size = 60}) async {
     final path = '/api/v1/collections/$collectionId/series';
@@ -475,6 +541,7 @@ class Komga {
 
   /// A read list's books sorted by a book field ([sort], e.g. "metadata.releaseDate,asc") instead of the list's
   /// order: Komga's book search with the list as the condition.
+  @override
   Future<Map<String, dynamic>> readListBooksSorted(String readListId, String sort, {List<String>? readStatus,
       int page = 0, int size = 500}) async =>
       await _post('/api/v1/books/list', {'page': page, 'size': size, 'sort': sort}, {
@@ -491,6 +558,7 @@ class Komga {
   /// A book downloaded on this device is read from the device, online too (user, 2026-10-12: "use a downloaded
   /// version of a comic if present, even if online") - its page list and pages ([localPages]: the downloads, for
   /// this server); anything else asks Komga.
+  @override
   Future<List<dynamic>> pages(String bookId) async =>
       localPages?.pagesOf(baseUrl, bookId) ?? (await _get('/api/v1/books/$bookId/pages')) as List<dynamic>;
 
@@ -498,37 +566,47 @@ class Komga {
   /// [pageThumbBytes] take from the device rather than Komga.
   static LocalPages? localPages;
   String pageUrl(String bookId, int number) => '$baseUrl/api/v1/books/$bookId/pages/$number'; // 1-based
+  @override
   String seriesThumb(String id) => '$baseUrl/api/v1/series/$id/thumbnail';
+  @override
   String bookThumb(String id) => '$baseUrl/api/v1/books/$id/thumbnail';
+  @override
   String readListThumb(String id) => '$baseUrl/api/v1/readlists/$id/thumbnail';
+  @override
   String collectionThumb(String id) => '$baseUrl/api/v1/collections/$id/thumbnail';
 
   /// The image for a thumbnail reference from the methods above. Screens go through this rather than building
   /// network images themselves, so the offline source can hand back images from disk (lib/offline/).
+  @override
   ImageProvider thumbImage(String ref) => NetworkImage(ref, headers: imageHeaders);
 
   // ---- reading state (always straight to the server)
   // After each write [onProgressWritten] is told, so a downloaded copy of the book follows (lib/offline/sync.dart).
+  @override
   Future<void> setProgress(String bookId, int page, {bool completed = false}) async {
     await _send('PATCH', '/api/v1/books/$bookId/read-progress', {'page': page, 'completed': completed});
     onProgressWritten?.call(this, ProgressWrite(bookId: bookId, page: page, completed: completed));
   }
 
+  @override
   Future<void> markRead(String bookId) async {
     await _send('PATCH', '/api/v1/books/$bookId/read-progress', {'completed': true});
     onProgressWritten?.call(this, ProgressWrite(bookId: bookId, completed: true));
   }
 
+  @override
   Future<void> markUnread(String bookId) async {
     await _send('DELETE', '/api/v1/books/$bookId/read-progress');
     onProgressWritten?.call(this, ProgressWrite(bookId: bookId, unread: true));
   }
 
+  @override
   Future<void> markSeriesRead(String seriesId) async {
     await _send('POST', '/api/v1/series/$seriesId/read-progress');
     onProgressWritten?.call(this, ProgressWrite(seriesId: seriesId, completed: true));
   }
 
+  @override
   Future<void> markSeriesUnread(String seriesId) async {
     await _send('DELETE', '/api/v1/series/$seriesId/read-progress');
     onProgressWritten?.call(this, ProgressWrite(seriesId: seriesId, unread: true));
@@ -537,6 +615,7 @@ class Komga {
   static void Function(Komga api, ProgressWrite write)? onProgressWritten;
 
   // ---- next book: within the read list it was opened from, else within its series
+  @override
   Future<Map<String, dynamic>?> nextBook(String bookId, {String? readListId}) async {
     final path = readListId != null
         ? '/api/v1/readlists/$readListId/books/$bookId/next'
@@ -544,6 +623,7 @@ class Komga {
     return await _get(path) as Map<String, dynamic>?;
   }
 
+  @override
   Future<Map<String, dynamic>?> previousBook(String bookId, {String? readListId}) async {
     final path = readListId != null
         ? '/api/v1/readlists/$readListId/books/$bookId/previous'
@@ -555,6 +635,7 @@ class Komga {
   /// The whole store. Callers asking while a request for it is on its way share that one answer: reader settings,
   /// pins and On deck hidden each refresh from it, and a Home reload asked three times (code review 2026-10-05, #35).
   /// A write starts afresh: nobody joins a request that went out before it.
+  @override
   Future<Map<String, dynamic>> clientSettings() {
     final running = _settingsAsking;
     if (running != null) return running;
@@ -570,6 +651,7 @@ class Komga {
   Future<Map<String, dynamic>> _fetchClientSettings() async =>
       (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
 
+  @override
   Future<void> putClientSetting(String key, String value) {
     _settingsAsking = null;
     return _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
@@ -578,6 +660,7 @@ class Komga {
   // ---- EPUB books (Readium web publication): the manifest (reading order, table of contents) and the book's files
   /// Komga answers 406 to Accept: application/json here (its API docs list it; the server doesn't serve it), so it's
   /// asked for as Readium's own type.
+  @override
   Future<Map<String, dynamic>?> epubManifest(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/manifest/epub'),
             headers: {..._auth, 'Accept': 'application/webpub+json'});
@@ -591,6 +674,7 @@ class Komga {
       });
 
   /// One file of an EPUB (a chapter, a stylesheet, a picture, a font) by its path inside the book.
+  @override
   Future<Uint8List> epubResource(String bookId, String path) => _net(() async {
         final r = await _http.get(
             Uri.parse('$baseUrl/api/v1/books/$bookId/resource/${path.split('/').map(Uri.encodeComponent).join('/')}'),
@@ -601,6 +685,7 @@ class Komga {
 
   /// Where reading stopped in an EPUB (Readium's progression: a locator - chapter file, how far in it - with the
   /// device and time); null if never read. Shared with Komga's own web reader.
+  @override
   Future<Map<String, dynamic>?> epubProgression(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/progression'),
             headers: {..._auth, 'Accept': 'application/vnd.readium.progression+json, application/json'});
@@ -611,12 +696,14 @@ class Komga {
 
   /// Saves where reading stopped in an EPUB; Komga turns it into the book's read progress (page = how far through the
   /// book x its page count for it - see epub/progress.dart komgaEpubPage).
+  @override
   Future<void> setEpubProgression(String bookId, Map<String, dynamic> progression) async {
     await _send('PUT', '/api/v1/books/$bookId/progression', progression);
     onProgressWritten?.call(this, ProgressWrite(bookId: bookId, place: progression)); // a downloaded copy follows
   }
 
   /// The book's own file (an EPUB, for reading offline).
+  @override
   Future<Uint8List> bookFileBytes(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/file'), headers: _auth);
         if (r.statusCode >= 400) throw KomgaError(r.statusCode, 'book file');
@@ -624,6 +711,7 @@ class Komga {
       }, limit: const Duration(minutes: 5), slowIsNotDown: true);
 
   /// The book's positions (Readium): roughly one per screenful, numbered from 1; Komga's page count for an EPUB.
+  @override
   Future<List<dynamic>> epubPositions(String bookId) => _net(() async {
         final r = await _http.get(Uri.parse('$baseUrl/api/v1/books/$bookId/positions'),
             headers: {..._auth, 'Accept': 'application/vnd.readium.position-list+json, application/json'});
@@ -632,6 +720,7 @@ class Komga {
       });
 
   // ---- raw page bytes (the reader decodes and adjusts them itself)
+  @override
   Future<Uint8List> pageBytes(String bookId, int number) =>
       localPages?.pageOf(baseUrl, bookId, number) ?? _net(() async {
         final r = await _http.get(Uri.parse(pageUrl(bookId, number)), headers: imageHeaders);
@@ -645,6 +734,7 @@ class Komga {
   /// one from the book file as it's asked, so on a slow share they can take seconds (2026-09-30: 0.2-3.7 s each, and
   /// some queued past the time limit): one running out of time means slow, not gone - Komga isn't reported
   /// unreachable for it.
+  @override
   Future<Uint8List> pageThumbBytes(String bookId, int number) =>
       localPages?.pageOf(baseUrl, bookId, number) ?? _net(() async { // (downloaded: the page itself, drawn small)
         final r = await _http.get(Uri.parse('${pageUrl(bookId, number)}/thumbnail'), headers: imageHeaders);
@@ -653,12 +743,15 @@ class Komga {
       }, slowIsNotDown: true);
 
   // ---- what a book belongs to (the download engine snapshots this for offline browsing)
+  @override
   Future<List<dynamic>> bookReadLists(String bookId) async =>
       (await _get('/api/v1/books/$bookId/readlists') as List<dynamic>?) ?? [];
+  @override
   Future<List<dynamic>> seriesCollections(String seriesId) async =>
       (await _get('/api/v1/series/$seriesId/collections') as List<dynamic>?) ?? [];
 
   /// A poster's image bytes (null if it has none).
+  @override
   Future<Uint8List?> thumbBytes(String url) => _net(() async {
         final r = await _http.get(Uri.parse(url), headers: imageHeaders);
         if (r.statusCode == 404) return null;
@@ -667,7 +760,9 @@ class Komga {
       });
 
   // ---- delete (removes the files on the server - callers must confirm first)
+  @override
   Future<void> deleteBookFile(String bookId) => _send('DELETE', '/api/v1/books/$bookId/file');
+  @override
   Future<void> deleteSeriesFiles(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/file');
 }
 
@@ -720,26 +815,3 @@ class KomgaUnreachable implements Exception {
   String toString() => 'no answer from $baseUrl';
 }
 
-/// The read filter: everything, hide what's read, or hide what isn't (user, 2026-10-07: three-way, on every library
-/// screen). In-progress counts as unread, so each item falls on one side: "hide read" asks Komga for UNREAD +
-/// IN_PROGRESS (for series: not every book finished), "hide unread" for READ (finished; a series: all of it).
-enum ReadFilter { all, hideRead, hideUnread }
-
-extension ReadFilterApi on ReadFilter {
-  List<String>? get api => switch (this) {
-        ReadFilter.all => null,
-        ReadFilter.hideRead => const ['UNREAD', 'IN_PROGRESS'],
-        ReadFilter.hideUnread => const ['READ'],
-      };
-
-  /// What the view shows, for names and counts ("unread", "read"); null for everything.
-  String? get shows => switch (this) {
-        ReadFilter.all => null,
-        ReadFilter.hideRead => 'unread',
-        ReadFilter.hideUnread => 'read',
-      };
-
-  /// A saved name; anything else is everything.
-  static ReadFilter fromName(Object? name) =>
-      ReadFilter.values.firstWhere((f) => f.name == name, orElse: () => ReadFilter.all);
-}

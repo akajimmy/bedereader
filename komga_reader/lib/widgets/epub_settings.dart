@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../screen.dart';
 import '../screens/app_settings.dart' show SettingsPage;
 import '../settings.dart';
 import 'display_panel.dart';
 import 'setting_rows.dart';
+import '../book_source.dart';
 
 /// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting, Page
 /// and Two pages. Two pages (user, 2026-10-21: in one group, the rows that don't apply hidden): [insetRow] (this
@@ -33,7 +33,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
 /// The eBook reader's panel, "eBook settings": what's changed mid-book (user, 2026-10-21, trimmed): font, size, line
 /// spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
 /// settings, a tap away).
-List<Widget> epubPanelRows(BuildContext context, AppSettings s, {Komga? api}) {
+List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api}) {
   final e = s.epub;
   final set = s.setEpub;
   return [

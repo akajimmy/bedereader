@@ -67,9 +67,19 @@ String apiKeyName() {
 /// API key" tabs, Password first). A password sign-in makes an API key for this device and keeps only that; when
 /// the server won't make one (a restricted or demo account), the email and password are kept instead (encrypted,
 /// like a key). The email is filled in again after Sign out; the password and key never are.
+///
+/// Or No server mode ([onNoServer]): the local libraries alone. [adding]: opened from No server mode to add a Komga
+/// server (Settings > Server and sync) - a screen over the app with a way back, and no No server choice.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, required this.onSignedIn, this.client});
+  const LoginScreen({super.key, required this.onSignedIn, this.client, this.onNoServer, this.adding = false});
   final Future<void> Function(Komga api) onSignedIn;
+
+  /// Use without a server (null: not offered).
+  final Future<void> Function(BuildContext context)? onNoServer;
+  final bool adding;
+
+  /// The Use without a server button (tests find it by this).
+  static const noServerKey = ValueKey('noServer');
 
   /// Builds the client Connect tries (tests: a fake); null = the real [Komga].
   final Komga Function(String server, String apiKey)? client;
@@ -163,18 +173,40 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _noServer() async {
+    if (_busy) return;
+    setState(() { _busy = true; _error = null; });
+    try {
+      await widget.onNoServer!(context);
+    } catch (e) {
+      if (mounted) setState(() { _error = e; _errorWithPassword = false; });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final grey = Theme.of(context).colorScheme.onSurfaceVariant;
     return Scaffold(
+      appBar: widget.adding ? AppBar(title: const Text('Add a Komga server')) : null,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: SingleChildScrollView( // (a short screen: a phone on its side, the keyboard up)
             padding: const EdgeInsets.all(24),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(appName, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 4),
-              const Text('$appTagline. Sign in to your Komga server.', style: TextStyle(color: Colors.white60)),
+              if (widget.adding)
+                const Text('Its books show beside the local libraries; settings, pins and progress then sync through '
+                    'it.', style: TextStyle(color: Colors.white60))
+              else ...[
+                Text(appName, style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 4),
+                const Text(appTagline, style: TextStyle(color: Colors.white60)),
+                const SizedBox(height: 4),
+                const Text('Sign in to your Komga server, or use the app with folders alone.',
+                    style: TextStyle(color: Colors.white60)),
+              ],
               const SizedBox(height: 24),
               SegmentedButton<bool>(
                 segments: const [
@@ -214,6 +246,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     onSubmitted: (_) => _connect()),
               const SizedBox(height: 20),
               FilledButton(onPressed: _busy ? null : _connect, child: Text(_busy ? 'Connecting…' : 'Connect')),
+              if (widget.onNoServer != null && !widget.adding) ...[
+                const SizedBox(height: 28),
+                OutlinedButton.icon(key: LoginScreen.noServerKey, onPressed: _busy ? null : _noServer,
+                    icon: const Icon(Icons.folder_outlined), label: const Text('Use without a server')),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('Books from folders on this device. A Komga server can be added later, in Settings.',
+                      textAlign: TextAlign.center, style: TextStyle(fontSize: 12.5, color: grey)),
+                ),
+              ],
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 12),
                   child: ErrorText(explain(_error!, signIn: true, password: _errorWithPassword).message, _error!)),
             ]),

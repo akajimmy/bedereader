@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../update_check.dart';
-import '../api.dart';
 import '../hidden_libraries.dart';
 import '../errors.dart';
 import '../home_sections.dart';
@@ -11,6 +10,7 @@ import '../offline/connection.dart';
 import '../ondeck_hidden.dart';
 import '../pins.dart';
 import '../settings.dart';
+import '../widgets/connection_prompt.dart' show offlineBooks;
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
@@ -18,18 +18,20 @@ import '../widgets/pin_tile.dart';
 import '../widgets/poster.dart' show PosterSizeButton;
 import '../widgets/poster_row.dart';
 import '../widgets/refresh_on_return.dart';
+import '../widgets/source_badge.dart' show libraryIcon;
 import '../widgets/error_text.dart';
 import 'library.dart';
 import 'open_book.dart';
 import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
+import '../book_source.dart';
 
 /// Start screen: Continue reading, On deck, Pinned views (long-press to rename or unpin) and a button per library;
 /// each section can be shown or hidden from the ⋮ menu. The side menu (☰) has the same library links.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, required this.api, required this.onSignOut});
-  final Komga api;
+  final BookSource api;
   final VoidCallback onSignOut;
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -52,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
   bool _loading = true;
   Object? _error; // shown through lib/errors.dart
 
-  Komga get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void initState() {
@@ -267,9 +269,10 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Wrap(spacing: 10, runSpacing: 10, children: [
                     for (final l in _libraries)
-                      _LibraryButton(label: l['name'] as String, autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
+                      _LibraryButton(label: l['name'] as String, icon: libraryIcon(api, l['id'] as String, size: 18),
+                          autofocus: (_inProgress.isEmpty || !_show['continue']!) && l == _libraries.first,
                           onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut, libraryId: l['id'] as String))),
-                    _LibraryButton(label: 'All libraries', icon: Icons.collections_bookmark_outlined,
+                    _LibraryButton(label: 'All libraries', icon: const Icon(Icons.collections_bookmark_outlined),
                         onTap: () => _push(LibraryScreen(api: api, onSignOut: widget.onSignOut))),
                   ]),
                 ),
@@ -315,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.only(bottom: 24), children: [
-                if (Connection.instance.offline) const _OfflineBanner(),
+                if (Connection.instance.offline) _OfflineBanner(shown: offlineBooks(api)),
                 const UpdateNotice(), // a newer release on GitHub (user, 2026-10-22)
                 if (_error != null)
                   Padding(padding: const EdgeInsets.all(16),
@@ -351,17 +354,17 @@ class _Empty extends StatelessWidget {
 }
 
 class _LibraryButton extends StatelessWidget {
-  const _LibraryButton({required this.label, required this.onTap, this.icon = Icons.folder_outlined, this.autofocus = false});
+  const _LibraryButton({required this.label, required this.onTap, required this.icon, this.autofocus = false});
   final String label;
   final VoidCallback onTap;
-  final IconData icon;
+  final Widget icon; // a library's: its source's, or the plain folder (libraryIcon)
   final bool autofocus;
   @override
   Widget build(BuildContext context) => FilledButton.tonalIcon(
         autofocus: autofocus,
         style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16)),
         onPressed: onTap,
-        icon: Icon(icon),
+        icon: icon,
         label: Text(label),
       );
 }
@@ -369,7 +372,8 @@ class _LibraryButton extends StatelessWidget {
 /// Shown on Home while offline: what you're looking at, and the way back - offline by hand ("Go online"), because
 /// Komga couldn't be reached ("Retry"), or Komga answers again ("Go online", in green).
 class _OfflineBanner extends StatelessWidget {
-  const _OfflineBanner();
+  const _OfflineBanner({required this.shown});
+  final String shown; // what's shown offline ([offlineBooks])
   @override
   Widget build(BuildContext context) => ListenableBuilder(
         listenable: Connection.instance,
@@ -377,10 +381,10 @@ class _OfflineBanner extends StatelessWidget {
           final c = Connection.instance;
           final back = c.reachableAgain && !c.forcedOffline;
           final (text, button, action) = c.forcedOffline
-              ? ('Offline mode - showing downloaded books', 'Go online', c.goOnline)
+              ? ('Offline mode - showing $shown', 'Go online', c.goOnline)
               : back
                   ? ('Komga is reachable again', 'Go online', c.goOnline)
-                  : ("Can't reach Komga - showing downloaded books", 'Retry', () { c.check(); });
+                  : ("Can't reach Komga - showing $shown", 'Retry', () { c.check(); });
           final color = back ? const Color(0xFF4ADE80) : const Color(0xFFFACC15);
           return Container(
             margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),

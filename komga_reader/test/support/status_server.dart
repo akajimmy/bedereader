@@ -14,7 +14,7 @@ class StatusServer extends TestKomga {
   @override
   Future<List<dynamic>> libraries() async => [];
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     calls++;
     if (next == 'refused') throw KomgaError(401, '/api/v2/users/me');
     if (next == 'down') throw KomgaUnreachable(baseUrl);

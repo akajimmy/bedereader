@@ -7,11 +7,15 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../api.dart';
+import '../local/book_names.dart' show isLocalId;
+import '../local/library_fs.dart' show FileTrouble;
+import '../local/local_source.dart';
 import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
 import 'store.dart';
+import '../book_source.dart';
 
 enum JobState { queued, downloading, paused, failed }
 
@@ -111,9 +115,42 @@ class Downloads extends ChangeNotifier implements LocalPages {
   static const gb = 1024 * 1024 * 1024;
   static const defaultCap = 10 * gb;
 
-  Komga? _api;
+  BookSource? _api;
   OfflineStore? store;
   final List<DownloadJob> queue = [];
+
+  // ---- network books (user, 2026-10-27: "I want download to work for network books" - with Komga's: the same queue,
+  // screen, limits, Wi-Fi rule, Delete once read and cache): their copies in a store of their own, beside the server's,
+  // there whether or not Komga is (No server mode too). A book in a folder on the device isn't downloaded: it's here.
+
+  /// The network books' downloads (their files copied whole); null until the local libraries are open.
+  OfflineStore? localStore;
+  LocalSource? _local;
+
+  /// Komga's downloads are open ([store]) - what offline mode needs ([Connection.available]).
+  bool get ready => store != null;
+
+  /// The network books' downloads are open.
+  bool get localReady => localStore != null && _local != null;
+
+  /// Any downloads at all: the Downloads screen, its badges and menus.
+  bool get anyReady => ready || localReady;
+
+  /// The store [bookId] is (or would be) downloaded into.
+  OfflineStore? _storeOf(String bookId) => isLocalId(bookId) ? localStore : store;
+
+  /// [bookId] can be downloaded here: Komga's, with its downloads open; a local library's on a network share, with
+  /// theirs (one in a folder on the device is here already).
+  bool canDownload(String bookId) =>
+      isLocalId(bookId) ? localReady && _local!.onShare(bookId) : ready;
+
+  /// A network book's copy on the device, downloaded or cached (whole); null: none. LocalSource reads it instead of
+  /// the share ([LocalSource.downloadedCopy]).
+  String? localCopyOf(String bookId) {
+    final e = localStore?.books[bookId];
+    if (e == null || e['state'] != 'done' || e['file'] is! String) return null;
+    return localStore!.file('$bookId/${e['file']}').path;
+  }
 
   /// Pause all: kept across restarts until Resume (code review, 2026-09-30: a restart ran the queue again and left
   /// the paused book stuck).
@@ -181,20 +218,18 @@ class Downloads extends ChangeNotifier implements LocalPages {
   bool _running = false;
   int _session = 0; // bumped by attach(); a worker from an older session stops instead of blocking the new one
 
-  bool get ready => store != null;
-
   /// The worker is running (including its final saves after a book finishes or pauses).
   bool get busy => _running;
   /// Downloads' room used (the cache's own is [cacheBytes]).
   int get usedBytes => _bytes(cached: false);
-  int _bytes({required bool cached}) => store?.books.values
-          .where((e) => (e['cache'] == true) == cached)
-          .fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0)) ??
-      0;
+  int _bytes({required bool cached}) => [store, localStore]
+      .expand((s) => s?.books.values ?? const <Map<String, dynamic>>[])
+      .where((e) => (e['cache'] == true) == cached)
+      .fold<int>(0, (sum, e) => sum + ((e['bytes'] as num?)?.toInt() ?? 0));
 
   /// Downloaded on purpose (a cached copy isn't: [isCached]).
   bool isDownloaded(String bookId) {
-    final e = store?.books[bookId];
+    final e = _storeOf(bookId)?.books[bookId];
     return e?['state'] == 'done' && e?['cache'] != true;
   }
 
@@ -206,7 +241,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   static int cacheCap = defaultCacheCap;
   int get cacheBytes => _bytes(cached: true);
   bool isCached(String bookId) {
-    final e = store?.books[bookId];
+    final e = _storeOf(bookId)?.books[bookId];
     return e?['state'] == 'done' && e?['cache'] == true;
   }
 
@@ -223,9 +258,11 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// A book opened in the reader (online): cached in the background - first in the queue - unless it's here already
   /// (then it counts as opened now, the last to go).
   Future<void> cacheBook(Map book) async {
-    final s = store;
-    if (s == null || _hold) return;
     final id = book['id'] as String;
+    // a network book like Komga's (user, 2026-10-27); one in a folder on the device is here already. Offline mode
+    // holds Komga's only (the share is another server)
+    final s = _storeOf(id);
+    if (s == null || !canDownload(id) || (_hold && !isLocalId(id))) return;
     final e = s.books[id];
     if (e != null && e['cache'] == true) {
       e['cachedAt'] = clock.now().toIso8601String();
@@ -255,15 +292,15 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// Room in the cache for [keep], the book being cached, at [bytes] in all: the books opened longest ago go - never
   /// [keep], nor the book open in the reader ([reading]: its pages are read from these files).
   Future<bool> _cacheRoom(int bytes, String keep) async {
-    final s = store!;
     final open = _readers > 0 ? _reading : null;
     final cached = [
-      for (final e in s.books.entries)
-        if (e.value['cache'] == true && e.key != keep && e.key != open) e,
+      for (final s in [store, localStore])
+        for (final e in s?.books.entries ?? const <MapEntry<String, Map<String, dynamic>>>[])
+          if (e.value['cache'] == true && e.key != keep && e.key != open) e,
     ]..sort((a, b) => '${a.value['cachedAt'] ?? ''}'.compareTo('${b.value['cachedAt'] ?? ''}'));
     // the others' (code review, 2026-10-24: [keep]'s bytes so far were taken off twice, and its real size left out
     // once it was in - the cache went past its limit)
-    var used = cacheBytes - ((s.books[keep]?['bytes'] as num?)?.toInt() ?? 0);
+    var used = cacheBytes - ((_storeOf(keep)?.books[keep]?['bytes'] as num?)?.toInt() ?? 0);
     final gone = <String>[];
     for (final e in cached) {
       if (used + bytes <= cacheCap) break;
@@ -280,7 +317,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
   (Map<String, int>, Map<String, int>)? _countCache;
   (Map<String, int>, Map<String, int>) _counts() => _countCache ??= () {
         final series = <String, int>{}, lists = <String, int>{};
-        for (final e in store?.books.values ?? const <Map<String, dynamic>>[]) {
+        for (final e in [store, localStore].expand((s) => s?.books.values ?? const <Map<String, dynamic>>[])) {
           if (e['state'] != 'done' || e['cache'] == true) continue;
           final s = (e['book'] as Map?)?['seriesId'] as String?;
           if (s != null) series[s] = (series[s] ?? 0) + 1;
@@ -305,7 +342,19 @@ class Downloads extends ChangeNotifier implements LocalPages {
     return null;
   }
 
-  File get _queueFile => store!.file('queue.json');
+  /// Each store keeps its own books' place in the queue (Komga's in the server's folder, the network books' in theirs).
+  static File _queueFile(OfflineStore s) => s.file('queue.json');
+
+  /// The jobs kept in [s]'s queue.json.
+  static Future<List<DownloadJob>> _readQueue(OfflineStore s) async {
+    final f = _queueFile(s);
+    if (!await f.exists()) return [];
+    try {
+      return [for (final j in jsonDecode(await f.readAsString()) as List) DownloadJob.fromJson(Map<String, dynamic>.from(j as Map))];
+    } catch (_) {
+      return [];
+    }
+  }
 
   /// Starts (or restarts) the manager for this server. [root] overrides the storage folder (tests). [start] false:
   /// the queue waits for [hold] to be set - the app applies offline mode first, so a forced-offline start contacts
@@ -318,9 +367,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
     _running = false;
     _serverTimer?.cancel();
     waitingForServer = false;
+    unawaited(_pump()); // (the network books' carry on: they're not the account's)
   }
 
-  Future<void> attach(Komga api, {Directory? root, bool start = true}) async {
+  /// A network book's reading progress, as the Downloads screen shows a book's (read, started): the local libraries
+  /// keep it, not the downloads.
+  Map<String, dynamic>? localProgressOf(String bookId) => _local?.readProgressOf(bookId);
+
+  Future<void> attach(BookSource api, {Directory? root, bool start = true}) async {
     _api = api;
     Komga.localPages = this;
     _session++;
@@ -339,6 +393,17 @@ class Downloads extends ChangeNotifier implements LocalPages {
       store = OfflineStore(folder);
       await store!.load();
     }
+    await _loadSettings();
+    // Komga's jobs from its folder; the network books' stay as they are
+    queue
+      ..removeWhere((j) => !isLocalId(j.bookId))
+      ..addAll([for (final j in await _readQueue(store!)) if (!isLocalId(j.bookId)) j]);
+    notifyListeners();
+    if (start) unawaited(_pump());
+  }
+
+  /// This device's downloads settings (Settings > Downloads): the limit, Wi-Fi only, paused, Delete once read.
+  Future<void> _loadSettings() async {
     final p = await SharedPreferences.getInstance();
     final cap = p.getInt(_capKey);
     capBytes = cap == null ? defaultCap : (cap < 0 ? null : cap);
@@ -350,16 +415,23 @@ class Downloads extends ChangeNotifier implements LocalPages {
       ..addAll(p.getStringList(_keptKey) ?? const []);
     final saved = p.getString(_deleteReadKey);
     deleteRead = DeleteRead.values.firstWhere((d) => d.name == saved, orElse: () => DeleteRead.never);
-    queue.clear();
-    if (await _queueFile.exists()) {
-      try {
-        for (final j in jsonDecode(await _queueFile.readAsString()) as List) {
-          queue.add(DownloadJob.fromJson(Map<String, dynamic>.from(j as Map)));
-        }
-      } catch (_) {}
-    }
+  }
+
+  /// The network books' downloads, opened with the local libraries (the app: once, at the start - signed in or not).
+  /// [root] overrides the storage folder (tests). Their copies are read through [local] from then on.
+  Future<void> attachLocal(LocalSource local, {Directory? root}) async {
+    _local = local;
+    local.downloadedCopy = localCopyOf;
+    local.onFinished = bookFinished; // (Delete once read; a cached copy goes)
+    final base = root ?? Directory('${await appStorageDir() ?? Directory.systemTemp.path}${Platform.pathSeparator}downloads');
+    final s = localStore = OfflineStore(Directory('${base.path}${Platform.pathSeparator}network'));
+    await s.load();
+    if (store == null) await _loadSettings(); // (No server mode: Komga's never attaches)
+    queue
+      ..removeWhere((j) => isLocalId(j.bookId))
+      ..addAll([for (final j in await _readQueue(s)) if (isLocalId(j.bookId)) j]);
     notifyListeners();
-    if (start) unawaited(_pump());
+    unawaited(_pump());
   }
 
   /// Each server's downloads in a folder of their own (code review, 2026-09-30: with one folder for all, signing in
@@ -540,6 +612,9 @@ class Downloads extends ChangeNotifier implements LocalPages {
     _serverTimer = null;
     _wifiTimer?.cancel();
     _wifiTimer = null;
+    _shareTimer?.cancel();
+    _shareTimer = null;
+    waitingForShare = false;
     _readers = 0;
     _reading = null;
     _finished.clear();
@@ -582,10 +657,13 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// Written to a temporary file and then moved over queue.json, so a crash (or a reader) never sees half a file.
   /// Saves run one after another (overlapping ones would fight over the temporary file).
   Future<void> _saveQueue() => _queueWrites = _queueWrites.then((_) async {
-        await store!.root.create(recursive: true);
-        final tmp = File('${_queueFile.path}.tmp');
-        await tmp.writeAsString(jsonEncode([for (final j in queue) j.toJson()]));
-        await tmp.rename(_queueFile.path);
+        for (final (s, local) in [(store, false), (localStore, true)]) {
+          if (s == null) continue;
+          await s.root.create(recursive: true);
+          final f = _queueFile(s), tmp = File('${_queueFile(s).path}.tmp');
+          await tmp.writeAsString(jsonEncode([for (final j in queue) if (isLocalId(j.bookId) == local) j.toJson()]));
+          await tmp.rename(f.path);
+        }
       }).catchError((Object _) {});
 
   Future<void> _queueWrites = Future.value();
@@ -593,10 +671,13 @@ class Downloads extends ChangeNotifier implements LocalPages {
   // ---- adding -----------------------------------------------------------------------------------------------------
   /// Queues books that aren't downloaded or queued yet. Returns how many were added.
   Future<int> add(Iterable<dynamic> books) async {
-    if (!ready) return 0;
+    if (!anyReady) return 0;
     var added = 0;
     for (final b in books) {
       final id = b['id'] as String;
+      // Komga's, or a network book's (one in a folder on the device: here already)
+      if (!canDownload(id)) continue;
+      final s = _storeOf(id)!;
       // a book in the cache, downloaded on purpose: a download from now on (kept until deleted)
       final cachedJob = jobFor(id);
       if (cachedJob != null && cachedJob.cache) {
@@ -604,11 +685,11 @@ class Downloads extends ChangeNotifier implements LocalPages {
         added++;
         continue;
       }
-      final e = store!.books[id];
+      final e = s.books[id];
       if (e != null && e['cache'] == true) {
         e.remove('cache');
         e.remove('cachedAt');
-        await store!.put(id, e);
+        await s.put(id, e);
         added++;
         continue;
       }
@@ -704,9 +785,12 @@ class Downloads extends ChangeNotifier implements LocalPages {
   }
 
   Future<void> _deleteFiles(Iterable<String> bookIds) async {
-    final s = store!;
     var kept = false;
+    final touched = <OfflineStore>{};
     for (final bookId in bookIds.toList()) {
+      final s = _storeOf(bookId);
+      if (s == null) continue;
+      touched.add(s);
       kept |= keptRead.remove(bookId);
       final dir = Directory(s.file(bookId).path);
       if (await dir.exists()) await dir.delete(recursive: true);
@@ -714,32 +798,180 @@ class Downloads extends ChangeNotifier implements LocalPages {
       if (s.progress[bookId]?['synced'] != false) s.progress.remove(bookId);
     }
     if (kept) await (await SharedPreferences.getInstance()).setStringList(_keptKey, keptRead.toList());
-    await s.save();
+    for (final s in touched) {
+      await s.save();
+    }
   }
 
   // ---- the worker ---------------------------------------------------------------------------------------------------
+  /// A job the worker can take now: Komga's while it's attached, not held (offline mode) and not waited for; a network
+  /// book's while its downloads are open and the share isn't being waited for.
+  bool _runnable(DownloadJob j) => j.state == JobState.queued &&
+      (isLocalId(j.bookId)
+          ? localReady && !waitingForShare && !_hold // (offline: nothing from a share either - user, 10-27)
+          : !_hold && _api != null && store != null && !waitingForServer);
+
   Future<void> _pump() async {
-    if (_running || paused || _hold || _api == null || store == null) return;
+    if (_running || paused) return;
     _running = true;
     final session = _session;
     final lookups = _Lookups(); // this run's: a worker from an older session can't fill the new one's
     try {
-      while (!paused && !_hold && session == _session) {
-        DownloadJob? next;
-        for (final j in queue) {
-          if (j.state == JobState.queued) {
-            next = j;
-            break;
-          }
-        }
+      while (!paused && session == _session) {
+        if (waitingForServer && !_hold && _api != null) await _serverOk(); // (Komga back? its books carry on)
+        final next = queue.where(_runnable).firstOrNull;
         if (next == null) break;
         if (!await _networkOk()) break; // Wi-Fi only, on mobile data: wait for Wi-Fi
-        if (!await _serverOk()) break; // Komga couldn't be reached: wait for it
-        await _run(next, lookups);
+        await (isLocalId(next.bookId) ? _runLocal(next) : _run(next, lookups));
       }
     } finally {
       if (session == _session) _running = false;
     }
+  }
+
+  /// A network share didn't answer: its books wait (back in the queue, their copy so far kept) and the worker looks
+  /// again in [serverRecheck] - Komga's carry on meanwhile.
+  bool waitingForShare = false;
+  Timer? _shareTimer;
+
+  void _waitForShare() {
+    waitingForShare = true;
+    _shareTimer?.cancel();
+    _shareTimer = Timer(serverRecheck, () {
+      waitingForShare = false;
+      unawaited(_pump());
+    });
+  }
+
+  /// How much of a network book is copied at a time (between two, a cancel, a pause or Wi-Fi gone is seen).
+  static const _chunk = 1 << 20;
+
+  /// A network book: its file copied whole from the share (whatever it is - CBZ, CBR, EPUB), read from the copy from
+  /// then on ([localCopyOf]); its entry a snapshot of the book as the local libraries list it. A copy cut off part way
+  /// (paused, Wi-Fi gone, the share gone) goes on from where it stopped.
+  Future<void> _runLocal(DownloadJob job) async {
+    final local = _local!, s = localStore!;
+    job
+      ..state = JobState.downloading
+      ..error = null
+      ..pagesDone = 0;
+    notifyListeners();
+    final took = Stopwatch()..start();
+    AppLog.instance.info('downloads', '${job.cache ? 'caching' : 'downloading'} "${job.title}" (network)');
+    try {
+      final e = local.entries[job.bookId];
+      if (e == null) throw const _Gone();
+      final book = Map<String, dynamic>.from(e['book'] as Map);
+      final size = (book['sizeBytes'] as num?)?.toInt() ?? 0;
+      final name = '${book['url'] ?? ''}';
+      final dot = name.lastIndexOf('.');
+      final ext = dot < 0 || name.length - dot > 6 ? 'book' : name.substring(dot + 1).toLowerCase();
+      final alreadyHere = (s.books[job.bookId]?['bytes'] as num?)?.toInt() ?? 0;
+      final cap = capBytes;
+      if (job.cache) {
+        if (!await _cacheRoom(size, job.bookId)) {
+          queue.remove(job);
+          await _deleteFiles([job.bookId]);
+          await _saveQueue();
+          notifyListeners();
+          return;
+        }
+      } else if (cap != null && usedBytes - alreadyHere + size > cap) {
+        throw Exception('not enough room: the download limit is ${_gb(cap)} and ${_gb(usedBytes)} is used '
+            '(raise it in Settings)');
+      }
+      final entry = <String, dynamic>{
+        'book': book, 'series': e['series'], 'library': e['library'], 'readLists': e['readLists'] ?? const [],
+        'collections': const [], 'file': 'book.$ext', 'bytes': 0, 'state': 'partial',
+        if (job.cache) 'cache': true,
+        if (job.cache) 'cachedAt': clock.now().toIso8601String(),
+      };
+      await s.put(job.bookId, entry);
+
+      final f = s.file('${job.bookId}/book.$ext'), part = File('${f.path}.part');
+      var stopped = false, offWifi = false;
+      if (!(await f.exists() && await f.length() == size)) {
+        await f.parent.create(recursive: true);
+        final from = await local.openBookFile(job.bookId);
+        final out = await part.open(mode: FileMode.append); // (what an earlier try copied stays)
+        try {
+          var at = await out.length();
+          final total = await from.length();
+          job.pagesTotal = (total / _chunk).ceil().clamp(1, 1 << 30);
+          for (var i = 0; at < total; i++) {
+            if (job._cancel || paused || _hold) { // (offline: back in the queue, the copy so far kept)
+              stopped = true;
+              break;
+            }
+            if (i > 0 && i % 8 == 0 && !await _networkOk()) {
+              offWifi = true;
+              break;
+            }
+            final bytes = await from.readRange(at, _chunk < total - at ? _chunk : total - at);
+            if (bytes.isEmpty) throw const FormatException('the file ended early');
+            await out.writeFrom(bytes);
+            at += bytes.length;
+            job
+              ..pagesDone = (at / _chunk).floor()
+              ..bytes = at;
+            notifyListeners();
+          }
+        } finally {
+          await out.close();
+          await from.close();
+        }
+        if (!stopped && !offWifi) await part.rename(f.path);
+      }
+
+      if (job._cancel) {
+        queue.remove(job);
+        await _deleteFiles([job.bookId]);
+      } else if (stopped || offWifi) {
+        job.state = paused && !offWifi ? JobState.paused : JobState.queued;
+        entry['bytes'] = await part.exists() ? await part.length() : 0;
+        await s.put(job.bookId, entry);
+      } else {
+        final bytes = await f.length();
+        entry
+          ..['bytes'] = bytes
+          ..['state'] = 'done';
+        if (!job.cache) entry..remove('cache')..remove('cachedAt');
+        await s.put(job.bookId, entry);
+        queue.remove(job);
+        AppLog.instance.info('downloads', '"${job.title}" done: ${(bytes / 1048576).toStringAsFixed(1)} MB in '
+            '${(took.elapsedMilliseconds / 1000).toStringAsFixed(1)} s (network)');
+        if (job.cache) await _cacheRoom(bytes, job.bookId);
+        local.closeBook(job.bookId); // (open from the share: read from the copy next time)
+      }
+    } catch (e, st) {
+      final trouble = e is _Gone ? FileTrouble.gone : _local!.troubleOf(job.bookId, e);
+      if (trouble == FileTrouble.noAnswer) {
+        // the share out of reach for now: back in the queue - the copy so far kept - and wait for it
+        job
+          ..state = JobState.queued
+          ..error = null;
+        AppLog.instance.warn('downloads', '"${job.title}" waits: the share is out of reach ($e)');
+        _waitForShare();
+      } else if (job.cache) {
+        queue.remove(job);
+        await _deleteFiles([job.bookId]);
+        ErrorLog.instance.record('Caching "${job.title}" failed.', e, st);
+      } else {
+        final room = '$e'.startsWith('Exception: not enough room');
+        job
+          ..state = JobState.failed
+          ..error = room
+              ? '$e'.replaceFirst('Exception: ', '')
+              : switch (trouble) {
+                  FileTrouble.gone => 'this book is no longer in its library',
+                  FileTrouble.refused => 'the share refused this device (Settings > Libraries: Sign in)',
+                  _ => explain(e, thing: 'book').reason,
+                };
+        if (!room) ErrorLog.instance.record('Download of "${job.title}" failed: ${job.error}.', e, st);
+      }
+    }
+    await _saveQueue();
+    notifyListeners();
   }
 
   /// After Komga couldn't be reached: does it answer now? No: look again in [serverRecheck].
@@ -1010,4 +1242,9 @@ class Downloads extends ChangeNotifier implements LocalPages {
     await _saveQueue();
     notifyListeners();
   }
+}
+
+/// A network book gone from the local libraries (its library removed, or its file gone since the scan).
+class _Gone implements Exception {
+  const _Gone();
 }

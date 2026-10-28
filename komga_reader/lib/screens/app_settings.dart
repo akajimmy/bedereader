@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../api.dart';
 import '../hidden_libraries.dart';
 import '../ondeck_hidden.dart';
 import '../reader_keys.dart';
@@ -13,6 +12,7 @@ import '../screen.dart';
 import '../settings.dart';
 import '../view_prefs.dart';
 import '../widgets/epub_settings.dart';
+import '../widgets/connection_prompt.dart' show offlineBooks;
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -24,10 +24,15 @@ import 'app_log_screen.dart';
 import 'document.dart';
 import 'downloads_screen.dart';
 import 'remote_test.dart';
+import '../book_source.dart';
+import '../api.dart' show Komga;
+import '../combined_source.dart';
+import 'local_settings.dart';
+import 'login.dart' show LoginScreen;
 
 /// The pages of Settings, in order (option A, "plain scopes" - user, 2026-10-07): the reading pages, then the app's,
 /// then help.
-enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, downloads, look, about }
+enum SettingsPage { reading, comics, webtoons, ebooks, keys, server, library, libraries, downloads, look, about }
 
 /// The headings the pages are listed under.
 enum SettingsSection { reading, app, help }
@@ -49,6 +54,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => 'Remote and keys',
         SettingsPage.server => 'Server and sync',
         SettingsPage.library => 'Library & Home',
+        SettingsPage.libraries => 'Libraries',
         SettingsPage.downloads => 'Downloads',
         SettingsPage.look => 'Look',
         SettingsPage.about => 'About',
@@ -61,6 +67,7 @@ extension SettingsPageInfo on SettingsPage {
         SettingsPage.keys => Icons.settings_remote_outlined,
         SettingsPage.server => Icons.dns_outlined,
         SettingsPage.library => Icons.grid_view_outlined,
+        SettingsPage.libraries => Icons.collections_bookmark_outlined,
         SettingsPage.downloads => Icons.download_outlined,
         SettingsPage.look => Icons.palette_outlined,
         SettingsPage.about => Icons.info_outline,
@@ -91,11 +98,18 @@ extension SettingsPageInfo on SettingsPage {
 class AppSettingsScreen extends StatefulWidget {
   const AppSettingsScreen({super.key, required this.api, required this.onSignOut, this.initialPage = SettingsPage.reading,
       this.only});
-  final Komga api;
+  final BookSource api;
   final VoidCallback onSignOut;
   final SettingsPage initialPage;
   /// Only these pages (the reader's More settings: Reading and the book's kind) - null: all of them.
   final List<SettingsPage>? only;
+
+  /// No server mode -> Komga with the local libraries beside it, once Add a Komga server's sign-in has worked (set by
+  /// the app, as the side menu's sign-out is).
+  static Future<void> Function(Komga api) appAddKomga = (_) async {};
+
+  /// No server mode's Add a Komga server and Leave rows (tests find them by these).
+  static const addKomgaKey = ValueKey('addKomga'), leaveNoServerKey = ValueKey('leaveNoServer');
 
   @override
   State<AppSettingsScreen> createState() => _AppSettingsScreenState();
@@ -144,7 +158,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   List<SettingsPage> get _pages => [
         for (final p in SettingsPage.values)
-          if ((p != SettingsPage.downloads || Downloads.instance.ready) && (widget.only?.contains(p) ?? true)) p,
+          if ((p != SettingsPage.downloads || Downloads.instance.anyReady) && (widget.only?.contains(p) ?? true)) p,
       ];
 
   @override
@@ -225,6 +239,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsPage.server => _server(context),
         SettingsPage.look => [_live((s) => _look(context, s))],
         SettingsPage.library => _library(),
+        SettingsPage.libraries => _libraries(),
         SettingsPage.downloads => [ListenableBuilder(listenable: Downloads.instance, builder: (context, _) => _downloads(context))],
         SettingsPage.keys => [ListenableBuilder(listenable: ReaderKeys.instance, builder: (context, _) => _keys(context))],
         SettingsPage.about => _about(context),
@@ -324,7 +339,27 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
 
   // ---- Server and sync -------------------------------------------------------------------------------------------
-  List<Widget> _server(BuildContext context) => [
+  List<Widget> _server(BuildContext context) => CombinedSource.noServerOf(widget.api) ? [
+        SettingsGroup(title: 'No server', children: [
+          const NoteRow('Books from the local libraries only. Settings, pins and reading progress stay on this '
+              'device.'),
+          ActionRow(
+            key: AppSettingsScreen.addKomgaKey,
+            title: 'Add a Komga server',
+            icon: Icons.dns_outlined,
+            subtitle: 'Its books beside the local libraries',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                builder: (_) => LoginScreen(adding: true, onSignedIn: AppSettingsScreen.appAddKomga))),
+          ),
+          ActionRow(
+            key: AppSettingsScreen.leaveNoServerKey,
+            title: 'Leave No server mode',
+            icon: Icons.logout,
+            subtitle: 'Back to the sign-in screen; the local libraries stay',
+            onTap: () => _signOut(context),
+          ),
+        ]),
+      ] : [
         SettingsGroup(title: 'Komga', children: [
           SettingRow(title: 'Address', trailing: SelectableText(widget.api.baseUrl, textAlign: TextAlign.right)),
           Padding(padding: const EdgeInsets.all(10), child: ServerStatus(api: widget.api)),
@@ -347,7 +382,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
               return SettingsGroup(title: 'Offline', children: [
                 SwitchRow(
                   title: 'Offline mode',
-                  subtitle: c.offline ? 'Showing downloaded books only' : 'Connected to Komga',
+                  subtitle: c.offline ? 'Showing ${offlineBooks(widget.api)} only' : 'Connected to Komga',
                   value: c.offline,
                   onChanged: c.setForcedOffline,
                 ),
@@ -488,6 +523,26 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   // ---- Library & Home --------------------------------------------------------------------------------------------
+  /// The local libraries (folders on this device) and Komga's - the server's own settings on Server and sync.
+  List<Widget> _libraries() {
+    final api = widget.api;
+    final local = api is CombinedSource ? api.local : null;
+    return [
+      if (local != null) ...[
+        LocalLibrariesGroup(local: local),
+        LocalLibrariesGroup(local: local, network: true),
+        SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
+      ] else
+        const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
+      SettingsGroup(title: 'Komga', children: [
+        ActionRow(title: 'Komga server', subtitle: CombinedSource.noServerOf(api)
+                ? 'None (No server mode) - one is added in Server and sync'
+                : 'Its address, account and sync: Server and sync',
+            icon: Icons.dns_outlined, onTap: () => setState(() => _page = SettingsPage.server)),
+      ]),
+    ];
+  }
+
   List<Widget> _library() => [
         _live((s) {
           final d = s.display, l = s.library; // (size: this device's; the captions: synced - LibraryPrefs)
@@ -516,6 +571,13 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
                 ToggleChip('Series #', l.ebookPosterSeries, (v) => s.setLibrary(l.copyWith(ebookPosterSeries: v))),
                 ToggleChip('Release date', l.ebookPosterDate, (v) => s.setLibrary(l.copyWith(ebookPosterDate: v))),
               ],
+            ),
+            // (this device's own: which sources it has is this device's - user, 2026-10-26: "show source icon")
+            SwitchRow(
+              title: 'Show where books come from',
+              subtitle: 'An icon on posters and libraries: this device, a network share, Komga',
+              value: d.sourceIcon,
+              onChanged: (v) => s.setDisplay(d.copyWith(sourceIcon: v)),
             ),
           ]);
         }),
@@ -637,15 +699,19 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   // ---- confirmations ---------------------------------------------------------------------------------------------
   Future<void> _signOut(BuildContext context) async {
+    final noServer = CombinedSource.noServerOf(widget.api);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Sign out?'),
-        content: const Text('The API key is removed from this device; you can sign in again or connect to a different '
-            'server. Downloads and settings stay.'),
+        title: Text(noServer ? 'Leave No server mode?' : 'Sign out?'),
+        content: Text(noServer
+            ? 'Back to the sign-in screen. The local libraries, their reading progress and the pins to them stay; '
+                "this mode's reading settings go."
+            : 'The API key is removed from this device; you can sign in again or connect to a different server. '
+                'Downloads and settings stay.'),
         actions: [
           TextButton(autofocus: true, onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Sign out')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text(noServer ? 'Leave' : 'Sign out')),
         ],
       ),
     );
@@ -665,7 +731,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         content: const Text('Back to the defaults: the reading settings kept on this device (brightness, the screen, '
             "what's shown over the page, rotation), the eBook font and text size, night mode and its schedule, app "
             "text size and "
-            "accent colour, the reader's keys, poster size, the libraries shown, every screen's remembered "
+            "accent colour, the reader's keys, poster size and the source icon, the libraries shown, every screen's remembered "
             'filter and sort, and the download limit and Delete once read.\n\nNot touched: settings synced '
             "through Komga (reading defaults, series settings, pins, On deck, posters' captions, Home sections), "
             'your sign-in and your downloaded books.'),
@@ -682,7 +748,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     await HiddenLibraries.instance.clear(); // every library shown again
     await ReaderKeys.instance.reset(); // the reader's usual keys
     await ViewPrefs.clearAll();
-    if (Downloads.instance.ready) {
+    if (Downloads.instance.anyReady) {
       await Downloads.instance.setCap(Downloads.defaultCap);
       await Downloads.instance.setDeleteRead(DeleteRead.never);
     }

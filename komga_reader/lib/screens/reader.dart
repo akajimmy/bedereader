@@ -4,13 +4,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../api.dart';
 import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
-import '../offline/offline_komga.dart' show NotAvailableOffline;
+import '../offline/downloads_source.dart' show NotAvailableOffline;
 import '../epub/source.dart';
 import '../reader/comic_renderer.dart';
 import '../reader/epub_renderer.dart';
@@ -28,6 +27,9 @@ import '../widgets/error_text.dart';
 import '../widgets/reader_clock.dart';
 import 'actions.dart';
 import 'open_book.dart' show isEpub;
+import '../book_source.dart';
+import '../combined_source.dart';
+import '../local/local_source.dart';
 
 export '../reader/comic_renderer.dart' show trimPictures;
 export '../reader/curl_turns.dart' show CurlLayer;
@@ -55,7 +57,7 @@ class ReaderScreen extends StatefulWidget {
 
   const ReaderScreen({super.key, required this.api, required this.book, this.readListId, this.skipRead = false,
       this.epubSource, this.saveProgress = true});
-  final Komga api;
+  final BookSource api;
   final dynamic book;
   final String? readListId; // continue within this read list at the end of the book
 
@@ -72,6 +74,12 @@ class ReaderScreen extends StatefulWidget {
   /// Forgets the closing saves still on their way (tests: each starts with none).
   @visibleForTesting
   static void forgetClosingSaves() => _ReaderScreenState._closingSaves.clear();
+
+  /// Done once the books just closed have their last place read saved (at most a few seconds): a screen loading
+  /// again as the reader closes waits for it - Home showed the place before (user, 2026-10-25).
+  static Future<void> closing() => Future.wait(_ReaderScreenState._closingSaves.values)
+      .timeout(const Duration(seconds: 5), onTimeout: () => const [])
+      .then((_) {}, onError: (Object _) {});
 
   @override
   State<ReaderScreen> createState() => _ReaderScreenState();
@@ -112,7 +120,7 @@ class _ReaderScreenState extends State<ReaderScreen>
   final Map<_Ctl, FocusNode> _ctl = {for (final c in _Ctl.values) c: FocusNode(debugLabel: 'ctl-${c.name}')};
 
   @override
-  Komga get api => widget.api;
+  BookSource get api => widget.api;
   int get _index => _r.place;
   int get _last => _r.last;
   int get _count => _r.last + 1; // the book's pages
@@ -179,14 +187,14 @@ class _ReaderScreenState extends State<ReaderScreen>
     _open(_book);
   }
 
-  @override
-  void dispose() {
-    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
-        "iOS's swipe from the left edge)"}');
+  /// The last place read saved as the book closes - once, the moment it's popped: the screen under it loads again
+  /// right then, and waits for this ([ReaderScreen.closing]); saved only once the reader was disposed, after the
+  /// closing animation, Home asked Komga first and showed the place before (user, 2026-10-25). (Disposed without a
+  /// pop - the app's screens replaced: then.)
+  void _saveClosing() {
+    if (_closeSaved) return;
+    _closeSaved = true;
     _saveTimer?.cancel();
-    _flashTimer?.cancel();
-    closeDevice();
-    _life?.dispose();
     // before Downloads hears the book closed: a book finished here is marked read first. No question while closing:
     // if another device moved the book on meanwhile, nothing is saved over it
     _saveNow(ask: false);
@@ -197,6 +205,19 @@ class _ReaderScreenState extends State<ReaderScreen>
     closing.whenComplete(() {
       if (identical(_closingSaves[id], closing)) _closingSaves.remove(id);
     });
+  }
+
+  bool _closeSaved = false;
+
+  @override
+  void dispose() {
+    _saveTimer?.cancel();
+    AppLog.instance.info('reader', 'closed "${_titleOf(_book)}" by ${_closedVia ?? "Back (the device's Back, or "
+        "iOS's swipe from the left edge)"}');
+    _flashTimer?.cancel();
+    closeDevice();
+    _life?.dispose();
+    _saveClosing(); // (done already if the book was popped)
     deviceClosed();
     _renderer
       ?..removeListener(_onRenderer)
@@ -275,13 +296,18 @@ class _ReaderScreenState extends State<ReaderScreen>
         _loading = false;
       });
       onOpened?.call();
+      // the source it's from - Komga, the downloads, a local library - through the app's combined one
+      final from = CombinedSource.of(api, fresh['id'] as String);
+      final fromKomga = identical(from, Connection.instance.online);
       AppLog.instance.info('reader', 'opened "${_titleOf(fresh)}" (${fresh['media']?['mediaProfile'] ?? '?'}, '
-          '${fresh['media']?['pagesCount'] ?? '?'} pages, ${identical(api, Connection.instance.online) ? 'from Komga' : 'offline'}) '
+          '${fresh['media']?['pagesCount'] ?? '?'} pages, '
+          '${fromKomga ? 'from Komga' : from is LocalSource ? 'from a local library' : 'offline'}) '
           'in ${took.elapsedMilliseconds} ms');
       _keys.requestFocus();
       Downloads.instance.reading(fresh['id'] as String); // (its cached copy stays while it's open)
       // read from Komga: kept on the device in the background too, as it's read (the cache - Downloads.cacheBook)
-      if (identical(api, Connection.instance.online)) unawaited(Downloads.instance.cacheBook(fresh));
+      // (a network book's too, from its share - user, 2026-10-27; one in a folder on the device: here already)
+      if (fromKomga || from is LocalSource) unawaited(Downloads.instance.cacheBook(fresh));
     } catch (e, st) {
       if (!reuse) r.dispose();
       AppLog.instance.warn('reader', 'couldn\'t open "${_titleOf(book)}" after ${took.elapsedMilliseconds} ms: $e');
@@ -823,7 +849,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       // page turn was meant (user, 2026-10-25)
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+        if (didPop) return _saveClosing(); // (popped: the screen under it is about to load again)
         _menu ? _hideControls() : Navigator.of(context).pop();
       },
       child: Scaffold(

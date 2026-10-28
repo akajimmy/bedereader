@@ -1,6 +1,5 @@
 import 'package:flutter/widgets.dart';
 
-import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_filter.dart';

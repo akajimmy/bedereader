@@ -1,8 +1,10 @@
-# Static checks and the test suite on every push and pull request (the same checks tools\build.ps1 runs first).
+# Static checks and the test suite on every branch push and pull request (the same checks tools\build.ps1 runs
+# first). Not on tag pushes: a tag points at a commit its branch push tests, so a run there only repeats it.
 name: checks
 
 on:
   push:
+    branches: ['**']
   pull_request:
 
 jobs:

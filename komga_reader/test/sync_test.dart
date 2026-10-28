@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/sync.dart';
 import 'package:komga_reader/screens/downloads_screen.dart';
 import 'package:komga_reader/widgets/sync_alert.dart';
@@ -36,7 +36,7 @@ class ProgressServer extends LibraryServer {
   }
 
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     if (down) _reach(); // (gone for the reachability check too)
     return super.me();
   }
@@ -144,7 +144,7 @@ void main() {
     await deleteTemp(dir);
   });
 
-  OfflineKomga offlineApi() => OfflineKomga(d.store!, baseUrl: 'offline');
+  DownloadsSource offlineApi() => DownloadsSource(d.store!, baseUrl: 'offline');
 
   test('one book Komga keeps refusing holds up nothing: the others are sent (code review, 2026-09-30)', () async {
     final off = offlineApi();
@@ -343,7 +343,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen())); // (nothing queued: on Manage)
     expect(find.textContaining('· no longer on Komga'), findsNWidgets(2));
     expect(find.text('Manage · 2'), findsOneWidget, reason: 'still downloaded, still listed');
-    expect(await tester.runAsync(() => OfflineKomga(d.store!).book('B1')), isNotNull, reason: 'still readable offline');
+    expect(await tester.runAsync(() => DownloadsSource(d.store!).book('B1')), isNotNull,
+        reason: 'still readable offline');
 
     await tester.runAsync(() async {
       server.goneSeries.clear(); // there after all (restored on Komga)

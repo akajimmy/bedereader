@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'api.dart';
 import 'errors.dart' show PageUnreadable;
 import 'enhance.dart';
 import 'settings.dart';
+import 'book_source.dart';
 
 /// A decoded page and the file it came from.
 class PageData {
@@ -30,7 +30,7 @@ void afterFrames(VoidCallback f, [int frames = 2]) {
 /// Loads a book's pages once each and keeps the few around the current page (and the next two, preloaded).
 class PageLoader {
   PageLoader(this.api, this.bookId, this.pageNumbers);
-  final Komga api;
+  final BookSource api;
   final String bookId;
   final List<int> pageNumbers; // index -> Komga page number (1-based)
   final Map<int, Future<PageData>> _cache = {}; // decoded: the pages a turn either way can need

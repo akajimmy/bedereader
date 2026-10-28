@@ -12,7 +12,6 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
-import '../api.dart';
 import '../epub/book.dart';
 import '../epub/count_store.dart';
 import '../epub/hyphenator.dart';
@@ -24,7 +23,9 @@ import '../epub/xhtml.dart';
 import '../errors.dart';
 import '../highlights.dart';
 import '../offline/downloads.dart';
-import '../offline/offline_komga.dart';
+import '../combined_source.dart';
+import '../local/local_source.dart';
+import '../offline/downloads_source.dart';
 import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -40,6 +41,7 @@ import 'reader_bars.dart';
 import 'renderer.dart';
 import 'spreads.dart';
 import 'turn_drag.dart';
+import '../book_source.dart';
 
 /// An EPUB ready to show (from [EpubRenderer.prepare]).
 class _Prepared {
@@ -121,8 +123,12 @@ class EpubRenderer extends Renderer {
   /// Where book [id]'s files come from: a downloaded EPUB's file - offline (its progress kept on the device, sent to
   /// Komga later) and online too (user, 2026-10-12: the downloaded copy, if there is one; progress and highlights
   /// still go to Komga as before); else Komga.
-  static EpubSource sourceFor(Komga api, String id) {
-    final file = api is OfflineKomga ? api.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
+  /// A book in a local library: its own file, read through the library's files (a share's too - Android and iOS
+  /// can't open a \\host\share path as a file).
+  static EpubSource sourceFor(BookSource api, String id) {
+    final from = CombinedSource.of(api, id);
+    if (from is LocalSource) return FileEpubSource.load(() => from.epubBytes(id));
+    final file = from is DownloadsSource ? from.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
 

@@ -258,7 +258,7 @@ class _PasswordKomga extends Komga {
   final keyNames = <String>[];
   bool closed = false;
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     meCalls++;
     if (meAnswer == null) throw KomgaError(401, '/api/v2/users/me');
     return meAnswer;
@@ -282,7 +282,7 @@ class _SignInKomga extends Komga {
   _SignInKomga(super.baseUrl, super.apiKey);
   int meCalls = 0;
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     meCalls++;
     return {'id': 'U1'};
   }
@@ -294,7 +294,7 @@ class _SlowKomga extends Komga {
   int meCalls = 0;
   final answer = Completer<Map<String, dynamic>?>();
   @override
-  Future<Map<String, dynamic>?> me() {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) {
     meCalls++;
     return answer.future;
   }

@@ -6,7 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api.dart';
 import 'app_log.dart';
-import 'offline/offline_komga.dart' show NotAvailableOffline;
+import 'offline/catalogue_source.dart' show NeedsKomga;
+import 'offline/downloads_source.dart' show NotAvailableOffline;
 
 /// Every error the app shows goes through here: plain words - what happened and what to do - never the raw error
 /// text (user, 2026-09-29: "completely unparseable to your average human"). The raw text isn't lost: it's behind
@@ -103,6 +104,10 @@ Explained explain(Object e, {bool signIn = false, bool password = false, String 
     final clause = what == 'The next book' || what.startsWith('Page ')
         ? "$what isn't downloaded"
         : "$what needs Komga, and you're using downloaded books only";
+    return Explained(ErrorKind.offline, _sentence(clause), clause[0].toLowerCase() + clause.substring(1));
+  }
+  if (e is NeedsKomga) {
+    final clause = '${e.what} needs Komga - this book is in a local library';
     return Explained(ErrorKind.offline, _sentence(clause), clause[0].toLowerCase() + clause.substring(1));
   }
   if (e is PageUnreadable) {

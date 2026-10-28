@@ -4,6 +4,7 @@ import '../api.dart';
 import '../view_sort.dart';
 import 'download_badge.dart';
 import 'poster.dart';
+import '../book_source.dart';
 
 /// What a read list or a collection holds under a read filter: its first four matching items (for the 2x2 poster)
 /// and how many match. One lookup per list and filter, shared by the tiles and by the screens that leave out lists
@@ -17,7 +18,7 @@ class ListContents {
 
   /// {content: the first four matching, matching: how many match, unread: (a read list on All) how many to read}.
   /// Empty if Komga couldn't say (asked again next time).
-  static Future<Map<String, dynamic>> of(Komga api,
+  static Future<Map<String, dynamic>> of(BookSource api,
       {required bool readList, required String id, required ReadFilter filter}) {
     final key = '${readList ? 'readlist' : 'collection'}:$id:${filter.name}';
     return _cache[key] ??= _lookup(api, readList, id, filter).catchError((Object _) {
@@ -26,7 +27,7 @@ class ListContents {
     });
   }
 
-  static Future<Map<String, dynamic>> _lookup(Komga api, bool readList, String id, ReadFilter filter) async {
+  static Future<Map<String, dynamic>> _lookup(BookSource api, bool readList, String id, ReadFilter filter) async {
     if (!readList) {
       final r = await api.series(collectionId: id, readStatus: filter.api, size: 4);
       return {'content': r['content'], 'matching': r['totalElements']};
@@ -46,7 +47,7 @@ class ListContents {
   /// A library's read lists or collections with something matching [filter] - all of them, in one page: Komga can't
   /// filter them by read state, so each is looked at, and a page filtered short would end the paging early. In
   /// [sort] if given (sorted here: lib/view_sort.dart sortLists).
-  static Future<Map<String, dynamic>> matching(Komga api,
+  static Future<Map<String, dynamic>> matching(BookSource api,
       {required bool readLists, String? libraryId, required ReadFilter filter, ViewSort? sort}) async {
     final all = <dynamic>[];
     for (var page = 0;; page++) {
@@ -76,7 +77,7 @@ class ListContents {
 class ReadListTile extends StatefulWidget {
   const ReadListTile({super.key, required this.api, required this.readList, required this.onOpen, this.onMenu,
       this.autofocus = false, this.filter = ReadFilter.all});
-  final Komga api;
+  final BookSource api;
   final dynamic readList;
   final VoidCallback onOpen;
   final VoidCallback? onMenu; // long-press: read-list actions
@@ -156,7 +157,7 @@ class _ReadListTileState extends State<ReadListTile> {
 class CollectionTile extends StatelessWidget {
   const CollectionTile({super.key, required this.api, required this.collection, required this.onOpen, this.onMenu,
       this.autofocus = false, this.filter = ReadFilter.all});
-  final Komga api;
+  final BookSource api;
   final dynamic collection;
   final VoidCallback onOpen;
   final VoidCallback? onMenu; // right-click / long-press: collection actions
@@ -199,7 +200,7 @@ class CollectionTile extends StatelessWidget {
 /// collections (their first matching items) and pins (first items of the pinned view).
 class PosterMosaic extends StatelessWidget {
   const PosterMosaic({super.key, required this.api, required this.refs});
-  final Komga api;
+  final BookSource api;
   final List<String> refs;
 
   Widget _cover(int i) => i < refs.length

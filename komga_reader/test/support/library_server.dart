@@ -72,7 +72,7 @@ class LibraryServer extends TestKomga {
   bool up = true;
   int meCalls = 0; // how often Komga was asked whether it's there
   @override
-  Future<Map<String, dynamic>?> me() async {
+  Future<Map<String, dynamic>?> me({via, Duration limit = Komga.timeout}) async {
     meCalls++;
     Komga.onReachability?.call(this, up);
     if (!up) throw KomgaUnreachable(baseUrl);

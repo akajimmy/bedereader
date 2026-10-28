@@ -114,9 +114,10 @@ class _AboutScreenState extends State<AboutScreen> {
               ]),
             ]),
             _Card(title: 'Komga', icon: Icons.favorite_outline, children: [
-              const Text('This app reads your library from a Komga server. Komga is a free and open-source media '
-                  'server for comics, manga and books, created by Gauthier Roebroeck (gotson) and its contributors. '
-                  'This app is not affiliated with the Komga project.',
+              const Text('This app reads your libraries from a Komga server, and from folders on this device or your '
+                  'network. Komga is a free and open-source media server for comics, manga and books, created by '
+                  'Gauthier Roebroeck (gotson) and its contributors. This app is not affiliated with the Komga '
+                  'project.',
                   style: TextStyle(height: 1.45, color: Color(0xFFCFCFCF))),
               const SizedBox(height: 12),
               Wrap(spacing: 8, runSpacing: 8, children: [

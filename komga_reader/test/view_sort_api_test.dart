@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:komga_reader/api.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 
 import 'support/helpers.dart';
@@ -53,7 +53,7 @@ void main() {
 
   group('offline', () {
     late Directory dir;
-    late OfflineKomga api;
+    late DownloadsSource api;
     setUp(() async {
       dir = await Directory.systemTemp.createTemp('komga_view_sort_test');
       final store = OfflineStore(dir);
@@ -72,7 +72,7 @@ void main() {
       await put('B1', s('S1', 'Alpha', '2001-01-01'), '2020-05-01', 0);
       await put('B2', s('S2', 'Beta', '1999-01-01'), '2010-05-01', 1, rp: {'page': 2, 'completed': true});
       await put('B3', s('S3', 'Gamma', '2005-01-01'), '2015-05-01', 2);
-      api = OfflineKomga(store);
+      api = DownloadsSource(store);
     });
     tearDown(() => deleteTemp(dir));
 

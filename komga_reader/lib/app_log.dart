@@ -130,6 +130,9 @@ class AppLog extends ChangeNotifier {
       await _pending;
       await Future<void>.delayed(Duration.zero); // (a write asked for meanwhile starts after this one)
     }
+    // and the saves asked for by [save] (in their own line since build 160: not waited for here, one still writing as
+    // a test deleted the folder - "the directory is not empty", 2026-10-26)
+    await _saving;
   }
 
   /// The app left or come back to ("to the background", "back") - on a phone or tablet only, where the system may

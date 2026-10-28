@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/offline/store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +50,16 @@ void main() {
     await deleteTemp(dir);
   });
 
+  test("a local library's book isn't queued, nor cached as it's read - it's on the device, and Komga hasn't it",
+      () async {
+    final api = server();
+    await d.attach(api, root: dir);
+    expect(await d.add([book('lb0000000000001', 1)]), 0);
+    await d.cacheBook(book('lb0000000000002', 2));
+    expect(d.queue, isEmpty);
+    expect(d.store!.books, isEmpty);
+  });
+
   test('a queued book downloads page by page, with its place in the tree, and shows up offline', () async {
     final api = server();
     await d.attach(api, root: dir);
@@ -68,7 +78,7 @@ void main() {
     expect(await d.store!.file('series/S1.jpg').exists(), isTrue);
     expect(await d.store!.file('readlists/RL1.jpg').exists(), isTrue);
 
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     expect((await offline.libraries()).single['name'], 'Archive');
     expect(((await offline.readListBooks('RL1'))['content'] as List).single['id'], 'B1');
     expect(((await offline.collections())['content'] as List).single['name'], 'Marvel cosmic');
@@ -127,7 +137,7 @@ void main() {
     await d.attach(server(), root: dir);
     await d.add([book('B1', 1), book('B2', 2)]);
     await settle(d);
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     await offline.markRead('B1');
     expect(d.isDownloaded('B1'), isTrue); // Never (the default): stays
     await d.setDeleteRead(DeleteRead.always);
@@ -150,7 +160,7 @@ void main() {
     await d.add([book('B1', 1), book('B2', 2)]);
     await settle(d);
     await d.setDeleteRead(DeleteRead.ask);
-    final offline = OfflineKomga(d.store!);
+    final offline = DownloadsSource(d.store!);
     d.readerOpened();
     await offline.markRead('B1');
     await offline.markRead('B2');
@@ -456,7 +466,7 @@ void main() {
     await settle(d);
     final sizes = [for (final p in d.pagesOf('http://test', 'B1')!) (p['width'], p['height'])];
     expect(sizes, [(1000, 1500), (2000, 1500), (1000, 1500)]);
-    final offline = await OfflineKomga(d.store!).pages('B1');
+    final offline = await DownloadsSource(d.store!).pages('B1');
     expect([for (final p in offline) (p['number'], p['width'], p['height'])],
         [(1, 1000, 1500), (2, 2000, 1500), (3, 1000, 1500)]);
   });

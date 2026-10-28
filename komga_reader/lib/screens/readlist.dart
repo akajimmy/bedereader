@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../view_filter.dart';
@@ -16,13 +15,14 @@ import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'library.dart';
 import 'open_book.dart';
+import '../book_source.dart';
 
 /// A read list (event / era) in its own order, e.g. "only the unread books of Civil War".
 /// Books opened from here continue to the next book of the list, not the next of the series.
 class ReadListScreen extends StatefulWidget {
   const ReadListScreen({super.key, required this.api, required this.readList, this.pin});
   final Pin? pin;
-  final Komga api;
+  final BookSource api;
   final dynamic readList;
   @override
   State<ReadListScreen> createState() => _ReadListScreenState();

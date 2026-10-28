@@ -9,6 +9,71 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.6.0
+
+**Released as build 164, tagged `v1.6.0`** (2026-10-28). Release candidates: build 164 (`v1.6.0-rc.1`).
+
+### Build 164 - 2026-10-27
+
+**Changed**
+
+- Offline mode covers network libraries too: offline, a network library shows only its books with a copy on the device (downloaded, or cached when opened), isn't scanned, and its downloads wait - nothing is read from a share. The Offline mode switch shows when there's Komga or a network library, not with only folders on the device (it stayed in the side menu after signing out); in No server mode it's kept as you left it.
+- The app's tagline is "Comics, manga and books - wherever they live." (it said "for Komga"), and About and the README describe the local and network libraries too. The README is rewritten for 1.6.
+- About > Licences of included open-source software adds libsmb2 (the network shares' library: its LGPL text, notice and source), the RAR reader's notices for the code it adapts, Komga's notice for its K, and every library the Android version carries. On iPhone and iPad, the local network question names shared folders too.
+- The Windows zip holds only the app's own files: an unused web view plugin, left over from an experiment, had been in it since 1.2.
+- Book details: the Downloaded and Cached badges are the blue of the downloaded tick on posters (Downloaded was a lighter blue, Cached grey).
+
+**Fixed**
+
+- Big CBRs in a network library open much faster the first time: measuring the pages' sizes read the whole book over the network (a 266 MB one took 13 s to its first page on the tablet), now only the start of each page.
+- A comic in a local or network library replaced by another file with as many pages kept the old file's page layout (a two-page spread could show as one page, or the other way round): its pages are measured again.
+
+### Build 163 - 2026-10-27
+
+**New**
+
+- Network books download like Komga's: Download on a book (or a series), the same queue and Downloads screen, the same storage limit, Wi-Fi only and Delete once read. The file is copied whole and read from the copy, also when the share is out of reach; a share that stops answering makes the download wait, not fail. A network book you open is kept for a while too, like Komga's (the cache). Books in a folder on the device aren't downloaded - they're there already.
+- Delete book isn't offered on local and network books for now (it only worked for Komga's).
+
+**Fixed**
+
+- A local or network eBook's details said "Pages 100": its progress shows as a share of the book now, and no page count.
+
+### Build 162 - 2026-10-27
+
+**New**
+
+- No server mode: the app without a Komga server, on local libraries alone. The sign-in screen's Use without a server starts it (the folder browser opens for a first library; more are added in Settings > Libraries). Settings > Server and sync then has Add a Komga server - its books come beside the local ones - and Leave No server mode. Settings, pins and reading progress stay on the device in this mode; adding a server or leaving the mode lets go of its reading settings, as signing out does.
+- Pins to a local library, its series or a book are this device's own: never sent to Komga (another device hasn't these folders), and kept through signing out. Removing a local library removes the pins to it.
+- A library deleted on Komga takes the pins to it, its series and its books with it (seen the next time Komga answers with its library list; out of reach, nothing is removed).
+- Network libraries: a folder on a server on your network (an SMB share - a NAS, a PC) as a library, in Settings > Libraries > Network: Add a shared folder browses a server's shares (Connect to a server by its name), and asks for a user name and password only when the share refuses a guest. The login is kept encrypted on the device; each network library has Sign in to change it. On Windows, Windows reaches the share itself, with its own login. Scan again now has a group of its own, for both kinds.
+- CBR comics (RAR4 and RAR5) in local and network libraries: read in place like CBZs; the CBRs the last scan couldn't read come in with the next scan. A CBR cut short (a copy that stopped part-way) is left out as damaged.
+- Adding a local or network library asks what's in the folder: one folder per series (as before), the books of one series (all of its subfolders, folder by folder), or a read list - books of several series in the order of their names ("001 - ..."), shown as a read list named after the library, each book in its series (from its ComicInfo, else its name). A library's kind shows under it in Settings > Libraries.
+- Local books are titled without the start of the name their series' books share ("Green Lantern Mosaic 012 (1993)" in that series is "012 (1993)"); a ComicInfo title still comes first. The local libraries' books are read again once, at the next scan, for this.
+- Where books come from: Settings > Library & Home > Show where books come from (this device's own, off at first) puts an icon on posters and beside libraries - this device, a network share, or Komga.
+- Book details: Source (and a network book's server), its Path in its library, its Format (CBZ, CBR, EPUB), and badges - Downloaded, Cached (opened lately, kept), Not Found (its file gone).
+- A local book's date shows as far as it's known: "2012", "Mar 2012", or the whole date.
+- Offline, the app says it's showing downloaded books and local libraries when there are local ones.
+- The side menu kept open on a wide screen takes in libraries added or removed straight away.
+- A local library's series settings (its own reader settings) and the local books hidden from On deck stay on this device, as its pins do: never sent to Komga, kept through signing out. Adding a library no longer waits for its first scan: it's listed at once, and Scan again shows how far the scan has got.
+
+### Build 161 - 2026-10-26
+
+**New**
+
+- Local libraries: folders of comics and eBooks (CBZ, EPUB) on this device, beside Komga's. Settings > Libraries adds them (a folder browser: the device's storage, a card or drive, the iPad's own folder in the Files app), renames and removes them, and scans them again; each says where it is and what its last scan couldn't read. Their books show with Komga's - in All libraries, Home, search and the reader - and their reading progress is kept on the device. Not yet: folders on a network share, CBR files (shown as not readable yet), read-list folders.
+- Android: reading a folder on the device asks for Android's All files access, once.
+- iPad and iPhone: the app's own folder shows in the Files app (On My iPad > BeDeReader), with a Comics folder in it to copy books to.
+- A library whose folder looks deleted is asked about: remove it, or keep it in case the folder comes back. One out of reach (a card taken out) keeps its books.
+
+**Fixed**
+
+- Sample values in text boxes (the server address on the sign-in screen, for one) are faded, so they no longer look filled in.
+- Home (and the library you came from) no longer shows a book where it was before you read on. Closing a book, the screen under it loaded again straight away, before the reader had saved the last pages you turned; now it waits for that save.
+- When Komga can't be reached, the offer to read offline comes within about 5 seconds. Checking whether Komga was there waited on connections left from before - on the iPad up to 15 seconds after the Wi-Fi went.
+- When Komga can be reached again, the app notices by itself: it asks every 10 seconds while Komga is gone, then closes the "Can't reach Komga" offer and loads the screen you're on again. Before, Home kept saying Komga couldn't be reached until you refreshed it.
+- Android, iPad and iPhone: a Komga server given by its bare name (http://nick-nas:25600) is found on the local network, as Windows finds it. It said "Can't reach Komga" unless given its full address.
+
 ## 1.5.0
 
 **Released as build 160, tagged `v1.5.0`** (2026-10-25). Release candidates: build 147 (`v1.5.0-rc.1`), build 153 (`v1.5.0-rc.2`).

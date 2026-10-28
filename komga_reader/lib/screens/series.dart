@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../paged.dart';
 import '../pins.dart';
 import '../settings.dart';
@@ -17,12 +16,13 @@ import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'library.dart';
 import 'open_book.dart';
+import '../book_source.dart';
 
 /// Books of one series, in number order (or another sort), filterable by read status.
 class SeriesScreen extends StatefulWidget {
   const SeriesScreen({super.key, required this.api, required this.series, this.pin});
   final Pin? pin;
-  final Komga api;
+  final BookSource api;
   final dynamic series;
   @override
   State<SeriesScreen> createState() => _SeriesScreenState();
@@ -146,7 +146,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
 class SeriesListScreen extends StatefulWidget {
   const SeriesListScreen({super.key, required this.api, required this.title, required this.collectionId, this.pin});
   final Pin? pin;
-  final Komga api;
+  final BookSource api;
   final String title;
   final String collectionId;
   @override

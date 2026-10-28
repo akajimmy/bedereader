@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../errors.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/poster.dart';
@@ -15,13 +14,14 @@ import 'library.dart';
 import 'open_book.dart';
 import 'readlist.dart';
 import 'series.dart';
+import '../book_source.dart';
 
 /// Search (Home and library screens' search button): Komga's search across series, books, read lists and collections
 /// (offline: titles of the downloaded ones). Results come as you type, in poster rows with their counts. Opened from a
 /// library it searches that library first, with a chip to widen to all libraries.
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, required this.api, this.libraryId, this.libraryName});
-  final Komga api;
+  final BookSource api;
   final String? libraryId;
   final String? libraryName;
   @override
@@ -38,7 +38,7 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
   Map<String, dynamic> _series = {}, _books = {}, _readLists = {}, _collections = {};
   int _generation = 0; // answers to an older query are dropped
 
-  Komga get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void dispose() {

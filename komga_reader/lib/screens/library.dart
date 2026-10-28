@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../api.dart';
 import '../book_title.dart';
 import '../paged.dart';
 import '../pins.dart';
@@ -17,6 +16,7 @@ import '../widgets/poster.dart';
 import '../widgets/readlist_tile.dart';
 import '../widgets/refresh_on_return.dart';
 import '../widgets/selection.dart';
+import '../widgets/source_badge.dart';
 import '../widgets/view_bar.dart';
 import 'actions.dart';
 import 'book_details.dart' show posterDate;
@@ -24,6 +24,7 @@ import 'open_book.dart';
 import 'search.dart';
 import 'readlist.dart';
 import 'series.dart';
+import '../book_source.dart';
 
 enum BrowseMode { series, books, collections, readLists }
 
@@ -31,7 +32,7 @@ enum BrowseMode { series, books, collections, readLists }
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key, required this.api, required this.onSignOut, this.libraryId, this.pin,
       this.startMode});
-  final Komga api;
+  final BookSource api;
   final VoidCallback onSignOut;
   final String? libraryId; // null = all libraries
   final Pin? pin; // opened from a Home pin: start in that view instead of the remembered one
@@ -42,7 +43,7 @@ class LibraryScreen extends StatefulWidget {
   /// A breadcrumb's parent (user, 2026-10-02): the library screen the user came through, if one is open under this
   /// screen, gone back to and shown [mode]; else a new one opened. [libraryId]: a library screen showing that one
   /// ([anyLibrary]: whichever it shows - read lists and collections span libraries).
-  static Future<void> openFromBreadcrumb(BuildContext context, Komga api,
+  static Future<void> openFromBreadcrumb(BuildContext context, BookSource api,
       {String? libraryId, bool anyLibrary = false, required BrowseMode mode}) async {
     for (final s in _LibraryScreenState._open.reversed) {
       final route = s.mounted ? ModalRoute.of(s.context) : null;
@@ -90,7 +91,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
   Map<String, String> get _komgaFields => _mode == BrowseMode.series ? seriesSortFields : bookSortFields;
   String get _sortParam => '${_komgaFields[_sort.key] ?? _komgaFields.values.first},${_sort.dir}';
 
-  Komga get api => widget.api;
+  BookSource get api => widget.api;
 
   @override
   void initState() {
@@ -233,8 +234,18 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
           tooltip: 'Library',
           onSelected: _switchLibrary,
           itemBuilder: (_) => [
-            const PopupMenuItem(value: null, child: Text('All libraries')),
-            for (final l in _libraries) PopupMenuItem(value: l['id'] as String, child: Text(l['name'] as String)),
+            // (each with its icon, as in the side menu: Komga's and a local one of the same name told apart)
+            const PopupMenuItem(value: null, child: Row(children: [
+              Icon(Icons.collections_bookmark_outlined, size: 20),
+              SizedBox(width: 12),
+              Flexible(child: Text('All libraries')),
+            ])),
+            for (final l in _libraries)
+              PopupMenuItem(value: l['id'] as String, child: Row(children: [
+                libraryIcon(api, l['id'] as String, size: 20),
+                const SizedBox(width: 12),
+                Flexible(child: Text(l['name'] as String)),
+              ])),
           ],
           // a narrow window: the name shortens ("Demo Li...") beside the buttons - it overflowed the bar at 650 px
           // (Windows test plan, 2026-10-22)
@@ -342,7 +353,7 @@ String seriesStatus(dynamic s) {
 
 /// Series tile used in every series grid (libraries, collections). Long-press = series actions. With a [selection],
 /// as a book tile: long-press offers "Select multiple", and while selecting a tap toggles the series.
-Widget seriesTile(BuildContext context, Komga api, dynamic s,
+Widget seriesTile(BuildContext context, BookSource api, dynamic s,
     {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false, Selection? selection}) {
   final selecting = selection != null && selection.active;
   final total = (s['booksCount'] ?? 0) as int;
@@ -355,6 +366,7 @@ Widget seriesTile(BuildContext context, Komga api, dynamic s,
     read: total > 0 && s['booksUnreadCount'] == 0 && s['booksInProgressCount'] == 0,
     selected: selecting ? selection.isSelected(s) : null,
     badge: DownloadBadge.series(s['id'] as String, total: total),
+    source: sourceBadgeFor(api, s['id'] as String),
     onOpen: selecting ? () => selection.toggle(s) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(s)
@@ -365,7 +377,7 @@ Widget seriesTile(BuildContext context, Komga api, dynamic s,
 
 /// Book tile used in every book grid (home, series, read lists). With a [selection], long-press offers "Select
 /// multiple", and while selecting a tap toggles the book instead of opening it.
-Widget bookTile(BuildContext context, Komga api, dynamic b,
+Widget bookTile(BuildContext context, BookSource api, dynamic b,
     {required VoidCallback onOpen, VoidCallback? onChanged, bool autofocus = false, String? readListId,
     Selection? selection, bool showViewSeries = true}) {
   final selecting = selection != null && selection.active;
@@ -374,7 +386,9 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
   final completed = rp != null && rp['completed'] == true;
   final title = (b['metadata']?['title'] ?? b['name']) as String;
   final display = AppSettings.instance.library; // (posters' captions: synced)
-  final date = posterDate(b['metadata']?['releaseDate'] as String?) ?? '';
+  final date = posterDate(b['metadata']?['releaseDate'] as String?,
+          precision: b['metadata']?['releaseDatePrecision'] as String?) ??
+      '';
   // Settings > Library & Home: any of the lines, always in this order (user, 2026-10-07) - the first is the tile's
   // title, the next its subtitle, the third its caption ('' keeps a line when the book has nothing for it). Comics
   // and eBooks each their own (user, 2026-10-18): an eBook by its title and author, not "Discworld #13".
@@ -405,6 +419,7 @@ Widget bookTile(BuildContext context, Komga api, dynamic b,
     progress: rp != null && !completed && pagesCount > 0 ? (rp['page'] as int) / pagesCount : null,
     selected: selecting ? selection.isSelected(b) : null,
     badge: DownloadBadge.book(b['id'] as String),
+    source: sourceBadgeFor(api, b['id'] as String),
     onOpen: selecting ? () => selection.toggle(b) : onOpen,
     onMenu: selecting
         ? () => selection.toggle(b)

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
-import 'package:komga_reader/offline/offline_komga.dart';
+import 'package:komga_reader/offline/downloads_source.dart';
 import 'package:komga_reader/pins.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,7 +39,7 @@ void main() {
       Pin(name: 'Book two', kind: 'book', id: 'B2', title: 'B2'),
       Pin(name: 'Book nine', kind: 'book', id: 'B9', title: 'B9'),
     ];
-    final api = OfflineKomga(Downloads.instance.store!);
+    final api = DownloadsSource(Downloads.instance.store!);
     await tester.pumpWidget(MaterialApp(home: HomeScreen(api: api, onSignOut: () {})));
     for (var i = 0; i < 5; i++) {
       await tester.pump(const Duration(milliseconds: 50));

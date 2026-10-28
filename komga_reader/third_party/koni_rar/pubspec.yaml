@@ -1,0 +1,17 @@
+name: koni_rar
+description: >-
+  Clean-room RAR4/RAR5 reader for the koni_archive ecosystem, including CBR comic archives.
+# 0.9.0 from pub.dev (MIT, https://github.com/zenbaku/koni_archive), vendored for BeDeReader with two additions:
+# RarReader.readHead (an entry's start, decoded only that far, from only the start of its packed data - for a page's
+# size) and RarReader.cutShort (a file cut short). Marked "BeDeReader" in lib/src/rar_reader.dart, and for readHead
+# the decoders' bitsRead (how far they read) and headOnly (a match cut at the end, a filter past it left out) in
+# rar4_decoder.dart, rar5_decoder.dart, rar20_decoder.dart and rar4_filters.dart; a block header read in one go
+# (rar4_container.dart, rar5_container.dart); nothing else changed.
+version: 0.9.0+bedereader
+publish_to: none
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  koni_archive_core: ^0.9.0
+  koni_codecs: ^0.9.0
