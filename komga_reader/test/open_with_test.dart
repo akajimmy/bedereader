@@ -162,12 +162,12 @@ void main() {
       }
     }
 
-    String? shown() => (tester.widget<ReaderScreen>(find.byType(ReaderScreen)).api as OpenedFile).name;
+    Object? shown() => (tester.widget<ReaderScreen>(find.byType(ReaderScreen)).api as OpenedFile).bookJson['name'];
     await arrives({'path': 'C:/in/a.cbz', 'token': 1});
-    expect(shown(), 'a.cbz');
+    expect(shown(), 'a');
     await arrives({'path': 'C:/in/b.epub', 'token': 2});
     expect(find.byType(ReaderScreen), findsOneWidget);
-    expect(shown(), 'b.epub');
+    expect(shown(), 'b');
     expect(calls.where((c) => c.method == 'done').map((c) => c.arguments), [{'token': 1}]);
     expect(calls.where((c) => c.method == 'back'), isEmpty);
     await tester.binding.handlePopRoute();
