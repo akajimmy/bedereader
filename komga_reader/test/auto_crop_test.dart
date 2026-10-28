@@ -1,7 +1,6 @@
 // Crop edges' Auto (user, 2026-10-28 - lib/reader/auto_crop.dart; dialled in on real books with the prototype,
 // reports\10-28-autocrop-review): pages measured, each cut to its content plus an even border.
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
