@@ -42,6 +42,11 @@ abstract interface class SmbShare {
   Future<Uint8List> read(Object handle, int offset, int length);
   Future<void> close(Object handle);
   Future<void> disconnect();
+
+  /// [data] written as the whole of [inShare] (made if it isn't there).
+  Future<void> write(String inShare, Uint8List data);
+  Future<void> delete(String inShare);
+  Future<void> rename(String from, String to);
 }
 
 /// Connects to [share] on [host] (a refused login, a host out of reach: throws an [Smb2Exception]).
@@ -151,6 +156,17 @@ class SmbFs implements LibraryFs {
     return _SmbFile(share, handle, size);
   }
 
+  /// (A share can't rename over a file: the new one is written beside it, the old one deleted, the new one renamed - a
+  /// failure in between leaves the new one beside it, under its temporary name.)
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) async {
+    final share = await _connected;
+    final at = _inShare(path), temp = '$at.bedereader-new';
+    await share.write(temp, bytes);
+    if (await share.exists(at)) await share.delete(at);
+    await share.rename(temp, at);
+  }
+
   @override
   Future<FolderLook> look(String folder) async => FolderLook.of([
         for (final e in await (await _connected).list(_inShare(folder)))
@@ -235,6 +251,12 @@ class _PoolShare implements SmbShare {
 
   @override
   Future<void> disconnect() => _pool.disconnect();
+  @override
+  Future<void> write(String inShare, Uint8List data) => _pool.writeFile(inShare, data);
+  @override
+  Future<void> delete(String inShare) => _pool.deleteFile(inShare);
+  @override
+  Future<void> rename(String from, String to) => _pool.rename(from, to);
 }
 
 /// The shares: which [LibraryFs] reads a library's path, and their logins. On Windows every path is the system's own -

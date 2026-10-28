@@ -62,6 +62,10 @@ abstract interface class LibraryFs {
 
   Future<LibraryFile> open(String path);
 
+  /// [path]'s contents replaced by [bytes] (made if it isn't there) - written beside it first, then put in its place, so
+  /// a failure part-way leaves the file as it was (metadata edits - lib/local/local_meta.dart).
+  Future<void> writeWhole(String path, Uint8List bytes);
+
   /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
   /// and how many books.
   Future<FolderLook> look(String folder);
@@ -178,6 +182,18 @@ class LocalFs implements LibraryFs {
 
   @override
   Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());
+
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) async {
+    final temp = File('$path.bedereader-new');
+    await temp.writeAsBytes(bytes, flush: true);
+    try {
+      await temp.rename(path); // (over the old one: Windows too)
+    } catch (_) {
+      await temp.delete().catchError((Object _) => temp);
+      rethrow;
+    }
+  }
 
   @override
   Future<FolderLook> look(String folder) async => FolderLook.of([

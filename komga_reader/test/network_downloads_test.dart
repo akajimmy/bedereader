@@ -23,6 +23,8 @@ class _Share implements LibraryFs {
   bool away = false;
   final _real = LocalFs();
   int opened = 0;
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) => _real.writeWhole(path, bytes);
 
   String _here(String path) => path.replaceFirst(RegExp(r'^\\\\nas\\books'), dir.path);
   void _check() {

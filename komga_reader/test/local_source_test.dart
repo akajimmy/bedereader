@@ -18,6 +18,8 @@ import 'support/zip_writer.dart';
 /// This machine's files, counting the books opened - and a file that "doesn't answer", as a share away would.
 class _Fs implements LibraryFs {
   final inner = LocalFs();
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) => inner.writeWhole(path, bytes);
   final opened = <String>[];
   int held = 0; // files open now
   String? away;

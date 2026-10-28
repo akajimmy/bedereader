@@ -13,6 +13,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 - Edit a book's or a series' details. A book: its title, number, release date and series; a series: its title, sort title, reading direction, status and publisher. Edit is in a book's and a series' long-press menu and on their Details screens. On Komga it's saved to Komga itself (an admin account only, as Komga allows), and each field changed is locked there so a metadata refresh doesn't undo it; a Komga book can't be moved to another series (Komga makes series from folders).
 - Local and network libraries: a series.json in a series' folder (Mylar's, the format Komga also reads) now gives the series its title, publisher and status.
+- Local and network books and series can be edited too, a book's series included - pick one of the library's or type a new name. The edits are kept beside the books, never inside them: a series' in a series.json in its folder (Mylar's format, which Komga reads too), the books' in a .bedereader.json in their folder, so every device reading that folder or share sees them. The folder or share has to allow writing.
 
 ## 1.7.0
 

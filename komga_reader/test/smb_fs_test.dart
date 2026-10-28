@@ -15,6 +15,24 @@ class _Share implements SmbShare {
   final refused = <String>{};
   final files = <String, Uint8List>{};
   final listed = <String>[];
+  final writes = <String>[]; // write / delete / rename, in order
+  @override
+  Future<void> write(String inShare, Uint8List data) async {
+    files[inShare] = data;
+    writes.add('write $inShare');
+  }
+
+  @override
+  Future<void> delete(String inShare) async {
+    files.remove(inShare);
+    writes.add('delete $inShare');
+  }
+
+  @override
+  Future<void> rename(String from, String to) async {
+    files[to] = files.remove(from)!;
+    writes.add('rename $from');
+  }
   int running = 0, mostAtOnce = 0, closed = 0, disconnected = 0;
 
   @override
@@ -190,6 +208,19 @@ void main() {
     expect(order, ['files let go', 'disconnected 1']);
     await shares.setLogin(r'\\nas\other', const SmbLogin('nick', 'p'));
     expect(order, hasLength(2), reason: 'nothing open on that share: nothing to let go');
+  });
+
+  test("a file replaced whole on a share (it can't rename over one): the new one written beside it, the old one "
+      'deleted, the new one renamed into its place; a file not there yet is just made', () async {
+    final share = _Share({'': const []})..files['Saga/.bedereader.json'] = Uint8List.fromList([1]);
+    final fs = SmbFs('nas', 'books', null, connect: (_, __, ___) async => share);
+    await fs.writeWhole(r'\\nas\books\Saga\.bedereader.json', Uint8List.fromList([2]));
+    expect(share.writes, ['write Saga/.bedereader.json.bedereader-new', 'delete Saga/.bedereader.json',
+        'rename Saga/.bedereader.json.bedereader-new']);
+    expect(share.files['Saga/.bedereader.json'], [2]);
+    share.writes.clear();
+    await fs.writeWhole(r'\\nas\books\Saga\series.json', Uint8List.fromList([3]));
+    expect(share.writes, ['write Saga/series.json.bedereader-new', 'rename Saga/series.json.bedereader-new']);
   });
 
   test("Windows's net view: the folder shares under the dashed line, hidden ones left out", () {
