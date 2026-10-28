@@ -10,6 +10,7 @@ import 'local/book_names.dart' show isLocalId;
 import 'refresh_gate.dart';
 import 'view_filter.dart';
 import 'book_source.dart';
+import 'widgets/pins_editor.dart';
 
 /// A library sort field's natural direction: titles A -> Z, dates newest first.
 bool naturalDesc(String key) => key != 'title';
@@ -90,6 +91,9 @@ class Pin {
       );
 }
 
+/// One of this device's own pins with its place: before the synced pin [before] (null: after them all).
+typedef _Here = ({Pin pin, Pin? before});
+
 /// The pins, kept on the device and in the user's Komga client settings (so another device gets them too).
 class Pins extends ChangeNotifier {
   Pins._();
@@ -135,10 +139,8 @@ class Pins extends ChangeNotifier {
     if (p.containsKey(_oldDeviceKey)) await p.remove(_oldDeviceKey);
     final before = _raw;
     final raw = p.getString(_local), here = p.getString(_hereKey);
-    items = [
-      if (raw != null) ..._decode(raw).where((p) => !isHere(p)),
-      if (here != null) ..._decode(here),
-    ];
+    items = _place(raw == null ? [] : _decode(raw).where((p) => !isHere(p)).toList(),
+        here == null ? [] : _decodeHere(here));
     _loaded = true;
     if (_raw != before) notifyListeners();
     if (!fetch) return;
@@ -162,7 +164,7 @@ class Pins extends ChangeNotifier {
       if (_changes != changes) return;
       if (remote is String) {
         final before = _raw;
-        items = [..._decode(remote).where((p) => !isHere(p)), ...items.where(isHere)];
+        items = _place(_decode(remote).where((p) => !isHere(p)).toList(), _anchored(items));
         if (_raw != before) { // nothing new: nobody told (Home reloaded three times per reload - #34)
           await p.setString(_local, _synced);
           notifyListeners();
@@ -225,6 +227,21 @@ class Pins extends ChangeNotifier {
   void remove(Pin pin) => _save(items.where((p) => !p.sameView(pin)).toList());
   void rename(Pin pin, String name) => _save([for (final p in items) p.sameView(pin) ? p.renamed(name) : p]);
 
+  /// Arrange pins (user, 2026-10-28): [pin] one place earlier (-1) or later (+1) on Home.
+  void move(Pin pin, int delta) {
+    final i = items.indexWhere((p) => p.sameView(pin)), j = i + delta;
+    if (i < 0 || j < 0 || j >= items.length) return;
+    reorder(i, j);
+  }
+
+  /// Drag-and-drop (onReorderItem: [to] is already the index after taking the dragged one out).
+  void reorder(int from, int to) {
+    if (from == to || from < 0 || from >= items.length) return;
+    final next = [...items];
+    next.insert(to.clamp(0, items.length - 1), next.removeAt(from));
+    _save(next);
+  }
+
   /// A read list (or other [kind]) renamed on Komga from [from] to [to]: its pins follow ([Pin.retitled]).
   void retitle(String kind, String id, String from, String to) {
     if (!items.any((p) => p.kind == kind && p.id == id)) return;
@@ -283,8 +300,55 @@ class Pins extends ChangeNotifier {
   /// What goes to Komga (and its copy on the device): the pins but this device's own.
   String get _synced => jsonEncode([for (final p in items) if (!isHere(p)) p.toJson()]);
 
-  /// This device's own pins.
-  String get _here => jsonEncode([for (final p in items) if (isHere(p)) p.toJson()]);
+  /// This device's own pins, each with its place among the synced ones: 'after' the synced pin before it, or 'start'.
+  String get _here => jsonEncode([
+        for (final h in _anchored(items)) {...h.pin.toJson(), if (h.before != null) 'before': h.before!.toJson()},
+      ]);
+
+  /// This device's own pins in [list], each with the synced pin it comes before (null: after them all).
+  static List<_Here> _anchored(List<Pin> list) {
+    final out = <_Here>[];
+    Pin? next;
+    for (final p in list.reversed) {
+      if (isHere(p)) {
+        out.insert(0, (pin: p, before: next));
+      } else {
+        next = p;
+      }
+    }
+    return out;
+  }
+
+  /// The synced pins (their order is Komga's, every device's) with this device's own put back where they were among
+  /// them: before the same synced pin. One with none after it, whose synced pin has gone (unpinned elsewhere), or
+  /// saved before pins could be arranged, goes last - where this device's own always went.
+  static List<Pin> _place(List<Pin> synced, List<_Here> here) {
+    final placed = <Pin>{};
+    final out = <Pin>[];
+    for (final s in synced) {
+      for (final h in here) {
+        if (h.before?.sameView(s) ?? false) {
+          if (placed.add(h.pin)) out.add(h.pin);
+        }
+      }
+      out.add(s);
+    }
+    return [...out, for (final h in here) if (!placed.contains(h.pin)) h.pin];
+  }
+
+  static List<_Here> _decodeHere(String raw) {
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          () {
+            final m = Map<String, dynamic>.from(j as Map), b = m['before'];
+            return (pin: Pin.fromJson(m), before: b is Map ? Pin.fromJson(Map<String, dynamic>.from(b)) : null);
+          }(),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
 
   void _save(List<Pin> next) {
     final synced = _synced;
@@ -383,6 +447,8 @@ Future<void> showPinDialog(BuildContext context, Pin pin, {required bool pinned}
       ),
       actions: [
         if (pinned) TextButton(onPressed: () => Navigator.pop(ctx, 'unpin'), child: const Text('Unpin')),
+        if (pinned && Pins.instance.items.length > 1)
+          TextButton(onPressed: () => Navigator.pop(ctx, 'arrange'), child: const Text('Arrange…')),
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(pinned ? 'Save' : 'Pin')),
       ],
@@ -391,6 +457,8 @@ Future<void> showPinDialog(BuildContext context, Pin pin, {required bool pinned}
   final n = name.text.trim();
   if (result == 'unpin') {
     Pins.instance.remove(pin);
+  } else if (result == 'arrange') {
+    if (context.mounted) await showPinsEditor(context);
   } else if (result == 'save' && n.isNotEmpty) {
     pinned ? Pins.instance.rename(pin, n) : Pins.instance.add(pin.renamed(n));
   }

@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Arrange pins: Home's ⋮ menu > Arrange pins… (and Arrange… in a pin's dialog) puts your pins in the order you want - ▲ and ▼ (a remote or keyboard too) or drag a row by its handle. Pins from Komga keep the new order on every device; pins to this device's own folders keep their place among them.
+
 ## 1.7.0
 
 ### Build 172 - 2026-10-28

@@ -10,6 +10,7 @@ import 'package:komga_reader/refresh_gate.dart';
 import 'package:komga_reader/screens/home.dart';
 import 'package:komga_reader/screens/readlist.dart';
 import 'package:komga_reader/settings.dart';
+import 'package:komga_reader/widgets/pins_editor.dart';
 import 'package:komga_reader/widgets/refresh_on_return.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -280,6 +281,66 @@ void main() {
       await api.visibleLibraries();
       await api.visibleLibraries(kept: true);
       expect(told, [['L1', 'L2']]);
+    });
+
+    // Arrange pins (user, 2026-10-28)
+    test("arranged: Komga's pins in their new order on Komga (every device); a local pin keeps its place among them "
+        'through the next start and a fresh list from Komga', () async {
+      const lib = Pin(name: 'Comics on Komga', kind: 'library', id: 'L1', title: 'Comics');
+      final api = server();
+      await Pins.instance.load(api);
+      for (final p in [uu, saga, lib]) {
+        Pins.instance.add(p);
+      }
+      Pins.instance.reorder(2, 0); // the Komga library first
+      Pins.instance.move(saga, -1); // Saga between it and the read list
+      await pumpEventQueue();
+      expect([for (final p in Pins.instance.items) p.id], ['L1', 'ls0123456789abc', 'RL1']);
+      expect([for (final j in jsonDecode(api.written[Pins.komgaKey]!) as List) j['id']], ['L1', 'RL1'],
+          reason: "Komga has its pins' new order");
+
+      Pins.instance.items = [];
+      await Pins.instance.load(api, fetch: false); // the next start
+      expect([for (final p in Pins.instance.items) p.id], ['L1', 'ls0123456789abc', 'RL1']);
+
+      api.written[Pins.komgaKey] = jsonEncode([uu.toJson(), lib.toJson()]); // arranged on another device
+      await Pins.instance.refresh();
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc', 'RL1', 'L1'],
+          reason: 'Saga still comes just before the read list');
+
+      Pins.instance.move(saga, 1);
+      Pins.instance.move(saga, 1);
+      await pumpEventQueue();
+      Pins.instance.items = [];
+      await Pins.instance.load(api, fetch: false);
+      expect(Pins.instance.items.last.id, 'ls0123456789abc', reason: 'last, after every synced pin');
+    });
+
+    test('local pins saved before pins could be arranged show last, as before', () async {
+      SharedPreferences.setMockInitialValues({'pins.here': jsonEncode([saga.toJson()])});
+      final api = server();
+      api.written[Pins.komgaKey] = jsonEncode([uu.toJson()]);
+      await Pins.instance.load(api);
+      expect([for (final p in Pins.instance.items) p.id], ['RL1', 'ls0123456789abc']);
+    });
+
+    testWidgets('the Arrange pins sheet: ▲ and ▼ move a pin; at the ends they do nothing', (tester) async {
+      await tester.runAsync(() async {
+        await Pins.instance.load(server(), fetch: false);
+        Pins.instance.add(uu);
+        Pins.instance.add(saga);
+      });
+      await tester.pumpWidget(const MaterialApp(home: Scaffold(body: PinsEditor())));
+      await tester.tap(find.byTooltip('Move Saga up'));
+      await tester.pump();
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc', 'RL1']);
+      await tester.tap(find.byTooltip('Move Saga up')); // already first
+      await tester.pump();
+      expect([for (final p in Pins.instance.items) p.id], ['ls0123456789abc', 'RL1']);
+      await tester.tap(find.byTooltip('Move Saga down'));
+      await tester.pump();
+      expect([for (final p in Pins.instance.items) p.id], ['RL1', 'ls0123456789abc']);
+      await tester.runAsync(pumpEventQueue);
     });
 
     test('a local library removed: the pins to it, its series and books go; the rest stay', () async {
