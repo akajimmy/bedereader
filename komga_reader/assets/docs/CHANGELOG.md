@@ -9,13 +9,15 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 174 - 2026-10-28
+
 - Delete book… works on local and network books too - from the book's menu, the reader, or several selected: it deletes the file from this device's folder or the share (the confirmation says which). A series whose last book goes is gone too.
 - Delete series… works on local and network series too: it deletes every book in the series - the files - from this device or the share, and the series with them. The confirmation says so, with how many books and where from (Komga's series say "from the server").
 - Windows: a library on a network share (\\host\share) is scanned several folders at a time, as on Android and the iPad - your COMICS share's first scan from this PC: 15 s before, under 4 s now.
 - eBooks: Paragraph spacing is back in the reader's eBook settings panel, under Line spacing.
 - eBooks: black lettering and line art on a see-through ground - Standard Ebooks' title pages and logo - all but vanished on the dark page colours. It's now drawn in the page's colours, as small black-and-white pictures are, on the page and full screen.
-
-## 1.7.0
 
 ### Build 173 - 2026-10-28
 
