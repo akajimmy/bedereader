@@ -86,9 +86,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - Webtoons' settings say Page Layout - default values too, and Comics' and Webtoons' Image - defaults is Image - default values.
 - Downloads is Storage & Downloads. Storage limit is Downloads limit, and it can be Off (nothing downloads). New: Cache limit - how much the books you open are kept, Off to 5 GB (512 MB as before; Off: nothing is cached, a book is read from its source) - and Clear cache.
 
-## 1.6.0 - in development
+## 1.6.0
 
-Not released yet. Release candidates: build 164 (`v1.6.0-rc.1`).
+**Released as build 164, tagged `v1.6.0`** (2026-10-28). Release candidates: build 164 (`v1.6.0-rc.1`).
 
 ### Build 164 - 2026-10-27
 
