@@ -39,6 +39,7 @@ import 'local/local_library.dart';
 import 'screens/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
 import 'local/smb_fs.dart' show Shares;
+import 'local/local_meta.dart' show EditsInFiles;
 import 'open_with.dart';
 import 'side_menu.dart';
 import 'update_check.dart';
@@ -199,6 +200,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    unawaited(EditsInFiles.instance.load()); // Settings > Libraries > Metadata edits
     OpenWith.instance.start(_nav, _args); // a book file handed to the app from outside: straight into the reader
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server

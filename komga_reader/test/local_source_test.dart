@@ -20,6 +20,12 @@ class _Fs implements LibraryFs {
   final inner = LocalFs();
   @override
   Future<void> writeWhole(String path, Uint8List bytes) => inner.writeWhole(path, bytes);
+  @override
+  Future<LibraryOut> create(String path) => inner.create(path);
+  @override
+  Future<void> replace(String from, String to) => inner.replace(from, to);
+  @override
+  Future<void> delete(String path) => inner.delete(path);
   final opened = <String>[];
   int held = 0; // files open now
   String? away;

@@ -54,6 +54,200 @@ class UnreadableArchive extends FormatException {
   const UnreadableArchive(String what) : super('Not readable yet: $what');
 }
 
+/// A zip entry as its directory lists it - its record kept whole, to be copied.
+class _Record {
+  const _Record(this.name, this.central, this.local, this.crc, this.compressed, this.size);
+  final String name;
+  final Uint8List central;
+  final int local, crc, compressed, size;
+}
+
+/// [path]'s zip (a CBZ, an EPUB) written anew with [replace]'s entries in place of theirs and [add]'s after the rest
+/// (metadata edits in the file - lib/local/local_meta.dart; user, 2026-10-27). Every other entry is copied as it is
+/// (its compressed bytes, its checksum, its place), so nothing else in the book changes. Written beside it first, then
+/// checked - every entry there, the same as before, the new ones reading back as given - and only then put in its
+/// place; anything wrong, the new copy goes and the book stays as it was.
+Future<void> rewriteZip(LibraryFs fs, String path,
+    {Map<String, Uint8List> replace = const {}, Map<String, Uint8List> add = const {}}) async {
+  final temp = '$path.bedereader-new';
+  final src = await ComicArchive.open(fs, path);
+  try {
+    if (src is! FileZip) throw const UnreadableArchive("a RAR file (it can't be rewritten)");
+    final out = await fs.create(temp);
+    final ({int crc, int length}) sent;
+    try {
+      sent = await src._writeTo(out, replace, add);
+    } finally {
+      await out.close();
+    }
+    // what's in the new file is every byte sent (a write gone wrong on the way - the disk, the share - shows here)
+    final written = await fs.open(temp);
+    try {
+      final length = await written.length();
+      var crc = 0xffffffff;
+      for (var p = 0; p < length; p += _chunk) {
+        crc = _crcAdd(crc, await written.readRange(p, length - p < _chunk ? length - p : _chunk));
+      }
+      if (length != sent.length || crc != sent.crc) throw const FormatException('The rewritten book was written wrong');
+    } finally {
+      await written.close();
+    }
+    final check = await FileZip.open(await fs.open(temp));
+    try {
+      await src._check(check, replace, add);
+    } finally {
+      await check.close();
+    }
+  } catch (_) {
+    await fs.delete(temp).catchError((Object _) {});
+    await src.close();
+    rethrow;
+  }
+  await src.close(); // (before it's replaced: Windows won't replace a file held open)
+  await fs.replace(temp, path);
+}
+
+extension on FileZip {
+  /// Writes the new zip to [out]; returns the checksum and length of what was sent.
+  Future<({int crc, int length})> _writeTo(
+      LibraryOut out, Map<String, Uint8List> replace, Map<String, Uint8List> add) async {
+    var at = 0, crc = 0xffffffff;
+    Future<void> put(Uint8List b) async {
+      crc = _crcAdd(crc, b);
+      await out.add(b);
+      at += b.length;
+    }
+
+    // each entry's bytes run from its local header to the next one's (its data descriptor, if any, with it)
+    final byPlace = [..._records]..sort((a, b) => a.local.compareTo(b.local));
+    final central = BytesBuilder();
+    for (final (i, r) in byPlace.indexed) {
+      final start = at;
+      final fresh = replace[r.name];
+      if (fresh != null) {
+        await put(_localHeader(r.name, fresh, r.central));
+        central.add(_centralRecord(r.name, fresh, r.central, start));
+        continue;
+      }
+      final end = i + 1 < byPlace.length ? byPlace[i + 1].local : _dirStart;
+      for (var p = r.local; p < end; p += _chunk) {
+        final n = end - p < _chunk ? end - p : _chunk;
+        final chunk = await _file.readRange(p, n);
+        if (chunk.length != n) throw const FormatException('Zip entry cut short');
+        await put(chunk);
+      }
+      final c = Uint8List.fromList(r.central);
+      ByteData.sublistView(c).setUint32(42, start, Endian.little);
+      central.add(c);
+    }
+    for (final MapEntry(key: name, value: bytes) in add.entries) {
+      final start = at;
+      await put(_localHeader(name, bytes, null));
+      central.add(_centralRecord(name, bytes, null, start));
+    }
+    final dir = central.takeBytes(), dirStart = at;
+    await put(dir);
+    final count = _records.length + add.length;
+    final end = ByteData(22)
+      ..setUint32(0, 0x06054b50, Endian.little)
+      ..setUint16(8, count, Endian.little)
+      ..setUint16(10, count, Endian.little)
+      ..setUint32(12, dir.length, Endian.little)
+      ..setUint32(16, dirStart, Endian.little);
+    await put(end.buffer.asUint8List());
+    return (crc: crc, length: at);
+  }
+
+  /// The new zip [check] is this one with the edits: the same entries in it, each copied one as it was (its checksum
+  /// and sizes), each new one reading back as given.
+  Future<void> _check(FileZip check, Map<String, Uint8List> replace, Map<String, Uint8List> add) async {
+    final was = {for (final r in _records) r.name: r}, now = {for (final r in check._records) r.name: r};
+    if (now.length != was.length + add.length) throw const FormatException('The rewritten book lost entries');
+    for (final r in was.values) {
+      final n = now[r.name];
+      if (n == null) throw FormatException('The rewritten book lost ${r.name}');
+      if (replace.containsKey(r.name)) continue;
+      if (n.crc != r.crc || n.compressed != r.compressed || n.size != r.size) {
+        throw FormatException('The rewritten book changed ${r.name}');
+      }
+    }
+    for (final MapEntry(:key, :value) in {...replace, ...add}.entries) {
+      final back = await check.read(key);
+      if (back == null || !_same(back, value)) throw FormatException('The rewritten book has $key wrong');
+    }
+  }
+}
+
+const _chunk = 4 << 20; // a rewrite's copying, 4 MB at a time
+
+bool _same(Uint8List a, Uint8List b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+/// A new entry's local header and data (deflated), its date from [was] (the record of the entry it replaces) if any.
+Uint8List _localHeader(String name, Uint8List bytes, Uint8List? was) {
+  final n = utf8.encode(name), packed = ZLibEncoder(raw: true).convert(bytes);
+  final h = ByteData(30)
+    ..setUint32(0, 0x04034b50, Endian.little)
+    ..setUint16(4, 20, Endian.little)
+    ..setUint16(6, 0x800, Endian.little) // (the name in UTF-8)
+    ..setUint16(8, 8, Endian.little)
+    ..setUint32(10, was == null ? _dosNow() : ByteData.sublistView(was).getUint32(12, Endian.little), Endian.little)
+    ..setUint32(14, _crc32(bytes), Endian.little)
+    ..setUint32(18, packed.length, Endian.little)
+    ..setUint32(22, bytes.length, Endian.little)
+    ..setUint16(26, n.length, Endian.little);
+  return Uint8List.fromList([...h.buffer.asUint8List(), ...n, ...packed]);
+}
+
+/// A new entry's directory record, its local header at [local].
+Uint8List _centralRecord(String name, Uint8List bytes, Uint8List? was, int local) {
+  final n = utf8.encode(name), packed = ZLibEncoder(raw: true).convert(bytes);
+  final h = ByteData(46)
+    ..setUint32(0, 0x02014b50, Endian.little)
+    ..setUint16(4, 20, Endian.little)
+    ..setUint16(6, 20, Endian.little)
+    ..setUint16(8, 0x800, Endian.little)
+    ..setUint16(10, 8, Endian.little)
+    ..setUint32(12, was == null ? _dosNow() : ByteData.sublistView(was).getUint32(12, Endian.little), Endian.little)
+    ..setUint32(16, _crc32(bytes), Endian.little)
+    ..setUint32(20, packed.length, Endian.little)
+    ..setUint32(24, bytes.length, Endian.little)
+    ..setUint16(28, n.length, Endian.little)
+    ..setUint32(42, local, Endian.little);
+  return Uint8List.fromList([...h.buffer.asUint8List(), ...n]);
+}
+
+/// Now, as a zip's DOS time and date (time low, date high).
+int _dosNow() {
+  final t = DateTime.now();
+  final time = (t.hour << 11) | (t.minute << 5) | (t.second ~/ 2);
+  final date = ((t.year - 1980).clamp(0, 127) << 9) | (t.month << 5) | t.day;
+  return (date << 16) | time;
+}
+
+final _crcTable = List<int>.generate(256, (n) {
+  var c = n;
+  for (var k = 0; k < 8; k++) {
+    c = c & 1 != 0 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  }
+  return c;
+});
+
+int _crc32(List<int> bytes) => _crcAdd(0xffffffff, bytes) ^ 0xffffffff;
+
+/// A running checksum ([_crc32] before its last step) with [bytes] added.
+int _crcAdd(int c, List<int> bytes) {
+  for (final b in bytes) {
+    c = _crcTable[(c ^ b) & 0xff] ^ (c >>> 8);
+  }
+  return c;
+}
+
 /// A zip entry: how it's stored and where.
 class _Entry {
   const _Entry(this.method, this.flags, this.compressed, this.size, this.local, this.nameLen);
@@ -65,10 +259,12 @@ class _Entry {
 /// share ([LibraryFs]): its central directory once, then each entry's bytes as they're asked for, in one read each.
 /// Stored or deflated entries; not zip64 or encrypted ones ([UnreadableArchive]).
 class FileZip extends ComicArchive {
-  FileZip._(this._file, this._entries);
+  FileZip._(this._file, this._entries, this._records, this._dirStart);
 
   final LibraryFile _file;
   final Map<String, _Entry> _entries;
+  final List<_Record> _records; // every entry (folders too), as the directory lists them - for [rewriteZip]
+  final int _dirStart;
 
   @override
   String get mediaType => 'application/zip';
@@ -108,6 +304,7 @@ class FileZip extends ComicArchive {
         : await file.readRange(dirStart, dirSize);
     final d = ByteData.sublistView(dir);
     final entries = <String, _Entry>{};
+    final records = <_Record>[];
     var p = 0;
     for (var n = 0; n < count; n++) {
       if (p + 46 > dir.length || d.getUint32(p, Endian.little) != 0x02014b50) {
@@ -127,9 +324,13 @@ class FileZip extends ComicArchive {
       // come out the same - one page lost)
       final name = flags & 0x800 != 0 ? utf8.decode(raw, allowMalformed: true) : _cp437(raw);
       if (!name.endsWith('/')) entries[name] = _Entry(method, flags, compressed, size, local, nameLen); // (a folder)
-      p += 46 + nameLen + extraLen + commentLen;
+      final end = p + 46 + nameLen + extraLen + commentLen;
+      if (end > dir.length) throw const FormatException('Damaged zip directory');
+      records.add(_Record(name, Uint8List.fromList(dir.sublist(p, end)), local, d.getUint32(p + 16, Endian.little),
+          compressed, size));
+      p = end;
     }
-    return FileZip._(file, entries);
+    return FileZip._(file, entries, records, dirStart);
   }
 
   @override
