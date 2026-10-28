@@ -918,6 +918,7 @@ class ComicRenderer extends Renderer {
           : _heldPage(_at, _spineX(target) ?? padded?.$2, earlier: false);
     },
     mirror: () => rtl,
+    backPage: _earlierRect,
     pixelRatio: () => MediaQuery.devicePixelRatioOf(host.context),
     done: ({required turned}) {
       if (turned) host.turned(index);
@@ -984,6 +985,19 @@ class ComicRenderer extends Renderer {
     return rtl
         ? Rect.fromLTRB(page.left, page.top, x - half, page.bottom)
         : Rect.fromLTRB(x + half, page.top, page.right, page.bottom);
+  }
+
+  /// Two pages up, item [v]'s earlier page on screen - a pair's left page (right, right to left), up to the gutter; a
+  /// spread picture's earlier half. Its size is its own: with Crop edges' Auto each page is cut its own way, so it
+  /// needn't match the page that turns over onto it (user, 2026-10-28: the back of the curling page showed no border,
+  /// or black past it). Null: no gutter at [v].
+  Rect? _earlierRect(int v) {
+    final x = _spineX(v);
+    if (x == null) return null;
+    final page = _pageRect(v), half = _gapOn(v) / 2;
+    return rtl
+        ? Rect.fromLTRB(x + half, page.top, page.right, page.bottom)
+        : Rect.fromLTRB(page.left, page.top, x - half, page.bottom);
   }
 
   /// Where the gutter is on screen at item [v] - a pair's (two pages up, joined), or a spread picture's middle; null

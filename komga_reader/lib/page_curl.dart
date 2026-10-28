@@ -79,7 +79,7 @@ class PageCurlPainter extends CustomPainter {
   /// [shader]: one kept by the caller and used for every paint (else one is made, and freed, per paint).
   PageCurlPainter({required this.program, required this.sheet, required this.page, required this.grab,
       required this.finger, required this.mirror, this.shader, this.paper = whitePaper, this.spine = false, this.back,
-      this.gap = 0});
+      this.gap = 0, this.backRect});
   final ui.FragmentProgram program;
   final ui.FragmentShader? shader;
   final ui.Image sheet;
@@ -102,6 +102,15 @@ class PageCurlPainter extends CustomPainter {
   /// Two pages up as two sheets: the gap between them, which the page turns over (it lands past it).
   final double gap;
 
+  /// Where the page on the [back] is in that snapshot; null: where this page lands (its mirror past the spine and
+  /// [gap]) - a page beside it of another size or place (Crop edges' Auto) is drawn stretched over this one's back.
+  final Rect? backRect;
+
+  /// Where this page lies once turned over onto the page beside it (the mirror of [page] past the spine and [gap]).
+  Rect get landed => mirror
+      ? Rect.fromLTWH(page.right + gap, page.top, page.width, page.height)
+      : Rect.fromLTWH(page.left - gap - page.width, page.top, page.width, page.height);
+
   @override
   void paint(Canvas canvas, Size size) {
     final r = spine ? PageCurl.spineRadius(page.width, grab, finger) : PageCurl.radius(page.width);
@@ -116,8 +125,10 @@ class PageCurlPainter extends CustomPainter {
     final (point, normal) = f;
     var i = 0;
     final s = shader ?? program.fragmentShader();
+    final b = backRect ?? landed;
     for (final v in [size.width, size.height, page.left, page.top, page.width, page.height, point.dx, point.dy,
-        normal.dx, normal.dy, r, mirror ? 1.0 : 0.0, paper.r, paper.g, paper.b, back != null ? 1.0 : 0.0, gap]) {
+        normal.dx, normal.dy, r, mirror ? 1.0 : 0.0, paper.r, paper.g, paper.b, back != null ? 1.0 : 0.0, gap,
+        b.left, b.top, b.width, b.height]) {
       s.setFloat(i++, v);
     }
     s.setImageSampler(0, sheet, filterQuality: FilterQuality.medium);
@@ -129,5 +140,5 @@ class PageCurlPainter extends CustomPainter {
   @override
   bool shouldRepaint(PageCurlPainter o) =>
       o.sheet != sheet || o.page != page || o.grab != grab || o.finger != finger || o.mirror != mirror ||
-      o.paper != paper || o.spine != spine || o.back != back || o.gap != gap;
+      o.paper != paper || o.spine != spine || o.back != back || o.gap != gap || o.backRect != backRect;
 }

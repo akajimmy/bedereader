@@ -23,7 +23,8 @@ import '../page_curl.dart';
 /// [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap, this.mirror}) {
+      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap, this.mirror,
+      this.backPage}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
       ..addStatusListener((s) {
@@ -57,6 +58,12 @@ class CurlTurns {
 
   /// A right-to-left book: the curl mirrored, page coordinates and drags in reading direction.
   final bool Function()? mirror;
+
+  /// Two pages up, at view [v]: where its earlier page is on screen - the page on the turning one's back (forward, the
+  /// next view's; back, this one's). It needn't be the turning page's size or mirror image (Crop edges' Auto cuts
+  /// each page its own way, and a page shown whole is another shape - user, 2026-10-28): the back is drawn from where
+  /// it really is. Null (or not given): the turning page's mirror.
+  final Rect? Function(int v)? backPage;
 
   bool _spineAt(int v) => spine?.call(v) ?? false;
   double _gapAt(int v) => gap?.call(v) ?? 0;
@@ -119,7 +126,11 @@ class CurlTurns {
     // two pages up, the turning page's back is a page (user, 2026-10-16: "the following left-hand page should be
     // shown on the back"): back, this spread's earlier page - the view now; forward, the next spread's, snapshot once
     // the view shows it
-    if (c.spine && !next) c.back = now;
+    if (c.spine && !next) {
+      c
+        ..back = now
+        ..backRect = backPage?.call(current());
+    }
     _curl = c;
     jump(target); // (while the turn is set: a renderer can tell this jump from a reader's turn - active)
     _moved.value++;
@@ -150,7 +161,9 @@ class CurlTurns {
       final b = _snapshot();
       if (b == null) return;
       final old = c.back;
-      c.back = b;
+      c
+        ..back = b
+        ..backRect = backPage?.call(current()); // (the view turned to: laid out by now)
       _moved.value++;
       if (old != null) WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
@@ -280,7 +293,7 @@ class CurlTurns {
               if (!c.pending)
                 CustomPaint(painter: _CurlPaint(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
                     grab: c.grab, finger: c.finger, mirror: _mirror, spine: c.spine, back: c.back,
-                    gap: c.spine ? c.gap : 0, held: c.underClip,
+                    backRect: c.backRect, gap: c.spine ? c.gap : 0, held: c.underClip,
                     paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
@@ -314,6 +327,9 @@ abstract interface class CurlLayer {
   ui.Image? get back;
   ui.Image get sheet;
 
+  /// Where the page on the back is in [back]; null: the curling page's mirror ([PageCurlPainter.landed]).
+  Rect? get backRect;
+
   /// Where the grabbed edge is now (page coordinates, reading direction).
   Offset get finger;
 
@@ -325,7 +341,7 @@ abstract interface class CurlLayer {
 class _CurlPaint extends PageCurlPainter implements CurlLayer {
   _CurlPaint({required super.program, required super.sheet, required super.page, required super.grab,
       required super.finger, required super.mirror, super.shader, super.paper, super.spine, super.back, super.gap,
-      this.held});
+      super.backRect, this.held});
   @override
   final Rect? held;
 }
@@ -356,6 +372,7 @@ class _Curl {
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
   ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
+  Rect? backRect; // where that page is in [back] (null: the turning page's mirror)
   Timer? backTimer; // its second snapshot
   bool completing = true;
   Offset animFrom = Offset.zero, animTo = Offset.zero;
