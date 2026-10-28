@@ -46,6 +46,20 @@ List<Highlight> inReadingOrder(List<Highlight> marks, List<String> spine) => [..
 /// until Komga has it (as pins are).
 class BookHighlights extends ChangeNotifier {
   BookHighlights(this.api, this.bookId);
+
+  /// Local books whose ids changed with their paths (Apply edits to files: old -> new): their highlights follow (a
+  /// local book's are this device's own - nothing on Komga to move).
+  static Future<void> renameIds(Map<String, String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      for (final suffix in const ['', '.unsent']) {
+        final v = p.get('highlights.$from$suffix');
+        if (v == null) continue;
+        v is bool ? await p.setBool('highlights.$to$suffix', v) : await p.setString('highlights.$to$suffix', '$v');
+        await p.remove('highlights.$from$suffix');
+      }
+    }
+  }
   final BookSource api;
   final String bookId;
 

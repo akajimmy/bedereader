@@ -31,6 +31,12 @@ class _Share implements LibraryFs {
   Future<void> replace(String from, String to) => _real.replace(from, to);
   @override
   Future<void> delete(String path) => _real.delete(path);
+  @override
+  Future<void> move(String from, String to) => _real.move(from, to);
+  @override
+  Future<void> makeFolder(String path) => _real.makeFolder(path);
+  @override
+  Future<bool> isThere(String path) => _real.isThere(path);
 
   String _here(String path) => path.replaceFirst(RegExp(r'^\\\\nas\\books'), dir.path);
   void _check() {
@@ -150,6 +156,19 @@ void main() {
     share.away = true;
     expect(await local.pages(id), hasLength(2));
     expect(await local.pageBytes(id, 2), page);
+  });
+
+  test("a network book given a new id (Apply edits to files renamed it): its downloaded copy follows - there under "
+      'the new id, gone from the old', () async {
+    final b = await book(onShare: true);
+    final id = b['id'] as String;
+    await d.add([b]);
+    await settled();
+    final bytes = await File(d.localCopyOf(id)!).readAsBytes();
+    await d.renameLocalIds({id: 'lbRENAMED'});
+    expect(d.localCopyOf(id), isNull);
+    expect(await File(d.localCopyOf('lbRENAMED')!).readAsBytes(), bytes);
+    expect(d.isDownloaded('lbRENAMED'), isTrue);
   });
 
   test("a book in a folder on the device isn't downloaded: it's here already", () async {

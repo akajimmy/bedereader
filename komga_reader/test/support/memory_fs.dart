@@ -53,6 +53,34 @@ class MemoryFs implements LibraryFs {
   @override
   Future<void> delete(String path) async => files.remove(path);
 
+  /// Folders made (a folder here is there when a file is under it, or it was made).
+  final folders = <String>{};
+
+  @override
+  Future<void> move(String from, String to) async {
+    if (readOnly) throw StateError('read-only: $from');
+    if (await isThere(to)) throw StateError('already there: $to');
+    if (files.containsKey(from)) {
+      files[to] = files.remove(from)!;
+    } else {
+      for (final k in [...files.keys.where((k) => k.startsWith('$from/'))]) {
+        files['$to${k.substring(from.length)}'] = files.remove(k)!;
+      }
+      if (folders.remove(from)) folders.add(to);
+    }
+    written.add(to);
+  }
+
+  @override
+  Future<void> makeFolder(String path) async {
+    if (readOnly) throw StateError('read-only: $path');
+    folders.add(path);
+  }
+
+  @override
+  Future<bool> isThere(String path) async =>
+      files.containsKey(path) || folders.contains(path) || files.keys.any((k) => k.startsWith('$path/'));
+
   /// Writes done (path, in order); [readOnly]: refused.
   final written = <String>[];
   bool readOnly = false;

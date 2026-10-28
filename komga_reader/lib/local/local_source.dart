@@ -9,6 +9,7 @@ import 'package:flutter/painting.dart';
 import '../content_changed.dart';
 import '../epub/progress.dart' show komgaEpubPage;
 import '../offline/catalogue_source.dart';
+import 'apply_edits.dart' as apply;
 import 'book_names.dart';
 import 'file_zip.dart';
 import 'library_fs.dart';
@@ -676,29 +677,42 @@ class LocalSource extends CatalogueSource {
     // own key
     final fs = _fsFor(library.path);
     final path = _inFolder(place.folder, seriesFileName);
-    final doc = await _readJson(fs, path) ?? {'version': '1.0.2', 'metadata': {'type': 'comicSeries'}};
-    final now = (FolderMeta.read(seriesJson: jsonEncode(doc)).folderSeries ?? const SeriesEdits()).plus(changes);
-    final m = Map<String, Object?>.from((doc['metadata'] as Map?) ?? const {});
-    m['name'] = now.title ?? index.series[seriesId]?.name ?? ''; // (Mylar's always has a name)
-    now.publisher == null ? m.remove('publisher') : m['publisher'] = now.publisher;
-    now.status == null ? m.remove('status') : m['status'] = now.status == 'ENDED' ? 'Ended' : 'Continuing';
-    // (Mylar's description: what Komga reads as the summary)
-    (now.summary ?? '').isEmpty ? m.remove('description_text') : m['description_text'] = now.summary;
-    doc['metadata'] = m;
-    final ownKeys = {
-      if (now.titleSort != null) 'titleSort': now.titleSort,
-      if (now.readingDirection != null) 'readingDirection': now.readingDirection,
-      if (now.status != null) 'status': now.status, // (exactly: Mylar's has no hiatus or abandoned)
-      if (now.genres != null) 'genres': now.genres, // (none in Mylar's)
-      if (now.tags != null) 'tags': now.tags,
-    };
-    ownKeys.isEmpty ? doc.remove('bedereader') : doc['bedereader'] = ownKeys;
-    final text = const JsonEncoder.withIndent('  ').convert(doc);
+    final doc = await readMetaJson(fs, path);
+    final now = ((doc == null ? null : FolderMeta.read(seriesJson: jsonEncode(doc)).folderSeries) ?? const SeriesEdits())
+        .plus(changes);
+    final text = seriesJsonText(doc, now, index.series[seriesId]?.name ?? '');
     await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
     final was = index.meta[place.folder];
     await _remember(index, place.folder, FolderMeta(folderSeries: FolderMeta.read(seriesJson: text).folderSeries,
         books: was?.books ?? const {}, series: was?.series ?? const {}));
   }
+
+  // ---- Apply edits to files (lib/local/apply_edits.dart; user, 2026-10-27) ---------------------------------------
+  /// What Apply would do to [library] now - for the confirmation before it.
+  Future<apply.ApplyPlan> planApply(LocalLibrary library) async {
+    final index = store.libraries[library.id];
+    if (index == null) return apply.ApplyPlan(library, const [], const [], const []);
+    return apply.planApply(_fsFor(library.path), library, index);
+  }
+
+  /// [plan] carried out (not while a scan runs; the books let go first - Windows won't move a file held open). What's
+  /// kept under the books' and series' ids follows them: their reading progress and page sizes here, the rest through
+  /// [onMoved]. The library is scanned again after.
+  Future<apply.ApplyResult> applyEdits(apply.ApplyPlan plan, {void Function(int done, int all)? onStep}) async {
+    await _scan?.catchError((Object _) {});
+    await closeFiles();
+    final r = await apply.runApply(_fsFor(plan.library.path), plan, onStep: onStep);
+    if (r.ids.isNotEmpty) {
+      await store.renameIds(r.ids);
+      onMoved?.call(r.ids);
+    }
+    await rescan();
+    return r;
+  }
+
+  /// Books' and series' ids changed with their paths (old -> new; Apply edits to files): the app's stores keyed by them
+  /// follow (pins, settings, highlights, downloads...).
+  void Function(Map<String, String> ids)? onMoved;
 
   /// [folder]'s .bedereader.json changed by [change] - read as it is now first (edits made on another device since the
   /// last scan kept), written whole, and the books listed with it at once.
@@ -706,7 +720,7 @@ class LocalSource extends CatalogueSource {
       void Function(Map<String, Object?> doc) change) async {
     final fs = _fsFor(library.path);
     final path = _inFolder(folder, editsFileName);
-    final there = await _readJson(fs, path);
+    final there = await readMetaJson(fs, path);
     final doc = there ?? <String, Object?>{};
     doc['bedereader'] = 1;
     change(doc);
@@ -730,20 +744,6 @@ class LocalSource extends CatalogueSource {
 
   static String _inFolder(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
 
-  /// A metadata file as it is now: null if it isn't there. One that's there but can't be read throws - never written
-  /// over.
-  static Future<Map<String, Object?>?> _readJson(LibraryFs fs, String path) async {
-    final Uint8List bytes;
-    try {
-      bytes = await readWhole(fs, path);
-    } catch (e) {
-      if (fs.classify(e) == FileTrouble.gone) return null;
-      rethrow;
-    }
-    final j = jsonDecode(utf8.decode(bytes, allowMalformed: true));
-    if (j is! Map) throw FormatException('Not a metadata file: $path');
-    return j.cast<String, Object?>();
-  }
 
   // ---- what only Komga has ------------------------------------------------------------------------------------------
   // (settings are this device's own here: nothing to sync)

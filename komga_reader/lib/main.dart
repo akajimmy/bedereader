@@ -39,7 +39,9 @@ import 'local/local_library.dart';
 import 'screens/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
 import 'local/smb_fs.dart' show Shares;
+import 'highlights.dart' show BookHighlights;
 import 'open_with.dart';
+import 'reader/comic_renderer.dart' show StripPlaces;
 import 'side_menu.dart';
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
@@ -171,6 +173,15 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       final local = _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'),
           await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
       local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
+      // books and series given new ids by Apply edits to files (their paths changed): what's kept under them follows
+      local.onMoved = (ids) {
+        Pins.instance.renameIds(ids);
+        OnDeckHidden.instance.renameIds(ids);
+        AppSettings.instance.renameIds(ids);
+        unawaited(BookHighlights.renameIds(ids));
+        unawaited(StripPlaces.renameIds(ids));
+        unawaited(Downloads.instance.renameLocalIds(ids));
+      };
       // offline mode is the network libraries' too: the switch is there for them, and they go offline with it
       Connection.instance.hasShares = () => local.hasShares;
       local.offline = Connection.instance.offline;

@@ -76,6 +76,16 @@ abstract interface class LibraryFs {
   /// [path] deleted (a rewrite's new copy that didn't check out).
   Future<void> delete(String path);
 
+  /// A file or folder at [from] moved to [to] (renamed, or into another folder) - refused if [to] is taken (Apply edits
+  /// to files - lib/local/apply_edits.dart).
+  Future<void> move(String from, String to);
+
+  /// A folder made at [path] (its parent there already); one there already is left as it is.
+  Future<void> makeFolder(String path);
+
+  /// Whether a file or folder is at [path].
+  Future<bool> isThere(String path);
+
   /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
   /// and how many books.
   Future<FolderLook> look(String folder);
@@ -207,6 +217,18 @@ class LocalFs implements LibraryFs {
 
   @override
   Future<void> delete(String path) => File(path).delete();
+
+  @override
+  Future<void> move(String from, String to) async {
+    if (await isThere(to)) throw FileSystemException('Already there', to);
+    await (await FileSystemEntity.isDirectory(from) ? Directory(from).rename(to) : File(from).rename(to));
+  }
+
+  @override
+  Future<void> makeFolder(String path) => Directory(path).create();
+
+  @override
+  Future<bool> isThere(String path) async => await FileSystemEntity.type(path) != FileSystemEntityType.notFound;
 
   @override
   Future<void> writeWhole(String path, Uint8List bytes) async {

@@ -106,6 +106,19 @@ abstract class SyncedIds extends ChangeNotifier {
     });
   }
 
+  /// Local books and series whose ids changed with their paths (Apply edits to files: old -> new): they stay in their
+  /// sets.
+  void renameIds(Map<String, String> ids) {
+    if (!sets.values.any((s) => s.any(ids.containsKey))) return;
+    change(() {
+      for (final s in sets.values) {
+        for (final MapEntry(key: from, value: to) in ids.entries) {
+          if (s.remove(from)) s.add(to);
+        }
+      }
+    });
+  }
+
   /// Id [id] in or out of set [name].
   @protected
   void put(String name, String id, bool inSet) => change(() => inSet ? sets[name]!.add(id) : sets[name]!.remove(id));

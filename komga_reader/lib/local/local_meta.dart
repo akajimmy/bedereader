@@ -1,7 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'book_names.dart';
-import 'library_fs.dart' show FsEntry;
+import 'library_fs.dart';
 import 'local_library.dart';
 import 'local_store.dart';
 
@@ -66,7 +67,7 @@ class SeriesEdits {
 /// them, as edited.
 class BookEdits {
   const BookEdits({this.title, this.number, this.numberSort, this.dateSet = false, this.releaseDate, this.series,
-      this.summary, this.authors, this.tags});
+      this.summary, this.authors, this.tags, this.applied});
   final String? title, number;
   final num? numberSort;
   final bool dateSet;
@@ -77,6 +78,10 @@ class BookEdits {
   final String? summary;
   final List<(String, String)>? authors;
   final List<String>? tags;
+
+  /// What Apply edits to files last wrote into the book (lib/local/apply_edits.dart: its fields, as JSON) - the same
+  /// again isn't written again. Any edit since drops it.
+  final String? applied;
 
   bool get isEmpty => title == null && number == null && numberSort == null && !dateSet && series == null &&
       summary == null && authors == null && tags == null;
@@ -99,7 +104,7 @@ class BookEdits {
         if (numberSort != null) 'numberSort': numberSort, if (dateSet) 'releaseDate': releaseDate,
         if (series != null) 'series': series, if (summary != null) 'summary': summary,
         if (authors != null) 'authors': [for (final (n, r) in authors!) {'name': n, 'role': r}],
-        if (tags != null) 'tags': tags,
+        if (tags != null) 'tags': tags, if (applied != null) 'applied': applied,
       };
 
   factory BookEdits.fromJson(Map j) => BookEdits(
@@ -108,6 +113,7 @@ class BookEdits {
         releaseDate: _date(j['releaseDate']), series: _text(j['series']),
         summary: j['summary'] is String ? j['summary'] as String : null,
         authors: j['authors'] is List ? _authors(j['authors']) : null, tags: _listOrNull(j['tags']),
+        applied: j['applied'] is String ? j['applied'] as String : null,
       );
 }
 
@@ -126,6 +132,43 @@ List<(String, String)> _authors(Object? v) => [
 
 String? _text(Object? v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
 String? _date(Object? v) => v is String && DateTime.tryParse(v) != null ? v : null;
+
+/// A series.json's text: [doc] (the file as it is; null: none yet) with [e] in it - Mylar's format kept (what Komga
+/// reads: name, publisher, status, description), with what that has no place for in the app's own key. [name]: its
+/// name when [e] has no title (Mylar's always has one).
+String seriesJsonText(Map<String, Object?>? doc, SeriesEdits e, String name) {
+  final d = doc ?? {'version': '1.0.2', 'metadata': {'type': 'comicSeries'}};
+  final m = Map<String, Object?>.from((d['metadata'] as Map?) ?? const {});
+  m['name'] = e.title ?? name;
+  e.publisher == null ? m.remove('publisher') : m['publisher'] = e.publisher;
+  e.status == null ? m.remove('status') : m['status'] = e.status == 'ENDED' ? 'Ended' : 'Continuing';
+  (e.summary ?? '').isEmpty ? m.remove('description_text') : m['description_text'] = e.summary;
+  d['metadata'] = m;
+  final own = {
+    if (e.titleSort != null) 'titleSort': e.titleSort,
+    if (e.readingDirection != null) 'readingDirection': e.readingDirection,
+    if (e.status != null) 'status': e.status, // (exactly: Mylar's has no hiatus or abandoned)
+    if (e.genres != null) 'genres': e.genres, // (none in Mylar's)
+    if (e.tags != null) 'tags': e.tags,
+  };
+  own.isEmpty ? d.remove('bedereader') : d['bedereader'] = own;
+  return const JsonEncoder.withIndent('  ').convert(d);
+}
+
+/// A metadata file (series.json, .bedereader.json) as it is now: null if it isn't there. One that's there but can't be
+/// read throws - never written over.
+Future<Map<String, Object?>?> readMetaJson(LibraryFs fs, String path) async {
+  final Uint8List bytes;
+  try {
+    bytes = await readWhole(fs, path);
+  } catch (e) {
+    if (fs.classify(e) == FileTrouble.gone) return null;
+    rethrow;
+  }
+  final j = jsonDecode(utf8.decode(bytes, allowMalformed: true));
+  if (j is! Map) throw FormatException('Not a metadata file: $path');
+  return j.cast<String, Object?>();
+}
 
 /// Mylar's statuses, as Komga reads them.
 const _mylarStatus = {'continuing': 'ONGOING', 'ended': 'ENDED'};
