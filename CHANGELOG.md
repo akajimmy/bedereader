@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 170 - 2026-10-28
+
 **New**
 
 - Crop edges has Auto (comics): each page's border is found and cut off, leaving an even margin round the art. Pages keep one shape through the book, so they show at the same size; covers, full-bleed pages and anything doubtful are shown whole, and art that runs off a side is never cut on that side. The first time a book is opened on Auto its pages are looked over first ("Finding page borders"); after that it opens straight away. A temporary Auto crop border setting under it sets how much margin is kept (2.5% to start).
@@ -19,8 +23,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 - A book's tags weren't shown anywhere: they're on its Details screen now.
 - Editing a local series showed its title in Sort title, so a series given a new title kept sorting under its old one; Sort title is empty unless the series has one of its own.
 - After a series was edited from its own screen, the bar at the top kept its old name until you left and came back.
-
-## 1.7.0
 
 ### Build 169 - 2026-10-28
 
