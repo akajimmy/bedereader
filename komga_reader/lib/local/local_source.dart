@@ -771,30 +771,54 @@ class LocalSource extends CatalogueSource {
   Future<void> deleteBookFile(String bookId) async {
     final b = _books[bookId];
     if (b == null) throw _notHere(bookId);
-    if (_offline && splitUnc(b.path) != null) throw NotAvailableOffline('Deleting a book');
-    await _scan?.catchError((Object _) {}); // (a scan ending after would put it back)
-    // its archive let go first: a file held open can't be deleted on Windows (the reader deleting the book it shows)
-    final open = _open.remove(bookId);
-    await open?.close();
-    await _fsFor(b.path).delete(b.path);
-    final gone = {bookId};
-    for (final index in store.libraries.values) {
-      final was = index.books.remove(bookId);
-      if (was == null) continue;
-      if (!index.books.values.any((x) => x.seriesId == was.seriesId)) {
-        index.series.remove(was.seriesId);
-        gone.add(was.seriesId);
-      }
-      await store.putLibrary(index);
-    }
-    await store.clearProgress(bookId);
-    onRemoved?.call(gone);
-    _rebuild();
-    changed.value++;
-    contentChanged.value++;
+    await _delete([b], 'Deleting a book');
   }
+
+  /// Every book of the series as listed (its edits' too: a book moved into it from another folder) deleted, as
+  /// [deleteBookFile] does one, and the series with them (user, 2026-10-28). The folder and its metadata files stay.
   @override
-  Future<void> deleteSeriesFiles(String seriesId) async => throw NeedsKomga('Deleting a series');
+  Future<void> deleteSeriesFiles(String seriesId) async {
+    final books = [for (final b in _books.values) if (b.seriesId == seriesId) b];
+    if (books.isEmpty) throw _notHere(seriesId);
+    await _delete(books, 'Deleting a series', series: seriesId);
+  }
+
+  /// [books]' files deleted, one by one, and each taken out of its library as it goes (a failure part-way leaves the
+  /// rest listed, the ones deleted gone); a series left with no book goes too. The pins to them are told
+  /// ([onRemoved]).
+  Future<void> _delete(List<LocalBook> books, String what, {String? series}) async {
+    if (_offline && books.any((b) => splitUnc(b.path) != null)) throw NotAvailableOffline(what);
+    await _scan?.catchError((Object _) {}); // (a scan ending after would put them back)
+    final gone = <String>{};
+    try {
+      for (final b in books) {
+        // its archive let go first: a file held open can't be deleted on Windows (the reader deleting the book it
+        // shows)
+        final open = _open.remove(b.id);
+        await open?.close();
+        await _fsFor(b.path).delete(b.path);
+        gone.add(b.id);
+        for (final index in store.libraries.values) {
+          final was = index.books.remove(b.id);
+          if (was == null) continue;
+          if (!index.books.values.any((x) => x.seriesId == was.seriesId)) {
+            index.series.remove(was.seriesId);
+            gone.add(was.seriesId);
+          }
+          await store.putLibrary(index);
+        }
+        await store.clearProgress(b.id);
+      }
+      if (series != null) gone.add(series);
+    } finally {
+      if (gone.isNotEmpty) {
+        onRemoved?.call(gone);
+        _rebuild();
+        changed.value++;
+        contentChanged.value++;
+      }
+    }
+  }
   @override
   Future<void> renameReadList(String id, String name) async => throw NeedsKomga('Renaming a read list');
   @override

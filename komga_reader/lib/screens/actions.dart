@@ -296,8 +296,13 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
     if (choice == 'unread') await api.markSeriesUnread(s['id']);
     if (choice == 'delete') {
       if (!context.mounted) return;
-      final ok = await confirmDelete(context, 'Delete the series "$title"?',
-          'This deletes all ${s['booksCount'] ?? ''} books of the series from the server. It cannot be undone from the app.');
+      // (user, 2026-10-28: "clear that you would delete the series and all books underneath it from the device or
+      // server")
+      final n = (s['booksCount'] as num?)?.toInt();
+      final books = n == null ? 'every book in it' : n == 1 ? 'its 1 book' : 'all $n of its books';
+      final ok = await confirmDelete(context, 'Delete the series "$title" and all its books?',
+          'This deletes the series and $books - the files themselves - from ${deletesFrom(api, [s['id'] as String])}. '
+          'It cannot be undone from the app.');
       if (!ok) return;
       await api.deleteSeriesFiles(s['id']);
       if (inSeries && context.mounted) {
@@ -540,8 +545,9 @@ Future<bool> confirmBulk(BuildContext context, String title, String body, String
   return r == true;
 }
 
-/// Where deleting [ids]' files deletes them from, for the confirmation: the server (Komga's), this device (a local
-/// library's folder), the share (a network library's) - "where they are" when they're in more than one.
+/// Where deleting [ids]' files (books' or series') deletes them from, for the confirmation: the server (Komga's), this
+/// device (a local library's folder), the share (a network library's) - "where they are" when they're in more than
+/// one.
 String deletesFrom(BookSource api, List<String> ids) {
   final local = api is CombinedSource ? api.local : null;
   final places = {
