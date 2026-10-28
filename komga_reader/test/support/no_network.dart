@@ -40,4 +40,8 @@ class TestKomga extends Komga {
       throw StateError('$runtimeType built outside noNetwork(): its un-overridden calls would reach the network');
     }
   }
+
+  /// Not an admin (Edit not offered) - Komga's own asks its account; a test that edits says otherwise.
+  @override
+  Future<bool> canEditMetadata(String id) async => false;
 }

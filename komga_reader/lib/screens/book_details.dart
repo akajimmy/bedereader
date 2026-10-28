@@ -16,6 +16,7 @@ import '../widgets/setting_rows.dart' show hintColour;
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/source_badge.dart';
 import '../widgets/error_text.dart';
+import 'edit_metadata.dart';
 import 'open_book.dart';
 import 'series.dart';
 import '../book_source.dart';
@@ -41,6 +42,7 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
   Object? _error; // shown through lib/errors.dart
   String? _root; // its library's folder (local) or root (Komga): its path shown from there
   bool _gone = false; // its file missing: Not Found
+  bool _canEdit = false; // Edit offered (lib/screens/edit_metadata.dart)
 
   BookSource get api => widget.api;
 
@@ -49,6 +51,9 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     super.initState();
     _load();
     _whereItIs();
+    canEditIn(api, widget.book['id'] as String).then((v) {
+      if (mounted) setState(() => _canEdit = v);
+    });
   }
 
   /// Where the book's file is - its library's root, for its path - and whether the file is still there (user,
@@ -178,7 +183,14 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
       // pinned to Home from here too (user, 2026-10-16), as a series or a read list from theirs
       appBar: AppBar(title: const Text('Details'),
-          actions: [PinButton(current: Pin.book(_book)), const FullscreenExit()]),
+          actions: [
+            if (_canEdit)
+              IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () async {
+                if (await editBook(context, api, _book as Map)) unawaited(_load());
+              }),
+            PinButton(current: Pin.book(_book)),
+            const FullscreenExit(),
+          ]),
       // pull down to refresh (re-reads the book and series from Komga)
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
       // edge behind it (user, 2026-10-07)

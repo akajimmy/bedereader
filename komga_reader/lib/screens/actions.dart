@@ -9,6 +9,7 @@ import '../offline/downloads.dart';
 import '../pins.dart';
 import '../widgets/error_text.dart';
 import 'book_details.dart';
+import 'edit_metadata.dart';
 import 'series.dart';
 import 'series_details.dart';
 import '../book_source.dart';
@@ -23,6 +24,8 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
   final title = bookTitle(b);
   final dl = Downloads.instance;
   final pinned = Pins.instance.find(Pin.book(b));
+  final canEdit = await canEditIn(api, b['id'] as String);
+  if (!context.mounted) return null;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -61,6 +64,9 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
             : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
                 subtitle: const Text('Skips this book; its series comes back once it is read'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
+        if (canEdit)
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit…'),
+              onTap: () => Navigator.pop(ctx, 'edit')),
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
@@ -75,6 +81,10 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'edit') {
+    if (await editBook(context, api, b as Map)) onChanged();
     return null;
   }
   if (choice == 'pin') {
@@ -209,6 +219,8 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
   final title = (s['metadata']?['title'] ?? s['name']) as String;
   final view = listPin('series', s['id'] as String, title);
   final pinned = Pins.instance.find(view);
+  final canEdit = await canEditIn(api, s['id'] as String);
+  if (!context.mounted) return;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -230,6 +242,9 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
             : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
                 subtitle: const Text('This series never shows in On deck'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
+        if (canEdit)
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit…'),
+              onTap: () => Navigator.pop(ctx, 'edit')),
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
@@ -242,6 +257,10 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
   if (choice == null || !context.mounted) return;
   if (choice == 'select') {
     onSelectMultiple!();
+    return;
+  }
+  if (choice == 'edit') {
+    if (await editSeries(context, api, s as Map)) onChanged();
     return;
   }
   if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
