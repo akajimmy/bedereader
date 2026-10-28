@@ -168,6 +168,12 @@ void main() {
       expect(jsonDecode(r.body), {'title': 'One', 'titleLock': true, 'releaseDate': null, 'releaseDateLock': true});
       expect(changes, contains('seriesName'), reason: "the caller's map left as it was");
 
+      // a title, sort title or number made empty: not sent (Komga can't have those empty) - the rest is
+      await api.editSeriesMetadata('S1', {'titleSort': '', 'summary': ''});
+      expect(jsonDecode(sent.last.body), {'summary': '', 'summaryLock': true});
+      await api.editBookMetadata('B1', {'number': '', 'title': ''});
+      expect(jsonDecode(sent.last.body), isEmpty);
+
       await api.editSeriesMetadata('S1', {'status': 'ENDED'});
       expect((sent.last.method, sent.last.url.path), ('PATCH', '/api/v1/series/S1/metadata'));
       expect(jsonDecode(sent.last.body), {'status': 'ENDED', 'statusLock': true});
