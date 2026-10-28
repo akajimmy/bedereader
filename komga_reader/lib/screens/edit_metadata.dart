@@ -250,6 +250,14 @@ const readingDirections = {
 };
 const seriesStatuses = {'ONGOING': 'Ongoing', 'ENDED': 'Ended', 'HIATUS': 'Hiatus', 'ABANDONED': 'Abandoned'};
 
+/// A series' sort title of its own: '' when it's just its title (as listings give it with none set - the tablet,
+/// build 169: the editor showed the title there, and a retitled series kept sorting under its old name).
+String ownSortTitle(Map series) {
+  final m = (series['metadata'] as Map?) ?? const {};
+  final sort = '${m['titleSort'] ?? ''}', title = '${m['title'] ?? series['name'] ?? ''}';
+  return sort == title ? '' : sort;
+}
+
 /// The changes made to a series' fields, by Komga's names - only what differs from [series].
 Map<String, Object?> seriesChanges(Map series, {required String title, required String titleSort,
     required String? readingDirection, required String? status, required String publisher, String? summary,
@@ -257,7 +265,7 @@ Map<String, Object?> seriesChanges(Map series, {required String title, required 
   final m = (series['metadata'] as Map?) ?? const {};
   final out = <String, Object?>{};
   if (title.trim() != '${m['title'] ?? series['name'] ?? ''}') out['title'] = title.trim();
-  if (titleSort.trim() != '${m['titleSort'] ?? ''}') out['titleSort'] = titleSort.trim();
+  if (titleSort.trim() != ownSortTitle(series)) out['titleSort'] = titleSort.trim();
   final dir = m['readingDirection'] as String?;
   if (readingDirection != dir) out['readingDirection'] = readingDirection; // (null: not set)
   if (status != null && status != m['status']) out['status'] = status;
@@ -283,7 +291,7 @@ class _SeriesEditor extends StatefulWidget {
 class _SeriesEditorState extends State<_SeriesEditor> {
   Map get _m => (widget.series['metadata'] as Map?) ?? const {};
   late final _title = TextEditingController(text: '${_m['title'] ?? widget.series['name'] ?? ''}');
-  late final _sort = TextEditingController(text: '${_m['titleSort'] ?? ''}');
+  late final _sort = TextEditingController(text: ownSortTitle(widget.series));
   late String? _direction = readingDirections.containsKey(_m['readingDirection']) ? _m['readingDirection'] as String : null;
   late String? _status = seriesStatuses.containsKey(_m['status']) ? _m['status'] as String : null;
   String _publisher = '';

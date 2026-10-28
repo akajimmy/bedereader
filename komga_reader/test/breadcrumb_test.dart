@@ -155,4 +155,36 @@ void main() {
     await settle(tester);
     expect(find.byType(LibraryScreen), findsOneWidget);
   });
+
+  testWidgets("a series renamed from its own screen's actions: its bar shows the new name at once (it kept the old one - "
+      'the tablet, build 169)', (tester) async {
+    final api = noNetwork(_Renaming.new);
+    await tester.pumpWidget(MaterialApp(home: SeriesScreen(api: api,
+        series: const {'id': 'S1', 'name': 'Series 1', 'libraryId': 'L1', 'metadata': {'title': 'Series 1'}})));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Series actions'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Edit…'));
+    await tester.tap(find.text('Edit…'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('edit-title')), 'Series One');
+    await tester.tap(find.byKey(const ValueKey('edit-save')));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Series One')), findsOneWidget);
+  });
+}
+
+/// A server whose series can be edited, and is renamed by it.
+class _Renaming extends BrowseServer {
+  String title = 'Series 1';
+  @override
+  Future<bool> canEditMetadata(String id) async => true;
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) async =>
+      title = changes['title'] as String? ?? title;
+  @override
+  Future<Map<String, dynamic>?> oneSeries(String id) async =>
+      {'id': id, 'name': title, 'libraryId': 'L1', 'metadata': {'title': title}};
+  @override
+  Future<List<String>> publishers({String? libraryId, String? collectionId}) async => const [];
 }

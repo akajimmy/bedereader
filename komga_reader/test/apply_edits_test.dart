@@ -21,6 +21,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/memory_fs.dart';
 import 'support/zip_writer.dart';
+import 'package:komga_reader/local/library_fs.dart' show fileNameOf;
 
 final _page = Uint8List.fromList([...pngHead(10, 10), 1, 2, 3]);
 final _cbz = zipOf({'1.png': _page});
@@ -274,5 +275,24 @@ void main() {
     expect((p.getString('highlights.lbNEW'), p.getString('highlights.lbOLD')), ('[]', null));
     expect(await StripPlaces.load('lbNEW'), (3, 0.5));
     expect(await StripPlaces.load('lbOLD'), isNull);
+  });
+
+  test("a book with no number is named after its series and its own title - it was named after the series alone and "
+      "lost its title (the tablet, build 169); with no title of its own it keeps its name", () async {
+    await open({
+      'lib/Expanse/Expanse_DragonTooth_005_DIGITAL.cbz': _cbz,
+      'lib/Expanse/Expanse Extras.cbz': _cbz,
+      'lib/Expanse/series.json': _json({'metadata': {'name': 'The Expanse'}}),
+      'lib/Expanse/.bedereader.json': _json({'books': {
+        'Expanse_DragonTooth_005_DIGITAL.cbz': {'title': 'Dragon Tooth'},
+        'Expanse Extras.cbz': {'summary': 'Extras.'},
+      }}),
+    });
+    final plan = await local.planApply(library);
+    final to = {for (final b in plan.books) fileNameOf(b.from): fileNameOf(b.to)};
+    expect(to['Expanse_DragonTooth_005_DIGITAL.cbz'], 'The Expanse - Dragon Tooth.cbz');
+    expect(to['Expanse Extras.cbz'], 'Expanse Extras.cbz', reason: 'no title of its own: its name kept');
+    await local.applyEdits(plan);
+    expect((await local.book(idOf('The Expanse - Dragon Tooth.cbz')))!['metadata']['title'], 'Dragon Tooth');
   });
 }
