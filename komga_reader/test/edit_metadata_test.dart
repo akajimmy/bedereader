@@ -143,6 +143,20 @@ void main() {
     expect(api.saved['B1'], {'number': 'Annual', 'numberSort': 6.5});
   });
 
+  testWidgets('a number deleted a character at a time takes the sort number with it - it stayed at the first figure '
+      '(the tablet, build 170: "4" left of "42")', (tester) async {
+    final api = noNetwork(_Saved.new);
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (c) => TextButton(
+        onPressed: () => editBook(c, api, _credited()), child: const Text('go')))));
+    await tester.tap(find.text('go'));
+    await tester.pumpAndSettle();
+    String sortShown() => tester.widget<TextField>(find.byKey(const ValueKey('edit-sort-number'))).controller!.text;
+    for (final typed in ['42', '4', '']) {
+      await tester.enterText(find.byKey(const ValueKey('edit-number')), typed);
+    }
+    expect(sortShown(), '');
+  });
+
   group("Komga's side", () {
     Komga komga(List<http.Request> sent, {List<String> roles = const ['ADMIN']}) => http.runWithClient(
         () => Komga('http://komga.test:25600', 'key'),
