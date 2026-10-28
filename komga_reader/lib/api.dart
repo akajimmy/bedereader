@@ -769,6 +769,29 @@ class Komga implements BookSource {
   Future<void> deleteBookFile(String bookId) => _send('DELETE', '/api/v1/books/$bookId/file');
   @override
   Future<void> deleteSeriesFiles(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/file');
+
+  // ---- metadata editing: admin accounts only (Komga's rule)
+  Future<bool>? _admin; // asked once (a failed ask: asked again next time)
+
+  @override
+  Future<bool> canEditMetadata(String id) => _admin ??= me().then(
+      (m) => ((m?['roles'] as List?) ?? const []).contains('ADMIN'),
+      onError: (Object _) {
+        _admin = null;
+        return false;
+      });
+
+  /// Each field changed is locked too, as Komga's own editor does: a metadata refresh doesn't put the file's back.
+  static Map<String, Object?> _locked(Map<String, Object?> changes) =>
+      {for (final MapEntry(:key, :value) in changes.entries) ...{key: value, '${key}Lock': true}};
+
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) =>
+      _send('PATCH', '/api/v1/books/$bookId/metadata', _locked({...changes}..remove('seriesName'))); // (a Komga book's series is its folder)
+
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) =>
+      _send('PATCH', '/api/v1/series/$seriesId/metadata', _locked(changes));
 }
 
 /// Komga answered with an error status. What people see comes from lib/errors.dart; this text is for the error log.

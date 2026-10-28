@@ -353,6 +353,14 @@ class CombinedSource implements BookSource {
   @override
   Future<void> renameCollection(String id, String name) => sourceOf(id).renameCollection(id, name);
   @override
+  Future<bool> canEditMetadata(String id) => sourceOf(id).canEditMetadata(id);
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) =>
+      sourceOf(bookId).editBookMetadata(bookId, changes);
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) =>
+      sourceOf(seriesId).editSeriesMetadata(seriesId, changes);
+  @override
   Future<Map<String, dynamic>?> book(String id) => sourceOf(id).book(id);
   @override
   Future<Map<String, dynamic>> collectionSeries(String collectionId,
