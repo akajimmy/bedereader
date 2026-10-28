@@ -56,6 +56,13 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - **Details** for books and series: summary, credits, publisher, genres and more.
 - Mark books, whole series or read lists as read or unread; select several books at once; hide books or series from
   On deck.
+- **Edit** a book's or a series' details: title, number and sort number, release date, summary, credits, tags; a
+  series' sort title, reading direction, status, publisher and genres. On Komga, as Komga's own editor does (an admin
+  account); for folders and shares the edits are kept beside the books (a series.json, Mylar's format), and **Apply
+  edits to files** puts them into the files when you choose - ComicInfo.xml, an EPUB's metadata, file and folder
+  names. A local book can be moved to another series.
+- **Open with**: a CBZ, CBR or EPUB from outside the app opens straight in the reader - Open with on Windows and
+  Android, Open in on iPhone and iPad.
 
 **Reading**
 - Fit to screen, width or height; pinch, double-tap or Ctrl+wheel to zoom; a zoomed-in page is read across and down
@@ -66,8 +73,10 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
   shifted by one.
 - A page slider with a preview of the page you're picking (the previews can be switched off for a slow server).
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
-- **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
-  sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).
+- **Image settings per series**: **Crop edges** (Off, 2%, 4%, 6%, or **Auto**: each page's border found and cut off,
+  leaving an even margin round the art, one page shape through the book; covers and full-bleed pages shown whole),
+  **Enhance** (cleans up speckle and grain, then sharpens - on the graphics chip, once per page) and **Enhance
+  colours** (whitens yellowed paper, deepens faded ink).
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
   keeps the screen's own brightness, so it never opens too dark to use), black, grey or white page colours, and the
   screen kept on while reading if you want it (for a few minutes after each page, or always).
