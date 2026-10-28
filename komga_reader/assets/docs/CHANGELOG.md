@@ -12,6 +12,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Fixed**
 
 - Crop edges on Auto, chosen part way through a book that hadn't been looked over yet: after "Finding page borders" the page stayed black until you turned it; the page you're on now shows, cropped.
+- Editing a book: deleting its number a character at a time left the sort number at the number's first figure; it now empties with the number.
 
 ## 1.7.0
 
