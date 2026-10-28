@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- eBooks: Paragraph spacing is back in the reader's eBook settings panel, under Line spacing.
+
 ## 1.7.0
 
 ### Build 173 - 2026-10-28

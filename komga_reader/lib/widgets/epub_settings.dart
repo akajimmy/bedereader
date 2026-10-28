@@ -33,7 +33,7 @@ List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<Epu
     ];
 
 /// The eBook reader's panel, "eBook settings": what's changed mid-book (user, 2026-10-21, trimmed): font, size, line
-/// spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
+/// spacing, paragraph spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
 /// settings, a tap away).
 ///
 /// [bookId]: the book open (user, 2026-10-27: per-book settings, as comics' per series) - "This book" leads with
@@ -71,7 +71,13 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api
           ),
       ]),
     SettingsGroup(title: 'Text', children: [
-      for (final row in [..._fontRows(e, set), _sizeRow(e, set), _lineSpacingRow(e, set), _marginsRow(e, set)])
+      for (final row in [
+        ..._fontRows(e, set),
+        _sizeRow(e, set),
+        _lineSpacingRow(e, set),
+        _paragraphGapRow(e, set), // back in the panel (user, 2026-10-28)
+        _marginsRow(e, set),
+      ])
         follows(row),
     ]),
     SettingsGroup(title: 'Page', children: [
