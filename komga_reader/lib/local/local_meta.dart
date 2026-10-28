@@ -1,8 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'book_names.dart';
 import 'library_fs.dart' show FsEntry;
 import 'local_library.dart';
@@ -18,22 +15,6 @@ import 'local_store.dart';
 //                     lower case>").
 // The scan reads them; the books and series are listed with them applied ([withEdits]) - what the scan found stays as
 // the files say.
-
-/// Settings > Libraries > Metadata edits (user, 2026-10-27): kept alongside the books (the default) or written into
-/// the book files (a CBZ's ComicInfo.xml, an EPUB's package file - what can't go there goes alongside). This device's
-/// own setting.
-class EditsInFiles extends ValueNotifier<bool> {
-  EditsInFiles._() : super(false);
-  static final instance = EditsInFiles._();
-  static const _key = 'local.editsInFiles';
-
-  Future<void> load() async => value = (await SharedPreferences.getInstance()).getBool(_key) ?? false;
-
-  Future<void> set(bool on) async {
-    value = on;
-    await (await SharedPreferences.getInstance()).setBool(_key, on);
-  }
-}
 
 /// The two file names.
 const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
@@ -111,20 +92,6 @@ class BookEdits {
         summary: changes.containsKey('summary') ? ((changes['summary'] as String?) ?? '').trim() : summary,
         authors: changes.containsKey('authors') ? _authors(changes['authors']) : authors,
         tags: changes.containsKey('tags') ? _list(changes['tags']) : tags,
-      );
-
-  /// The same edits without those of [keys] (Komga's names) - what's been written into the file itself, read from
-  /// there now.
-  BookEdits without(Set<String> keys) => BookEdits(
-        title: keys.contains('title') ? null : title,
-        number: keys.contains('number') ? null : number,
-        numberSort: keys.contains('numberSort') ? null : numberSort,
-        dateSet: keys.contains('releaseDate') ? false : dateSet,
-        releaseDate: keys.contains('releaseDate') ? null : releaseDate,
-        series: series,
-        summary: keys.contains('summary') ? null : summary,
-        authors: keys.contains('authors') ? null : authors,
-        tags: keys.contains('tags') ? null : tags,
       );
 
   Map<String, Object?> toJson() => {

@@ -1,12 +1,12 @@
-// Metadata editing, more fields (user, 2026-10-28): a book's sort number, summary, credits and tags; a series'
-// summary, genres and tags - on Komga, alongside local and network books, and in the files.
+// Metadata editing, more fields (user, 2026-10-27): a book's sort number, summary, credits and tags; a series'
+// summary, genres and tags - on Komga, and kept alongside local and network books (and what goes into the files when
+// edits are applied to them).
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:komga_reader/local/file_zip.dart';
 import 'package:komga_reader/local/in_file_meta.dart';
 import 'package:komga_reader/local/local_library.dart';
 import 'package:komga_reader/local/local_meta.dart';
@@ -130,7 +130,6 @@ void main() {
       addTearDown(() async {
         await local.closeFiles();
         await data.delete(recursive: true);
-        await EditsInFiles.instance.set(false);
       });
       await local.rescan();
     }
@@ -168,24 +167,6 @@ void main() {
       final s = (await local.oneSeries(seriesId))!['metadata'] as Map;
       expect([s['summary'], s['genres'], s['tags']], ['Star-crossed.', ['Sci-fi'], ['war']]);
       expect(await local.genres(), contains('Sci-fi'));
-    });
-
-    test('in the files: a CBZ\'s summary and credits in its ComicInfo (read back from there); its tags there and '
-        'alongside (not read from ComicInfo), its sort number alongside (ComicInfo has none)', () async {
-      await open();
-      await EditsInFiles.instance.set(true);
-      await local.editBookMetadata(idOf('Saga 02.cbz'), edit);
-      final z = await FileZip.open(await fs.open('lib/Saga/Saga 02.cbz'));
-      final info = utf8.decode((await z.read('ComicInfo.xml'))!);
-      await z.close();
-      expect(info, allOf(contains('<Summary>A war.</Summary>'), contains('<Writer>Brian K. Vaughan</Writer>'),
-          contains('<Tags>space</Tags>')));
-      final along = jsonDecode(utf8.decode(fs.files['lib/Saga/.bedereader.json']!)) as Map;
-      expect(along['books'], {'Saga 02.cbz': {'numberSort': 0.5, 'tags': ['space']}});
-      await local.rescan();
-      final m = await meta('Saga 02.cbz');
-      expect([m['summary'], m['tags'], m['numberSort']], ['A war.', ['space'], 0.5]);
-      expect([for (final a in m['authors'] as List) a['name']], ['Brian K. Vaughan']);
     });
   });
 }

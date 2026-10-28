@@ -11,7 +11,6 @@ import '../epub/progress.dart' show komgaEpubPage;
 import '../offline/catalogue_source.dart';
 import 'book_names.dart';
 import 'file_zip.dart';
-import 'in_file_meta.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
 import 'local_meta.dart';
@@ -651,67 +650,12 @@ class LocalSource extends CatalogueSource {
     final own = withEdits(index, library, index.meta).series[scanned.seriesId]?.name ?? '';
     if (c['seriesName'] case final String name when name.trim().toLowerCase() == own.toLowerCase()) c['seriesName'] = null;
     final file = fileNameOf(b.path);
-    // Settings' In the book files: a CBZ's or an EPUB's own fields into the file - the rest (its series; its sort
-    // number - ComicInfo has none; a CBR's everything) alongside. What the scan reads back from the file - a CBZ's
-    // title, number, date, summary and credits (its ComicInfo), an EPUB's title - isn't kept alongside as well; the
-    // rest is (in the file for other apps, read by this one from alongside).
-    var readBack = const <String>{};
-    final inFile = {
-      for (final k in const ['title', 'number', 'releaseDate', 'summary', 'authors', 'tags'])
-        if (c.containsKey(k)) k: c[k],
-    };
-    if (EditsInFiles.instance.value && inFile.isNotEmpty && (b.epub || b.mediaType == 'application/zip')) {
-      closeBook(bookId); // (not held open while it's replaced)
-      await _writeIntoFile(library, b, const BookEdits().plus(inFile));
-      readBack = {
-        for (final k in b.epub ? const ['title'] : const ['title', 'number', 'releaseDate', 'summary', 'authors'])
-          if (inFile.containsKey(k)) k,
-      };
-      // shown at once as it now is in the file (the next scan reads the file again: it changed)
-      index.books[bookId] = scanned.edited(const BookEdits().plus({for (final k in readBack) k: c[k]}),
-          seriesId: scanned.seriesId);
-      for (final k in readBack) {
-        c.remove(k);
-      }
-    }
     await _saveEdits(library, index, folderOf(b.path), (doc) {
       final books = Map<String, Object?>.from((doc['books'] as Map?) ?? const {});
-      final now = (books[file] is Map ? BookEdits.fromJson(books[file] as Map) : const BookEdits())
-          .without(readBack)
-          .plus(c);
+      final now = (books[file] is Map ? BookEdits.fromJson(books[file] as Map) : const BookEdits()).plus(c);
       now.isEmpty ? books.remove(file) : books[file] = now.toJson();
       doc['books'] = books;
     });
-  }
-
-  /// [e] written into [b]'s own file: a CBZ's ComicInfo.xml (made if it has none), an EPUB's package file - the book
-  /// rewritten safely ([rewriteZip]: checked before it takes the old one's place). Its own file, never a downloaded copy.
-  Future<void> _writeIntoFile(LocalLibrary library, LocalBook b, BookEdits e) async {
-    final fs = _fsFor(library.path);
-    final zip = await ComicArchive.open(fs, b.path);
-    final Map<String, Uint8List> replace, add;
-    try {
-      if (b.epub) {
-        final container = await zip.read(zip.find('META-INF/container.xml') ?? 'META-INF/container.xml');
-        final opfPath = container == null
-            ? null
-            : RegExp(r'full-path\s*=\s*"([^"]+)"').firstMatch(utf8.decode(container, allowMalformed: true))?[1];
-        final opf = opfPath == null ? null : await zip.read(opfPath);
-        if (opfPath == null || opf == null) throw const FormatException('No package file in the EPUB');
-        replace = {opfPath: Uint8List.fromList(utf8.encode(opfWith(utf8.decode(opf, allowMalformed: true), e)))};
-        add = const {};
-      } else {
-        final name = zip.find('ComicInfo.xml');
-        final was = name == null ? null : await zip.read(name);
-        final xml = Uint8List.fromList(
-            utf8.encode(comicInfoWith(was == null ? null : utf8.decode(was, allowMalformed: true), e)));
-        replace = name == null ? const {} : {name: xml};
-        add = name == null ? {'ComicInfo.xml': xml} : const {};
-      }
-    } finally {
-      await zip.close();
-    }
-    await rewriteZip(fs, b.path, replace: replace, add: add);
   }
 
   @override

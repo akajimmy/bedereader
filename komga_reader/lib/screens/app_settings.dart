@@ -32,7 +32,6 @@ import 'remote_test.dart';
 import '../book_source.dart';
 import '../api.dart' show Komga;
 import '../combined_source.dart';
-import '../local/local_meta.dart' show EditsInFiles;
 import 'local_settings.dart';
 import 'login.dart' show LoginScreen;
 
@@ -578,22 +577,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         SettingsGroup(title: 'Scan', children: [LibraryScanRow(local: local)]),
         LocalLibrariesGroup(local: local),
         LocalLibrariesGroup(local: local, network: true),
-        // (user, 2026-10-27; reports\10-27-metadata-plan.md)
-        SettingsGroup(title: 'Metadata edits', children: [
-          ValueListenableBuilder<bool>(
-            valueListenable: EditsInFiles.instance,
-            builder: (context, inFiles, _) => SegmentRow<bool>(
-              title: 'Local and network books: edits kept',
-              subtitle: inFiles
-                  ? "In the CBZ and EPUB files themselves (Komga and other apps see them). A CBR's, a book's series and "
-                      "a series' own go alongside."
-                  : 'Alongside the books, in small files in their folders. The book files are never touched.',
-              choices: const [Choice(false, 'Alongside'), Choice(true, 'In the files')],
-              value: inFiles,
-              onChanged: EditsInFiles.instance.set,
-            ),
-          ),
-        ]),
       ] else
         const SettingsGroup(title: 'Local', children: [NoteRow("Local libraries can't be kept on this device.")]),
       if (noServer)
