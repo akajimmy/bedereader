@@ -26,8 +26,12 @@ class SpreadBook extends ReaderServer {
   /// Pages that load (the curl tests: pairs joined): [png] for each.
   static bool real = false;
   static late Uint8List png;
+
+  /// A page of its own size (another picture than [png]).
+  static Map<int, Uint8List> pngOf = {};
   @override
-  Future<Uint8List> pageBytes(String bookId, int number) => real ? Future.value(png) : super.pageBytes(bookId, number);
+  Future<Uint8List> pageBytes(String bookId, int number) =>
+      real ? Future.value(pngOf[number] ?? png) : super.pageBytes(bookId, number);
   @override
   Future<List<dynamic>> pages(String bookId) async => [
         for (var n = 1; n <= 9; n++) {'number': n, 'width': wide.contains(n) ? 2400 : 1200, 'height': 1800},
@@ -340,6 +344,38 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pump();
       expect(curl(tester), isNull);
+      expect(await position(tester), startsWith('Pg. 5-6/9'));
+    });
+
+    // (user, 2026-10-28, Crop edges' Auto: each page cut its own way, so the next pair's left page needn't be the turning
+    // page's size - its back showed no border, or black past the page) - here page 5 is square
+    testWidgets("forward onto a pair whose left page is another size: the back is drawn from where that page really "
+        "is, not from the turning page's mirror", (tester) async {
+      SpreadBook.pngOf = {5: (await tester.runAsync(() => solidPng(300, 300, const Color(0xFFE0D0B0))))!};
+      addTearDown(() => SpreadBook.pngOf = {});
+      await openReal(tester);
+      await toPair(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      await turn(tester); // 5|6 joined once, so its place is known
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump();
+      }
+      await turn(tester, back: true);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.page.left, closeTo(800, 1), reason: "4, 3|4's right-hand page, turns: 667 wide");
+      // 5|6 at 1600 x 1000: 300 + 200 wide at one height, 1600 x 960, from y 20; page 5 to its gutter at 960
+      final r = c.backRect!;
+      expect(r.left, closeTo(0, 2));
+      expect(r.top, closeTo(20, 2));
+      expect(r.right, closeTo(960, 2), reason: "page 5's own width - not 667, the turning page's");
+      expect(r.bottom, closeTo(980, 2));
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
       expect(await position(tester), startsWith('Pg. 5-6/9'));
     });
 
