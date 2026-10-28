@@ -9,6 +9,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- eBooks: Paragraph spacing is back in the reader's eBook settings panel, under Line spacing.
 - eBooks: black lettering and line art on a see-through ground - Standard Ebooks' title pages and logo - all but vanished on the dark page colours. It's now drawn in the page's colours, as small black-and-white pictures are, on the page and full screen.
 
 ## 1.7.0
