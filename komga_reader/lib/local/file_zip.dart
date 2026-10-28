@@ -63,7 +63,7 @@ class _Record {
 }
 
 /// [path]'s zip (a CBZ, an EPUB) written anew with [replace]'s entries in place of theirs and [add]'s after the rest
-/// (metadata edits in the file - lib/local/local_meta.dart; user, 2026-10-27). Every other entry is copied as it is
+/// (Apply edits to files - lib/local/apply_edits.dart; user, 2026-10-27). Every other entry is copied as it is
 /// (its compressed bytes, its checksum, its place), so nothing else in the book changes. Written beside it first, then
 /// checked - every entry there, the same as before, the new ones reading back as given - and only then put in its
 /// place; anything wrong, the new copy goes and the book stays as it was.

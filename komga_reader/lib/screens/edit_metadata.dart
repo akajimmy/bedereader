@@ -45,18 +45,14 @@ bool _sameNames(Iterable<String> a, Iterable<String> b) {
 }
 
 /// The changes made to a book's fields, by Komga's names - only what differs from [book] ([series]: the series name
-/// typed, local and network books only). [sort]: the sort number typed (null: it follows the number); [credits]:
-/// names typed for each of [editedRoles]; [tags]: typed separated by commas. Null: not edited.
+/// typed, local and network books only); [sort]: the sort number in its field; [credits]: names typed for each of
+/// [editedRoles]; [tags]: typed separated by commas. Null: not shown.
 Map<String, Object?> bookChanges(Map book, {required String title, required String number, required DateTime? date,
     String? series, String? sort, String? summary, Map<String, String>? credits, String? tags}) {
   final m = (book['metadata'] as Map?) ?? const {};
   final out = <String, Object?>{};
   if (title.trim() != '${m['title'] ?? ''}') out['title'] = title.trim();
-  if (number.trim() != '${m['number'] ?? ''}') {
-    out['number'] = number.trim();
-    final follows = numberSortOf(number);
-    if (sort == null && follows != null) out['numberSort'] = follows;
-  }
+  if (number.trim() != '${m['number'] ?? ''}') out['number'] = number.trim();
   if (sort != null) {
     final n = num.tryParse(sort.trim());
     if (n != null && n != m['numberSort']) out['numberSort'] = n;

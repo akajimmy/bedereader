@@ -215,17 +215,18 @@ abstract interface class BookSource {
 
   Future<void> deleteBookFile(String bookId);
 
-  // ---- metadata editing (user, 2026-10-27; reports-27-metadata-plan.md)
+  // ---- metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md, reports\10-27-apply-edits-plan.md)
   /// Whether a book's or a series' ([id]) metadata can be edited here: Komga - an admin account (Komga's rule), not
   /// offline; a local or network book - its library's files.
   Future<bool> canEditMetadata(String id);
 
   /// Saves [changes] to a book's metadata, by Komga's names: title, number, numberSort, releaseDate ('yyyy-MM-dd', or
-  /// null for none). A local or network book also takes seriesName (its series, an existing one's name or a new one).
+  /// null for none), summary, authors ([{name, role}]), tags. A local or network book also takes seriesName (its
+  /// series, an existing one's name or a new one).
   Future<void> editBookMetadata(String bookId, Map<String, Object?> changes);
 
   /// Saves [changes] to a series' metadata, by Komga's names: title, titleSort, readingDirection (LEFT_TO_RIGHT,
-  /// RIGHT_TO_LEFT, VERTICAL, WEBTOON), status (ONGOING, ENDED, HIATUS, ABANDONED), publisher.
+  /// RIGHT_TO_LEFT, VERTICAL, WEBTOON), status (ONGOING, ENDED, HIATUS, ABANDONED), publisher, summary, genres, tags.
   Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes);
 
   Future<void> deleteSeriesFiles(String seriesId);

@@ -781,9 +781,12 @@ class Komga implements BookSource {
         return false;
       });
 
-  /// Each field changed is locked too, as Komga's own editor does: a metadata refresh doesn't put the file's back.
-  static Map<String, Object?> _locked(Map<String, Object?> changes) =>
-      {for (final MapEntry(:key, :value) in changes.entries) ...{key: value, '${key}Lock': true}};
+  /// Each field changed is locked too, as Komga's own editor does: a metadata refresh doesn't put the file's back. A
+  /// title, sort title or number made empty isn't sent: Komga can't have those empty.
+  static Map<String, Object?> _locked(Map<String, Object?> changes) => {
+        for (final MapEntry(:key, :value) in changes.entries)
+          if (!(value == '' && const {'title', 'titleSort', 'number'}.contains(key))) ...{key: value, '${key}Lock': true},
+      };
 
   @override
   Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) =>

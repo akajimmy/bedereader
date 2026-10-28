@@ -144,8 +144,6 @@ class Downloads extends ChangeNotifier implements LocalPages {
   bool canDownload(String bookId) =>
       isLocalId(bookId) ? localReady && _local!.onShare(bookId) : ready;
 
-  /// A network book's copy on the device, downloaded or cached (whole); null: none. LocalSource reads it instead of
-  /// the share ([LocalSource.downloadedCopy]).
   /// Network books whose ids changed with their paths (Apply edits to files: old -> new): their downloaded or cached
   /// copies follow (each in its own folder, named by its id).
   Future<void> renameLocalIds(Map<String, String> ids) async {
@@ -166,6 +164,8 @@ class Downloads extends ChangeNotifier implements LocalPages {
     notifyListeners();
   }
 
+  /// A network book's copy on the device, downloaded or cached (whole); null: none. LocalSource reads it instead of
+  /// the share ([LocalSource.downloadedCopy]).
   String? localCopyOf(String bookId) {
     final e = localStore?.books[bookId];
     if (e == null || e['state'] != 'done' || e['file'] is! String) return null;

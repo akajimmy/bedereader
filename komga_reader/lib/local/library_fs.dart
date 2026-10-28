@@ -1,6 +1,4 @@
 import 'dart:io';
-
-import 'local_meta.dart' show isMetaFile;
 import 'dart:typed_data';
 
 /// A file found in a library folder: its full path (as the library's own path is written), size and date.
@@ -63,11 +61,11 @@ abstract interface class LibraryFs {
   Future<LibraryFile> open(String path);
 
   /// [path]'s contents replaced by [bytes] (made if it isn't there) - written beside it first, then put in its place, so
-  /// a failure part-way leaves the file as it was (metadata edits - lib/local/local_meta.dart).
+  /// a failure part-way leaves the file as it was (the metadata files - lib/local/local_meta.dart).
   Future<void> writeWhole(String path, Uint8List bytes);
 
   /// A new file at [path] (one there is emptied), written in order ([LibraryOut]) - a book rewritten with its
-  /// metadata in it (lib/local/zip_rewrite.dart), too big to hold whole.
+  /// metadata in it ([rewriteZip], lib/local/file_zip.dart), too big to hold whole.
   Future<LibraryOut> create(String path);
 
   /// [from] put in [to]'s place (the old [to] gone).
@@ -123,6 +121,20 @@ class FolderLook {
     return FolderLook(folders, names.where((e) => !e.$2 && isBookFile(e.$1)).length);
   }
 }
+
+/// The files the metadata edits are kept in, beside the books (lib/local/local_meta.dart): a series folder's
+/// series.json, and a folder's .bedereader.json.
+const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
+
+/// One of the metadata files (listed with the books - the scan reads them).
+bool isMetaFile(String name) => name.toLowerCase() == seriesFileName || name == editsFileName;
+
+/// A path's folder, and its file (or folder) name - '\\' or '/' paths alike.
+String folderOf(String path) => path.substring(0, path.lastIndexOf(RegExp(r'[\\/]')));
+String fileNameOf(String path) => path.substring(path.lastIndexOf(RegExp(r'[\\/]')) + 1);
+
+/// [name] in [folder], with the separator the folder's path uses.
+String joinPath(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
 
 /// A file read as a book - not a hidden one (a Mac's ._x copy of a book's attributes, on a share it wrote to).
 bool isBookFile(String name) {
@@ -198,7 +210,7 @@ class LocalFs implements LibraryFs {
       if (e is Directory) {
         if (!shownFolder(name)) continue;
         yield* list(e.path, onUnreadable: onUnreadable ?? (_, __) {});
-      } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files - local_meta.dart)
+      } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files)
         final s = await e.stat();
         if (s.type == FileSystemEntityType.notFound) continue; // (deleted since it was listed)
         yield FsEntry(e.path, s.size, s.modified);

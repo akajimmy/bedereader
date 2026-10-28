@@ -43,6 +43,7 @@ import 'highlights.dart' show BookHighlights;
 import 'open_with.dart';
 import 'reader/comic_renderer.dart' show StripPlaces;
 import 'side_menu.dart';
+import 'view_prefs.dart' show ViewPrefs;
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/drawer.dart';
@@ -177,6 +178,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       local.onMoved = (ids) {
         Pins.instance.renameIds(ids);
         OnDeckHidden.instance.renameIds(ids);
+        PairShift.instance.renameIds(ids);
+        unawaited(ViewPrefs.renameIds(ids));
         AppSettings.instance.renameIds(ids);
         unawaited(BookHighlights.renameIds(ids));
         unawaited(StripPlaces.renameIds(ids));

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../local/apply_edits.dart';
 import '../local/local_library.dart';
-import '../local/local_meta.dart' show fileNameOf;
+import '../local/library_fs.dart' show fileNameOf;
 import '../local/local_source.dart';
 import '../widgets/error_text.dart';
 

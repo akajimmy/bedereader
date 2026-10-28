@@ -1,6 +1,6 @@
-// A book's edits written into the book itself (Settings > Libraries > Metadata edits: In the book files - user,
-// 2026-10-27; reports\10-27-metadata-plan.md): a CBZ's ComicInfo.xml, an EPUB's package file. Only the fields asked
-// for change; everything else in the text stays as it was.
+// A book's edits written into the book itself, by Apply edits to files (lib/local/apply_edits.dart;
+// reports\10-27-apply-edits-plan.md): a CBZ's ComicInfo.xml, an EPUB's package file. Only the fields asked for
+// change; everything else in the text stays as it was.
 
 import 'local_meta.dart';
 

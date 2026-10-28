@@ -11,7 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/no_network.dart';
 
-// Metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md): step 1, Komga.
+// Metadata editing (user, 2026-10-27; reports\10-27-metadata-plan.md): what an edit sends - only the fields changed,
+// by Komga's names - Komga's side of it, and the edit screens.
 
 /// A Komga that records the edits sent to it, and answers whether the account is an admin.
 class _EditKomga extends TestKomga {
@@ -41,15 +42,37 @@ Map<String, dynamic> _book(String id, {String title = 'Saga', String number = '1
       'metadata': {'title': title, 'number': number, 'numberSort': 1, 'releaseDate': date},
     };
 
+/// A book with credits, tags and a summary.
+Map<String, dynamic> _credited() => {
+      'id': 'B1', 'seriesId': 'S1', 'seriesTitle': 'Saga', 'libraryId': 'L1',
+      'metadata': {
+        'title': 'Chapter One', 'number': '1', 'numberSort': 1, 'summary': 'Old.',
+        'authors': [
+          {'name': 'Brian K. Vaughan', 'role': 'writer'}, {'name': 'Fiona Staples', 'role': 'penciller'},
+          {'name': 'Eric Stephenson', 'role': 'editor'},
+        ],
+        'tags': ['space', 'war'],
+      },
+    };
+
+/// Records the book edits it's sent.
+class _Saved extends TestKomga {
+  final saved = <String, Map<String, Object?>>{};
+  @override
+  Future<bool> canEditMetadata(String id) async => true;
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) async => saved[bookId] = changes;
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('the changes sent', () {
-    test("a book: only the fields changed; a number's sort number follows it (none for a number with no figures); a "
+    test("a book: only the fields changed - a sort number as its field has it; a "
         'date cleared is null', () {
       final b = _book('B1');
       expect(bookChanges(b, title: 'Saga', number: '1', date: DateTime(2012, 3, 14)), isEmpty);
-      expect(bookChanges(b, title: ' Saga, Chapter One ', number: '12.5', date: null),
+      expect(bookChanges(b, title: ' Saga, Chapter One ', number: '12.5', sort: '12.5', date: null),
           {'title': 'Saga, Chapter One', 'number': '12.5', 'numberSort': 12.5, 'releaseDate': null});
       expect(bookChanges(b, title: 'Saga', number: 'Annual', date: DateTime(2013, 1, 2)),
           {'number': 'Annual', 'releaseDate': '2013-01-02'});
@@ -67,6 +90,57 @@ void main() {
       expect(seriesChanges(s, title: 'Saga', titleSort: 'Saga', readingDirection: null, status: 'HIATUS',
           publisher: 'Image Comics'), {'readingDirection': null, 'status': 'HIATUS', 'publisher': 'Image Comics'});
     });
+
+    Map<String, Object?> changes({String number = '1', String? sort, String? summary, Map<String, String>? credits,
+            String? tags}) =>
+        bookChanges(_credited(), title: 'Chapter One', number: number, date: null, sort: sort, summary: summary,
+            credits: credits, tags: tags);
+    Map<String, String> creditsAsIs() => {for (final r in editedRoles.keys) r: creditsText(_credited(), r)};
+
+    test('nothing changed, nothing sent: the credits and tags as they were, in any order', () {
+      expect(changes(sort: '1', summary: 'Old.', credits: creditsAsIs(), tags: 'war, space'), isEmpty);
+    });
+
+    test("a sort number apart from the number (an Annual between 12 and 13)", () {
+      expect(changes(number: 'Annual', sort: '12.5'), {'number': 'Annual', 'numberSort': 12.5});
+      expect(changes(sort: '1.5'), {'numberSort': 1.5});
+    });
+
+    test("credits: all of them sent, the roles not edited (an editor) kept; summary and tags as typed", () {
+      final c = changes(summary: ' New. ', credits: {...creditsAsIs(), 'penciller': 'Fiona Staples, Jim Lee'},
+          tags: 'space, war, drama');
+      expect(c['summary'], 'New.');
+      expect(c['tags'], ['space', 'war', 'drama']);
+      expect({for (final a in c['authors'] as List) '${a['role']}|${a['name']}'}, {
+        'writer|Brian K. Vaughan', 'penciller|Fiona Staples', 'penciller|Jim Lee', 'editor|Eric Stephenson',
+      });
+    });
+
+    test('a series: summary, genres and tags', () {
+      final s = {'id': 'S1', 'metadata': {'title': 'Saga', 'summary': '', 'genres': ['Sci-fi'], 'tags': []}};
+      expect(seriesChanges(s, title: 'Saga', titleSort: '', readingDirection: null, status: null, publisher: '',
+          summary: 'Star-crossed.', genres: 'Sci-fi, Fantasy', tags: ''),
+          {'summary': 'Star-crossed.', 'genres': ['Sci-fi', 'Fantasy']});
+    });
+  });
+
+  testWidgets('the sort number follows the number as it is typed, until it is changed by hand', (tester) async {
+    final api = noNetwork(_Saved.new);
+    await tester.pumpWidget(MaterialApp(home: Builder(builder: (c) => TextButton(
+        onPressed: () => editBook(c, api, _credited()), child: const Text('go')))));
+    await tester.tap(find.text('go'));
+    await tester.pumpAndSettle();
+    String sortShown() => tester.widget<TextField>(find.byKey(const ValueKey('edit-sort-number'))).controller!.text;
+    expect(sortShown(), '1');
+    await tester.enterText(find.byKey(const ValueKey('edit-number')), '7');
+    expect(sortShown(), '7');
+    await tester.enterText(find.byKey(const ValueKey('edit-sort-number')), '6.5');
+    await tester.enterText(find.byKey(const ValueKey('edit-number')), 'Annual');
+    expect(sortShown(), '6.5');
+    await tester.ensureVisible(find.byKey(const ValueKey('edit-save')));
+    await tester.tap(find.byKey(const ValueKey('edit-save')));
+    await tester.pumpAndSettle();
+    expect(api.saved['B1'], {'number': 'Annual', 'numberSort': 6.5});
   });
 
   group("Komga's side", () {

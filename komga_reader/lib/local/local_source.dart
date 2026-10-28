@@ -676,7 +676,7 @@ class LocalSource extends CatalogueSource {
     // its folder's series.json, Mylar's format kept (what Komga reads), with what that has no place for in the app's
     // own key
     final fs = _fsFor(library.path);
-    final path = _inFolder(place.folder, seriesFileName);
+    final path = joinPath(place.folder, seriesFileName);
     final doc = await readMetaJson(fs, path);
     final now = ((doc == null ? null : FolderMeta.read(seriesJson: jsonEncode(doc)).folderSeries) ?? const SeriesEdits())
         .plus(changes);
@@ -719,14 +719,13 @@ class LocalSource extends CatalogueSource {
   Future<void> _saveEdits(LocalLibrary library, LibraryIndex index, String folder,
       void Function(Map<String, Object?> doc) change) async {
     final fs = _fsFor(library.path);
-    final path = _inFolder(folder, editsFileName);
+    final path = joinPath(folder, editsFileName);
     final there = await readMetaJson(fs, path);
     final doc = there ?? <String, Object?>{};
     doc['bedereader'] = 1;
     change(doc);
     final text = const JsonEncoder.withIndent('  ').convert(doc);
-    // nothing to keep, and no file yet: none made (everything went into the book's own file - on the tablet, an empty
-    // one was left beside it)
+    // nothing to keep, and no file yet: none made (an edit that only took a book's own back)
     final empty = ((doc['books'] as Map?) ?? const {}).isEmpty && ((doc['series'] as Map?) ?? const {}).isEmpty;
     if (there != null || !empty) await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
     final read = FolderMeta.read(editsJson: text), was = index.meta[folder];
@@ -742,7 +741,6 @@ class LocalSource extends CatalogueSource {
     contentChanged.value++;
   }
 
-  static String _inFolder(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
 
 
   // ---- what only Komga has ------------------------------------------------------------------------------------------

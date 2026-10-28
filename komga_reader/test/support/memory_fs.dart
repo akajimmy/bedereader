@@ -4,8 +4,17 @@ import 'package:komga_reader/local/library_fs.dart';
 
 /// Files held in memory, counting the opens and the reads (as a share would answer them, one round trip each).
 class MemoryFs implements LibraryFs {
-  MemoryFs(this.files);
+  MemoryFs(this.files, {this.caseInsensitive = false});
   final Map<String, Uint8List> files;
+
+  /// Names told apart regardless of case, as Windows's and most shares' are ("Saga" and "saga" are one).
+  final bool caseInsensitive;
+  bool _same(String a, String b) => caseInsensitive ? a.toLowerCase() == b.toLowerCase() : a == b;
+  bool _under(String path, String folder) =>
+      caseInsensitive ? path.toLowerCase().startsWith('${folder.toLowerCase()}/') : path.startsWith('$folder/');
+
+  /// The file at [path] as kept (its own case); null for none.
+  String? _file(String path) => files.containsKey(path) ? path : files.keys.where((k) => _same(k, path)).firstOrNull;
   int opens = 0, reads = 0;
 
   @override
@@ -28,7 +37,7 @@ class MemoryFs implements LibraryFs {
 
   @override
   Future<LibraryFile> open(String path) async {
-    final f = files[path];
+    final f = files[_file(path) ?? path];
     if (f == null) throw StateError('no file $path');
     opens++;
     return _MemoryFile(this, f);
@@ -59,17 +68,23 @@ class MemoryFs implements LibraryFs {
   @override
   Future<void> move(String from, String to) async {
     if (readOnly) throw StateError('read-only: $from');
+    if (failMoves.any((f) => _same(f, from))) throw StateError('refused: $from');
     if (await isThere(to)) throw StateError('already there: $to');
-    if (files.containsKey(from)) {
-      files[to] = files.remove(from)!;
+    final file = _file(from);
+    if (file != null) {
+      files[to] = files.remove(file)!;
     } else {
-      for (final k in [...files.keys.where((k) => k.startsWith('$from/'))]) {
+      for (final k in [...files.keys.where((k) => _under(k, from))]) {
         files['$to${k.substring(from.length)}'] = files.remove(k)!;
       }
-      if (folders.remove(from)) folders.add(to);
+      final f = folders.where((f) => _same(f, from)).firstOrNull;
+      if (f != null) (folders.remove(f), folders.add(to));
     }
     written.add(to);
   }
+
+  /// Moves of these refused (a folder held open, say).
+  final failMoves = <String>{};
 
   @override
   Future<void> makeFolder(String path) async {
@@ -79,7 +94,7 @@ class MemoryFs implements LibraryFs {
 
   @override
   Future<bool> isThere(String path) async =>
-      files.containsKey(path) || folders.contains(path) || files.keys.any((k) => k.startsWith('$path/'));
+      _file(path) != null || folders.any((f) => _same(f, path)) || files.keys.any((k) => _under(k, path));
 
   /// Writes done (path, in order); [readOnly]: refused.
   final written = <String>[];
