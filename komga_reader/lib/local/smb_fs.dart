@@ -65,8 +65,8 @@ class SmbFs implements LibraryFs {
   final SmbConnect _connect;
   Future<SmbShare>? _share;
 
-  /// How many folders are listed at once (the pool has 4 workers; a NAS answers each listing in turn otherwise).
-  static const parallel = 4;
+  /// How many folders are listed at once ([listedAtOnce]; the pool has as many workers).
+  static const parallel = listedAtOnce;
 
   Future<SmbShare> get _connected => _share ??= _connect(host, share, login).catchError((Object e) {
         _share = null; // (connected again next time)
@@ -97,8 +97,7 @@ class SmbFs implements LibraryFs {
   /// The book files under [folder], several folders listed at once. A folder in it that can't be listed is told to
   /// [onUnreadable] and the rest goes on; [folder] itself not listed throws when there's no [onUnreadable].
   @override
-  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) {
-    final out = StreamController<FsEntry>();
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) async* {
     final base = folder.replaceAll(RegExp(r'[\\/]+$'), ''), sep = folder.contains('\\') ? '\\' : '/';
     final root = _inShare(folder);
     String full(String inShare) {
@@ -106,51 +105,20 @@ class SmbFs implements LibraryFs {
       return rest.isEmpty ? base : '$base$sep${rest.replaceAll('/', sep)}';
     }
 
-    Future<void> run() async {
-      final share = await _connected;
-      final todo = [root];
-      var running = 0;
-      final done = Completer<void>();
-      void next() {
-        while (running < parallel && todo.isNotEmpty) {
-          final dir = todo.removeLast();
-          running++;
-          share.list(dir).then((entries) {
-            for (final e in entries) {
-              if (e.name == '.' || e.name == '..' || e.hidden) continue;
-              final p = dir.isEmpty ? e.name : '$dir/${e.name}';
-              if (e.folder) {
-                if (shownFolder(e.name)) todo.add(p);
-              } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files)
-                out.add(FsEntry(full(p), e.size, e.modified));
-              }
-            }
-          }, onError: (Object e) {
-            if (dir == root && onUnreadable == null) {
-              if (!done.isCompleted) done.completeError(e);
-              return;
-            }
-            onUnreadable?.call(full(dir), e);
-          }).whenComplete(() {
-            running--;
-            if (todo.isEmpty && running == 0) {
-              if (!done.isCompleted) done.complete();
-            } else {
-              next();
-            }
-          });
+    final share = await _connected; // (not reached: the stream's error, told or not)
+    yield* listFolders(root, (dir) async {
+      final folders = <String>[], files = <FsEntry>[];
+      for (final e in await share.list(dir)) {
+        if (e.name == '.' || e.name == '..' || e.hidden) continue;
+        final p = dir.isEmpty ? e.name : '$dir/${e.name}';
+        if (e.folder) {
+          if (shownFolder(e.name)) folders.add(p);
+        } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files)
+          files.add(FsEntry(full(p), e.size, e.modified));
         }
       }
-
-      next();
-      await done.future;
-    }
-
-    run().then((_) => out.close(), onError: (Object e, StackTrace s) {
-      out.addError(e, s);
-      out.close();
-    });
-    return out.stream;
+      return (folders, files);
+    }, onUnreadable: onUnreadable, shown: full);
   }
 
   @override

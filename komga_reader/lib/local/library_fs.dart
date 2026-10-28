@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -108,6 +109,51 @@ Future<Uint8List> readWhole(LibraryFs fs, String path) async {
   }
 }
 
+/// What one folder holds, for [listFolders]: its folders to go into (the system's own already left out) and its files
+/// (book and metadata files).
+typedef FolderListing = (List<String> folders, List<FsEntry> files);
+
+/// How many folders a library's listing reads at once (a share answers each listing in turn otherwise - a round trip
+/// a folder; SmbFs's pool has as many workers).
+const listedAtOnce = 4;
+
+/// The files under [root], folder by folder, [listedAtOnce] folders at a time: [listOne] reads one folder. A folder
+/// that can't be read is told to [onUnreadable] (named by [shown], the folder as the library's path writes it) and the
+/// rest goes on; [root] itself not read is the stream's error when there's no [onUnreadable].
+Stream<FsEntry> listFolders(String root, Future<FolderListing> Function(String folder) listOne,
+    {void Function(String folder, Object error)? onUnreadable, String Function(String folder)? shown}) {
+  final out = StreamController<FsEntry>();
+  final todo = [root];
+  var running = 0;
+  void next() {
+    while (running < listedAtOnce && todo.isNotEmpty) {
+      final dir = todo.removeLast();
+      running++;
+      listOne(dir).then((l) {
+        todo.addAll(l.$1);
+        l.$2.forEach(out.add);
+      }, onError: (Object e, StackTrace s) {
+        if (dir == root && onUnreadable == null) {
+          out.addError(e, s);
+          todo.clear();
+        } else {
+          onUnreadable?.call(shown == null ? dir : shown(dir), e);
+        }
+      }).whenComplete(() {
+        running--;
+        if (todo.isEmpty && running == 0) {
+          out.close();
+        } else {
+          next();
+        }
+      });
+    }
+  }
+
+  next();
+  return out.stream;
+}
+
 /// A folder's own folders and its count of books (CBZ, CBR, EPUB), as the folder browser shows them.
 class FolderLook {
   const FolderLook(this.folders, this.books);
@@ -195,28 +241,32 @@ class LocalFs implements LibraryFs {
     }
   }
 
+  /// Several folders at once, a folder's files' sizes asked for together: on Windows a share's (\\host\share) listing
+  /// and every file's size are a round trip each - one at a time, a big share's first scan was the slow one (the
+  /// share client on Android and iOS lists [listedAtOnce] at once; user, 2026-10-28).
   @override
-  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) async* {
-    final List<FileSystemEntity> here;
-    try {
-      here = await Directory(folder).list(followLinks: false).toList();
-    } catch (e) {
-      if (onUnreadable == null) rethrow; // (the library's own folder: the caller says what's wrong)
-      onUnreadable(folder, e);
-      return;
-    }
-    for (final e in here) {
-      final name = e.path.substring(e.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
-      if (e is Directory) {
-        if (!shownFolder(name)) continue;
-        yield* list(e.path, onUnreadable: onUnreadable ?? (_, __) {});
-      } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files)
-        final s = await e.stat();
-        if (s.type == FileSystemEntityType.notFound) continue; // (deleted since it was listed)
-        yield FsEntry(e.path, s.size, s.modified);
-      }
-    }
-  }
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) =>
+      listFolders(folder, (dir) async {
+        final folders = <String>[];
+        final files = <File>[];
+        await for (final e in Directory(dir).list(followLinks: false)) {
+          final name = fileNameOf(e.path);
+          if (e is Directory) {
+            if (shownFolder(name)) folders.add(e.path);
+          } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files)
+            files.add(e);
+          }
+        }
+        final stats = await Future.wait(files.map((f) => f.stat()));
+        return (
+          folders,
+          [
+            for (var i = 0; i < files.length; i++)
+              if (stats[i].type != FileSystemEntityType.notFound) // (deleted since it was listed)
+                FsEntry(files[i].path, stats[i].size, stats[i].modified),
+          ],
+        );
+      }, onUnreadable: onUnreadable);
 
   @override
   Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());
