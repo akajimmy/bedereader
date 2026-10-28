@@ -92,9 +92,20 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
     super.dispose();
   }
 
+  /// The series as shown: as it came, then as asked for again after a change from its actions (an edit renames it -
+  /// the tablet, build 169: the bar kept the old name).
+  late Map _series = widget.series as Map;
+
+  void _changed() {
+    _paged.refresh();
+    widget.api.oneSeries(_id).then((s) {
+      if (s != null && mounted) setState(() => _series = s);
+    }, onError: (Object _) {});
+  }
+
   @override
   Widget build(BuildContext context) {
-    final s = widget.series;
+    final s = _series;
     final title = (s['metadata']?['title'] ?? s['name']) as String;
     return withSideMenu(widget.api, (docked) => selectionScope(_sel, (context) => Scaffold(
       key: menuScaffold,
@@ -126,7 +137,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
             sort: sort.isDefault(seriesBookSorts) ? null : sort.pinValue,
           ),
           onRefresh: _paged.refresh,
-          onMore: () => showSeriesActions(context, widget.api, s, onChanged: _paged.refresh, inSeries: true),
+          onMore: () => showSeriesActions(context, widget.api, s, onChanged: _changed, inSeries: true),
           moreTooltip: 'Series actions',
         ),
       ),

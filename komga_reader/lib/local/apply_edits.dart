@@ -181,7 +181,8 @@ Future<ApplyPlan> planApply(LibraryFs fs, LocalLibrary library, LibraryIndex ind
       if (place == null || place.key != null) makes = series.name;
       folder = into;
     }
-    var to = renames ? joinPath(folder, '${safeName(patternName(now, series))}${_extension(b.path)}') : via;
+    final named = renames ? patternName(now, series) : null;
+    var to = named == null ? joinPath(folder, fileNameOf(b.path)) : joinPath(folder, '${safeName(named)}${_extension(b.path)}');
     if (to.toLowerCase() != via.toLowerCase()) {
       occupied.remove(via.toLowerCase());
       final stem = to.substring(0, to.length - _extension(b.path).length);
@@ -210,6 +211,8 @@ Future<ApplyPlan> planApply(LibraryFs fs, LocalLibrary library, LibraryIndex ind
 /// A CBR (a RAR): it can't be written to.
 bool isCbr(LocalBook b) => !b.epub && b.mediaType != 'application/zip';
 
+String _stem(String name) => name.contains('.') ? name.substring(0, name.lastIndexOf('.')) : name;
+
 String _extension(String path) {
   final name = fileNameOf(path);
   return name.contains('.') ? name.substring(name.lastIndexOf('.')) : '';
@@ -224,9 +227,11 @@ bool _within(Map<String, Object?> now, String? applied) {
 
 /// A book's file name by the pattern (user, 2026-10-27: "Series 001 (Year)"): a comic "Saga 001 (2012)" - the number
 /// padded to three figures, one that isn't a number kept as it is ("Saga Annual (2012)"), the year left out if there's
-/// none or the series' name has it; an eBook in a series "Dune 01 - Dune", else its title; a one-shot its title (and
-/// year). No extension.
-String patternName(LocalBook b, LocalSeries s) {
+/// none or the series' name has it; one with no number "Saga - Its Title (2012)" (its title kept - the tablet, build
+/// 169: a numberless book was named after its series alone, and lost its title); an eBook in a series "Dune 01 - Dune",
+/// else its title; a one-shot its title (and year). Null: no name to give it (no number, and no title of its own) -
+/// it keeps the one it has. No extension.
+String? patternName(LocalBook b, LocalSeries s) {
   final year = b.released == null || s.name.contains('(${b.released!.year})') ? '' : ' (${b.released!.year})';
   if (s.oneshot) return '${b.title}$year';
   if (b.epub) {
@@ -234,7 +239,10 @@ String patternName(LocalBook b, LocalSeries s) {
     return n == null ? b.title : '${s.name} $n - ${b.title}';
   }
   final n = _numberText(b.number, 3);
-  return '${s.name}${n == null ? '' : ' $n'}$year';
+  if (n != null) return '${s.name} $n$year';
+  final title = b.title.trim(), stem = _stem(fileNameOf(b.path));
+  final own = title.isNotEmpty && title.toLowerCase() != stem.toLowerCase() && title.toLowerCase() != s.name.toLowerCase();
+  return own ? '${s.name} - $title$year' : null;
 }
 
 String? _numberText(String number, int width) {

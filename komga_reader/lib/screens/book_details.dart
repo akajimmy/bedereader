@@ -210,6 +210,10 @@ class _BookDetailsScreenState extends State<BookDetailsScreen> {
                 const SizedBox(height: 16),
                 facts,
               ]),
+        if (((m['tags'] as List?) ?? const []).isNotEmpty) ...[
+          const DetailsHeading('Tags'),
+          Wrap(spacing: 8, runSpacing: 8, children: [for (final t in m['tags'] as List) Chip(label: Text('$t'))]),
+        ],
         if (summary.isNotEmpty) ...[
           const DetailsHeading('Summary'),
           Text(summary, style: const TextStyle(fontSize: 15, height: 1.45)),

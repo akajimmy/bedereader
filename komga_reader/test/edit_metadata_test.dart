@@ -85,9 +85,9 @@ void main() {
     test('a series: only the fields changed; reading direction "not set" is null', () {
       final s = {'id': 'S1', 'metadata': {'title': 'Saga', 'titleSort': 'Saga', 'readingDirection': 'LEFT_TO_RIGHT',
           'status': 'ONGOING', 'publisher': 'Image'}};
-      expect(seriesChanges(s, title: 'Saga', titleSort: 'Saga', readingDirection: 'LEFT_TO_RIGHT', status: 'ONGOING',
+      expect(seriesChanges(s, title: 'Saga', titleSort: '', readingDirection: 'LEFT_TO_RIGHT', status: 'ONGOING',
           publisher: 'Image'), isEmpty);
-      expect(seriesChanges(s, title: 'Saga', titleSort: 'Saga', readingDirection: null, status: 'HIATUS',
+      expect(seriesChanges(s, title: 'Saga', titleSort: '', readingDirection: null, status: 'HIATUS',
           publisher: 'Image Comics'), {'readingDirection': null, 'status': 'HIATUS', 'publisher': 'Image Comics'});
     });
 
@@ -244,5 +244,17 @@ void main() {
         await tester.pumpAndSettle();
       }
     });
+  });
+
+  test("a series' sort title that's only its title (as a listing gives it) is no sort title of its own: shown empty, "
+      'and retitling the series sends none - it sorted under its old name (the tablet, build 169)', () {
+    final s = {'id': 'S1', 'metadata': {'title': 'Apply Test', 'titleSort': 'Apply Test'}};
+    expect(ownSortTitle(s), '');
+    expect(seriesChanges(s, title: 'Apply Test Renamed', titleSort: '', readingDirection: null, status: null,
+        publisher: ''), {'title': 'Apply Test Renamed'});
+    final own = {'id': 'S1', 'metadata': {'title': 'The Saga', 'titleSort': 'Saga, The'}};
+    expect(ownSortTitle(own), 'Saga, The');
+    expect(seriesChanges(own, title: 'The Saga', titleSort: '', readingDirection: null, status: null, publisher: ''),
+        {'titleSort': ''}, reason: 'one of its own taken away');
   });
 }

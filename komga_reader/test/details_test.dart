@@ -277,6 +277,16 @@ void main() {
     expect(find.byType(BookDetailsScreen), findsOneWidget);
   });
 
+
+  testWidgets("a book's tags are on its Details screen (they were saved, and shown nowhere - the tablet, build 169)",
+      (tester) async {
+    final tagged = {...theBook, 'metadata': {...(theBook['metadata'] as Map), 'tags': ['space', 'war']}};
+    await tester.pumpWidget(MaterialApp(home: BookDetailsScreen(api: noNetwork(() => _Tagged(tagged)), book: tagged)));
+    await tester.pump();
+    for (final t in ['space', 'war']) {
+      expect(find.widgetWithText(Chip, t), findsOneWidget);
+    }
+  });
 }
 
 class _SeriesKomga extends FakeKomga {
@@ -307,4 +317,12 @@ class _SeriesDown extends FakeKomga {
     if (looks++ == 0) return null;
     throw KomgaUnreachable(baseUrl);
   }
+}
+
+/// A server whose book has tags.
+class _Tagged extends FakeKomga {
+  _Tagged(this.tagged);
+  final Map<String, dynamic> tagged;
+  @override
+  Future<Map<String, dynamic>?> book(String id) async => tagged;
 }
