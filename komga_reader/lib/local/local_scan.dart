@@ -4,6 +4,7 @@ import 'book_names.dart';
 import 'file_zip.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
+import 'local_meta.dart';
 import 'local_store.dart';
 
 /// Which version of the scan's rules read the inside of a file: a book read by older rules is opened again.
@@ -59,11 +60,16 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
   final report = LibraryScan();
   final unreadFolders = <String>[];
   final files = <FsEntry>[];
+  final metaFiles = <String, List<FsEntry>>{}; // folder -> its metadata files (local_meta.dart)
   try {
     await for (final e in fs.list(library.path, onUnreadable: (folder, error) {
       unreadFolders.add(folder);
       report.files.add((folder, fs.classify(error)));
     })) {
+      if (isMetaFile(fileNameOf(e.path))) {
+        metaFiles.putIfAbsent(folderOf(e.path), () => []).add(e);
+        continue;
+      }
       files.add(e);
       onFound?.call(files.length);
     }
@@ -169,15 +175,56 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
     }
   }
   final seriesIds = {for (final b in books) b.seriesId};
+  final meta = await _readMeta(fs, metaFiles, kept.meta);
+  // a folder that couldn't be listed keeps the edits it had
+  for (final folder in unreadFolders) {
+    for (final MapEntry(:key, :value) in kept.meta.entries) {
+      if (key.startsWith(folder)) meta.putIfAbsent(key, () => value);
+    }
+  }
   return (
     index: LibraryIndex(library.id, [
       ...series.where((s) => seriesIds.contains(s.id)),
       for (final s in kept.series.values)
         if (seriesIds.contains(s.id) && !series.any((x) => x.id == s.id)) s,
-    ], books),
+    ], books, meta: meta),
     report: report,
   );
 }
+
+/// Each folder's metadata files read - only where they changed since [before] (the same sizes and dates: what was read
+/// then). A file that can't be read counts as not there.
+Future<Map<String, FolderMeta>> _readMeta(
+    LibraryFs fs, Map<String, List<FsEntry>> files, Map<String, FolderMeta> before) async {
+  final out = <String, FolderMeta>{};
+  for (final MapEntry(key: folder, value: here) in files.entries) {
+    final stamps = {for (final f in here) fileNameOf(f.path): FolderMeta.stampOf(f)};
+    final was = before[folder];
+    if (was != null && _sameStamps(was.stamps, stamps)) {
+      out[folder] = was;
+      continue;
+    }
+    Future<String?> text(bool Function(String name) which) async {
+      final f = here.where((f) => which(fileNameOf(f.path))).firstOrNull;
+      if (f == null) return null;
+      try {
+        return utf8.decode(await readWhole(fs, f.path), allowMalformed: true);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final m = FolderMeta.read(
+        seriesJson: await text((n) => n.toLowerCase() == seriesFileName),
+        editsJson: await text((n) => n == editsFileName),
+        stamps: stamps);
+    if (!m.isEmpty) out[folder] = m;
+  }
+  return out;
+}
+
+bool _sameStamps(Map<String, String> a, Map<String, String> b) =>
+    a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
 
 /// Opens a book's file: its pages (a comic) or its metadata (an EPUB), its ComicInfo, and what its name says. Also
 /// returns its ComicInfo's series (a read list's books are put in theirs). [shortName]: its name without the start

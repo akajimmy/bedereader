@@ -1,4 +1,6 @@
 import 'dart:io';
+
+import 'local_meta.dart' show isMetaFile;
 import 'dart:typed_data';
 
 /// A file found in a library folder: its full path (as the library's own path is written), size and date.
@@ -166,7 +168,7 @@ class LocalFs implements LibraryFs {
       if (e is Directory) {
         if (!shownFolder(name)) continue;
         yield* list(e.path, onUnreadable: onUnreadable ?? (_, __) {});
-      } else if (e is File && isBookFile(name)) {
+      } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files - local_meta.dart)
         final s = await e.stat();
         if (s.type == FileSystemEntityType.notFound) continue; // (deleted since it was listed)
         yield FsEntry(e.path, s.size, s.modified);
