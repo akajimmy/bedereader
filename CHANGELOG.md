@@ -9,6 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+**Fixed**
+
+- Apply edits to files: a book with no number was renamed after its series alone and lost its title; it's now named "Series - Its Title", or keeps its own name when its title is just that name.
+- A book's tags weren't shown anywhere: they're on its Details screen now.
+- Editing a local series showed its title in Sort title, so a series given a new title kept sorting under its old one; Sort title is empty unless the series has one of its own.
+- After a series was edited from its own screen, the bar at the top kept its old name until you left and came back.
+
 ## 1.7.0
 
 ### Build 169 - 2026-10-28
