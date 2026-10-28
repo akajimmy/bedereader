@@ -1,6 +1,6 @@
-// Metadata edits written into the book files (Settings > Libraries > Metadata edits: In the files - reports\
-// 10-27-metadata-plan.md, step 4): a CBZ's ComicInfo.xml, an EPUB's package file; the book rewritten with every other
-// entry copied as it was, checked before it takes the old one's place.
+// Metadata edits written into the book files (Apply edits to files - reports\10-27-apply-edits-plan.md): a CBZ's
+// ComicInfo.xml, an EPUB's package file; the book rewritten with every other entry copied as it was, checked before
+// it takes the old one's place.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -9,10 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/local/file_zip.dart';
 import 'package:komga_reader/local/in_file_meta.dart';
 import 'package:komga_reader/local/library_fs.dart';
-import 'package:komga_reader/local/local_library.dart';
 import 'package:komga_reader/local/local_meta.dart';
-import 'package:komga_reader/local/local_source.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/epub_files.dart' show epub3, zip;
 import 'support/memory_fs.dart';
@@ -140,63 +137,6 @@ void main() {
       await expectLater(rewriteZip(fs, 'lib/a.cbr', add: {'ComicInfo.xml': Uint8List(1)}), throwsA(anything));
       expect(fs.files['lib/a.cbr'], bytes);
       expect(fs.files.keys, ['lib/a.cbr']);
-    });
-  });
-
-  group('the setting on', () {
-    late MemoryFs fs;
-    late LocalSource local;
-    setUp(() async {
-      SharedPreferences.setMockInitialValues({});
-      await EditsInFiles.instance.set(true);
-      addTearDown(() => EditsInFiles.instance.set(false));
-      fs = MemoryFs({'lib/Saga/Saga 01.cbz': _cbz(), 'lib/Books/Dune.epub': zip(epub3())});
-      final data = await Directory.systemTemp.createTemp('in_files');
-      local = await LocalSource.open(data, [const LocalLibrary('lib', 'lib')], fsFor: (_) => fs);
-      addTearDown(() async {
-        await local.closeFiles();
-        await data.delete(recursive: true);
-      });
-      await local.rescan();
-    });
-
-    String idOf(String file) => local.entries.values
-        .firstWhere((e) => (e['book'] as Map)['url'].toString().endsWith(file))['book']['id'] as String;
-
-    test("a CBZ: its title, number and date in its ComicInfo.xml, its series alongside; shown at once, and the same "
-        "after a scan reads the file", () async {
-      await local.editBookMetadata(idOf('Saga 01.cbz'), {'title': 'Chapter One', 'number': '1', 'numberSort': 1,
-          'releaseDate': '2012-03-14', 'seriesName': 'Saga Deluxe'});
-      final z = await FileZip.open(await fs.open('lib/Saga/Saga 01.cbz'));
-      final info = utf8.decode((await z.read('ComicInfo.xml'))!);
-      await z.close();
-      expect(info, allOf(contains('<Title>Chapter One</Title>'), contains('<Year>2012</Year>')));
-      final edits = jsonDecode(utf8.decode(fs.files['lib/Saga/.bedereader.json']!)) as Map;
-      // (its sort number alongside too: ComicInfo has none)
-      expect(edits['books'], {'Saga 01.cbz': {'numberSort': 1, 'series': 'Saga Deluxe'}});
-      for (final pass in ['at once', 'after a scan']) {
-        final b = (await local.book(idOf('Saga 01.cbz')))!;
-        expect([b['metadata']['title'], b['metadata']['releaseDate'], b['seriesTitle']],
-            ['Chapter One', '2012-03-14', 'Saga Deluxe'], reason: pass);
-        await local.rescan();
-      }
-    });
-
-    test("a CBZ whose edits all went into its file: no .bedereader.json made beside it (an empty one was, on the "
-        'tablet)', () async {
-      await local.editBookMetadata(idOf('Saga 01.cbz'), {'title': 'Chapter One'});
-      expect(fs.files.keys, isNot(contains('lib/Saga/.bedereader.json')));
-      expect((await local.book(idOf('Saga 01.cbz')))!['metadata']['title'], 'Chapter One');
-    });
-
-    test("an EPUB: its title in its package file; its date kept alongside too (the app reads an EPUB's title from it, "
-        "not its date)", () async {
-      await local.editBookMetadata(idOf('Dune.epub'), {'title': 'Dune (1965)', 'releaseDate': '1965-08-01'});
-      final edits = jsonDecode(utf8.decode(fs.files['lib/Books/.bedereader.json']!)) as Map;
-      expect(edits['books'], {'Dune.epub': {'releaseDate': '1965-08-01'}});
-      await local.rescan();
-      final b = (await local.book(idOf('Dune.epub')))!;
-      expect([b['metadata']['title'], b['metadata']['releaseDate']], ['Dune (1965)', '1965-08-01']);
     });
   });
 }

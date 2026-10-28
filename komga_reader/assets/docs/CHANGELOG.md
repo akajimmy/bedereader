@@ -9,9 +9,14 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-**Fixed**
+**New**
 
-- Metadata edits In the files: an edit that went wholly into the book's own file no longer leaves an empty .bedereader.json beside it.
+- More to edit: a book's sort number (where it sorts, apart from its number - an Annual between #12 and #13; it follows the number until you change it), summary, credits (writers, pencillers, inkers, colorists, letterers, cover artists - names separated by commas) and tags; a series' summary, genres and tags. On Komga and on local and network books alike.
+- Apply edits to files, on each local and network library in Settings > Libraries: the edits you've made go into the files themselves - a CBZ's into its ComicInfo.xml and an EPUB's into its own metadata, series folders renamed after their series, book files renamed after their series and number ("Saga 001 (2012).cbz"), books moved to another series put in its folder. It first sums up what will change in that library, and only what will; nothing happens until you confirm. Only books and series you've edited are touched. A CBR can't be written into: it's renamed and moved only, and its edits stay beside it. Your edits stay beside the books too, and reading progress, pins, highlights, settings and downloads follow the books to their new names. It can be run again any time: what's applied already isn't done twice.
+
+**Changed**
+
+- The Metadata edits setting from build 168 (Alongside / In the files) is gone: edits are always kept beside the books, and Apply edits to files puts them into the files when you choose. Komga books and series: the edit screens change only what Komga itself can change.
 
 ## 1.7.0
 
@@ -19,7 +24,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 **New**
 
-- More to edit: a book's sort number (where it sorts, apart from its number - an Annual between #12 and #13; it follows the number until you change it), summary, credits (writers, pencillers, inkers, colorists, letterers, cover artists - names separated by commas) and tags; a series' summary, genres and tags. On Komga, local and network books alike; In the files, a CBZ's go into its ComicInfo.xml (its sort number and tags are kept alongside too) and an EPUB's into its own metadata.
 - Edit a book's or a series' details. A book: its title, number, release date and series; a series: its title, sort title, reading direction, status and publisher. Edit is in a book's and a series' long-press menu and on their Details screens. On Komga it's saved to Komga itself (an admin account only, as Komga allows), and each field changed is locked there so a metadata refresh doesn't undo it; a Komga book can't be moved to another series (Komga makes series from folders).
 - Local and network libraries: a series.json in a series' folder (Mylar's, the format Komga also reads) now gives the series its title, publisher and status.
 - Local and network books and series can be edited too, a book's series included - pick one of the library's or type a new name. The edits are kept beside the books, never inside them: a series' in a series.json in its folder (Mylar's format, which Komga reads too), the books' in a .bedereader.json in their folder, so every device reading that folder or share sees them. The folder or share has to allow writing.

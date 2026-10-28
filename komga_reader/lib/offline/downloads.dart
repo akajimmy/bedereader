@@ -146,6 +146,26 @@ class Downloads extends ChangeNotifier implements LocalPages {
 
   /// A network book's copy on the device, downloaded or cached (whole); null: none. LocalSource reads it instead of
   /// the share ([LocalSource.downloadedCopy]).
+  /// Network books whose ids changed with their paths (Apply edits to files: old -> new): their downloaded or cached
+  /// copies follow (each in its own folder, named by its id).
+  Future<void> renameLocalIds(Map<String, String> ids) async {
+    final s = localStore;
+    if (s == null) return;
+    var any = false;
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      final e = s.books.remove(from);
+      if (e == null) continue;
+      final dir = Directory(s.file(from).path);
+      if (await dir.exists()) await dir.rename(s.file(to).path);
+      if (e['book'] is Map) e['book'] = {...(e['book'] as Map), 'id': to};
+      s.books[to] = e;
+      any = true;
+    }
+    if (!any) return;
+    await s.save();
+    notifyListeners();
+  }
+
   String? localCopyOf(String bookId) {
     final e = localStore?.books[bookId];
     if (e == null || e['state'] != 'done' || e['file'] is! String) return null;

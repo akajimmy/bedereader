@@ -58,6 +58,8 @@ class _Share implements SmbShare {
   @override
   Future<Object> openWrite(String inShare) async => inShare;
   @override
+  Future<void> mkdir(String inShare) async {}
+  @override
   Future<void> writeAt(Object handle, Uint8List data, int offset) async {}
 
   @override

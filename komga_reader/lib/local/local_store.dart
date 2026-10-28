@@ -332,6 +332,17 @@ class LocalStore {
   }
 
   /// These books' page sizes forgotten (their files changed: measured again when next opened).
+  /// Books whose ids changed with their paths (Apply edits to files: old -> new): their progress and page sizes follow.
+  Future<void> renameIds(Map<String, String> ids) async {
+    var moved = false, measured = false;
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      if (progress.remove(from) case final p?) (progress[to] = p, moved = true);
+      if (sizes.remove(from) case final s?) (sizes[to] = s, measured = true);
+    }
+    if (moved) await _write('progress.json', () => progress);
+    if (measured) await _write('sizes.json', () => sizes);
+  }
+
   Future<void> forgetSizes(Iterable<String> bookIds) async {
     var any = false;
     for (final id in bookIds) {

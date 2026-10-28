@@ -814,6 +814,18 @@ class AppSettings extends ChangeNotifier {
     _epubBooksChanged();
   }
 
+  /// Local books and series whose ids changed with their paths (Apply edits to files: old -> new): a series' reader
+  /// settings and a book's eBook settings follow.
+  void renameIds(Map<String, String> ids) {
+    var reader = false, books = false;
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      if (series.remove(from) case final p?) (series[to] = p, reader = true);
+      if (epubBooks.remove(from) case final p?) (epubBooks[to] = p, books = true);
+    }
+    if (reader) _changedReader();
+    if (books) _epubBooksChanged();
+  }
+
   void _epubBooksChanged() {
     notifyListeners();
     final json = jsonEncode({for (final MapEntry(:key, :value) in epubBooks.entries) key: value.toJson()});

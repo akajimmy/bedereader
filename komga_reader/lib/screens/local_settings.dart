@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'actions.dart' show askName;
 import '../widgets/setting_rows.dart';
 import '../local/device_folders.dart';
+import 'apply_edits_dialog.dart';
 import 'folder_browser.dart';
 import '../local/library_fs.dart';
 import '../local/local_library.dart';
@@ -120,6 +121,8 @@ class _LocalLibrariesGroupState extends State<LocalLibrariesGroup> {
                 if (widget.network && _shares.viaApp) // (Windows signs in to a share itself)
                   IconButton(key: LocalLibrariesGroup.signInKey, tooltip: 'Sign in', icon: const Icon(Icons.key_outlined),
                       onPressed: () => _signIn(l)),
+                IconButton(tooltip: 'Apply edits to files', icon: const Icon(Icons.drive_file_rename_outline),
+                    onPressed: () => applyEditsTo(context, _local, l)),
                 IconButton(tooltip: 'Rename', icon: const Icon(Icons.edit_outlined), onPressed: () => _rename(l)),
                 IconButton(tooltip: 'Remove', icon: const Icon(Icons.delete_outline), onPressed: () => _remove(l)),
               ]),

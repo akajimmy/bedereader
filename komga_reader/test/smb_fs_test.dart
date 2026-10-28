@@ -29,6 +29,9 @@ class _Share implements SmbShare {
   }
 
   @override
+  Future<void> mkdir(String inShare) async => folders[inShare] = [];
+
+  @override
   Future<Object> openWrite(String inShare) async {
     files[inShare] = Uint8List(0);
     return 'w:$inShare';

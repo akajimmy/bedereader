@@ -26,6 +26,12 @@ class _Fs implements LibraryFs {
   Future<void> replace(String from, String to) => inner.replace(from, to);
   @override
   Future<void> delete(String path) => inner.delete(path);
+  @override
+  Future<void> move(String from, String to) => inner.move(from, to);
+  @override
+  Future<void> makeFolder(String path) => inner.makeFolder(path);
+  @override
+  Future<bool> isThere(String path) => inner.isThere(path);
   final opened = <String>[];
   int held = 0; // files open now
   String? away;

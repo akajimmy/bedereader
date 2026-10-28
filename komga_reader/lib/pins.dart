@@ -231,6 +231,12 @@ class Pins extends ChangeNotifier {
     _save([for (final p in items) p.kind == kind && p.id == id ? p.retitled(from, to) : p]);
   }
 
+  /// Local books and series whose ids changed with their paths (Apply edits to files: old -> new): their pins follow.
+  void renameIds(Map<String, String> ids) {
+    if (!items.any((p) => ids.containsKey(p.id))) return;
+    _save([for (final p in items) ids.containsKey(p.id) ? Pin.fromJson({...p.toJson(), 'id': ids[p.id]}) : p]);
+  }
+
   /// The pins to these - a library removed, and its series and books - deleted.
   void removeFor(Set<String> ids) {
     if (!items.any((p) => ids.contains(p.id))) return;

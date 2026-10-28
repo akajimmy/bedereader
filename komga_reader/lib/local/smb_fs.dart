@@ -51,6 +51,7 @@ abstract interface class SmbShare {
   Future<void> write(String inShare, Uint8List data);
   Future<void> delete(String inShare);
   Future<void> rename(String from, String to);
+  Future<void> mkdir(String inShare);
 }
 
 /// Connects to [share] on [host] (a refused login, a host out of reach: throws an [Smb2Exception]).
@@ -181,6 +182,22 @@ class SmbFs implements LibraryFs {
   Future<void> delete(String path) async => (await _connected).delete(_inShare(path));
 
   @override
+  Future<void> move(String from, String to) async {
+    final share = await _connected;
+    if (await share.exists(_inShare(to))) throw FileSystemException('Already there', to);
+    await share.rename(_inShare(from), _inShare(to));
+  }
+
+  @override
+  Future<void> makeFolder(String path) async {
+    final share = await _connected;
+    if (!await share.exists(_inShare(path))) await share.mkdir(_inShare(path));
+  }
+
+  @override
+  Future<bool> isThere(String path) async => (await _connected).exists(_inShare(path));
+
+  @override
   Future<void> writeWhole(String path, Uint8List bytes) async {
     final share = await _connected;
     final at = _inShare(path), temp = '$at.bedereader-new';
@@ -299,6 +316,8 @@ class _PoolShare implements SmbShare {
   Future<void> delete(String inShare) => _pool.deleteFile(inShare);
   @override
   Future<void> rename(String from, String to) => _pool.rename(from, to);
+  @override
+  Future<void> mkdir(String inShare) => _pool.mkdir(inShare);
 }
 
 /// The shares: which [LibraryFs] reads a library's path, and their logins. On Windows every path is the system's own -

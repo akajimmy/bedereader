@@ -58,6 +58,17 @@ class StripPlaces {
 
   static Future<void> save(String bookId, int page, double share) async =>
       (await SharedPreferences.getInstance()).setString(_key(bookId), '$page:${share.toStringAsFixed(4)}');
+
+  /// Local books whose ids changed with their paths (Apply edits to files: old -> new): their places follow.
+  static Future<void> renameIds(Map<String, String> ids) async {
+    final p = await SharedPreferences.getInstance();
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      final v = p.getString(_key(from));
+      if (v == null) continue;
+      await p.setString(_key(to), v);
+      await p.remove(_key(from));
+    }
+  }
 }
 
 /// The comic renderer (the one Reader, user 2026-10-07): a book's page images - the page view and its turns (wipe,

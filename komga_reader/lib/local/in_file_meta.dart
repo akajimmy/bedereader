@@ -10,7 +10,7 @@ const comicInfoRoles = {
   'cover': 'CoverArtist', 'editor': 'Editor',
 };
 
-/// [xml] (a CBZ's ComicInfo.xml; null: it has none) with [e]'s title, number, date (Year, Month, Day), summary,
+/// [xml] (a CBZ's ComicInfo.xml; null: it has none) with [e]'s title, series, number, date (Year, Month, Day), summary,
 /// credits (a field each role, names separated by commas) and tags.
 String comicInfoWith(String? xml, BookEdits e) {
   var x = xml ??
@@ -18,6 +18,7 @@ String comicInfoWith(String? xml, BookEdits e) {
           '<ComicInfo xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n'
           '</ComicInfo>\n';
   if (e.title != null) x = _setElement(x, 'Title', e.title, close: 'ComicInfo');
+  if (e.series != null) x = _setElement(x, 'Series', e.series, close: 'ComicInfo');
   if (e.number != null) x = _setElement(x, 'Number', e.number!.isEmpty ? null : e.number, close: 'ComicInfo');
   if (e.dateSet) {
     final d = e.releaseDate == null ? null : DateTime.tryParse(e.releaseDate!);
@@ -36,7 +37,7 @@ String comicInfoWith(String? xml, BookEdits e) {
   return x;
 }
 
-/// [opf] (an EPUB's package file) with [e]'s title (dc:title), date (dc:date), number (calibre's series index),
+/// [opf] (an EPUB's package file) with [e]'s title (dc:title), date (dc:date), series and number (calibre's),
 /// summary (dc:description), credits (dc:creator for writers, dc:contributor for the others) and tags (dc:subject).
 String opfWith(String opf, BookEdits e) {
   var x = opf;
@@ -61,6 +62,11 @@ String opfWith(String opf, BookEdits e) {
     if (e.number!.isNotEmpty) {
       x = _beforeClose(x, '<meta name="calibre:series_index" content="${xmlEscape(e.number!)}"/>');
     }
+  }
+  if (e.series != null) {
+    final m = RegExp(r'\s*<meta\b[^>]*name="calibre:series"[^>]*>(?:\s*</meta>)?').firstMatch(x);
+    if (m != null) x = x.replaceRange(m.start, m.end, '');
+    x = _beforeClose(x, '<meta name="calibre:series" content="${xmlEscape(e.series!)}"/>');
   }
   if (e.summary != null) {
     x = _without(x, 'dc:description');
