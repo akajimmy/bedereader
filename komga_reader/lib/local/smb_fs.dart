@@ -8,6 +8,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../local_names.dart' show hostToConnect;
 import 'library_fs.dart';
+import 'local_meta.dart' show isMetaFile;
 
 /// A share's user name and password (kept encrypted on the device - [Shares]).
 class SmbLogin {
@@ -111,7 +112,7 @@ class SmbFs implements LibraryFs {
               final p = dir.isEmpty ? e.name : '$dir/${e.name}';
               if (e.folder) {
                 if (shownFolder(e.name)) todo.add(p);
-              } else if (isBookFile(e.name)) {
+              } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files - local_meta.dart)
                 out.add(FsEntry(full(p), e.size, e.modified));
               }
             }

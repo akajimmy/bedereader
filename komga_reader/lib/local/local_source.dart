@@ -12,6 +12,7 @@ import 'book_names.dart';
 import 'file_zip.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
+import 'local_meta.dart';
 import 'local_scan.dart';
 import 'local_store.dart';
 
@@ -77,6 +78,7 @@ class LocalSource extends CatalogueSource {
   Map<String, Map<String, dynamic>> _entries = {};
   Map<String, LocalBook> _books = {}; // bookId -> its record
   Map<String, String> _seriesFirst = {}; // seriesId -> its first book (its poster)
+  Map<String, (LocalLibrary, SeriesPlace)> _seriesPlaces = {}; // seriesId -> where its edits are kept
 
   @override
   Map<String, Map<String, dynamic>> get entries => _entries;
@@ -114,17 +116,23 @@ class LocalSource extends CatalogueSource {
 
   void _rebuild() {
     final entries = <String, Map<String, dynamic>>{}, books = <String, LocalBook>{}, first = <String, (String, num)>{};
+    final places = <String, (LocalLibrary, SeriesPlace)>{};
     for (final library in _libraries) {
       final index = store.libraries[library.id];
       if (index == null) continue;
       final lib = {'id': library.id, 'name': library.name};
-      final seriesOf = {for (final s in index.series.values) s.id: seriesJson(s)};
-      for (final b in index.books.values) {
+      // as edited (lib/local/local_meta.dart): the books' own fields, books moved to another series, the series'
+      final edited = withEdits(index, library, index.meta);
+      for (final MapEntry(:key, :value) in edited.places.entries) {
+        places[key] = (library, value);
+      }
+      final seriesOf = {for (final s in edited.series.values) s.id: seriesJson(s)};
+      for (final b in edited.books.values) {
         final series = seriesOf[b.seriesId];
         if (series == null || _outOfReach(b)) continue;
         books[b.id] = b;
         entries[b.id] = {
-          'book': bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
+          'book': bookJson(b, edited.series[b.seriesId]!), 'series': series, 'library': lib,
           // a read-list library's list, named after the library
           'readLists': [
             for (final r in b.readLists) {'id': r.id, 'name': library.name, 'index': r.index, 'count': r.count},
@@ -137,6 +145,7 @@ class LocalSource extends CatalogueSource {
     }
     _entries = entries;
     _books = books;
+    _seriesPlaces = places;
     _seriesFirst = {for (final MapEntry(:key, :value) in first.entries) key: value.$1};
   }
 
@@ -145,7 +154,11 @@ class LocalSource extends CatalogueSource {
 
   static Map<String, dynamic> seriesJson(LocalSeries s) => {
         'id': s.id, 'name': s.name, 'libraryId': s.libraryId, 'oneshot': s.oneshot,
-        'metadata': {'title': s.name, 'titleSort': s.name, 'status': 'ONGOING', 'genres': const [], 'tags': const []},
+        'metadata': {
+          'title': s.name, 'titleSort': s.titleSort ?? s.name, 'status': s.status ?? 'ONGOING', 'genres': const [],
+          'tags': const [], if (s.readingDirection != null) 'readingDirection': s.readingDirection,
+          if (s.publisher != null) 'publisher': s.publisher,
+        },
         'booksMetadata': {'authors': const []},
       };
 
@@ -231,7 +244,8 @@ class LocalSource extends CatalogueSource {
 
   int _signature() => Object.hashAllUnordered([
         for (final library in _libraries) library.name,
-        for (final b in _books.values) Object.hash(b.id, b.size, b.modified, b.title),
+        for (final b in _books.values) Object.hash(b.id, b.size, b.modified, b.title, b.seriesId, b.number, b.released),
+        for (final s in _entries.values) Object.hashAll((s['series'] as Map)['metadata'].values),
       ]);
 
   /// The libraries changed (Settings): kept, the removed ones' scans let go (not their progress), and scanned again -
@@ -246,7 +260,10 @@ class LocalSource extends CatalogueSource {
     final gone = <String>{};
     for (final l in removed) {
       final index = store.libraries[l.id];
-      gone.addAll([l.id, ...?index?.series.keys, ...?index?.books.keys]);
+      gone.addAll([
+        l.id, ...?index?.series.keys, ...?index?.books.keys,
+        for (final MapEntry(:key, :value) in _seriesPlaces.entries) if (value.$1.id == l.id) key, // (books moved to one)
+      ]);
       await store.removeLibrary(l.id);
     }
     if (gone.isNotEmpty) onRemoved?.call(gone);

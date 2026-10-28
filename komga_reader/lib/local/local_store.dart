@@ -4,14 +4,25 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'book_names.dart' show DatePrecision;
+import 'local_meta.dart';
 
 /// A series in a local library: stored once, not copied into each of its books.
 class LocalSeries {
-  const LocalSeries({required this.id, required this.libraryId, required this.name, this.oneshot = false});
+  const LocalSeries({required this.id, required this.libraryId, required this.name, this.oneshot = false,
+      this.titleSort, this.readingDirection, this.status, this.publisher});
   final String id, libraryId, name;
 
   /// A book of its own (a book loose in the library, or in a _oneshots folder).
   final bool oneshot;
+
+  /// Its edited fields (lib/local/local_meta.dart - not kept in the scan: the edits are applied to it as it's listed).
+  final String? titleSort, readingDirection, status, publisher;
+
+  /// The same series with [e] applied (none: as it is).
+  LocalSeries edited(SeriesEdits? e) => e == null
+      ? this
+      : LocalSeries(id: id, libraryId: libraryId, name: e.title ?? name, oneshot: oneshot, titleSort: e.titleSort,
+          readingDirection: e.readingDirection, status: e.status, publisher: e.publisher);
 
   Map<String, Object?> toJson() => {'id': id, 'name': name, if (oneshot) 'oneshot': true};
   factory LocalSeries.fromJson(Map j, String libraryId) =>
@@ -84,6 +95,25 @@ class LocalBook {
   /// after the iPad crossed one, and a whole library was read again).
   bool sameFile(int size, DateTime modified) => size == this.size && modified.isAtSameMomentAs(this.modified);
 
+  /// The same book with its edits [e] (lib/local/local_meta.dart), in [seriesId].
+  LocalBook edited(BookEdits e, {required String seriesId}) {
+    final j = toJson()..['series'] = seriesId;
+    if (e.title != null) j['title'] = e.title;
+    if (e.number != null) j['number'] = e.number;
+    if (e.numberSort != null) j['numberSort'] = e.numberSort;
+    if (e.dateSet) {
+      j.remove('precision');
+      final date = e.releaseDate == null ? null : DateTime.tryParse(e.releaseDate!);
+      if (date == null) {
+        j.remove('released');
+      } else {
+        j['released'] = DateTime.utc(date.year, date.month, date.day).toIso8601String();
+        j['precision'] = DatePrecision.day.name;
+      }
+    }
+    return LocalBook.fromJson(j, libraryId);
+  }
+
   /// The same book in [seriesId], at [readLists] (a read-list library's: its series known once it's read, its place
   /// worked out again each scan).
   LocalBook placed({String? seriesId, List<ReadListPlace>? readLists}) {
@@ -124,23 +154,34 @@ class LocalBook {
 
 /// One library's scan: its series and books.
 class LibraryIndex {
-  LibraryIndex(this.libraryId, Iterable<LocalSeries> series, Iterable<LocalBook> books)
+  LibraryIndex(this.libraryId, Iterable<LocalSeries> series, Iterable<LocalBook> books,
+      {Map<String, FolderMeta>? meta})
       : series = {for (final s in series) s.id: s},
-        books = {for (final b in books) b.id: b};
+        books = {for (final b in books) b.id: b},
+        meta = meta ?? {};
   final String libraryId;
   final Map<String, LocalSeries> series;
   final Map<String, LocalBook> books;
+
+  /// The metadata edits kept alongside the books (lib/local/local_meta.dart), by folder - as the scan last read them,
+  /// and as edited since.
+  final Map<String, FolderMeta> meta;
 
   Map<String, Object?> toJson() => {
         'v': LocalStore.version,
         'series': [for (final s in series.values) s.toJson()],
         'books': [for (final b in books.values) b.toJson()],
+        if (meta.isNotEmpty) 'meta': {for (final MapEntry(:key, :value) in meta.entries) key: value.toJson()},
       };
 
   factory LibraryIndex.fromJson(String libraryId, Map j) => LibraryIndex(
         libraryId,
         [for (final s in (j['series'] as List?) ?? const []) LocalSeries.fromJson(s as Map, libraryId)],
         [for (final b in (j['books'] as List?) ?? const []) LocalBook.fromJson(b as Map, libraryId)],
+        meta: {
+          for (final MapEntry(:key, :value) in ((j['meta'] as Map?) ?? const {}).entries)
+            '$key': FolderMeta.fromJson(value as Map),
+        },
       );
 }
 
