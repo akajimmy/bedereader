@@ -53,8 +53,13 @@ class OpenWith {
 
   void _take(Map file) => _turn = _turn.then((_) => _open(file)).catchError((Object _) {});
 
+  int _taken = 0; // the files taken so far: a reader closed for a newer one doesn't go back to the other app
+
+  /// Opens [file] in the reader - done once it's on screen (not once it's closed: a file coming meanwhile takes its
+  /// place - on the tablet, a second one shared waited for the first to be closed).
   Future<void> _open(Map file) async {
     await _ready.future;
+    final n = ++_taken;
     final path = file['path'] as String;
     final name = file['name'] as String? ?? path.substring(path.lastIndexOf(RegExp(r'[\\/]')) + 1);
     AppLog.instance.info('open with', 'opening "$name"');
@@ -71,12 +76,14 @@ class OpenWith {
       if (ctx != null && ctx.mounted) showErrorSnack(ctx, couldnt('open "$name"', e, thing: 'book'), e, st);
       return;
     }
-    await nav.push(MaterialPageRoute<void>(
-        builder: (_) => ReaderScreen(api: book, book: book.bookJson, saveProgress: false)));
-    book.close();
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      unawaited(channel.invokeMethod('back').catchError((Object _) {})); // (back to the app it came from)
-    }
+    unawaited(nav.push(MaterialPageRoute<void>(
+        builder: (_) => ReaderScreen(api: book, book: book.bookJson, saveProgress: false))).then((_) {
+      book.close();
+      // closed by the user: Android goes back to the app it came from (not when a newer file took its place)
+      if (n == _taken && defaultTargetPlatform == TargetPlatform.android) {
+        unawaited(channel.invokeMethod('back').catchError((Object _) {}));
+      }
+    }));
   }
 
   /// What the platform holds open for [file] let go (Android: the file; iOS: the access to it).

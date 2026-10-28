@@ -17,7 +17,7 @@ import 'offline/catalogue_source.dart';
 /// The reader's source for that one book, read straight from its file: no progress kept (user: never), no copy, in
 /// no list. [close]d when the reader closes.
 class OpenedFile extends CatalogueSource {
-  OpenedFile._(this.path, this.loose, this._fs, this._archive, this._onClose);
+  OpenedFile._(this.path, this.name, this.loose, this._fs, this._archive, this._onClose);
 
   /// Opens the book at [path] ([name]: the file's name, when the path doesn't end in it - Android hands a file over
   /// as /proc/self/fd/N). [onClose]: what the platform holds open for it let go (Android's file, iOS's access).
@@ -31,7 +31,8 @@ class OpenedFile extends CatalogueSource {
       await file.close();
       final book = await readLooseBook(files, FsEntry(path, size, clock.now()), fileName: name);
       final archive = book.epub ? null : await ComicArchive.open(files, path);
-      return OpenedFile._(path, book, files, archive, onClose);
+      return OpenedFile._(path, name ?? path.substring(path.lastIndexOf(RegExp(r'[\\/]')) + 1), book, files, archive,
+          onClose);
     } catch (_) {
       onClose?.call();
       rethrow;
@@ -39,6 +40,9 @@ class OpenedFile extends CatalogueSource {
   }
 
   final String path;
+
+  /// The file's name ("Saga 02.cbz").
+  final String name;
   final LocalBook loose;
   final LibraryFs _fs;
   final ComicArchive? _archive; // a comic's, open while it's read
@@ -54,7 +58,11 @@ class OpenedFile extends CatalogueSource {
 
   @override
   late final Map<String, Map<String, dynamic>> entries = () {
-    final series = LocalSeries(id: loose.seriesId, libraryId: loose.libraryId, name: loose.title, oneshot: true);
+    // the reader's heading over a comic's title: the file's name, when its title is another (its ComicInfo's) - else
+    // none (the title twice, on the tablet)
+    final stem = name.contains('.') ? name.substring(0, name.lastIndexOf('.')) : name;
+    final series =
+        LocalSeries(id: loose.seriesId, libraryId: loose.libraryId, name: stem == loose.title ? '' : stem, oneshot: true);
     return {
       loose.id: {
         'book': LocalSource.bookJson(loose, series), 'series': LocalSource.seriesJson(series),

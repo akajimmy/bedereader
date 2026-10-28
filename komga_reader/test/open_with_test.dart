@@ -46,6 +46,16 @@ void main() {
       expect(await f.epubBytes(), bytes);
     });
 
+    test("the reader's heading over a comic's title is its file's name when its title is another (its ComicInfo's) - "
+        'else none, not the title twice (on the tablet)', () async {
+      final titled = zipOf({'ComicInfo.xml': '<ComicInfo><Title>A Star Is Born</Title></ComicInfo>', '001.png': _page});
+      final f = await OpenedFile.open('C:/in/Atomic Mouse 001.cbz', fs: MemoryFs({'C:/in/Atomic Mouse 001.cbz': titled}));
+      expect(f.bookJson['seriesTitle'], 'Atomic Mouse 001');
+      final g = await OpenedFile.open('C:/in/Saga 02.cbz', fs: MemoryFs({'C:/in/Saga 02.cbz': _cbz}));
+      expect(g.bookJson['metadata']['title'], 'Saga 02');
+      expect(g.bookJson['seriesTitle'], '');
+    });
+
     test("a file that isn't a book: not opened, and what the platform holds for it is let go; a book's is let go "
         'once, when it closes', () async {
       var released = 0;
@@ -126,6 +136,46 @@ void main() {
     expect(find.byType(ReaderScreen), findsNothing);
     expect(find.text('open'), findsOneWidget);
     expect(calls.where((c) => c.method == 'done').map((c) => c.arguments), [{'token': 5}]);
+    expect(calls.where((c) => c.method == 'back'), hasLength(1), reason: 'Android: back to the app it came from');
     expect(api.saves, [2]);
+  });
+
+  testWidgets('a second file shared while the first is open takes its place at once - it waited for the first to be '
+      'closed (on the tablet); the app stays, and goes back to the other app only once the second is closed',
+      (tester) async {
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(OpenWith.channel, (call) async {
+      calls.add(call);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(OpenWith.channel, null));
+    final nav = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(navigatorKey: nav, home: const Text('home')));
+    OpenWith(fs: MemoryFs({'C:/in/a.cbz': _cbz, 'C:/in/b.epub': zip(epub3())}))
+      ..start(nav, const [])
+      ..ready();
+    Future<void> arrives(Map<String, Object> file) async {
+      await tester.binding.defaultBinaryMessenger.handlePlatformMessage(OpenWith.channel.name,
+          OpenWith.channel.codec.encodeMethodCall(MethodCall('open', file)), (_) {});
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    String? shown() => (tester.widget<ReaderScreen>(find.byType(ReaderScreen)).api as OpenedFile).name;
+    await arrives({'path': 'C:/in/a.cbz', 'token': 1});
+    expect(shown(), 'a.cbz');
+    await arrives({'path': 'C:/in/b.epub', 'token': 2});
+    expect(find.byType(ReaderScreen), findsOneWidget);
+    expect(shown(), 'b.epub');
+    expect(calls.where((c) => c.method == 'done').map((c) => c.arguments), [{'token': 1}]);
+    expect(calls.where((c) => c.method == 'back'), isEmpty);
+    await tester.binding.handlePopRoute();
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('home'), findsOneWidget);
+    expect(calls.where((c) => c.method == 'back'), hasLength(1));
+    await tester.pumpWidget(const SizedBox());
   });
 }
