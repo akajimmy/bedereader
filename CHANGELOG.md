@@ -9,10 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 173 - 2026-10-28
+
 - Arrange pins: Home's ⋮ menu > Arrange pins… (and Arrange… in a pin's dialog) puts your pins in the order you want - ▲ and ▼ (a remote or keyboard too) or drag a row by its handle. Pins from Komga keep the new order on every device; pins to this device's own folders keep their place among them.
 - Page curl with two pages up and Crop edges on Auto: the back of the turning page showed the next left-hand page cut wrong - no border with the art against the edge, or black past the page's border - until it landed. It now shows that page as it will lie.
-
-## 1.7.0
 
 ### Build 172 - 2026-10-28
 
