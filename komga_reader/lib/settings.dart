@@ -73,11 +73,15 @@ class ReaderPrefs {
 
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
   final bool autoLevels; // shown as "Enhance colours": auto-levels + whiten paper + deepen ink (lib/enhance.dart)
-  final double crop; // "Crop edges": this fraction of the page cut off every side - one of [crops]
+  final double crop; // "Crop edges": this fraction of the page cut off every side - one of [crops] - or [autoCrop]
 
-  /// Crop edges' steps (user, 2026-10-21: "Off, 2%, 4%, 6%" - it was a 1% slider to 10%). A share saved that isn't
-  /// one of them reads as Off (no migration - user rule).
-  static const crops = [0.0, 0.02, 0.04, 0.06];
+  /// Crop edges' steps (user, 2026-10-21: "Off, 2%, 4%, 6%" - it was a 1% slider to 10%), and Auto (user,
+  /// 2026-10-28: each page's border found - lib/reader/auto_crop.dart). A share saved that isn't one of them reads as
+  /// Off (no migration - user rule).
+  static const crops = [0.0, 0.02, 0.04, 0.06, autoCrop];
+
+  /// Crop edges' Auto: each page cut to its own content plus an even border (comics only: a webtoon's strip isn't).
+  static const autoCrop = -1.0;
 
   /// The Gutter's steps, px (user, 2026-10-21: "a few steps" - it was a slider to dial in).
   static const gutters = [0.0, 2.0, 8.0, 16.0];
@@ -316,12 +320,18 @@ class DisplayPrefs {
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
       this.webtoonScroll = WebtoonScroll.smooth, this.webtoonTaps = WebtoonTaps.sides,
-      this.autoScrollSpeed = autoScrollStart, this.webtoonDoubleTap = true, this.sourceIcon = false});
+      this.autoScrollSpeed = autoScrollStart, this.webtoonDoubleTap = true, this.sourceIcon = false,
+      this.autoCropBorder = 0.025});
   final bool night;
 
   /// Posters and libraries show where they come from - this device, a network share, Komga (Settings > Library &
   /// Home; user, 2026-10-26: "show source icon").
   final bool sourceIcon;
+
+  /// TEMPORARY (user, 2026-10-28: "give me a temporary setting which we'll remove"): Crop edges' Auto - the border
+  /// left round each page's content, a share of the page width. This device's.
+  final double autoCropBorder;
+  static const autoCropBorders = [0.015, 0.02, 0.025, 0.03, 0.04];
 
   /// A webtoon's single presses: a short glide or most of a screen ([WebtoonScroll]) - this device's, as the page
   /// turn is.
@@ -417,13 +427,15 @@ class DisplayPrefs {
           bool? pageStrip,
           KindPrefs? comics, KindPrefs? ebooks, KindPrefs? webtoons, InsetPage? insetPage, Rotation? rotation,
           PageNote? pageNote, bool? showClock, bool? showBattery, bool? progressBar, WebtoonScroll? webtoonScroll,
-          WebtoonTaps? webtoonTaps, double? autoScrollSpeed, bool? webtoonDoubleTap, bool? sourceIcon}) =>
+          WebtoonTaps? webtoonTaps, double? autoScrollSpeed, bool? webtoonDoubleTap, bool? sourceIcon,
+          double? autoCropBorder}) =>
       DisplayPrefs(
         comics: comics ?? this.comics, ebooks: ebooks ?? this.ebooks, webtoons: webtoons ?? this.webtoons,
         insetPage: insetPage ?? this.insetPage, webtoonTaps: webtoonTaps ?? this.webtoonTaps,
         autoScrollSpeed: autoScrollSpeed ?? this.autoScrollSpeed,
         webtoonDoubleTap: webtoonDoubleTap ?? this.webtoonDoubleTap,
         sourceIcon: sourceIcon ?? this.sourceIcon,
+        autoCropBorder: autoCropBorder ?? this.autoCropBorder,
         rotation: rotation ?? this.rotation, pageNote: pageNote ?? this.pageNote,
         showClock: showClock ?? this.showClock, showBattery: showBattery ?? this.showBattery,
         progressBar: progressBar ?? this.progressBar,
@@ -454,7 +466,8 @@ class DisplayPrefs {
       'webtoonDoubleTap': webtoonDoubleTap,
       // new keys (the kinds' old ones are left unread: these start from the defaults - no migration)
       'rotation': rotation.name, 'pageNote': pageNote.name, 'showClock': showClock, 'showBattery': showBattery,
-      'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name, 'sourceIcon': sourceIcon};
+      'progressBar': progressBar, 'webtoonScroll': webtoonScroll.name, 'sourceIcon': sourceIcon,
+      'autoCropBorder': autoCropBorder};
   factory DisplayPrefs.fromJson(Map<String, dynamic> j) {
     T pick<T extends Enum>(List<T> values, Object? name, T fallback) =>
         values.firstWhere((v) => v.name == name, orElse: () => fallback);
@@ -495,7 +508,10 @@ class DisplayPrefs {
         showBattery: j['showBattery'] == true,
         progressBar: j['progressBar'] == true,
         webtoonScroll: pick(WebtoonScroll.values, j['webtoonScroll'], WebtoonScroll.smooth),
-        sourceIcon: j['sourceIcon'] == true);
+        sourceIcon: j['sourceIcon'] == true,
+        autoCropBorder: autoCropBorders.contains((j['autoCropBorder'] as num?)?.toDouble())
+            ? (j['autoCropBorder'] as num).toDouble()
+            : 0.025);
   }
 }
 

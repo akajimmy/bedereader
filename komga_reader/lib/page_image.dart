@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'errors.dart' show PageUnreadable;
 import 'enhance.dart';
+import 'reader/auto_crop.dart';
 import 'settings.dart';
 import 'book_source.dart';
 
@@ -235,30 +236,31 @@ class Tone {
       ];
 }
 
-/// Crop edges: [img] with [share] of its width and height cut off every side (a quick GPU copy, once per page) -
-/// [sidesOnly]: the left and right only (a webtoon's slices: cut at top and bottom, the strip would lose what runs
-/// from one into the next).
-Future<ui.Image> cropEdges(ui.Image img, double share, {bool sidesOnly = false}) {
-  final (dx, dy) = cropInset(img.width, img.height, share, sidesOnly: sidesOnly);
-  final w = img.width - 2 * dx, h = img.height - 2 * dy;
+/// Crop edges: [img] with [cut] cut off its sides (a quick GPU copy, once per page).
+Future<ui.Image> cropEdges(ui.Image img, PageCut cut) {
+  final (l, t, r, b) = cut.pixels(img.width, img.height);
+  final w = img.width - l - r, h = img.height - t - b;
   final rec = ui.PictureRecorder();
-  Canvas(rec).drawImageRect(img, Rect.fromLTWH(dx.toDouble(), dy.toDouble(), w.toDouble(), h.toDouble()),
+  Canvas(rec).drawImageRect(img, Rect.fromLTWH(l.toDouble(), t.toDouble(), w.toDouble(), h.toDouble()),
       Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..filterQuality = FilterQuality.none);
   final picture = rec.endRecording();
   return picture.toImage(w, h).whenComplete(picture.dispose);
 }
 
+/// What a page has cut off under [prefs]' Crop edges: a fixed step every side - [sidesOnly], the left and right only
+/// (a webtoon's slices: cut at top and bottom, the strip would lose what runs from one into the next) - or, on Auto,
+/// the page's own ([auto]; none known, or a strip: nothing).
+PageCut cutFor(ReaderPrefs prefs, PageCut? auto, {bool sidesOnly = false}) => prefs.crop == ReaderPrefs.autoCrop
+    ? (sidesOnly ? PageCut.none : auto ?? PageCut.none)
+    : PageCut.even(prefs.crop, sidesOnly: sidesOnly);
+
 /// Two pages side by side as one picture, left to right as given (two pages up - lib/reader/spreads.dart): the
 /// shorter one scaled to the taller's height, so they meet edge to edge at the spine (a GPU copy, once per pair).
 /// [gap]: the gutter between them, picture pixels, filled with [fill] (user, 2026-10-20: a setting).
-/// What [cropEdges] cuts off each side of a [width] x [height] picture: (left and right, top and bottom).
-(int, int) cropInset(int width, int height, double share, {bool sidesOnly = false}) =>
-    ((width * share).round(), sidesOnly ? 0 : (height * share).round());
-
 /// The size of a [width] x [height] picture after [cropEdges].
-Size croppedSize(int width, int height, double share, {bool sidesOnly = false}) {
-  final (dx, dy) = cropInset(width, height, share, sidesOnly: sidesOnly);
-  return Size((width - 2 * dx).toDouble(), (height - 2 * dy).toDouble());
+Size croppedSize(int width, int height, PageCut cut) {
+  final (l, t, r, b) = cut.pixels(width, height);
+  return Size((width - l - r).toDouble(), (height - t - b).toDouble());
 }
 
 Future<ui.Image> joinPages(List<ui.Image> images, {double gap = 0, Color fill = const Color(0xFF000000)}) {
@@ -287,10 +289,13 @@ class PageCanvas extends StatefulWidget {
   const PageCanvas({super.key, required this.data, required this.prefs, required this.scroll,
       this.startAtEnd = false, this.onStartedAtEnd, this.levels, this.levelsNow, this.onZoomChanged, this.onWheel, this.onStepper,
       this.zoom, this.rtl = false, this.onPanChanged, this.onEdgeSwipe, this.onPageRect, this.idle, this.onZoomToggle,
-      this.onZoomStep, this.current = true});
+      this.onZoomStep, this.current = true, this.autoCut});
   final PageData data;
   final ReaderPrefs prefs;
   final ScrollController scroll;
+
+  /// Crop edges on Auto: this page's own cut (null: shown whole) - [cutFor].
+  final PageCut? autoCut;
   final bool startAtEnd; // came back from the next page: show the bottom (or right) of this one
   final VoidCallback? onStartedAtEnd;
   final Future<Levels> Function()? levels; // the book's auto-levels (used when auto-levels is on)
@@ -518,11 +523,11 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final img = widget.data.image;
     // the page as shown: cropped (Crop edges) - its processing is ProcessedPicture's
-    final base = croppedSize(img.width, img.height, widget.prefs.crop);
+    final base = croppedSize(img.width, img.height, cutFor(widget.prefs, widget.autoCut));
     final aspect = base.width / base.height;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     Widget picture(Size size) => ProcessedPicture(key: _pictureKey, data: widget.data, prefs: widget.prefs, size: size,
-        levels: widget.levels, levelsNow: widget.levelsNow, idle: widget.idle);
+        levels: widget.levels, levelsNow: widget.levelsNow, idle: widget.idle, autoCut: widget.autoCut);
 
     return LayoutBuilder(builder: (context, box) {
       final w = box.maxWidth, h = box.maxHeight;
@@ -690,10 +695,16 @@ class _PageCanvasState extends State<PageCanvas> with SingleTickerProviderStateM
 /// strip).
 class ProcessedPicture extends StatefulWidget {
   const ProcessedPicture({super.key, required this.data, required this.prefs, required this.size, this.levels,
-      this.levelsNow, this.idle, this.sidesOnly = false});
+      this.levelsNow, this.idle, this.sidesOnly = false, this.autoCut});
   final PageData data;
   final ReaderPrefs prefs;
   final Size size;
+
+  /// Crop edges on Auto: this page's own cut (null: shown whole).
+  final PageCut? autoCut;
+
+  /// What's cut off the page ([cutFor]).
+  PageCut get cut => cutFor(prefs, autoCut, sidesOnly: sidesOnly);
   final Future<Levels> Function()? levels; // the book's auto-levels (used when auto-levels is on)
   final Levels? Function()? levelsNow; // those levels if already known (else the page doesn't wait for them)
   final Future<void> Function()? idle; // off screen: the passes wait for no page turn ([PageCanvas.idle])
@@ -710,9 +721,9 @@ class ProcessedPicture extends StatefulWidget {
 class _ProcessedPictureState extends State<ProcessedPicture> {
   Levels _levels = Levels.identity;
   // Enhance colours (lib/enhance.dart): the page after auto-levels + whiten paper + deepen ink, at page size
-  // Crop edges: the page with the chosen share cut off every side (null = not cropped)
+  // Crop edges: the page with its cut taken off (null = not cropped)
   ui.Image? _cropped;
-  double _croppedBy = 0;
+  PageCut _croppedBy = PageCut.none;
   ui.Image? _coloured;
   bool _colourFailed = false; // the shaders can't run here: show the page with plain auto-levels
   bool _cropFailed = false; // the crop pass failed: the page uncropped
@@ -743,7 +754,7 @@ class _ProcessedPictureState extends State<ProcessedPicture> {
   @override
   void didUpdateWidget(ProcessedPicture old) {
     super.didUpdateWidget(old);
-    final cropChanged = old.prefs.crop != widget.prefs.crop;
+    final cropChanged = old.cut != widget.cut;
     if (old.prefs.autoLevels != widget.prefs.autoLevels || old.data != widget.data || cropChanged) {
       if (old.data != widget.data || !widget.prefs.autoLevels || cropChanged) {
         _coloured?.dispose();
@@ -776,26 +787,27 @@ class _ProcessedPictureState extends State<ProcessedPicture> {
       if (!mounted || run != _colourRun) return;
       setState(() {
         _colourFailed = p.autoLevels;
-        _cropFailed = p.crop > 0 && _cropped == null;
+        _cropFailed = !widget.cut.isNone && _cropped == null;
         _dropEnhanced();
       });
     }
   }
 
   Future<void> _prepareNow(ReaderPrefs p, int run) async {
-    if (p.crop > 0 || p.autoLevels) {
+    final pageCut = widget.cut;
+    if (!pageCut.isNone || p.autoLevels) {
       await widget.idle?.call(); // off screen: the crop and colour passes wait until no page turn is playing
       if (!mounted || run != _colourRun) return;
     }
     var img = widget.data.image;
-    if (p.crop > 0) {
-      if (_cropped == null || _croppedBy != p.crop) {
-        final cut = await cropEdges(img, p.crop, sidesOnly: widget.sidesOnly);
+    if (!pageCut.isNone) {
+      if (_cropped == null || _croppedBy != pageCut) {
+        final cut = await cropEdges(img, pageCut);
         if (!mounted || run != _colourRun) { cut.dispose(); return; }
         setState(() {
           _cropped?.dispose();
           _cropped = cut;
-          _croppedBy = p.crop;
+          _croppedBy = pageCut;
         });
       }
       img = _cropped!;
@@ -877,7 +889,7 @@ class _ProcessedPictureState extends State<ProcessedPicture> {
   @override
   Widget build(BuildContext context) {
     final img = widget.data.image;
-    final cropping = widget.prefs.crop > 0;
+    final cropping = !widget.cut.isNone;
     final base = _coloured ?? (cropping ? _cropped : null) ?? img; // Enhance colours already applied levels and crop
     final tone = Tone.of(widget.prefs, _coloured != null ? Levels.identity : _levels);
     final enhance = widget.prefs.sharpen; // the setting is still called sharpen in the synced settings

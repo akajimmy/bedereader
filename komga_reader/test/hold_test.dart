@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_image.dart';
+import 'package:komga_reader/reader/auto_crop.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -87,7 +88,7 @@ void main() {
       img = await paintedImage(200, 300, (canvas) => canvas
         ..drawRect(const Rect.fromLTWH(0, 0, 200, 300), Paint()..color = const Color(0xFFFFFFFF)) // margin
         ..drawRect(const Rect.fromLTWH(10, 15, 180, 270), Paint()..color = const Color(0xFF204060))); // the art
-      final cut = await cropEdges(img, 0.05);
+      final cut = await cropEdges(img, PageCut.even(0.05));
       expect((cut.width, cut.height), (180, 270));
       final d = (await cut.toByteData(format: ui.ImageByteFormat.rawRgba))!;
       expect(d.getUint8(0), 0x20); // the top-left corner is now art, not margin

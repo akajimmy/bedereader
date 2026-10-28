@@ -20,6 +20,7 @@ import '../screen.dart';
 import '../settings.dart';
 import '../widgets/display_panel.dart';
 import '../widgets/error_text.dart';
+import 'auto_crop.dart';
 import 'position_row.dart';
 import '../synced_ids.dart';
 import 'reader_bars.dart';
@@ -119,6 +120,63 @@ class ComicRenderer extends Renderer {
   @override
   bool get opened => pc != null;
   bool get onEndCard => index > last;
+
+  // ---- Crop edges on Auto (user, 2026-10-28): the book's pages measured first - a spinner, as an eBook's layout -
+  // then each page cut to its own border (lib/reader/auto_crop.dart). A webtoon's strip isn't.
+
+  /// Auto is on for this book.
+  bool get _autoOn => prefs.crop == ReaderPrefs.autoCrop && !webtoon;
+  AutoCropRun? _auto;
+
+  @override
+  bool get ready => opened && (!_autoOn || _autoRun().cuts != null);
+
+  /// This book's run for the border set - started if it isn't (the book opened, Auto chosen, the border changed).
+  AutoCropRun _autoRun() {
+    final id = _book['id'] as String, border = _settings.display.autoCropBorder;
+    final have = _auto;
+    if (have != null && have.bookId == id && have.border == border && have.total == pages.length) return have;
+    have?.cancel();
+    late final AutoCropRun run;
+    run = AutoCropRun(api, id, _loader!.pageNumbers, border: border, onProgress: () {
+      if (identical(_auto, run)) _changed(); // (told only after it's started: its first step waits)
+    });
+    return _auto = run;
+  }
+
+  /// Page [i]'s own cut on Auto (null: whole, or not on Auto).
+  PageCut? _autoCutOf(int i) {
+    if (!_autoOn) return null;
+    final cuts = _auto?.cuts;
+    return cuts == null || i < 0 || i >= cuts.length ? null : cuts[i];
+  }
+
+  /// Page [i] as it's cut ([cutFor]).
+  PageCut _cutOf(int i) => cutFor(prefs, _autoCutOf(i));
+
+  /// The book's pages being measured: a spinner, how far it has got, and Close (Back works too) - as an eBook's
+  /// layout (user, 2026-10-28: "use the same spinner as ebooks use when doing the layout").
+  @override
+  Widget waiting(BuildContext context) {
+    final run = _autoRun();
+    return ColoredBox(
+      color: background,
+      child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3)),
+        const SizedBox(height: 20),
+        Text('Finding page borders', style: TextStyle(color: ink(0.8), fontSize: 16)),
+        const SizedBox(height: 6),
+        Text('Page ${math.min(run.done + 1, run.total)} of ${run.total}', key: const ValueKey('autocrop-counting'),
+            style: TextStyle(color: ink(0.55), fontSize: 13, fontFeatures: const [FontFeature.tabularFigures()])),
+        const SizedBox(height: 14),
+        SizedBox(width: 220, child: LinearProgressIndicator(value: run.total == 0 ? null : run.done / run.total,
+            minHeight: 3, backgroundColor: ink(0.12))),
+        const SizedBox(height: 22),
+        TextButton(onPressed: () => Navigator.of(context).maybePop(),
+            child: Text('Close', style: TextStyle(color: ink(0.8)))),
+      ])),
+    );
+  }
 
   // ---- two pages side by side (user, 2026-10-16 - NOTES, "Dual-page mode"): the page view goes by spread
   // (lib/reader/spreads.dart), one page each otherwise; [_at] is where the page view is, [index] the page read
@@ -444,6 +502,7 @@ class ComicRenderer extends Renderer {
   @override
   void dispose() {
     _disposed = true;
+    _auto?.cancel();
     _freeAllJoined();
     _loader?.freeAll();
     _settleTimer?.cancel();
@@ -1080,7 +1139,7 @@ class ComicRenderer extends Renderer {
                 for (final p in pages)
                   // (as cropped: Crop edges narrows each slice, its place in the strip with it)
                   croppedSize(((p as Map)['width'] as num?)?.toInt() ?? 0, (p['height'] as num?)?.toInt() ?? 0,
-                      prefs.crop, sidesOnly: true),
+                      cutFor(prefs, null, sidesOnly: true)),
               ],
               page: _slice,
               endCard: host.endCard,
@@ -1268,23 +1327,23 @@ class ComicRenderer extends Renderer {
     // place moves first) - off screen and about to go; loading it decoded again the pages just let go of, two pages up
     // the spread just left (measured 2026-10-25: four big decodes a curl, two of them that)
     if ((v - _at).abs() > 1) return const SizedBox.shrink();
-    if (!_dual) return _page(context, v, _loader!.get(v));
+    if (!_dual) return _page(context, v, _loader!.get(v), autoCut: _autoCutOf(v));
     final s = _spreads[v];
-    if (s.pages.length == 1) return _page(context, v, _loader!.get(s.first));
+    if (s.pages.length == 1) return _page(context, v, _loader!.get(s.first), autoCut: _autoCutOf(s.first));
     // (cropped page by page before they're joined: the pages meet at the spine, not their cut-off margins)
     return _page(context, v, _joinedAt(v, s), prefs: prefs.copyWith(crop: 0));
   }
 
   /// Two pages joined, by item, the crop and the direction they were joined in - the ones near the page being read.
-  final Map<(int, double, bool, double, FitMode, Size, Color), Future<PageData>> _joined = {};
+  final Map<(int, (PageCut, PageCut), bool, double, FitMode, Size, Color), Future<PageData>> _joined = {};
 
   Future<PageData> _joinedAt(int v, Spread s) {
     // the pair showing and one turn either way (the page view builds no further) - each is two pages wide
     for (final k in [for (final k in _joined.keys) if ((k.$1 - _at).abs() > 1) k]) {
       _freeJoined(_joined.remove(k)!);
     }
-    final crop = prefs.crop;
-    final key = (v, crop, rtl, prefs.gutter, prefs.fit, _settled, background);
+    final cuts = (_cutOf(s.earlier!), _cutOf(s.later!)); // (Auto: each its own)
+    final key = (v, cuts, rtl, prefs.gutter, prefs.fit, _settled, background);
     // one picture per pair: the one for an older size or setting goes (a rotation passes through several sizes as
     // the bars move, and each pair was joined again for each, every copy kept - two full pages wide each; user,
     // 2026-10-24: the app died turning the tablet with two pages up)
@@ -1294,7 +1353,9 @@ class ComicRenderer extends Renderer {
         final pair = await Future.wait([_loader!.get(s.earlier!), _loader!.get(s.later!)]);
         // its own hold on the two pages (the loader frees its own once they're far behind - PageLoader.around)
         final own = [for (final p in pair) p.image.clone()];
-        final cut = crop > 0 ? [for (final i in own) await cropEdges(i, crop)] : null;
+        final cut = cuts.$1.isNone && cuts.$2.isNone
+            ? null
+            : [await cropEdges(own[0], cuts.$1), await cropEdges(own[1], cuts.$2)];
         try {
           final images = cut ?? own;
           final onScreen = rtl ? images.reversed.toList() : images;
@@ -1345,7 +1406,7 @@ class ComicRenderer extends Renderer {
   @visibleForTesting
   static void Function(ui.Image)? onJoined;
 
-  Widget _page(BuildContext context, int i, Future<PageData> data, {ReaderPrefs? prefs}) {
+  Widget _page(BuildContext context, int i, Future<PageData> data, {ReaderPrefs? prefs, PageCut? autoCut}) {
     return FutureBuilder<PageData>(
       future: data,
       builder: (context, snap) {
@@ -1366,7 +1427,7 @@ class ComicRenderer extends Renderer {
         }
         if (!snap.hasData) return const Center(child: CircularProgressIndicator(strokeWidth: 2));
         return PageCanvas(
-          data: snap.data!, prefs: prefs ?? this.prefs, scroll: _scrollFor(i),
+          data: snap.data!, prefs: prefs ?? this.prefs, scroll: _scrollFor(i), autoCut: autoCut,
           startAtEnd: _startAtEnd == i,
           levels: _loader!.bookLevels,
           levelsNow: () => _loader?.levelsNow,
