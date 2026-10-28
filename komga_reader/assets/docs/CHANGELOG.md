@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+### Build 169 - 2026-10-28
+
 **New**
 
 - More to edit: a book's sort number (where it sorts, apart from its number - an Annual between #12 and #13; it follows the number until you change it), summary, credits (writers, pencillers, inkers, colorists, letterers, cover artists - names separated by commas) and tags; a series' summary, genres and tags. On Komga and on local and network books alike.
@@ -17,8 +21,6 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 **Changed**
 
 - The Metadata edits setting from build 168 (Alongside / In the files) is gone: edits are always kept beside the books, and Apply edits to files puts them into the files when you choose. Komga books and series: the edit screens change only what Komga itself can change.
-
-## 1.7.0
 
 ### Build 168 - 2026-10-27
 
