@@ -79,10 +79,18 @@ class StripPlaces {
 ///
 /// Places are the pages, 0..[last]; [last] + 1 is the end card.
 class ComicRenderer extends Renderer {
-  ComicRenderer(super.host) {
+  ComicRenderer(super.host, {this.saves = true}) {
     PageCurl.program().ignore(); // load the curl shader ahead of the first turn
     latest = this;
   }
+
+  /// Progress is loaded and saved - not for a file opened on its own (nothing kept: its "saves" kept nothing, and the
+  /// next one, finding no progress where this reader had "saved" a page, asked "Read further on another device - marked
+  /// unread on another device" - user, 2026-10-29).
+  final bool saves;
+
+  @override
+  bool get savesProgress => saves;
 
   /// The comic renderer made last (tests look inside it).
   @visibleForTesting
