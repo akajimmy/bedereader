@@ -9,6 +9,7 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Page curl, two pages up: as a page shown alone (the cover) turned into the double page after it, a thin line ran down it at the middle - the double page's gutter showing through. Gone.
 - A comic opened on its own (Open with, Share, Open in): turning pages could bring up "Read further on another device - This book was marked unread on another device", though it had never been on another. Nothing about it is kept, so nothing is asked now.
 
 ## 1.7.0
