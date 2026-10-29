@@ -918,8 +918,14 @@ class ComicRenderer extends Renderer {
       // until the previous spread's later page lands on it - the earlier side shows that spread at once
       final padded = _padded(forward ? _at : target);
       if (forward && padded != null) {
+        // held up to where its turning half starts ([_curlRect]: past half the pair's gutter) - the page alone has no
+        // gutter of its own: held only to the middle, the strip between showed the pair's gutter underneath, a line
+        // down the cover as it turned (user, 2026-10-29)
         final (r, x) = padded;
-        return rtl ? Rect.fromLTRB(x, r.top, r.right, r.bottom) : Rect.fromLTRB(r.left, r.top, x, r.bottom);
+        final half = _gapOn(_at) / 2;
+        return rtl
+            ? Rect.fromLTRB(x - half, r.top, r.right, r.bottom)
+            : Rect.fromLTRB(r.left, r.top, x + half, r.bottom);
       }
       return forward
           ? _heldPage(_at, _spineX(_at), earlier: true)

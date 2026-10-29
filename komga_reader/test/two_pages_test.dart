@@ -625,6 +625,30 @@ void main() {
       await tester.pump();
     });
 
+    // user, 2026-10-29: a line down the cover as it turned into the spread - its held half ended at the gutter's
+    // middle, its turning half started past the gutter: the pair's gutter showed between them
+    testWidgets('from a page alone to a pair with a wide gutter: what stays of the page alone meets its turning half - '
+        'no strip between them', (tester) async {
+      AppSettings.instance.setDefault(const ReaderPrefs(gutter: 40));
+      await openReal(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      await turn(tester); // [1] then [2], alone, before the pair 3|4
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.curl));
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump();
+      }
+      expect(await position(tester), startsWith('Pg. 2/9'));
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump();
+      await tester.pump();
+      final c = curl(tester)!;
+      expect(c.page.left - c.held!.left, greaterThan(100), reason: 'a double page turning, its left half held');
+      expect(c.held!.right, closeTo(c.page.left, 0.5), reason: 'held up to where the turning half starts');
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+    });
+
     testWidgets('from a page alone to a pair, the page alone turns as a double page as wide as the pair, background '
         'either side of it (user, 2026-10-17: "turn the single into a double by including background empty space to '
         'each side")', (tester) async {
