@@ -349,7 +349,7 @@ class _ReaderScreenState extends State<ReaderScreen>
       // the source given (tests) is the first book's only
       ? EpubRenderer(this, source: book['id'] == widget.book['id'] ? widget.epubSource : null,
           saves: widget.saveProgress)
-      : ComicRenderer(this);
+      : ComicRenderer(this, saves: widget.saveProgress);
 
   /// Each book's save from its last closing, while it's on its way (the book opened again waits for it).
   static final Map<String, Future<void>> _closingSaves = {};
@@ -524,7 +524,8 @@ class _ReaderScreenState extends State<ReaderScreen>
   Future<void> _checkElsewhere() {
     _saves = _saves.then((_) async {
       final r = _renderer;
-      if (!mounted || _loading || r == null || !r.ready || _question != null) return;
+      // (a book whose progress isn't kept - a file opened on its own - has no other device to ask about)
+      if (!mounted || _loading || r == null || !r.ready || !r.savesProgress || _question != null) return;
       final moved = await _movedElsewhere(_book['id'] as String, r, r.progressReader());
       if (moved != null && mounted) await _askAboutElsewhere(moved.now);
     });

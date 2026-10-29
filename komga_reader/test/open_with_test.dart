@@ -71,6 +71,25 @@ void main() {
     });
   });
 
+  // user, 2026-10-29: a comic opened on its own, pages turned - "Read further on another device: This book was marked
+  // unread on another device" (it had never been on another). Its saves kept nothing; the next found no progress where
+  // this reader had "saved" a page, and took that for another device's
+  testWidgets('a comic opened on its own, read page after page (a save each time): never asked about another device',
+      (tester) async {
+    final f = await OpenedFile.open('C:/in/a.cbz',
+        fs: MemoryFs({'C:/in/a.cbz': zipOf({for (var i = 1; i <= 6; i++) '00$i.png': _page})}));
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: f, book: f.bookJson, saveProgress: false)));
+    await tester.pump(const Duration(milliseconds: 500));
+    for (var i = 0; i < 4; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pump(const Duration(seconds: 2)); // (a save 1.5 s after a turn)
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.textContaining('another device'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets("the reader of a file on its own has no Mark read, Delete or books either side (a book's has)",
       (tester) async {
     Future<void> controlsOf(Widget reader) async {
