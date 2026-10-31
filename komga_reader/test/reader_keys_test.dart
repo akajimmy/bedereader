@@ -116,24 +116,34 @@ void main() {
     expect(k.actionFor(LogicalKeyboardKey.arrowRight), ReaderAction.next, reason: 'the rest of the save kept');
   });
 
-  testWidgets("Settings: + Add takes the next key pressed - Back and Esc cancel, they're never taken as the key (code "
-      'review); a chip removes its key', (tester) async {
+  testWidgets("Settings: + Add takes the next key pressed - Back cancels, it's never taken as the key (code review); "
+      'Esc is a key like any other (user, 2026-10-31: a controller button sending Esc could not be set); a chip '
+      'removes its key', (tester) async {
     // (two tests on the same page, merged - test audit, 2026-10-07)
+    addTearDown(k.reset);
     setView(tester, const Size(1000, 2000));
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
     await tester.pump();
-    for (final cancel in [LogicalKeyboardKey.goBack, LogicalKeyboardKey.escape]) {
-      await tester.tap(find.text('Add').first); // Next page
-      await tester.pumpAndSettle();
-      expect(find.text('Next page: press a key'), findsOneWidget);
-      // the remote's Back (the test kit knows no physical key for it, so one is named)
-      await tester.sendKeyEvent(cancel, physicalKey: PhysicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
-      expect(k.keys[ReaderAction.next], isNot(contains(cancel)), reason: '${ReaderKeys.nameOf(cancel)} not added');
-    }
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsOneWidget);
+    // the remote's Back (the test kit knows no physical key for it, so one is named)
+    await tester.sendKeyEvent(LogicalKeyboardKey.goBack, physicalKey: PhysicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
+    expect(k.keys[ReaderAction.next], isNot(contains(LogicalKeyboardKey.goBack)), reason: 'Back not added');
     expect(k.isDefault, isTrue);
+
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsNothing, reason: 'Esc was the answer');
+    expect(find.byType(AppSettingsScreen), findsOneWidget, reason: 'still in Settings');
+    expect(k.actionFor(LogicalKeyboardKey.escape), ReaderAction.next, reason: 'Esc taken (off Close the book)');
+    await k.reset();
+    await tester.pumpAndSettle();
 
     expect(find.text('Next page'), findsOneWidget);
     expect(find.text('PgDn'), findsOneWidget);

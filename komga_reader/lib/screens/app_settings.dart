@@ -10,6 +10,7 @@ import '../offline/sync.dart' show ProgressSync;
 import '../pins.dart';
 import '../sync_status.dart';
 import '../synced_ids.dart' show PairShift;
+import '../app_log.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
@@ -460,9 +461,10 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   Future<void> _addKey(BuildContext context, ReaderAction action) async {
     // The key is caught from the keyboard itself while the dialog is up, not by a widget waiting for the focus: on
     // the tablet the dialog never got a key that way - not the volume keys, not any (user, build 92: "it does not let
-    // me set the volume keys"). Every key is the answer, OK included, except Back and Esc, which cancel (code review,
-    // 2026-09-30: Back was taken as the key, and then no longer closed the book). Taken keys go no further (a volume
-    // key doesn't change the volume).
+    // me set the volume keys"). Every key is the answer, OK and Esc included, except Back, which cancels (code
+    // review, 2026-09-30: Back was taken as the key, and then no longer closed the book). Esc is a key like any other
+    // (user, 2026-10-31: a controller button sent Esc and couldn't be set - Esc cancelled). Taken keys go no further (a
+    // volume key doesn't change the volume).
     BuildContext? dialog;
     var answered = false;
     bool onKey(KeyEvent e) {
@@ -470,7 +472,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       if (ctx == null || !ctx.mounted) return false;
       if (e is KeyDownEvent && !answered) {
         answered = true;
-        final cancel = e.logicalKey == LogicalKeyboardKey.goBack || e.logicalKey == LogicalKeyboardKey.escape;
+        final cancel = e.logicalKey == LogicalKeyboardKey.goBack;
+        AppLog.instance.info('keys', 'Remote and keys: ${ReaderKeys.nameOf(e.logicalKey)} pressed for '
+            '${action.label}${cancel ? ' (cancels)' : ''}');
         Navigator.pop(ctx, cancel ? null : e.logicalKey);
       }
       return true; // the rest of the press too, while the dialog is up
@@ -485,7 +489,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           dialog = ctx;
           return AlertDialog(
             title: Text('${action.label}: press a key'),
-            content: const Text('Press the key on the remote or keyboard. (Back, Esc or a tap outside cancels.)'),
+            content: const Text('Press the key on the remote or keyboard. (Back or a tap outside cancels.)'),
             actions: [
               // touch; never the remote's focus (OK on it would be the answer, not a press)
               ExcludeFocus(child: TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel'))),

@@ -860,7 +860,18 @@ class _ReaderScreenState extends State<ReaderScreen>
       return KeyEventResult.handled;
     }
     if (e is KeyDownEvent && (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack)) _hidingKey = k;
-    return controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
+    final fixed = controlsKey(e, nothingSelected: _keys.hasPrimaryFocus, hide: _hideControls, move: _move);
+    if (fixed != KeyEventResult.ignored) return fixed;
+    // the key that showed them hides them again until the remote moves into the bars, as OK does - any key set to
+    // Show the controls, not only OK (user, 2026-10-31: a controller button set to it no longer hid them)
+    if (_keys.hasPrimaryFocus && ReaderKeys.instance.actionFor(k, rtl: _rtl) == ReaderAction.controls) {
+      if (e is KeyDownEvent) {
+        _hidingKey = k;
+        _hideControls();
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   @override

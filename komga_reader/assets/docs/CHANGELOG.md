@@ -9,6 +9,9 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Settings > Remote and keys: Esc can now be given to an action, for a remote or controller button that sends Esc. Pressing it while the app waits for a key used to cancel instead. The remote's Back still cancels, and so do Cancel and a tap outside.
+- In the reader, a key set to "Show the controls" hides them again, as OK does, until you move into the bars. Only OK did this before.
+
 ## 1.7.0
 
 ### Build 175 - 2026-10-29
