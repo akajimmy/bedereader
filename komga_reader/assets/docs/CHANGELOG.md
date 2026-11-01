@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- iPad and iPhone: a local library can be any folder the Files app shows, such as Downloads (where Safari saves), iCloud Drive or On My iPad. When adding a library, choose "A folder in Files" and pick the folder in the Files picker, then go into it as before. iOS keeps the permission, so the library stays readable after restarts and updates. Books in an iCloud folder that aren't on the device yet are downloaded, and appear at the next scan.
+
 ## 1.7.0
 
 ### Build 176 - 2026-10-31
