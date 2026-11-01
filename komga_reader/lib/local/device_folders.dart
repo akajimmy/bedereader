@@ -40,6 +40,20 @@ class DeviceFolders {
     }
   }
 
+  static const _folders = MethodChannel('komga_reader/folders');
+
+  /// iOS: a folder picked in the Files picker (Downloads, iCloud Drive, On My iPad...), the app's to read from then on
+  /// - iOS keeps the permission (FolderAccess in ios/Runner/AppDelegate.swift; user, 2026-10-31). Its path, or null
+  /// (cancelled, or not iOS).
+  static Future<String?> pickInFiles() async {
+    if (defaultTargetPlatform != TargetPlatform.iOS) return null;
+    try {
+      return await _folders.invokeMethod<String>('pick');
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// iOS: a Comics folder in the app's own folder while that's empty - the Files app hides an empty one, so there was
   /// nowhere to copy books to (user, 2026-10-26). Only while empty: one deleted among the person's own isn't made
   /// again. [documents] for tests. Returns the folder made, or null.
@@ -79,6 +93,12 @@ String wherePlainly(String path, {String? storage, String? documents}) {
     final m = iosGuid.firstMatch(p);
     if (m != null) return 'This Device › Documents/${inside(p.substring(m.end))}';
   }
+  // iOS, a folder picked in Files (user, 2026-10-31): iCloud Drive, and On My iPad / iPhone (the Files app's own)
+  final cloud = RegExp(r'^(?:/private)?/var/mobile/Library/Mobile Documents/com~apple~CloudDocs/?').firstMatch(p);
+  if (cloud != null) return 'iCloud Drive › ${inside(p.substring(cloud.end))}';
+  final mine = RegExp(r'^(?:/private)?/var/mobile/Containers/Shared/AppGroup/[^/]+/File Provider Storage/?')
+      .firstMatch(p);
+  if (mine != null) return 'On This Device › ${inside(p.substring(mine.end))}';
   if (storage != null && (p == storage || p.startsWith('$storage/'))) {
     return 'This Device › ${inside(p.substring(storage.length).replaceFirst(RegExp(r'^/'), ''))}';
   }
