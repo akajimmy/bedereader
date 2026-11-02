@@ -35,6 +35,8 @@ class OpenWith {
     _nav = nav;
     channel.setMethodCallHandler((call) async {
       if (call.method == 'open') _take(call.arguments as Map);
+      // the platform's own line for the app's log (Windows: its window shown without a first frame, 2026-11-02)
+      if (call.method == 'log') AppLog.instance.info('app', call.arguments as String);
     });
     final file = args.where((a) => !a.startsWith('-')).firstOrNull;
     if (file != null) _take({'path': file});

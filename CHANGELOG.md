@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Windows: the app's window could stay hidden for good after it started, with the app running in Task Manager, and every book opened with the app afterwards went into the hidden window. Now the window shows after 3 seconds at most, and a book opened with the app always shows it.
+
 ## 1.7.0
 
 ### Build 177 - 2026-10-31
