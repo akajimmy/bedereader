@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/open_with.dart';
 import 'package:komga_reader/opened_file.dart';
 import 'package:komga_reader/screens/reader.dart';
@@ -196,5 +197,14 @@ void main() {
     expect(find.text('home'), findsOneWidget);
     expect(calls.where((c) => c.method == 'back'), hasLength(1));
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets("the platform's own line goes into the app's log (Windows: its window shown without a first frame - "
+      'user, 2026-11-02: a start stayed hidden for good)', (tester) async {
+    OpenWith(fs: MemoryFs(const {})).start(GlobalKey<NavigatorState>(), const []);
+    const msg = 'window shown without its first frame: none came within 3 s';
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(OpenWith.channel.name,
+        OpenWith.channel.codec.encodeMethodCall(const MethodCall('log', msg)), (_) {});
+    expect(AppLog.instance.recent.where((l) => l.tag == 'app' && l.msg == msg), hasLength(1));
   });
 }

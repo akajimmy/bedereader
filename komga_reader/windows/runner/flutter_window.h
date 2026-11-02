@@ -40,6 +40,11 @@ class FlutterWindow : public Win32Window {
 
   // Files handed over by later starts, passed on to the app (open_with.h, lib/open_with.dart).
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> open_with_;
+
+  // The window shown, once: by the first frame, or without it (ShowFirstWhy) - its first frame can fail to come.
+  void ShowFirst();
+  void ShowFirstWhy(const char* why);
+  bool shown_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
