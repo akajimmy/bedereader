@@ -1,6 +1,6 @@
 # Tests tools\update-desktop.ps1 on temporary folders (never the real Desktop copy): the normal swap, and the final
 # rename failing - the old copy must be back in place. Run with: powershell -ExecutionPolicy Bypass -File <this>
-param([string]$script = 'C:\Claude\KomgaClient\tools\update-desktop.ps1')
+param([string]$script = 'C:\Claude\BeDeReader\tools\update-desktop.ps1')
 $ErrorActionPreference = 'Stop'
 "script under test: $script"
 $base = Join-Path $env:TEMP "ud-test-$(Get-Random)"

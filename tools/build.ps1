@@ -38,7 +38,7 @@
        building Windows, Android, and iOS").
 
     Each step prints a timestamped line; the tools' full output goes to dist\build.log
-    (watch it with: Get-Content C:\Claude\KomgaClient\dist\build.log -Wait -Tail 20).
+    (watch it with: Get-Content C:\Claude\BeDeReader\dist\build.log -Wait -Tail 20).
 
 .EXAMPLE
     .\tools\build.ps1 -Bump             (BeDeReader Exp - the everyday build)
@@ -69,7 +69,7 @@ $fileName = if ($exp) { 'BeDeReader-Exp' } else { 'BeDeReader' }  # the dist\ fi
 $tagPrefix = if ($exp) { 'exp-build-' } else { 'build-' }
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot          # C:\Claude\KomgaClient
+$root = Split-Path -Parent $PSScriptRoot          # C:\Claude\BeDeReader
 $app = Join-Path $root 'komga_reader'
 $dist = Join-Path $root 'dist'
 $log = Join-Path $dist 'build.log'
