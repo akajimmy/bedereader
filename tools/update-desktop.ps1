@@ -13,7 +13,7 @@
 .PARAMETER Dest
     Default: <Desktop>\BeDeReader.
 .EXAMPLE
-    C:\Claude\KomgaClient\tools\update-desktop.cmd
+    C:\Claude\BeDeReader\tools\update-desktop.cmd
     (or double-click it) - runs this script with the execution policy bypassed for that one run; Windows blocks
     .ps1 files by default.
 #>
