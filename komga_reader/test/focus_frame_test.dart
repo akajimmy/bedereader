@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/reader_keys.dart';
 import 'package:komga_reader/widgets/focus_style.dart';
 import 'package:komga_reader/widgets/poster.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/no_network.dart';
 
@@ -15,6 +17,16 @@ void main() {
     expect(frames, isNotEmpty);
     return frames.any((box) => ((box.decoration as BoxDecoration).border as Border).top.color != Colors.transparent);
   }
+
+  testWidgets('a key set as an arrow turns the highlight on, as the arrow does', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    addTearDown(stopFollowingInput);
+    addTearDown(ReaderKeys.instance.reset);
+    focusHighlightFollowsInput();
+    await ReaderKeys.instance.assignMove(Nav.right, LogicalKeyboardKey.keyK);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    expect(FocusManager.instance.highlightStrategy, FocusHighlightStrategy.alwaysTraditional);
+  });
 
   testWidgets('the first tile has focus but no highlight on start-up; arrows show it, a mouse click or a touch hides it '
       'again', (tester) async {

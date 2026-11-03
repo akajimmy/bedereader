@@ -779,8 +779,9 @@ class _ReaderScreenState extends State<ReaderScreen>
     setState(() {});
   }
 
-  // Fixed keys for moving around the controls and scrubbing the slider (not remappable, so a mapping can't strand the
-  // remote); with the controls hidden, keys go through ReaderKeys.
+  // Fixed keys for moving around the controls and scrubbing the slider (the arrows, whichever keys Up, Down, Left and
+  // Right are - a mapping of reader actions can't strand the remote); with the controls hidden, keys go through
+  // ReaderKeys.
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     // the rest of the press that hid the controls (a fresh press is a new one: it goes on below)
     if (e.logicalKey == _hidingKey && e is! KeyDownEvent) {

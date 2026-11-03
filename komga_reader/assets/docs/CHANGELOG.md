@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Settings > Remote and keys: Up, Down, Left, Right and OK can be given to any key, on every screen and in the reader (new group, Moving around and OK, everywhere). For a controller held sideways, give Left the button that now points left, and so on; a key set as OK opens books and presses what's selected. In the reader these keys do what the key they stand for does. Reset keys puts them back.
+
 ## 1.7.0
 
 ### Build 178 - 2026-11-02
