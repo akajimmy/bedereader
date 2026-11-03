@@ -436,7 +436,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       SettingsGroup(title: 'In the reader, with the controls hidden', children: [
         for (final a in ReaderAction.values)
-          if (a != ReaderAction.openMenu) _KeyRow(action: a, onAdd: () => _addKey(context, a)),
+          if (a != ReaderAction.openMenu) _KeyRow.action(a, onAdd: () => _addKey(context, a)),
         NoteRow('${hasVolumeKeys ? 'Any key can be added, the volume keys too (to turn pages with them: Volume down to '
             'Next page, Volume up to Previous page). ' : ''}For a book read right to left, Left and Right swap. '
             'Shift+Space always goes back. Once the controls are up, the arrows and OK move around them.'),
@@ -445,9 +445,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           button: TextButton(onPressed: k.isDefault ? null : k.reset, child: const Text('Reset keys')),
         ),
       ]),
+      // (user, 2026-11-03: the 8BitDo Micro held sideways, its up and down to be left and right)
+      SettingsGroup(title: 'Moving around and OK, everywhere', children: [
+        for (final m in Nav.values) _KeyRow.move(m, onAdd: () => _addMove(context, m)),
+        const NoteRow('The keys that count as the arrows and OK, on every screen and in the reader: for a controller held '
+            "sideways, give Left the key that's now pointing left, and so on. OK opens a book and presses what's selected. "
+            'In the reader these keys do what the key they stand for does. Reset keys puts them back too.'),
+      ]),
       // the screens with a side menu (Home, the libraries, a series...) - no key by default (user, 2026-10-12)
       SettingsGroup(title: 'Anywhere else', children: [
-        _KeyRow(action: ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
+        _KeyRow.action(ReaderAction.openMenu, onAdd: () => _addKey(context, ReaderAction.openMenu)),
       ]),
       // what a remote sends, and where it's lost (user, 2026-10-25: the Chromecast remote on the iPad)
       SettingsGroup(title: 'Remote', children: [
@@ -459,6 +466,37 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
   /// "+ Add": the next key pressed (on the remote or a keyboard) goes to [action].
   Future<void> _addKey(BuildContext context, ReaderAction action) async {
+    final key = await _pressKey(context, action.label);
+    if (key == null || !context.mounted) return;
+    final no = ReaderKeys.instance.cantAssign(action, key);
+    if (no != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(no)));
+      return;
+    }
+    final was = await ReaderKeys.instance.assign(action, key);
+    if (context.mounted && was != null) _sayMoved(context, key, action.label, was.label);
+  }
+
+  /// "+ Add" on Up, Down, Left or Right: the same, for [move].
+  Future<void> _addMove(BuildContext context, Nav move) async {
+    final key = await _pressKey(context, move.label);
+    if (key == null || !context.mounted) return;
+    final no = ReaderKeys.instance.cantAssign(ReaderAction.next, key);
+    if (no != null) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(no)));
+      return;
+    }
+    final was = await ReaderKeys.instance.assignMove(move, key);
+    if (context.mounted && was != null) _sayMoved(context, key, move.label, was);
+  }
+
+  void _sayMoved(BuildContext context, LogicalKeyboardKey key, String now, String was) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+        content: Text('${ReaderKeys.nameOf(key)} now does ${now.toLowerCase()} (was: ${was.toLowerCase()})')));
+  }
+
+  /// Asks for a key for [label]: the one pressed next, or null if that was cancelled.
+  Future<LogicalKeyboardKey?> _pressKey(BuildContext context, String label) async {
     // The key is caught from the keyboard itself while the dialog is up, not by a widget waiting for the focus: on
     // the tablet the dialog never got a key that way - not the volume keys, not any (user, build 92: "it does not let
     // me set the volume keys"). Every key is the answer, OK and Esc included, except Back, which cancels (code
@@ -474,21 +512,20 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
         answered = true;
         final cancel = e.logicalKey == LogicalKeyboardKey.goBack;
         AppLog.instance.info('keys', 'Remote and keys: ${ReaderKeys.nameOf(e.logicalKey)} pressed for '
-            '${action.label}${cancel ? ' (cancels)' : ''}');
+            '$label${cancel ? ' (cancels)' : ''}');
         Navigator.pop(ctx, cancel ? null : e.logicalKey);
       }
       return true; // the rest of the press too, while the dialog is up
     }
 
     HardwareKeyboard.instance.addHandler(onKey);
-    final LogicalKeyboardKey? key;
     try {
-      key = await showDialog<LogicalKeyboardKey>(
+      return await showDialog<LogicalKeyboardKey>(
         context: context,
         builder: (ctx) {
           dialog = ctx;
           return AlertDialog(
-            title: Text('${action.label}: press a key'),
+            title: Text('$label: press a key'),
             content: const Text('Press the key on the remote or keyboard. (Back or a tap outside cancels.)'),
             actions: [
               // touch; never the remote's focus (OK on it would be the answer, not a press)
@@ -499,17 +536,6 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       );
     } finally {
       HardwareKeyboard.instance.removeHandler(onKey);
-    }
-    if (key == null || !context.mounted) return;
-    final no = ReaderKeys.instance.cantAssign(action, key);
-    if (no != null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(no)));
-      return;
-    }
-    final was = await ReaderKeys.instance.assign(action, key);
-    if (context.mounted && was != null) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-          content: Text('${ReaderKeys.nameOf(key)} now does ${action.label.toLowerCase()} (was: ${was.label.toLowerCase()})')));
     }
   }
 
@@ -906,8 +932,23 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
 
 /// One job's keys as chips (select one to remove it - Show the controls always keeps one), and + Add.
 class _KeyRow extends StatefulWidget {
-  const _KeyRow({required this.action, required this.onAdd});
-  final ReaderAction action;
+  _KeyRow.action(ReaderAction action, {required this.onAdd})
+      : title = action.label,
+        keys = (() => ReaderKeys.instance.keys[action]!),
+        removable = ((_) => ReaderKeys.instance.canRemove(action)),
+        kept = 'Show the controls keeps at least one key',
+        remove = ((key) => ReaderKeys.instance.remove(action, key));
+  _KeyRow.move(Nav move, {required this.onAdd})
+      : title = move.label,
+        keys = (() => ReaderKeys.instance.moves[move]!),
+        removable = ((key) => ReaderKeys.instance.canRemoveMove(move, key)),
+        kept = 'This key stays here until another row takes it',
+        remove = ((key) => ReaderKeys.instance.removeMove(move, key));
+  final String title;
+  final List<LogicalKeyboardKey> Function() keys;
+  final bool Function(LogicalKeyboardKey key) removable;
+  final String kept; // why a key can't be removed
+  final void Function(LogicalKeyboardKey key) remove;
   final VoidCallback onAdd;
   @override
   State<_KeyRow> createState() => _KeyRowState();
@@ -922,38 +963,36 @@ class _KeyRowState extends State<_KeyRow> {
     super.dispose();
   }
 
-  /// [key] off [ReaderAction]; the remote's focus, which was on its chip, goes to the row's Add (the chip is gone -
-  /// the focus went with it; code review 2026-10-05, #26).
+  /// [key] off the row; the remote's focus, which was on its chip, goes to the row's Add (the chip is gone - the focus
+  /// went with it; code review 2026-10-05, #26).
   void _remove(LogicalKeyboardKey key) {
     final hadFocus = FocusManager.instance.primaryFocus?.context?.findAncestorStateOfType<_KeyRowState>() == this;
-    ReaderKeys.instance.remove(widget.action, key);
+    widget.remove(key);
     if (hadFocus) WidgetsBinding.instance.addPostFrameCallback((_) { if (mounted) _addNode.requestFocus(); });
   }
 
   @override
   Widget build(BuildContext context) {
-    final action = widget.action;
-    final k = ReaderKeys.instance;
-    final removable = k.canRemove(action);
+    final keys = widget.keys();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(action.label, style: const TextStyle(fontSize: 14.5)),
+        Text(widget.title, style: const TextStyle(fontSize: 14.5)),
         const SizedBox(height: 8),
         Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          for (final key in k.keys[action]!)
+          for (final key in keys)
             // one stop per key for the remote: the ✕ is drawn in the label, not a second (focusable) delete button
             // (user, 2026-09-30); OK or a tap removes it
             InputChip(
               label: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(ReaderKeys.nameOf(key)),
-                if (removable) ...[const SizedBox(width: 6), const Icon(Icons.close, size: 16)],
+                if (widget.removable(key)) ...[const SizedBox(width: 6), const Icon(Icons.close, size: 16)],
               ]),
               visualDensity: VisualDensity.compact,
-              tooltip: removable ? 'Remove ${ReaderKeys.nameOf(key)}' : 'Show the controls keeps at least one key',
-              onPressed: removable ? () => _remove(key) : null,
+              tooltip: widget.removable(key) ? 'Remove ${ReaderKeys.nameOf(key)}' : widget.kept,
+              onPressed: widget.removable(key) ? () => _remove(key) : null,
             ),
-          if (k.keys[action]!.isEmpty) const Text('No key', style: TextStyle(color: hintColour)),
+          if (keys.isEmpty) const Text('No key', style: TextStyle(color: hintColour)),
           TextButton.icon(focusNode: _addNode, onPressed: widget.onAdd, icon: const Icon(Icons.add, size: 18),
               label: const Text('Add')),
         ]),

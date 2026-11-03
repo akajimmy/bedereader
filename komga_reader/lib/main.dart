@@ -61,6 +61,7 @@ void main(List<String> args) {
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
+  ReaderKeys.instance.remapKeysToFocus(); // the keys set as Up, Down, Left and Right (Settings > Remote and keys)
   HttpOverrides.global = LocalNames(); // a bare server name ("nick-nas") found as name.local (local_names.dart)
   // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
   // trace to go on - user, build 65); they're still reported as before

@@ -2,6 +2,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../reader_keys.dart';
+
 /// The "you are here" highlight (tiles, buttons - everything that follows Flutter's focus highlight mode) shows only
 /// while the keyboard or a remote is being used: from the first arrow / Tab / Enter until the next click or touch.
 /// Flutter's own rule starts desktop apps in keyboard mode and keeps them there with a mouse, so on Windows the first
@@ -15,7 +17,8 @@ void focusHighlightFollowsInput() {
 }
 
 bool _onKey(KeyEvent e) {
-  if (e is KeyDownEvent && _navigationKeys.contains(e.logicalKey)) {
+  // (it's listening to the keyboard itself: a key set as an arrow still has its own name here)
+  if (e is KeyDownEvent && _navigationKeys.contains(ReaderKeys.instance.moved(e.logicalKey))) {
     FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
   }
   return false; // only watching: the key still goes where it was going
