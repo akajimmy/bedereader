@@ -184,12 +184,14 @@ String libraryKindLabel(LibraryKind k) => switch (k) {
       LibraryKind.seriesFolders => 'One folder per series',
       LibraryKind.oneSeries => 'Books of one series',
       LibraryKind.readList => 'Books of several series, in order (a read list)',
+      LibraryKind.looseFiles => 'Loose books among other files (like Downloads)',
     };
 
 IconData libraryKindIcon(LibraryKind k) => switch (k) {
       LibraryKind.seriesFolders => Icons.folder_copy_outlined,
       LibraryKind.oneSeries => Icons.collections_bookmark_outlined,
       LibraryKind.readList => Icons.format_list_numbered,
+      LibraryKind.looseFiles => Icons.move_to_inbox_outlined,
     };
 
 /// Picks a library folder on this device, browsed folder by folder: its path, or null.

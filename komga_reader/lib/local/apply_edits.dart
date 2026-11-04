@@ -113,8 +113,9 @@ Future<ApplyPlan> planApply(LibraryFs fs, LocalLibrary library, LibraryIndex ind
   final edited = withEdits(index, library, index.meta);
   final root = library.path.replaceAll(RegExp(r'[\\/]+$'), '');
   // series made from folders: their folders renamed, books moved between them; a read list's order is in its file
-  // names ("002 - "): its books written into, never renamed
-  final ownFolders = library.kind == LibraryKind.seriesFolders, renames = library.kind != LibraryKind.readList;
+  // names ("002 - "): its books written into, never renamed; loose files likewise, where they are is their own
+  final ownFolders = library.kind == LibraryKind.seriesFolders;
+  final renames = library.kind == LibraryKind.seriesFolders || library.kind == LibraryKind.oneSeries;
   final problems = <String>[];
 
   // 1. series folders whose title was edited, named after it (a one-series library's folder is the library itself)

@@ -29,8 +29,9 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 ### Folders and shares as libraries
 
 - Each library says what's in its folder, chosen when it's added: **one folder per series** (a book loose in it, or
-  in _oneshots, is a book of its own), **the books of one series** (every subfolder, folder by folder), or **a read
-  list** - books of several series in the order of their names ("001 - ...").
+  in _oneshots, is a book of its own), **the books of one series** (every subfolder, folder by folder), **a read
+  list** - books of several series in the order of their names ("001 - ...") - or **loose books among other files**,
+  like a Downloads folder: every book in it or its subfolders, put with the others of its series.
 - **CBZ, CBR (RAR4 and RAR5) and EPUB**, read in place - a book isn't copied to be read, even from a share.
 - Titles, numbers and dates come from the books' ComicInfo.xml (and an EPUB's own title and author), else from the
   file names: the issue number, the year, and the title without the start every book of the series shares.

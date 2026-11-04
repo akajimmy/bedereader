@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../app_log.dart';
 import '../content_changed.dart';
 import '../epub/progress.dart' show komgaEpubPage;
 import '../offline/catalogue_source.dart';
@@ -206,13 +207,15 @@ class LocalSource extends CatalogueSource {
         final signature = _signature();
         for (final library in List.of(_libraries)) {
           if (_offline && splitUnc(library.path) != null) continue; // (offline: its share not asked - as it was)
-          final r = await scanLibrary(_fsFor(library.path), library, store.libraries[library.id],
+          final fs = _fsFor(library.path);
+          final r = await scanLibrary(fs, library, store.libraries[library.id],
               onFound: (n) => found.value = n, onBook: (_) {
             found.value = null;
             scanning.value = ++done;
           });
           found.value = null;
           report[library.id] = r.report;
+          AppLog.instance.info('local', _scanLine(library, r, fs is LocalFs ? fs.inCloud : 0));
           // (not one removed while it was being scanned: it was asked about after it had gone - the review, 2026-10-26)
           if (r.report.missing && _libraries.any((l) => l.id == library.id)) looksDeleted.add(library);
           if (r.report.reached && _libraries.any((l) => l.id == library.id)) {
@@ -863,4 +866,15 @@ class _Poster extends ImageProvider<_Poster> {
   bool operator ==(Object other) => other is _Poster && other.path == path;
   @override
   int get hashCode => path.hashCode;
+}
+
+/// What a scan of [library] came to, for the app's log: a library that shows nothing leaves a reason (user, 2026-11-04).
+String _scanLine(LocalLibrary library, ScanResult r, int inCloud) {
+  final report = r.report;
+  if (!report.reached) {
+    return 'Scan of ${library.name}: not reached${report.missing ? ' (not there)' : ''}${report.error == null ? '' : ': ${report.error}'}';
+  }
+  return 'Scan of ${library.name}: ${r.index.books.length} books in ${r.index.series.length} series'
+      '${report.files.isEmpty ? '' : ', ${report.files.length} left out'}'
+      '${inCloud == 0 ? '' : ', $inCloud still in iCloud'}';
 }

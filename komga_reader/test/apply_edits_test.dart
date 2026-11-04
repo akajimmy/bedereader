@@ -195,6 +195,20 @@ void main() {
     expect(fs.files.keys.where((k) => k.endsWith('.cbz')), ['Order/001 - Saga 01.cbz', 'Order/002 - Saga 02.cbz']);
   });
 
+  test("loose files: written into, never renamed or moved - they're where they came", () async {
+    const loose = LocalLibrary('Downloads', 'Downloads', kind: LibraryKind.looseFiles);
+    await open({
+      'Downloads/Saga 01.cbz': _cbz,
+      'Downloads/old/Saga 02.cbz': _cbz,
+      'Downloads/old/.bedereader.json': _json({'books': {'Saga 02.cbz': {'title': 'The Edit'}}}),
+    }, on: loose);
+    final plan = await local.planApply(loose);
+    expect([for (final b in plan.books) (b.from, b.to, b.write?.title)],
+        [('Downloads/old/Saga 02.cbz', 'Downloads/old/Saga 02.cbz', 'The Edit')]);
+    await apply(on: loose);
+    expect(fs.files.keys.where((k) => k.endsWith('.cbz')), ['Downloads/Saga 01.cbz', 'Downloads/old/Saga 02.cbz']);
+  });
+
   test('a book moved to a series whose name a folder can\'t have ("What If?"): its folder is "What If-", and the '
       'series keeps its name - the book is in it after the scan, not adrift', () async {
     await open({
