@@ -87,8 +87,10 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
 
   // each series' files in natural order (by path: a one-series library's folder by folder - user, 2026-10-26), as the
   // library holds them ([LibraryKind]): a series folder's or a one-shot's own; the whole library's; a read list's
-  // books, all in one list - each one's series known once it's read (its ComicInfo, else its name)
+  // books, all in one list - each one's series known once it's read (its ComicInfo, else its name); loose files' the
+  // same, without the list
   final readList = library.kind == LibraryKind.readList;
+  final byName = readList || library.kind == LibraryKind.looseFiles;
   final groups = <(String, bool), List<FsEntry>>{};
   for (final f in files) {
     final parent = parentOf(f.path);
@@ -96,7 +98,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
         (parent.toLowerCase() == root.toLowerCase() || oneshotFolders.contains(baseOf(parent).toLowerCase()));
     final key = switch (library.kind) {
       LibraryKind.seriesFolders => oneshot ? (f.path, true) : (parent, false),
-      LibraryKind.oneSeries || LibraryKind.readList => (root, false),
+      LibraryKind.oneSeries || LibraryKind.readList || LibraryKind.looseFiles => (root, false),
     };
     groups.putIfAbsent(key, () => []).add(f);
   }
@@ -106,7 +108,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
   final jobs = <(FsEntry, int, String, String, bool)>[];
   for (final MapEntry(key: (where, oneshot), value: inIt) in groups.entries) {
     inIt.sort((a, b) => naturalCompare(a.path, b.path));
-    if (!oneshot && !readList) {
+    if (!oneshot && !byName) {
       // (user, 2026-10-26: "Green Lantern Mosaic 012 (1993)" in a folder of its issues is "012 (1993)")
       if (withoutSharedStart([for (final f in inIt) stemOf(f.path)]) case final names?) {
         for (final (i, f) in inIt.indexed) {
@@ -115,14 +117,14 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
       }
     }
     final id = localSeriesId(where), name = oneshot ? stemOf(where) : baseOf(where);
-    if (!readList) series.add(LocalSeries(id: id, libraryId: library.id, name: name, oneshot: oneshot));
+    if (!byName) series.add(LocalSeries(id: id, libraryId: library.id, name: name, oneshot: oneshot));
     for (final (i, f) in inIt.indexed) {
-      jobs.add(readList
+      jobs.add(byName
           ? (f, i, '', seriesFromName(withoutReadingOrder(stemOf(f.path))), false)
           : (f, i, id, name, oneshot));
     }
   }
-  final infoSeries = <String, String>{}; // a read list's book, read now: its ComicInfo's series
+  final infoSeries = <String, String>{}; // a book put by name, read now: its ComicInfo's series
 
   final books = <LocalBook>[];
   var next = 0, done = 0;
@@ -156,9 +158,9 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
       if (b.path.startsWith(folder) && !books.any((x) => x.id == b.id)) books.add(b);
     }
   }
-  if (readList) {
-    // a read list: its books put together by series - a book read now by its ComicInfo's, else its name's; one kept
-    // from before in the series it had - and each given its place in the list, counting the books there are
+  if (byName) {
+    // its books put together by series - a book read now by its ComicInfo's, else its name's; one kept from before in
+    // the series it had - and a read list's each given its place in the list, counting the books there are
     books.sort((a, b) => naturalCompare(a.path, b.path));
     final listId = library.readListId;
     for (final (i, b) in books.indexed) {
@@ -171,7 +173,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
           series.add(LocalSeries(id: seriesId, libraryId: library.id, name: name.trim(), oneshot: false));
         }
       }
-      books[i] = b.placed(seriesId: seriesId, readLists: [ReadListPlace(listId, i, books.length)]);
+      books[i] = b.placed(seriesId: seriesId, readLists: readList ? [ReadListPlace(listId, i, books.length)] : null);
     }
   }
   final seriesIds = {for (final b in books) b.seriesId};

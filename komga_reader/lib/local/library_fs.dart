@@ -183,6 +183,10 @@ String fileNameOf(String path) => path.substring(path.lastIndexOf(RegExp(r'[\\/]
 String joinPath(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
 
 /// A file read as a book - not a hidden one (a Mac's ._x copy of a book's attributes, on a share it wrote to).
+/// A book iCloud keeps a stand-in for until it's downloaded: ".Name.cbz.icloud".
+bool isCloudPlaceholder(String name) =>
+    name.startsWith('.') && name.endsWith('.icloud') && isBookFile(name.substring(1, name.length - '.icloud'.length));
+
 bool isBookFile(String name) {
   if (name.startsWith('.')) return false;
   final n = name.toLowerCase();
@@ -245,14 +249,17 @@ class LocalFs implements LibraryFs {
   /// and every file's size are a round trip each - one at a time, a big share's first scan was the slow one (the
   /// share client on Android and iOS lists [listedAtOnce] at once; user, 2026-10-28).
   @override
-  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) =>
-      listFolders(folder, (dir) async {
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) {
+    inCloud = 0;
+    return listFolders(folder, (dir) async {
         final folders = <String>[];
         final files = <File>[];
         await for (final e in Directory(dir).list(followLinks: false)) {
           final name = fileNameOf(e.path);
           if (e is Directory) {
             if (shownFolder(name)) folders.add(e.path);
+          } else if (isCloudPlaceholder(name)) {
+            inCloud++;
           } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files)
             files.add(e);
           }
@@ -267,6 +274,10 @@ class LocalFs implements LibraryFs {
           ],
         );
       }, onUnreadable: onUnreadable);
+  }
+
+  /// Books the last [list] saw that are in iCloud, not on this device yet (they're no books until they've come down).
+  int inCloud = 0;
 
   @override
   Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());

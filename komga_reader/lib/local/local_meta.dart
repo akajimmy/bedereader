@@ -256,7 +256,8 @@ String movedSeriesId(LocalLibrary library, String name) =>
 ({Map<String, LocalSeries> series, Map<String, LocalBook> books, Map<String, SeriesPlace> places}) withEdits(
     LibraryIndex index, LocalLibrary library, Map<String, FolderMeta> meta) {
   final root = library.path.replaceAll(RegExp(r'[\\/]+$'), '');
-  final ownFolder = library.kind != LibraryKind.readList; // series made from folders (not by name: a read list's)
+  // series made from folders (not by name: a read list's, or loose files')
+  final ownFolder = library.kind == LibraryKind.seriesFolders || library.kind == LibraryKind.oneSeries;
 
   // where each series' edits are, from its first book
   final places = <String, SeriesPlace>{};
