@@ -49,6 +49,12 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api
       ? row
       : IgnorePointer(child: ExcludeFocus(child: Opacity(opacity: 0.45, child: row)));
   return [
+    // the screen first, the book's own settings under it (user, 2026-11-11: brightness and rotation are what's changed
+    // mid-book; a book's settings are set once, if at all)
+    SettingsGroup(title: 'Screen', children: [
+      ...brightnessRows(s),
+      if (canRotate) rotationRow(s),
+    ]),
     if (id != null)
       SettingsGroup(title: 'This book', children: [
         SwitchRow(
@@ -83,10 +89,6 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api
     SettingsGroup(title: 'Page', children: [
       follows(_coloursRow(e, set)),
       follows(_twoPagesRow(e, set)),
-    ]),
-    SettingsGroup(title: 'Screen', children: [
-      ...brightnessRows(s),
-      if (canRotate) rotationRow(s),
     ]),
     if (api != null) moreSettingsRow(context, api, SettingsPage.ebooks),
   ];

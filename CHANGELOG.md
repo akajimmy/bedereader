@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- The reader's settings panels (comics, webtoons, eBooks): Screen - brightness and rotation - comes before the series' or book's own settings, which are now at the bottom, above More settings.
+
 ## 1.7.0
 
 ### Build 180 - 2026-11-04
