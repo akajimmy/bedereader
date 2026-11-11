@@ -790,6 +790,31 @@ void main() {
     ch.dispose();
   });
 
+  // Standard Ebooks' title page: SVG lettering shipped as a black-on-transparent PNG (The Wonderful Wizard of Oz's is
+  // big - no size limit) all but vanished on the dark page colours
+  test('black line art on a clear ground is drawn in the page\'s colours at any size; light or coloured ink, or an '
+      'opaque picture, is not', () async {
+    Future<Uint8List> png(int w, int h, Color ground, Color ink) async =>
+        (await (await drawn(w, h, ground, ink)).toByteData(format: ui.ImageByteFormat.png))!.buffer.asUint8List();
+    const clear = Color(0x00000000);
+    final source = _CountingSource(
+        {'c.xhtml': '<html><body><p><img src="title.png"/></p><p><img src="white.png"/></p>'
+            '<p><img src="red.png"/></p><p><img src="map.png"/></p></body></html>'},
+        const EpubInfo(spine: ['c.xhtml'], toc: []),
+        binary: {
+          'title.png': await png(600, 400, clear, const Color(0xFF000000)),
+          'white.png': await png(600, 400, clear, const Color(0xFFFFFFFF)),
+          'red.png': await png(600, 400, clear, const Color(0xFFD02020)),
+          'map.png': await png(600, 400, const Color(0xFFFFFFFF), const Color(0xFF000000)),
+        });
+    final ch = await ChapterLoader(source).load('c.xhtml');
+    expect(ch.blocks.whereType<ImageBlock>().map((p) => p.inkOnLight), [true, false, false, false]);
+    // on the dark page its ink is the text's colour, and full screen it keeps the page's colours
+    final page = Paginator(const EpubTheme(), const Size(1000, 1400), null).run(ch.blocks).first;
+    expect(page.pictures.first.$3, isNotNull);
+    ch.dispose();
+  });
+
   test("a chapter number printed on white is drawn in the page's colours: its ground the page's, its ink the text's",
       () async {
     final blocks = ChapterReader(StyleSheet(), (h) => h).read(parseXhtml(

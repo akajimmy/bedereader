@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:komga_reader/api.dart';
+import 'package:komga_reader/combined_source.dart';
 import 'package:komga_reader/hidden_libraries.dart';
+import 'package:komga_reader/local/local_library.dart';
+import 'package:komga_reader/local/local_source.dart';
 import 'package:komga_reader/screens/app_settings.dart';
 import 'package:komga_reader/widgets/setting_rows.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -66,13 +70,12 @@ void main() {
     expect((await api.libraries()).length, 3); // the full list stays (downloads name a book's library from it)
   });
 
-  testWidgets('Settings: a switch per library; the last one shown stays', (tester) async {
+  testWidgets('Settings > Libraries: a switch per Komga library; the last one shown stays', (tester) async {
     setView(tester, const Size(1000, 2400));
     final (api, _) = recorded();
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: api, onSignOut: () {},
-        initialPage: SettingsPage.library)));
+        initialPage: SettingsPage.libraries)));
     await tester.pumpAndSettle();
-    expect(find.text('Libraries on this device'), findsOneWidget);
     await tester.tap(find.widgetWithText(SwitchRow, 'Archive'));
     await tester.pumpAndSettle();
     expect(HiddenLibraries.instance.isHidden('L2'), isTrue);
@@ -83,4 +86,39 @@ void main() {
         find.descendant(of: find.widgetWithText(SwitchRow, 'Ongoing'), matching: find.byType(SwitchListTile)));
     expect(last.onChanged, isNull); // Ongoing is the last one shown
   }, tags: 'slow');
+
+  testWidgets("Komga and a local library side by side: Settings > Libraries switches Komga's libraries only, Library "
+      "& Home has none (user, 2026-10-27: all library management in Libraries); a local library isn't hidden - one "
+      "that isn't wanted isn't added", (tester) async {
+    setView(tester, const Size(1000, 3000));
+    final (komga, _) = recorded();
+    final (local, data) = (await tester.runAsync(() async {
+      final data = await Directory.systemTemp.createTemp('hidden_local');
+      final folder = await Directory('${data.path}${Platform.pathSeparator}Comics').create();
+      return (await LocalSource.open(data, [LocalLibrary.at(folder.path)]), data);
+    }))!;
+    addTearDown(() => tester.runAsync(() async {
+          await local.closeFiles();
+          await local.store.written;
+          await data.delete(recursive: true);
+        }));
+    final api = CombinedSource(komga, local: local);
+    Future<void> page(SettingsPage p) async {
+      await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(key: UniqueKey(), api: api, onSignOut: () {},
+          initialPage: p)));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50))); // (the libraries asked for)
+      await tester.pump();
+    }
+
+    await page(SettingsPage.libraries);
+    expect([for (final s in tester.widgetList<SwitchRow>(find.byType(SwitchRow))) s.title],
+        containsAll(['Ongoing', 'Archive', 'Demo Library']));
+    expect(find.widgetWithText(SwitchRow, 'Comics'), findsNothing, reason: 'the local library has no switch');
+    await page(SettingsPage.library);
+    expect(find.widgetWithText(SwitchRow, 'Ongoing'), findsNothing, reason: 'not in Library & Home any more');
+
+    // a local library's id among the hidden ones (hidden there before): shown all the same
+    await HiddenLibraries.instance.setHidden(local.folders.single.id, true);
+    expect([for (final l in (await tester.runAsync(local.visibleLibraries))!) l['name']], ['Comics']);
+  });
 }

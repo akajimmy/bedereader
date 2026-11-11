@@ -14,6 +14,7 @@ import '../widgets/connection_prompt.dart' show offlineBooks;
 import '../widgets/drawer.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/home_sections_editor.dart';
+import '../widgets/pins_editor.dart';
 import '../widgets/pin_tile.dart';
 import '../widgets/poster.dart' show PosterSizeButton;
 import '../widgets/poster_row.dart';
@@ -299,13 +300,20 @@ class _HomeScreenState extends State<HomeScreen> with RefreshOnReturn {
           const PosterSizeButton(),
           PopupMenuButton<String>(
             tooltip: 'Show or hide sections',
-            onSelected: (k) => k == '_arrange' ? showHomeSectionsEditor(context) : _toggleSection(k),
+            onSelected: (k) => switch (k) {
+              '_arrange' => showHomeSectionsEditor(context),
+              '_pins' => showPinsEditor(context),
+              _ => _toggleSection(k),
+            },
             itemBuilder: (_) => [
               for (final k in _sections.order)
                 CheckedPopupMenuItem(value: k, checked: _sections[k], child: Text(HomeSections.names[k]!)),
               const PopupMenuDivider(),
               const PopupMenuItem(value: '_arrange', child: ListTile(
                   contentPadding: EdgeInsets.zero, leading: Icon(Icons.reorder), title: Text('Arrange sections…'))),
+              if (Pins.instance.items.length > 1)
+                const PopupMenuItem(value: '_pins', child: ListTile(
+                    contentPadding: EdgeInsets.zero, leading: Icon(Icons.push_pin_outlined), title: Text('Arrange pins…'))),
             ],
           ),
           const FullscreenExit(),

@@ -43,3 +43,6 @@ reports/
 
 # the dictionary source (downloaded; tools/dictionary/build_dictionary.py says from where)
 tools/dictionary/source/
+
+# tools/exp_identity.py: what it replaced while a build has the Exp identity on
+/build-exp-identity/

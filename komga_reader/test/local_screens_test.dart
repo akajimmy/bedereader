@@ -70,6 +70,30 @@ void main() {
     expect(await result(), '/storage/emulated/0/Comics');
   });
 
+  testWidgets("iPad: a place picked in Files (the browser's Downloads - user, 2026-10-31) opens the folder picked, "
+      'named after it, to choose in; cancelled, the places stay', (tester) async {
+    String? answer;
+    final source = _Fake([
+      const Place("This device (the app's folder in Files)", '/docs'),
+      Place('A folder in Files', '', pick: () async => answer),
+    ]);
+    final result = await open(tester, source);
+    await tester.tap(find.text('A folder in Files'));
+    await tester.pumpAndSettle();
+    expect(source.looked, isEmpty, reason: 'cancelled in the picker: nothing opened');
+    expect(find.text('A folder in Files'), findsOneWidget);
+    answer = '/storage/emulated/0';
+    await tester.tap(find.text('A folder in Files'));
+    await tester.pumpAndSettle();
+    expect(source.looked, ['/storage/emulated/0']);
+    expect(find.text('0'), findsOneWidget, reason: 'the title: the folder picked');
+    await tester.tap(find.text('Comics'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FilledButton));
+    await tester.pumpAndSettle();
+    expect(await result(), '/storage/emulated/0/Comics');
+  });
+
   testWidgets('several places (a card too): listed; a folder typed in is taken as it is', (tester) async {
     final source = _Fake(const [Place('This device', '/storage/emulated/0'), Place('Card', '/storage/1234-ABCD')]);
     final result = await open(tester, source);
@@ -88,6 +112,11 @@ void main() {
     expect(wherePlainly('/var/mobile/Containers/Data/Application/AC3D-11/Documents/Comics'),
         'This Device › Documents/Comics/');
     expect(wherePlainly('/storage/1234-ABCD/Comics'), 'Card 1234-ABCD › Comics/');
+    // iOS folders picked in Files (2026-10-31)
+    expect(wherePlainly('/private/var/mobile/Library/Mobile Documents/com~apple~CloudDocs/Downloads'),
+        'iCloud Drive › Downloads/');
+    expect(wherePlainly('/private/var/mobile/Containers/Shared/AppGroup/9F2C-77/File Provider Storage/Downloads'),
+        'On This Device › Downloads/');
     expect(wherePlainly(r'C:\Comics'), r'C:\Comics');
   });
 

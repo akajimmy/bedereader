@@ -4,14 +4,27 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'book_names.dart' show DatePrecision;
+import 'local_meta.dart';
 
 /// A series in a local library: stored once, not copied into each of its books.
 class LocalSeries {
-  const LocalSeries({required this.id, required this.libraryId, required this.name, this.oneshot = false});
+  const LocalSeries({required this.id, required this.libraryId, required this.name, this.oneshot = false,
+      this.titleSort, this.readingDirection, this.status, this.publisher, this.summary, this.genres, this.tags});
   final String id, libraryId, name;
 
   /// A book of its own (a book loose in the library, or in a _oneshots folder).
   final bool oneshot;
+
+  /// Its edited fields (lib/local/local_meta.dart - not kept in the scan: the edits are applied to it as it's listed).
+  final String? titleSort, readingDirection, status, publisher, summary;
+  final List<String>? genres, tags;
+
+  /// The same series with [e] applied (none: as it is).
+  LocalSeries edited(SeriesEdits? e) => e == null
+      ? this
+      : LocalSeries(id: id, libraryId: libraryId, name: e.title ?? name, oneshot: oneshot, titleSort: e.titleSort,
+          readingDirection: e.readingDirection, status: e.status, publisher: e.publisher, summary: e.summary,
+          genres: e.genres, tags: e.tags);
 
   Map<String, Object?> toJson() => {'id': id, 'name': name, if (oneshot) 'oneshot': true};
   factory LocalSeries.fromJson(Map j, String libraryId) =>
@@ -36,7 +49,7 @@ class LocalBook {
     required this.modified, required this.title, this.epub = false, this.mediaType = 'application/zip',
     this.pages = 0, this.cover, this.number = '', this.numberSort = 0, this.released, this.precision,
     this.authors = const [], this.summary = '', this.readLists = const [], this.inside = 0, this.rightToLeft = false,
-    this.publisher, this.genres = const [], this.count,
+    this.publisher, this.genres = const [], this.count, this.tags = const [],
   });
 
   final String id, libraryId, seriesId;
@@ -79,10 +92,35 @@ class LocalBook {
   final List<String> genres;
   final int? count;
 
+  /// Its tags - as edited (lib/local/local_meta.dart; ComicInfo's own aren't read).
+  final List<String> tags;
+
   /// The file is the same one as before (its book needn't be opened again): the same size, changed at the same moment
   /// - whatever time zone the device is in now (review, 2026-10-26: kept as local time, every book looked changed
   /// after the iPad crossed one, and a whole library was read again).
   bool sameFile(int size, DateTime modified) => size == this.size && modified.isAtSameMomentAs(this.modified);
+
+  /// The same book with its edits [e] (lib/local/local_meta.dart), in [seriesId].
+  LocalBook edited(BookEdits e, {required String seriesId}) {
+    final j = toJson()..['series'] = seriesId;
+    if (e.title != null) j['title'] = e.title;
+    if (e.number != null) j['number'] = e.number;
+    if (e.numberSort != null) j['numberSort'] = e.numberSort;
+    if (e.summary != null) j['summary'] = e.summary;
+    if (e.authors != null) j['authors'] = [for (final (n, r) in e.authors!) [n, r]];
+    if (e.tags != null) j['tags'] = e.tags;
+    if (e.dateSet) {
+      j.remove('precision');
+      final date = e.releaseDate == null ? null : DateTime.tryParse(e.releaseDate!);
+      if (date == null) {
+        j.remove('released');
+      } else {
+        j['released'] = DateTime.utc(date.year, date.month, date.day).toIso8601String();
+        j['precision'] = DatePrecision.day.name;
+      }
+    }
+    return LocalBook.fromJson(j, libraryId);
+  }
 
   /// The same book in [seriesId], at [readLists] (a read-list library's: its series known once it's read, its place
   /// worked out again each scan).
@@ -103,7 +141,7 @@ class LocalBook {
         if (summary.isNotEmpty) 'summary': summary,
         if (readLists.isNotEmpty) 'readLists': [for (final r in readLists) r.toJson()],
         'inside': inside, if (rightToLeft) 'rightToLeft': true, if (publisher != null) 'publisher': publisher,
-        if (genres.isNotEmpty) 'genres': genres, if (count != null) 'count': count,
+        if (genres.isNotEmpty) 'genres': genres, if (count != null) 'count': count, if (tags.isNotEmpty) 'tags': tags,
       };
 
   factory LocalBook.fromJson(Map j, String libraryId) => LocalBook(
@@ -119,28 +157,40 @@ class LocalBook {
         readLists: [for (final r in (j['readLists'] as List?) ?? const []) ReadListPlace.fromJson(r as Map)],
         inside: j['inside'] as int? ?? 0, rightToLeft: j['rightToLeft'] == true, publisher: j['publisher'] as String?,
         genres: [for (final g in (j['genres'] as List?) ?? const []) g as String], count: j['count'] as int?,
+        tags: [for (final t in (j['tags'] as List?) ?? const []) t as String],
       );
 }
 
 /// One library's scan: its series and books.
 class LibraryIndex {
-  LibraryIndex(this.libraryId, Iterable<LocalSeries> series, Iterable<LocalBook> books)
+  LibraryIndex(this.libraryId, Iterable<LocalSeries> series, Iterable<LocalBook> books,
+      {Map<String, FolderMeta>? meta})
       : series = {for (final s in series) s.id: s},
-        books = {for (final b in books) b.id: b};
+        books = {for (final b in books) b.id: b},
+        meta = meta ?? {};
   final String libraryId;
   final Map<String, LocalSeries> series;
   final Map<String, LocalBook> books;
+
+  /// The metadata edits kept alongside the books (lib/local/local_meta.dart), by folder - as the scan last read them,
+  /// and as edited since.
+  final Map<String, FolderMeta> meta;
 
   Map<String, Object?> toJson() => {
         'v': LocalStore.version,
         'series': [for (final s in series.values) s.toJson()],
         'books': [for (final b in books.values) b.toJson()],
+        if (meta.isNotEmpty) 'meta': {for (final MapEntry(:key, :value) in meta.entries) key: value.toJson()},
       };
 
   factory LibraryIndex.fromJson(String libraryId, Map j) => LibraryIndex(
         libraryId,
         [for (final s in (j['series'] as List?) ?? const []) LocalSeries.fromJson(s as Map, libraryId)],
         [for (final b in (j['books'] as List?) ?? const []) LocalBook.fromJson(b as Map, libraryId)],
+        meta: {
+          for (final MapEntry(:key, :value) in ((j['meta'] as Map?) ?? const {}).entries)
+            '$key': FolderMeta.fromJson(value as Map),
+        },
       );
 }
 
@@ -279,6 +329,17 @@ class LocalStore {
   Future<void> setSizes(String bookId, List<int> pageSizes) {
     sizes[bookId] = pageSizes;
     return _write('sizes.json', () => sizes);
+  }
+
+  /// Books whose ids changed with their paths (Apply edits to files: old -> new): their progress and page sizes follow.
+  Future<void> renameIds(Map<String, String> ids) async {
+    var moved = false, measured = false;
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      if (progress.remove(from) case final p?) (progress[to] = p, moved = true);
+      if (sizes.remove(from) case final s?) (sizes[to] = s, measured = true);
+    }
+    if (moved) await _write('progress.json', () => progress);
+    if (measured) await _write('sizes.json', () => sizes);
   }
 
   /// These books' page sizes forgotten (their files changed: measured again when next opened).

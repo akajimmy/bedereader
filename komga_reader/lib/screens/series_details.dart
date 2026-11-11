@@ -8,6 +8,7 @@ import '../widgets/arrow_scroll.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/error_text.dart';
 import 'book_details.dart';
+import 'edit_metadata.dart';
 import 'library.dart';
 import 'series.dart';
 import '../book_source.dart';
@@ -27,6 +28,7 @@ class SeriesDetailsScreen extends StatefulWidget {
 class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   late dynamic _series = widget.series;
   Object? _error; // shown through lib/errors.dart
+  bool _canEdit = false; // Edit offered (lib/screens/edit_metadata.dart)
 
   BookSource get api => widget.api;
 
@@ -34,6 +36,9 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
   void initState() {
     super.initState();
     _load();
+    canEditIn(api, widget.series['id'] as String).then((v) {
+      if (mounted) setState(() => _canEdit = v);
+    });
   }
 
   Future<void> _load() async {
@@ -99,7 +104,13 @@ class _SeriesDetailsScreenState extends State<SeriesDetailsScreen> {
     ]);
 
     return ArrowScroll(builder: (scroll) => Scaffold( // the remote's Up / Down scroll past the buttons
-      appBar: AppBar(title: const Text('Series details'), actions: const [FullscreenExit()]),
+      appBar: AppBar(title: const Text('Series details'), actions: [
+        if (_canEdit)
+          IconButton(tooltip: 'Edit', icon: const Icon(Icons.edit_outlined), onPressed: () async {
+            if (await editSeries(context, api, _series as Map)) unawaited(_load());
+          }),
+        const FullscreenExit(),
+      ]),
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
       // edge behind it (user, 2026-10-07)
       body: SafeArea(top: false, child: RefreshIndicator(onRefresh: _load, child: ListView(controller: scroll,

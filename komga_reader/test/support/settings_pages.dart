@@ -5,24 +5,11 @@ import 'package:komga_reader/settings.dart';
 
 import 'status_server.dart';
 
-/// Settings' pages as the side list names them, to move between pages (a switch: a new page doesn't compile here
-/// until it's added). One table for app_settings_test, settings_remote_test and row_nav_keys_test (test audit,
-/// 2026-10-07: it was kept twice).
-String pageName(SettingsPage p) => switch (p) {
-      SettingsPage.reading => 'Reading',
-      SettingsPage.comics => 'Comics',
-      SettingsPage.webtoons => 'Webtoons',
-      SettingsPage.ebooks => 'eBooks',
-      SettingsPage.keys => 'Remote and keys',
-      SettingsPage.server => 'Server and sync',
-      SettingsPage.library => 'Library & Home',
-      SettingsPage.libraries => 'Libraries',
-      SettingsPage.downloads => 'Downloads',
-      SettingsPage.look => 'Look',
-      SettingsPage.about => 'About',
-    };
+/// Settings' pages as the side list names them, to move between pages: the app's own names (a copy here pinned the
+/// wording - user, 2026-10-27, Reading renamed). One for app_settings_test, settings_remote_test and row_nav_keys_test.
+String pageName(SettingsPage p) => p.label;
 
-/// Two libraries, so Library & Home has its switches.
+/// Two libraries, so Libraries has Komga's switches.
 class TwoLibraries extends StatusServer {
   @override
   Future<List<dynamic>> libraries() async => [{'id': 'L1', 'name': 'Events'}, {'id': 'L2', 'name': 'Ongoing'}];

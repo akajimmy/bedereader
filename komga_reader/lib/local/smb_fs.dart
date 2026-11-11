@@ -41,6 +41,16 @@ abstract interface class SmbShare {
   Future<Uint8List> read(Object handle, int offset, int length);
   Future<void> close(Object handle);
   Future<void> disconnect();
+
+  /// Opened for writing, emptied (made if it isn't there): written with [writeAt], let go with [close].
+  Future<Object> openWrite(String inShare);
+  Future<void> writeAt(Object handle, Uint8List data, int offset);
+
+  /// [data] written as the whole of [inShare] (made if it isn't there).
+  Future<void> write(String inShare, Uint8List data);
+  Future<void> delete(String inShare);
+  Future<void> rename(String from, String to);
+  Future<void> mkdir(String inShare);
 }
 
 /// Connects to [share] on [host] (a refused login, a host out of reach: throws an [Smb2Exception]).
@@ -55,8 +65,8 @@ class SmbFs implements LibraryFs {
   final SmbConnect _connect;
   Future<SmbShare>? _share;
 
-  /// How many folders are listed at once (the pool has 4 workers; a NAS answers each listing in turn otherwise).
-  static const parallel = 4;
+  /// How many folders are listed at once ([listedAtOnce]; the pool has as many workers).
+  static const parallel = listedAtOnce;
 
   Future<SmbShare> get _connected => _share ??= _connect(host, share, login).catchError((Object e) {
         _share = null; // (connected again next time)
@@ -87,8 +97,7 @@ class SmbFs implements LibraryFs {
   /// The book files under [folder], several folders listed at once. A folder in it that can't be listed is told to
   /// [onUnreadable] and the rest goes on; [folder] itself not listed throws when there's no [onUnreadable].
   @override
-  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) {
-    final out = StreamController<FsEntry>();
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) async* {
     final base = folder.replaceAll(RegExp(r'[\\/]+$'), ''), sep = folder.contains('\\') ? '\\' : '/';
     final root = _inShare(folder);
     String full(String inShare) {
@@ -96,51 +105,20 @@ class SmbFs implements LibraryFs {
       return rest.isEmpty ? base : '$base$sep${rest.replaceAll('/', sep)}';
     }
 
-    Future<void> run() async {
-      final share = await _connected;
-      final todo = [root];
-      var running = 0;
-      final done = Completer<void>();
-      void next() {
-        while (running < parallel && todo.isNotEmpty) {
-          final dir = todo.removeLast();
-          running++;
-          share.list(dir).then((entries) {
-            for (final e in entries) {
-              if (e.name == '.' || e.name == '..' || e.hidden) continue;
-              final p = dir.isEmpty ? e.name : '$dir/${e.name}';
-              if (e.folder) {
-                if (shownFolder(e.name)) todo.add(p);
-              } else if (isBookFile(e.name)) {
-                out.add(FsEntry(full(p), e.size, e.modified));
-              }
-            }
-          }, onError: (Object e) {
-            if (dir == root && onUnreadable == null) {
-              if (!done.isCompleted) done.completeError(e);
-              return;
-            }
-            onUnreadable?.call(full(dir), e);
-          }).whenComplete(() {
-            running--;
-            if (todo.isEmpty && running == 0) {
-              if (!done.isCompleted) done.complete();
-            } else {
-              next();
-            }
-          });
+    final share = await _connected; // (not reached: the stream's error, told or not)
+    yield* listFolders(root, (dir) async {
+      final folders = <String>[], files = <FsEntry>[];
+      for (final e in await share.list(dir)) {
+        if (e.name == '.' || e.name == '..' || e.hidden) continue;
+        final p = dir.isEmpty ? e.name : '$dir/${e.name}';
+        if (e.folder) {
+          if (shownFolder(e.name)) folders.add(p);
+        } else if (isBookFile(e.name) || isMetaFile(e.name)) { // (and the metadata files)
+          files.add(FsEntry(full(p), e.size, e.modified));
         }
       }
-
-      next();
-      await done.future;
-    }
-
-    run().then((_) => out.close(), onError: (Object e, StackTrace s) {
-      out.addError(e, s);
-      out.close();
-    });
-    return out.stream;
+      return (folders, files);
+    }, onUnreadable: onUnreadable, shown: full);
   }
 
   @override
@@ -148,6 +126,61 @@ class SmbFs implements LibraryFs {
     final share = await _connected;
     final (handle, size) = await share.open(_inShare(path));
     return _SmbFile(share, handle, size);
+  }
+
+  /// (A share can't rename over a file: the new one is written beside it, the old one deleted, the new one renamed - a
+  /// failure in between leaves the new one beside it, under its temporary name.)
+  @override
+  Future<LibraryOut> create(String path) async {
+    final share = await _connected;
+    return _SmbOut(share, await share.openWrite(_inShare(path)));
+  }
+
+  @override
+  Future<void> replace(String from, String to) async => _swapIn(await _connected, _inShare(from), _inShare(to));
+
+  /// [from] put in [at]'s place. A share can't rename over a file: the old one is renamed aside first, the new one
+  /// into its place, and only then is the old one deleted - at no moment is neither of them there under a name the
+  /// scan reads (a failure in between leaves the old one as "...bedereader-old").
+  static Future<void> _swapIn(SmbShare share, String from, String at) async {
+    final aside = '$at.bedereader-old';
+    final there = await share.exists(at);
+    if (there) await share.rename(at, aside);
+    try {
+      await share.rename(from, at);
+    } catch (_) {
+      if (there) await share.rename(aside, at).catchError((Object _) {}); // (the old one back)
+      rethrow;
+    }
+    if (there) await share.delete(aside);
+  }
+
+  @override
+  Future<void> delete(String path) async => (await _connected).delete(_inShare(path));
+
+  @override
+  Future<void> move(String from, String to) async {
+    final share = await _connected;
+    if (await share.exists(_inShare(to))) throw FileSystemException('Already there', to);
+    await share.rename(_inShare(from), _inShare(to));
+  }
+
+  @override
+  Future<void> makeFolder(String path) async {
+    final share = await _connected;
+    if (!await share.exists(_inShare(path))) await share.mkdir(_inShare(path));
+  }
+
+  @override
+  Future<bool> isThere(String path) async => (await _connected).exists(_inShare(path));
+
+  /// (Written beside it, then swapped in - [_swapIn].)
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) async {
+    final share = await _connected;
+    final at = _inShare(path), temp = '$at.bedereader-new';
+    await share.write(temp, bytes);
+    await _swapIn(share, temp, at);
   }
 
   @override
@@ -183,6 +216,21 @@ class SmbFs implements LibraryFs {
       // never connected
     }
   }
+}
+
+class _SmbOut implements LibraryOut {
+  _SmbOut(this._share, this._handle);
+  final SmbShare _share;
+  final Object _handle;
+  int _at = 0;
+  @override
+  Future<void> add(Uint8List bytes) async {
+    await _share.writeAt(_handle, bytes, _at);
+    _at += bytes.length;
+  }
+
+  @override
+  Future<void> close() => _share.close(_handle);
 }
 
 class _SmbFile implements LibraryFile {
@@ -234,6 +282,19 @@ class _PoolShare implements SmbShare {
 
   @override
   Future<void> disconnect() => _pool.disconnect();
+  @override
+  Future<void> write(String inShare, Uint8List data) => _pool.writeFile(inShare, data);
+  @override
+  Future<Object> openWrite(String inShare) => _pool.openFileWrite(inShare, truncate: true);
+  @override
+  Future<void> writeAt(Object handle, Uint8List data, int offset) =>
+      _pool.writeToHandle(handle as Smb2PoolHandle, data, offset: offset);
+  @override
+  Future<void> delete(String inShare) => _pool.deleteFile(inShare);
+  @override
+  Future<void> rename(String from, String to) => _pool.rename(from, to);
+  @override
+  Future<void> mkdir(String inShare) => _pool.mkdir(inShare);
 }
 
 /// The shares: which [LibraryFs] reads a library's path, and their logins. On Windows every path is the system's own -

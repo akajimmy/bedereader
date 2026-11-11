@@ -191,8 +191,11 @@ class SettingsGroup extends StatelessWidget {
 /// wide control (segmented buttons) goes under the label when there isn't room beside it.
 class SettingRow extends StatelessWidget {
   const SettingRow({super.key, required this.title, this.subtitle, this.trailing, this.stackWhenNarrow = false,
-      this.trailingWidth = 240, this.enabled = true, this.titleIcon});
+      this.trailingWidth = 240, this.enabled = true, this.titleIcon, this.info});
   final String title;
+
+  /// More about the setting, behind an (i) beside the title ([InfoTip]); null: none.
+  final String? info;
   final IconData? titleIcon; // drawn in the title where it says [iconHere] (a button's own icon, named in the text)
 
   /// Where [titleIcon] goes in a title.
@@ -221,8 +224,12 @@ class SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final name = titleText(title, titleIcon, TextStyle(fontSize: 14.5, color: enabled ? null : const Color(0xFF6A6A6A)));
     final label = Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      titleText(title, titleIcon, TextStyle(fontSize: 14.5, color: enabled ? null : const Color(0xFF6A6A6A))),
+      if (info == null)
+        name
+      else
+        Row(mainAxisSize: MainAxisSize.min, children: [Flexible(child: name), const SizedBox(width: 4), InfoTip(info!)]),
       if (subtitle != null)
         Padding(
           padding: const EdgeInsets.only(top: 2),
@@ -296,16 +303,18 @@ ButtonStyle slimButtonStyle(ColorScheme scheme) {
 /// Under a row's label, the full width of the row: the controls of a page or panel all start and end on the same
 /// lines (user, 2026-10-22: "all the selection controls go to their own line, full width of the space allowed").
 class _UnderLabel extends StatelessWidget {
-  const _UnderLabel({required this.title, this.subtitle, this.enabled = true, required this.control, this.titleIcon});
+  const _UnderLabel({required this.title, this.subtitle, this.enabled = true, required this.control, this.titleIcon,
+      this.info});
   final String title;
   final IconData? titleIcon;
   final String? subtitle;
+  final String? info;
   final bool enabled;
   final Widget control;
 
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SettingRow(title: title, enabled: enabled, subtitle: subtitle, titleIcon: titleIcon),
+        SettingRow(title: title, enabled: enabled, subtitle: subtitle, titleIcon: titleIcon, info: info),
         Padding(padding: const EdgeInsets.fromLTRB(14, 0, 14, 12), child: control),
       ]);
 }
@@ -341,15 +350,17 @@ class ToggleChip {
 /// text's spots) - any combination. The same slim buttons as a [SegmentRow], each one lit while it's on (user,
 /// 2026-10-22: the chips were "ugly and inconsistent with everything else").
 class ToggleChipsRow extends StatelessWidget {
-  const ToggleChipsRow({super.key, required this.title, this.subtitle, required this.chips});
+  const ToggleChipsRow({super.key, required this.title, this.subtitle, required this.chips, this.info});
   final String title;
   final String? subtitle;
   final List<ToggleChip> chips;
+  final String? info; // behind an (i) beside the title
 
   @override
   Widget build(BuildContext context) => _UnderLabel(
         title: title,
         subtitle: subtitle,
+        info: info,
         control: LayoutBuilder(builder: (context, box) {
           var widest = 0.0;
           for (final c in chips) {
@@ -551,6 +562,37 @@ class NoteRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
         child: Text(text, style: const TextStyle(fontSize: 12, color: hintColour)),
+      );
+}
+
+/// An (i) beside a setting's title: [text], more about it, shown on a tap (or OK on a remote, the mouse resting on it
+/// on the PC) - for what a title alone can't say (user, 2026-10-27).
+class InfoTip extends StatefulWidget {
+  const InfoTip(this.text, {super.key});
+  final String text;
+  @override
+  State<InfoTip> createState() => _InfoTipState();
+}
+
+class _InfoTipState extends State<InfoTip> {
+  final _tip = GlobalKey<TooltipState>();
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        key: _tip,
+        message: widget.text,
+        showDuration: const Duration(seconds: 8),
+        child: Semantics(
+          button: true,
+          label: widget.text,
+          child: InkResponse(
+            onTap: () => _tip.currentState?.ensureTooltipVisible(),
+            radius: 16,
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(Icons.info_outline, size: 17, color: hintColour),
+            ),
+          ),
+        ),
       );
 }
 

@@ -150,7 +150,8 @@ class ImageBlock extends Block {
   /// where it gives none.
   final String? width, height;
   ui.Image? image;
-  bool inkOnLight = false; // a small black-and-white picture on a light ground: drawn in the page's colours
+  // a small black-and-white picture on a light ground, or black line art on a clear one: drawn in the page's colours
+  bool inkOnLight = false;
 }
 
 /// A table: rows of cells, each cell its text runs (paragraphs inside a cell become lines).
@@ -836,7 +837,9 @@ class EpubPage {
   List<Rect> get imageRects => [for (final p in pieces) if (p is _ImagePiece) p.rect];
 
   /// The pictures on the page big enough to open full screen with a tap: where each is drawn, and the picture.
-  List<(Rect, ui.Image)> get pictures => [for (final p in pieces) if (p is _ImagePiece && p.zoomable) (p.rect, p.image)];
+  /// The pictures that open full screen: where, which, and the page's colours if it's drawn in them.
+  List<(Rect, ui.Image, ColorFilter?)> get pictures =>
+      [for (final p in pieces) if (p is _ImagePiece && p.zoomable) (p.rect, p.image, p.filter)];
 
   /// The page's text for selecting and copying (worked out the first time it's asked for).
   late final PageText text = PageText._(this);
@@ -1568,7 +1571,8 @@ class Paginator {
   static bool zoomable(ui.Image img) => math.min(img.width, img.height) > 150;
 
   /// A small black-and-white picture on a light ground ([ImageBlock.inkOnLight]) in the page's own colours: its white
-  /// box no longer glares on a dark page (user, 2026-10-06: "drop clashing backgrounds"). Others as they are.
+  /// box no longer glares on a dark page (user, 2026-10-06: "drop clashing backgrounds"); black line art on a clear
+  /// ground (inkOnClear, chapter.dart) no longer vanishes on one. Others as they are.
   late final ColorFilter _pageColours = pageColours(theme.background, theme.text);
   ColorFilter? _filterFor(ImageBlock b) => b.inkOnLight ? _pageColours : null;
 

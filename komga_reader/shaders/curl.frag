@@ -17,6 +17,7 @@ uniform float uMirror; // 1 = right-to-left book: page coordinates run from the 
 uniform vec3 uPaper;   // the back of the page's colour: white paper for comics, the page's own for eBooks
 uniform float uBackOn; // 1 = the back of the page is a page of its own (two pages up), taken from uBack
 uniform float uGap;    // two pages up: the gap between the pages - the page lands at x = -uGap - x (page coordinates)
+uniform vec4 uBackRect; // two pages up: where the page on the back really is in uBack (x, y, width, height)
 uniform sampler2D uSheet;
 uniform sampler2D uBack; // a snapshot of the whole area holding the page on the back, where it lies once turned
 
@@ -34,11 +35,15 @@ vec3 sheet(vec2 q) {  // q in page coordinates
 // The back of the sheet at q: paper with the print showing through - or, two pages up, the page that's on the back
 // (user, 2026-10-16: the following left page, so it doesn't switch when the page lands): what lies, once the page has
 // turned over, where q lands - so the landed page is exactly what's under it then.
+// The page on the back is read from where it really is (uBackRect), stretched over this sheet: it can be another size
+// or sit elsewhere than this page's mirror image - Crop edges' Auto cuts each page its own way, and a page shown whole
+// is another shape (user, 2026-10-28: no border on the back, or black past it). The same size and place: the mirror.
 vec3 backOf(vec2 q) {
   if (uBackOn > 0.5) {
-    float x = -uGap - q.x;
-    if (uMirror > 0.5) x = uRect.z - x;
-    return texture(uBack, (vec2(x, q.y) + uRect.xy) / uSize).rgb;
+    // across the landed page, from its left on screen: forward it lies to the left (right, right to left), mirrored
+    float fx = uMirror > 0.5 ? q.x / uRect.z : (uRect.z - q.x) / uRect.z;
+    vec2 at = uBackRect.xy + vec2(fx, q.y / uRect.w) * uBackRect.zw;
+    return texture(uBack, at / uSize).rgb;
   }
   return mix(sheet(q), uPaper, 0.82);
 }

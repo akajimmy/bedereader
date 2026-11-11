@@ -18,6 +18,20 @@ import 'support/zip_writer.dart';
 /// This machine's files, counting the books opened - and a file that "doesn't answer", as a share away would.
 class _Fs implements LibraryFs {
   final inner = LocalFs();
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) => inner.writeWhole(path, bytes);
+  @override
+  Future<LibraryOut> create(String path) => inner.create(path);
+  @override
+  Future<void> replace(String from, String to) => inner.replace(from, to);
+  @override
+  Future<void> delete(String path) => inner.delete(path);
+  @override
+  Future<void> move(String from, String to) => inner.move(from, to);
+  @override
+  Future<void> makeFolder(String path) => inner.makeFolder(path);
+  @override
+  Future<bool> isThere(String path) => inner.isThere(path);
   final opened = <String>[];
   int held = 0; // files open now
   String? away;
@@ -105,6 +119,7 @@ void main() {
   tearDown(() async {
     for (final s in sources) {
       await s.closeFiles();
+      await s.store.written; // (the pages' sizes are saved in the background: not deleted under the write)
     }
     sources.clear();
     await shelf.delete(recursive: true);
@@ -297,5 +312,55 @@ void main() {
     expect(told, isEmpty);
     await s.setLibraries(const []);
     expect(told.single, {library().id, ...series, ...books});
+  });
+
+  // user, 2026-10-28: Delete book was Komga's only
+  test("a book deleted: its file goes (held open by the reader: let go first), it's off the list at once, and its "
+      'series with it if it was the last; the pins to them are told; a scan after leaves it gone', () async {
+    final s = await open();
+    await s.rescan();
+    Future<Map<String, String>> byName() async => {
+          for (final x in (await s.books(size: 100))['content'] as List)
+            (x['url'] as String).replaceAll('\\', '/').split('/').last: x['id'] as String,
+        };
+    final ids = await byName();
+    final saga2 = ids['Saga #2 (2012).cbz']!, loose = ids['Loose One-Shot (2020).cbz']!;
+    final looseSeries = s.entries[loose]!['book']['seriesId'] as String;
+    await s.pageBytes(saga2, 1); // (open in the reader)
+    final told = <Set<String>>[];
+    s.onRemoved = told.add;
+
+    await s.deleteBookFile(saga2);
+    expect(File('${root.path}/Saga (2012)/Saga #2 (2012).cbz').existsSync(), isFalse);
+    expect(fs.held, 0);
+    expect((await byName()).keys, isNot(contains('Saga #2 (2012).cbz')));
+    expect(told.single, {saga2}, reason: 'Saga has other books: it stays');
+
+    await s.deleteBookFile(loose);
+    expect(told.last, {loose, looseSeries}, reason: 'its last book: the series goes too');
+    expect([for (final x in (await s.series(size: 100))['content'] as List) x['id']], isNot(contains(looseSeries)));
+
+    await s.rescan();
+    expect((await byName()).keys, unorderedEquals(['Saga #10 (2014).cbz', 'Saga Annual.cbz',
+        'Frankenstein - Mary Shelley.epub']));
+  });
+
+  test('a series deleted: every book of it - its files - goes, the series with them; the other series stay, and a '
+      'scan after leaves them gone', () async {
+    final s = await open();
+    await s.rescan();
+    final saga = [for (final x in (await s.series(size: 100))['content'] as List) if (x['name'] == 'Saga (2012)') x]
+        .single['id'] as String;
+    final told = <Set<String>>[];
+    s.onRemoved = told.add;
+    await s.deleteSeriesFiles(saga);
+    for (final f in ['Saga #10 (2014).cbz', 'Saga #2 (2012).cbz', 'Saga Annual.cbz']) {
+      expect(File('${root.path}/Saga (2012)/$f').existsSync(), isFalse, reason: f);
+    }
+    expect(told.single, contains(saga));
+    expect(told.single, hasLength(4), reason: 'its three books and itself');
+    await s.rescan();
+    expect([for (final x in (await s.series(size: 100))['content'] as List) x['name']],
+        unorderedEquals(['Loose One-Shot (2020)', 'Frankenstein - Mary Shelley']));
   });
 }

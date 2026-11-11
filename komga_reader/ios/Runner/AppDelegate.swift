@@ -4,6 +4,7 @@ import GameController
 import Network
 import Photos
 import UIKit
+import UniformTypeIdentifiers
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -22,6 +23,194 @@ import UIKit
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderRemote") {
       RemoteLog.register(messenger: registrar.messenger())
     }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderOpenWith") {
+      OpenWith.shared.register(registrar)
+    }
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "BeDeReaderFolders") {
+      FolderAccess.register(messenger: registrar.messenger())
+    }
+  }
+}
+
+/// Folders outside the app's own, as local libraries ("komga_reader/folders", lib/local/device_folders.dart; user,
+/// 2026-10-31: the browser's Downloads): one picked in the Files picker ("pick") is the app's to read and write from
+/// then on - a bookmark kept for it (UserDefaults, by its path) is resolved at every start and its access started
+/// again, before the libraries are scanned. Books in an iCloud folder not on the device yet are asked for (their
+/// download started) when the folder is picked and at each start; they're in the library at the scan after they've
+/// come down.
+enum FolderAccess {
+  private static let key = "folderBookmarks"
+  private static let books: Set<String> = ["cbz", "cbr", "epub"]
+  private static var picking: Picker?
+
+  static func register(messenger: FlutterBinaryMessenger) {
+    restore()
+    let channel = FlutterMethodChannel(name: "komga_reader/folders", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "pick":
+        pick(result)
+      case "folders":
+        result(Array(saved().keys))
+      case "fetch":
+        if let path = call.arguments as? String { fetchCloud(URL(fileURLWithPath: path, isDirectory: true)) }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private static func saved() -> [String: Data] {
+    UserDefaults.standard.dictionary(forKey: key) as? [String: Data] ?? [:]
+  }
+
+  private static func save(_ url: URL, as path: String) {
+    guard let data = try? url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil) else {
+      NSLog("BeDeReader folders: no bookmark for \(path)")
+      return
+    }
+    var all = saved()
+    all[path] = data
+    UserDefaults.standard.set(all, forKey: key)
+  }
+
+  /// Each kept folder's access started again (kept under the path the library has, also if iOS says it moved).
+  private static func restore() {
+    for (path, data) in saved() {
+      var stale = false
+      guard let url = try? URL(resolvingBookmarkData: data, options: [], relativeTo: nil,
+                               bookmarkDataIsStale: &stale) else {
+        NSLog("BeDeReader folders: \(path) can't be reached any more")
+        continue
+      }
+      let ok = url.startAccessingSecurityScopedResource()
+      NSLog("BeDeReader folders: \(path) \(ok ? "opened" : "not opened")\(stale ? " (bookmark renewed)" : "")")
+      if stale { save(url, as: path) }
+      fetchCloud(url)
+    }
+  }
+
+  private static func pick(_ result: @escaping FlutterResult) {
+    guard let top = topController() else { return result(nil) }
+    let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+    let delegate = Picker { url in
+      picking = nil
+      guard let url = url else { return result(nil) }
+      _ = url.startAccessingSecurityScopedResource() // kept up while the app runs (a library reads it any time)
+      let path = url.standardizedFileURL.path
+      save(url, as: path)
+      fetchCloud(url)
+      result(path)
+    }
+    picking = delegate
+    picker.delegate = delegate
+    picker.allowsMultipleSelection = false
+    top.present(picker, animated: true)
+  }
+
+  private static func topController() -> UIViewController? {
+    let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
+    var top = (windows.first { $0.isKeyWindow } ?? windows.first)?.rootViewController
+    while let shown = top?.presentedViewController { top = shown }
+    return top
+  }
+
+  /// The books in [folder] (and its folders) that iCloud hasn't put on the device, asked for - in the background.
+  private static func fetchCloud(_ folder: URL) {
+    DispatchQueue.global(qos: .utility).async {
+      let fm = FileManager.default
+      guard let all = fm.enumerator(at: folder, includingPropertiesForKeys: [.ubiquitousItemDownloadingStatusKey])
+      else { return }
+      var asked = 0
+      for case let url as URL in all {
+        var name = url.lastPathComponent
+        var file = url
+        if name.hasPrefix(".") && name.hasSuffix(".icloud") { // an iCloud placeholder: .Name.cbz.icloud
+          name = String(name.dropFirst().dropLast(".icloud".count))
+          file = url.deletingLastPathComponent().appendingPathComponent(name)
+        } else {
+          // (not in iCloud: no status; on the device already: current)
+          guard let values = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]),
+                let status = values.ubiquitousItemDownloadingStatus, status != .current else { continue }
+        }
+        guard books.contains((name as NSString).pathExtension.lowercased()) else { continue }
+        if (try? fm.startDownloadingUbiquitousItem(at: file)) != nil { asked += 1 }
+      }
+      if asked > 0 { NSLog("BeDeReader folders: \(asked) books asked for from iCloud in \(folder.path)") }
+    }
+  }
+
+  private final class Picker: NSObject, UIDocumentPickerDelegate {
+    let done: (URL?) -> Void
+    init(_ done: @escaping (URL?) -> Void) { self.done = done }
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { done(urls.first) }
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { done(nil) }
+  }
+}
+
+/// Open in (the Files app, a share sheet): a CBZ, CBR or EPUB read in place in the reader (lib/open_with.dart; user,
+/// 2026-10-27) - its file as the system hands it over, accessed until the reader closes ("done"); nothing copied by
+/// the app. A copy the system made for the app (Documents/Inbox, from an app that can't share in place) goes then too.
+/// Files handed over before the app listens wait ("pending"). The scene's events come through Flutter's own scene
+/// delegate (a launch's file too, passed on once the engine is up).
+final class OpenWith: NSObject, FlutterSceneLifeCycleDelegate {
+  static let shared = OpenWith()
+  private var channel: FlutterMethodChannel?
+  private var listening = false
+  private var waiting: [[String: Any]] = []
+  private var files: [Int: (url: URL, accessing: Bool)] = [:]
+  private var nextToken = 1
+
+  func register(_ registrar: FlutterPluginRegistrar) {
+    let c = FlutterMethodChannel(name: "komga_reader/open_with", binaryMessenger: registrar.messenger())
+    c.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { return result(nil) }
+      switch call.method {
+      case "pending":
+        self.listening = true
+        result(self.waiting)
+        self.waiting.removeAll()
+      case "done":
+        if let token = (call.arguments as? [String: Any])?["token"] as? Int,
+           let file = self.files.removeValue(forKey: token) {
+          if file.accessing { file.url.stopAccessingSecurityScopedResource() }
+          let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Inbox").standardizedFileURL.path
+          if let inbox = inbox, file.url.standardizedFileURL.path.hasPrefix(inbox + "/") {
+            try? FileManager.default.removeItem(at: file.url)
+          }
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    channel = c
+    registrar.addSceneDelegate(self)
+  }
+
+  func scene(_ scene: UIScene, willConnectTo session: UISceneSession,
+             options connectionOptions: UIScene.ConnectionOptions?) -> Bool {
+    var took = false
+    for context in connectionOptions?.urlContexts ?? [] where take(context.url) { took = true }
+    return took
+  }
+
+  func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) -> Bool {
+    var took = false
+    for context in URLContexts where take(context.url) { took = true }
+    return took
+  }
+
+  private func take(_ url: URL) -> Bool {
+    guard url.isFileURL else { return false }
+    let token = nextToken
+    nextToken += 1
+    files[token] = (url, url.startAccessingSecurityScopedResource())
+    let file: [String: Any] = ["path": url.path, "name": url.lastPathComponent, "token": token]
+    if listening { channel?.invokeMethod("open", arguments: file) } else { waiting.append(file) }
+    return true
   }
 }
 

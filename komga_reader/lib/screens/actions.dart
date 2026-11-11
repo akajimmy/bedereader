@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../api.dart';
 import '../book_title.dart';
+import '../combined_source.dart';
 import '../errors.dart';
 import '../local/book_names.dart' show isLocalId;
 import '../ondeck_hidden.dart';
@@ -9,6 +10,7 @@ import '../offline/downloads.dart';
 import '../pins.dart';
 import '../widgets/error_text.dart';
 import 'book_details.dart';
+import 'edit_metadata.dart';
 import 'series.dart';
 import 'series_details.dart';
 import '../book_source.dart';
@@ -23,6 +25,8 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
   final title = bookTitle(b);
   final dl = Downloads.instance;
   final pinned = Pins.instance.find(Pin.book(b));
+  final canEdit = await canEditIn(api, b['id'] as String);
+  if (!context.mounted) return null;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -61,20 +65,26 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
             : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
                 subtitle: const Text('Skips this book; its series comes back once it is read'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
+        if (canEdit)
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit…'),
+              onTap: () => Navigator.pop(ctx, 'edit')),
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
-        // (Komga's only: a local or network book's delete is in the backlog - user, 2026-10-27)
-        if (!isLocalId(b['id'] as String))
-          ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
-              title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
-              onTap: () => Navigator.pop(ctx, 'delete')),
+        // (a local or network book's too: its file - user, 2026-10-28)
+        ListTile(leading: const Icon(Icons.delete_outline, color: Color(0xFFFF8A80)),
+            title: const Text('Delete book…', style: TextStyle(color: Color(0xFFFF8A80))),
+            onTap: () => Navigator.pop(ctx, 'delete')),
       ])),
     ),
   );
   if (choice == null || !context.mounted) return null;
   if (choice == 'select') {
     onSelectMultiple!();
+    return null;
+  }
+  if (choice == 'edit') {
+    if (await editBook(context, api, b as Map)) onChanged();
     return null;
   }
   if (choice == 'pin') {
@@ -132,7 +142,7 @@ Future<String?> showBookActions(BuildContext context, BookSource api, dynamic b,
     if (choice == 'delete') {
       if (!context.mounted) return null;
       final ok = await confirmDelete(context, 'Delete "$title"?',
-          'This deletes the file from the server. It cannot be undone from the app.');
+          'This deletes the file from ${deletesFrom(api, [b['id'] as String])}. It cannot be undone from the app.');
       if (!ok) return null;
       await api.deleteBookFile(b['id']);
     }
@@ -184,7 +194,8 @@ Future<void> bulkMark(BuildContext context, BookSource api, List<dynamic> books,
 Future<bool> bulkDelete(BuildContext context, BookSource api, List<dynamic> books) async {
   final n = books.length;
   final ok = await confirmDelete(context, 'Delete $n book${n == 1 ? '' : 's'}?',
-      'This deletes the files from the server. It cannot be undone from the app.');
+      'This deletes the files from ${deletesFrom(api, [for (final b in books) b['id'] as String])}. It cannot be '
+      'undone from the app.');
   if (!ok || !context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
   var done = 0;
@@ -209,6 +220,8 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
   final title = (s['metadata']?['title'] ?? s['name']) as String;
   final view = listPin('series', s['id'] as String, title);
   final pinned = Pins.instance.find(view);
+  final canEdit = await canEditIn(api, s['id'] as String);
+  if (!context.mounted) return;
   final choice = await showModalBottomSheet<String>(
     context: context,
     backgroundColor: const Color(0xFF141416),
@@ -230,6 +243,9 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
             : ListTile(leading: const Icon(Icons.visibility_off_outlined), title: const Text('Hide from On deck'),
                 subtitle: const Text('This series never shows in On deck'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-hide')),
+        if (canEdit)
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Edit…'),
+              onTap: () => Navigator.pop(ctx, 'edit')),
         if (onSelectMultiple != null)
           ListTile(leading: const Icon(Icons.checklist), title: const Text('Select multiple'),
               onTap: () => Navigator.pop(ctx, 'select')),
@@ -242,6 +258,10 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
   if (choice == null || !context.mounted) return;
   if (choice == 'select') {
     onSelectMultiple!();
+    return;
+  }
+  if (choice == 'edit') {
+    if (await editSeries(context, api, s as Map)) onChanged();
     return;
   }
   if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
@@ -276,8 +296,13 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
     if (choice == 'unread') await api.markSeriesUnread(s['id']);
     if (choice == 'delete') {
       if (!context.mounted) return;
-      final ok = await confirmDelete(context, 'Delete the series "$title"?',
-          'This deletes all ${s['booksCount'] ?? ''} books of the series from the server. It cannot be undone from the app.');
+      // (user, 2026-10-28: "clear that you would delete the series and all books underneath it from the device or
+      // server")
+      final n = (s['booksCount'] as num?)?.toInt();
+      final books = n == null ? 'every book in it' : n == 1 ? 'its 1 book' : 'all $n of its books';
+      final ok = await confirmDelete(context, 'Delete the series "$title" and all its books?',
+          'This deletes the series and $books - the files themselves - from ${deletesFrom(api, [s['id'] as String])}. '
+          'It cannot be undone from the app.');
       if (!ok) return;
       await api.deleteSeriesFiles(s['id']);
       if (inSeries && context.mounted) {
@@ -518,6 +543,18 @@ Future<bool> confirmBulk(BuildContext context, String title, String body, String
     ),
   );
   return r == true;
+}
+
+/// Where deleting [ids]' files (books' or series') deletes them from, for the confirmation: the server (Komga's), this
+/// device (a local library's folder), the share (a network library's) - "where they are" when they're in more than
+/// one.
+String deletesFrom(BookSource api, List<String> ids) {
+  final local = api is CombinedSource ? api.local : null;
+  final places = {
+    for (final id in ids)
+      !isLocalId(id) || local == null ? 'the server' : local.onShare(id) ? 'the share' : 'this device',
+  };
+  return places.length == 1 ? places.single : 'where they are';
 }
 
 /// Deletion always needs an explicit confirm; "Cancel" has focus so an accidental OK press on the remote is safe.

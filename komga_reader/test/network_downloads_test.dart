@@ -23,6 +23,20 @@ class _Share implements LibraryFs {
   bool away = false;
   final _real = LocalFs();
   int opened = 0;
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) => _real.writeWhole(path, bytes);
+  @override
+  Future<LibraryOut> create(String path) => _real.create(path);
+  @override
+  Future<void> replace(String from, String to) => _real.replace(from, to);
+  @override
+  Future<void> delete(String path) => _real.delete(path);
+  @override
+  Future<void> move(String from, String to) => _real.move(from, to);
+  @override
+  Future<void> makeFolder(String path) => _real.makeFolder(path);
+  @override
+  Future<bool> isThere(String path) => _real.isThere(path);
 
   String _here(String path) => path.replaceFirst(RegExp(r'^\\\\nas\\books'), dir.path);
   void _check() {
@@ -144,6 +158,19 @@ void main() {
     expect(await local.pageBytes(id, 2), page);
   });
 
+  test("a network book given a new id (Apply edits to files renamed it): its downloaded copy follows - there under "
+      'the new id, gone from the old', () async {
+    final b = await book(onShare: true);
+    final id = b['id'] as String;
+    await d.add([b]);
+    await settled();
+    final bytes = await File(d.localCopyOf(id)!).readAsBytes();
+    await d.renameLocalIds({id: 'lbRENAMED'});
+    expect(d.localCopyOf(id), isNull);
+    expect(await File(d.localCopyOf('lbRENAMED')!).readAsBytes(), bytes);
+    expect(d.isDownloaded('lbRENAMED'), isTrue);
+  });
+
   test("a book in a folder on the device isn't downloaded: it's here already", () async {
     final b = await book(onShare: false);
     expect(d.canDownload(b['id'] as String), isFalse);
@@ -245,6 +272,64 @@ void main() {
       addTearDown(deviceOnly.closeFiles);
       c.hasShares = () => deviceOnly.hasShares;
       expect(c.available, isFalse, reason: 'folders on this device only');
+    });
+  });
+
+  group('Storage & Downloads (user, 2026-10-27): a cache limit, Clear cache, and either limit Off', () {
+    tearDown(() => Downloads.cacheCap = Downloads.defaultCacheCap);
+
+    test("the cache limit Off: nothing is cached, the book is read from its source; the limit is kept on the device",
+        () async {
+      await d.setCacheCap(0);
+      final b = await book(onShare: true);
+      await d.cacheBook(b);
+      await settled();
+      expect(d.isCached(b['id'] as String), isFalse);
+      expect(d.queue, isEmpty);
+      Downloads.cacheCap = Downloads.defaultCacheCap;
+      await d.attachLocal(local, root: root); // (the settings read again, as at a start)
+      expect(Downloads.cacheCap, 0);
+    });
+
+    test('Clear cache: the cached copies go, the downloaded ones stay; a lower limit trims the cache at once',
+        () async {
+      final f = File('${shareDir.path}${Platform.pathSeparator}Saga${Platform.pathSeparator}Saga 2.cbz');
+      await f.writeAsBytes(zipOf({'1.png': page, '2.png': page}));
+      await local.rescan();
+      final onShare = [
+        for (final b in (await local.books(size: 10))['content'] as List)
+          if ('${b['url']}'.startsWith(r'\\')) b as Map,
+      ];
+      final (cached, downloaded) = (onShare[0], onShare[1]);
+      await d.cacheBook(cached);
+      await d.add([downloaded]);
+      await settled();
+      expect((d.isCached(cached['id'] as String), d.isDownloaded(downloaded['id'] as String)), (true, true));
+      await d.clearCache();
+      expect(d.isCached(cached['id'] as String), isFalse);
+      expect(d.isDownloaded(downloaded['id'] as String), isTrue);
+      expect(d.cacheBytes, 0);
+
+      await d.cacheBook(cached);
+      await settled();
+      expect(d.isCached(cached['id'] as String), isTrue);
+      await d.setCacheCap(1); // (smaller than any book)
+      expect(d.isCached(cached['id'] as String), isFalse, reason: 'trimmed to the new limit');
+    });
+
+    test('the downloads limit Off: nothing downloads - the book stops for lack of room, nothing breaks; the limit back, '
+        'it carries on', () async {
+      await d.setCap(0);
+      final b = await book(onShare: true);
+      await d.add([b]);
+      await settled();
+      expect(d.isDownloaded(b['id'] as String), isFalse);
+      expect(d.jobFor(b['id'] as String)?.state, JobState.failed);
+      // room again: the book goes back in the queue and downloads - waited for here, or it was still writing into the
+      // downloads folder when tearDown deleted it ("Directory not empty" on GitHub's Linux checks, 10-27)
+      await d.setCap(Downloads.defaultCap);
+      await settled();
+      expect(d.isDownloaded(b['id'] as String), isTrue);
     });
   });
 

@@ -35,10 +35,21 @@ void main() {
         });
     UpdateCheck.installed = () async => ('1.4.0', 134);
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    UpdateCheck.inThisApp = true; // (as in BeDeReader; off in BeDeReader Exp - the next test)
   });
-  tearDown(() => debugDefaultTargetPlatformOverride = null);
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
+    UpdateCheck.inThisApp = true;
+  });
 
   final day0 = DateTime(2026, 10, 22, 9);
+
+  test("BeDeReader Exp doesn't ask: a BeDeReader release isn't an update to it (user, 2026-10-26)", () async {
+    UpdateCheck.inThisApp = false;
+    await UpdateCheck.instance.check(now: day0);
+    expect(asked, 0);
+    expect(UpdateCheck.instance.available, isNull);
+  });
 
   test('a release with a higher build number: offered, with its page; the same or a lower one: not', () async {
     await UpdateCheck.instance.check(now: day0);

@@ -1,17 +1,21 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../app_log.dart';
 import '../content_changed.dart';
 import '../epub/progress.dart' show komgaEpubPage;
 import '../offline/catalogue_source.dart';
+import 'apply_edits.dart' as apply;
 import 'book_names.dart';
 import 'file_zip.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
+import 'local_meta.dart';
 import 'local_scan.dart';
 import 'local_store.dart';
 
@@ -77,6 +81,7 @@ class LocalSource extends CatalogueSource {
   Map<String, Map<String, dynamic>> _entries = {};
   Map<String, LocalBook> _books = {}; // bookId -> its record
   Map<String, String> _seriesFirst = {}; // seriesId -> its first book (its poster)
+  Map<String, (LocalLibrary, SeriesPlace)> _seriesPlaces = {}; // seriesId -> where its edits are kept
 
   @override
   Map<String, Map<String, dynamic>> get entries => _entries;
@@ -114,17 +119,23 @@ class LocalSource extends CatalogueSource {
 
   void _rebuild() {
     final entries = <String, Map<String, dynamic>>{}, books = <String, LocalBook>{}, first = <String, (String, num)>{};
+    final places = <String, (LocalLibrary, SeriesPlace)>{};
     for (final library in _libraries) {
       final index = store.libraries[library.id];
       if (index == null) continue;
       final lib = {'id': library.id, 'name': library.name};
-      final seriesJson = {for (final s in index.series.values) s.id: _seriesJson(s)};
-      for (final b in index.books.values) {
-        final series = seriesJson[b.seriesId];
+      // as edited (lib/local/local_meta.dart): the books' own fields, books moved to another series, the series'
+      final edited = withEdits(index, library, index.meta);
+      for (final MapEntry(:key, :value) in edited.places.entries) {
+        places[key] = (library, value);
+      }
+      final seriesOf = {for (final s in edited.series.values) s.id: seriesJson(s)};
+      for (final b in edited.books.values) {
+        final series = seriesOf[b.seriesId];
         if (series == null || _outOfReach(b)) continue;
         books[b.id] = b;
         entries[b.id] = {
-          'book': _bookJson(b, index.series[b.seriesId]!), 'series': series, 'library': lib,
+          'book': bookJson(b, edited.series[b.seriesId]!), 'series': series, 'library': lib,
           // a read-list library's list, named after the library
           'readLists': [
             for (final r in b.readLists) {'id': r.id, 'name': library.name, 'index': r.index, 'count': r.count},
@@ -137,19 +148,25 @@ class LocalSource extends CatalogueSource {
     }
     _entries = entries;
     _books = books;
+    _seriesPlaces = places;
     _seriesFirst = {for (final MapEntry(:key, :value) in first.entries) key: value.$1};
   }
 
   static String _date(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  static Map<String, dynamic> _seriesJson(LocalSeries s) => {
+  static Map<String, dynamic> seriesJson(LocalSeries s) => {
         'id': s.id, 'name': s.name, 'libraryId': s.libraryId, 'oneshot': s.oneshot,
-        'metadata': {'title': s.name, 'titleSort': s.name, 'status': 'ONGOING', 'genres': const [], 'tags': const []},
+        'metadata': {
+          'title': s.name, 'titleSort': s.titleSort ?? s.name, 'status': s.status ?? 'ONGOING',
+          'genres': s.genres ?? const [], 'tags': s.tags ?? const [], 'summary': s.summary ?? '',
+          if (s.readingDirection != null) 'readingDirection': s.readingDirection,
+          if (s.publisher != null) 'publisher': s.publisher,
+        },
         'booksMetadata': {'authors': const []},
       };
 
-  static Map<String, dynamic> _bookJson(LocalBook b, LocalSeries s) {
+  static Map<String, dynamic> bookJson(LocalBook b, LocalSeries s) {
     final name = b.path.substring(b.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
     final modified = b.modified.toUtc().toIso8601String();
     return {
@@ -167,7 +184,7 @@ class LocalSource extends CatalogueSource {
         if (b.released != null) 'releaseDate': _date(b.released!),
         if (b.released != null && b.precision != null) 'releaseDatePrecision': b.precision!.name,
         'authors': [for (final (n, r) in b.authors) {'name': n, 'role': r}],
-        'tags': const [], 'isbn': '', 'links': const [],
+        'tags': b.tags, 'isbn': '', 'links': const [],
       },
       'readProgress': null, 'deleted': false, 'oneshot': s.oneshot,
     };
@@ -190,13 +207,15 @@ class LocalSource extends CatalogueSource {
         final signature = _signature();
         for (final library in List.of(_libraries)) {
           if (_offline && splitUnc(library.path) != null) continue; // (offline: its share not asked - as it was)
-          final r = await scanLibrary(_fsFor(library.path), library, store.libraries[library.id],
+          final fs = _fsFor(library.path);
+          final r = await scanLibrary(fs, library, store.libraries[library.id],
               onFound: (n) => found.value = n, onBook: (_) {
             found.value = null;
             scanning.value = ++done;
           });
           found.value = null;
           report[library.id] = r.report;
+          AppLog.instance.info('local', _scanLine(library, r, fs is LocalFs ? fs.inCloud : 0));
           // (not one removed while it was being scanned: it was asked about after it had gone - the review, 2026-10-26)
           if (r.report.missing && _libraries.any((l) => l.id == library.id)) looksDeleted.add(library);
           if (r.report.reached && _libraries.any((l) => l.id == library.id)) {
@@ -231,7 +250,8 @@ class LocalSource extends CatalogueSource {
 
   int _signature() => Object.hashAllUnordered([
         for (final library in _libraries) library.name,
-        for (final b in _books.values) Object.hash(b.id, b.size, b.modified, b.title),
+        for (final b in _books.values) Object.hash(b.id, b.size, b.modified, b.title, b.seriesId, b.number, b.released),
+        for (final s in _entries.values) Object.hashAll((s['series'] as Map)['metadata'].values),
       ]);
 
   /// The libraries changed (Settings): kept, the removed ones' scans let go (not their progress), and scanned again -
@@ -246,7 +266,10 @@ class LocalSource extends CatalogueSource {
     final gone = <String>{};
     for (final l in removed) {
       final index = store.libraries[l.id];
-      gone.addAll([l.id, ...?index?.series.keys, ...?index?.books.keys]);
+      gone.addAll([
+        l.id, ...?index?.series.keys, ...?index?.books.keys,
+        for (final MapEntry(:key, :value) in _seriesPlaces.entries) if (value.$1.id == l.id) key, // (books moved to one)
+      ]);
       await store.removeLibrary(l.id);
     }
     if (gone.isNotEmpty) onRemoved?.call(gone);
@@ -285,6 +308,11 @@ class LocalSource extends CatalogueSource {
   @override
   Future<List<dynamic>> libraries() async =>
       [for (final l in _libraries) {'id': l.id, 'name': l.name}]..sort((a, b) => '${a['name']}'.compareTo('${b['name']}'));
+
+  /// All of them: a folder that isn't wanted isn't added - hiding is Komga's libraries' (Settings > Libraries; user,
+  /// 2026-10-27), and a local one hidden before had no switch left to show it again.
+  @override
+  Future<List<dynamic>> visibleLibraries({bool kept = false}) => libraries();
 
   /// [id] (a book, series or library of these) is on a network share.
   bool onShare(String id) {
@@ -375,7 +403,7 @@ class LocalSource extends CatalogueSource {
     return _withArchive(bookId, (archive, names) async {
       var sizes = store.sizes[bookId];
       if (sizes == null || sizes.length != names.length * 2) {
-        sizes = await _measure(archive, names);
+        sizes = await measurePages(archive, names);
         unawaited(store.setSizes(bookId, sizes));
       }
       return [
@@ -390,7 +418,7 @@ class LocalSource extends CatalogueSource {
 
   /// Each page's size from the start of its picture ([w, h, ...]; 0, 0 where it can't be told), 8 at a time - a
   /// picture whose size isn't in its first 64 KB (a big colour profile) read further, to 1 MB.
-  static Future<List<int>> _measure(ComicArchive archive, List<String> names) async {
+  static Future<List<int>> measurePages(ComicArchive archive, List<String> names) async {
     final out = List.filled(names.length * 2, 0);
     var next = 0;
     Future<void> worker() async {
@@ -608,6 +636,116 @@ class LocalSource extends CatalogueSource {
   /// What an error reading [bookId]'s own file was, as its library's files tell it (a share out of reach: no answer).
   FileTrouble troubleOf(String bookId, Object error) => _fsFor(_books[bookId]?.path ?? '').classify(error);
 
+  // ---- metadata edits, kept alongside the books (lib/local/local_meta.dart; user, 2026-10-27) ---------------------
+  /// A book or series of these, its share in reach (offline mode: a network one not).
+  @override
+  Future<bool> canEditMetadata(String id) async =>
+      (_books.containsKey(id) || _seriesPlaces.containsKey(id)) && !(_offline && onShare(id));
+
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) async {
+    final b = _books[bookId];
+    final library = _libraries.where((l) => l.id == b?.libraryId).firstOrNull;
+    final index = library == null ? null : store.libraries[library.id];
+    final scanned = index?.books[bookId];
+    if (b == null || library == null || index == null || scanned == null) throw _notHere(bookId);
+    final c = Map.of(changes);
+    // moved back to the series its folder makes: not moved any more
+    final own = withEdits(index, library, index.meta).series[scanned.seriesId]?.name ?? '';
+    if (c['seriesName'] case final String name when name.trim().toLowerCase() == own.toLowerCase()) c['seriesName'] = null;
+    final file = fileNameOf(b.path);
+    await _saveEdits(library, index, folderOf(b.path), (doc) {
+      final books = Map<String, Object?>.from((doc['books'] as Map?) ?? const {});
+      final now = (books[file] is Map ? BookEdits.fromJson(books[file] as Map) : const BookEdits()).plus(c);
+      now.isEmpty ? books.remove(file) : books[file] = now.toJson();
+      doc['books'] = books;
+    });
+  }
+
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) async {
+    final (library, place) = _seriesPlaces[seriesId] ?? (throw NeedsKomga('This series'));
+    final index = store.libraries[library.id] ?? (throw NeedsKomga('This series'));
+    final key = place.key;
+    if (key != null) {
+      // one with no folder of its own: in its folder's .bedereader.json
+      return _saveEdits(library, index, place.folder, (doc) {
+        final series = Map<String, Object?>.from((doc['series'] as Map?) ?? const {});
+        final now = (series[key] is Map ? SeriesEdits.fromJson(series[key] as Map) : const SeriesEdits()).plus(changes);
+        now.isEmpty ? series.remove(key) : series[key] = now.toJson();
+        doc['series'] = series;
+      });
+    }
+    // its folder's series.json, Mylar's format kept (what Komga reads), with what that has no place for in the app's
+    // own key
+    final fs = _fsFor(library.path);
+    final path = joinPath(place.folder, seriesFileName);
+    final doc = await readMetaJson(fs, path);
+    final now = ((doc == null ? null : FolderMeta.read(seriesJson: jsonEncode(doc)).folderSeries) ?? const SeriesEdits())
+        .plus(changes);
+    final text = seriesJsonText(doc, now, index.series[seriesId]?.name ?? '');
+    await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
+    final was = index.meta[place.folder];
+    await _remember(index, place.folder, FolderMeta(folderSeries: FolderMeta.read(seriesJson: text).folderSeries,
+        books: was?.books ?? const {}, series: was?.series ?? const {}));
+  }
+
+  // ---- Apply edits to files (lib/local/apply_edits.dart; user, 2026-10-27) ---------------------------------------
+  /// What Apply would do to [library] now - for the confirmation before it.
+  Future<apply.ApplyPlan> planApply(LocalLibrary library) async {
+    final index = store.libraries[library.id];
+    if (index == null) return apply.ApplyPlan(library, const [], const [], const []);
+    return apply.planApply(_fsFor(library.path), library, index);
+  }
+
+  /// [plan] carried out (not while a scan runs; the books let go first - Windows won't move a file held open). What's
+  /// kept under the books' and series' ids follows them: their reading progress and page sizes here, the rest through
+  /// [onMoved]. The library is scanned again after.
+  Future<apply.ApplyResult> applyEdits(apply.ApplyPlan plan, {void Function(int done, int all)? onStep}) async {
+    await _scan?.catchError((Object _) {});
+    await closeFiles();
+    final r = await apply.runApply(_fsFor(plan.library.path), plan, onStep: onStep);
+    if (r.ids.isNotEmpty) {
+      await store.renameIds(r.ids);
+      onMoved?.call(r.ids);
+    }
+    await rescan();
+    return r;
+  }
+
+  /// Books' and series' ids changed with their paths (old -> new; Apply edits to files): the app's stores keyed by them
+  /// follow (pins, settings, highlights, downloads...).
+  void Function(Map<String, String> ids)? onMoved;
+
+  /// [folder]'s .bedereader.json changed by [change] - read as it is now first (edits made on another device since the
+  /// last scan kept), written whole, and the books listed with it at once.
+  Future<void> _saveEdits(LocalLibrary library, LibraryIndex index, String folder,
+      void Function(Map<String, Object?> doc) change) async {
+    final fs = _fsFor(library.path);
+    final path = joinPath(folder, editsFileName);
+    final there = await readMetaJson(fs, path);
+    final doc = there ?? <String, Object?>{};
+    doc['bedereader'] = 1;
+    change(doc);
+    final text = const JsonEncoder.withIndent('  ').convert(doc);
+    // nothing to keep, and no file yet: none made (an edit that only took a book's own back)
+    final empty = ((doc['books'] as Map?) ?? const {}).isEmpty && ((doc['series'] as Map?) ?? const {}).isEmpty;
+    if (there != null || !empty) await fs.writeWhole(path, Uint8List.fromList(utf8.encode(text)));
+    final read = FolderMeta.read(editsJson: text), was = index.meta[folder];
+    await _remember(index, folder, FolderMeta(folderSeries: was?.folderSeries, books: read.books, series: read.series));
+  }
+
+  /// [folder]'s edits as now saved - kept (no stamps: the next scan reads its files again) and listed.
+  Future<void> _remember(LibraryIndex index, String folder, FolderMeta meta) async {
+    meta.isEmpty ? index.meta.remove(folder) : index.meta[folder] = meta;
+    await store.putLibrary(index);
+    _rebuild();
+    changed.value++;
+    contentChanged.value++;
+  }
+
+
+
   // ---- what only Komga has ------------------------------------------------------------------------------------------
   // (settings are this device's own here: nothing to sync)
   @override
@@ -629,10 +767,61 @@ class LocalSource extends CatalogueSource {
       ];
   @override
   Future<List<dynamic>> seriesCollections(String seriesId) async => const [];
+  /// The book's file deleted - from this device's folder, or the share (user, 2026-10-28) - and the book taken out of
+  /// its library at once (its series too, if it was the last one in it); the pins to them go ([onRemoved]). Not while
+  /// offline for a book on a share.
   @override
-  Future<void> deleteBookFile(String bookId) async => throw NeedsKomga('Deleting a book');
+  Future<void> deleteBookFile(String bookId) async {
+    final b = _books[bookId];
+    if (b == null) throw _notHere(bookId);
+    await _delete([b], 'Deleting a book');
+  }
+
+  /// Every book of the series as listed (its edits' too: a book moved into it from another folder) deleted, as
+  /// [deleteBookFile] does one, and the series with them (user, 2026-10-28). The folder and its metadata files stay.
   @override
-  Future<void> deleteSeriesFiles(String seriesId) async => throw NeedsKomga('Deleting a series');
+  Future<void> deleteSeriesFiles(String seriesId) async {
+    final books = [for (final b in _books.values) if (b.seriesId == seriesId) b];
+    if (books.isEmpty) throw _notHere(seriesId);
+    await _delete(books, 'Deleting a series', series: seriesId);
+  }
+
+  /// [books]' files deleted, one by one, and each taken out of its library as it goes (a failure part-way leaves the
+  /// rest listed, the ones deleted gone); a series left with no book goes too. The pins to them are told
+  /// ([onRemoved]).
+  Future<void> _delete(List<LocalBook> books, String what, {String? series}) async {
+    if (_offline && books.any((b) => splitUnc(b.path) != null)) throw NotAvailableOffline(what);
+    await _scan?.catchError((Object _) {}); // (a scan ending after would put them back)
+    final gone = <String>{};
+    try {
+      for (final b in books) {
+        // its archive let go first: a file held open can't be deleted on Windows (the reader deleting the book it
+        // shows)
+        final open = _open.remove(b.id);
+        await open?.close();
+        await _fsFor(b.path).delete(b.path);
+        gone.add(b.id);
+        for (final index in store.libraries.values) {
+          final was = index.books.remove(b.id);
+          if (was == null) continue;
+          if (!index.books.values.any((x) => x.seriesId == was.seriesId)) {
+            index.series.remove(was.seriesId);
+            gone.add(was.seriesId);
+          }
+          await store.putLibrary(index);
+        }
+        await store.clearProgress(b.id);
+      }
+      if (series != null) gone.add(series);
+    } finally {
+      if (gone.isNotEmpty) {
+        onRemoved?.call(gone);
+        _rebuild();
+        changed.value++;
+        contentChanged.value++;
+      }
+    }
+  }
   @override
   Future<void> renameReadList(String id, String name) async => throw NeedsKomga('Renaming a read list');
   @override
@@ -677,4 +866,15 @@ class _Poster extends ImageProvider<_Poster> {
   bool operator ==(Object other) => other is _Poster && other.path == path;
   @override
   int get hashCode => path.hashCode;
+}
+
+/// What a scan of [library] came to, for the app's log: a library that shows nothing leaves a reason (user, 2026-11-04).
+String _scanLine(LocalLibrary library, ScanResult r, int inCloud) {
+  final report = r.report;
+  if (!report.reached) {
+    return 'Scan of ${library.name}: not reached${report.missing ? ' (not there)' : ''}${report.error == null ? '' : ': ${report.error}'}';
+  }
+  return 'Scan of ${library.name}: ${r.index.books.length} books in ${r.index.series.length} series'
+      '${report.files.isEmpty ? '' : ', ${report.files.length} left out'}'
+      '${inCloud == 0 ? '' : ', $inCloud still in iCloud'}';
 }

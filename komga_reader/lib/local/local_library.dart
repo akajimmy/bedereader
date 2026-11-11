@@ -15,6 +15,11 @@ enum LibraryKind {
   /// Books of several series, in an order: a read list named after the library, the books in it by path ("001 - "
   /// first); each book's series from its ComicInfo, else its file name.
   readList,
+
+  /// Books loose among anything else, as they came (a Downloads folder - user, 2026-11-04): every book in the folder
+  /// and its subfolders, wherever it is, put with the others of its series - its ComicInfo's, else its file name's.
+  /// Its files stay as they are: Apply edits writes into them, and never renames or moves them.
+  looseFiles,
 }
 
 /// A local library: a folder on this device or a share, holding its books as [kind] says.

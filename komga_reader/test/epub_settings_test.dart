@@ -10,6 +10,7 @@ import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:komga_reader/widgets/epub_settings.dart';
+import 'package:komga_reader/widgets/setting_rows.dart' show SwitchRow;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/epub_books.dart' show MemorySource, twoChapters;
@@ -239,6 +240,68 @@ void main() {
     final sent = jsonDecode(api.written[AppSettings.komgaKey]!) as Map;
     expect((sent['epub'] as Map)['colours'], 'sepia', reason: 'puts ${api.puts} gets ${api.gets} '
         'error ${AppSettings.instance.syncError}');
+  });
+
+  group("a book's own eBook settings (user, 2026-10-27: per book, as comics' per series - all of them; this "
+      "device's only)", () {
+    tearDown(AppSettings.instance.clearEpubBooks);
+
+    testWidgets('Override defaults starts the book from the defaults; set, only that book reads with them; kept on '
+        'the device across a restart; never sent to Komga; off, it follows the defaults again', (tester) async {
+      final api = noNetwork(() => SettingsServer());
+      final s = AppSettings.instance;
+      await tester.runAsync(() => s.load(api));
+      final puts = api.puts;
+      s.setEpubOverride('B1', true);
+      expect(s.epubFor('B1'), s.epub, reason: 'from the defaults: nothing on the page moves');
+      s.setEpubBook('B1', s.epubFor('B1').copyWith(font: EpubFont.lora, size: 26, colours: EpubColours.light));
+      expect(s.epubFor('B1').colours, EpubColours.light);
+      expect(s.epubFor('B2'), s.epub, reason: 'another book: the defaults');
+      expect(s.epub.colours, isNot(EpubColours.light), reason: 'the defaults as they were');
+      await wait(tester, const Duration(seconds: 3));
+      expect(api.puts, puts, reason: "nothing sent to Komga: this device's");
+
+      s.epubBooks.clear(); // a restart: read from the device
+      await tester.runAsync(() => s.load(api, fetch: false));
+      expect((s.epubFor('B1').font, s.epubFor('B1').size), (EpubFont.lora, 26.0));
+      s.setEpubOverride('B1', false);
+      expect(s.ownsEpub('B1'), isFalse);
+      expect(s.epubFor('B1'), s.epub);
+    });
+
+    testWidgets('the reader reads a book with its own settings - its page colours - while the defaults stay',
+        (tester) async {
+      tester.view.physicalSize = const Size(800, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final s = AppSettings.instance;
+      s.setEpubOverride('B1', true);
+      s.setEpubBook('B1', s.epubFor('B1').copyWith(colours: EpubColours.light));
+      await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(EmptySettingsKomga.new),
+          book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}}, epubSource: twoChapters(),
+          saveProgress: false)));
+      await bookShown(tester);
+      expect(tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor, EpubColours.light.background);
+      expect(s.epub.colours, isNot(EpubColours.light));
+      await tester.pumpWidget(const SizedBox()); // closed: the background counting stops
+      for (var i = 0; i < 10; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump(const Duration(milliseconds: 10));
+      }
+    });
+
+    testWidgets("the Aa panel: following the defaults, the book's rows show them greyed out and can't be set; "
+        "Override defaults on, they're the book's own", (tester) async {
+      final s = AppSettings.instance;
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListenableBuilder(listenable: s,
+          builder: (context, _) => ListView(children: epubPanelRows(context, s, bookId: 'B9'))))));
+      final greyed = find.byWidgetPredicate((w) => w is Opacity && w.opacity < 1);
+      expect(greyed, findsWidgets);
+      await tester.tap(find.byType(SwitchRow).first); // This book > Override defaults
+      await tester.pump();
+      expect(s.ownsEpub('B9'), isTrue);
+      expect(greyed, findsNothing);
+    });
   });
 
   testWidgets('the reader follows the settings: a bigger size lays the book out again (more pages), the theme '

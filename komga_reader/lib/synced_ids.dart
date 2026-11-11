@@ -80,10 +80,10 @@ abstract class SyncedIds extends ChangeNotifier {
 
   /// Komga's list again - Home calls it each time it reloads, so a change made on another device arrives without a
   /// restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_api == null || !_loaded) return;
     final p = await SharedPreferences.getInstance();
-    await _gate.run(() => _fetch(p));
+    await _gate.run(() => _fetch(p), force: force); // (force: Sync now)
   }
 
   final _gate = RefreshGate();
@@ -103,6 +103,19 @@ abstract class SyncedIds extends ChangeNotifier {
     if (!_loaded) return;
     SharedPreferences.getInstance().then((p) {
       if (p.getBool(_dirtyKey) ?? false) _send();
+    });
+  }
+
+  /// Local books and series whose ids changed with their paths (Apply edits to files: old -> new): they stay in their
+  /// sets.
+  void renameIds(Map<String, String> ids) {
+    if (!sets.values.any((s) => s.any(ids.containsKey))) return;
+    change(() {
+      for (final s in sets.values) {
+        for (final MapEntry(key: from, value: to) in ids.entries) {
+          if (s.remove(from)) s.add(to);
+        }
+      }
     });
   }
 

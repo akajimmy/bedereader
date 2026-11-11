@@ -4,6 +4,7 @@ import 'book_names.dart';
 import 'file_zip.dart';
 import 'library_fs.dart';
 import 'local_library.dart';
+import 'local_meta.dart';
 import 'local_store.dart';
 
 /// Which version of the scan's rules read the inside of a file: a book read by older rules is opened again.
@@ -59,11 +60,16 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
   final report = LibraryScan();
   final unreadFolders = <String>[];
   final files = <FsEntry>[];
+  final metaFiles = <String, List<FsEntry>>{}; // folder -> its metadata files (local_meta.dart)
   try {
     await for (final e in fs.list(library.path, onUnreadable: (folder, error) {
       unreadFolders.add(folder);
       report.files.add((folder, fs.classify(error)));
     })) {
+      if (isMetaFile(fileNameOf(e.path))) {
+        metaFiles.putIfAbsent(folderOf(e.path), () => []).add(e);
+        continue;
+      }
       files.add(e);
       onFound?.call(files.length);
     }
@@ -81,8 +87,10 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
 
   // each series' files in natural order (by path: a one-series library's folder by folder - user, 2026-10-26), as the
   // library holds them ([LibraryKind]): a series folder's or a one-shot's own; the whole library's; a read list's
-  // books, all in one list - each one's series known once it's read (its ComicInfo, else its name)
+  // books, all in one list - each one's series known once it's read (its ComicInfo, else its name); loose files' the
+  // same, without the list
   final readList = library.kind == LibraryKind.readList;
+  final byName = readList || library.kind == LibraryKind.looseFiles;
   final groups = <(String, bool), List<FsEntry>>{};
   for (final f in files) {
     final parent = parentOf(f.path);
@@ -90,7 +98,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
         (parent.toLowerCase() == root.toLowerCase() || oneshotFolders.contains(baseOf(parent).toLowerCase()));
     final key = switch (library.kind) {
       LibraryKind.seriesFolders => oneshot ? (f.path, true) : (parent, false),
-      LibraryKind.oneSeries || LibraryKind.readList => (root, false),
+      LibraryKind.oneSeries || LibraryKind.readList || LibraryKind.looseFiles => (root, false),
     };
     groups.putIfAbsent(key, () => []).add(f);
   }
@@ -100,7 +108,7 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
   final jobs = <(FsEntry, int, String, String, bool)>[];
   for (final MapEntry(key: (where, oneshot), value: inIt) in groups.entries) {
     inIt.sort((a, b) => naturalCompare(a.path, b.path));
-    if (!oneshot && !readList) {
+    if (!oneshot && !byName) {
       // (user, 2026-10-26: "Green Lantern Mosaic 012 (1993)" in a folder of its issues is "012 (1993)")
       if (withoutSharedStart([for (final f in inIt) stemOf(f.path)]) case final names?) {
         for (final (i, f) in inIt.indexed) {
@@ -109,14 +117,14 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
       }
     }
     final id = localSeriesId(where), name = oneshot ? stemOf(where) : baseOf(where);
-    if (!readList) series.add(LocalSeries(id: id, libraryId: library.id, name: name, oneshot: oneshot));
+    if (!byName) series.add(LocalSeries(id: id, libraryId: library.id, name: name, oneshot: oneshot));
     for (final (i, f) in inIt.indexed) {
-      jobs.add(readList
+      jobs.add(byName
           ? (f, i, '', seriesFromName(withoutReadingOrder(stemOf(f.path))), false)
           : (f, i, id, name, oneshot));
     }
   }
-  final infoSeries = <String, String>{}; // a read list's book, read now: its ComicInfo's series
+  final infoSeries = <String, String>{}; // a book put by name, read now: its ComicInfo's series
 
   final books = <LocalBook>[];
   var next = 0, done = 0;
@@ -150,9 +158,9 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
       if (b.path.startsWith(folder) && !books.any((x) => x.id == b.id)) books.add(b);
     }
   }
-  if (readList) {
-    // a read list: its books put together by series - a book read now by its ComicInfo's, else its name's; one kept
-    // from before in the series it had - and each given its place in the list, counting the books there are
+  if (byName) {
+    // its books put together by series - a book read now by its ComicInfo's, else its name's; one kept from before in
+    // the series it had - and a read list's each given its place in the list, counting the books there are
     books.sort((a, b) => naturalCompare(a.path, b.path));
     final listId = library.readListId;
     for (final (i, b) in books.indexed) {
@@ -165,26 +173,68 @@ Future<ScanResult> scanLibrary(LibraryFs fs, LocalLibrary library, LibraryIndex?
           series.add(LocalSeries(id: seriesId, libraryId: library.id, name: name.trim(), oneshot: false));
         }
       }
-      books[i] = b.placed(seriesId: seriesId, readLists: [ReadListPlace(listId, i, books.length)]);
+      books[i] = b.placed(seriesId: seriesId, readLists: readList ? [ReadListPlace(listId, i, books.length)] : null);
     }
   }
   final seriesIds = {for (final b in books) b.seriesId};
+  final meta = await _readMeta(fs, metaFiles, kept.meta);
+  // a folder that couldn't be listed keeps the edits it had
+  for (final folder in unreadFolders) {
+    for (final MapEntry(:key, :value) in kept.meta.entries) {
+      if (key.startsWith(folder)) meta.putIfAbsent(key, () => value);
+    }
+  }
   return (
     index: LibraryIndex(library.id, [
       ...series.where((s) => seriesIds.contains(s.id)),
       for (final s in kept.series.values)
         if (seriesIds.contains(s.id) && !series.any((x) => x.id == s.id)) s,
-    ], books),
+    ], books, meta: meta),
     report: report,
   );
 }
 
+/// Each folder's metadata files read - only where they changed since [before] (the same sizes and dates: what was read
+/// then). A file that can't be read counts as not there.
+Future<Map<String, FolderMeta>> _readMeta(
+    LibraryFs fs, Map<String, List<FsEntry>> files, Map<String, FolderMeta> before) async {
+  final out = <String, FolderMeta>{};
+  for (final MapEntry(key: folder, value: here) in files.entries) {
+    final stamps = {for (final f in here) fileNameOf(f.path): FolderMeta.stampOf(f)};
+    final was = before[folder];
+    if (was != null && _sameStamps(was.stamps, stamps)) {
+      out[folder] = was;
+      continue;
+    }
+    Future<String?> text(bool Function(String name) which) async {
+      final f = here.where((f) => which(fileNameOf(f.path))).firstOrNull;
+      if (f == null) return null;
+      try {
+        return utf8.decode(await readWhole(fs, f.path), allowMalformed: true);
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final m = FolderMeta.read(
+        seriesJson: await text((n) => n.toLowerCase() == seriesFileName),
+        editsJson: await text((n) => n == editsFileName),
+        stamps: stamps);
+    if (!m.isEmpty) out[folder] = m;
+  }
+  return out;
+}
+
+bool _sameStamps(Map<String, String> a, Map<String, String> b) =>
+    a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
+
 /// Opens a book's file: its pages (a comic) or its metadata (an EPUB), its ComicInfo, and what its name says. Also
 /// returns its ComicInfo's series (a read list's books are put in theirs). [shortName]: its name without the start
 /// its series' books share - its title, unless its name has one after its number, or its ComicInfo or the EPUB has one.
+/// [fileName]: the file's name, when its path doesn't end in it (Android's opened files: /proc/self/fd/N).
 Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary library, String seriesId,
-    String seriesName, int place, bool oneshot, {String? shortName}) async {
-  final name = f.path.substring(f.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
+    String seriesName, int place, bool oneshot, {String? shortName, String? fileName}) async {
+  final name = fileName ?? f.path.substring(f.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
   final dot = name.lastIndexOf('.');
   final fileStem = dot <= 0 ? name : name.substring(0, dot);
   // (a read list's "001 - " is its place in the list, not its number)
@@ -240,6 +290,16 @@ Future<(LocalBook, String?)> _readBook(LibraryFs fs, FsEntry f, LocalLibrary lib
     await archive.close();
   }
 }
+
+/// A book file opened on its own (Open with, Share - lib/opened_file.dart): read as a book of its own in a library
+/// would be ([fileName]: its name, when its path doesn't end in it).
+Future<LocalBook> readLooseBook(LibraryFs fs, FsEntry f, {String? fileName}) async {
+  const library = LocalLibrary('', looseFolder);
+  return (await _readBook(fs, f, library, localSeriesId(f.path), '', 0, true, fileName: fileName)).$1;
+}
+
+/// Where the loose books are said to be: no folder (their library's id is made from it).
+const looseFolder = '<opened file>';
 
 /// What a book sorts by: its ComicInfo number, else its name's; one with neither goes after the numbered ones, in
 /// its place in the folder (it took its place as its number, and could tie with #1 - the experiment's review).

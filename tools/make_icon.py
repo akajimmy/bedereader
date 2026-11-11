@@ -10,7 +10,7 @@ One set of geometry drives every output:
   assets/icon.png                                the icon inside the app (Info screen)
   windows/runner/resources/app_icon.ico          Windows app icon
   tools/icon_preview.png                         how launchers show it
-Usage (from C:\\Claude\\KomgaClient): py -3.13 tools\\make_icon.py
+Usage (from C:\\Claude\\BeDeReader): py -3.13 tools\\make_icon.py
 """
 import pathlib
 

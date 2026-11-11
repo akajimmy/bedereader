@@ -73,11 +73,15 @@ class ReaderPrefs {
 
   final bool sharpen; // shown as "Enhance": denoise + Lanczos scaling + RCAS (lib/enhance.dart); key kept for sync
   final bool autoLevels; // shown as "Enhance colours": auto-levels + whiten paper + deepen ink (lib/enhance.dart)
-  final double crop; // "Crop edges": this fraction of the page cut off every side - one of [crops]
+  final double crop; // "Crop edges": this fraction of the page cut off every side - one of [crops] - or [autoCrop]
 
-  /// Crop edges' steps (user, 2026-10-21: "Off, 2%, 4%, 6%" - it was a 1% slider to 10%). A share saved that isn't
-  /// one of them reads as Off (no migration - user rule).
-  static const crops = [0.0, 0.02, 0.04, 0.06];
+  /// Crop edges' steps (user, 2026-10-21: "Off, 2%, 4%, 6%" - it was a 1% slider to 10%), and Auto (user,
+  /// 2026-10-28: each page's border found - lib/reader/auto_crop.dart). A share saved that isn't one of them reads as
+  /// Off (no migration - user rule).
+  static const crops = [0.0, 0.02, 0.04, 0.06, autoCrop];
+
+  /// Crop edges' Auto: each page cut to its own content plus an even border (comics only: a webtoon's strip isn't).
+  static const autoCrop = -1.0;
 
   /// The Gutter's steps, px (user, 2026-10-21: "a few steps" - it was a slider to dial in).
   static const gutters = [0.0, 2.0, 8.0, 16.0];
@@ -181,37 +185,56 @@ extension RotationLabel on Rotation {
       };
 }
 
-/// The app's accent colour (buttons, switches, highlights): full-strength colours that still sit well on the dark
-/// background (the "Rich" set, 2026-09-30 - the first, pale set was too muted). Listed in the order shown; the names
-/// are what's saved, so the original seven keep theirs (purple is now a violet).
-/// The app's accent colours (user, 2026-10-07 QA: hues spread out - the old ones crowded round blue - and greys).
-enum Accent { red, orange, yellow, lime, green, blue, violet, purple, magenta, pink, bronze, olive, white, silver, slate,
-  charcoal }
+/// The app's accent colour (buttons, switches, highlights), listed in the order shown: the user's own palette (10-27
+/// worksheet, reports\10-27-accent-worksheet.html: bolder, more of them - "a bright fire engine red, a bold forest
+/// green"). The name is what's saved: a device on a name that's gone (blue, red, purple...) starts on [defaultAccent].
+/// In hue order round the wheel, cut between Salmon and Crimson so the reds stay together (user, 2026-10-27, "A'" -
+/// cut at 0 degrees, Crimson at 348 went to the far end), then the earth tones, then the greys light to dark.
+enum Accent { crimson, fireRed, coral, orange, yellow, lime, neon, forest, green, mint, cyan, royal, navy, violet,
+  electric, darkPink, hotPink, salmon, bronze, olive, white, grey, charcoal, nearBlack }
+
+/// A fresh install's accent, and one saved under a name that's gone (user, 2026-10-27: Blue was the default - gone).
+const defaultAccent = Accent.royal;
 
 extension AccentColour on Accent {
   Color get colour => switch (this) {
-        Accent.red => const Color(0xFFE5484D),
+        Accent.fireRed => const Color(0xFFFF1F1F),
+        Accent.crimson => const Color(0xFFD7163E),
+        Accent.coral => const Color(0xFFFF6B57),
         Accent.orange => const Color(0xFFF76B15),
         Accent.yellow => const Color(0xFFF5D90A),
-        Accent.lime => const Color(0xFF99D52A),
+        Accent.lime => const Color(0xFF00FF00),
+        Accent.neon => const Color(0xFF3DFF5A),
         Accent.green => const Color(0xFF30A46C),
-        Accent.blue => const Color(0xFF0090FF),
+        Accent.forest => const Color(0xFF1E8C3A),
+        Accent.mint => const Color(0xFF3DE8B5),
+        Accent.cyan => const Color(0xFF00D2F0),
+        Accent.navy => const Color(0xFF000080),
+        Accent.royal => const Color(0xFF2F5BFF),
         Accent.violet => const Color(0xFF6E56CF),
-        Accent.purple => const Color(0xFF9A5CD0),
-        Accent.magenta => const Color(0xFFD6409F),
-        Accent.pink => const Color(0xFFE93D82),
+        Accent.electric => const Color(0xFFB026FF),
+        Accent.darkPink => const Color(0xFFA02372),
+        Accent.hotPink => const Color(0xFFFF2E93),
+        Accent.salmon => const Color(0xFFFF91A4),
         Accent.bronze => const Color(0xFFAD7F58),
         Accent.olive => const Color(0xFF8E8C5C),
         Accent.white => const Color(0xFFEDEDED),
-        Accent.silver => const Color(0xFFA0A4AB),
-        Accent.slate => const Color(0xFF6B7280),
+        Accent.grey => const Color(0xFF9999A0),
         Accent.charcoal => const Color(0xFF4A4F57),
+        Accent.nearBlack => const Color(0xFF1B1B1B), // (the user's call: as it is, though it sits close to the background)
       };
 
   /// Text and icons on the accent (a selected choice, a filled button): black on the light ones, white on the dark.
   Color get onColour => colour.computeLuminance() > 0.25 ? const Color(0xFF101012) : const Color(0xFFFFFFFF);
 
-  String get label => '${name[0].toUpperCase()}${name.substring(1)}';
+  /// As the user named them (10-27).
+  String get label => switch (this) {
+        Accent.fireRed => 'Fire red',
+        Accent.darkPink => 'Dark Pink',
+        Accent.hotPink => 'Hot pink',
+        Accent.nearBlack => 'Near Black',
+        _ => '${name[0].toUpperCase()}${name.substring(1)}',
+      };
 
   /// Where the remote's focus is shown: the accent, or on the dark greys a lighter one - charcoal on the app's
   /// near-black was hard to find.
@@ -292,7 +315,7 @@ class DisplayPrefs {
       this.doubleTapZoom = true, this.midBook = MidBook.ask,
       this.screenOn = 0, this.posterSize = PosterSize.medium,
       this.nightSchedule = false, this.nightFrom = 21 * 60, this.nightTo = 7 * 60,
-      this.textScale = 1.0, this.accent = Accent.blue, this.pageStrip = false,
+      this.textScale = 1.0, this.accent = defaultAccent, this.pageStrip = false,
       this.comics = const KindPrefs(), this.ebooks = const KindPrefs(), this.webtoons = const KindPrefs(),
       this.insetPage = InsetPage.wideScreen, this.rotation = Rotation.auto, this.pageNote = PageNote.afterTurn,
       this.showClock = false, this.showBattery = false, this.progressBar = false,
@@ -458,7 +481,7 @@ class DisplayPrefs {
         nightFrom: minutes(j['nightFrom'], 21 * 60),
         nightTo: minutes(j['nightTo'], 7 * 60),
         textScale: textScales.contains(j['textScale']) ? (j['textScale'] as num).toDouble() : 1.0,
-        accent: pick(Accent.values, j['accent'], Accent.blue),
+        accent: pick(Accent.values, j['accent'], defaultAccent),
         pageStrip: j['pageStrip'] == true,
         comics: kind('comics', none.comics),
         webtoons: kind('webtoons', none.webtoons),
@@ -761,6 +784,71 @@ class AppSettings extends ChangeNotifier {
   EpubPrefs epub = const EpubPrefs();
   static const _localEpubOwn = 'epub.own';
 
+  /// eBooks: a book's own settings, overriding the defaults ([epub]) - every one of them, font and size included
+  /// (user, 2026-10-27: per book, as comics are per series; "all per-device": kept on this device only, never synced
+  /// - what reads best differs from screen to screen. The defaults stay synced, but for the font and size).
+  final Map<String, EpubPrefs> epubBooks = {};
+  static const _epubBooksKey = 'epub.books';
+
+  /// The eBook settings [bookId] is read with: its own, else the defaults.
+  EpubPrefs epubFor(String? bookId) => (bookId == null ? null : epubBooks[bookId]) ?? epub;
+
+  /// Whether [bookId] has its own eBook settings.
+  bool ownsEpub(String bookId) => epubBooks.containsKey(bookId);
+
+  /// [bookId]'s own eBook settings, from now on.
+  void setEpubBook(String bookId, EpubPrefs prefs) {
+    if (epubBooks[bookId] == prefs) return;
+    epubBooks[bookId] = prefs;
+    _epubBooksChanged();
+  }
+
+  /// The panel's "Override defaults": on, the book starts from the defaults' values (nothing on the page moves) and
+  /// can then be set; off, it follows the defaults again.
+  void setEpubOverride(String bookId, bool own) {
+    if (own == ownsEpub(bookId)) return;
+    own ? epubBooks[bookId] = epub : epubBooks.remove(bookId);
+    _epubBooksChanged();
+  }
+
+  /// Every book back to the defaults (Settings > eBooks > Reset all).
+  void clearEpubBooks() {
+    if (epubBooks.isEmpty) return;
+    epubBooks.clear();
+    _epubBooksChanged();
+  }
+
+  /// Local books and series whose ids changed with their paths (Apply edits to files: old -> new): a series' reader
+  /// settings and a book's eBook settings follow.
+  void renameIds(Map<String, String> ids) {
+    var reader = false, books = false;
+    for (final MapEntry(key: from, value: to) in ids.entries) {
+      if (series.remove(from) case final p?) (series[to] = p, reader = true);
+      if (epubBooks.remove(from) case final p?) (epubBooks[to] = p, books = true);
+    }
+    if (reader) _changedReader();
+    if (books) _epubBooksChanged();
+  }
+
+  void _epubBooksChanged() {
+    notifyListeners();
+    final json = jsonEncode({for (final MapEntry(:key, :value) in epubBooks.entries) key: value.toJson()});
+    SharedPreferences.getInstance().then((p) => p.setString(_epubBooksKey, json)).then<void>((_) {},
+        onError: (Object _) {});
+  }
+
+  void _loadEpubBooks(String? raw) {
+    epubBooks.clear();
+    if (raw == null) return; // (a new key: none until set here - no migration)
+    try {
+      for (final MapEntry(:key, :value) in (jsonDecode(raw) as Map<String, dynamic>).entries) {
+        epubBooks[key] = EpubPrefs.fromJson(value as Map<String, dynamic>);
+      }
+    } catch (_) {
+      epubBooks.clear(); // damaged: every book follows the defaults
+    }
+  }
+
   /// [p] with this device's font and text size (from [epub], which always has them).
   EpubPrefs _withOwn(EpubPrefs p) => p.copyWith(font: epub.font, size: epub.size);
   LibraryPrefs library = const LibraryPrefs(); // posters' captions, Home's sections: synced (key "library")
@@ -897,6 +985,7 @@ class AppSettings extends ChangeNotifier {
     final own = p.getString(_localEpubOwn); // (a new key: from the defaults until set here - no migration)
     final ownPrefs = own == null ? const EpubPrefs() : EpubPrefs.fromJson(jsonDecode(own) as Map<String, dynamic>);
     epub = epub.copyWith(font: ownPrefs.font, size: ownPrefs.size);
+    _loadEpubBooks(p.getString(_epubBooksKey));
     try {
       final u = jsonDecode(p.getString(_unsentKey) ?? '{}') as Map;
       _dirtySeries
@@ -1032,10 +1121,10 @@ class AppSettings extends ChangeNotifier {
 
   /// The reader settings from Komga again - Home calls it each time it reloads, so a change made on another device
   /// arrives without a restart (user, 2026-10-05). Several reloads in a row ask once ([RefreshGate]).
-  Future<void> refresh() async {
+  Future<void> refresh({bool force = false}) async {
     if (_api == null || !_loaded) return;
     final p = await SharedPreferences.getInstance();
-    await _gate.run(() => _fetch(p));
+    await _gate.run(() => _fetch(p), force: force); // (force: Sync now)
   }
 
   final _gate = RefreshGate();

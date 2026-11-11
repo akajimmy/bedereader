@@ -49,6 +49,18 @@ class _Network implements NetworkBrowseSource {
 
 /// A share as Shares connects to it, with a Comics folder.
 class _Share implements SmbShare {
+  @override
+  Future<void> write(String inShare, Uint8List data) async {}
+  @override
+  Future<void> delete(String inShare) async {}
+  @override
+  Future<void> rename(String from, String to) async {}
+  @override
+  Future<Object> openWrite(String inShare) async => inShare;
+  @override
+  Future<void> mkdir(String inShare) async {}
+  @override
+  Future<void> writeAt(Object handle, Uint8List data, int offset) async {}
 
   @override
   Future<bool> exists(String inShare) async => inShare == 'Comics';

@@ -4,7 +4,7 @@ pursue getting this into the play store".
   <out>/play-icon-512.png        the store icon: 512 x 512, 32-bit PNG, full square (Play rounds the corners itself)
   <out>/play-feature-1024x500.png  the feature graphic: the icon, the name and "A library and reader for Komga"
 
-Usage (from C:\\Claude\\KomgaClient): py -3.13 tools\\play_graphics.py <out folder>
+Usage (from C:\\Claude\\BeDeReader): py -3.13 tools\\play_graphics.py <out folder>
 """
 import pathlib
 import sys

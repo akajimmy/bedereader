@@ -29,6 +29,7 @@ import 'pins.dart';
 import 'reader_keys.dart';
 import 'remote_log.dart';
 import 'settings.dart';
+import 'sync_status.dart';
 import 'screen.dart';
 import 'book_source.dart';
 import 'combined_source.dart';
@@ -38,7 +39,11 @@ import 'local/local_library.dart';
 import 'screens/local_settings.dart' show askAboutMissing;
 import 'local/local_source.dart';
 import 'local/smb_fs.dart' show Shares;
+import 'highlights.dart' show BookHighlights;
+import 'open_with.dart';
+import 'reader/comic_renderer.dart' show StripPlaces;
 import 'side_menu.dart';
+import 'view_prefs.dart' show ViewPrefs;
 import 'update_check.dart';
 import 'widgets/connection_prompt.dart';
 import 'widgets/drawer.dart';
@@ -48,10 +53,15 @@ import 'widgets/focus_style.dart';
 import 'widgets/night.dart';
 import 'widgets/poster.dart' show HoldOkGuard;
 
-void main() {
+/// The app's command line (Windows: a file opened with the app - lib/open_with.dart).
+List<String> _args = const [];
+
+void main(List<String> args) {
+  _args = args;
   registerLicences(); // our MIT licence and AMD's FSR notice on the licences page
   WidgetsFlutterBinding.ensureInitialized();
   focusHighlightFollowsInput(); // the focus highlight only while the keyboard / remote is in use (focus_style.dart)
+  ReaderKeys.instance.remapKeysToFocus(); // the keys set as Up, Down, Left and Right (Settings > Remote and keys)
   HttpOverrides.global = LocalNames(); // a bare server name ("nick-nas") found as name.local (local_names.dart)
   // errors nothing else caught go to Settings > Error log too (the EPUB reader stuck on a spinner on the PC left no
   // trace to go on - user, build 65); they're still reported as before
@@ -104,7 +114,7 @@ Future<void> _startLog() async {
 
 /// Minimal dark theme in the chosen accent colour (Settings > Look). Focus is made clearly visible because the
 /// app is driven by a D-pad remote as well as touch.
-ThemeData buildTheme([Accent choice = Accent.blue]) {
+ThemeData buildTheme([Accent choice = defaultAccent]) {
   final accent = choice.colour;
   final base = ThemeData(brightness: Brightness.dark, useMaterial3: true);
   return base.copyWith(
@@ -165,6 +175,17 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       final local = _local = await LocalSource.open(Directory('$dir${Platform.pathSeparator}local'),
           await LocalLibraries.load(), fsFor: Shares.instance.fsFor);
       local.onRemoved = Pins.instance.removeFor; // a library removed: the pins to it, its series and books go
+      // books and series given new ids by Apply edits to files (their paths changed): what's kept under them follows
+      local.onMoved = (ids) {
+        Pins.instance.renameIds(ids);
+        OnDeckHidden.instance.renameIds(ids);
+        PairShift.instance.renameIds(ids);
+        unawaited(ViewPrefs.renameIds(ids));
+        AppSettings.instance.renameIds(ids);
+        unawaited(BookHighlights.renameIds(ids));
+        unawaited(StripPlaces.renameIds(ids));
+        unawaited(Downloads.instance.renameLocalIds(ids));
+      };
       // offline mode is the network libraries' too: the switch is there for them, and they go offline with it
       Connection.instance.hasShares = () => local.hasShares;
       local.offline = Connection.instance.offline;
@@ -193,6 +214,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
   void initState() {
     super.initState();
     SideMenu.instance.load();
+    OpenWith.instance.start(_nav, _args); // a book file handed to the app from outside: straight into the reader
     AppDrawer.appSignOut = _signOut; // the side menu on screens not handed it
     AppSettingsScreen.appAddKomga = _addKomga; // No server mode's Add a Komga server
     // a library deleted on Komga: the pins to it go (only the signed-in Komga's answers count)
@@ -381,6 +403,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
 
   Future<void> _restore() async {
     await HiddenLibraries.instance.load(); // before anything is fetched: lists leave those libraries out
+    unawaited(SyncStatus.instance.load()); // (Settings > Server & Sync > Last Sync)
     unawaited(ReaderKeys.instance.load()); // the reader's keys (Settings > Remote and keys)
     // the local libraries in the background - the start doesn't wait on the disk for them (Home takes them in when
     // they're open: what the last scans found, then scanned again)
@@ -420,6 +443,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       _noServer = noServer;
       _loaded = true;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => OpenWith.instance.ready()); // (over the first screen)
   }
 
   /// No server mode's settings, pins, On deck hidden and pairing: this device's own - nothing to sync them through.

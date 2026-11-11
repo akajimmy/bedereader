@@ -82,6 +82,29 @@ void main() {
     });
   });
 
+  // user, 2026-10-28: on Windows a share (\\host\share) is read through the system - one folder at a time, every
+  // file's size a round trip of its own - so a big share's first scan was the slow one; the share client on Android and
+  // iOS lists four at once
+  test("this device's files (a share by \\\\host\\share on Windows) are listed several folders at once, no more than "
+      'the share client does; every book found', () async {
+    final real = await Directory.systemTemp.createTemp('library_fs_at_once');
+    final book = File('${real.path}/x.cbz')..writeAsBytesSync([1, 2, 3]);
+    final tree = _Tree(book.path, {
+      'S': ['A', 'B', 'C', 'D', 'E', 'top.cbz'],
+      'S/A': ['a1.cbz', 'a2.cbz'], 'S/B': ['b.cbz'], 'S/C': ['c.cbz'], 'S/D': ['Inner'], 'S/D/Inner': ['i.cbz'],
+      'S/E': [],
+    });
+    try {
+      final found = await IOOverrides.runZoned(() => LocalFs().list('S').map((e) => e.path).toList(),
+          createDirectory: (p) => _Dir(p, tree));
+      expect(found.toSet(), {'S/top.cbz', 'S/A/a1.cbz', 'S/A/a2.cbz', 'S/B/b.cbz', 'S/C/c.cbz', 'S/D/Inner/i.cbz'});
+      expect(tree.mostAtOnce, greaterThan(1), reason: 'folders listed at once');
+      expect(tree.mostAtOnce, lessThanOrEqualTo(listedAtOnce));
+    } finally {
+      await real.delete(recursive: true);
+    }
+  });
+
   // review, 2026-10-26: walking up, / was always there - a card taken out looked deleted, and the user was asked
   test("a card or USB drive taken out (Android: /storage/1234-ABCD) is out of reach, not deleted: the system's own "
       'top folders (/, /storage) are no place of its own', () async {
@@ -117,4 +140,47 @@ void main() {
     expect(fs.classify(StateError('a bug')), FileTrouble.damaged);
     expect(fs.classify(const FileSystemException('no OS error')), FileTrouble.damaged);
   });
+}
+
+/// Folders (by path) and their entries - a name ending .cbz a file, others folders; each listing takes a while, and
+/// how many run at once is counted. Every file's size is [book]'s (a real file).
+class _Tree {
+  _Tree(this.book, this.folders);
+  final String book;
+  final Map<String, List<String>> folders;
+  int running = 0, mostAtOnce = 0;
+}
+
+class _Dir implements Directory {
+  _Dir(this.path, this.tree);
+  @override
+  final String path;
+  final _Tree tree;
+
+  @override
+  Stream<FileSystemEntity> list({bool recursive = false, bool followLinks = true}) async* {
+    tree.running++;
+    if (tree.running > tree.mostAtOnce) tree.mostAtOnce = tree.running;
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    tree.running--;
+    for (final n in tree.folders[path]!) {
+      yield n.endsWith('.cbz') ? _File('$path/$n', tree) : _Dir('$path/$n', tree);
+    }
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _File implements File {
+  _File(this.path, this.tree);
+  @override
+  final String path;
+  final _Tree tree;
+
+  @override
+  Future<FileStat> stat() => FileStat.stat(tree.book);
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }

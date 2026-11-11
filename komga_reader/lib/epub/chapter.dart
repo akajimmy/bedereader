@@ -67,7 +67,9 @@ class ChapterLoader {
         final picture = (await codec.getNextFrame()).image;
         // an ornament: its shorter side 150 px or less (The Dispossessed's chapter numbers are 150 x 555, Thud's
         // ornament 150 x 185 - they were left white); maps and illustrations aren't recoloured (user, 2026-10-11)
-        final ink = math.min(picture.width, picture.height) <= 150 && await inkOnLight(picture);
+        // and black line art on a clear ground, of any size (Standard Ebooks' title page)
+        final ink = (math.min(picture.width, picture.height) <= 150 && await inkOnLight(picture)) ||
+            await inkOnClear(picture);
         for (final img in e.value) {
           img
             ..image = picture.clone()
@@ -110,4 +112,39 @@ Future<bool> inkOnLight(ui.Image picture) async {
   // at least half the edge light (it was 80%: Hitchhiker's drop-cap T, Homeland's E and A Dance with Dragons' chapter
   // band have 52-71% and stayed white boxes - library check 2026-10-11)
   return all > 0 && coloured / all < 0.05 && edge > 0 && lightEdge / edge >= 0.5;
+}
+
+/// Whether a picture is dark ink on a clear (transparent) ground - black line art, its edge mostly see-through: drawn
+/// in the page's colours too, whatever its size. On the dark page colours it all but vanished: Standard Ebooks' title
+/// page (an SVG lettering, shipped as a black-on-transparent PNG) and its logo in the colophon (The Wonderful Wizard
+/// of Oz). Light or coloured ink is left as it is - white ink would take the page's ground and vanish on a light page.
+Future<bool> inkOnClear(ui.Image picture) async {
+  final data = await picture.toByteData(format: ui.ImageByteFormat.rawRgba);
+  if (data == null) return false;
+  final px = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+  final w = picture.width, h = picture.height;
+  // the edge first: an opaque picture (a cover, an illustration, a map) is turned away without the rest read
+  var edge = 0, clearEdge = 0;
+  void look(int x, int y) {
+    edge++;
+    if (px[(y * w + x) * 4 + 3] < 30) clearEdge++;
+  }
+  for (var x = 0; x < w; x++) {
+    look(x, 0);
+    if (h > 1) look(x, h - 1);
+  }
+  for (var y = 1; y < h - 1; y++) {
+    look(0, y);
+    if (w > 1) look(w - 1, y);
+  }
+  if (edge == 0 || clearEdge / edge < 0.5) return false;
+  var ink = 0, dark = 0, coloured = 0;
+  for (var i = 0; i < px.length; i += 4) {
+    if (px[i + 3] < 100) continue; // the ground, and the faint edges of strokes
+    final r = px[i], g = px[i + 1], b = px[i + 2];
+    ink++;
+    if (math.max(r, math.max(g, b)) - math.min(r, math.min(g, b)) > 40) coloured++;
+    if (0.2126 * r + 0.7152 * g + 0.0722 * b < 100) dark++;
+  }
+  return ink > 0 && coloured / ink < 0.05 && dark / ink >= 0.9;
 }

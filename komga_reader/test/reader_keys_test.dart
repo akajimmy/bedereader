@@ -116,24 +116,34 @@ void main() {
     expect(k.actionFor(LogicalKeyboardKey.arrowRight), ReaderAction.next, reason: 'the rest of the save kept');
   });
 
-  testWidgets("Settings: + Add takes the next key pressed - Back and Esc cancel, they're never taken as the key (code "
-      'review); a chip removes its key', (tester) async {
+  testWidgets("Settings: + Add takes the next key pressed - Back cancels, it's never taken as the key (code review); "
+      'Esc is a key like any other (user, 2026-10-31: a controller button sending Esc could not be set); a chip '
+      'removes its key', (tester) async {
     // (two tests on the same page, merged - test audit, 2026-10-07)
+    addTearDown(k.reset);
     setView(tester, const Size(1000, 2000));
     await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
         initialPage: SettingsPage.keys)));
     await tester.pump();
-    for (final cancel in [LogicalKeyboardKey.goBack, LogicalKeyboardKey.escape]) {
-      await tester.tap(find.text('Add').first); // Next page
-      await tester.pumpAndSettle();
-      expect(find.text('Next page: press a key'), findsOneWidget);
-      // the remote's Back (the test kit knows no physical key for it, so one is named)
-      await tester.sendKeyEvent(cancel, physicalKey: PhysicalKeyboardKey.escape);
-      await tester.pumpAndSettle();
-      expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
-      expect(k.keys[ReaderAction.next], isNot(contains(cancel)), reason: '${ReaderKeys.nameOf(cancel)} not added');
-    }
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsOneWidget);
+    // the remote's Back (the test kit knows no physical key for it, so one is named)
+    await tester.sendKeyEvent(LogicalKeyboardKey.goBack, physicalKey: PhysicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsNothing, reason: 'cancelled');
+    expect(k.keys[ReaderAction.next], isNot(contains(LogicalKeyboardKey.goBack)), reason: 'Back not added');
     expect(k.isDefault, isTrue);
+
+    await tester.tap(find.text('Add').first); // Next page
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Next page: press a key'), findsNothing, reason: 'Esc was the answer');
+    expect(find.byType(AppSettingsScreen), findsOneWidget, reason: 'still in Settings');
+    expect(k.actionFor(LogicalKeyboardKey.escape), ReaderAction.next, reason: 'Esc taken (off Close the book)');
+    await k.reset();
+    await tester.pumpAndSettle();
 
     expect(find.text('Next page'), findsOneWidget);
     expect(find.text('PgDn'), findsOneWidget);
@@ -172,6 +182,255 @@ void main() {
     expect(k.actionFor(LogicalKeyboardKey.audioVolumeDown), ReaderAction.next);
     expect(find.text('Volume down'), findsOneWidget);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  // ---- Up, Down, Left and Right (user, 2026-11-03: the 8BitDo Micro held sideways, its up and down to be left and right)
+
+  /// The controller a quarter turn round: its Up goes left, its Down right, its Left down, its Right up.
+  Future<void> sideways() async {
+    await k.assignMove(Nav.left, LogicalKeyboardKey.arrowUp);
+    await k.assignMove(Nav.right, LogicalKeyboardKey.arrowDown);
+    await k.assignMove(Nav.down, LogicalKeyboardKey.arrowLeft);
+    await k.assignMove(Nav.up, LogicalKeyboardKey.arrowRight);
+  }
+
+  KeyEvent down(LogicalKeyboardKey key, [PhysicalKeyboardKey physical = PhysicalKeyboardKey.keyA]) =>
+      KeyDownEvent(physicalKey: physical, logicalKey: key, timeStamp: Duration.zero);
+  KeyEvent again(LogicalKeyboardKey key, [PhysicalKeyboardKey physical = PhysicalKeyboardKey.keyA]) =>
+      KeyRepeatEvent(physicalKey: physical, logicalKey: key, timeStamp: Duration.zero);
+  KeyEvent up(LogicalKeyboardKey key, [PhysicalKeyboardKey physical = PhysicalKeyboardKey.keyA]) =>
+      KeyUpEvent(physicalKey: physical, logicalKey: key, timeStamp: Duration.zero);
+
+  test('the arrows turned a quarter: each comes through as the one set, down, repeat and up; kept; Reset puts them '
+      'back', () async {
+    const u = LogicalKeyboardKey.arrowUp, l = LogicalKeyboardKey.arrowLeft;
+    expect(k.remap(down(u)).logicalKey, u, reason: 'as it is, to begin with');
+    expect(k.remap(up(u)).logicalKey, u);
+    await sideways();
+    expect(k.isDefault, isFalse);
+    expect(k.moves[Nav.left], [u]);
+    expect(k.moves[Nav.up], [LogicalKeyboardKey.arrowRight]);
+    expect(k.remap(down(u)).logicalKey, l);
+    expect(k.remap(again(u)).logicalKey, l);
+    expect(k.remap(up(u)).logicalKey, l);
+    expect(k.moved(LogicalKeyboardKey.arrowRight), u);
+    await k.load(); // next start
+    expect(k.moved(u), l);
+    await k.reset();
+    expect(k.moved(u), u);
+    expect(k.isDefault, isTrue);
+    await k.load();
+    expect(k.moved(u), u);
+  });
+
+  test('a press ends as it began, whatever is set while it is held; a press not changed stays so', () async {
+    const key = LogicalKeyboardKey.keyK;
+    await k.assignMove(Nav.right, key);
+    expect(k.remap(down(key)).logicalKey, LogicalKeyboardKey.arrowRight);
+    await k.removeMove(Nav.right, key);
+    expect(k.remap(again(key)).logicalKey, LogicalKeyboardKey.arrowRight);
+    expect(k.remap(up(key)).logicalKey, LogicalKeyboardKey.arrowRight);
+
+    expect(k.remap(down(key)).logicalKey, key);
+    await k.assignMove(Nav.right, key);
+    expect(k.remap(up(key)).logicalKey, key, reason: 'the key it was pressed as');
+  });
+
+  test('a key on no direction is left alone; in a text box a letter stays a letter, an arrow still turns', () async {
+    await k.assignMove(Nav.right, LogicalKeyboardKey.keyK);
+    await k.assignMove(Nav.left, LogicalKeyboardKey.arrowUp);
+    expect(k.remap(down(LogicalKeyboardKey.keyQ)).logicalKey, LogicalKeyboardKey.keyQ);
+    expect(k.remap(down(LogicalKeyboardKey.keyK), typing: true).logicalKey, LogicalKeyboardKey.keyK);
+    expect(k.remap(up(LogicalKeyboardKey.keyK)).logicalKey, LogicalKeyboardKey.keyK);
+    expect(k.remap(down(LogicalKeyboardKey.arrowUp), typing: true).logicalKey, LogicalKeyboardKey.arrowLeft);
+    expect(k.remap(up(LogicalKeyboardKey.arrowUp)).logicalKey, LogicalKeyboardKey.arrowLeft);
+  });
+
+  test('every arrow stays on one direction: its own can only be left by being given away, and comes back when taken '
+      'off another', () async {
+    const u = LogicalKeyboardKey.arrowUp;
+    expect(k.canRemoveMove(Nav.up, u), isFalse);
+    await k.removeMove(Nav.up, u);
+    expect(k.moves[Nav.up], [u]);
+    expect(await k.assignMove(Nav.left, u), 'Up'); // moved, and said
+    expect(k.moves[Nav.up], isEmpty);
+    expect(k.canRemoveMove(Nav.left, u), isTrue);
+    await k.removeMove(Nav.left, u);
+    expect(k.moves[Nav.left], [LogicalKeyboardKey.arrowLeft]);
+    expect(k.moves[Nav.up], [u], reason: 'back on its own');
+  });
+
+  test('a key has one job: an action gives way to a direction and the other way round; an arrow stays on the reader '
+      "lists, for its direction; the only key that shows the controls can't go", () async {
+    const key = LogicalKeyboardKey.keyK;
+    await k.assign(ReaderAction.zoomIn, key);
+    expect(await k.assignMove(Nav.right, key), ReaderAction.zoomIn.label);
+    expect(k.actionFor(key), isNull);
+    await k.assign(ReaderAction.zoomIn, key);
+    expect(k.moved(key), key, reason: 'off Right');
+    expect(k.actionFor(key), ReaderAction.zoomIn);
+
+    await k.assignMove(Nav.left, LogicalKeyboardKey.arrowUp);
+    expect(k.actionFor(LogicalKeyboardKey.arrowUp), ReaderAction.previous, reason: 'kept: another key may send it');
+
+    for (final c in List.of(k.keys[ReaderAction.controls]!)) {
+      await k.remove(ReaderAction.controls, c);
+    }
+    final last = k.keys[ReaderAction.controls]!.single;
+    await k.assignMove(Nav.up, last);
+    expect(k.moved(last), last);
+    expect(k.keys[ReaderAction.controls], [last]);
+  });
+
+  test('an arrow given to a reader action goes on as the arrow it now is: what the reader will get; the side menu, '
+      'which looks before the change, gets it as pressed', () async {
+    await k.assignMove(Nav.left, LogicalKeyboardKey.arrowUp);
+    await k.assign(ReaderAction.zoomIn, LogicalKeyboardKey.arrowUp);
+    expect(k.keys[ReaderAction.zoomIn], contains(LogicalKeyboardKey.arrowLeft));
+    expect(k.keys[ReaderAction.zoomIn], isNot(contains(LogicalKeyboardKey.arrowUp)));
+    await k.assign(ReaderAction.openMenu, LogicalKeyboardKey.arrowUp);
+    expect(k.keys[ReaderAction.openMenu], [LogicalKeyboardKey.arrowUp]);
+  });
+
+  test('saved directions: unreadable, or leaving out an arrow, load the usual ones', () async {
+    final none = jsonEncode({for (final m in Nav.values) m.name: <int>[]});
+    for (final raw in ['not json', '[1]', '{"up": "x"}', '{"up": [1.5]}', none]) {
+      SharedPreferences.setMockInitialValues({'reader.moves': raw});
+      await k.load();
+      expect(k.isDefault, isTrue, reason: raw);
+    }
+  });
+
+  testWidgets('sideways, on a screen: the focus goes the way set, keys listened to at the keyboard itself get the key '
+      'as pressed', (tester) async {
+    k.remapKeysToFocus();
+    addTearDown(k.stopRemappingKeys);
+    addTearDown(k.reset);
+    await sideways();
+    final seen = <LogicalKeyboardKey>[];
+    bool watch(KeyEvent e) {
+      if (e is KeyDownEvent) seen.add(e.logicalKey);
+      return false;
+    }
+
+    HardwareKeyboard.instance.addHandler(watch);
+    addTearDown(() => HardwareKeyboard.instance.removeHandler(watch));
+    final a = FocusNode(), b = FocusNode();
+    addTearDown(a.dispose);
+    addTearDown(b.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Row(children: [
+      TextButton(focusNode: a, autofocus: true, onPressed: () {}, child: const Text('A')),
+      const SizedBox(width: 100),
+      TextButton(focusNode: b, onPressed: () {}, child: const Text('B')),
+    ]))));
+    await tester.pump();
+    expect(a.hasPrimaryFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown); // the controller's Down: right
+    await tester.pump();
+    expect(b.hasPrimaryFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp); // its Up: left
+    await tester.pump();
+    expect(a.hasPrimaryFocus, isTrue);
+    expect(seen, [LogicalKeyboardKey.arrowDown, LogicalKeyboardKey.arrowUp]);
+  });
+
+  testWidgets('a key set as OK presses what the focus is on, and shows the controls in the reader as OK does', (tester) async {
+    k.remapKeysToFocus();
+    addTearDown(k.stopRemappingKeys);
+    addTearDown(k.reset);
+    await k.assignMove(Nav.ok, LogicalKeyboardKey.keyK);
+    expect(k.moves[Nav.ok], [LogicalKeyboardKey.enter, LogicalKeyboardKey.keyK]);
+    var pressed = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: TextButton(autofocus: true, onPressed: () => pressed++,
+        child: const Text('A')))));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pumpAndSettle();
+    expect(pressed, 1);
+
+    final api = noNetwork(ReaderServer.new);
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(Slider), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(Slider), findsOneWidget, reason: 'the controls are up');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a letter set to a direction moves the focus, and types in a text box', (tester) async {
+    k.remapKeysToFocus();
+    addTearDown(k.stopRemappingKeys);
+    addTearDown(k.reset);
+    await k.assignMove(Nav.right, LogicalKeyboardKey.keyK);
+    final seen = <LogicalKeyboardKey>[];
+    final box = FocusNode(), field = FocusNode();
+    addTearDown(box.dispose);
+    addTearDown(field.dispose);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Column(children: [
+      Focus(focusNode: box, autofocus: true, onKeyEvent: (_, e) {
+        if (e is KeyDownEvent) seen.add(e.logicalKey);
+        return KeyEventResult.handled;
+      }, child: const SizedBox(height: 50)),
+      Focus(onKeyEvent: (_, e) {
+        if (e is KeyDownEvent) seen.add(e.logicalKey);
+        return KeyEventResult.ignored;
+      }, child: TextField(focusNode: field)),
+    ]))));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    field.requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    expect(seen, [LogicalKeyboardKey.arrowRight, LogicalKeyboardKey.keyK]);
+  });
+
+  testWidgets('Settings: Add on Left takes the key as pressed, even one that moves another way already; a chip off '
+      'sends an arrow home', (tester) async {
+    k.remapKeysToFocus();
+    addTearDown(k.stopRemappingKeys);
+    addTearDown(k.reset);
+    setView(tester, const Size(1000, 3000));
+    await k.assignMove(Nav.right, LogicalKeyboardKey.arrowUp);
+    await tester.pumpWidget(MaterialApp(home: AppSettingsScreen(api: noNetwork(ReaderServer.new), onSignOut: () {},
+        initialPage: SettingsPage.keys)));
+    await tester.pump();
+    final left = find.descendant(of: find.ancestor(of: find.text('Left'), matching: find.byType(Column)).first,
+        matching: find.text('Add'));
+    await tester.tap(left);
+    await tester.pumpAndSettle();
+    expect(find.text('Left: press a key'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(k.moves[Nav.left], contains(LogicalKeyboardKey.arrowUp), reason: 'not the → it was sent as');
+    expect(k.moves[Nav.right], [LogicalKeyboardKey.arrowRight]);
+    await tester.tap(find.descendant(of: find.ancestor(of: find.text('Left'), matching: find.byType(Column)).first,
+        matching: find.text(ReaderKeys.nameOf(LogicalKeyboardKey.arrowUp))));
+    await tester.pumpAndSettle();
+    expect(k.moves[Nav.up], contains(LogicalKeyboardKey.arrowUp));
+    expect(k.isDefault, isTrue);
+  });
+
+  testWidgets('the reader goes by the arrow a key stands for: with Up set as Right, Up turns forward', (tester) async {
+    k.remapKeysToFocus();
+    addTearDown(k.stopRemappingKeys);
+    addTearDown(k.reset);
+    await k.assignMove(Nav.right, LogicalKeyboardKey.arrowUp);
+    final api = noNetwork(ReaderServer.new);
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: api, book: api.theBook)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    double page() => tester.widget<PageView>(find.byType(PageView)).controller!.page!;
+    expect(page(), 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(page(), 1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('the reader follows the map: a remapped key turns the page', (tester) async {
     await k.assign(ReaderAction.next, LogicalKeyboardKey.mediaTrackNext);

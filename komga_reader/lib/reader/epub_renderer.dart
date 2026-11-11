@@ -26,6 +26,7 @@ import '../offline/downloads.dart';
 import '../combined_source.dart';
 import '../local/local_source.dart';
 import '../offline/downloads_source.dart';
+import '../opened_file.dart';
 import '../page_curl.dart';
 import '../screen.dart';
 import '../settings.dart';
@@ -109,7 +110,10 @@ class EpubRenderer extends Renderer {
 
   /// Two pages up with Inset page: how far apart the two sheets are - the Gutter setting (24 by default, as dialled in
   /// on the tablet; user, 2026-10-20: a setting).
-  static double get pagesApart => AppSettings.instance.epub.gutter;
+  double get pagesApart => _prefs.gutter;
+
+  /// The settings this book is read with: its own (Aa > Override defaults), else the defaults (user, 2026-10-27).
+  EpubPrefs get _prefs => AppSettings.instance.epubFor(_record['id'] as String?);
 
   /// The colour round the sheet: the page's own, a shade darker (a white page on light grey); the dark grey page on
   /// black (user, 2026-10-16: "full black"); black, a shade lighter (user, 2026-10-11: derived, no setting).
@@ -128,6 +132,7 @@ class EpubRenderer extends Renderer {
   static EpubSource sourceFor(BookSource api, String id) {
     final from = CombinedSource.of(api, id);
     if (from is LocalSource) return FileEpubSource.load(() => from.epubBytes(id));
+    if (from is OpenedFile) return FileEpubSource.load(from.epubBytes); // (a file opened on its own)
     final file = from is DownloadsSource ? from.epubFile(id) : Downloads.instance.epubFileOf(api.baseUrl, id);
     return file != null ? FileEpubSource(file) : KomgaEpubSource(api, id);
   }
@@ -265,7 +270,7 @@ class EpubRenderer extends Renderer {
   /// screen: the margins the setting's, measured in from its edges (user, 2026-10-22: "the text should then render
   /// within that page as though the page were the screen").
   EpubTheme _themeFor(Size size, Rect? sheet) {
-    final e = AppSettings.instance.epub;
+    final e = _prefs;
     final family = e.font.family ?? switch (e.font) {
       EpubFont.deviceSerif => deviceSerifFamily,
       _ => null,
@@ -304,13 +309,13 @@ class EpubRenderer extends Renderer {
   }
 
   @override
-  Color get background => AppSettings.instance.epub.colours.background;
+  Color get background => _prefs.colours.background;
 
   /// An inset page: the surround round the sheet is what's along the top.
   @override
   Color get edge => _ready && _sheet != null ? surround(background) : background;
   @override
-  Color ink(double alpha) => AppSettings.instance.epub.colours.text.withValues(alpha: alpha);
+  Color ink(double alpha) => _prefs.colours.text.withValues(alpha: alpha);
 
   // ---- opening
 
@@ -441,7 +446,7 @@ class EpubRenderer extends Renderer {
     if (area.isEmpty) return;
     _area = area;
     // Dual page mode (user, 2026-10-16): two pages side by side, each laid out at half the width
-    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    final dual = twoPagesAllowed && _prefs.twoPages.on(area);
     _laidDual = dual;
     final size = dual ? Size(area.width / 2, area.height) : area;
     _size = size;
@@ -455,7 +460,7 @@ class EpubRenderer extends Renderer {
       // the same pages, set out the other way (a half-width page and a narrow window's are the same page): two up or
       // one, after this frame
       // (or the chapters set to start elsewhere: paired again, on the same page)
-      if (_ready && (dual != _dual || (dual && _pairedBy != AppSettings.instance.epub.chapterStart))) {
+      if (_ready && (dual != _dual || (dual && _pairedBy != _prefs.chapterStart))) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _arrange(dual));
       }
       return;
@@ -556,7 +561,7 @@ class EpubRenderer extends Renderer {
   Future<void> _countOtherWay(EpubBook b) async {
     if (!canRotate || !countOtherWay || _otherWay != null || _area.isEmpty) return;
     final area = Size(_area.height, _area.width);
-    final dual = twoPagesAllowed && AppSettings.instance.epub.twoPages.on(area);
+    final dual = twoPagesAllowed && _prefs.twoPages.on(area);
     final size = dual ? Size(area.width / 2, area.height) : area;
     final theme = _themeFor(size, _planSheet(size, area, dual));
     final id = _record['id'] as String, key = await _layoutKeyFor(theme, size, b);
@@ -740,7 +745,7 @@ class EpubRenderer extends Renderer {
       _spreadOf = const [];
       return;
     }
-    _pairedBy = AppSettings.instance.epub.chapterStart;
+    _pairedBy = _prefs.chapterStart;
     _spreads = pairChapters([for (var c = 0; c < b.chapterCount; c++) b.pageCount(c)!],
         rightHand: _pairedBy == ChapterStart.rightPage);
     _spreadOf = spreadIndex(_spreads, b.totalPages!);
@@ -758,7 +763,7 @@ class EpubRenderer extends Renderer {
   /// One page or two now, the same layout (the window's shape changed, not the page's): the page view again, on the
   /// same page.
   void _arrange(bool dual) {
-    if (_disposed || !_ready || (dual == _dual && (!dual || _pairedBy == AppSettings.instance.epub.chapterStart))) {
+    if (_disposed || !_ready || (dual == _dual && (!dual || _pairedBy == _prefs.chapterStart))) {
       return;
     }
     final keep = place;
@@ -911,9 +916,9 @@ class EpubRenderer extends Renderer {
     // a big picture tapped in the middle of the screen: full screen over the book (the sides still turn the page -
     // a picture can fill the page)
     if (!host.controlsUp && x >= 1 / 3 && x <= 2 / 3) {
-      for (final (rect, image) in page?.pictures ?? const <(Rect, ui.Image)>[]) {
+      for (final (rect, image, filter) in page?.pictures ?? const <(Rect, ui.Image, ColorFilter?)>[]) {
         if (rect.contains(at)) {
-          unawaited(_showPicture(image));
+          unawaited(_showPicture(image, filter));
           return;
         }
       }
@@ -1030,7 +1035,9 @@ class EpubRenderer extends Renderer {
   /// A picture full screen over the book, fitted to the screen (user, 2026-10-06: "a lightbox style view"): pinch
   /// or wheel to zoom, a tap, Back or Esc closes it. Drawn from its own handle on the picture, so the chapter being
   /// let go of meanwhile can't free it from under the view.
-  Future<void> _showPicture(ui.Image image) async {
+  /// [filter]: a picture drawn in the page's colours (inkOnClear's line art, chapter.dart) is shown in them full screen too, on
+  /// the page's ground - black ink on the black backdrop vanished.
+  Future<void> _showPicture(ui.Image image, ColorFilter? filter) async {
     // the view owns this handle and lets it go when it's gone - after its fade-out, not when the dialog's future
     // completes (the picture is still drawn while it fades)
     final own = image.clone();
@@ -1040,7 +1047,8 @@ class EpubRenderer extends Renderer {
       barrierLabel: 'Close',
       barrierColor: Colors.black.withValues(alpha: 0.92),
       transitionDuration: const Duration(milliseconds: 150),
-      pageBuilder: (c, _, __) => _PictureView(image: own),
+      pageBuilder: (c, _, __) =>
+          _PictureView(image: own, filter: filter, ground: filter == null ? null : _drawn.background),
       transitionBuilder: (c, a, _, child) => FadeTransition(opacity: a, child: child),
     );
   }
@@ -1150,7 +1158,7 @@ class EpubRenderer extends Renderer {
     // the comic reader's panel look: the page stays in view beside it (wide) or above it (narrow), changing live;
     // the controls stay up behind it, as with comics (user, 2026-10-06: the panels as the comics')
     await showReaderPanelFrame(host.context, title: 'eBook settings',
-        children: (c, s) => epubPanelRows(c, s, api: api));
+        children: (c, s) => epubPanelRows(c, s, api: api, bookId: _record['id'] as String?));
   }
 
   // ---- the bars
@@ -1836,8 +1844,10 @@ class EpubRenderer extends Renderer {
 /// Esc or OK closes it. A button in each top corner of the screen turns it a quarter - left: counterclockwise,
 /// right: clockwise (user, 2026-10-08; buttons only, no key, not kept). The remote reaches them with Left / Right.
 class _PictureView extends StatefulWidget {
-  const _PictureView({required this.image});
+  const _PictureView({required this.image, this.filter, this.ground});
   final ui.Image image; // its own handle: let go of with the view
+  final ColorFilter? filter; // the page's colours, as on the page
+  final Color? ground; // behind it: the page's background
 
   /// The share of the screen the picture's area takes (user: "instead of going full screen, go like 95%").
   static const share = 0.95;
@@ -1860,6 +1870,12 @@ class _PictureViewState extends State<_PictureView> {
     super.dispose();
   }
 
+  Widget _filtered(Widget picture) {
+    final f = widget.filter, g = widget.ground;
+    if (f != null) picture = ColorFiltered(colorFilter: f, child: picture);
+    return g == null ? picture : ColoredBox(color: g, child: picture);
+  }
+
   /// The picture at [area], turned: fitted in it, centred.
   Widget _picture(Size area) {
     final w = widget.image.width.toDouble(), h = widget.image.height.toDouble();
@@ -1876,7 +1892,7 @@ class _PictureViewState extends State<_PictureView> {
             child: RotatedBox(
               key: const ValueKey('picture.turned'),
               quarterTurns: _turns,
-              child: RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium),
+              child: _filtered(RawImage(image: widget.image, fit: BoxFit.fill, filterQuality: FilterQuality.medium)),
             ),
           ),
         ),

@@ -32,6 +32,15 @@ abstract class CatalogueSource implements BookSource {
   /// The book's reading progress as Komga would give it (null: never opened, or marked unread).
   Map<String, dynamic>? readProgressOf(String bookId);
 
+  // ---- metadata editing: none, unless the source has its own (a local library's)
+  @override
+  Future<bool> canEditMetadata(String id) async => false;
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) async => throw NeedsKomga('Editing a book');
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) async =>
+      throw NeedsKomga('Editing a series');
+
   // ---- helpers ------------------------------------------------------------------------------------------------------
   // the books held here - those in a library hidden on this device left out, as online
   Catalogue get _catalogue => Catalogue(entries, hidden: HiddenLibraries.instance.isHidden);

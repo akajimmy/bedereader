@@ -9,6 +9,125 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.7.0
+
+**Released as build 180, tagged `v1.7.0`** (2026-11-11). No release candidates.
+
+### Build 180 - 2026-11-04
+
+- Local libraries: a fourth kind, "Loose books among other files (like Downloads)". Every book in the folder or its subfolders is found, wherever it is, and put with the others of its series - from its ComicInfo, else its file name. Other files are ignored. Apply edits writes into these books but never renames or moves them. To switch a library you've added already, remove it and add it again; its reading progress stays with the folder.
+- Each library's scan now leaves a line in the app's log: books and series found, what was left out, and how many books are still in iCloud and not on the device.
+
+### Build 179 - 2026-11-03
+
+- Settings > Remote and keys: Up, Down, Left, Right and OK can be given to any key, on every screen and in the reader (new group, Moving around and OK, everywhere). For a controller held sideways, give Left the button that now points left, and so on; a key set as OK opens books and presses what's selected. In the reader these keys do what the key they stand for does. Reset keys puts them back.
+
+### Build 178 - 2026-11-02
+
+- Windows: the app's window could stay hidden for good after it started, with the app running in Task Manager, and every book opened with the app afterwards went into the hidden window. Now the window shows after 3 seconds at most, and a book opened with the app always shows it.
+
+### Build 177 - 2026-10-31
+
+- iPad and iPhone: a local library can be any folder the Files app shows, such as Downloads (where Safari saves), iCloud Drive or On My iPad. When adding a library, choose "A folder in Files" and pick the folder in the Files picker, then go into it as before. iOS keeps the permission, so the library stays readable after restarts and updates. Books in an iCloud folder that aren't on the device yet are downloaded, and appear at the next scan.
+
+### Build 176 - 2026-10-31
+
+- Settings > Remote and keys: Esc can now be given to an action, for a remote or controller button that sends Esc. Pressing it while the app waits for a key used to cancel instead. The remote's Back still cancels, and so do Cancel and a tap outside.
+- In the reader, a key set to "Show the controls" hides them again, as OK does, until you move into the bars. Only OK did this before.
+
+### Build 175 - 2026-10-29
+
+- Page curl, two pages up: as a page shown alone (the cover) turned into the double page after it, a thin line ran down it at the middle - the double page's gutter showing through. Gone.
+- A comic opened on its own (Open with, Share, Open in): turning pages could bring up "Read further on another device - This book was marked unread on another device", though it had never been on another. Nothing about it is kept, so nothing is asked now.
+
+### Build 174 - 2026-10-28
+
+- Delete book… works on local and network books too - from the book's menu, the reader, or several selected: it deletes the file from this device's folder or the share (the confirmation says which). A series whose last book goes is gone too.
+- Delete series… works on local and network series too: it deletes every book in the series - the files - from this device or the share, and the series with them. The confirmation says so, with how many books and where from (Komga's series say "from the server").
+- Windows: a library on a network share (\\host\share) is scanned several folders at a time, as on Android and the iPad - your COMICS share's first scan from this PC: 15 s before, under 4 s now.
+- eBooks: Paragraph spacing is back in the reader's eBook settings panel, under Line spacing.
+- eBooks: black lettering and line art on a see-through ground - Standard Ebooks' title pages and logo - all but vanished on the dark page colours. It's now drawn in the page's colours, as small black-and-white pictures are, on the page and full screen.
+
+### Build 173 - 2026-10-28
+
+- Arrange pins: Home's ⋮ menu > Arrange pins… (and Arrange… in a pin's dialog) puts your pins in the order you want - ▲ and ▼ (a remote or keyboard too) or drag a row by its handle. Pins from Komga keep the new order on every device; pins to this device's own folders keep their place among them.
+- Page curl with two pages up and Crop edges on Auto: the back of the turning page showed the next left-hand page cut wrong - no border with the art against the edge, or black past the page's border - until it landed. It now shows that page as it will lie.
+
+### Build 172 - 2026-10-28
+
+- Crop edges' Auto: the temporary Auto crop border setting is gone; the margin kept is 2.5%. (A border set to something else on this device goes back to 2.5%, and those books are looked over again once.)
+
+### Build 171 - 2026-10-28
+
+**Fixed**
+
+- Crop edges on Auto, chosen part way through a book that hadn't been looked over yet: after "Finding page borders" the page stayed black until you turned it; the page you're on now shows, cropped.
+- Editing a book: deleting its number a character at a time left the sort number at the number's first figure; it now empties with the number.
+
+### Build 170 - 2026-10-28
+
+**New**
+
+- Crop edges has Auto (comics): each page's border is found and cut off, leaving an even margin round the art. Pages keep one shape through the book, so they show at the same size; covers, full-bleed pages and anything doubtful are shown whole, and art that runs off a side is never cut on that side. The first time a book is opened on Auto its pages are looked over first ("Finding page borders"); after that it opens straight away. A temporary Auto crop border setting under it sets how much margin is kept (2.5% to start).
+
+**Fixed**
+
+- Apply edits to files: a book with no number was renamed after its series alone and lost its title; it's now named "Series - Its Title", or keeps its own name when its title is just that name.
+- A book's tags weren't shown anywhere: they're on its Details screen now.
+- Editing a local series showed its title in Sort title, so a series given a new title kept sorting under its old one; Sort title is empty unless the series has one of its own.
+- After a series was edited from its own screen, the bar at the top kept its old name until you left and came back.
+
+### Build 169 - 2026-10-28
+
+**New**
+
+- More to edit: a book's sort number (where it sorts, apart from its number - an Annual between #12 and #13; it follows the number until you change it), summary, credits (writers, pencillers, inkers, colorists, letterers, cover artists - names separated by commas) and tags; a series' summary, genres and tags. On Komga and on local and network books alike.
+- Apply edits to files, on each local and network library in Settings > Libraries: the edits you've made go into the files themselves - a CBZ's into its ComicInfo.xml and an EPUB's into its own metadata, series folders renamed after their series, book files renamed after their series and number ("Saga 001 (2012).cbz"), books moved to another series put in its folder. It first sums up what will change in that library, and only what will; nothing happens until you confirm. Only books and series you've edited are touched - a series whose title you edited has all its books renamed and given its name. A read-list library's books are written into but keep their names (the list's order is in them). A CBR can't be written into: it's renamed and moved only, and its edits stay beside it. Your edits stay beside the books too, and reading progress, pins, highlights, settings and downloads follow the books to their new names. It can be run again any time: what's applied already isn't done twice.
+
+**Changed**
+
+- The Metadata edits setting from build 168 (Alongside / In the files) is gone: edits are always kept beside the books, and Apply edits to files puts them into the files when you choose. Komga books and series: the edit screens change only what Komga itself can change.
+
+### Build 168 - 2026-10-27
+
+**New**
+
+- Edit a book's or a series' details. A book: its title, number, release date and series; a series: its title, sort title, reading direction, status and publisher. Edit is in a book's and a series' long-press menu and on their Details screens. On Komga it's saved to Komga itself (an admin account only, as Komga allows), and each field changed is locked there so a metadata refresh doesn't undo it; a Komga book can't be moved to another series (Komga makes series from folders).
+- Local and network libraries: a series.json in a series' folder (Mylar's, the format Komga also reads) now gives the series its title, publisher and status.
+- Local and network books and series can be edited too, a book's series included - pick one of the library's or type a new name. The edits are kept beside the books, never inside them: a series' in a series.json in its folder (Mylar's format, which Komga reads too), the books' in a .bedereader.json in their folder, so every device reading that folder or share sees them. The folder or share has to allow writing.
+- Settings > Libraries > Metadata edits: Alongside (the default) or In the files. In the files writes a CBZ's edits into its ComicInfo.xml and an EPUB's into its own metadata, so Komga and other apps see them; the book is rewritten as a new copy, checked byte for byte (every page as it was), and only then put in place of the old one - which isn't kept. A CBR can't be rewritten, so its edits, a book's series and a series' edits stay alongside; the edit screen says so.
+
+### Build 167 - 2026-10-27
+
+**Fixed**
+
+- Opening a second file from outside the app while the first was still open in the reader did nothing until the first was closed; now it takes its place at once. A comic opened this way no longer shows its title twice at the top: the line above the title is the file's name when the comic has a title of its own, and nothing otherwise.
+
+### Build 166 - 2026-10-27
+
+**New**
+
+- Open a comic or eBook file from outside the app: on Windows, right-click a CBZ, CBR or EPUB > Open with > BeDeReader (the first time: Choose another app, then browse to BeDeReader.exe); on Android, Open with or Share from a Files app; on iPhone and iPad, the Files app's Open in or a share sheet. The book opens straight in the reader, read from its file - it isn't added to a library or downloaded, and where you stopped isn't kept. With BeDeReader already open, the file opens there (on Windows the window comes to the front); a book open in the reader is closed first, its place saved. Closing the reader takes you back where you came from: on Android, the app you opened it from.
+
+### Build 165 - 2026-10-27
+
+**New**
+
+- eBook settings per book: in the reader's eBook settings (Aa), This book > Override defaults gives the book its own font, text size, spacing, margins, page colours, two pages and the rest - starting from the defaults, so nothing moves - and Make default passes them on to every book. A book's own settings are kept on that device only (what reads best differs from screen to screen); the defaults stay as they were. Settings > eBooks counts the books with their own settings, with Reset all.
+
+**Changed**
+
+- Builds in progress come as BeDeReader Exp, a separate app beside BeDeReader with its own settings, downloads and striped icon (its name shows on its screens, and it doesn't offer BeDeReader releases as updates). BeDeReader itself gets the stable releases.
+- Settings > Libraries now holds every library: Local, Network and Komga. Komga's libraries are listed there, each with its switch to show it on this device or not (they were in Library & Home). Local and network libraries can't be hidden any more: a folder you don't want isn't added (Remove takes it off).
+- Settings, renamed and regrouped: Reading is All Book Types, with Display (was Over the page) and Behaviour (was Moving on). Comics: Page Layout - default values (was Pages - defaults), Appearance (was Turning pages) with Page Turn Animation, and Double-tap to zoom now in Controls. eBooks: Formatting, Page and Two pages are one group, Page Layout, with New Chapters Start On; eBooks' Page Turn Animation too. Over the slider (tap to hide) is Show above page slider, with an (i) that says what it does - a tap on it shows the text. In Libraries, Scan is at the top.
+- Server and sync is Server & Sync. Its group What's synced through Komga is Sync, with Last Sync - when this device last synced with Komga - and Sync now: everything synced through Komga, at once (it says so if Komga doesn't answer).
+- Library & Home: Under comic posters is Under Comic & Webtoon Posters (a webtoon's posters take those lines).
+- Night mode and its schedule moved from Look to All Book Types.
+- Look: a new palette of 24 accent colours, bolder and more of them - Crimson, Fire red, Coral, Orange, Yellow, Lime, Neon, Forest, Green, Mint, Cyan, Royal, Navy, Violet, Electric, Dark Pink, Hot pink, Salmon, Bronze, Olive, White, Grey, Charcoal and Near Black. Royal is the default now (Blue is gone); a device on a colour that's gone starts on Royal.
+- Comics, Webtoons and eBooks settings in the same order: Page Layout - default values, Image (or eBooks' Text) - default values, Display (was Appearance, Scrolling, Screen), Behaviour (was Controls). Webtoons' Double-tap to zoom is in Behaviour.
+- Webtoons' settings say Page Layout - default values too, and Comics' and Webtoons' Image - defaults is Image - default values.
+- Downloads is Storage & Downloads. Storage limit is Downloads limit, and it can be Off (nothing downloads). New: Cache limit - how much the books you open are kept, Off to 5 GB (512 MB as before; Off: nothing is cached, a book is read from its source) - and Clear cache.
+
 ## 1.6.0
 
 **Released as build 164, tagged `v1.6.0`** (2026-10-28). Release candidates: build 164 (`v1.6.0-rc.1`).

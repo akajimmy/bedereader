@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/app_log.dart';
 import 'package:komga_reader/local/local_library.dart';
 import 'package:komga_reader/local/local_scan.dart';
 import 'package:komga_reader/local/local_source.dart';
@@ -85,6 +86,55 @@ void main() {
     expect(moved['000 - Prologue.cbz'], 0);
     expect(moved['003 - Green Lantern 022 (2007).cbz'], 3);
     expect({for (final s in again.index.series.values) s.name}, {'Green Lantern', 'Batman (2016)', 'Prologue'});
+  });
+
+  test('loose files: every book, in the subfolders too, with the others of its series - its ComicInfo\'s, else its '
+      "name's; no list; scanned again, each stays in its series", () async {
+    final files = {
+      'Downloads/Ultimate Wolverine 015 (2026).cbz': _cbz(),
+      'Downloads/Ultimate Wolverine 014 (2026).cbz': _cbz(),
+      'Downloads/from a friend/Ultimate Wolverine 016 (2026).cbz': _cbz(),
+      'Downloads/from a friend/x.cbz': _cbz(info: '<ComicInfo><Series>Batman (2016)</Series><Number>5</Number></ComicInfo>'),
+      'Downloads/from a friend/Small Press Thing.cbz': _cbz(),
+    };
+    const library = LocalLibrary('Downloads', 'Downloads', kind: LibraryKind.looseFiles);
+    final r = await scanLibrary(MemoryFs(files), library, null);
+    expect(r.report.clean, isTrue);
+    final series = {for (final s in r.index.series.values) s.id: s.name};
+    expect(series.values.toSet(), {'Ultimate Wolverine', 'Batman (2016)', 'Small Press Thing'});
+    expect(r.index.series.values.any((s) => s.oneshot), isFalse);
+    final wolverine = [
+      for (final b in r.index.books.values.toList()..sort((a, b) => a.numberSort.compareTo(b.numberSort)))
+        if (series[b.seriesId] == 'Ultimate Wolverine') b.number,
+    ];
+    expect(wolverine, ['14', '15', '16'], reason: 'one series, across the folders');
+    expect(r.index.books.values.every((b) => b.readLists.isEmpty), isTrue, reason: 'no list');
+
+    final again = await scanLibrary(MemoryFs({...files, 'Downloads/Ultimate Wolverine 017 (2026).cbz': _cbz()}), library,
+        r.index);
+    expect(again.index.series.length, 3);
+    expect(again.index.books.length, 6);
+    expect({for (final b in again.index.books.values) b.seriesId}.length, 3);
+    expect(LocalLibrary.fromJson(library.toJson()).kind, LibraryKind.looseFiles);
+  });
+
+  test("loose files: a scan says what it came to in the app's log, books waiting in iCloud too", () async {
+    SharedPreferences.setMockInitialValues({});
+    final root = await Directory.systemTemp.createTemp('kinds_loose');
+    final data = await Directory.systemTemp.createTemp('kinds_data');
+    final sep = Platform.pathSeparator;
+    File('${root.path}${sep}Batman 005.cbz').writeAsBytesSync(_cbz());
+    File('${root.path}$sep.Batman 006.cbz.icloud').writeAsBytesSync([1]);
+    File('${root.path}${sep}holiday.jpg').writeAsBytesSync([1]);
+    final local = await LocalSource.open(data, [LocalLibrary('Mine', root.path, kind: LibraryKind.looseFiles)]);
+    addTearDown(() async {
+      await local.closeFiles();
+      await root.delete(recursive: true);
+      await data.delete(recursive: true);
+    });
+    await local.rescan();
+    expect(AppLog.instance.recent.where((l) => l.tag == 'local').last.msg,
+        'Scan of Mine: 1 books in 1 series, 1 still in iCloud');
   });
 
   test('the kind is kept with the library; one saved before kinds is one folder per series', () {

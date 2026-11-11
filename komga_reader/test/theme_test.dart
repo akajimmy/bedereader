@@ -10,7 +10,7 @@ import 'package:komga_reader/settings.dart';
 void main() {
   testWidgets("a progress bar's unfilled part isn't the accent - every bar looked full (Downloads' storage bar at 10%, "
       'build 83)', (tester) async {
-    for (final accent in [Accent.yellow, Accent.blue]) {
+    for (final accent in [Accent.yellow, Accent.royal]) {
       final key = GlobalKey();
       await tester.pumpWidget(MaterialApp(
         theme: buildTheme(accent),

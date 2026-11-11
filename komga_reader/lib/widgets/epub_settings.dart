@@ -7,45 +7,82 @@ import 'display_panel.dart';
 import 'setting_rows.dart';
 import '../book_source.dart';
 
-/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Text, Formatting, Page
-/// and Two pages. Two pages (user, 2026-10-21: in one group, the rows that don't apply hidden): [insetRow] (this
-/// device's Inset page, as [inset] is set), Dual page mode, then - two pages up - Chapters start on, and with an inset
-/// page the Gutter between the sheets.
+/// The EPUB set's synced groups (one set for every book, through Komga) for Settings > eBooks: Page Layout, then Text
+/// (user, 2026-10-27: every kind's page in the same order - page layout, then image or text, then display and
+/// behaviour; and Formatting, Page and Two pages made one group) - the formatting rows, page colours, then the two
+/// pages (the rows that don't apply hidden - user, 2026-10-21): [insetRow] (this device's Inset page, as [inset] is
+/// set), Dual page mode, then - two pages up - New Chapters Start On, and with an inset page the Gutter between the
+/// sheets.
 List<Widget> epubSettingRows(BuildContext context, EpubPrefs e, ValueChanged<EpubPrefs> set,
         {Widget? insetRow, InsetPage inset = InsetPage.wideScreen}) => [
-      SettingsGroup(title: 'Text', synced: true, children: [
+      SettingsGroup(title: 'Page Layout - default values', synced: true, children: [
+        ..._formattingRows(e, set),
+        _coloursRow(e, set),
+        if (insetRow != null) insetRow,
+        _twoPagesRow(e, set),
+        if (e.twoPages != TwoPages.off) _chapterStartRow(e, set),
+        if (e.twoPages != TwoPages.off && inset != InsetPage.never) _gutterRow(e, set),
+      ]),
+      SettingsGroup(title: 'Text - default values', synced: true, children: [
         ..._fontRows(e, set),
         _sizeRow(e, set),
         _lineSpacingRow(e, set),
         _paragraphGapRow(e, set),
         _marginsRow(e, set),
       ]),
-      SettingsGroup(title: 'Formatting', synced: true, children: _formattingRows(e, set)),
-      SettingsGroup(title: 'Page', synced: true, children: [_coloursRow(e, set)]),
-      SettingsGroup(title: 'Two pages', synced: true, children: [
-        if (insetRow != null) insetRow,
-        _twoPagesRow(e, set),
-        if (e.twoPages != TwoPages.off) _chapterStartRow(e, set),
-        if (e.twoPages != TwoPages.off && inset != InsetPage.never) _gutterRow(e, set),
-      ]),
     ];
 
 /// The eBook reader's panel, "eBook settings": what's changed mid-book (user, 2026-10-21, trimmed): font, size, line
-/// spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
+/// spacing, paragraph spacing, margins; page colours, dual page mode; brightness, rotation - the rest in Settings > eBooks ([api]: More
 /// settings, a tap away).
-List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api}) {
-  final e = s.epub;
-  final set = s.setEpub;
+///
+/// [bookId]: the book open (user, 2026-10-27: per-book settings, as comics' per series) - "This book" leads with
+/// Override defaults: off, the rows show the defaults, greyed out; on, they're this book's own (this device's), with
+/// Make default. Null: the rows set the defaults, as before.
+List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api, String? bookId}) {
+  final id = bookId;
+  final own = id != null && s.ownsEpub(id);
+  final e = s.epubFor(id);
+  final ValueChanged<EpubPrefs> set = id == null ? s.setEpub : (n) => s.setEpubBook(id, n);
+  // following the defaults: shown, not set (nor focused by the remote)
+  Widget follows(Widget row) => own || id == null
+      ? row
+      : IgnorePointer(child: ExcludeFocus(child: Opacity(opacity: 0.45, child: row)));
   return [
+    if (id != null)
+      SettingsGroup(title: 'This book', children: [
+        SwitchRow(
+          title: 'Override defaults',
+          subtitle: own ? 'Its own settings, on this device' : 'Following the eBook defaults',
+          value: own,
+          onChanged: (v) => s.setEpubOverride(id, v),
+        ),
+        if (own)
+          ActionRow(
+            title: 'Use these settings for every book',
+            button: TextButton(
+              onPressed: () {
+                s.setEpub(e);
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    const SnackBar(content: Text("Books you haven't adjusted will read like this one")));
+              },
+              child: const Text('Make default'),
+            ),
+          ),
+      ]),
     SettingsGroup(title: 'Text', children: [
-      ..._fontRows(e, set),
-      _sizeRow(e, set),
-      _lineSpacingRow(e, set),
-      _marginsRow(e, set),
+      for (final row in [
+        ..._fontRows(e, set),
+        _sizeRow(e, set),
+        _lineSpacingRow(e, set),
+        _paragraphGapRow(e, set), // back in the panel (user, 2026-10-28)
+        _marginsRow(e, set),
+      ])
+        follows(row),
     ]),
     SettingsGroup(title: 'Page', children: [
-      _coloursRow(e, set),
-      _twoPagesRow(e, set),
+      follows(_coloursRow(e, set)),
+      follows(_twoPagesRow(e, set)),
     ]),
     SettingsGroup(title: 'Screen', children: [
       ...brightnessRows(s),
@@ -57,7 +94,7 @@ List<Widget> epubPanelRows(BuildContext context, AppSettings s, {BookSource? api
 
 /// eBooks' page turn - this device's (user, 2026-10-21; it was synced), called as comics' is.
 Widget epubTurnRow(AppSettings s) => SegmentRow<EpubTurn>(
-      title: 'Page turn',
+      title: 'Page Turn Animation', // (as comics' - user, 2026-10-27)
       choices: const [Choice(EpubTurn.none, 'None'), Choice(EpubTurn.slide, 'Slide'), Choice(EpubTurn.curl, 'Curl')],
       value: s.display.epubTurn,
       onChanged: (v) => s.setDisplay(s.display.copyWith(epubTurn: v)),
@@ -85,7 +122,7 @@ Widget _gutterRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<double
 
 /// Dual page mode: where a chapter starts (user, 2026-10-18: "A setting") - the next page, or a right-hand one.
 Widget _chapterStartRow(EpubPrefs e, ValueChanged<EpubPrefs> set) => SegmentRow<ChapterStart>(
-      title: 'Chapters start on',
+      title: 'New Chapters Start On',
       choices: const [Choice(ChapterStart.nextPage, 'Next page'), Choice(ChapterStart.rightPage, 'Right-hand page')],
       value: e.chapterStart,
       onChanged: (v) => set(e.copyWith(chapterStart: v)),

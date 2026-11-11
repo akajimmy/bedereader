@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -60,12 +61,42 @@ abstract interface class LibraryFs {
 
   Future<LibraryFile> open(String path);
 
+  /// [path]'s contents replaced by [bytes] (made if it isn't there) - written beside it first, then put in its place, so
+  /// a failure part-way leaves the file as it was (the metadata files - lib/local/local_meta.dart).
+  Future<void> writeWhole(String path, Uint8List bytes);
+
+  /// A new file at [path] (one there is emptied), written in order ([LibraryOut]) - a book rewritten with its
+  /// metadata in it ([rewriteZip], lib/local/file_zip.dart), too big to hold whole.
+  Future<LibraryOut> create(String path);
+
+  /// [from] put in [to]'s place (the old [to] gone).
+  Future<void> replace(String from, String to);
+
+  /// [path] deleted (a rewrite's new copy that didn't check out).
+  Future<void> delete(String path);
+
+  /// A file or folder at [from] moved to [to] (renamed, or into another folder) - refused if [to] is taken (Apply edits
+  /// to files - lib/local/apply_edits.dart).
+  Future<void> move(String from, String to);
+
+  /// A folder made at [path] (its parent there already); one there already is left as it is.
+  Future<void> makeFolder(String path);
+
+  /// Whether a file or folder is at [path].
+  Future<bool> isThere(String path);
+
   /// What's directly in [folder], for the folder browser: its folders' names (sorted, the system's own left out)
   /// and how many books.
   Future<FolderLook> look(String folder);
 
   /// What kind of trouble [error] (thrown by this file system's reads) is.
   FileTrouble classify(Object error);
+}
+
+/// A file being written ([LibraryFs.create]): its bytes added in order, then closed.
+abstract interface class LibraryOut {
+  Future<void> add(Uint8List bytes);
+  Future<void> close();
 }
 
 /// A whole file, through [LibraryFs.open].
@@ -76,6 +107,51 @@ Future<Uint8List> readWhole(LibraryFs fs, String path) async {
   } finally {
     await f.close();
   }
+}
+
+/// What one folder holds, for [listFolders]: its folders to go into (the system's own already left out) and its files
+/// (book and metadata files).
+typedef FolderListing = (List<String> folders, List<FsEntry> files);
+
+/// How many folders a library's listing reads at once (a share answers each listing in turn otherwise - a round trip
+/// a folder; SmbFs's pool has as many workers).
+const listedAtOnce = 4;
+
+/// The files under [root], folder by folder, [listedAtOnce] folders at a time: [listOne] reads one folder. A folder
+/// that can't be read is told to [onUnreadable] (named by [shown], the folder as the library's path writes it) and the
+/// rest goes on; [root] itself not read is the stream's error when there's no [onUnreadable].
+Stream<FsEntry> listFolders(String root, Future<FolderListing> Function(String folder) listOne,
+    {void Function(String folder, Object error)? onUnreadable, String Function(String folder)? shown}) {
+  final out = StreamController<FsEntry>();
+  final todo = [root];
+  var running = 0;
+  void next() {
+    while (running < listedAtOnce && todo.isNotEmpty) {
+      final dir = todo.removeLast();
+      running++;
+      listOne(dir).then((l) {
+        todo.addAll(l.$1);
+        l.$2.forEach(out.add);
+      }, onError: (Object e, StackTrace s) {
+        if (dir == root && onUnreadable == null) {
+          out.addError(e, s);
+          todo.clear();
+        } else {
+          onUnreadable?.call(shown == null ? dir : shown(dir), e);
+        }
+      }).whenComplete(() {
+        running--;
+        if (todo.isEmpty && running == 0) {
+          out.close();
+        } else {
+          next();
+        }
+      });
+    }
+  }
+
+  next();
+  return out.stream;
 }
 
 /// A folder's own folders and its count of books (CBZ, CBR, EPUB), as the folder browser shows them.
@@ -92,7 +168,25 @@ class FolderLook {
   }
 }
 
+/// The files the metadata edits are kept in, beside the books (lib/local/local_meta.dart): a series folder's
+/// series.json, and a folder's .bedereader.json.
+const seriesFileName = 'series.json', editsFileName = '.bedereader.json';
+
+/// One of the metadata files (listed with the books - the scan reads them).
+bool isMetaFile(String name) => name.toLowerCase() == seriesFileName || name == editsFileName;
+
+/// A path's folder, and its file (or folder) name - '\\' or '/' paths alike.
+String folderOf(String path) => path.substring(0, path.lastIndexOf(RegExp(r'[\\/]')));
+String fileNameOf(String path) => path.substring(path.lastIndexOf(RegExp(r'[\\/]')) + 1);
+
+/// [name] in [folder], with the separator the folder's path uses.
+String joinPath(String folder, String name) => '$folder${folder.contains(r'\') ? r'\' : '/'}$name';
+
 /// A file read as a book - not a hidden one (a Mac's ._x copy of a book's attributes, on a share it wrote to).
+/// A book iCloud keeps a stand-in for until it's downloaded: ".Name.cbz.icloud".
+bool isCloudPlaceholder(String name) =>
+    name.startsWith('.') && name.endsWith('.icloud') && isBookFile(name.substring(1, name.length - '.icloud'.length));
+
 bool isBookFile(String name) {
   if (name.startsWith('.')) return false;
   final n = name.toLowerCase();
@@ -151,31 +245,75 @@ class LocalFs implements LibraryFs {
     }
   }
 
+  /// Several folders at once, a folder's files' sizes asked for together: on Windows a share's (\\host\share) listing
+  /// and every file's size are a round trip each - one at a time, a big share's first scan was the slow one (the
+  /// share client on Android and iOS lists [listedAtOnce] at once; user, 2026-10-28).
   @override
-  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) async* {
-    final List<FileSystemEntity> here;
-    try {
-      here = await Directory(folder).list(followLinks: false).toList();
-    } catch (e) {
-      if (onUnreadable == null) rethrow; // (the library's own folder: the caller says what's wrong)
-      onUnreadable(folder, e);
-      return;
-    }
-    for (final e in here) {
-      final name = e.path.substring(e.path.lastIndexOf(RegExp(r'[\\/]')) + 1);
-      if (e is Directory) {
-        if (!shownFolder(name)) continue;
-        yield* list(e.path, onUnreadable: onUnreadable ?? (_, __) {});
-      } else if (e is File && isBookFile(name)) {
-        final s = await e.stat();
-        if (s.type == FileSystemEntityType.notFound) continue; // (deleted since it was listed)
-        yield FsEntry(e.path, s.size, s.modified);
-      }
-    }
+  Stream<FsEntry> list(String folder, {void Function(String folder, Object error)? onUnreadable}) {
+    inCloud = 0;
+    return listFolders(folder, (dir) async {
+        final folders = <String>[];
+        final files = <File>[];
+        await for (final e in Directory(dir).list(followLinks: false)) {
+          final name = fileNameOf(e.path);
+          if (e is Directory) {
+            if (shownFolder(name)) folders.add(e.path);
+          } else if (isCloudPlaceholder(name)) {
+            inCloud++;
+          } else if (e is File && (isBookFile(name) || isMetaFile(name))) { // (and the metadata files)
+            files.add(e);
+          }
+        }
+        final stats = await Future.wait(files.map((f) => f.stat()));
+        return (
+          folders,
+          [
+            for (var i = 0; i < files.length; i++)
+              if (stats[i].type != FileSystemEntityType.notFound) // (deleted since it was listed)
+                FsEntry(files[i].path, stats[i].size, stats[i].modified),
+          ],
+        );
+      }, onUnreadable: onUnreadable);
   }
+
+  /// Books the last [list] saw that are in iCloud, not on this device yet (they're no books until they've come down).
+  int inCloud = 0;
 
   @override
   Future<LibraryFile> open(String path) async => _LocalFile(await File(path).open());
+
+  @override
+  Future<LibraryOut> create(String path) async => _LocalOut(await File(path).open(mode: FileMode.write));
+
+  @override
+  Future<void> replace(String from, String to) => File(from).rename(to); // (over the old one: Windows too)
+
+  @override
+  Future<void> delete(String path) => File(path).delete();
+
+  @override
+  Future<void> move(String from, String to) async {
+    if (await isThere(to)) throw FileSystemException('Already there', to);
+    await (await FileSystemEntity.isDirectory(from) ? Directory(from).rename(to) : File(from).rename(to));
+  }
+
+  @override
+  Future<void> makeFolder(String path) => Directory(path).create();
+
+  @override
+  Future<bool> isThere(String path) async => await FileSystemEntity.type(path) != FileSystemEntityType.notFound;
+
+  @override
+  Future<void> writeWhole(String path, Uint8List bytes) async {
+    final temp = File('$path.bedereader-new');
+    await temp.writeAsBytes(bytes, flush: true);
+    try {
+      await temp.rename(path); // (over the old one: Windows too)
+    } catch (_) {
+      await temp.delete().catchError((Object _) => temp);
+      rethrow;
+    }
+  }
 
   @override
   Future<FolderLook> look(String folder) async => FolderLook.of([
@@ -218,6 +356,18 @@ class LocalFs implements LibraryFs {
       }
     }
     return FileTrouble.damaged;
+  }
+}
+
+class _LocalOut implements LibraryOut {
+  _LocalOut(this._f);
+  final RandomAccessFile _f;
+  @override
+  Future<void> add(Uint8List bytes) => _f.writeFrom(bytes);
+  @override
+  Future<void> close() async {
+    await _f.flush();
+    await _f.close();
   }
 }
 

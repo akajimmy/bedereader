@@ -16,7 +16,7 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 - **A Komga server** - your libraries, series, collections and read lists, with reading progress kept on the server
   and the same on every device. Komga sorts, searches and keeps the metadata; BeDeReader shows it and keeps it in
-  sync.
+  sync. Each of the server's libraries can be switched off on a device, in Settings > Libraries.
 - **A folder on this device** - on Android its storage or a card, on Windows any drive, on iPhone and iPad the app's
   own folder in the Files app.
 - **A shared folder on your network** - a NAS or a PC's share (SMB). The app asks for a user name and password only
@@ -24,13 +24,14 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - **Several at once** - Home, search, On deck and the libraries list put every source's books together. Settings >
   Library & Home > Show where books come from puts a small icon on posters: this device, the network or Komga.
 - **No Komga at all** - the sign-in screen's *Use without a server* runs the app on folders alone. A Komga server can
-  be added later, in Settings > Server and sync.
+  be added later, in Settings > Server & Sync.
 
 ### Folders and shares as libraries
 
 - Each library says what's in its folder, chosen when it's added: **one folder per series** (a book loose in it, or
-  in _oneshots, is a book of its own), **the books of one series** (every subfolder, folder by folder), or **a read
-  list** - books of several series in the order of their names ("001 - ...").
+  in _oneshots, is a book of its own), **the books of one series** (every subfolder, folder by folder), **a read
+  list** - books of several series in the order of their names ("001 - ...") - or **loose books among other files**,
+  like a Downloads folder: every book in it or its subfolders, put with the others of its series.
 - **CBZ, CBR (RAR4 and RAR5) and EPUB**, read in place - a book isn't copied to be read, even from a share.
 - Titles, numbers and dates come from the books' ComicInfo.xml (and an EPUB's own title and author), else from the
   file names: the issue number, the year, and the title without the start every book of the series shares.
@@ -56,6 +57,13 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - **Details** for books and series: summary, credits, publisher, genres and more.
 - Mark books, whole series or read lists as read or unread; select several books at once; hide books or series from
   On deck.
+- **Edit** a book's or a series' details: title, number and sort number, release date, summary, credits, tags; a
+  series' sort title, reading direction, status, publisher and genres. On Komga, as Komga's own editor does (an admin
+  account); for folders and shares the edits are kept beside the books (a series.json, Mylar's format), and **Apply
+  edits to files** puts them into the files when you choose - ComicInfo.xml, an EPUB's metadata, file and folder
+  names. A local book can be moved to another series.
+- **Open with**: a CBZ, CBR or EPUB from outside the app opens straight in the reader - Open with on Windows and
+  Android, Open in on iPhone and iPad.
 
 **Reading**
 - Fit to screen, width or height; pinch, double-tap or Ctrl+wheel to zoom; a zoomed-in page is read across and down
@@ -66,8 +74,10 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
   shifted by one.
 - A page slider with a preview of the page you're picking (the previews can be switched off for a slow server).
 - Right-to-left books (manga) follow Komga's reading direction, or your own setting per series.
-- **Image settings per series**: Crop edges, brightness, contrast, **Enhance** (cleans up speckle and grain, then
-  sharpens - on the graphics chip, once per page) and **Enhance colours** (whitens yellowed paper, deepens faded ink).
+- **Image settings per series**: **Crop edges** (Off, 2%, 4%, 6%, or **Auto**: each page's border found and cut off,
+  leaving an even margin round the art, one page shape through the book; covers and full-bleed pages shown whole),
+  **Enhance** (cleans up speckle and grain, then sharpens - on the graphics chip, once per page) and **Enhance
+  colours** (whitens yellowed paper, deepens faded ink).
 - Night mode (warm tint), a reading brightness that can go darker than the screen's minimum (the rest of the app
   keeps the screen's own brightness, so it never opens too dark to use), black, grey or white page colours, and the
   screen kept on while reading if you want it (for a few minutes after each page, or always).
@@ -84,9 +94,10 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
   with the book's pictures, drop caps, tables, bordered passages and footnotes (tap a footnote mark: the note opens
   over the page).
 - Your choice of font (Literata, Lora, EB Garamond, Atkinson Hyperlegible Next, or the device's own), text size, line
-  spacing, paragraph spacing, margins and black, dark, sepia or light page colours - in the reader (**Aa**) or Settings >
-  eBooks. *Alignment* (the book's, justified or left), *Paragraphs* (the book's indents and gaps, or Auto) and
-  *Auto-hyphenation* are set apart. A book set smaller or larger all through shows at your text size; small
+  spacing, paragraph spacing, margins and black, dark, sepia or light page colours - as defaults in Settings > eBooks,
+  and for one book in the reader (**Aa** > Override defaults: that book's own settings, on that device; Make default
+  passes them on to every book). *Alignment* (the book's, justified or left), *Paragraphs* (the book's indents and
+  gaps, or Auto) and *Auto-hyphenation* are set apart. A book set smaller or larger all through shows at your text size; small
   black-and-white pictures (chapter numbers, drop caps) take the page's colours.
 - Contents, a slider and "page X of Y" over the whole book. A Komga book's place is kept on Komga in the same form its
   own web reader uses - pick up in either. A book is laid out and its pages counted before it shows: a few seconds
@@ -109,10 +120,11 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 
 **Offline**
 - Download single books, or a series or read list's unread (or all) books - from Komga or a shared folder - with a
-  storage limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
+  downloads limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
   carries on where it stopped. A book on a folder of the device itself needs no download: it's there.
-- Books you open are kept on the device for a while too (up to 512 MB, the oldest opened going first), so they read
-  offline without a download.
+- Books you open are kept on the device for a while too (up to the cache limit, 512 MB at first, the oldest opened
+  going first), so they read offline without a download. Settings > Storage & Downloads sets both limits - either can
+  be Off - and Clear cache empties the cache.
 - **Offline mode** shows just the books with a copy on the device - by hand, or offered when Komga can't be reached.
   Nothing is read from Komga or a share while it's on; folders on the device are read as always. Started in offline
   mode, the app doesn't contact Komga at all.
@@ -179,17 +191,18 @@ others), the eBooks public-domain classics from [Standard Ebooks](https://standa
 - **On Komga, for every device**: reading progress of Komga's books, per-series reader settings (fit, reading
   direction, page colours, gutter) and image settings and their defaults - comics and webtoons each their own - the
   EPUB settings (spacing, margins, formatting, page colours...), the lines under posters, Home's sections and their
-  order, pins (unless Settings > Server and sync > Sync pins across devices is off on a device - then it has its
-  own), and what's hidden from On deck.
+  order, pins and what's hidden from On deck. Settings > Server & Sync says when this device last synced, and Sync
+  now syncs it at once.
 - **On this device**: the server address and API key, the local and network libraries and the shares' logins, the
-  reading progress, pins and series settings of their books, reading brightness and night mode, how the reader
+  reading progress, pins and series settings of their books, each eBook's own settings, reading brightness and
+  night mode, how the reader
   behaves (page turn animation, taps, keys, what's shown over the page, keeping the screen on, webtoon scrolling and
   auto-scroll speed), the eBook font and text size, poster size, remembered filters and sort orders, downloads and the
   offline mode switch. In No server mode, everything is on this device. Settings > About can reset this device's
   settings at once; each Settings page also has its own reset.
 
-Settings (side menu) has everything in one place: Reading, Comics, Webtoons, eBooks and Remote and keys for reading;
-Server and sync, Library & Home, Libraries, Downloads and Look for the app; About. Groups marked "synced" are the same
+Settings (side menu) has everything in one place: All Book Types, Comics, Webtoons, eBooks and Remote and keys for reading;
+Server & Sync, Library & Home, Libraries, Storage & Downloads and Look for the app; About. Groups marked "synced" are the same
 on every device.
 
 ## Privacy
@@ -264,7 +277,8 @@ The rest of this file is about building the app.
   puts the newest Windows build in Desktop\BeDeReader; **tools\ios-status.ps1** - how a build's iPhone / iPad
   (TestFlight) build on GitHub is going; **tools\testing\** - scripts for checking builds on real devices (its README
   says which).
-- **tools\make_icon.py** - draws every app icon from one set of shapes.
+- **tools\make_icon.py** - draws every app icon from one set of shapes. **tools\exp_identity.py** and
+  **tools\exp-identity\** - the BeDeReader Exp identity a build puts on and takes off (Building, below).
 - **keytest\** - a page for finding out which keys a remote sends.
 - **dev_setup.py** - downloads and verifies the toolchain.
 
@@ -309,15 +323,25 @@ From the repository's folder: **powershell -ExecutionPolicy Bypass -File tools\b
 (Windows blocks .ps1 scripts by default; -ExecutionPolicy Bypass lifts that for this one run without changing any
 setting. The same goes for the other scripts in tools\.)
 
+**Which app it builds.** Every build is **BeDeReader Exp** unless -Stable is given. BeDeReader Exp is a separate app
+that installs beside BeDeReader, never over it: Android ID com.nickp.komga_reader.exp, iOS bundle ID
+com.nickp.bedereader.exp, Windows data in %LOCALAPPDATA%\KomgaReaderExp and %APPDATA%\com.nickp\Komga Reader Exp, a
+striped "under construction" icon, and no update check. It's where everything new is tried. **-Stable** builds
+BeDeReader itself, for release candidates and releases. tools\exp_identity.py puts the Exp identity (IDs, names, icons
+from tools\exp-identity\) on the working tree just before the platforms are built and takes it off straight after, so
+it's never committed; the Dart side follows --dart-define=BEDEREADER_EXP=true. Both apps share one line of build
+numbers: an Exp build is tagged exp-build-{n}, a stable one build-{n}, and {n} is always past the highest of either.
+
 Checks the working tree is committed (before and after flutter pub get), runs analyze - lint findings included - and
 the tests (stopping on any failure), raises the build number, files the changelog's *Unreleased* entries under the new
 build, bundles the README, changelog and third-party notices into the app, builds Android and Windows into
-dist\{version}\ with checksums and a BUILD-INFO.txt, then commits and tags build-{n}. If a build fails, the version,
-changelog and bundled documents are put back. A -Bump build must be signed with the release key, and its build-{n}
-tag must not exist yet. The Windows build starts from an empty build folder, so the zip holds only that build's files.
+dist\{version}\ with checksums and a BUILD-INFO.txt, then commits and tags exp-build-{n} (or build-{n}). If a build
+fails, the version, changelog and bundled documents are put back. A -Bump build must be signed with the release key,
+and its tag must not exist yet. The Windows build starts from an empty build folder, so the zip holds only that
+build's files.
 
-A -Bump build then pushes its build-{n} tag to GitHub, where .github\workflows\testflight.yml builds that same commit
-for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about 15-20
+A -Bump build then pushes its tag to GitHub, where .github\workflows\testflight.yml builds that same commit as the
+same app for iPhone and iPad on a Mac runner and uploads it to TestFlight with the same version and build number - about 15-20
 minutes, while the device and the Desktop copy are updated. **tools\ios-status.ps1 -Build {n}** says how it's going;
 -NoIos keeps the tag local and skips it. (The workflow signs and uploads with the repository owner's App Store Connect
 key, kept in the repository's secrets.)
@@ -326,8 +350,8 @@ Options: -Platforms android (or windows) builds one of them; -Timing compiles in
 (a measuring build); -SkipTests skips the tests; -NoInstall skips the device and the Desktop copy; -AllowDirty allows
 uncommitted changes. The last two are for throwaway builds: -Bump refuses both. Progress is in dist\build.log.
 
-After a Windows build the app is unpacked fresh and swapped in as BeDeReader on your Desktop, the copy you use day to
-day; the copy it replaces is kept beside it as BeDeReader.previous (rename it back if a build misbehaves). Your
+After a Windows build the app is unpacked fresh and swapped in as BeDeReader-Exp (a -Stable build: BeDeReader) on your
+Desktop, the copy you use day to day; the copy it replaces is kept beside it as .previous (rename it back if a build misbehaves). Your
 settings and downloads aren't in those folders, so nothing is lost. If the app is open from there, that step is
 skipped and says so: close it and run tools\update-desktop.cmd (or double-click it).
 
@@ -365,8 +389,8 @@ spelling is displayed, typed, searched and used in file names.
 - **Change** (the name people see): komga_reader\lib\app_identity.dart (appName - every screen);
   android\app\src\main\AndroidManifest.xml (android:label); ios\Runner\Info.plist (CFBundleDisplayName and
   CFBundleName); windows\runner\main.cpp (window title); windows\runner\Runner.rc (FileDescription, InternalName,
-  OriginalFilename); windows\CMakeLists.txt (BINARY_NAME, the .exe); tools\build.ps1 ($product, the file names in
-  dist\); this README, the changelog's intro, THIRD_PARTY_NOTICES.md, lib\licences.dart (the AI disclosure).
+  OriginalFilename); windows\CMakeLists.txt (BINARY_NAME, the .exe); tools\build.ps1 ($product, $appLabel and
+  $fileName); tools\exp_identity.py (its text edits match the current names); this README, the changelog's intro, THIRD_PARTY_NOTICES.md, lib\licences.dart (the AI disclosure).
 - **Never change** (internal): the Android application ID and Kotlin package com.nickp.komga_reader; the iOS bundle ID
   com.nickp.bedereader; the Dart package komga_reader; Runner.rc's CompanyName and ProductName (they name the Windows
   settings folder %APPDATA%\com.nickp\Komga Reader); the Windows data folder %LOCALAPPDATA%\KomgaReader

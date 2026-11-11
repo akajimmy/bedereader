@@ -16,15 +16,19 @@
     The build number the APK was made as (build.ps1 passes it). After installing, the tablet must report that build
     and the installed APK must be byte-for-byte this file (SHA-256) - otherwise it fails, saying what it found.
 
+.PARAMETER Package
+    Which app: com.nickp.komga_reader (BeDeReader), or com.nickp.komga_reader.exp for BeDeReader Exp (build.ps1 passes
+    it) - the Exp app installs beside the other, never over it.
+
 .EXAMPLE
     .\tools\install-android.ps1
 #>
-param([string]$Apk, [int]$ExpectedBuild = 0)
+param([string]$Apk, [int]$ExpectedBuild = 0, [string]$Package = 'com.nickp.komga_reader')
 
 $ErrorActionPreference = 'Stop'
 $adb = 'C:\Dev\android-sdk\platform-tools\adb.exe'
 $root = Split-Path -Parent $PSScriptRoot
-$package = 'com.nickp.komga_reader'
+$package = $Package
 
 function Say([string]$text) { Write-Host ('[{0}] {1}' -f (Get-Date -Format 'HH:mm:ss'), $text) }
 function Adb([string]$arguments) { cmd /c "`"$adb`" $arguments 2>&1" }

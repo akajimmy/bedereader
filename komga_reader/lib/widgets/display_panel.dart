@@ -218,7 +218,7 @@ class _ReaderPanel extends StatelessWidget {
             else
               ...layoutRows(p, (n) => s.setSeriesLayout(id, n), icons: true, komgaDirection: komgaDirection,
                   enabled: own),
-            ...imageRows(p, (n) => s.setSeriesImage(id, n), enabled: own),
+            ...imageRows(p, (n) => s.setSeriesImage(id, n), enabled: own, auto: !readsAsStrip(p, komgaDirection)),
             // (lost with the Image panel - code review, 2026-10-24; fit and direction are left alone)
             if (own)
               ActionRow(
@@ -397,20 +397,27 @@ Widget pageColoursRow(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enab
       ),
     );
 
-/// Enhance and Enhance colours, then Crop edges in four steps (user, 2026-10-21: brightness and contrast went).
-List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true}) => [
-      SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
-          value: p.sharpen, onChanged: enabled ? (v) => setP(p.copyWith(sharpen: v)) : null),
-      SwitchRow(title: 'Enhance colours', subtitle: 'Whiter paper, deeper ink',
-          value: p.autoLevels, onChanged: enabled ? (v) => setP(p.copyWith(autoLevels: v)) : null),
-      SegmentRow<double>(
-        title: 'Crop edges',
-        choices: [for (final c in ReaderPrefs.crops) Choice(c, c == 0 ? 'Off' : '${(c * 100).round()}%')],
-        value: ReaderPrefs.crops.contains(p.crop) ? p.crop : 0,
-        onChanged: (c) => setP(p.copyWith(crop: c)),
-        enabled: enabled,
-      ),
-    ];
+/// Enhance and Enhance colours, then Crop edges in four steps (user, 2026-10-21: brightness and contrast went) and -
+/// [auto]: comics, not a webtoon's strip - Auto (user, 2026-10-28).
+List<Widget> imageRows(ReaderPrefs p, void Function(ReaderPrefs) setP, {bool enabled = true, bool auto = false}) {
+  return [
+    SwitchRow(title: 'Enhance', subtitle: 'Cleans up grain and speckle, then sharpens',
+        value: p.sharpen, onChanged: enabled ? (v) => setP(p.copyWith(sharpen: v)) : null),
+    SwitchRow(title: 'Enhance colours', subtitle: 'Whiter paper, deeper ink',
+        value: p.autoLevels, onChanged: enabled ? (v) => setP(p.copyWith(autoLevels: v)) : null),
+    SegmentRow<double>(
+      title: 'Crop edges',
+      choices: [
+        for (final c in ReaderPrefs.crops)
+          if (c != ReaderPrefs.autoCrop || auto)
+            Choice(c, c == 0 ? 'Off' : c == ReaderPrefs.autoCrop ? 'Auto' : '${(c * 100).round()}%'),
+      ],
+      value: ReaderPrefs.crops.contains(p.crop) && (auto || p.crop != ReaderPrefs.autoCrop) ? p.crop : 0,
+      onChanged: (c) => setP(p.copyWith(crop: c)),
+      enabled: enabled,
+    ),
+  ];
+}
 
 /// Screen brightness in the reader (this device; everywhere else the screen follows the system): the backlight plus
 /// extra dimming on Android and iOS, dimming only on a PC - the same row everywhere (user, 2026-10-22: "match the
@@ -557,7 +564,9 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
       : const [(PositionSpot.right, 'Chapter progress'), (PositionSpot.left, 'Book progress'),
           (PositionSpot.centre, 'Chapter name')];
   return ToggleChipsRow(
-    title: 'Over the slider (tap to hide)', // (user, 2026-10-21: "(tap to hide)" in the title, no description)
+    title: 'Show above page slider', // (user, 2026-10-27; it said "Over the slider (tap to hide)")
+    info: 'Show which of the following above the page slider when the control panel is visible. You can also tap '
+        'these elements to hide them and tap the empty area to show them again',
     chips: [
       for (final (spot, label) in spots)
         ToggleChip(label, !k.hiddenSpots.contains(spot.name), (on) => s.setDisplay(s.display.withKind(kind,
@@ -567,7 +576,7 @@ Widget positionTextRow(AppSettings s, BookKind kind) {
 }
 
 Widget pageTurnRow(AppSettings s) => SegmentRow<PageTurn>(
-      title: 'Page turn', // as eBooks' (user, 2026-10-21: "the same name")
+      title: 'Page Turn Animation', // as eBooks' (user, 2026-10-21: "the same name"; 2026-10-27: this name)
       choices: [for (final t in PageTurn.values) Choice(t, t.label)],
       value: s.display.pageTurn,
       onChanged: (t) => s.setDisplay(s.display.copyWith(pageTurn: t)),

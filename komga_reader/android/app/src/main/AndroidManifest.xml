@@ -18,7 +18,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:taskAffinity=""
             android:screenOrientation="fullUser"
             android:theme="@style/LaunchTheme"
@@ -36,6 +36,37 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Open with and Share from another app (a Files app): a CBZ, CBR or EPUB read in place in the reader
+                 (lib/open_with.dart, MainActivity.kt). singleTask: one app - a file opened while it's open goes to
+                 it, not to a second copy inside the other app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:mimeType="application/epub+zip"/>
+                <data android:mimeType="application/vnd.comicbook+zip"/>
+                <data android:mimeType="application/vnd.comicbook-rar"/>
+                <data android:mimeType="application/x-cbz"/>
+                <data android:mimeType="application/x-cbr"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/x-zip-compressed"/>
+                <data android:mimeType="application/vnd.rar"/>
+                <data android:mimeType="application/x-rar-compressed"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/epub+zip"/>
+                <data android:mimeType="application/vnd.comicbook+zip"/>
+                <data android:mimeType="application/vnd.comicbook-rar"/>
+                <data android:mimeType="application/x-cbz"/>
+                <data android:mimeType="application/x-cbr"/>
+                <data android:mimeType="application/zip"/>
+                <data android:mimeType="application/x-zip-compressed"/>
+                <data android:mimeType="application/vnd.rar"/>
+                <data android:mimeType="application/x-rar-compressed"/>
             </intent-filter>
         </activity>
         <!-- Copy page (the reader): the copied page is shared from the app's cache (res/xml/shared_files.xml) -->

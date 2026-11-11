@@ -12,9 +12,12 @@ import '../local/smb_fs.dart';
 
 /// Where the folder browser starts: this device's storage, a card or drive, the iPad's app folder.
 class Place {
-  const Place(this.label, this.path);
+  const Place(this.label, this.path, {this.pick});
   final String label;
   final String path;
+
+  /// A place chosen elsewhere when opened (the iPad's Files picker): its folder, or null (cancelled). [path] unused.
+  final Future<String?> Function()? pick;
 }
 
 /// What the folder browser reads (tests give their own).
@@ -76,6 +79,8 @@ class DeviceBrowse implements BrowseSource {
       case TargetPlatform.iOS:
         final docs = await DeviceFolders.documents();
         if (docs != null) out.add(Place("This device (the app's folder in Files)", docs));
+        // any other folder the Files app shows - the browser's Downloads above all (user, 2026-10-31)
+        out.add(const Place('A folder in Files (Downloads, iCloud Drive...)', '', pick: DeviceFolders.pickInFiles));
       default:
         final home = Platform.environment['HOME'];
         if (home != null) out.add(Place('Home', home));
@@ -179,12 +184,14 @@ String libraryKindLabel(LibraryKind k) => switch (k) {
       LibraryKind.seriesFolders => 'One folder per series',
       LibraryKind.oneSeries => 'Books of one series',
       LibraryKind.readList => 'Books of several series, in order (a read list)',
+      LibraryKind.looseFiles => 'Loose books among other files (like Downloads)',
     };
 
 IconData libraryKindIcon(LibraryKind k) => switch (k) {
       LibraryKind.seriesFolders => Icons.folder_copy_outlined,
       LibraryKind.oneSeries => Icons.collections_bookmark_outlined,
       LibraryKind.readList => Icons.format_list_numbered,
+      LibraryKind.looseFiles => Icons.move_to_inbox_outlined,
     };
 
 /// Picks a library folder on this device, browsed folder by folder: its path, or null.
@@ -299,9 +306,11 @@ class _FolderBrowserState extends State<FolderBrowser> {
 
   Future<void> _open(Place p) async {
     if (!await widget.source.openPlace(context)) return;
-    _root = p.path;
-    _rootLabel = p.label;
-    await _go(p.path);
+    final path = p.pick == null ? p.path : await p.pick!();
+    if (path == null || !mounted) return;
+    _root = path;
+    _rootLabel = p.pick == null ? p.label : _name(path);
+    await _go(path);
   }
 
   Future<void> _type() async {
@@ -353,7 +362,8 @@ class _FolderBrowserState extends State<FolderBrowser> {
                       ? const Center(child: CircularProgressIndicator())
                       : ListView(children: [
                           for (final (i, pl) in places.indexed)
-                            ListTile(autofocus: i == 0, leading: Icon(_isServer(pl.path) ? Icons.dns_outlined
+                            ListTile(autofocus: i == 0, leading: Icon(pl.pick != null ? Icons.folder_open_outlined
+                                    : _isServer(pl.path) ? Icons.dns_outlined
                                     : pl.path.startsWith('/storage/') && !pl.path.startsWith('/storage/emulated')
                                         ? Icons.sd_card_outlined : Icons.folder_outlined),
                                 title: Text(pl.label), onTap: () => _open(pl)),

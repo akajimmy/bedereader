@@ -8,6 +8,7 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/enhance.dart';
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/page_image.dart';
+import 'package:komga_reader/reader_keys.dart';
 import 'package:komga_reader/screens/reader.dart';
 import 'package:komga_reader/settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -291,6 +292,23 @@ void main() {
     await tester.pump();
     expect(find.byType(Slider), findsNothing, reason: 'a new Back: taken');
     await tester.sendKeyUpEvent(LogicalKeyboardKey.goBack, physicalKey: physical);
+  });
+
+  testWidgets('a key set to Show the controls hides them again, as OK does, until the remote moves into the bars '
+      '(user, 2026-10-31: a controller button set to it no longer hid them)', (tester) async {
+    addTearDown(ReaderKeys.instance.reset);
+    await ReaderKeys.instance.assign(ReaderAction.controls, LogicalKeyboardKey.keyK);
+    await openLoaded(tester, pages: 20);
+    await key(tester, LogicalKeyboardKey.keyK);
+    expect(find.byType(Slider), findsOneWidget, reason: 'K shows the controls');
+    await key(tester, LogicalKeyboardKey.keyK);
+    expect(find.byType(Slider), findsNothing, reason: 'K again hides them');
+    expect(page(tester), 0.0, reason: 'no page turned');
+    await key(tester, LogicalKeyboardKey.keyK);
+    expect(find.byType(Slider), findsOneWidget);
+    await key(tester, LogicalKeyboardKey.arrowDown); // into the bottom bar
+    await key(tester, LogicalKeyboardKey.keyK);
+    expect(find.byType(Slider), findsOneWidget, reason: 'moved into the bars: K leaves them up');
   });
 
   // Esc / Back in the middle of a scrub cancel it: the page picked isn't gone to, the controls go away, and the next

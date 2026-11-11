@@ -6,6 +6,7 @@ import 'package:flutter/painting.dart' show ImageProvider, NetworkImage;
 import 'package:http/http.dart' as http;
 
 import 'hidden_libraries.dart';
+import 'sync_status.dart';
 import 'book_source.dart';
 import 'view_filter.dart';
 export 'view_filter.dart' show ReadFilter, ReadFilterApi;
@@ -648,13 +649,17 @@ class Komga implements BookSource {
 
   Future<Map<String, dynamic>>? _settingsAsking;
 
-  Future<Map<String, dynamic>> _fetchClientSettings() async =>
-      (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
+  Future<Map<String, dynamic>> _fetchClientSettings() async {
+    final got = (await _get('/api/v1/client-settings/user/list') as Map<String, dynamic>?) ?? {};
+    SyncStatus.instance.synced(); // (Settings > Server & Sync > Last Sync)
+    return got;
+  }
 
   @override
-  Future<void> putClientSetting(String key, String value) {
+  Future<void> putClientSetting(String key, String value) async {
     _settingsAsking = null;
-    return _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+    await _send('PATCH', '/api/v1/client-settings/user', {key: {'value': value}});
+    SyncStatus.instance.synced();
   }
 
   // ---- EPUB books (Readium web publication): the manifest (reading order, table of contents) and the book's files
@@ -764,6 +769,32 @@ class Komga implements BookSource {
   Future<void> deleteBookFile(String bookId) => _send('DELETE', '/api/v1/books/$bookId/file');
   @override
   Future<void> deleteSeriesFiles(String seriesId) => _send('DELETE', '/api/v1/series/$seriesId/file');
+
+  // ---- metadata editing: admin accounts only (Komga's rule)
+  Future<bool>? _admin; // asked once (a failed ask: asked again next time)
+
+  @override
+  Future<bool> canEditMetadata(String id) => _admin ??= me().then(
+      (m) => ((m?['roles'] as List?) ?? const []).contains('ADMIN'),
+      onError: (Object _) {
+        _admin = null;
+        return false;
+      });
+
+  /// Each field changed is locked too, as Komga's own editor does: a metadata refresh doesn't put the file's back. A
+  /// title, sort title or number made empty isn't sent: Komga can't have those empty.
+  static Map<String, Object?> _locked(Map<String, Object?> changes) => {
+        for (final MapEntry(:key, :value) in changes.entries)
+          if (!(value == '' && const {'title', 'titleSort', 'number'}.contains(key))) ...{key: value, '${key}Lock': true},
+      };
+
+  @override
+  Future<void> editBookMetadata(String bookId, Map<String, Object?> changes) =>
+      _send('PATCH', '/api/v1/books/$bookId/metadata', _locked({...changes}..remove('seriesName'))); // (a Komga book's series is its folder)
+
+  @override
+  Future<void> editSeriesMetadata(String seriesId, Map<String, Object?> changes) =>
+      _send('PATCH', '/api/v1/series/$seriesId/metadata', _locked(changes));
 }
 
 /// Komga answered with an error status. What people see comes from lib/errors.dart; this text is for the error log.
