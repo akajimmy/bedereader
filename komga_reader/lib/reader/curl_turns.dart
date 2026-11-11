@@ -72,6 +72,15 @@ class CurlTurns {
   /// Where a turn of a page [width] wide at view [v] ends: off itself, or over the page beside it (past the gap).
   double _goneFor(double width, int v) => _spineAt(v) ? -width - _gapAt(v) : PageCurl.gone(width);
 
+  /// How far the corner is lifted (of the page's height) once a page has turned away, one page up - a turn back starts
+  /// from there, so it comes in as a forward turn goes out: corner first, the fold slanted (user, 2026-11-11: the
+  /// back curl slid in square, "the corner peels away first" going forward). Two pages up nothing lifts.
+  static const _lift = 0.08;
+
+  /// Where the grabbed edge is with the page turned away, at view [v].
+  Offset _turnedAway(Rect page, Offset grab, int v) =>
+      Offset(_goneFor(page.width, v), grab.dy - (_spineAt(v) ? 0 : page.height * _lift));
+
   final boundary = GlobalKey(debugLabel: 'curl-pages');
   late final AnimationController _anim;
   final _moved = ValueNotifier<int>(0);
@@ -105,10 +114,12 @@ class CurlTurns {
     final v = next ? current() : target;
     final page = pageRect(v);
     final grab = Offset(page.width, page.height * 0.72);
-    if (!_start(next: next, target: target, page: page, grab: grab,
-        finger: next ? grab : Offset(_goneFor(page.width, v), grab.dy))) {
+    if (!_start(next: next, target: target, page: page, grab: grab, finger: next ? grab : _turnedAway(page, grab, v))) {
       return false;
     }
+    // back: the forward turn played backwards - its ease-out reversed, so the corner is on screen as long, and as
+    // fast, as it is going forward (it took the slow end of the ease-out: twice as long - 2026-11-11)
+    _curl!.easeIn = !next;
     _animate(complete: true);
     return true;
   }
@@ -182,7 +193,7 @@ class CurlTurns {
       ..animTo = c.forward == complete
           ? c.spine
               ? Offset(-w - c.gap, c.grab.dy) // turned over flat onto the page beside it, past the gap
-              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * 0.08) // turned away, corner lifted a little
+              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * _lift) // turned away, corner lifted a little
           : c.grab; // flat on the page
     _anim.forward(from: 0);
   }
@@ -190,7 +201,7 @@ class CurlTurns {
   void _tick() {
     final c = _curl;
     if (c == null) return;
-    c.finger = Offset.lerp(c.animFrom, c.animTo, Curves.easeOut.transform(_anim.value))!;
+    c.finger = Offset.lerp(c.animFrom, c.animTo, (c.easeIn ? Curves.easeIn : Curves.easeOut).transform(_anim.value))!;
     _moved.value++;
   }
 
@@ -247,7 +258,7 @@ class CurlTurns {
       final page = pageRect(v);
       final grab = Offset(page.width, (s0.dy - page.top).clamp(0.0, page.height));
       if (!_start(next: next, target: target, page: page, grab: grab,
-          finger: next ? grab : Offset(_goneFor(page.width, v), grab.dy))) {
+          finger: next ? grab : _turnedAway(page, grab, v))) {
         _dragStart = null;
         return;
       }
@@ -260,7 +271,10 @@ class CurlTurns {
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
     // the grabbed point follows the pointer up and down as well (user, 2026-10-22: "grab the top right corner of the
     // page and drag it down left"; it went half the way) - PageCurl.pinned keeps the spine down
-    final y = c.grab.dy + (p.dy - s.dy);
+    // back, one page up: the corner comes down from the lift it started at as the page lands (forward's let-go lifts it
+    // the same way)
+    final lift = c.forward || c.spine ? 0.0 : c.page.height * _lift * (1 - t);
+    final y = c.grab.dy + (p.dy - s.dy) - lift;
     c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     _moved.value++;
   }
@@ -375,6 +389,7 @@ class _Curl {
   Rect? backRect; // where that page is in [back] (null: the turning page's mirror)
   Timer? backTimer; // its second snapshot
   bool completing = true;
+  bool easeIn = false; // a whole turn back: the forward turn's ease-out reversed
   Offset animFrom = Offset.zero, animTo = Offset.zero;
 
   void dispose() {
