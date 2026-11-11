@@ -15,6 +15,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## 1.7.0
 
+**Released as build 180, tagged `v1.7.0`** (2026-11-11). No release candidates.
+
 ### Build 180 - 2026-11-04
 
 - Local libraries: a fourth kind, "Loose books among other files (like Downloads)". Every book in the folder or its subfolders is found, wherever it is, and put with the others of its series - from its ComicInfo, else its file name. Other files are ignored. Apply edits writes into these books but never renames or moves them. To switch a library you've added already, remove it and add it again; its reading progress stays with the folder.
