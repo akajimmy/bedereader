@@ -1061,6 +1061,40 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('a tap back plays the forward curl backwards: the corner comes in lifted, and is on screen as long as '
+        'going forward (user, 2026-11-11: it slid in square, and took twice as long)', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      CurlLayer? curl() => curling().evaluate().isEmpty ? null : tester.widget<CustomPaint>(curling()).painter as CurlLayer;
+
+      /// A tap at [x]: each frame's grabbed edge, while it's drawn.
+      Future<List<Offset>> play(double x) async {
+        await tester.tapAt(Offset(x, size.height / 2));
+        final out = <Offset>[];
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          if (curl() case final c?) out.add(c.finger);
+        }
+        await tester.pump(const Duration(seconds: 1));
+        return out;
+      }
+
+      final forward = await play(size.width * 0.9);
+      expect(page(tester), 1.0);
+      final page1 = tester.getRect(find.byType(PageView));
+      final back = await play(size.width * 0.1);
+      expect(page(tester), 0.0);
+      bool onScreen(Offset f) => f.dx >= 0 && f.dx <= page1.width;
+      final f = forward.where(onScreen).length, b = back.where(onScreen).length;
+      expect(f, greaterThan(3));
+      expect(b, inInclusiveRange(f - 1, f + 1), reason: 'as long on screen: forward $f frames, back $b');
+      // its first frames: well up (the lift a forward turn leaves with), coming down as it lands
+      final grabY = back.last.dy;
+      expect(back.first.dy, lessThan(grabY - page1.height * 0.06), reason: 'lifted as it comes in');
+      expect(forward.last.dy, lessThan(forward.first.dy - page1.height * 0.06), reason: 'forward lifts as it goes');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
     // a short one springing back: the next test (this one did that too, the same way - test audit, 2026-10-07)
     testWidgets('a slow drag past halfway turns the page', (tester) async {
       await openCurling(tester);
