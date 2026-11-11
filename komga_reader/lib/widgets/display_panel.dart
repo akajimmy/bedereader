@@ -13,10 +13,10 @@ import '../book_source.dart';
 /// view), bottom sheets on a narrow one. Changes show live. Remote: Up/Down move between rows, Left/Right adjust a
 /// slider or move along segmented buttons, OK presses; "Done" closes the panel.
 ///
-/// * Comic settings (Webtoon settings for a webtoon): Save / Copy page, this book's pairing, then this series' fit,
-///   reading direction, page colours, Enhance, Enhance colours and Crop edges (Reset to original, Make default), then
-///   the screen: brightness and rotation (user, 2026-10-21: trimmed - the rest is a tap away, "More settings"). Night
-///   mode is the top bar's moon.
+/// * Comic settings (Webtoon settings for a webtoon): Save / Copy page, this book's pairing, a webtoon's scrolling,
+///   the screen: brightness and rotation, then this series' fit, reading direction, page colours, Enhance, Enhance
+///   colours and Crop edges (Reset to original, Make default) - lowest, being set once if at all (user, 2026-11-11)
+///   (user, 2026-10-21: trimmed - the rest is a tap away, "More settings"). Night mode is the top bar's moon.
 ///
 /// The series group starts with "Override defaults" (user, 2026-09-30; shorter, no line under it - 2026-10-07): off,
 /// the series follows the defaults and its controls are greyed out showing the default values; on, they're the
@@ -199,6 +199,17 @@ class _ReaderPanel extends StatelessWidget {
               ),
             ),
           ]),
+        // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
+        // this device's
+        if (readsAsStrip(p, komgaDirection))
+          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
+            webtoonDoubleTapRow(s)]),
+        // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
+        // Settings only); above the series' settings, which are set once if at all (user, 2026-11-11)
+        SettingsGroup(title: 'Screen', children: [
+          ...brightnessRows(s),
+          if (canRotate) rotationRow(s), // locked mid-book, lying down
+        ]),
         if (id != null)
           SettingsGroup(title: _seriesHeading(seriesTitle), children: [
             // on: this series' own fit and direction; off: the defaults', greyed out (user, 2026-09-30)
@@ -245,17 +256,6 @@ class _ReaderPanel extends StatelessWidget {
                 ),
               ),
           ]),
-        // a webtoon: how presses scroll it (user, 2026-10-22: "i want the smooth scroll/page scroll modes there") -
-        // this device's
-        if (readsAsStrip(p, komgaDirection))
-          SettingsGroup(title: 'Scrolling', children: [webtoonScrollRow(s), webtoonTapsRow(s), autoScrollSpeedRow(s),
-            webtoonDoubleTapRow(s)]),
-        // what's changed mid-book (user, 2026-10-21: trimmed to these - position text and keep the screen on are in
-        // Settings only)
-        SettingsGroup(title: 'Screen', children: [
-          ...brightnessRows(s),
-          if (canRotate) rotationRow(s), // locked mid-book, lying down
-        ]),
         if (api != null) moreSettingsRow(context, api!, webtoon ? SettingsPage.webtoons : SettingsPage.comics),
       ];
     });
