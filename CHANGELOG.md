@@ -13,6 +13,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 - The reader's settings panels (comics, webtoons, eBooks): Screen - brightness and rotation - comes before the series' or book's own settings, which are now at the bottom, above More settings.
 
+- Page curl, one page up: a turn forward peels the page from its top corner (top right, or top left in a right-to-left book), and a turn back brings it in from the bottom corner on the other side. Both used to lead with the bottom.
+
 ## 1.7.0
 
 **Released as build 180, tagged `v1.7.0`** (2026-11-11). No release candidates.
