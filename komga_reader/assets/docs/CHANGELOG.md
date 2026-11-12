@@ -9,6 +9,10 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.8.0
+
+### Build 181 - 2026-11-12
+
 - Page curl, one page up: a turn back now looks like a turn forward played backwards - the page comes in corner first, slanted, and as quickly. It used to slide in square, and slowly (its corner was on screen about twice as long). Dragging back starts from the same slant.
 
 - The reader's settings panels (comics, webtoons, eBooks): Screen - brightness and rotation - comes before the series' or book's own settings, which are now at the bottom, above More settings.
