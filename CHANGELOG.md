@@ -9,11 +9,13 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-- Page curl, one page up: a turn back now looks like a turn forward played backwards - the page comes in corner first, lifted and slanted, and as quickly. It used to slide in square, and slowly (its corner was on screen about twice as long). Dragging back starts from the same lifted corner.
+- Page curl, one page up: a turn back now looks like a turn forward played backwards - the page comes in corner first, slanted, and as quickly. It used to slide in square, and slowly (its corner was on screen about twice as long). Dragging back starts from the same slant.
 
 - The reader's settings panels (comics, webtoons, eBooks): Screen - brightness and rotation - comes before the series' or book's own settings, which are now at the bottom, above More settings.
 
-- Page curl, one page up: a turn forward peels the page from its top corner (top right, or top left in a right-to-left book), and a turn back brings it in from the bottom corner on the other side. Both used to lead with the bottom.
+- Page curl, one page up: a turn forward peels the page from its top corner (top right, or top left in a right-to-left book), and a turn back brings it in from the bottom corner on the other side. It used to peel from the bottom corner.
+
+- Page curl, one page up: the back of the turning page is the page itself, mirrored, in its full colours. It used to be a pale print on white paper (on eBooks, on the page colour).
 
 ## 1.7.0
 

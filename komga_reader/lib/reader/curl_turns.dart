@@ -23,7 +23,7 @@ import '../page_curl.dart';
 /// [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap, this.mirror,
+      required this.done, required this.pixelRatio, this.spine, this.held, this.gap, this.mirror,
       this.backPage}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
@@ -39,9 +39,6 @@ class CurlTurns {
   final Rect Function(int v) pageRect;
   final void Function({required bool turned}) done;
   final double Function() pixelRatio;
-
-  /// The back of the turning page's colour (eBooks: the page's own); white paper when not given (comics).
-  final Color Function()? paper;
 
   /// At view [v], two pages side by side (user, 2026-10-16): the page turns over onto the one beside it, attached at
   /// the spine, and lands flat over it ([PageCurl.spineRadius]) - it doesn't go off past it.
@@ -313,7 +310,6 @@ class CurlTurns {
                 CustomPaint(painter: _CurlPaint(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
                     grab: c.grab, finger: c.finger, mirror: _mirror, spine: c.spine, back: c.back,
                     backRect: c.backRect, gap: c.spine ? c.gap : 0, held: c.underClip,
-                    paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
           );
@@ -342,7 +338,7 @@ abstract interface class CurlLayer {
   Rect? get held;
 
   /// The page on the curling one's back (two pages up: a snapshot of the view holding it), and the curling page's own
-  /// snapshot; [back] null: paper.
+  /// snapshot; [back] null: the curling page itself, mirrored.
   ui.Image? get back;
   ui.Image get sheet;
 
@@ -360,7 +356,7 @@ abstract interface class CurlLayer {
 /// The curl's painter, with what stays put under it ([held]) for a test to see.
 class _CurlPaint extends PageCurlPainter implements CurlLayer {
   _CurlPaint({required super.program, required super.sheet, required super.page, required super.grab,
-      required super.finger, required super.mirror, super.shader, super.paper, super.spine, super.back, super.gap,
+      required super.finger, required super.mirror, super.shader, super.spine, super.back, super.gap,
       super.backRect, this.held});
   @override
   final Rect? held;
@@ -391,7 +387,7 @@ class _Curl {
   Offset finger; // where that point is now
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
-  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
+  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: the turning page itself, mirrored)
   Rect? backRect; // where that page is in [back] (null: the turning page's mirror)
   Timer? backTimer; // its second snapshot
   bool completing = true;

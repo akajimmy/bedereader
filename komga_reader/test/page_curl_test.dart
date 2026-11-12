@@ -29,27 +29,28 @@ void main() {
     expect(PageCurl.fold(grab, const Offset(-w, 500), PageCurl.radius(w))!.$1.dx, lessThan(-50));
   });
 
-  test("the back of the turning page is the colour given: white paper for comics, the eBook page's own (user, "
-      '2026-10-11: a light back on the dark page looked wrong)', () async {
+  test('one page up, the back of the turning page is the page itself, as bright as its front - not a paler print '
+      '(user, 2026-11-12: "same page back and front")', () async {
     const size = Size(200, 300);
-    final sheet = await solidImage(200, 300, const Color(0xFF808080));
-    Future<double> lightness(Color paper) async {
-      final rec = ui.PictureRecorder();
-      PageCurlPainter(program: (await PageCurl.program())!, sheet: sheet, page: Offset.zero & size,
-              grab: const Offset(200, 216), finger: const Offset(60, 216), mirror: false, paper: paper)
-          .paint(Canvas(rec), size);
-      final img = await rec.endRecording().toImage(200, 300);
-      final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
-      img.dispose();
-      var sum = 0;
-      for (var i = 0; i < px.length; i += 4) {
-        sum += px[i] + px[i + 1] + px[i + 2];
+    final sheet = await solidImage(200, 300, const Color(0xFFFF0000));
+    final rec = ui.PictureRecorder();
+    PageCurlPainter(program: (await PageCurl.program())!, sheet: sheet, page: Offset.zero & size,
+            grab: const Offset(200, 216), finger: const Offset(60, 216), mirror: false)
+        .paint(Canvas(rec), size);
+    final img = await rec.endRecording().toImage(200, 300);
+    final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+    img.dispose();
+    // the turned-over part lies on top from the finger (x 60) towards the fold: its back, the red page itself, with
+    // only the curl's light and shade on it - nothing mixed in (a paler print is pink: green and blue in it)
+    var backs = 0;
+    for (var y = 0; y < 300; y++) {
+      for (var x = 0; x < 200; x++) {
+        final i = (y * 200 + x) * 4;
+        expect(px[i + 1] + px[i + 2], lessThanOrEqualTo(8), reason: 'pale at ($x, $y): ${px.sublist(i, i + 4)}');
+        if (x >= 62 && x <= 90 && px[i] >= 230) backs++;
       }
-      return sum / (px.length / 4 * 3);
     }
-
-    final white = await lightness(PageCurlPainter.whitePaper), dark = await lightness(const Color(0xFF101010));
-    expect(dark, lessThan(white - 20), reason: 'the turned-over part drawn dark on a dark page: $dark vs $white');
+    expect(backs, greaterThan(28 * 200), reason: 'the turned-over part at full red');
     sheet.dispose();
   });
 
@@ -108,9 +109,9 @@ void main() {
     // the step in lightness across the fold (where the page starts to curl) along row [y]: 2 px either side
     Future<int> stepAtFold(Offset finger, int y) async {
       final rec = ui.PictureRecorder();
-      // (the back the sheet's own grey: only the light and shade differ)
+      // (the back is the sheet itself: only the light and shade differ)
       PageCurlPainter(program: program, sheet: sheet, page: Offset.zero & size, grab: const Offset(400, 150),
-              finger: finger, mirror: false, paper: grey)
+              finger: finger, mirror: false)
           .paint(Canvas(rec), size);
       final img = await rec.endRecording().toImage(400, 300);
       final px = (await img.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
