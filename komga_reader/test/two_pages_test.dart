@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/page_curl.dart' show PageCurl;
 import 'package:komga_reader/page_image.dart';
 import 'package:komga_reader/reader/comic_renderer.dart' show ComicRenderer;
 import 'package:komga_reader/reader/spreads.dart' show twoPagesAllowed;
@@ -345,6 +346,45 @@ void main() {
       await tester.pump();
       expect(curl(tester), isNull);
       expect(await position(tester), startsWith('Pg. 5-6/9'));
+    });
+
+    testWidgets('two pages up, forward peels the right-hand page from its top corner; back, the page comes off the '
+        'left from its bottom corner - starting and landing flat (user, 2026-11-12: "one page curls top right, the '
+        'other curls bottom left")', (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+
+      /// A turn by [key]: each frame's fold normal (towards the side that lifts), and how far the drawn edge is below where it was taken hold of.
+      Future<(List<Offset>, List<double>)> play(LogicalKeyboardKey key) async {
+        await tester.sendKeyEvent(key);
+        final normals = <Offset>[], drops = <double>[];
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          final c = curl(tester);
+          if (c == null || !c.spine) continue;
+          drops.add(c.finger.dy - c.grab.dy);
+          final r = PageCurl.spineRadius(c.page.width, c.grab, c.finger);
+          if (PageCurl.fold(c.grab, PageCurl.pinned(c.grab, c.finger, r, c.page.height), r) case (_, final n)) {
+            normals.add(n);
+          }
+        }
+        await tester.pump(const Duration(seconds: 1));
+        return (normals, drops);
+      }
+
+      for (final (name, key) in [('forward', LogicalKeyboardKey.arrowRight), ('back', LogicalKeyboardKey.arrowLeft)]) {
+        final (normals, drops) = await play(key);
+        expect(normals.length, greaterThan(3), reason: name);
+        for (final n in normals) {
+          expect(n.dy, lessThanOrEqualTo(0), reason: '$name: the top corner first, going over ($n)');
+        }
+        expect(normals.where((n) => n.dy < -0.02).length, greaterThan(normals.length ~/ 2), reason: '$name: slanted');
+        final most = drops.reduce((a, b) => a > b ? a : b);
+        expect(most, greaterThan(1000 * 0.05), reason: '$name: dips on the way over ($drops)');
+        expect(drops.first, lessThan(most / 2), reason: '$name: starts nearly flat ($drops)');
+        expect(drops.last, lessThan(most / 2), reason: '$name: lands nearly flat ($drops)');
+      }
+      expect(await position(tester), startsWith('Pg. 3-4/9'));
     });
 
     // (user, 2026-10-28, Crop edges' Auto: each page cut its own way, so the next pair's left page needn't be the turning
