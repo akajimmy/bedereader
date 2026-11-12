@@ -4,8 +4,8 @@
 
 // "3D page curl" page turn (lib/page_curl.dart): the page's image - only the comic page, not the black bars around
 // it - taken from a snapshot of the screen and bent around a cylinder lying along the fold line. Its flat part is
-// drawn as is; the part going over the cylinder and the part lying flipped on top show the back of the paper (the
-// print faintly, mirrored, as through thin paper); where the page has lifted away the screen underneath shows, with
+// drawn as is; the part going over the cylinder and the part lying flipped on top show the back of the page: the page
+// itself, mirrored, as bright as its front (user, 2026-11-12: it was a paler print, as through thin paper); where the page has lifted away the screen underneath shows, with
 // a soft shadow along the curl. Transparent wherever none of the page is.
 // The fold is given in the page's own coordinates (origin at its top-left corner in reading direction).
 uniform vec2 uSize;    // area size, logical px (the snapshot covers all of it)
@@ -14,7 +14,6 @@ uniform vec2 uFold;    // a point on the fold line (page coordinates)
 uniform vec2 uNormal;  // unit normal of the fold line, pointing to the side that lifts
 uniform float uRadius; // cylinder radius
 uniform float uMirror; // 1 = right-to-left book: page coordinates run from the page's right edge
-uniform vec3 uPaper;   // the back of the page's colour: white paper for comics, the page's own for eBooks
 uniform float uBackOn; // 1 = the back of the page is a page of its own (two pages up), taken from uBack
 uniform float uGap;    // two pages up: the gap between the pages - the page lands at x = -uGap - x (page coordinates)
 uniform vec4 uBackRect; // two pages up: where the page on the back really is in uBack (x, y, width, height)
@@ -32,7 +31,7 @@ vec3 sheet(vec2 q) {  // q in page coordinates
   return texture(uSheet, (q + uRect.xy) / uSize).rgb;
 }
 
-// The back of the sheet at q: paper with the print showing through - or, two pages up, the page that's on the back
+// The back of the sheet at q: the page itself, mirrored (q is already the mirrored point) - or, two pages up, the page that's on the back
 // (user, 2026-10-16: the following left page, so it doesn't switch when the page lands): what lies, once the page has
 // turned over, where q lands - so the landed page is exactly what's under it then.
 // The page on the back is read from where it really is (uBackRect), stretched over this sheet: it can be another size
@@ -45,7 +44,7 @@ vec3 backOf(vec2 q) {
     vec2 at = uBackRect.xy + vec2(fx, q.y / uRect.w) * uBackRect.zw;
     return texture(uBack, at / uSize).rgb;
   }
-  return mix(sheet(q), uPaper, 0.82);
+  return sheet(q);
 }
 
 void main() {

@@ -1088,10 +1088,49 @@ void main() {
       final f = forward.where(onScreen).length, b = back.where(onScreen).length;
       expect(f, greaterThan(3));
       expect(b, inInclusiveRange(f - 1, f + 1), reason: 'as long on screen: forward $f frames, back $b');
-      // its first frames: well up (the lift a forward turn leaves with), coming down as it lands
+      // its first frames: well down (the drop a forward turn leaves with - the top corner leads), back up as it lands
       final grabY = back.last.dy;
-      expect(back.first.dy, lessThan(grabY - page1.height * 0.06), reason: 'lifted as it comes in');
-      expect(forward.last.dy, lessThan(forward.first.dy - page1.height * 0.06), reason: 'forward lifts as it goes');
+      expect(back.first.dy, greaterThan(grabY + page1.height * 0.06), reason: 'slanted as it comes in');
+      expect(forward.last.dy, greaterThan(forward.first.dy + page1.height * 0.06), reason: 'forward slants as it goes');
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a tap forward peels the page from its top corner; back, it comes in from the bottom corner on the '
+        'other side (user, 2026-11-12)', (tester) async {
+      await openCurling(tester);
+      final size = tester.getSize(find.byType(PageView));
+      CurlLayer? curl() => curling().evaluate().isEmpty ? null : tester.widget<CustomPaint>(curling()).painter as CurlLayer;
+
+      /// A tap at [x]: each frame's fold normal (towards the side that lifts), while it's drawn.
+      Future<List<Offset>> play(double x) async {
+        await tester.tapAt(Offset(x, size.height / 2));
+        final out = <Offset>[];
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          if (curl() case final c?) {
+            final r = PageCurl.radius(c.page.width);
+            if (PageCurl.fold(c.grab, PageCurl.pinned(c.grab, c.finger, r, c.page.height), r) case (_, final n)) {
+              out.add(n);
+            }
+          }
+        }
+        await tester.pump(const Duration(seconds: 1));
+        return out;
+      }
+
+      final forward = await play(size.width * 0.9);
+      final back = await play(size.width * 0.1);
+      expect(page(tester), 0.0);
+      // the lifting side is up and to the right: the top-right corner goes first, the bottom-left last (so it is the
+      // first in, coming back)
+      for (final (name, normals) in [('forward', forward), ('back', back)]) {
+        expect(normals.length, greaterThan(3), reason: name);
+        for (final n in normals) {
+          expect(n.dx, greaterThan(0), reason: '$name: $n');
+          expect(n.dy, lessThanOrEqualTo(0), reason: '$name: the top corner first ($n)');
+        }
+        expect(normals.where((n) => n.dy < -0.02).length, greaterThan(normals.length ~/ 2), reason: '$name: slanted');
+      }
       await tester.pump(const Duration(seconds: 2));
     });
 

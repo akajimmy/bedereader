@@ -23,7 +23,7 @@ import '../page_curl.dart';
 /// [overlay] over it.
 class CurlTurns {
   CurlTurns({required TickerProvider vsync, required this.current, required this.jump, required this.pageRect,
-      required this.done, required this.pixelRatio, this.paper, this.spine, this.held, this.gap, this.mirror,
+      required this.done, required this.pixelRatio, this.spine, this.held, this.gap, this.mirror,
       this.backPage}) {
     _anim = AnimationController(vsync: vsync, duration: const Duration(milliseconds: 380))
       ..addListener(_tick)
@@ -39,9 +39,6 @@ class CurlTurns {
   final Rect Function(int v) pageRect;
   final void Function({required bool turned}) done;
   final double Function() pixelRatio;
-
-  /// The back of the turning page's colour (eBooks: the page's own); white paper when not given (comics).
-  final Color Function()? paper;
 
   /// At view [v], two pages side by side (user, 2026-10-16): the page turns over onto the one beside it, attached at
   /// the spine, and lands flat over it ([PageCurl.spineRadius]) - it doesn't go off past it.
@@ -75,11 +72,16 @@ class CurlTurns {
   /// How far the corner is lifted (of the page's height) once a page has turned away, one page up - a turn back starts
   /// from there, so it comes in as a forward turn goes out: corner first, the fold slanted (user, 2026-11-11: the
   /// back curl slid in square, "the corner peels away first" going forward). Two pages up nothing lifts.
+  /// The grabbed edge goes down by it, so the top corner leads: forward, the page peels from its top corner (top right,
+  /// top left in a right-to-left book); back, it comes in from the bottom corner on the other side (user, 2026-11-12).
   static const _lift = 0.08;
+
+  /// Where a tap's turn takes hold of the page's edge (of its height): near the top, the corner that peels first.
+  static const _tapGrab = 0.28;
 
   /// Where the grabbed edge is with the page turned away, at view [v].
   Offset _turnedAway(Rect page, Offset grab, int v) =>
-      Offset(_goneFor(page.width, v), grab.dy - (_spineAt(v) ? 0 : page.height * _lift));
+      Offset(_goneFor(page.width, v), grab.dy + (_spineAt(v) ? 0 : page.height * _lift));
 
   final boundary = GlobalKey(debugLabel: 'curl-pages');
   late final AnimationController _anim;
@@ -113,7 +115,7 @@ class CurlTurns {
     if (settling) return true; // (the one playing goes on; this one is dropped)
     final v = next ? current() : target;
     final page = pageRect(v);
-    final grab = Offset(page.width, page.height * 0.72);
+    final grab = Offset(page.width, page.height * _tapGrab);
     if (!_start(next: next, target: target, page: page, grab: grab, finger: next ? grab : _turnedAway(page, grab, v))) {
       return false;
     }
@@ -193,7 +195,7 @@ class CurlTurns {
       ..animTo = c.forward == complete
           ? c.spine
               ? Offset(-w - c.gap, c.grab.dy) // turned over flat onto the page beside it, past the gap
-              : Offset(PageCurl.gone(w), c.grab.dy - c.page.height * _lift) // turned away, corner lifted a little
+              : Offset(PageCurl.gone(w), c.grab.dy + c.page.height * _lift) // turned away, top corner first
           : c.grab; // flat on the page
     _anim.forward(from: 0);
   }
@@ -271,10 +273,10 @@ class CurlTurns {
     final t = (moved / math.max(room, 40.0)).clamp(0.0, 1.0);
     // the grabbed point follows the pointer up and down as well (user, 2026-10-22: "grab the top right corner of the
     // page and drag it down left"; it went half the way) - PageCurl.pinned keeps the spine down
-    // back, one page up: the corner comes down from the lift it started at as the page lands (forward's let-go lifts it
+    // back, one page up: the edge comes back from the drop it started at as the page lands (forward's let-go drops it
     // the same way)
     final lift = c.forward || c.spine ? 0.0 : c.page.height * _lift * (1 - t);
-    final y = c.grab.dy + (p.dy - s.dy) - lift;
+    final y = c.grab.dy + (p.dy - s.dy) + lift;
     c.finger = c.forward ? Offset(w + (gone - w) * t, y) : Offset(gone + (w - gone) * t, y);
     _moved.value++;
   }
@@ -308,7 +310,6 @@ class CurlTurns {
                 CustomPaint(painter: _CurlPaint(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
                     grab: c.grab, finger: c.finger, mirror: _mirror, spine: c.spine, back: c.back,
                     backRect: c.backRect, gap: c.spine ? c.gap : 0, held: c.underClip,
-                    paper: paper?.call() ?? PageCurlPainter.whitePaper,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
           );
@@ -337,14 +338,15 @@ abstract interface class CurlLayer {
   Rect? get held;
 
   /// The page on the curling one's back (two pages up: a snapshot of the view holding it), and the curling page's own
-  /// snapshot; [back] null: paper.
+  /// snapshot; [back] null: the curling page itself, mirrored.
   ui.Image? get back;
   ui.Image get sheet;
 
   /// Where the page on the back is in [back]; null: the curling page's mirror ([PageCurlPainter.landed]).
   Rect? get backRect;
 
-  /// Where the grabbed edge is now (page coordinates, reading direction).
+  /// Where the page was taken hold of, and where that grabbed edge is now (page coordinates, reading direction).
+  Offset get grab;
   Offset get finger;
 
   /// Turning over onto the page beside it, attached at the spine.
@@ -354,7 +356,7 @@ abstract interface class CurlLayer {
 /// The curl's painter, with what stays put under it ([held]) for a test to see.
 class _CurlPaint extends PageCurlPainter implements CurlLayer {
   _CurlPaint({required super.program, required super.sheet, required super.page, required super.grab,
-      required super.finger, required super.mirror, super.shader, super.paper, super.spine, super.back, super.gap,
+      required super.finger, required super.mirror, super.shader, super.spine, super.back, super.gap,
       super.backRect, this.held});
   @override
   final Rect? held;
@@ -385,7 +387,7 @@ class _Curl {
   Offset finger; // where that point is now
   final int from; // the page before the turn, to go back to if it's let go
   bool pending; // going back: the previous page's snapshot isn't taken yet
-  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: paper, for now)
+  ui.Image? back; // two pages up: the view holding the page on the turning one's back (null: the turning page itself, mirrored)
   Rect? backRect; // where that page is in [back] (null: the turning page's mirror)
   Timer? backTimer; // its second snapshot
   bool completing = true;
