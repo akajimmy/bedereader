@@ -71,7 +71,7 @@ class CurlTurns {
 
   /// How far the corner is lifted (of the page's height) once a page has turned away, one page up - a turn back starts
   /// from there, so it comes in as a forward turn goes out: corner first, the fold slanted (user, 2026-11-11: the
-  /// back curl slid in square, "the corner peels away first" going forward). Two pages up nothing lifts.
+  /// back curl slid in square, "the corner peels away first" going forward). Two pages up: [_drawnFinger].
   /// The grabbed edge goes down by it, so the top corner leads: forward, the page peels from its top corner (top right,
   /// top left in a right-to-left book); back, it comes in from the bottom corner on the other side (user, 2026-11-12).
   static const _lift = 0.08;
@@ -294,6 +294,16 @@ class CurlTurns {
     _animate(complete: complete);
   }
 
+  /// Where the grabbed edge is drawn. Two pages up, it dips on the way over, most at halfway and none at either end
+  /// (the page starts and lands flat, square to the spine): the top corner leads forward and the bottom one on the
+  /// other side comes back first, as one page up does (user, 2026-11-12: "this should also apply in two page mode").
+  Offset _drawnFinger(_Curl c) {
+    if (!c.spine) return c.finger;
+    final w = c.page.width;
+    final t = ((w - c.finger.dx) / (2 * w + c.gap)).clamp(0.0, 1.0);
+    return c.finger + Offset(0, c.page.height * _lift * math.sin(math.pi * t));
+  }
+
   /// The turning page, over the page view (nothing when no turn is on) - rebuilt as it moves, the reader isn't.
   Widget overlay() => ValueListenableBuilder<int>(
         valueListenable: _moved,
@@ -308,7 +318,7 @@ class CurlTurns {
                     : ClipRect(clipper: _RectClip(c.underClip!), child: RawImage(image: c.under, fit: BoxFit.fill)),
               if (!c.pending)
                 CustomPaint(painter: _CurlPaint(program: PageCurl.loaded!, sheet: c.sheet, page: c.page,
-                    grab: c.grab, finger: c.finger, mirror: _mirror, spine: c.spine, back: c.back,
+                    grab: c.grab, finger: _drawnFinger(c), mirror: _mirror, spine: c.spine, back: c.back,
                     backRect: c.backRect, gap: c.spine ? c.gap : 0, held: c.underClip,
                     shader: _shader ??= PageCurl.loaded!.fragmentShader())),
             ]),
