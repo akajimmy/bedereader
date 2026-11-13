@@ -48,12 +48,14 @@ void main() {
     await tester.runAsync(() async {
       await d.attach(api, root: dir);
       d.pauseAll(); // (queued only: nothing downloads here)
+      // loaded, not started: no top-up runs here - it writes the queue to disk, which a widget test doesn't wait on
+      // (code review, 2026-11-12); what a top-up does is smart_downloads_test's
       await s.load();
     });
     return api;
   }
 
-  testWidgets("a series' menu sets its rule: the next N of it queued, as the rule's (user, 2026-11-12)",
+  testWidgets("a series' menu sets its rule (user, 2026-11-12)",
       (tester) async {
     final api = await attached(tester);
     setView(tester, const Size(1000, 1800)); // (the whole menu on screen)
@@ -68,14 +70,9 @@ void main() {
     await tester.tap(find.byIcon(smartIcon));
     await tester.pumpAndSettle();
     // the choices: Off, then 1 to 10 - the third is "the next 2"
-    s.on = false; // (the top-up the rule starts writes the queue to disk: run below, outside the test's fake time)
     await tester.tap(find.descendant(of: find.byType(SimpleDialog), matching: find.byType(ListTile)).at(2));
     await tester.pumpAndSettle();
-    s.on = true;
-    await tester.runAsync(s.topUp);
     expect(s.ruleFor(RuleKind.series, 'S1')!.keep, 2);
-    expect(d.queue.map((j) => j.bookId), ['B1', 'B2']);
-    expect(s.isRuled('B1') && s.isRuled('B2'), isTrue);
   });
 
   testWidgets("a rule's book has its own mark on the poster; one you downloaded, the tick", (tester) async {
@@ -92,9 +89,7 @@ void main() {
 
   testWidgets("Downloads' Smart tab lists the rules, and one taken off goes", (tester) async {
     await attached(tester);
-    await tester.runAsync(() => s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 3));
-    await tester.runAsync(s.topUp);
-    s.on = false; // (taking it off below starts a top-up: nothing to do with it here)
+    await s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 3);
     setView(tester, const Size(1000, 900));
     await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
     await tester.tap(find.byType(Tab).at(2));

@@ -111,7 +111,7 @@ void main() {
   Future<SeriesServer> start() async {
     final api = noNetwork(SeriesServer.new);
     await d.attach(api, root: dir);
-    await s.load();
+    await s.start();
     return api;
   }
 
@@ -252,6 +252,78 @@ void main() {
     expect(SmartDownloads.pinCanKeep(const Pin(name: 'b', kind: 'book', id: 'B1', title: 'b')), isFalse);
     expect(SmartDownloads.pinCanKeep(const Pin(name: 'l', kind: 'library', mode: 'readLists', title: 'l')), isFalse);
     expect(SmartDownloads.pinCanKeep(const Pin(name: 'c', kind: 'collection', id: 'C1', title: 'c')), isTrue);
+  });
+
+  test("nothing tops up until it's started - the app starts it once offline mode is applied (code review, "
+      '2026-11-12: the local libraries opening started a top-up before, asking Komga at a forced-offline start)',
+      () async {
+    final api = noNetwork(SeriesServer.new);
+    await d.attach(api, root: dir);
+    await s.load();
+    await s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 2);
+    await s.topUp();
+    expect(api.seriesAsks, 0, reason: 'Komga not asked');
+    expect(d.queue, isEmpty);
+    await s.start();
+    await settle(d);
+    expect(downloaded(), ['B1', 'B2']);
+  });
+
+  test("Delete once read: Ask doesn't ask about a rule's book - the rule removes it (code review, 2026-11-12: a Keep "
+      'was then overridden by the top-up)', () async {
+    final api = await start();
+    await d.setDeleteRead(DeleteRead.ask);
+    await s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 2);
+    await s.topUp();
+    await settle(d);
+    api.read.add('B1');
+    d.bookFinished('B1');
+    expect(d.askPending, isEmpty);
+    await s.topUp();
+    await settle(d);
+    expect(downloaded(), ['B2', 'B3']);
+  });
+
+  test("a pin's rule is found again after its list is renamed (the pin retitled), and whatever its sort's spelling "
+      '(code review, 2026-11-12)', () async {
+    await start();
+    s.on = false; // (the rules only: no top-up asks for these views)
+    const pin = Pin(name: 'Cosmic', kind: 'collection', id: 'C1', title: 'Cosmic', sort: 'added');
+    await s.setPinRule(pin, 2);
+    expect(s.ruleForPin(pin.retitled('Cosmic', 'Cosmic tales'))?.keep, 2);
+    // a library pin's sort, with its direction or without (Pin.fullSort - as Pins tells views apart)
+    await s.setPinRule(const Pin(name: 'New', kind: 'library', id: 'L1', title: 'Events', sort: 'added'), 1);
+    expect(s.ruleForPin(const Pin(name: 'x', kind: 'library', id: 'L1', title: 'Events', sort: 'added:desc'))?.keep,
+        1);
+    expect(s.ruleForPin(const Pin(name: 'x', kind: 'collection', id: 'C2', title: 'Cosmic')), isNull);
+  });
+
+  test("a top-up that fails part way doesn't throw out of topUp (its callers don't wait on it): logged, and the next "
+      'one runs (code review, 2026-11-12)', () async {
+    final api = await start();
+    await s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 1);
+    SmartDownloads.beforeSave = () => throw const FileSystemException('disk full');
+    addTearDown(() => SmartDownloads.beforeSave = null);
+    await s.topUp(); // (it threw out of here)
+    SmartDownloads.beforeSave = null;
+    await settle(d);
+    api.read.add('B1');
+    await s.topUp();
+    await settle(d);
+    expect(downloaded(), ['B2']);
+  });
+
+  test('a top-up that changes nothing tells no one (every poster mark listens - code review, 2026-11-12)', () async {
+    await start();
+    await s.setRule(RuleKind.series, 'S1', 'Silver Surfer', 2);
+    await s.topUp();
+    await settle(d);
+    var told = 0;
+    void count() => told++;
+    s.addListener(count);
+    addTearDown(() => s.removeListener(count));
+    await s.topUp();
+    expect(told, 0);
   });
 
   test('rules and their books are kept on the device, across a restart', () async {
