@@ -340,7 +340,7 @@ class _SeriesEditorState extends State<_SeriesEditor> {
               decoration: const InputDecoration(labelText: 'Sort title', helperText: 'Empty: sorted by its title')),
           const SizedBox(height: 8),
           DropdownButtonFormField<String?>(
-            key: const ValueKey('edit-direction'),
+            key: const ValueKey('edit-direction'), isExpanded: true,
             initialValue: _direction,
             decoration: const InputDecoration(labelText: 'Reading direction'),
             items: [
@@ -351,7 +351,7 @@ class _SeriesEditorState extends State<_SeriesEditor> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String?>(
-            key: const ValueKey('edit-status'),
+            key: const ValueKey('edit-status'), isExpanded: true,
             initialValue: _status,
             decoration: const InputDecoration(labelText: 'Status'),
             items: [

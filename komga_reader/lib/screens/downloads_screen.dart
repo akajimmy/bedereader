@@ -8,6 +8,7 @@ import '../offline/smart_downloads.dart';
 import '../offline/sync.dart';
 import '../widgets/fullscreen_exit.dart';
 import '../widgets/smart_rule.dart';
+import '../widgets/view_bar.dart' show narrowScreen;
 
 /// Downloads (side menu > Downloads), in three tabs (user, 2026-10-07; Smart, 2026-11-12): **Queue** - what's downloading: each book's
 /// state, pages done / total for the one downloading, failed ones with why and Retry; **Manage** - what's downloaded:
@@ -195,18 +196,23 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
 
   // ---- Queue ----------------------------------------------------------------------------------------------------
 
+  /// A top-bar button: icon and label, or on a phone-width screen the icon alone with the label as its tooltip
+  /// (Pause, Retry and Cancel all overflowed a 402-wide bar - the phone-width round, 2026-11-13).
+  Widget _barButton(IconData icon, String label, VoidCallback onPressed) => narrowScreen(context)
+      ? IconButton(tooltip: label, icon: Icon(icon), onPressed: onPressed)
+      : TextButton.icon(onPressed: onPressed, icon: Icon(icon), label: Text(label));
+
   List<Widget> _queueActions() {
     final queue = d.shownQueue;
     final failed = queue.where((j) => j.state == JobState.failed).length;
     return [
       if (queue.isNotEmpty)
         d.paused
-            ? TextButton.icon(onPressed: d.resumeAll, icon: const Icon(Icons.play_arrow), label: const Text('Resume'))
-            : TextButton.icon(onPressed: d.pauseAll, icon: const Icon(Icons.pause), label: const Text('Pause')),
-      if (failed > 0) TextButton.icon(onPressed: d.retryAll, icon: const Icon(Icons.refresh), label: Text('Retry $failed')),
+            ? _barButton(Icons.play_arrow, 'Resume', d.resumeAll)
+            : _barButton(Icons.pause, 'Pause', d.pauseAll),
+      if (failed > 0) _barButton(Icons.refresh, 'Retry $failed', d.retryAll),
       if (queue.isNotEmpty)
-        TextButton.icon(
-          onPressed: () async {
+        _barButton(Icons.clear_all, 'Cancel all', () async {
             final ok = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -220,10 +226,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
               ),
             );
             if (ok == true) await d.cancelAll();
-          },
-          icon: const Icon(Icons.clear_all),
-          label: const Text('Cancel all'),
-        ),
+          }),
     ];
   }
 
@@ -251,7 +254,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
     final s = SmartDownloads.instance;
     return [
       if (s.on && s.rules.isNotEmpty)
-        TextButton.icon(onPressed: s.topUp, icon: const Icon(Icons.refresh), label: const Text('Top up now')),
+        _barButton(Icons.refresh, 'Top up now', s.topUp),
     ];
   }
 

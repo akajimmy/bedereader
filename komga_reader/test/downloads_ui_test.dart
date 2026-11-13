@@ -116,6 +116,33 @@ void main() {
     await quiet(tester);
   }, tags: 'slow');
 
+  // the phone-width round (2026-11-13): Pause, Retry 2 and Cancel all overflowed a 402-wide bar
+  testWidgets('on a phone the queue\'s top-bar buttons are icons, their names as tooltips, and they still work',
+      (tester) async {
+    setView(tester, const Size(375, 667));
+    final api = noNetwork(LibraryServer.new);
+    await tester.runAsync(() async {
+      await d.attach(api, root: dir);
+      await d.setCap(100); // smaller than any book
+      await d.add([
+        {'id': 'B1', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '1'}},
+        {'id': 'B2', 'seriesTitle': 'Silver Surfer', 'metadata': {'number': '2'}},
+      ]);
+      await waitUntil(() => d.queue.every((j) => j.state == JobState.failed) && !d.busy,
+          timeout: const Duration(seconds: 1), reason: 'both stopped for lack of room');
+    });
+    await tester.pumpWidget(const MaterialApp(home: DownloadsScreen()));
+    expect(find.text('Retry 2'), findsNothing, reason: 'no label');
+    for (final t in ['Pause', 'Retry 2', 'Cancel all']) {
+      expect(find.byTooltip(t), findsOneWidget, reason: t);
+    }
+    await tester.tap(find.byTooltip('Pause'));
+    await tester.pump();
+    expect(d.paused, isTrue);
+    expect(find.byTooltip('Resume'), findsOneWidget);
+    await quiet(tester);
+  });
+
   testWidgets('multi-select: Download queues the ticked books in the order picked', (tester) async {
     final api = noNetwork(LibraryServer.new);
     await tester.runAsync(() => d.attach(api, root: dir));

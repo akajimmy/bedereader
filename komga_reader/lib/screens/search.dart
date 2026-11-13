@@ -138,8 +138,12 @@ class _SearchScreenState extends State<SearchScreen> with RefreshOnReturn {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
                   child: Row(children: [
-                    ChoiceChip(label: Text('In ${widget.libraryName ?? 'this library'}'), selected: _inLibrary,
-                        onSelected: (_) { setState(() => _inLibrary = true); _search(_query); }),
+                    // a long library name shortens: it overflowed a phone's width (the phone-width round, 2026-11-13)
+                    Flexible(child: ChoiceChip(
+                        label: Text('In ${widget.libraryName ?? 'this library'}', maxLines: 1, softWrap: false,
+                            overflow: TextOverflow.ellipsis),
+                        selected: _inLibrary,
+                        onSelected: (_) { setState(() => _inLibrary = true); _search(_query); })),
                     const SizedBox(width: 8),
                     ChoiceChip(label: const Text('All libraries'), selected: !_inLibrary,
                         onSelected: (_) { setState(() => _inLibrary = false); _search(_query); }),

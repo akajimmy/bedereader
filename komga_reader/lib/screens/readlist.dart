@@ -89,7 +89,7 @@ class _ReadListScreenState extends State<ReadListScreen> with SideMenuHere, Refr
             onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
                 mode: BrowseMode.readLists)),
         bottom: filterChips(),
-        actions: viewBarActions(
+        actions: viewBarActions(context: context,
           paged: _paged,
           filter: readFilter, onFilter: setReadFilter,
           filters: filterButton(),

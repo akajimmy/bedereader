@@ -12,7 +12,17 @@ class Breadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = parent;
-    if (p == null || p.isEmpty) return Text(title, overflow: TextOverflow.ellipsis);
+    final alone = Text(title, overflow: TextOverflow.ellipsis, maxLines: 1);
+    if (p == null || p.isEmpty) return alone;
+    // too narrow for the parent and the › (a phone's bar beside its buttons - it overflowed: the phone-width round,
+    // 2026-11-13): the title alone
+    return LayoutBuilder(builder: (context, box) => box.maxWidth < _withParent ? alone : _trail(p));
+  }
+
+  /// The least room for "parent › title"; less, and the title shows alone.
+  static const _withParent = 180.0;
+
+  Widget _trail(String p) {
     final dim = TextStyle(color: Colors.white.withValues(alpha: 0.55));
     final name = Text(p, style: dim, overflow: TextOverflow.ellipsis, maxLines: 1);
     return Row(children: [
