@@ -9,9 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-- Smart downloads: Keep downloaded, on a series or read list (its menu) or a pin (its Pinned view dialog), keeps its next unread books on this device - 3 at first, or 1 to 10 - topped up whenever the server or share answers: at the start, back in the app, leaving a book. A book read goes at the next top-up, and the next one comes in; one you have started stays until it is read. Books you download yourself are never touched, and a rule's book you download yourself becomes yours. Their posters have their own mark. Downloads has a Smart tab listing them, with Top up now, and says when the download limit stops them; Settings > Storage & Downloads has a switch for all of them.
-
 ## 1.8.0
+
+### Build 182 - 2026-11-12
+
+- Smart downloads: Keep downloaded, on a series or read list (its menu) or a pin (its Pinned view dialog), keeps its next unread books on this device - 3 at first, or 1 to 10 - topped up whenever the server or share answers: at the start, back in the app, leaving a book. A book read goes at the next top-up, and the next one comes in; one you have started stays until it is read. Books you download yourself are never touched, and a rule's book you download yourself becomes yours. Their posters have their own mark. Downloads has a Smart tab listing them, with Top up now, and says when the download limit stops them; Settings > Storage & Downloads has a switch for all of them.
 
 ### Build 181 - 2026-11-12
 
