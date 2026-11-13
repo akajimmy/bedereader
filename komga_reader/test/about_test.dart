@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:komga_reader/remote_log.dart';
 import 'package:komga_reader/screens/about.dart';
+import 'package:komga_reader/screens/app_log_screen.dart';
+import 'package:komga_reader/widgets/setting_rows.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
 
@@ -29,5 +33,62 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: AboutScreen(key: UniqueKey())));
     await tester.pump();
     expect(find.text('Version unknown'), findsOneWidget);
+  });
+
+  group('the remote log, hidden until asked for (user, 2026-11-12: for the App Store)', () {
+    final r = RemoteLog.instance;
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      r.reset();
+    });
+    tearDown(r.reset);
+
+    Finder group() => find.byKey(RemoteLogGroup.groupKey);
+    Future<void> settings(WidgetTester tester) async {
+      setView(tester, const Size(900, 1400));
+      await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SingleChildScrollView(child: RemoteLogGroup()))));
+    }
+
+    testWidgets('its settings are nowhere until shown; shown, or on, they are there', (tester) async {
+      await settings(tester);
+      expect(group(), findsNothing, reason: 'a fresh install: nothing');
+      await tester.runAsync(() => r.setShown(true));
+      await tester.pump();
+      expect(group(), findsOneWidget);
+      await tester.runAsync(() => r.setShown(false));
+      r.on = true; // (set up on a device before: it can always be turned off)
+      r.notifyListeners();
+      await tester.pump();
+      expect(group(), findsOneWidget);
+    });
+
+    testWidgets('seven taps on the version in About show it, kept on the device; six do nothing', (tester) async {
+      setView(tester, const Size(900, 1400));
+      await tester.pumpWidget(const MaterialApp(home: AboutScreen()));
+      await tester.pump();
+      for (var i = 0; i < RemoteLog.tapsToShow - 1; i++) {
+        await tester.tap(find.byKey(AboutScreen.versionKey));
+        await tester.pump();
+      }
+      expect(r.shown, isFalse);
+      await tester.tap(find.byKey(AboutScreen.versionKey));
+      await tester.pump();
+      expect(r.shown, isTrue);
+      expect((await tester.runAsync(SharedPreferences.getInstance))!.getBool('remoteLog.shown'), isTrue);
+      await tester.runAsync(() async {
+        r.reset();
+        await r.load();
+      });
+      expect(r.visible, isTrue, reason: 'kept across a restart');
+    });
+
+    testWidgets('off, it can be hidden again from its own settings', (tester) async {
+      await tester.runAsync(() => r.setShown(true));
+      await settings(tester);
+      await tester.tap(find.descendant(of: group(), matching: find.byType(ActionRow)).last);
+      await tester.pump();
+      expect(r.shown, isFalse);
+      expect(group(), findsNothing);
+    });
   });
 }

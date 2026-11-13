@@ -48,16 +48,20 @@ class AppLogScreen extends StatelessWidget {
   }
 }
 
-/// Settings > About > Remote log: the app's log sent to a collector on your server (lib/remote_log.dart).
+/// Settings > About > Remote log: the app's log sent to a collector on your server (lib/remote_log.dart) - nothing at
+/// all until it's shown ([RemoteLog.visible]: seven taps on the version in About).
 class RemoteLogGroup extends StatelessWidget {
   const RemoteLogGroup({super.key});
+
+  /// The group, when shown (tests find it by this).
+  static const groupKey = ValueKey('remote-log');
 
   @override
   Widget build(BuildContext context) {
     final r = RemoteLog.instance;
     return ListenableBuilder(
       listenable: Listenable.merge([r, AppLog.instance]),
-      builder: (context, _) => SettingsGroup(title: 'Remote log', children: [
+      builder: (context, _) => !r.visible ? const SizedBox.shrink() : SettingsGroup(key: groupKey, title: 'Remote log', children: [
         SwitchRow(
           title: 'Send the app log to a server',
           subtitle: 'For finding problems: what the app does, its errors and crashes, sent to a log collector of '
@@ -101,6 +105,14 @@ class RemoteLogGroup extends StatelessWidget {
           icon: Icons.sync,
           button: TextButton(onPressed: r.on ? r.sendNow : null, child: const Text('Send')),
         ),
+        // off: these settings can go out of sight again
+        if (!r.on)
+          ActionRow(
+            title: 'Hide the remote log',
+            subtitle: 'Seven taps on the version in About show it again',
+            icon: Icons.visibility_off_outlined,
+            onTap: () => r.setShown(false),
+          ),
       ]),
     );
   }

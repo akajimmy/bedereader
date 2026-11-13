@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_identity.dart';
 import '../licences.dart';
+import '../remote_log.dart';
 import '../screen.dart';
 import '../widgets/error_text.dart';
 import '../widgets/fullscreen_exit.dart';
@@ -16,12 +17,26 @@ const appLicense = 'MIT licence - free to use, change and share, keeping the cop
 /// Settings > Server and sync.
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
+  /// The version badge (tests tap it).
+  static const versionKey = ValueKey('about-version');
+
   @override
   State<AboutScreen> createState() => _AboutScreenState();
 }
 
 class _AboutScreenState extends State<AboutScreen> {
   String? _version;
+
+  int _taps = 0;
+
+  void _versionTapped() {
+    final log = RemoteLog.instance;
+    if (log.visible || ++_taps < RemoteLog.tapsToShow) return;
+    _taps = 0;
+    log.setShown(true);
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Remote log shown: Settings > About')));
+  }
 
   @override
   void initState() {
@@ -59,15 +74,22 @@ class _AboutScreenState extends State<AboutScreen> {
             const Center(child: Text(appTagline, style: TextStyle(color: Colors.white60))),
             const SizedBox(height: 10),
             Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: accent.withValues(alpha: 0.4)),
+              // seven taps (or OK presses) show the remote log in Settings > About - hidden otherwise (user,
+              // 2026-11-12: "put the remote log behind a hidden option", for the App Store)
+              child: InkWell(
+                key: AboutScreen.versionKey,
+                borderRadius: BorderRadius.circular(20),
+                onTap: _versionTapped,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: accent.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(_version == null ? 'Version unknown' : 'Version $_version',
+                      style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.w500)),
                 ),
-                child: Text(_version == null ? 'Version unknown' : 'Version $_version',
-                    style: TextStyle(color: accent, fontSize: 13, fontWeight: FontWeight.w500)),
               ),
             ),
             const SizedBox(height: 28),

@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- The remote log is hidden: its settings show in Settings > About only after seven taps on the version in About, or while it's on (a device that already sends its log keeps it, and its settings). Off, Hide the remote log puts it out of sight again.
+
 ## 1.8.0
 
 ### Build 183 - 2026-11-12

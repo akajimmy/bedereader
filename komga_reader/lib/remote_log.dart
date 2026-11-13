@@ -27,7 +27,8 @@ class RemoteLog extends ChangeNotifier {
   static const longestWait = Duration(minutes: 15);
   static const batch = 500;
 
-  static const _on = 'remoteLog.on', _url = 'remoteLog.url', _device = 'remoteLog.device', _token = 'remoteLogToken';
+  static const _on = 'remoteLog.on', _url = 'remoteLog.url', _device = 'remoteLog.device', _token = 'remoteLogToken',
+      _shown = 'remoteLog.shown';
   static const _secure = FlutterSecureStorage();
 
   /// Tests: the HTTP client, and the key store.
@@ -39,6 +40,17 @@ class RemoteLog extends ChangeNotifier {
   static Future<void> Function(String) writeToken = (t) => _secure.write(key: _token, value: t);
 
   bool on = false;
+
+  /// Its settings shown in Settings > About: hidden until asked for - seven taps on the version in About - so the
+  /// App Store build shows nothing that sends anything (user, 2026-10-29: "behind some kind of hidden option
+  /// before we publish to the App Store"; Apple's 3.2(e)(6)). While it's on it shows anyway: it can always be
+  /// turned off.
+  bool shown = false;
+  bool get visible => shown || on;
+
+  /// How many taps on the version show it.
+  static const tapsToShow = 7;
+
   String url = '';
   String device = defaultDevice;
   bool hasToken = false;
@@ -61,6 +73,7 @@ class RemoteLog extends ChangeNotifier {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     on = p.getBool(_on) ?? false;
+    shown = p.getBool(_shown) ?? false;
     url = p.getString(_url) ?? '';
     device = p.getString(_device) ?? defaultDevice;
     try {
@@ -92,6 +105,13 @@ class RemoteLog extends ChangeNotifier {
     _wait = every;
     status = '';
     _apply();
+  }
+
+  /// Its settings shown in Settings > About, or hidden again ([show] false - while it's off they go).
+  Future<void> setShown(bool show) async {
+    shown = show;
+    await (await SharedPreferences.getInstance()).setBool(_shown, show);
+    notifyListeners();
   }
 
   /// A device's name as the collector keeps it: letters, digits and dashes.
@@ -231,6 +251,7 @@ class RemoteLog extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     on = false;
+    shown = false;
     url = '';
     device = defaultDevice;
     hasToken = false;

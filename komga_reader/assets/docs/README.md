@@ -214,8 +214,9 @@ on every device.
   GitHub at most once a day, to see whether a newer BeDeReader has been released (it asks for the latest release and
   sends nothing about you; GitHub sees your IP address, as with any web request). No analytics, no tracking, no
   accounts, no ads.
-- Settings > About has a **remote log**, off unless you set it up: it sends the app's own log to a collector at an
-  address you give, with a key you give. Nothing is sent anywhere else.
+- There's a **remote log** for finding problems, hidden and off unless you set it up (seven taps on the version in
+  About show it in Settings > About): it sends the app's own log to a collector at an address you give, with a key
+  you give. Nothing is sent anywhere else.
 - Your API key, and the user names and passwords of shared folders, are stored **on the device, encrypted**: with a
   key held in the Android Keystore on Android, in the Keychain on iPhone and iPad, and with Windows' own data
   protection (only your Windows account can read it) on a PC. If Komga won't let the app make an API key (a demo or
