@@ -22,6 +22,7 @@ import 'screens/home.dart';
 import 'screens/login.dart';
 import 'offline/connection.dart';
 import 'offline/downloads.dart';
+import 'offline/smart_downloads.dart';
 import 'offline/sync.dart';
 import 'ondeck_hidden.dart';
 import 'synced_ids.dart';
@@ -185,6 +186,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
         unawaited(BookHighlights.renameIds(ids));
         unawaited(StripPlaces.renameIds(ids));
         unawaited(Downloads.instance.renameLocalIds(ids));
+        unawaited(SmartDownloads.instance.renameIds(ids));
       };
       // offline mode is the network libraries' too: the switch is there for them, and they go offline with it
       Connection.instance.hasShares = () => local.hasShares;
@@ -192,6 +194,9 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       Shares.instance.beforeReconnect = local.closeFiles; // a share's new login: its open books opened again
       // the network books' downloads, there whether or not Komga is (No server mode too)
       await Downloads.instance.attachLocal(local);
+      // Smart downloads (user, 2026-11-12): this device's rules - their network books now, Komga's once it's attached
+      await SmartDownloads.instance.load();
+      unawaited(SmartDownloads.instance.topUp());
       // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
       // or Keep it in case it comes back
       local.missing.addListener(() {
@@ -501,6 +506,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await Downloads.instance.attach(api, start: false);
     await Connection.instance.load(api);
     ProgressSync.instance.start(); // offline reading -> Komga
+    unawaited(SmartDownloads.instance.topUp()); // (offline mode applied: in it, nothing tops up)
   }
 
   Future<void> _signOut() async {
