@@ -8,6 +8,7 @@ import '../book_title.dart';
 import '../epub/progress.dart' show komgaEpubPage;
 import 'connection.dart';
 import 'downloads.dart';
+import 'smart_downloads.dart';
 import 'store.dart';
 import '../book_source.dart';
 
@@ -158,6 +159,9 @@ class ProgressSync extends ChangeNotifier with WidgetsBindingObserver {
       final r = SyncResult(sent: sent, conflicts: conflicts, gone: gone);
       if (!r.isEmpty) last = r;
       notifyListeners();
+      // Smart downloads: a book read offline counts as read on Komga only now - the top-up that going online started
+      // ran before this, and left it (tablet test, 2026-11-12)
+      if (sent > 0) unawaited(SmartDownloads.instance.topUp());
     }
   }
 

@@ -9,6 +9,8 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+- Smart downloads: a book read offline now goes as soon as the app is back online and has sent your reading progress, and the next one comes in. It used to stay until the next top-up (leaving a book, coming back to the app, or Top up now).
+
 ## 1.8.0
 
 ### Build 182 - 2026-11-12

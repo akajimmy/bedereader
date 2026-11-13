@@ -7,6 +7,7 @@ import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/connection.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/downloads_source.dart';
+import 'package:komga_reader/offline/smart_downloads.dart';
 import 'package:komga_reader/offline/sync.dart';
 import 'package:komga_reader/screens/downloads_screen.dart';
 import 'package:komga_reader/widgets/sync_alert.dart';
@@ -503,5 +504,22 @@ void main() {
     await sync.run();
     expect(d.store!.readProgressOf('B1')!['page'], 7);
     expect(d.store!.placeOf('B1'), isNull, reason: 'the page alone, not the 30% place');
+  });
+
+  test('progress read offline, once sent, starts a Smart downloads top-up - going online had one before the progress '
+      'reached Komga, so a book read offline stayed until the next (tablet test, 2026-11-12)', () async {
+    final smart = SmartDownloads.instance..reset();
+    addTearDown(smart.reset);
+    await smart.start();
+    await smart.setRule(RuleKind.series, 'S1', 'Silver Surfer', 2);
+    await smart.topUp();
+    final before = smart.lastTopUp;
+    expect(before, isNotNull);
+    await offlineApi().markRead('B1');
+    await withClock(Clock.fixed(before!.add(const Duration(minutes: 1))), () async {
+      await sync.run();
+      await waitUntil(() => smart.lastTopUp != before, reason: 'a top-up after the progress went');
+    });
+    expect(server.writes, contains('B1 read'));
   });
 }
