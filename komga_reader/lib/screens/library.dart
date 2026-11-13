@@ -254,7 +254,7 @@ class _LibraryScreenState extends State<LibraryScreen> with RefreshOnReturn, Vie
             const Icon(Icons.arrow_drop_down),
           ]),
         ),
-        actions: viewBarActions(
+        actions: viewBarActions(context: context,
           paged: _paged,
           filter: _filter, onFilter: (f) { _filter = f; _load(); },
           filters: _listMode ? null : filterButton(),

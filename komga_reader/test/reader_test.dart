@@ -912,7 +912,8 @@ void main() {
       setView(tester, size);
       await openReader(tester);
       await key(tester, LogicalKeyboardKey.enter);
-      expect(find.text('Close'), findsOneWidget, reason: name);
+      // Close: labelled, or on a phone the arrow alone with its name as the tooltip (the phone-width round, 2026-11-13)
+      expect(find.text('Close').evaluate().length + find.byTooltip('Close').evaluate().length, 1, reason: name);
       expect(find.byTooltip('Previous book'), findsOneWidget, reason: name);
       expect(tester.takeException(), isNull, reason: '$name: a RenderFlex overflow would surface here');
       await tester.pumpWidget(const SizedBox());

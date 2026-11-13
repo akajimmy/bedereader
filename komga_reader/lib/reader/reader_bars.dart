@@ -44,6 +44,17 @@ class ReaderTopBar extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 12, 8, 12),
               child: Row(children: [
+                // a phone: the arrow alone, its name the tooltip - with the page's buttons the bar overflowed at 375
+                // wide (the phone-width round, 2026-11-13)
+                if (MediaQuery.sizeOf(context).width < 600)
+                  IconButton.filledTonal(
+                    focusNode: closeNode,
+                    tooltip: 'Close',
+                    padding: const EdgeInsets.all(12),
+                    onPressed: onClose ?? () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.arrow_back, size: 24),
+                  )
+                else
                 FilledButton.tonalIcon(
                   focusNode: closeNode,
                   style: FilledButton.styleFrom(

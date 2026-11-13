@@ -244,6 +244,25 @@ void main() {
       expect(api.seriesSaved['S1'], {'status': 'ENDED', 'publisher': 'Image Comics'});
     });
 
+    // the phone-width round (2026-11-13): the reading direction's choice overflowed a phone's width
+    testWidgets('the series editor fits a phone, and its choices still pick', (tester) async {
+      tester.view.physicalSize = const Size(375, 667);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = noNetwork(_EditKomga.new);
+      final s = {'id': 'S1', 'libraryId': 'L1',
+          'metadata': {'title': 'Saga', 'status': 'ONGOING', 'readingDirection': 'RIGHT_TO_LEFT'}};
+      await show(tester, (c) => editSeries(c, api, s));
+      await tester.tap(find.byKey(const ValueKey('edit-direction')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Webtoon').last);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const ValueKey('edit-save')));
+      await tester.tap(find.byKey(const ValueKey('edit-save')));
+      await tester.pumpAndSettle();
+      expect(api.seriesSaved['S1'], {'readingDirection': 'WEBTOON'});
+    });
+
     testWidgets("Edit is in a book's and a series' long-press menu only where the source allows it", (tester) async {
       final api = noNetwork(_EditKomga.new);
       for (final admin in [true, false]) {

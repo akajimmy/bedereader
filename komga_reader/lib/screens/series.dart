@@ -122,7 +122,7 @@ class _SeriesScreenState extends State<SeriesScreen> with SideMenuHere, RefreshO
                   libraryId: s['libraryId'] as String?, mode: BrowseMode.series)),
         ),
         bottom: filterChips(),
-        actions: viewBarActions(
+        actions: viewBarActions(context: context,
           paged: _paged,
           filter: readFilter, onFilter: setReadFilter,
           filters: filterButton(),
@@ -226,7 +226,7 @@ class _SeriesListScreenState extends State<SeriesListScreen> with SideMenuHere, 
               onParent: () => LibraryScreen.openFromBreadcrumb(context, widget.api, anyLibrary: true,
                   mode: BrowseMode.collections)),
           bottom: filterChips(),
-          actions: viewBarActions(
+          actions: viewBarActions(context: context,
             paged: _paged,
             filter: readFilter, onFilter: setReadFilter,
             filters: filterButton(),
