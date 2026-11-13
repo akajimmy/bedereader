@@ -4,13 +4,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../book_title.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../offline/smart_downloads.dart';
 import '../offline/sync.dart';
 import '../widgets/fullscreen_exit.dart';
+import '../widgets/smart_rule.dart';
 
-/// Downloads (side menu > Downloads), in two tabs (user, 2026-10-07): **Queue** - what's downloading: each book's
+/// Downloads (side menu > Downloads), in three tabs (user, 2026-10-07; Smart, 2026-11-12): **Queue** - what's downloading: each book's
 /// state, pages done / total for the one downloading, failed ones with why and Retry; **Manage** - what's downloaded:
 /// a flat list sorted by name or size, filtered by read state, with a select mode, a whole series' removal and
-/// "Remove all read". Opens on Queue while something is queued, Manage otherwise.
+/// "Remove all read"; **Smart** - the Smart downloads rules. Opens on Queue while something is queued, Manage otherwise.
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
 
@@ -54,7 +56,7 @@ class _Item {
 class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProviderStateMixin {
   final d = Downloads.instance;
   late final TabController _tabs =
-      TabController(length: 2, vsync: this, initialIndex: d.shownQueue.isNotEmpty ? 0 : 1)..addListener(_onTab);
+      TabController(length: 3, vsync: this, initialIndex: d.shownQueue.isNotEmpty ? 0 : 1)..addListener(_onTab);
 
   ManageFilter _filter = ManageFilter.all;
   ManageSort _sort = ManageSort.name;
@@ -151,7 +153,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: d,
+      listenable: Listenable.merge([d, SmartDownloads.instance]),
       builder: (context, _) {
         final all = _downloaded();
         _selected.retainAll(all.map((i) => i.id)); // (removed meanwhile)
@@ -170,12 +172,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
                   : null,
               title: selecting ? _selectionTitle(all) : const Text('Downloads'),
               actions: [
-                if (selecting) ..._selectionActions(all) else if (!onManage) ..._queueActions(),
+                if (selecting) ..._selectionActions(all) else if (_tabs.index == 0) ..._queueActions() else if (_tabs.index == 2) ..._smartActions(),
                 const FullscreenExit(),
               ],
               bottom: TabBar(controller: _tabs, tabs: [
                 Tab(text: d.shownQueue.isEmpty ? 'Queue' : 'Queue · ${d.shownQueue.length}'),
                 Tab(text: 'Manage · ${all.length}'),
+                Tab(text: SmartDownloads.instance.rules.isEmpty ? 'Smart' : 'Smart · ${SmartDownloads.instance.rules.length}'),
               ]),
             ),
       // above Android's navigation bar (the app is drawn edge to edge, under it): the remote's focus was scrolled to an
@@ -183,7 +186,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
             body: SafeArea(top: false, child: !d.anyReady
                 ? const Center(
                     child: Text('Downloads aren\'t available on this device', style: TextStyle(color: _grey)))
-                : TabBarView(controller: _tabs, children: [_queueTab(), _manageTab(all)])),
+                : TabBarView(controller: _tabs, children: [_queueTab(), _manageTab(all), _smartTab()])),
           ),
         );
       },
@@ -237,6 +240,54 @@ class _DownloadsScreenState extends State<DownloadsScreen> with SingleTickerProv
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
           child: Text('Nothing downloading. Long-press a book, series or read list and choose Download.',
+              style: TextStyle(color: _grey)),
+        ),
+    ]);
+  }
+
+  // ---- Smart downloads (user, 2026-11-12): the rules, what each keeps, Top up now --------------------------------
+
+  List<Widget> _smartActions() {
+    final s = SmartDownloads.instance;
+    return [
+      if (s.on && s.rules.isNotEmpty)
+        TextButton.icon(onPressed: s.topUp, icon: const Icon(Icons.refresh), label: const Text('Top up now')),
+    ];
+  }
+
+  Widget _smartTab() {
+    final s = SmartDownloads.instance;
+    String what(SmartRule r) => switch (r.kind) { RuleKind.series => 'Series', RuleKind.readList => 'Read list', RuleKind.pin => 'Pin' };
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 8, 16, 32), children: [
+      _Heading('Smart downloads${s.on ? '' : ' · off'}'),
+      Text(s.on
+          ? 'Each keeps its next unread books downloaded, topped up whenever the server or share answers. A book read '
+              'goes at the next top-up; books you download yourself stay.'
+          : 'Off in Settings > Storage & Downloads: nothing is topped up or removed.', style: const TextStyle(color: _grey)),
+      if (s.limitReached)
+        const Padding(
+          padding: EdgeInsets.only(top: 12),
+          child: Text('Download limit reached: the rest wait in the queue until there is room.',
+              style: TextStyle(color: Color(0xFFFF8A80))),
+        ),
+      const SizedBox(height: 8),
+      for (final r in s.rules)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(smartIcon),
+          title: Text(r.title),
+          subtitle: Text('${what(r)} · the next ${r.keep} unread · ${s.keeping(r)} downloaded'),
+          onTap: () async {
+            final n = await pickKeep(context, r.title, r.keep);
+            if (n != null) await s.setRule(r.kind, r.id, r.title, n, pin: r.pin);
+          },
+          trailing: IconButton(tooltip: 'Stop keeping it', icon: const Icon(Icons.close),
+              onPressed: () => s.setRule(r.kind, r.id, r.title, 0)),
+        ),
+      if (s.rules.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Text('None yet. Long-press a series or read list, or open a pin, and choose Keep downloaded.',
               style: TextStyle(color: _grey)),
         ),
     ]);

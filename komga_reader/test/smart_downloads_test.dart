@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/api.dart';
 import 'package:komga_reader/offline/downloads.dart';
 import 'package:komga_reader/offline/smart_downloads.dart';
+import 'package:komga_reader/pins.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/helpers.dart';
@@ -51,6 +52,37 @@ class SeriesServer extends LibraryServer {
       {List<String>? readStatus, int page = 0, int size = 1000}) async {
     if (down) throw KomgaUnreachable(baseUrl);
     final all = [for (final id in ids.reversed) if (readStatus == null || _unread(id)) _b(id)];
+    return {'content': all.take(size).toList(), 'totalElements': all.length};
+  }
+}
+
+/// Library L1 for pins: series S2 and S1 (in that order: the pin sorts them so), S2 of two unread books, S1 of
+/// three; and the library's books, newest first. Records what each asks for.
+class PinServer extends LibraryServer {
+  final asked = <String>[];
+  Map<String, dynamic> _b(String s, int n) =>
+      {'id': '$s-$n', 'seriesId': s, 'seriesTitle': s, 'name': '$s-$n', 'metadata': {'number': '$n'}};
+
+  @override
+  Future<Map<String, dynamic>> series({String? libraryId, String? collectionId, List<String>? readStatus,
+      String sort = 'metadata.titleSort,asc', int page = 0, int size = 60}) async {
+    asked.add('series $libraryId ${readStatus?.join('+')} $sort');
+    return {'content': [{'id': 'S2'}, {'id': 'S1'}], 'totalElements': 2};
+  }
+
+  @override
+  Future<Map<String, dynamic>> seriesBooks(String seriesId,
+      {List<String>? readStatus, String sort = 'metadata.numberSort,asc', int page = 0, int size = 500}) async {
+    asked.add('books of $seriesId ${readStatus?.join('+')} $size');
+    final all = [for (var n = 1; n <= (seriesId == 'S2' ? 2 : 3); n++) _b(seriesId, n)];
+    return {'content': all.take(size).toList(), 'totalElements': all.length};
+  }
+
+  @override
+  Future<Map<String, dynamic>> books({String? libraryId, List<String>? readStatus,
+      String sort = 'metadata.releaseDate,desc', int page = 0, int size = 60}) async {
+    asked.add('books $libraryId ${readStatus?.join('+')} $sort $size');
+    final all = [for (var n = 9; n >= 1; n--) _b('S1', n)];
     return {'content': all.take(size).toList(), 'totalElements': all.length};
   }
 }
@@ -188,6 +220,38 @@ void main() {
     await waitUntil(() => d.queue.isNotEmpty && d.queue.every((j) => j.state == JobState.failed));
     expect(downloaded(), ['B1']);
     expect(s.limitReached, isTrue);
+  });
+
+  test("a pin's next books are its first unread ones in its own order: a library of series, series by series in the "
+      "pin's sort, each by number; a library's books, in the pin's sort (user, 2026-11-12: 'first 3 of the pin')",
+      () async {
+    final api = noNetwork(PinServer.new);
+    const series = Pin(name: 'Events', kind: 'library', id: 'L1', title: 'Events', sort: 'title:desc');
+    final r = SmartRule(kind: RuleKind.pin, id: SmartRule.pinKey(series), title: 'Events', pin: series);
+    expect([for (final b in await SmartDownloads.nextBooks(api, r)) b['id']], ['S2-1', 'S2-2', 'S1-1']);
+    expect(api.asked, [
+      'series L1 UNREAD+IN_PROGRESS metadata.titleSort,desc', // (the pin's own sort; read series left out)
+      'books of S2 UNREAD+IN_PROGRESS 3',
+      'books of S1 UNREAD+IN_PROGRESS 1', // (only as many as are still wanted)
+    ]);
+
+    api.asked.clear();
+    const books = Pin(name: 'New', kind: 'library', id: 'L1', title: 'Events', mode: 'books', sort: 'added');
+    final rb = SmartRule(kind: RuleKind.pin, id: SmartRule.pinKey(books), title: 'New', keep: 2, pin: books);
+    expect([for (final b in await SmartDownloads.nextBooks(api, rb)) b['id']], ['S1-9', 'S1-8']);
+    expect(api.asked, ['books L1 UNREAD+IN_PROGRESS createdDate,desc 2']);
+  });
+
+  test("a pinned series or read list is that series' or list's rule; a pinned book, or a view of lists, has none",
+      () async {
+    await start();
+    const pinned = Pin(name: 'Surfer', kind: 'series', id: 'S1', title: 'Silver Surfer');
+    await s.setPinRule(pinned, 2);
+    expect(s.ruleFor(RuleKind.series, 'S1')!.keep, 2);
+    expect(s.ruleForPin(pinned)!.keep, 2);
+    expect(SmartDownloads.pinCanKeep(const Pin(name: 'b', kind: 'book', id: 'B1', title: 'b')), isFalse);
+    expect(SmartDownloads.pinCanKeep(const Pin(name: 'l', kind: 'library', mode: 'readLists', title: 'l')), isFalse);
+    expect(SmartDownloads.pinCanKeep(const Pin(name: 'c', kind: 'collection', id: 'C1', title: 'c')), isTrue);
   });
 
   test('rules and their books are kept on the device, across a restart', () async {

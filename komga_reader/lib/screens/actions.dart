@@ -7,8 +7,10 @@ import '../errors.dart';
 import '../local/book_names.dart' show isLocalId;
 import '../ondeck_hidden.dart';
 import '../offline/downloads.dart';
+import '../offline/smart_downloads.dart';
 import '../pins.dart';
 import '../widgets/error_text.dart';
+import '../widgets/smart_rule.dart';
 import 'book_details.dart';
 import 'edit_metadata.dart';
 import 'series.dart';
@@ -237,6 +239,7 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark series as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
         ...downloadTiles(ctx),
+        ...keepTiles(ctx, SmartDownloads.instance.ruleFor(RuleKind.series, s['id'] as String)),
         OnDeckHidden.instance.seriesHidden(s['id'] as String?)
             ? ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('Show in On deck again'),
                 onTap: () => Navigator.pop(ctx, 'ondeck-show'))
@@ -275,6 +278,7 @@ Future<void> showSeriesActions(BuildContext context, BookSource api, dynamic s,
     OnDeckHidden.instance.setSeries(s['id'] as String, choice == 'ondeck-hide');
     return;
   }
+  if (choice == 'keep') return editRule(context, RuleKind.series, s['id'] as String, title);
   if (choice == 'dl-all' || choice == 'dl-unread') {
     return queueDownloads(context, '"$title"',
         (status) => api.seriesBooks(s['id'] as String, readStatus: status, size: 2000),
@@ -474,6 +478,7 @@ Future<void> showReadListActions(BuildContext context, BookSource api, dynamic r
         ListTile(leading: const Icon(Icons.radio_button_unchecked), title: const Text('Mark all as unread'),
             onTap: () => Navigator.pop(ctx, 'unread')),
         ...downloadTiles(ctx),
+        ...keepTiles(ctx, SmartDownloads.instance.ruleFor(RuleKind.readList, rl['id'] as String)),
         ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Rename'),
             onTap: () => Navigator.pop(ctx, 'rename')),
       ])),
@@ -481,6 +486,7 @@ Future<void> showReadListActions(BuildContext context, BookSource api, dynamic r
   );
   if (choice == null || !context.mounted) return;
   if (choice == 'rename') return renameReadList(context, api, rl, onChanged: onChanged);
+  if (choice == 'keep') return editRule(context, RuleKind.readList, rl['id'] as String, name);
   if (choice == 'pin') return showPinDialog(context, pinned ?? view, pinned: pinned != null);
   if (choice == 'dl-all' || choice == 'dl-unread') {
     return queueDownloads(context, '"$name"', (status) => api.readListBooks(rl['id'] as String, readStatus: status, size: 2000),
