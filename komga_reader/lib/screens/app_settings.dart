@@ -14,6 +14,7 @@ import '../app_log.dart';
 import '../reader_keys.dart';
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../offline/smart_downloads.dart';
 import '../screen.dart';
 import '../settings.dart';
 import '../view_prefs.dart';
@@ -773,6 +774,16 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           choices: const [Choice(DeleteRead.never, 'Never'), Choice(DeleteRead.ask, 'Ask'), Choice(DeleteRead.always, 'Always')],
           value: d.deleteRead,
           onChanged: d.setDeleteRead,
+        ),
+        // Smart downloads (user, 2026-11-12): the rules are set on a series, read list or pin; off, none tops up
+        ListenableBuilder(
+          listenable: SmartDownloads.instance,
+          builder: (context, _) => SwitchRow(
+            title: 'Smart downloads',
+            subtitle: 'Keep downloaded, on a series, read list or pin',
+            value: SmartDownloads.instance.on,
+            onChanged: SmartDownloads.instance.setOn,
+          ),
         ),
         ActionRow(
           title: 'Open Downloads',

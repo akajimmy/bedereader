@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../offline/connection.dart';
 import '../offline/downloads.dart';
+import '../offline/smart_downloads.dart';
+import 'smart_rule.dart';
 
 /// The blue of a book kept on this device: the poster tick, and book details' Downloaded and Cached (user, 10-27) -
 /// apart from the green "read" tick.
@@ -26,12 +28,16 @@ class DownloadBadge extends StatelessWidget {
     final d = Downloads.instance;
     if (!d.anyReady) return const SizedBox.shrink();
     return ListenableBuilder(
-      listenable: Listenable.merge([d, Connection.instance]),
+      listenable: Listenable.merge([d, Connection.instance, SmartDownloads.instance]),
       builder: (context, _) {
         if (Connection.instance.offline) return const SizedBox.shrink();
         final id = bookId;
         if (id != null) {
-          if (d.isDownloaded(id)) return _disc(const Icon(Icons.download_done, size: 18, color: Colors.white), _done);
+          // a rule's own: its mark instead of the tick - it goes once read (user, 2026-11-12)
+          if (d.isDownloaded(id)) {
+            return _disc(Icon(SmartDownloads.instance.isRuled(id) ? smartIcon : Icons.download_done, size: 18,
+                color: Colors.white), _done);
+          }
           final job = d.downloadJob(id); // (the cache's own: no badge)
           if (job == null) return const SizedBox.shrink();
           return switch (job.state) {

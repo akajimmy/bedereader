@@ -122,6 +122,9 @@ keyboard, mouse or a remote page-turner, take books with you offline, and make o
 - Download single books, or a series or read list's unread (or all) books - from Komga or a shared folder - with a
   downloads limit; optionally deleted once read, and optionally only on Wi-Fi (Android). A download cut off part way
   carries on where it stopped. A book on a folder of the device itself needs no download: it's there.
+- Smart downloads: Keep downloaded, on a series, a read list or a pin, keeps its next unread books (3, or 1 to 10) on
+  the device, topped up whenever the server or share answers. A book read goes at the next top-up; books you download
+  yourself stay. Each device has its own; Downloads > Smart lists them.
 - Books you open are kept on the device for a while too (up to the cache limit, 512 MB at first, the oldest opened
   going first), so they read offline without a download. Settings > Storage & Downloads sets both limits - either can
   be Off - and Clear cache empties the cache.

@@ -14,6 +14,7 @@ import '../app_log.dart';
 import '../book_title.dart';
 import '../errors.dart';
 import '../screen.dart';
+import 'smart_downloads.dart';
 import 'store.dart';
 import '../book_source.dart';
 
@@ -126,6 +127,14 @@ class Downloads extends ChangeNotifier implements LocalPages {
   /// The network books' downloads (their files copied whole); null until the local libraries are open.
   OfflineStore? localStore;
   LocalSource? _local;
+
+  /// Komga, as the downloads ask it (null: signed out) - and the local libraries: where Smart downloads asks for a
+  /// rule's next books.
+  BookSource? get komga => _api;
+  LocalSource? get local => _local;
+
+  /// The book open in the reader (null: none) - a rule doesn't remove it under you.
+  String? get openBook => _readers > 0 ? _reading : null;
 
   /// Komga's downloads are open ([store]) - what offline mode needs ([Connection.available]).
   bool get ready => store != null;
@@ -631,6 +640,7 @@ class Downloads extends ChangeNotifier implements LocalPages {
     if (_readers == 0) _reading = null;
     if (_readers == 0 && _finished.isNotEmpty) unawaited(_deleteFinished());
     if (_readers == 0 && askPending.isNotEmpty) notifyListeners(); // time to ask
+    if (_readers == 0) unawaited(SmartDownloads.instance.topUp()); // (a book finished: the next one in, it out)
   }
 
   /// The books waiting to be asked about, handed over once (the answer is the caller's).
@@ -718,9 +728,11 @@ class Downloads extends ChangeNotifier implements LocalPages {
   Future<void> _queueWrites = Future.value();
 
   // ---- adding -----------------------------------------------------------------------------------------------------
-  /// Queues books that aren't downloaded or queued yet. Returns how many were added.
-  Future<int> add(Iterable<dynamic> books) async {
+  /// Queues books that aren't downloaded or queued yet. Returns how many were added. [byRule]: Smart downloads' - else
+  /// they're yours, a rule's among them too (it no longer removes them).
+  Future<int> add(Iterable<dynamic> books, {bool byRule = false}) async {
     if (!anyReady) return 0;
+    if (!byRule) SmartDownloads.instance.takenByHand([for (final b in books) b['id'] as String]);
     var added = 0;
     for (final b in books) {
       final id = b['id'] as String;

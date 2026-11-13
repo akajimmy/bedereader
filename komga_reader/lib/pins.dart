@@ -10,7 +10,10 @@ import 'local/book_names.dart' show isLocalId;
 import 'refresh_gate.dart';
 import 'view_filter.dart';
 import 'book_source.dart';
+import 'offline/downloads.dart';
+import 'offline/smart_downloads.dart';
 import 'widgets/pins_editor.dart';
+import 'widgets/smart_rule.dart';
 
 /// A library sort field's natural direction: titles A -> Z, dates newest first.
 bool naturalDesc(String key) => key != 'title';
@@ -449,6 +452,9 @@ Future<void> showPinDialog(BuildContext context, Pin pin, {required bool pinned}
         if (pinned) TextButton(onPressed: () => Navigator.pop(ctx, 'unpin'), child: const Text('Unpin')),
         if (pinned && Pins.instance.items.length > 1)
           TextButton(onPressed: () => Navigator.pop(ctx, 'arrange'), child: const Text('Arrange…')),
+        // Smart downloads (user, 2026-11-12): the pin's first unread books kept downloaded
+        if (pinned && Downloads.instance.anyReady && SmartDownloads.pinCanKeep(pin))
+          TextButton(onPressed: () => Navigator.pop(ctx, 'keep'), child: const Text('Keep downloaded…')),
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         FilledButton(onPressed: () => Navigator.pop(ctx, 'save'), child: Text(pinned ? 'Save' : 'Pin')),
       ],
@@ -457,6 +463,8 @@ Future<void> showPinDialog(BuildContext context, Pin pin, {required bool pinned}
   final n = name.text.trim();
   if (result == 'unpin') {
     Pins.instance.remove(pin);
+  } else if (result == 'keep') {
+    if (context.mounted) await editPinRule(context, pin);
   } else if (result == 'arrange') {
     if (context.mounted) await showPinsEditor(context);
   } else if (result == 'save' && n.isNotEmpty) {
