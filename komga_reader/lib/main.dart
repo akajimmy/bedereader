@@ -194,8 +194,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
       Shares.instance.beforeReconnect = local.closeFiles; // a share's new login: its open books opened again
       // the network books' downloads, there whether or not Komga is (No server mode too)
       await Downloads.instance.attachLocal(local);
-      // Smart downloads (user, 2026-11-12): this device's rules - their network books now, Komga's once it's attached
-      await SmartDownloads.instance.load();
+      // Smart downloads (user, 2026-11-12): the network books' rules can top up now (once it's started: _restore)
       unawaited(SmartDownloads.instance.topUp());
       // a library whose folder looks deleted (not there, while the place it was in answers): asked about - Remove,
       // or Keep it in case it comes back
@@ -457,7 +456,8 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     unawaited(Pins.instance.load(api, fetch: false));
     unawaited(OnDeckHidden.instance.load(api, fetch: false));
     unawaited(PairShift.instance.load(api, fetch: false));
-    unawaited(Connection.instance.loadOnDevice()); // (offline mode as it was left: the network libraries')
+    // (offline mode as it was left: the network libraries'); Smart downloads after it
+    unawaited(Connection.instance.loadOnDevice().then((_) => SmartDownloads.instance.start()));
   }
 
   /// The sign-in screen's Use without a server: No server mode, on the local libraries - with none yet, the folder
@@ -506,7 +506,7 @@ class _KomgaReaderAppState extends State<KomgaReaderApp> {
     await Downloads.instance.attach(api, start: false);
     await Connection.instance.load(api);
     ProgressSync.instance.start(); // offline reading -> Komga
-    unawaited(SmartDownloads.instance.topUp()); // (offline mode applied: in it, nothing tops up)
+    unawaited(SmartDownloads.instance.start()); // (offline mode applied first: in it, nothing tops up)
   }
 
   Future<void> _signOut() async {

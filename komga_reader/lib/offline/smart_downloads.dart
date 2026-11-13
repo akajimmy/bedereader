@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:clock/clock.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_log.dart';
+import '../errors.dart' show ErrorLog;
 import '../book_source.dart';
 import '../local/book_names.dart' show isLocalId;
 import '../pins.dart';
@@ -35,8 +37,11 @@ class SmartRule {
   /// A pin's view (its name aside).
   final Pin? pin;
 
-  /// A pin's view as a rule's id: two pins of the same view are one rule.
-  static String pinKey(Pin p) => jsonEncode({...p.toJson(), 'name': null});
+  /// A pin's view as a rule's id: two pins of the same view are one rule - what [Pin.sameView] compares (not its
+  /// name or title: a list renamed on Komga retitles the pin, and the rule stayed under the old title, unfound -
+  /// code review, 2026-11-12; the sort with its direction: 'added' is 'added:desc').
+  static String pinKey(Pin p) => jsonEncode({'kind': p.kind, 'id': p.id, 'filter': p.filter, 'mode': p.mode,
+        'sort': p.fullSort, if (p.filters.isNotEmpty) 'filters': p.filters.toJson()});
 
   /// Komga's, or a local library's (the network books') - where its books are asked for.
   bool get local => switch (kind) {
@@ -44,7 +49,6 @@ class SmartRule {
         _ => isLocalId(id),
       };
 
-  SmartRule withKeep(int n) => SmartRule(kind: kind, id: id, title: title, keep: n, pin: pin);
   SmartRule withId(String to) => SmartRule(kind: kind, id: to, title: title, keep: keep, pin: pin);
 
   Map<String, dynamic> toJson() =>
@@ -86,6 +90,17 @@ class SmartDownloads extends ChangeNotifier with WidgetsBindingObserver {
 
   Downloads get _d => Downloads.instance;
   bool _loaded = false, _observing = false;
+
+  /// Offline mode has been applied ([start]): before it, a top-up could ask Komga for a rule's books at a forced-
+  /// offline start (code review, 2026-11-12: the local libraries opening started one before Connection.load).
+  bool _started = false;
+
+  /// The app's start, once offline mode is applied: the rules loaded (if they aren't), and a top-up.
+  Future<void> start() async {
+    if (!_loaded) await load();
+    _started = true;
+    await topUp();
+  }
 
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
@@ -133,6 +148,7 @@ class SmartDownloads extends ChangeNotifier with WidgetsBindingObserver {
     on = true;
     lastTopUp = null;
     _loaded = false;
+    _started = false;
     _again = false;
     _running = null;
   }
@@ -252,7 +268,13 @@ class SmartDownloads extends ChangeNotifier with WidgetsBindingObserver {
       try {
         do {
           _again = false;
-          await _once();
+          try {
+            await _once();
+          } catch (e, st) {
+            // (a file that couldn't be removed, the queue not saved...: logged, tried again at the next top-up -
+            // every caller starts it unawaited; code review, 2026-11-12)
+            ErrorLog.instance.record('Smart downloads: a top-up stopped.', e, st);
+          }
         } while (_again);
       } finally {
         _running = null;
@@ -261,7 +283,8 @@ class SmartDownloads extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _once() async {
-    if (!_loaded || !on || (rules.isEmpty && books.isEmpty) || _d.hold) return;
+    if (!_loaded || !_started || !on || (rules.isEmpty && books.isEmpty) || _d.hold) return;
+    final before = {for (final MapEntry(:key, :value) in wanted.entries) key: value.join(',')};
     final failed = <bool>{}; // the sources that didn't answer: local (true) / Komga (false)
     final want = <String, Map>{};
     for (final r in rules) {
@@ -321,9 +344,16 @@ class SmartDownloads extends ChangeNotifier with WidgetsBindingObserver {
       AppLog.instance.info('smart', 'top-up: ${add.length} queued, ${gone.length} removed');
     }
     lastTopUp = clock.now();
+    beforeSave?.call();
     await _save();
-    notifyListeners();
+    // only when something changed: every poster's download mark listens (code review, 2026-11-12)
+    final now = {for (final MapEntry(:key, :value) in wanted.entries) key: value.join(',')};
+    if (add.isNotEmpty || gone.isNotEmpty || !mapEquals(before, now)) notifyListeners();
   }
+
+  /// Tests: something that throws, to stand for a top-up's file or settings write failing.
+  @visibleForTesting
+  static void Function()? beforeSave;
 
   BookSource? _sourceFor(bool local) => local ? _d.local : _d.komga;
 

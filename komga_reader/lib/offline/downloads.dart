@@ -624,6 +624,9 @@ class Downloads extends ChangeNotifier implements LocalPages {
       if (_readers == 0) unawaited(_deleteFinished());
       return;
     }
+    // a rule's: the rule removes it at the next top-up (leaving the book starts one) - not asked about, and not a
+    // Keep that the rule then overrode (code review, 2026-11-12)
+    if (SmartDownloads.instance.isRuled(bookId)) return;
     if (deleteRead == DeleteRead.never || !isDownloaded(bookId)) return;
     if (deleteRead == DeleteRead.ask) {
       if (keptRead.contains(bookId)) return; // asked already: Keep
