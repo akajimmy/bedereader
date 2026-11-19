@@ -9,10 +9,12 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
+## 1.8.0
+
+### Build 186 - 2026-11-19
+
 - Two pages up, only the outer sides turn the page: the left page's left third and the right page's right third (a sixth of the screen each, the space round the pages included). Anywhere else on either page, the middle of the screen too, shows the controls - build 185 turned at the spine as well.
 - eBooks: a picture opens full screen wherever it's tapped, at the sides too - it comes before turning the page (one that fills the page turns with a swipe or the remote).
-
-## 1.8.0
 
 ### Build 185 - 2026-11-19
 
