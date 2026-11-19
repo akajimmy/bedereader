@@ -348,6 +348,36 @@ void main() {
       expect(await position(tester), startsWith('Pg. 5-6/9'));
     });
 
+    testWidgets("two pages up, a tap is judged on the page it lands on (user, 2026-11-19): a page's middle shows the "
+        "controls, its right side turns ahead and its left side back - whichever side of the screen it's on",
+        (tester) async {
+      await openReal(tester);
+      await toPair(tester);
+      AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(pageTurn: PageTurn.flip));
+      Future<void> tap(double x) async {
+        await tester.tapAt(Offset(x, 500));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        for (var i = 0; i < 10; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5))); // decoded, joined
+          await tester.pump();
+        }
+      }
+
+      String shown() => tester.widgetList<Text>(find.textContaining('Pg. ')).map((t) => t.data!).join();
+      // (the pair: the left-hand page 133 to 800, the right-hand one 800 to 1467)
+      await tap(467); // the left-hand page's middle (across the screen: its left third, a turn back)
+      expect(shown(), startsWith('Pg. 3-4/9'), reason: 'the controls, on the same pair');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // (the controls away)
+      await tester.pump();
+      await tap(720); // the left-hand page's right side, at the spine (across the screen: the middle)
+      expect(await position(tester), startsWith('Pg. 5-6/9'), reason: 'its right side: ahead');
+      await tap(880); // the right-hand page's left side, at the spine (across the screen: the middle)
+      expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'its left side: back');
+      await tap(1133); // the right-hand page's middle (across the screen: its right third, a turn ahead)
+      expect(shown(), startsWith('Pg. 3-4/9'), reason: 'the controls again, not a turn');
+    });
+
     testWidgets('two pages up, forward peels the right-hand page from its top corner; back, the page comes off the '
         'left from its bottom corner - starting and landing flat (user, 2026-11-12: "one page curls top right, the '
         'other curls bottom left")', (tester) async {

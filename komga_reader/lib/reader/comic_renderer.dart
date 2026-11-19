@@ -878,7 +878,19 @@ class ComicRenderer extends Renderer {
 
   void _onTapUp(TapUpDetails d, double width) => _tapOrDoubleTap(d,
       zoom: _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null,
-      tap: (at) => host.tap(at.dx / width));
+      tap: (at) => host.tap(_across(at, width)));
+
+  /// Where across the page a tap at [at] is, 0 to 1 - its sides turn, its middle shows the controls. Two pages up (a
+  /// pair, or a spread in one picture), across the page it's on: each page has its own sides and middle, as a page
+  /// alone does (user, 2026-11-19: "the right edge of a page (whichever side of the screen its on) flips ahead. the
+  /// left edge flips back"). Else, or zoomed in, across the screen.
+  double _across(Offset at, double width) {
+    final spine = zoomed ? null : _spineX(_at);
+    if (spine == null) return at.dx / width;
+    final page = _pageRect(_at);
+    if (at.dx < spine) return spine <= page.left ? 0 : ((at.dx - page.left) / (spine - page.left)).clamp(0.0, 1.0);
+    return page.right <= spine ? 1 : ((at.dx - spine) / (page.right - spine)).clamp(0.0, 1.0);
+  }
 
   /// A tap, or two close together: with a [zoom] (Double-tap to zoom), a tap waits [doubleTapWait] for a second
   /// near it - the pair zooms ([zoom] with the second's place on the screen), a tap alone goes to [tap] (its place in
