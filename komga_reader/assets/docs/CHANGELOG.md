@@ -9,9 +9,11 @@ first 1.3.0 build. The 1.1 release was numbered 0.1.1 (tag `v0.1.1`), and the 1.
 
 ## Unreleased
 
-- Two pages up (comics and eBooks), a tap counts on the page it lands on: each page has its own sides and middle. A page's right side turns ahead and its left side back, whichever side of the screen it's on (mirrored for right-to-left books); its middle shows the controls. In eBooks a picture on either page opens full screen when tapped - it used to turn the page instead.
-
 ## 1.8.0
+
+### Build 185 - 2026-11-19
+
+- Two pages up (comics and eBooks), a tap counts on the page it lands on: each page has its own sides and middle. A page's right side turns ahead and its left side back, whichever side of the screen it's on (mirrored for right-to-left books); its middle shows the controls. In eBooks a picture on either page opens full screen when tapped - it used to turn the page instead.
 
 ### Build 184 - 2026-11-13
 
