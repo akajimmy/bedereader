@@ -376,6 +376,13 @@ void main() {
       expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'its left side: back');
       await tap(1133); // the right-hand page's middle (across the screen: its right third, a turn ahead)
       expect(shown(), startsWith('Pg. 3-4/9'), reason: 'the controls again, not a turn');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      // each half of the screen is a page, the space round the pictures with it (user, 2026-11-19)
+      await tap(1550); // past the right-hand picture's edge (1467)
+      expect(await position(tester), startsWith('Pg. 5-6/9'), reason: 'right of the picture: still its right side');
+      await tap(60); // left of the left-hand picture (133)
+      expect(await position(tester), startsWith('Pg. 3-4/9'), reason: 'left of the picture: still its left side');
     });
 
     testWidgets('two pages up, forward peels the right-hand page from its top corner; back, the page comes off the '

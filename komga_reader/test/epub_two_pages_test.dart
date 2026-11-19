@@ -57,6 +57,11 @@ void main() {
     await bookShown(tester);
   }
 
+  Future<void> turn(WidgetTester tester) async {
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await settleEpub(tester);
+  }
+
   String pages(String left) => RegExp(r'Pg\. ([0-9-]+)/').firstMatch(left)!.group(1)!;
   int of(String spot) => int.parse(RegExp(r'/(\d+)').firstMatch(spot)!.group(1)!);
 
@@ -103,12 +108,21 @@ void main() {
     await tester.tapAt(const Offset(880, 500)); // the right-hand page's left side, at the spine: back
     await settleEpub(tester);
     expect(pages((await spots(tester))!.$1), '1');
-  });
 
-  Future<void> turn(WidgetTester tester) async {
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // Inset page: each half of the screen is still a page - the space round the sheets with it (user, 2026-11-19:
+    // "tapping just to the right of the inset page should still turn the page")
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    await tester.pump(EpubRenderer.settleDelay);
     await settleEpub(tester);
-  }
+    await turn(tester);
+    expect(pages((await spots(tester))!.$1), '2-3');
+    await tester.tapAt(const Offset(1595, 500)); // right of the right-hand sheet
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), isNot('2-3'), reason: 'ahead');
+    await tester.tapAt(const Offset(805, 500)); // the gap at the spine, on the right-hand half
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), '2-3', reason: 'back');
+  });
 
 
   testWidgets('a wide screen (the default, Wide screen): two pages side by side - chapters starting on the next page '
