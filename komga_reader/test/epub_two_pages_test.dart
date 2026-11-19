@@ -79,10 +79,11 @@ void main() {
     return t;
   }
 
-  testWidgets("two pages up, a tap is judged on the page it lands on (user, 2026-11-19: a picture tapped turned the "
-      "page - judged on the whole screen, it was in a side third): a picture in its page's middle opens; a page's right "
-      "side turns ahead, its left side back", (tester) async {
-    final map = (await tester.runAsync(() => solidPng(300, 500, const Color(0xFF808080))))!;
+  testWidgets("two pages up, only each page's outer third turns - the left page's left third back, the right page's "
+      "right third ahead; anywhere else on either page shows the controls (user, 2026-11-19, after build 185); a "
+      "picture opens wherever it's tapped, a turning zone too (user, 2026-11-19: a picture tapped turned the page)",
+      (tester) async {
+    final map = (await tester.runAsync(() => solidPng(760, 500, const Color(0xFF808080))))!;
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -94,34 +95,49 @@ void main() {
         }, const EpubInfo(spine: ['c1.xhtml', 'c2.xhtml'], toc: []), binary: {'map.png': map}),
         saveProgress: false)));
     await bookShown(tester);
-    // the first page alone, on the right-hand side (800 to 1600), the map in its middle
+    Future<void> tap(double x) async {
+      await tester.tapAt(Offset(x, 500));
+      await settleEpub(tester);
+    }
+
+    /// A tap at [x] brought up the controls (and no turn): put away again.
+    Future<void> controlsAt(double x, String reason) async {
+      await tap(x);
+      expect(find.byKey(const ValueKey('pos-left-text')), findsOneWidget, reason: reason);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+    }
+
+    // the first page alone, on the right-hand side (800 to 1600), the map across its text (wider than the column)
     expect(pages((await spots(tester))!.$1), '1');
-    await tester.tapAt(const Offset(1200, 500));
-    await settleEpub(tester);
-    expect(find.byType(RawImage), findsOneWidget, reason: 'the picture full screen');
-    await tester.tapAt(const Offset(1200, 500));
-    await settleEpub(tester);
-    expect(find.byType(RawImage), findsNothing, reason: 'a tap closed it');
-    await tester.tapAt(const Offset(1500, 500)); // its right side: ahead
-    await settleEpub(tester);
+    for (final x in [1200.0, 1360.0]) { // its middle; in the right-hand turning zone (past 1333)
+      await tap(x);
+      expect(find.byType(RawImage), findsOneWidget, reason: 'the picture full screen, tapped at $x');
+      await tap(x);
+      expect(find.byType(RawImage), findsNothing, reason: 'a tap closed it');
+    }
+    await tap(1500); // the right-hand page's right third, off the picture: ahead
     expect(pages((await spots(tester))!.$1), '2-3');
-    await tester.tapAt(const Offset(880, 500)); // the right-hand page's left side, at the spine: back
-    await settleEpub(tester);
+    await controlsAt(880, "the right-hand page's left side, at the spine - not a turn");
+    await controlsAt(800, 'the middle of the screen');
+    await controlsAt(400, "the left-hand page's middle");
+    await controlsAt(720, "the left-hand page's right side, at the spine - not a turn");
+    expect(pages((await spots(tester))!.$1), '2-3', reason: 'no turn');
+    await tap(100); // the left-hand page's left third: back
     expect(pages((await spots(tester))!.$1), '1');
 
-    // Inset page: each half of the screen is still a page - the space round the sheets with it (user, 2026-11-19:
-    // "tapping just to the right of the inset page should still turn the page")
+    // Inset page: the same thirds of the halves - the space round the sheets with them (user, 2026-11-19: "tapping just
+    // to the right of the inset page should still turn the page")
     AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
     await tester.pump(EpubRenderer.settleDelay);
     await settleEpub(tester);
     await turn(tester);
     expect(pages((await spots(tester))!.$1), '2-3');
-    await tester.tapAt(const Offset(1595, 500)); // right of the right-hand sheet
-    await settleEpub(tester);
+    await tap(1595); // right of the right-hand sheet
     expect(pages((await spots(tester))!.$1), isNot('2-3'), reason: 'ahead');
-    await tester.tapAt(const Offset(805, 500)); // the gap at the spine, on the right-hand half
-    await settleEpub(tester);
+    await tap(5); // left of the left-hand sheet
     expect(pages((await spots(tester))!.$1), '2-3', reason: 'back');
+    await controlsAt(805, 'the gap at the spine');
   });
 
 
