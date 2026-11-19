@@ -5,6 +5,14 @@ import 'package:flutter/foundation.dart';
 /// Always on in the app.
 bool twoPagesAllowed = true;
 
+/// Two pages up, what a tap at [x] (0 to 1 across the screen) does, as a page alone's tap there would: 0 the screen's
+/// left side (back; ahead right to left), 1 its right side, 0.5 the middle (the controls; in an eBook, a picture). Each
+/// half of the screen is a page with its thirds, as a page alone has - but only the outer ones turn: the left page's
+/// left third and the right page's right third, a sixth of the screen each. Anywhere else on either page, the spine
+/// included, is its middle (user, 2026-11-19, after build 185: "only the outer touch zones should be active ... a tap
+/// in the middle of either page brings up the controls, as does a tap in the middle of the screen").
+double twoUpTap(double x) => x < 1 / 6 ? 0 : x > 5 / 6 ? 1 : 0.5;
+
 /// What two pages side by side show (dual-page mode - user, 2026-10-16): a pair, a page alone in one of the two
 /// slots, or a wide page across both. Pages are 0-based indexes into the book's pages; [earlier] / [later] are in
 /// reading order - left / right in a left-to-right book, right / left in a right-to-left one (the renderer mirrors).

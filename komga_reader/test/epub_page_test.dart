@@ -158,6 +158,14 @@ void main() {
     await settleEpub(tester);
     expect(find.byType(RawImage), findsNothing, reason: 'a tap closed it');
     expect(find.text('Close'), findsNothing, reason: 'and the controls stayed hidden');
+    // the picture first, wherever it's tapped - a side third too (user, 2026-11-19: "the picture should always take
+    // priority"): its right edge, past 533
+    await tester.tapAt(const Offset(545, 600));
+    await settleEpub(tester);
+    expect(find.byType(RawImage), findsOneWidget, reason: 'tapped in the right third, on the picture: it opens');
+    await tester.tapAt(const Offset(545, 600));
+    await settleEpub(tester);
+    expect(find.byType(RawImage), findsNothing);
     // the next chapter: a banner (96 tall) at the top - not opened; the middle shows the controls as usual
     await tester.tapAt(const Offset(750, 600));
     await settleEpub(tester);

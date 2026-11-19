@@ -880,15 +880,13 @@ class ComicRenderer extends Renderer {
       zoom: _settings.display.doubleTapZoom && prefs.fit == FitMode.screen ? _zoomers[_at] : null,
       tap: (at) => host.tap(_across(at, width)));
 
-  /// Where across the page a tap at [at] is, 0 to 1 - its sides turn, its middle shows the controls. Two pages up (a
-  /// pair, or a spread in one picture), each half of the screen is a page with its own sides and middle, as a page
-  /// alone has - the space round the pictures included, as eBooks' pages are (user, 2026-11-19: "the right edge of a
-  /// page (whichever side of the screen its on) flips ahead. the left edge flips back"; "each half of the screen
-  /// should be treated like a page"). Else (a page alone, or zoomed in), across the screen.
+  /// Where a tap at [at] counts, 0 to 1 across the screen - its sides turn, its middle shows the controls. Two pages up
+  /// (a pair, or a spread in one picture): [twoUpTap] - only the outer third of each page turns, the space round the
+  /// pictures included. Else (a page alone, or zoomed in), where it is.
   double _across(Offset at, double width) {
     final x = at.dx / width;
     if (zoomed || _spineX(_at) == null) return x;
-    return x < 0.5 ? x * 2 : x * 2 - 1;
+    return twoUpTap(x);
   }
 
   /// A tap, or two close together: with a [zoom] (Double-tap to zoom), a tap waits [doubleTapWait] for a second
