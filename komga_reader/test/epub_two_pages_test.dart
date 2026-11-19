@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:komga_reader/epub/count_store.dart';
+import 'package:komga_reader/epub/source.dart' show EpubInfo;
 import 'package:komga_reader/page_curl.dart';
 import 'package:komga_reader/reader/epub_renderer.dart';
 import 'package:komga_reader/reader/spreads.dart';
@@ -56,20 +57,6 @@ void main() {
     await bookShown(tester);
   }
 
-  /// The position's left and right spots ("Book · Pg. 2-3/9 · 20%", "Ch. · Pg. 2/5"), the controls up for a moment.
-  Future<(String, String)?> spots(WidgetTester tester) async {
-    final mid = tester.view.physicalSize.center(Offset.zero);
-    await tester.tapAt(mid);
-    await tester.pump();
-    final left = find.byKey(const ValueKey('pos-left-text')), right = find.byKey(const ValueKey('pos-right-text'));
-    final t = left.evaluate().isEmpty
-        ? null
-        : (tester.widget<Text>(left).data!, right.evaluate().isEmpty ? '' : tester.widget<Text>(right).data!);
-    await tester.tapAt(mid);
-    await tester.pump();
-    return t;
-  }
-
   Future<void> turn(WidgetTester tester) async {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await settleEpub(tester);
@@ -77,6 +64,66 @@ void main() {
 
   String pages(String left) => RegExp(r'Pg\. ([0-9-]+)/').firstMatch(left)!.group(1)!;
   int of(String spot) => int.parse(RegExp(r'/(\d+)').firstMatch(spot)!.group(1)!);
+
+  /// The position's left and right spots ("Book · Pg. 2-3/9 · 20%", "Ch. · Pg. 2/5"), the controls up for a moment
+  /// (OK, as the remote: two pages up, the screen's middle is the spine - a page's edge, a turn).
+  Future<(String, String)?> spots(WidgetTester tester) async {
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    final left = find.byKey(const ValueKey('pos-left-text')), right = find.byKey(const ValueKey('pos-right-text'));
+    final t = left.evaluate().isEmpty
+        ? null
+        : (tester.widget<Text>(left).data!, right.evaluate().isEmpty ? '' : tester.widget<Text>(right).data!);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    return t;
+  }
+
+  testWidgets("two pages up, a tap is judged on the page it lands on (user, 2026-11-19: a picture tapped turned the "
+      "page - judged on the whole screen, it was in a side third): a picture in its page's middle opens; a page's right "
+      "side turns ahead, its left side back", (tester) async {
+    final map = (await tester.runAsync(() => solidPng(300, 500, const Color(0xFF808080))))!;
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(home: ReaderScreen(api: noNetwork(_Komga.new),
+        book: const {'id': 'B1', 'name': 'Book', 'media': {'mediaProfile': 'EPUB'}},
+        epubSource: MemorySource({
+          'c1.xhtml': '<html><body><p><img src="map.png"/></p></body></html>',
+          'c2.xhtml': '<html><body>${para('word', 600)}</body></html>',
+        }, const EpubInfo(spine: ['c1.xhtml', 'c2.xhtml'], toc: []), binary: {'map.png': map}),
+        saveProgress: false)));
+    await bookShown(tester);
+    // the first page alone, on the right-hand side (800 to 1600), the map in its middle
+    expect(pages((await spots(tester))!.$1), '1');
+    await tester.tapAt(const Offset(1200, 500));
+    await settleEpub(tester);
+    expect(find.byType(RawImage), findsOneWidget, reason: 'the picture full screen');
+    await tester.tapAt(const Offset(1200, 500));
+    await settleEpub(tester);
+    expect(find.byType(RawImage), findsNothing, reason: 'a tap closed it');
+    await tester.tapAt(const Offset(1500, 500)); // its right side: ahead
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), '2-3');
+    await tester.tapAt(const Offset(880, 500)); // the right-hand page's left side, at the spine: back
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), '1');
+
+    // Inset page: each half of the screen is still a page - the space round the sheets with it (user, 2026-11-19:
+    // "tapping just to the right of the inset page should still turn the page")
+    AppSettings.instance.setDisplay(AppSettings.instance.display.copyWith(insetPage: InsetPage.always));
+    await tester.pump(EpubRenderer.settleDelay);
+    await settleEpub(tester);
+    await turn(tester);
+    expect(pages((await spots(tester))!.$1), '2-3');
+    await tester.tapAt(const Offset(1595, 500)); // right of the right-hand sheet
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), isNot('2-3'), reason: 'ahead');
+    await tester.tapAt(const Offset(805, 500)); // the gap at the spine, on the right-hand half
+    await settleEpub(tester);
+    expect(pages((await spots(tester))!.$1), '2-3', reason: 'back');
+  });
+
 
   testWidgets('a wide screen (the default, Wide screen): two pages side by side - chapters starting on the next page '
       '(the default) or on a right-hand page (the setting), then pairs; a turn goes a spread on, to the end card',

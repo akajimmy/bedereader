@@ -911,9 +911,12 @@ class EpubRenderer extends Renderer {
         return;
       }
     }
-    final x = d.localPosition.dx / size.width;
-    // a big picture tapped in the middle of the screen: full screen over the book (the sides still turn the page -
-    // a picture can fill the page)
+    // where across the page: two pages up, across the one tapped - each page has its own sides and middle, as a page
+    // alone does (user, 2026-11-19: a picture on either page turned it instead of opening - its tap was judged on the
+    // whole screen; "the right edge of a page (whichever side of the screen its on) flips ahead")
+    final x = _across(d.localPosition, size);
+    // a big picture tapped in the middle of its page: full screen over the book (the sides still turn the page - a
+    // picture can fill the page)
     if (!host.controlsUp && x >= 1 / 3 && x <= 2 / 3) {
       for (final (rect, image, filter) in page?.pictures ?? const <(Rect, ui.Image, ColorFilter?)>[]) {
         if (rect.contains(at)) {
@@ -948,6 +951,14 @@ class EpubRenderer extends Renderer {
       }
     }
     host.tap(x);
+  }
+
+  /// Where across the page a tap at [local] is, 0 to 1 (see [_tap]): two pages up, across the page on that side; else
+  /// across the screen ([size]).
+  double _across(Offset local, Size size) {
+    if (!_dual || _end || _size.width <= 0) return local.dx / size.width;
+    final later = local.dx >= _size.width;
+    return ((local.dx - (later ? _size.width : 0)) / _size.width).clamp(0.0, 1.0);
   }
 
   Offset? _firstTap; // a tap in the middle, waiting to see whether a second makes it a double tap
